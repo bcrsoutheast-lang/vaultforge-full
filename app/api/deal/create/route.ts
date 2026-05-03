@@ -25,25 +25,17 @@ function cleanNumber(value: unknown) {
   const raw = String(value ?? "").replace(/,/g, "").trim();
   if (!raw) return null;
   const num = Number(raw);
-  if (Number.isNaN(num)) return null;
-  return num;
+  return Number.isNaN(num) ? null : num;
 }
 
 export async function POST(req: Request) {
   const config = getSupabaseConfig();
-
-  if (!config) {
-    return NextResponse.json({ error: "Supabase environment variables are missing." }, { status: 500 });
-  }
+  if (!config) return NextResponse.json({ error: "Supabase environment variables are missing." }, { status: 500 });
 
   const ownerEmail = getSessionEmailFromRequest(req);
-
-  if (!ownerEmail) {
-    return NextResponse.json({ error: "Not logged in." }, { status: 401 });
-  }
+  if (!ownerEmail) return NextResponse.json({ error: "Not logged in." }, { status: 401 });
 
   const body = await req.json();
-
   const title = cleanText(body?.title, 140);
   const state = cleanText(body?.state, 80);
   const property_type = cleanText(body?.property_type, 80);
@@ -57,7 +49,6 @@ export async function POST(req: Request) {
   if (strategy && !ALLOWED_STRATEGIES.includes(strategy)) return NextResponse.json({ error: "Valid strategy is required." }, { status: 400 });
 
   const ai = analyzeDeal({ title, state, property_type, strategy, price, description });
-
   const payload = {
     owner_email: ownerEmail,
     title,
@@ -82,18 +73,11 @@ export async function POST(req: Request) {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) {
-    const details = await res.text();
-    return NextResponse.json({ error: "Failed to save deal.", details }, { status: 500 });
-  }
+  if (!res.ok) return NextResponse.json({ error: "Failed to save deal.", details: await res.text() }, { status: 500 });
 
   const saved = await res.json();
   const deal = saved?.[0] || null;
-
-  let routing = { ok: true, matched: 0 };
-  if (deal?.id) {
-    routing = await matchDealToMembers(deal);
-  }
+  const routing = deal?.id ? await matchDealToMembers(deal) : { ok: true, matched: 0 };
 
   return NextResponse.json({ ok: true, deal, ai, routing });
 }
