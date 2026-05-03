@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
 import { analyzeDeal } from "../../../lib/vaultforge-ai";
 import { matchDealToMembers } from "../../../lib/vaultforge-routing";
+import { getSessionEmailFromRequest } from "../../../lib/vaultforge-session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const ALLOWED_STATES = [
-  "Georgia",
-  "Tennessee",
-  "Florida",
-  "North Carolina",
-  "South Carolina",
-  "Texas",
-];
-
+const ALLOWED_STATES = ["Georgia", "Tennessee", "Florida", "North Carolina", "South Carolina", "Texas"];
 const ALLOWED_TYPES = ["Residential", "Commercial", "Land"];
 const ALLOWED_STRATEGIES = ["Fix & Flip", "Rental", "Wholesale", "Development"];
 
@@ -22,13 +15,6 @@ function getSupabaseConfig() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   if (!url || !key) return null;
   return { url, key };
-}
-
-function getCookieValue(cookieHeader: string, name: string) {
-  const parts = cookieHeader.split(";").map((part) => part.trim());
-  const found = parts.find((part) => part.startsWith(`${name}=`));
-  if (!found) return "";
-  return decodeURIComponent(found.slice(name.length + 1));
 }
 
 function cleanText(value: unknown, max = 700) {
@@ -47,16 +33,10 @@ export async function POST(req: Request) {
   const config = getSupabaseConfig();
 
   if (!config) {
-    return NextResponse.json(
-      { error: "Supabase environment variables are missing." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Supabase environment variables are missing." }, { status: 500 });
   }
 
-  const cookieHeader = req.headers.get("cookie") || "";
-  const ownerEmail =
-    getCookieValue(cookieHeader, "vf_user") ||
-    getCookieValue(cookieHeader, "vf_email");
+  const ownerEmail = getSessionEmailFromRequest(req);
 
   if (!ownerEmail) {
     return NextResponse.json({ error: "Not logged in." }, { status: 401 });
@@ -72,20 +52,14 @@ export async function POST(req: Request) {
   const description = cleanText(body?.description, 900);
 
   if (!title) return NextResponse.json({ error: "Title is required." }, { status: 400 });
-  if (!ALLOWED_STATES.includes(state)) {
-    return NextResponse.json({ error: "Valid state is required." }, { status: 400 });
-  }
-  if (!ALLOWED_TYPES.includes(property_type)) {
-    return NextResponse.json({ error: "Valid property type is required." }, { status: 400 });
-  }
-  if (strategy && !ALLOWED_STRATEGIES.includes(strategy)) {
-    return NextResponse.json({ error: "Valid strategy is required." }, { status: 400 });
-  }
+  if (!ALLOWED_STATES.includes(state)) return NextResponse.json({ error: "Valid state is required." }, { status: 400 });
+  if (!ALLOWED_TYPES.includes(property_type)) return NextResponse.json({ error: "Valid property type is required." }, { status: 400 });
+  if (strategy && !ALLOWED_STRATEGIES.includes(strategy)) return NextResponse.json({ error: "Valid strategy is required." }, { status: 400 });
 
   const ai = analyzeDeal({ title, state, property_type, strategy, price, description });
 
   const payload = {
-    owner_email: ownerEmail.toLowerCase(),
+    owner_email: ownerEmail,
     title,
     state,
     property_type,
