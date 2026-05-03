@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const shellStyle: React.CSSProperties = {
@@ -54,16 +54,32 @@ export default function LoginPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem("vf_user_email") || "";
+    if (saved) setEmail(saved);
+  }, []);
+
   async function login() {
+    const cleanEmail = email.trim().toLowerCase();
+
     setStatus("");
+
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setStatus("Enter a valid email.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const res = await fetch("/api/member/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-user-email": cleanEmail,
+        },
         credentials: "same-origin",
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: cleanEmail }),
       });
 
       const data = await res.json();
@@ -73,6 +89,9 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
+
+      window.localStorage.setItem("vf_user_email", cleanEmail);
+      window.sessionStorage.setItem("vf_user_email", cleanEmail);
 
       window.location.href = data.redirectTo || "/dashboard";
     } catch {
@@ -115,11 +134,7 @@ export default function LoginPage() {
           {loading ? "Logging in..." : "Login"}
         </button>
 
-        {status && (
-          <p style={{ color: "#ffd0d0", marginTop: 16 }}>
-            {status}
-          </p>
-        )}
+        {status && <p style={{ color: "#ffd0d0", marginTop: 16 }}>{status}</p>}
 
         <p style={{ color: "rgba(255,255,255,.55)", marginTop: 18 }}>
           By entering, you agree to the platform rules and disclaimers.{" "}
