@@ -55,6 +55,7 @@ export default function Dashboard() {
         <Link href="/projects" style={navLinkStyle}>Projects</Link>
         <Link href="/buy-bucket" style={navLinkStyle}>Buy Bucket</Link>
         <Link href="/alerts" style={navLinkStyle}>Alerts</Link>
+        <Link href="/messages" style={navLinkStyle}>Messages</Link>
         <Link href="/network" style={navLinkStyle}>Network</Link>
       </nav>
 
@@ -66,7 +67,7 @@ export default function Dashboard() {
           Dashboard
         </h1>
         <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.45 }}>
-          Create deals, track projects, save opportunities to your Buy Bucket, and watch alerts.
+          Create deals, track projects, save opportunities, send messages, and watch alerts.
         </p>
       </section>
     </main>
