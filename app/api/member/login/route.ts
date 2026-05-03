@@ -7,18 +7,6 @@ function cleanEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
-function setSessionCookie(response: NextResponse, name: string, value: string) {
-  const isProduction = process.env.NODE_ENV === "production";
-
-  response.cookies.set(name, value, {
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-    sameSite: "lax",
-    secure: isProduction,
-    httpOnly: false,
-  });
-}
-
 export async function POST(req: Request) {
   let body: any = {};
 
@@ -28,12 +16,11 @@ export async function POST(req: Request) {
     body = {};
   }
 
-  const headerEmail =
-    req.headers.get("x-vf-user-email") ||
-    req.headers.get("x-vaultforge-email") ||
-    "";
-
-  const email = cleanEmail(body?.email || headerEmail);
+  const email = cleanEmail(
+    body?.email ||
+    req.headers.get("x-vf-email") ||
+    req.headers.get("x-vf-user-email")
+  );
 
   if (!email || !email.includes("@")) {
     return NextResponse.json(
@@ -48,12 +35,20 @@ export async function POST(req: Request) {
     redirectTo: "/dashboard",
   });
 
-  setSessionCookie(response, "vf_user", email);
-  setSessionCookie(response, "vf_email", email);
-  setSessionCookie(response, "vf_member_login", "1");
-
-  response.cookies.set("vf_admin", "", { path: "/", maxAge: 0 });
-  response.cookies.set("isAdmin", "", { path: "/", maxAge: 0 });
+  // Keep cookies as optional fallback only. The app now uses x-vf-email headers.
+  const secure = process.env.NODE_ENV === "production";
+  response.cookies.set("vf_email", email, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+    sameSite: "lax",
+    secure,
+  });
+  response.cookies.set("vf_user", email, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+    sameSite: "lax",
+    secure,
+  });
 
   return response;
 }
