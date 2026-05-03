@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,6 +16,12 @@ function getCookieValue(cookieHeader: string, name: string) {
   const found = parts.find((part) => part.startsWith(`${name}=`));
   if (!found) return "";
   return decodeURIComponent(found.slice(name.length + 1));
+}
+
+function makeThreadId(senderEmail: string, recipientEmail: string, dealId: string | null) {
+  const people = [senderEmail.toLowerCase(), recipientEmail.toLowerCase()].sort().join("|");
+  const base = `${dealId || "general"}|${people}`;
+  return crypto.createHash("sha256").update(base).digest("hex").slice(0, 32);
 }
 
 export async function POST(req: Request) {
@@ -38,9 +45,10 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const recipientEmail = String(body?.recipient_email || "").trim().toLowerCase();
-  const subject = String(body?.subject || "").trim();
+  const subject = String(body?.subject || "VaultForge message").trim();
   const message = String(body?.message || "").trim();
   const dealId = String(body?.deal_id || "").trim() || null;
+  const incomingThreadId = String(body?.thread_id || "").trim();
 
   if (!recipientEmail || !message) {
     return NextResponse.json(
@@ -49,15 +57,18 @@ export async function POST(req: Request) {
     );
   }
 
+  const threadId = incomingThreadId || makeThreadId(senderEmail, recipientEmail, dealId);
+
   const res = await fetch(`${config.url}/rest/v1/vf_messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: config.key,
       Authorization: `Bearer ${config.key}`,
-      Prefer: "return=minimal",
+      Prefer: "return=representation",
     },
     body: JSON.stringify({
+      thread_id: threadId,
       sender_email: senderEmail.toLowerCase(),
       recipient_email: recipientEmail,
       subject: subject || "VaultForge message",
@@ -76,5 +87,6 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true });
+  const saved = await res.json();
+  return NextResponse.json({ ok: true, message: saved?.[0] || null, thread_id: threadId });
 }
