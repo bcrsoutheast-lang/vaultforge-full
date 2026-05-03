@@ -7,10 +7,7 @@ function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-  if (!url || !key) {
-    return null;
-  }
-
+  if (!url || !key) return null;
   return { url, key };
 }
 
@@ -47,9 +44,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not logged in." }, { status: 401 });
   }
 
-  const insertUrl = `${config.url}/rest/v1/vf_buy_bucket`;
-
-  const res = await fetch(insertUrl, {
+  const res = await fetch(`${config.url}/rest/v1/vf_buy_bucket`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -69,7 +64,6 @@ export async function POST(req: Request) {
 
   const details = await res.text();
 
-  // Supabase/Postgres unique violation. This means the user already saved this deal.
   if (details.includes("23505") || details.toLowerCase().includes("duplicate key")) {
     return NextResponse.json({ ok: true, status: "already_saved" });
   }
