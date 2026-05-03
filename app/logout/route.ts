@@ -3,10 +3,13 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 function clearCookie(response: NextResponse, name: string) {
+  const isProduction = process.env.NODE_ENV === "production";
+
   response.cookies.set(name, "", {
     path: "/",
     maxAge: 0,
     sameSite: "lax",
+    secure: isProduction,
   });
 }
 
