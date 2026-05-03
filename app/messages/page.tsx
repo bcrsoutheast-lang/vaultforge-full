@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Message = {
-  id: string;
-  sender_email: string;
-  recipient_email: string;
+type Thread = {
+  thread_id: string;
   subject: string;
-  message: string;
   deal_id: string | null;
-  read: boolean;
-  archived: boolean;
-  created_at: string;
+  other_email: string;
+  latest_message: string;
+  latest_sender: string;
+  latest_recipient: string;
+  latest_at: string;
+  unread_count: number;
 };
 
 const shellStyle: React.CSSProperties = {
@@ -55,34 +55,15 @@ const cardStyle: React.CSSProperties = {
   marginBottom: 16,
 };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  background: "rgba(255,255,255,.08)",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.25)",
-  borderRadius: 16,
-  padding: "14px 16px",
-  fontSize: 18,
-  marginBottom: 14,
-};
-
 const buttonStyle: React.CSSProperties = {
-  border: 0,
+  display: "inline-block",
   background: "#9df3bf",
   color: "#071326",
   borderRadius: 999,
   padding: "12px 16px",
   fontWeight: 800,
-  cursor: "pointer",
-  marginRight: 10,
-};
-
-const archiveButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
-  background: "transparent",
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,107,107,.55)",
+  textDecoration: "none",
+  marginTop: 12,
 };
 
 function formatDate(value: string) {
@@ -93,14 +74,11 @@ function formatDate(value: string) {
 }
 
 export default function MessagesPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [recipientEmail, setRecipientEmail] = useState("");
-  const [subject, setSubject] = useState("");
-  const [messageText, setMessageText] = useState("");
-  const [status, setStatus] = useState("");
+  const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState("");
 
-  async function loadMessages() {
+  async function loadThreads() {
     setLoading(true);
     setStatus("");
 
@@ -109,70 +87,23 @@ export default function MessagesPage() {
 
     if (!res.ok) {
       setStatus(data?.error || data?.details || "Could not load messages.");
-      setMessages([]);
+      setThreads([]);
     } else {
-      setMessages(data.messages || []);
+      setThreads(data.threads || []);
     }
 
     setLoading(false);
   }
 
-  async function sendMessage() {
-    setStatus("");
-
-    const res = await fetch("/api/messages/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recipient_email: recipientEmail,
-        subject,
-        message: messageText,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setStatus(data?.error || data?.details || "Could not send message.");
-      return;
-    }
-
-    setRecipientEmail("");
-    setSubject("");
-    setMessageText("");
-    setStatus("Message sent.");
-    loadMessages();
-  }
-
-  async function archiveMessage(messageId: string) {
-    const ok = window.confirm("Archive this message?");
-    if (!ok) return;
-
-    const res = await fetch("/api/messages/archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message_id: messageId }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setStatus(data?.error || data?.details || "Could not archive message.");
-      return;
-    }
-
-    setStatus("Message archived.");
-    loadMessages();
-  }
-
   useEffect(() => {
-    loadMessages();
+    loadThreads();
   }, []);
 
   return (
     <main style={shellStyle}>
       <nav style={navStyle}>
         <Link href="/dashboard" style={navLinkStyle}>Dashboard</Link>
+        <Link href="/profile" style={navLinkStyle}>Profile</Link>
         <Link href="/submit" style={navLinkStyle}>Create Deal</Link>
         <Link href="/projects" style={navLinkStyle}>Projects</Link>
         <Link href="/buy-bucket" style={navLinkStyle}>Buy Bucket</Link>
@@ -185,97 +116,58 @@ export default function MessagesPage() {
           VAULTFORGE MESSAGES
         </p>
         <h1 style={{ fontSize: 54, lineHeight: 1, margin: "10px 0 18px" }}>
-          Member Communication
+          Inbox
         </h1>
         <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.45 }}>
-          Send and track direct member messages. Deal-linked threads come next.
+          General and deal-based conversations grouped into clean threads.
         </p>
       </section>
 
-      <section style={cardStyle}>
-        <h2 style={{ marginTop: 0 }}>Send Message</h2>
-        <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>
-          Recipient Email
-        </label>
-        <input
-          value={recipientEmail}
-          onChange={(e) => setRecipientEmail(e.target.value)}
-          placeholder="member@example.com"
-          style={inputStyle}
-        />
-
-        <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>
-          Subject
-        </label>
-        <input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder="Interested in your deal"
-          style={inputStyle}
-        />
-
-        <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>
-          Message
-        </label>
-        <textarea
-          value={messageText}
-          onChange={(e) => setMessageText(e.target.value)}
-          placeholder="Write message..."
-          rows={5}
-          style={inputStyle}
-        />
-
-        <button style={buttonStyle} onClick={sendMessage}>
-          Send Message
-        </button>
-      </section>
+      <button
+        onClick={loadThreads}
+        style={{ ...buttonStyle, border: 0, cursor: "pointer", marginBottom: 18 }}
+      >
+        Refresh Inbox
+      </button>
 
       {status && (
-        <section
-          style={{
-            ...cardStyle,
-            color: status.toLowerCase().includes("could") || status.toLowerCase().includes("failed")
-              ? "#ffd0d0"
-              : "#9df3bf",
-          }}
-        >
+        <section style={{ ...cardStyle, color: "#ffd0d0" }}>
           {status}
         </section>
       )}
 
-      <section style={cardStyle}>
-        <h2 style={{ marginTop: 0 }}>Inbox / Sent</h2>
-        <button style={buttonStyle} onClick={loadMessages}>
-          Refresh
-        </button>
-      </section>
-
       {loading && <section style={cardStyle}>Loading messages...</section>}
 
-      {!loading && messages.length === 0 && (
-        <section style={cardStyle}>No messages yet.</section>
+      {!loading && !status && threads.length === 0 && (
+        <section style={cardStyle}>
+          <h2>No message threads yet.</h2>
+          <p style={{ color: "rgba(255,255,255,.68)" }}>
+            Message a deal owner from a deal room to start a thread.
+          </p>
+        </section>
       )}
 
-      {!loading &&
-        messages.map((item) => (
-          <section key={item.id} style={cardStyle}>
-            <p style={{ color: "#9df3bf", letterSpacing: 2, fontWeight: 800 }}>
-              FROM {item.sender_email} → TO {item.recipient_email}
-            </p>
-            <h2 style={{ fontSize: 30, margin: "0 0 12px" }}>
-              {item.subject || "VaultForge message"}
-            </h2>
-            <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.45 }}>
-              {item.message}
-            </p>
-            <p style={{ color: "rgba(255,255,255,.45)", fontSize: 14 }}>
-              {formatDate(item.created_at)}
-            </p>
-            <button style={archiveButtonStyle} onClick={() => archiveMessage(item.id)}>
-              Archive
-            </button>
-          </section>
-        ))}
+      {!loading && !status && threads.map((thread) => (
+        <section key={thread.thread_id} style={cardStyle}>
+          <p style={{ color: "#9df3bf", letterSpacing: 3, fontWeight: 800 }}>
+            {thread.deal_id ? "DEAL THREAD" : "GENERAL THREAD"}
+            {thread.unread_count > 0 ? ` • ${thread.unread_count} unread` : ""}
+          </p>
+          <h2 style={{ fontSize: 28, margin: "0 0 8px" }}>{thread.subject}</h2>
+          <p style={{ color: "rgba(255,255,255,.62)" }}>
+            With: {thread.other_email || "Unknown member"}
+          </p>
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.45 }}>
+            {thread.latest_message}
+          </p>
+          <p style={{ color: "rgba(255,255,255,.45)", fontSize: 14 }}>
+            {formatDate(thread.latest_at)}
+          </p>
+          <Link href={`/messages/${thread.thread_id}`} style={buttonStyle}>
+            Open Thread
+          </Link>
+        </section>
+      ))}
     </main>
   );
 }
