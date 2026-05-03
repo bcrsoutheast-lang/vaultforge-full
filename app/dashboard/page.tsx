@@ -116,17 +116,20 @@ export default function Dashboard() {
     setError("");
 
     try {
-      const res = await fetch("/api/dashboard/summary", { cache: "no-store" });
+      const res = await fetch("/api/dashboard/summary", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
       const data = await res.json();
 
       if (!res.ok) {
-        setError("Could not load dashboard. Refresh and try again.");
+        setError("Session is missing. Log out, log back in, then try again.");
         setSummary(null);
         return;
       }
 
       setSummary(data);
-    } catch (err) {
+    } catch {
       setError("Could not load dashboard. Refresh and try again.");
       setSummary(null);
     } finally {
@@ -153,6 +156,14 @@ export default function Dashboard() {
       </nav>
 
       <section style={heroStyle}>
+        <div style={{ textAlign: "center", marginBottom: 18 }}>
+          <img
+            src="/vaultforge-logo.png"
+            alt="VaultForge"
+            style={{ width: "100%", maxWidth: 420, borderRadius: 18 }}
+          />
+        </div>
+
         <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>
           VAULTFORGE COMMAND CENTER
         </p>
@@ -174,6 +185,9 @@ export default function Dashboard() {
       {error && (
         <section style={{ ...cardStyle, color: "#ffd0d0", borderColor: "rgba(255,107,107,.55)" }}>
           {error}
+          <div style={{ marginTop: 16 }}>
+            <Link href="/logout" style={navLinkStyle}>Reset login</Link>
+          </div>
         </section>
       )}
 
