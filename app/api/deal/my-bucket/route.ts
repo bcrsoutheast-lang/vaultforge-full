@@ -7,10 +7,7 @@ function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-  if (!url || !key) {
-    return null;
-  }
-
+  if (!url || !key) return null;
   return { url, key };
 }
 
@@ -32,24 +29,28 @@ export async function GET(req: Request) {
   }
 
   const cookieHeader = req.headers.get("cookie") || "";
-  const ownerEmail = getCookieValue(cookieHeader, "vf_user");
+  const memberEmail =
+    getCookieValue(cookieHeader, "vf_user") ||
+    getCookieValue(cookieHeader, "vf_email");
 
-  if (!ownerEmail) {
+  if (!memberEmail) {
     return NextResponse.json({ error: "Not logged in.", deals: [] }, { status: 401 });
   }
+
+  const headers = {
+    apikey: config.key,
+    Authorization: `Bearer ${config.key}`,
+  };
 
   const bucketUrl =
     `${config.url}/rest/v1/vf_buy_bucket` +
     `?select=deal_id,created_at` +
-    `&owner_email=eq.${encodeURIComponent(ownerEmail)}` +
+    `&member_email=eq.${encodeURIComponent(memberEmail)}` +
     `&order=created_at.desc`;
 
   const bucketRes = await fetch(bucketUrl, {
     method: "GET",
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-    },
+    headers,
     cache: "no-store",
   });
 
@@ -83,10 +84,7 @@ export async function GET(req: Request) {
 
   const dealsRes = await fetch(dealsUrl, {
     method: "GET",
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-    },
+    headers,
     cache: "no-store",
   });
 
