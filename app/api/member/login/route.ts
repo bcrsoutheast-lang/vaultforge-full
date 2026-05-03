@@ -28,7 +28,12 @@ export async function POST(req: Request) {
     body = {};
   }
 
-  const email = cleanEmail(body?.email);
+  const headerEmail =
+    req.headers.get("x-vf-user-email") ||
+    req.headers.get("x-vaultforge-email") ||
+    "";
+
+  const email = cleanEmail(body?.email || headerEmail);
 
   if (!email || !email.includes("@")) {
     return NextResponse.json(
@@ -43,12 +48,10 @@ export async function POST(req: Request) {
     redirectTo: "/dashboard",
   });
 
-  // Set every cookie name the app has used so old and new pages agree.
   setSessionCookie(response, "vf_user", email);
   setSessionCookie(response, "vf_email", email);
   setSessionCookie(response, "vf_member_login", "1");
 
-  // Clear old admin/demo flags that caused bouncing before.
   response.cookies.set("vf_admin", "", { path: "/", maxAge: 0 });
   response.cookies.set("isAdmin", "", { path: "/", maxAge: 0 });
 
