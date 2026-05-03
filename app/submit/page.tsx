@@ -24,11 +24,13 @@ export default function SubmitPage() {
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("");
   const [aiSummary, setAiSummary] = useState("");
+  const [routingMessage, setRoutingMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function saveDeal() {
     setStatus("");
     setAiSummary("");
+    setRoutingMessage("");
     setSaving(true);
 
     const res = await fetch("/api/deal/create", {
@@ -47,6 +49,7 @@ export default function SubmitPage() {
 
     setStatus("Deal saved with AI analysis.");
     setAiSummary(data?.ai?.ai_summary || "");
+    setRoutingMessage(`Routing complete: ${data?.routing?.matched || 0} matching member alert(s) created.`);
     setTitle("");
     setPrice("");
     setDescription("");
@@ -68,7 +71,7 @@ export default function SubmitPage() {
       <section style={heroStyle}>
         <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>VAULTFORGE CREATE</p>
         <h1 style={{ fontSize: 54, lineHeight: 1, margin: "10px 0 18px" }}>Submit Deal</h1>
-        <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.45 }}>Structured deal entry with AI analysis and routing notes.</p>
+        <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.45 }}>Structured deal entry with AI analysis and automatic match alerts.</p>
       </section>
 
       <section style={cardStyle}>
@@ -90,10 +93,11 @@ export default function SubmitPage() {
         <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>Description</label>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={6} placeholder="Condition, numbers, notes, what help is needed..." style={inputStyle} />
 
-        <button style={buttonStyle} onClick={saveDeal} disabled={saving}>{saving ? "Saving..." : "Save Deal + Analyze"}</button>
+        <button style={buttonStyle} onClick={saveDeal} disabled={saving}>{saving ? "Saving..." : "Save Deal + Route"}</button>
       </section>
 
-      {status && <section style={{ ...cardStyle, color: status.toLowerCase().includes("could") || status.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf" }}>{status}</section>}
+      {status && <section style={{ ...cardStyle, color: "#9df3bf" }}>{status}</section>}
+      {routingMessage && <section style={{ ...cardStyle, color: "#9df3bf" }}>{routingMessage}</section>}
 
       {aiSummary && (
         <section style={cardStyle}>
