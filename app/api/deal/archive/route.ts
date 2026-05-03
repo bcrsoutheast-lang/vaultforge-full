@@ -1,47 +1,36 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 function getSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-  if (!url || !key) {
-    return null;
-  }
-
+  if (!url || !key) return null;
   return { url, key };
 }
 
 export async function POST(req: Request) {
-  const userEmail = cookies().get("vf_user")?.value || "";
-
-  if (!userEmail) {
-    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-  }
-
-  const { id } = await req.json();
-
-  if (!id) {
-    return NextResponse.json({ error: "Missing deal id" }, { status: 400 });
-  }
-
   const config = getSupabaseConfig();
 
   if (!config) {
     return NextResponse.json(
-      { error: "Supabase keys are missing in Vercel." },
+      { error: "Supabase environment variables are missing." },
       { status: 500 }
     );
   }
 
-  const query = new URL(`${config.url}/rest/v1/vf_deals`);
-  query.searchParams.set("id", `eq.${id}`);
-  query.searchParams.set("owner_email", `eq.${userEmail}`);
+  const body = await req.json();
+  const dealId = String(body?.deal_id || body?.dealId || "").trim();
 
-  const response = await fetch(query.toString(), {
+  if (!dealId) {
+    return NextResponse.json({ error: "Missing deal id." }, { status: 400 });
+  }
+
+  const url = `${config.url}/rest/v1/vf_deals?id=eq.${encodeURIComponent(dealId)}`;
+
+  const res = await fetch(url, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -49,15 +38,17 @@ export async function POST(req: Request) {
       Authorization: `Bearer ${config.key}`,
       Prefer: "return=minimal",
     },
-    body: JSON.stringify({ archived: true, status: "archived" }),
-    cache: "no-store",
+    body: JSON.stringify({
+      archived: true,
+      status: "archived",
+    }),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
+  if (!res.ok) {
+    const details = await res.text();
     return NextResponse.json(
-      { error: errorText || "Failed to archive deal." },
-      { status: response.status }
+      { error: "Failed to archive deal.", details },
+      { status: 500 }
     );
   }
 
