@@ -20,15 +20,15 @@ const shellStyle: React.CSSProperties = {
   minHeight: "100vh",
   background: "#071326",
   color: "white",
-  padding: "36px 22px",
+  padding: "36px 22px 80px",
   fontFamily: "Arial, sans-serif",
 };
 
 const navStyle: React.CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
-  gap: 12,
-  marginBottom: 28,
+  gap: 10,
+  marginBottom: 24,
 };
 
 const navLinkStyle: React.CSSProperties = {
@@ -36,8 +36,8 @@ const navLinkStyle: React.CSSProperties = {
   textDecoration: "none",
   border: "1px solid rgba(255,255,255,.25)",
   borderRadius: 999,
-  padding: "12px 18px",
-  fontSize: 16,
+  padding: "11px 15px",
+  fontSize: 15,
 };
 
 const heroStyle: React.CSSProperties = {
@@ -120,14 +120,14 @@ export default function Dashboard() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data?.error || "Could not load dashboard.");
+        setError("Could not load dashboard. Refresh and try again.");
         setSummary(null);
         return;
       }
 
       setSummary(data);
     } catch (err) {
-      setError("Could not load dashboard.");
+      setError("Could not load dashboard. Refresh and try again.");
       setSummary(null);
     } finally {
       setLoading(false);
@@ -148,6 +148,8 @@ export default function Dashboard() {
         <Link href="/alerts" style={navLinkStyle}>Alerts</Link>
         <Link href="/messages" style={navLinkStyle}>Messages</Link>
         <Link href="/network" style={navLinkStyle}>Network</Link>
+        <Link href="/terms" style={navLinkStyle}>Terms</Link>
+        <Link href="/logout" style={navLinkStyle}>Logout</Link>
       </nav>
 
       <section style={heroStyle}>
@@ -167,11 +169,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      {loading && (
-        <section style={cardStyle}>
-          Loading dashboard...
-        </section>
-      )}
+      {loading && <section style={cardStyle}>Loading dashboard...</section>}
 
       {error && (
         <section style={{ ...cardStyle, color: "#ffd0d0", borderColor: "rgba(255,107,107,.55)" }}>
@@ -203,68 +201,14 @@ export default function Dashboard() {
           )}
 
           <section style={gridStyle}>
-            <ActionCard
-              href="/profile"
-              label={summary.profileComplete ? "READY" : "NEEDS SETUP"}
-              title="Profile + Buy Box"
-              description="Control your role, states, price range, strategies, and matching preferences."
-              count={summary.profileComplete ? "✓" : "!"}
-            />
-
-            <ActionCard
-              href="/submit"
-              label="CREATE"
-              title="Submit Deal"
-              description="Create a structured opportunity and trigger AI analysis plus match alerts."
-            />
-
-            <ActionCard
-              href="/projects"
-              label="DEALS"
-              title="Active Deals"
-              description="Open deal rooms, view AI analysis, save opportunities, and message owners."
-              count={summary.counts.activeDeals}
-            />
-
-            <ActionCard
-              href="/projects"
-              label="YOUR DEALS"
-              title="My Deals"
-              description="Deals you posted into the VaultForge network."
-              count={summary.counts.myDeals}
-            />
-
-            <ActionCard
-              href="/buy-bucket"
-              label="SAVED"
-              title="Buy Bucket"
-              description="Opportunities you marked as interesting for tracking and routing."
-              count={summary.counts.buyBucket}
-            />
-
-            <ActionCard
-              href="/alerts"
-              label="SIGNALS"
-              title="Alerts"
-              description="Matched deals, buy bucket activity, and routing notifications."
-              count={summary.counts.alerts}
-            />
-
-            <ActionCard
-              href="/messages"
-              label="COMMS"
-              title="Messages"
-              description="Deal-based and general member conversations."
-              count={summary.counts.messages}
-            />
-
-            <ActionCard
-              href="/network"
-              label="NETWORK"
-              title="Members"
-              description="Buyers, lenders, contractors, developers, and partners."
-              count={summary.counts.members}
-            />
+            <ActionCard href="/profile" label={summary.profileComplete ? "READY" : "NEEDS SETUP"} title="Profile + Buy Box" description="Control your role, states, price range, strategies, and matching preferences." count={summary.profileComplete ? "✓" : "!"} />
+            <ActionCard href="/submit" label="CREATE" title="Submit Deal" description="Create a structured opportunity and trigger AI analysis plus match alerts." />
+            <ActionCard href="/projects" label="DEALS" title="Active Deals" description="Open deal rooms, view AI analysis, save opportunities, and message owners." count={summary.counts.activeDeals} />
+            <ActionCard href="/projects" label="YOUR DEALS" title="My Deals" description="Deals you posted into the VaultForge network." count={summary.counts.myDeals} />
+            <ActionCard href="/buy-bucket" label="SAVED" title="Buy Bucket" description="Opportunities you marked as interesting for tracking and routing." count={summary.counts.buyBucket} />
+            <ActionCard href="/alerts" label="SIGNALS" title="Alerts" description="Matched deals, buy bucket activity, and routing notifications." count={summary.counts.alerts} />
+            <ActionCard href="/messages" label="COMMS" title="Messages" description="Deal-based and general member conversations." count={summary.counts.messages} />
+            <ActionCard href="/network" label="NETWORK" title="Members" description="Buyers, lenders, contractors, developers, and partners." count={summary.counts.members} />
           </section>
         </>
       )}
