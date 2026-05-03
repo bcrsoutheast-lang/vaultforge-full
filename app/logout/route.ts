@@ -14,7 +14,7 @@ function clearCookie(response: NextResponse, name: string) {
 }
 
 export async function GET(request: Request) {
-  const response = NextResponse.redirect(new URL("/login", request.url));
+  const response = NextResponse.redirect(new URL("/login?logged_out=1", request.url));
 
   clearCookie(response, "vf_user");
   clearCookie(response, "vf_email");
