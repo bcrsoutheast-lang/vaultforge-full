@@ -6,7 +6,6 @@ export const revalidate = 0;
 function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-
   if (!url || !key) return null;
   return { url, key };
 }
@@ -37,12 +36,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not logged in.", alerts: [] }, { status: 401 });
   }
 
-  const dealsUrl =
-    `${config.url}/rest/v1/vf_deals` +
-    `?select=id,title,state,property_type,strategy,price,status,created_at` +
-    `&archived=eq.false` +
+  const headers = {
+    apikey: config.key,
+    Authorization: `Bearer ${config.key}`,
+  };
+
+  const matchUrl =
+    `${config.url}/rest/v1/vf_match_alerts` +
+    `?select=id,deal_id,deal_title,deal_state,deal_property_type,deal_strategy,match_role,alert_title,alert_message,read,created_at` +
+    `&member_email=eq.${encodeURIComponent(memberEmail.toLowerCase())}` +
     `&order=created_at.desc` +
-    `&limit=10`;
+    `&limit=25`;
 
   const bucketUrl =
     `${config.url}/rest/v1/vf_buy_bucket` +
@@ -51,36 +55,29 @@ export async function GET(req: Request) {
     `&order=created_at.desc` +
     `&limit=10`;
 
-  const headers = {
-    apikey: config.key,
-    Authorization: `Bearer ${config.key}`,
-  };
-
-  const [dealsRes, bucketRes] = await Promise.all([
-    fetch(dealsUrl, { method: "GET", headers, cache: "no-store" }),
+  const [matchRes, bucketRes] = await Promise.all([
+    fetch(matchUrl, { method: "GET", headers, cache: "no-store" }),
     fetch(bucketUrl, { method: "GET", headers, cache: "no-store" }),
   ]);
 
   const alerts: any[] = [];
 
-  if (dealsRes.ok) {
-    const deals = await dealsRes.json();
-
-    for (const deal of deals) {
+  if (matchRes.ok) {
+    const rows = await matchRes.json();
+    for (const row of rows) {
       alerts.push({
-        id: `deal-${deal.id}`,
-        type: "New Deal",
-        title: `New ${deal.property_type || "deal"} in ${deal.state || "your market"}`,
-        message: `${deal.title || "Untitled deal"}${deal.strategy ? ` • ${deal.strategy}` : ""}${deal.price ? ` • $${Number(deal.price).toLocaleString()}` : ""}`,
+        id: `match-${row.id}`,
+        type: "Match Alert",
+        title: row.alert_title || `Matched deal: ${row.deal_title}`,
+        message: row.alert_message || "A deal matched your buy box.",
         href: "/projects",
-        created_at: deal.created_at,
+        created_at: row.created_at,
       });
     }
   }
 
   if (bucketRes.ok) {
     const rows = await bucketRes.json();
-
     for (const row of rows) {
       alerts.push({
         id: `bucket-${row.deal_id}-${row.created_at}`,
@@ -99,5 +96,5 @@ export async function GET(req: Request) {
     return bTime - aTime;
   });
 
-  return NextResponse.json({ alerts: alerts.slice(0, 20) });
+  return NextResponse.json({ alerts: alerts.slice(0, 30) });
 }
