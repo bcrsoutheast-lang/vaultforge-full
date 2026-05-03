@@ -1,38 +1,74 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const shellStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "#071326",
+  color: "white",
+  padding: "36px 22px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const navStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+  marginBottom: 28,
+};
+
+const navLinkStyle: React.CSSProperties = {
+  color: "white",
+  textDecoration: "none",
+  border: "1px solid rgba(255,255,255,.25)",
+  borderRadius: 999,
+  padding: "12px 18px",
+  fontSize: 16,
+};
+
+const heroStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.2)",
+  background: "rgba(255,255,255,.05)",
+  borderRadius: 28,
+  padding: 28,
+  marginBottom: 22,
+};
+
 export default function Dashboard() {
   const user = cookies().get("vf_user")?.value;
 
   if (!user) {
-    return <div style={{ padding: 40 }}>Not logged in</div>;
+    return (
+      <main style={shellStyle}>
+        <h1>Not logged in</h1>
+        <Link href="/login" style={navLinkStyle}>Go to Login</Link>
+      </main>
+    );
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: "#071326", color: "white", padding: 28, fontFamily: "Arial" }}>
-      <section style={{ border: "1px solid rgba(255,255,255,.2)", borderRadius: 24, padding: 28, background: "rgba(255,255,255,.05)", marginBottom: 24 }}>
-        <p style={{ color: "#9ff3c6", letterSpacing: 3, fontSize: 13, fontWeight: 700 }}>VAULTFORGE MEMBER AREA</p>
-        <h1 style={{ fontSize: 48, margin: "10px 0" }}>Dashboard</h1>
-        <p style={{ color: "#cbd5e1", fontSize: 20 }}>Logged in as {user}</p>
-      </section>
+    <main style={shellStyle}>
+      <nav style={navStyle}>
+        <Link href="/submit" style={navLinkStyle}>Create Deal</Link>
+        <Link href="/projects" style={navLinkStyle}>Projects</Link>
+        <Link href="/buy-bucket" style={navLinkStyle}>Buy Bucket</Link>
+        <Link href="/alerts" style={navLinkStyle}>Alerts</Link>
+        <Link href="/network" style={navLinkStyle}>Network</Link>
+      </nav>
 
-      <section style={{ display: "grid", gap: 14 }}>
-        <Link href="/submit"><button style={button}>Create Deal</button></Link>
-        <Link href="/projects"><button style={button}>Projects</button></Link>
-        <Link href="/buy-bucket"><button style={button}>Buy Bucket</button></Link>
-        <Link href="/network"><button style={button}>Network</button></Link>
+      <section style={heroStyle}>
+        <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>
+          VAULTFORGE MEMBER AREA
+        </p>
+        <h1 style={{ fontSize: 54, lineHeight: 1, margin: "10px 0 18px" }}>
+          Dashboard
+        </h1>
+        <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.45 }}>
+          Create deals, track projects, save opportunities to your Buy Bucket, and watch alerts.
+        </p>
       </section>
     </main>
   );
 }
-
-const button = {
-  width: "100%",
-  border: "1px solid rgba(255,255,255,.25)",
-  borderRadius: 18,
-  padding: "18px 20px",
-  background: "rgba(255,255,255,.06)",
-  color: "white",
-  fontSize: 22,
-  textAlign: "left" as const,
-};
