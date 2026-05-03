@@ -16,92 +16,30 @@ type Summary = {
   };
 };
 
-const shellStyle: React.CSSProperties = {
-  minHeight: "100vh",
-  background: "#071326",
-  color: "white",
-  padding: "36px 22px 80px",
-  fontFamily: "Arial, sans-serif",
-};
+const shellStyle: React.CSSProperties = { minHeight: "100vh", background: "#071326", color: "white", padding: "36px 22px 80px", fontFamily: "Arial, sans-serif" };
+const navStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 24 };
+const navLinkStyle: React.CSSProperties = { color: "white", textDecoration: "none", border: "1px solid rgba(255,255,255,.25)", borderRadius: 999, padding: "11px 15px", fontSize: 15 };
+const heroStyle: React.CSSProperties = { border: "1px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.05)", borderRadius: 28, padding: 28, marginBottom: 22 };
+const gridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 16 };
+const cardStyle: React.CSSProperties = { border: "1px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.04)", borderRadius: 24, padding: 22, textDecoration: "none", color: "white" };
+const countStyle: React.CSSProperties = { fontSize: 44, fontWeight: 900, lineHeight: 1, margin: "12px 0" };
+const pillStyle: React.CSSProperties = { display: "inline-block", color: "#9df3bf", border: "1px solid rgba(157,243,191,.35)", borderRadius: 999, padding: "7px 12px", fontSize: 13, letterSpacing: 1.2, marginBottom: 12 };
 
-const navStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 10,
-  marginBottom: 24,
-};
+function getClientEmail() {
+  return (
+    window.localStorage.getItem("vf_user_email") ||
+    window.sessionStorage.getItem("vf_user_email") ||
+    ""
+  ).trim().toLowerCase();
+}
 
-const navLinkStyle: React.CSSProperties = {
-  color: "white",
-  textDecoration: "none",
-  border: "1px solid rgba(255,255,255,.25)",
-  borderRadius: 999,
-  padding: "11px 15px",
-  fontSize: 15,
-};
-
-const heroStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.2)",
-  background: "rgba(255,255,255,.05)",
-  borderRadius: 28,
-  padding: 28,
-  marginBottom: 22,
-};
-
-const gridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-  gap: 16,
-};
-
-const cardStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.04)",
-  borderRadius: 24,
-  padding: 22,
-  textDecoration: "none",
-  color: "white",
-};
-
-const countStyle: React.CSSProperties = {
-  fontSize: 44,
-  fontWeight: 900,
-  lineHeight: 1,
-  margin: "12px 0",
-};
-
-const pillStyle: React.CSSProperties = {
-  display: "inline-block",
-  color: "#9df3bf",
-  border: "1px solid rgba(157,243,191,.35)",
-  borderRadius: 999,
-  padding: "7px 12px",
-  fontSize: 13,
-  letterSpacing: 1.2,
-  marginBottom: 12,
-};
-
-function ActionCard({
-  href,
-  label,
-  title,
-  description,
-  count,
-}: {
-  href: string;
-  label: string;
-  title: string;
-  description: string;
-  count?: number | string;
-}) {
+function ActionCard({ href, label, title, description, count }: { href: string; label: string; title: string; description: string; count?: number | string }) {
   return (
     <Link href={href} style={cardStyle}>
       <span style={pillStyle}>{label}</span>
       <h2 style={{ fontSize: 28, margin: "0 0 8px" }}>{title}</h2>
       {count !== undefined && <div style={countStyle}>{count}</div>}
-      <p style={{ color: "rgba(255,255,255,.68)", fontSize: 17, lineHeight: 1.45 }}>
-        {description}
-      </p>
+      <p style={{ color: "rgba(255,255,255,.68)", fontSize: 17, lineHeight: 1.45 }}>{description}</p>
     </Link>
   );
 }
@@ -115,10 +53,20 @@ export default function Dashboard() {
     setLoading(true);
     setError("");
 
+    const email = getClientEmail();
+
+    if (!email) {
+      setError("Session missing. Go to Login and enter your email again.");
+      setSummary(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/dashboard/summary", {
         cache: "no-store",
         credentials: "same-origin",
+        headers: { "x-vf-user-email": email },
       });
       const data = await res.json();
 
@@ -137,9 +85,7 @@ export default function Dashboard() {
     }
   }
 
-  useEffect(() => {
-    loadSummary();
-  }, []);
+  useEffect(() => { loadSummary(); }, []);
 
   return (
     <main style={shellStyle}>
@@ -157,27 +103,13 @@ export default function Dashboard() {
 
       <section style={heroStyle}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <img
-            src="/vaultforge-logo.png"
-            alt="VaultForge"
-            style={{ width: "100%", maxWidth: 420, borderRadius: 18 }}
-          />
+          <img src="/vaultforge-logo.png" alt="VaultForge" style={{ width: "100%", maxWidth: 420, borderRadius: 18 }} />
         </div>
 
-        <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>
-          VAULTFORGE COMMAND CENTER
-        </p>
-        <h1 style={{ fontSize: 54, lineHeight: 1, margin: "10px 0 18px" }}>
-          Dashboard
-        </h1>
-        <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.45 }}>
-          Your member workspace for deals, buy box routing, messages, alerts, and network activity.
-        </p>
-        {summary?.email && (
-          <p style={{ color: "rgba(255,255,255,.52)", marginTop: 18 }}>
-            Logged in as {summary.email}
-          </p>
-        )}
+        <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>VAULTFORGE COMMAND CENTER</p>
+        <h1 style={{ fontSize: 54, lineHeight: 1, margin: "10px 0 18px" }}>Dashboard</h1>
+        <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.45 }}>Your member workspace for deals, buy box routing, messages, alerts, and network activity.</p>
+        {summary?.email && <p style={{ color: "rgba(255,255,255,.52)", marginTop: 18 }}>Logged in as {summary.email}</p>}
       </section>
 
       {loading && <section style={cardStyle}>Loading dashboard...</section>}
@@ -186,7 +118,7 @@ export default function Dashboard() {
         <section style={{ ...cardStyle, color: "#ffd0d0", borderColor: "rgba(255,107,107,.55)" }}>
           {error}
           <div style={{ marginTop: 16 }}>
-            <Link href="/logout" style={navLinkStyle}>Reset login</Link>
+            <Link href="/login" style={navLinkStyle}>Login again</Link>
           </div>
         </section>
       )}
@@ -194,22 +126,10 @@ export default function Dashboard() {
       {!loading && !error && summary && (
         <>
           {!summary.profileComplete && (
-            <section
-              style={{
-                ...heroStyle,
-                borderColor: "rgba(157,243,191,.45)",
-                background: "rgba(157,243,191,.07)",
-              }}
-            >
-              <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>
-                NEXT BEST ACTION
-              </p>
-              <h2 style={{ fontSize: 34, margin: "0 0 14px" }}>
-                Complete Profile + Buy Box
-              </h2>
-              <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.45 }}>
-                This powers AI routing, network visibility, lender matching, and alert quality.
-              </p>
+            <section style={{ ...heroStyle, borderColor: "rgba(157,243,191,.45)", background: "rgba(157,243,191,.07)" }}>
+              <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>NEXT BEST ACTION</p>
+              <h2 style={{ fontSize: 34, margin: "0 0 14px" }}>Complete Profile + Buy Box</h2>
+              <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.45 }}>This powers AI routing, network visibility, lender matching, and alert quality.</p>
               <Link href="/profile" style={navLinkStyle}>Open Profile</Link>
             </section>
           )}
