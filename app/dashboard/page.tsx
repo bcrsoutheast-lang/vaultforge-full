@@ -36,6 +36,14 @@ const heroStyle: React.CSSProperties = {
   marginBottom: 22,
 };
 
+const cardStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.04)",
+  borderRadius: 24,
+  padding: 22,
+  marginBottom: 16,
+};
+
 export default function Dashboard() {
   const user = cookies().get("vf_user")?.value;
 
@@ -51,6 +59,7 @@ export default function Dashboard() {
   return (
     <main style={shellStyle}>
       <nav style={navStyle}>
+        <Link href="/profile" style={navLinkStyle}>Profile</Link>
         <Link href="/submit" style={navLinkStyle}>Create Deal</Link>
         <Link href="/projects" style={navLinkStyle}>Projects</Link>
         <Link href="/buy-bucket" style={navLinkStyle}>Buy Bucket</Link>
@@ -67,8 +76,16 @@ export default function Dashboard() {
           Dashboard
         </h1>
         <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.45 }}>
-          Create deals, track projects, save opportunities, send messages, and watch alerts.
+          Create deals, track projects, save opportunities, send messages, and update your buy box.
         </p>
+      </section>
+
+      <section style={cardStyle}>
+        <h2 style={{ marginTop: 0 }}>Next Best Action</h2>
+        <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.45 }}>
+          Complete your Profile + Buy Box first. That powers routing, alerts, and network matching.
+        </p>
+        <Link href="/profile" style={navLinkStyle}>Open Profile</Link>
       </section>
     </main>
   );
