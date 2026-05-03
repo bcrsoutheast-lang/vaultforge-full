@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSessionEmailFromRequest } from "../../../lib/vaultforge-session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -8,13 +9,6 @@ function getSupabaseConfig() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   if (!url || !key) return null;
   return { url, key };
-}
-
-function getCookieValue(cookieHeader: string, name: string) {
-  const parts = cookieHeader.split(";").map((part) => part.trim());
-  const found = parts.find((part) => part.startsWith(`${name}=`));
-  if (!found) return "";
-  return decodeURIComponent(found.slice(name.length + 1));
 }
 
 async function safeCount(url: string, key: string) {
@@ -46,16 +40,12 @@ export async function GET(req: Request) {
     );
   }
 
-  const cookieHeader = req.headers.get("cookie") || "";
-  const memberEmail =
-    getCookieValue(cookieHeader, "vf_user") ||
-    getCookieValue(cookieHeader, "vf_email");
+  const email = getSessionEmailFromRequest(req);
 
-  if (!memberEmail) {
+  if (!email) {
     return NextResponse.json({ error: "Not logged in." }, { status: 401 });
   }
 
-  const email = memberEmail.toLowerCase();
   const headers = {
     apikey: config.key,
     Authorization: `Bearer ${config.key}`,
@@ -68,32 +58,14 @@ export async function GET(req: Request) {
   const profileRows = profileRes.ok ? await profileRes.json() : [];
   const profileComplete = Array.isArray(profileRows) && profileRows.length > 0;
 
-  const activeDealsUrl =
-    `${config.url}/rest/v1/vf_deals?select=id&archived=eq.false`;
+  const activeDealsUrl = `${config.url}/rest/v1/vf_deals?select=id&archived=eq.false`;
+  const myDealsUrl = `${config.url}/rest/v1/vf_deals?select=id&owner_email=eq.${encodeURIComponent(email)}&archived=eq.false`;
+  const bucketUrl = `${config.url}/rest/v1/vf_buy_bucket?select=id&member_email=eq.${encodeURIComponent(email)}`;
+  const matchAlertsUrl = `${config.url}/rest/v1/vf_match_alerts?select=id&member_email=eq.${encodeURIComponent(email)}&read=eq.false`;
+  const messagesUrl = `${config.url}/rest/v1/vf_messages?select=id&or=(sender_email.eq.${encodeURIComponent(email)},recipient_email.eq.${encodeURIComponent(email)})&archived=eq.false`;
+  const membersUrl = `${config.url}/rest/v1/vf_members?select=id&is_active=eq.true`;
 
-  const myDealsUrl =
-    `${config.url}/rest/v1/vf_deals?select=id&owner_email=eq.${encodeURIComponent(email)}&archived=eq.false`;
-
-  const bucketUrl =
-    `${config.url}/rest/v1/vf_buy_bucket?select=id&member_email=eq.${encodeURIComponent(email)}`;
-
-  const matchAlertsUrl =
-    `${config.url}/rest/v1/vf_match_alerts?select=id&member_email=eq.${encodeURIComponent(email)}&read=eq.false`;
-
-  const messagesUrl =
-    `${config.url}/rest/v1/vf_messages?select=id&or=(sender_email.eq.${encodeURIComponent(email)},recipient_email.eq.${encodeURIComponent(email)})&archived=eq.false`;
-
-  const membersUrl =
-    `${config.url}/rest/v1/vf_members?select=id&is_active=eq.true`;
-
-  const [
-    activeDeals,
-    myDeals,
-    buyBucket,
-    alerts,
-    messages,
-    members,
-  ] = await Promise.all([
+  const [activeDeals, myDeals, buyBucket, alerts, messages, members] = await Promise.all([
     safeCount(activeDealsUrl, config.key),
     safeCount(myDealsUrl, config.key),
     safeCount(bucketUrl, config.key),
@@ -105,13 +77,6 @@ export async function GET(req: Request) {
   return NextResponse.json({
     email,
     profileComplete,
-    counts: {
-      activeDeals,
-      myDeals,
-      buyBucket,
-      alerts,
-      messages,
-      members,
-    },
+    counts: { activeDeals, myDeals, buyBucket, alerts, messages, members },
   });
 }
