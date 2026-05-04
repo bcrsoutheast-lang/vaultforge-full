@@ -1,199 +1,369 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type Thread = {
-  thread_id: string;
-  subject: string;
-  deal_id: string | null;
-  other_email: string;
-  latest_message: string;
-  latest_at: string;
-  unread_count: number;
-};
+type Thread = Record<string, any>;
+type Message = Record<string, any>;
 
-
-const shellStyle: React.CSSProperties = {
+const page: React.CSSProperties = {
   minHeight: "100vh",
-  background: "#071326",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
   color: "white",
-  padding: "32px 18px 80px",
+  padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif",
 };
 
-const navStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 10,
-  marginBottom: 24,
-};
-
-const navLinkStyle: React.CSSProperties = {
-  color: "white",
-  textDecoration: "none",
-  border: "1px solid rgba(255,255,255,.25)",
+const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
+const nav: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 };
+const btn: React.CSSProperties = {
+  display: "inline-block",
+  background: "#f5d978",
+  color: "#06100a",
+  border: "none",
   borderRadius: 999,
-  padding: "11px 15px",
-  fontSize: 15,
+  padding: "12px 16px",
+  fontWeight: 900,
+  textDecoration: "none",
+  margin: "6px 6px 0 0",
 };
-
-const heroStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.2)",
-  background: "rgba(255,255,255,.05)",
-  borderRadius: 26,
-  padding: 24,
-  marginBottom: 20,
-};
-
-const cardStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.18)",
+const ghost: React.CSSProperties = {
+  display: "inline-block",
   background: "rgba(255,255,255,.04)",
-  borderRadius: 22,
-  padding: 20,
-  marginBottom: 16,
+  color: "white",
+  border: "1px solid rgba(255,255,255,.16)",
+  borderRadius: 999,
+  padding: "12px 16px",
+  fontWeight: 900,
+  textDecoration: "none",
+  margin: "6px 6px 0 0",
 };
-
-const inputStyle: React.CSSProperties = {
+const hero: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.28)",
+  background: "rgba(255,255,255,.045)",
+  borderRadius: 34,
+  padding: 24,
+  marginBottom: 22,
+};
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(280px, 420px) 1fr",
+  gap: 18,
+};
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.13)",
+  background: "rgba(255,255,255,.04)",
+  borderRadius: 28,
+  padding: 18,
+};
+const threadCard: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  background: "rgba(0,0,0,.18)",
+  borderRadius: 22,
+  padding: 16,
+  marginBottom: 12,
+  cursor: "pointer",
+};
+const activeThread: React.CSSProperties = {
+  ...threadCard,
+  borderColor: "rgba(157,243,191,.55)",
+  background: "rgba(157,243,191,.08)",
+};
+const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  background: "rgba(255,255,255,.08)",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.16)",
+  background: "rgba(255,255,255,.075)",
   color: "white",
-  border: "1px solid rgba(255,255,255,.25)",
-  borderRadius: 16,
-  padding: "14px 16px",
-  fontSize: 17,
-  marginBottom: 14,
+  padding: 14,
+  fontSize: 16,
 };
-
-const buttonStyle: React.CSSProperties = {
-  border: 0,
-  background: "#9df3bf",
-  color: "#071326",
-  borderRadius: 999,
-  padding: "12px 15px",
-  fontWeight: 800,
-  cursor: "pointer",
-  marginRight: 8,
-  marginTop: 10,
-};
-
-const archiveButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
-  background: "transparent",
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,107,107,.55)",
-};
-
-const pillStyle: React.CSSProperties = {
-  display: "inline-block",
-  color: "#9df3bf",
-  border: "1px solid rgba(157,243,191,.35)",
-  borderRadius: 999,
-  padding: "7px 11px",
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: 5,
+  fontWeight: 900,
   fontSize: 12,
-  letterSpacing: 1.1,
-  marginRight: 7,
-  marginBottom: 8,
+  marginBottom: 12,
 };
+const muted: React.CSSProperties = { color: "rgba(255,255,255,.68)", lineHeight: 1.5 };
 
-function cleanError(value: string) {
-  if (!value) return "";
-  const lower = value.toLowerCase();
-  if (lower.includes("supabase") || lower.includes("pgrst") || lower.includes("violates") || lower.includes("schema") || lower.includes("failed to fetch")) {
-    return "Something did not save correctly. Refresh and try again.";
-  }
-  return value;
-}
-
-
-function Nav() {
+function getEmail() {
+  if (typeof window === "undefined") return "";
   return (
-    <nav style={navStyle}>
-      <Link href="/dashboard" style={navLinkStyle}>Dashboard</Link>
-      <Link href="/profile" style={navLinkStyle}>Profile</Link>
-      <Link href="/submit" style={navLinkStyle}>Create Deal</Link>
-      <Link href="/projects" style={navLinkStyle}>Projects</Link>
-      <Link href="/buy-bucket" style={navLinkStyle}>Buy Bucket</Link>
-      <Link href="/alerts" style={navLinkStyle}>Alerts</Link>
-      <Link href="/messages" style={navLinkStyle}>Messages</Link>
-      <Link href="/network" style={navLinkStyle}>Network</Link>
-    </nav>
-  );
+    localStorage.getItem("vf_email") ||
+    sessionStorage.getItem("vf_email") ||
+    "text@text.com"
+  ).trim().toLowerCase();
 }
 
+function money(value: any) {
+  const n = Number(value || 0);
+  if (!n) return "";
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
 
-function formatDate(value: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString();
+function preview(thread: Thread) {
+  const msg = thread.latest_message || {};
+  return String(msg.body || msg.subject || "No message yet").slice(0, 120);
 }
 
 export default function MessagesPage() {
   const [threads, setThreads] = useState<Thread[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState("");
+  const [selected, setSelected] = useState<Thread | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [deal, setDeal] = useState<any>(null);
+  const [reply, setReply] = useState("");
+  const [status, setStatus] = useState("Loading messages...");
+  const [threadStatus, setThreadStatus] = useState("");
+
+  const email = useMemo(() => getEmail(), []);
 
   async function loadThreads() {
-    setLoading(true);
-    setStatus("");
-
+    setStatus("Loading messages...");
     try {
-      const res = await fetch("/api/messages/list", { cache: "no-store" });
+      const res = await fetch("/api/messages/list", {
+        cache: "no-store",
+        headers: { "x-vf-email": getEmail() },
+      });
       const data = await res.json();
-
-      if (!res.ok) {
-        setStatus(cleanError(data?.error || data?.details || "Could not load messages."));
-        setThreads([]);
-      } else {
-        setThreads(data.threads || []);
-      }
-    } catch {
-      setStatus("Could not load messages. Refresh and try again.");
-      setThreads([]);
+      if (!res.ok) throw new Error(data?.error || data?.details || "Could not load messages.");
+      setThreads(data?.threads || []);
+      setStatus("");
+    } catch (err: any) {
+      setStatus(err?.message || "Could not load messages.");
     }
-
-    setLoading(false);
   }
 
-  useEffect(() => { loadThreads(); }, []);
+  async function openThread(thread: Thread) {
+    setSelected(thread);
+    setThreadStatus("Loading thread...");
+    setMessages([]);
+    setDeal(thread.deal || null);
+
+    try {
+      const res = await fetch(`/api/messages/thread?thread_key=${encodeURIComponent(thread.thread_key)}`, {
+        cache: "no-store",
+        headers: { "x-vf-email": getEmail() },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || data?.details || "Could not load thread.");
+      setMessages(data?.messages || []);
+      setDeal(data?.deal || thread.deal || null);
+      setThreadStatus("");
+      loadThreads();
+    } catch (err: any) {
+      setThreadStatus(err?.message || "Could not load thread.");
+    }
+  }
+
+  async function sendReply() {
+    if (!selected || !reply.trim()) return;
+    setThreadStatus("Sending reply...");
+
+    try {
+      const other =
+        messages.find((m) => m.sender_email !== email)?.sender_email ||
+        messages.find((m) => m.recipient_email !== email)?.recipient_email ||
+        selected.latest_message?.sender_email ||
+        selected.latest_message?.recipient_email;
+
+      const res = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": getEmail(),
+        },
+        body: JSON.stringify({
+          deal_id: selected.deal_id,
+          thread_key: selected.thread_key,
+          recipient_email: other,
+          subject: `RE: ${selected.latest_message?.subject || "VaultForge Deal Inquiry"}`,
+          body: reply.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || data?.details || "Could not send reply.");
+
+      setReply("");
+      await openThread(selected);
+    } catch (err: any) {
+      setThreadStatus(err?.message || "Could not send reply.");
+    }
+  }
+
+  async function archiveThread() {
+    if (!selected) return;
+
+    try {
+      const res = await fetch("/api/messages/thread", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
+        body: JSON.stringify({ thread_key: selected.thread_key, archived: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || data?.details || "Could not archive thread.");
+      setSelected(null);
+      setMessages([]);
+      setDeal(null);
+      await loadThreads();
+    } catch (err: any) {
+      setThreadStatus(err?.message || "Could not archive thread.");
+    }
+  }
+
+  useEffect(() => {
+    loadThreads();
+  }, []);
 
   return (
-    <main style={shellStyle}>
-      <Nav />
+    <main style={page}>
+      <div style={wrap}>
+        <nav style={nav}>
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <Link href="/projects" style={ghost}>Projects</Link>
+          <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+          <Link href="/submit" style={btn}>Create Deal</Link>
+        </nav>
 
-      <section style={heroStyle}>
-        <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>VAULTFORGE MESSAGES</p>
-        <h1 style={{ fontSize: 50, lineHeight: 1, margin: "10px 0 18px" }}>Inbox</h1>
-        <p style={{ color: "rgba(255,255,255,.72)", fontSize: 20, lineHeight: 1.45 }}>
-          General and deal-based conversations grouped into clean threads.
-        </p>
-      </section>
-
-      <button onClick={loadThreads} style={{ ...buttonStyle, marginBottom: 18 }}>Refresh Inbox</button>
-
-      {status && <section style={{ ...cardStyle, color: "#ffd0d0" }}>{status}</section>}
-      {loading && <section style={cardStyle}>Loading messages...</section>}
-
-      {!loading && !status && threads.length === 0 && (
-        <section style={cardStyle}>
-          <h2>No message threads yet.</h2>
-          <p style={{ color: "rgba(255,255,255,.68)" }}>Open a deal room and message the deal owner to start a conversation.</p>
-          <Link href="/projects" style={navLinkStyle}>Browse Projects</Link>
+        <section style={hero}>
+          <div style={eyebrow}>MESSAGES</div>
+          <h1 style={{ fontSize: "clamp(56px, 12vw, 96px)", lineHeight: .9, margin: "0 0 16px" }}>
+            Deal-tied inbox.
+          </h1>
+          <p style={muted}>
+            Messages are connected to the property/deal room so members can keep conversations organized.
+          </p>
+          <button style={btn} onClick={loadThreads}>Refresh Inbox</button>
         </section>
-      )}
 
-      {!loading && !status && threads.map((thread) => (
-        <section key={thread.thread_id} style={cardStyle}>
-          <span style={pillStyle}>{thread.deal_id ? "DEAL THREAD" : "GENERAL THREAD"}{thread.unread_count > 0 ? ` • ${thread.unread_count} unread` : ""}</span>
-          <h2 style={{ fontSize: 28, margin: "0 0 8px" }}>{thread.subject}</h2>
-          <p style={{ color: "rgba(255,255,255,.62)" }}>With: {thread.other_email || "Unknown member"}</p>
-          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.45 }}>{thread.latest_message}</p>
-          <p style={{ color: "rgba(255,255,255,.45)", fontSize: 14 }}>{formatDate(thread.latest_at)}</p>
-          <Link href={`/messages/${thread.thread_id}`} style={{ ...buttonStyle, display: "inline-block", textDecoration: "none" }}>Open Thread</Link>
-        </section>
-      ))}
+        {status && <section style={hero}>{status}</section>}
+
+        {!status && threads.length === 0 && (
+          <section style={hero}>
+            No messages yet. Open a Deal Room and click <strong>Message Owner</strong> to start a thread.
+          </section>
+        )}
+
+        {!status && threads.length > 0 && (
+          <section style={grid}>
+            <aside style={panel}>
+              <div style={eyebrow}>THREADS</div>
+              {threads.map((thread) => {
+                const dealTitle = thread.deal?.title || "Untitled Deal";
+                const latest = thread.latest_message || {};
+                const isActive = selected?.thread_key === thread.thread_key;
+
+                return (
+                  <div
+                    key={thread.thread_key}
+                    style={isActive ? activeThread : threadCard}
+                    onClick={() => openThread(thread)}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <strong>{dealTitle}</strong>
+                      {thread.unread_count > 0 && (
+                        <span style={{
+                          background: "#9df3bf",
+                          color: "#06100a",
+                          borderRadius: 999,
+                          padding: "3px 8px",
+                          fontWeight: 900,
+                          fontSize: 12,
+                        }}>
+                          {thread.unread_count}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ ...muted, margin: "8px 0" }}>{preview(thread)}</p>
+                    <small style={{ color: "rgba(255,255,255,.52)" }}>
+                      {latest.created_at ? new Date(latest.created_at).toLocaleString() : ""}
+                    </small>
+                  </div>
+                );
+              })}
+            </aside>
+
+            <section style={panel}>
+              {!selected && (
+                <div>
+                  <div style={eyebrow}>SELECT THREAD</div>
+                  <p style={muted}>Choose a thread from the left to read and reply.</p>
+                </div>
+              )}
+
+              {selected && (
+                <>
+                  <div style={eyebrow}>ACTIVE THREAD</div>
+                  <h2 style={{ fontSize: 38, margin: "0 0 10px" }}>
+                    {deal?.title || selected.deal?.title || "Untitled Deal"}
+                  </h2>
+                  {deal && (
+                    <div style={{
+                      border: "1px solid rgba(255,255,255,.12)",
+                      background: "rgba(0,0,0,.16)",
+                      borderRadius: 22,
+                      padding: 14,
+                      marginBottom: 16,
+                    }}>
+                      <p style={{ margin: "0 0 8px", fontWeight: 900 }}>
+                        {deal.city || "Unknown City"}, {deal.state || "Unknown State"} {deal.asking_price ? `• ${money(deal.asking_price)}` : ""}
+                      </p>
+                      <Link href={`/deal/${deal.id || selected.deal_id}`} style={btn}>Open Deal Room</Link>
+                    </div>
+                  )}
+
+                  {threadStatus && <p style={{ color: threadStatus.includes("Sending") || threadStatus.includes("Loading") ? "#e8c46b" : "#ffd0d0", fontWeight: 900 }}>{threadStatus}</p>}
+
+                  <div style={{ display: "grid", gap: 12, marginBottom: 18 }}>
+                    {messages.map((message) => {
+                      const mine = message.sender_email === email;
+                      return (
+                        <div
+                          key={message.id}
+                          style={{
+                            border: "1px solid rgba(255,255,255,.12)",
+                            background: mine ? "rgba(157,243,191,.08)" : "rgba(255,255,255,.04)",
+                            borderRadius: 22,
+                            padding: 16,
+                            marginLeft: mine ? "auto" : 0,
+                            maxWidth: "82%",
+                          }}
+                        >
+                          <div style={{ color: mine ? "#9df3bf" : "#e8c46b", fontWeight: 900, marginBottom: 8 }}>
+                            {mine ? "You" : message.sender_email}
+                          </div>
+                          <p style={{ ...muted, margin: 0, color: "rgba(255,255,255,.82)" }}>{message.body}</p>
+                          <small style={{ color: "rgba(255,255,255,.45)" }}>
+                            {message.created_at ? new Date(message.created_at).toLocaleString() : ""}
+                          </small>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <textarea
+                    value={reply}
+                    onChange={(event) => setReply(event.target.value)}
+                    placeholder="Write a reply..."
+                    style={{ ...input, minHeight: 120, resize: "vertical" }}
+                  />
+                  <div style={{ marginTop: 12 }}>
+                    <button style={btn} onClick={sendReply}>Send Reply</button>
+                    <button style={ghost} onClick={archiveThread}>Archive Thread</button>
+                  </div>
+                </>
+              )}
+            </section>
+          </section>
+        )}
+      </div>
     </main>
   );
 }
