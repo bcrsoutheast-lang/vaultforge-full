@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+
+const FOUNDER_DEADLINE = new Date("2026-05-10T00:00:00-04:00").getTime();
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top, rgba(214,170,62,.18), transparent 34%), linear-gradient(180deg, #030509 0%, #071326 58%, #030509 100%)",
+    "radial-gradient(circle at top, rgba(214,170,62,.18), transparent 34%), radial-gradient(circle at 80% 10%, rgba(157,243,191,.11), transparent 26%), linear-gradient(180deg, #030509 0%, #071326 58%, #030509 100%)",
   color: "white",
   fontFamily: "Arial, sans-serif",
   padding: "28px 18px 90px",
@@ -172,7 +175,132 @@ const listItem: React.CSSProperties = {
   lineHeight: 1.45,
 };
 
+const countdownBox: React.CSSProperties = {
+  marginTop: 26,
+  border: "1px solid rgba(232,196,107,.35)",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.20), transparent 34%), linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.025))",
+  borderRadius: 30,
+  padding: 24,
+  textAlign: "left",
+};
+
+const countdownGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(68px, 1fr))",
+  gap: 12,
+  marginTop: 18,
+};
+
+const timeCard: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.13)",
+  background: "rgba(0,0,0,.24)",
+  borderRadius: 20,
+  padding: "16px 10px",
+  textAlign: "center",
+};
+
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString("en-US");
+}
+
+function getTimeLeft() {
+  const diff = FOUNDER_DEADLINE - Date.now();
+
+  if (diff <= 0) {
+    return {
+      expired: true,
+      days: 0,
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+    };
+  }
+
+  return {
+    expired: false,
+    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+    minutes: Math.floor((diff / (1000 * 60)) % 60),
+    seconds: Math.floor((diff / 1000) % 60),
+  };
+}
+
 export default function HomePage() {
+  const [stats, setStats] = useState({
+    members: 0,
+    deals: 0,
+    saved: 0,
+    alerts: 0,
+    markets: 6,
+  });
+
+  const [timeLeft, setTimeLeft] = useState(getTimeLeft());
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadStats() {
+      try {
+        const res = await fetch("/api/public/stats", { cache: "no-store" });
+        const data = await res.json();
+        if (!mounted) return;
+
+        setStats({
+          members: Number(data?.members || 0),
+          deals: Number(data?.deals || 0),
+          saved: Number(data?.saved || 0),
+          alerts: Number(data?.alerts || 0),
+          markets: Number(data?.markets || 6),
+        });
+      } catch {
+        // Keep homepage live even if stats are temporarily unavailable.
+      }
+    }
+
+    loadStats();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setTimeLeft(getTimeLeft());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const founderActive = !timeLeft.expired;
+
+  const liveStats = useMemo(
+    () => [
+      {
+        label: "MEMBERS",
+        value: stats.members > 0 ? formatNumber(stats.members) : "Opening",
+        text: "Qualified operators, investors, lenders, buyers, and deal sources entering the private network.",
+      },
+      {
+        label: "DEALS",
+        value: stats.deals > 0 ? formatNumber(stats.deals) : "Building",
+        text: "Structured residential, commercial, and land opportunities routed through the system.",
+      },
+      {
+        label: "SAVED TARGETS",
+        value: formatNumber(stats.saved),
+        text: "Buy Bucket saves that show real member demand and acquisition interest.",
+      },
+      {
+        label: "MARKETS",
+        value: `${formatNumber(stats.markets)}+`,
+        text: "Initial Southeast and high-activity real estate markets targeted for member routing.",
+      },
+    ],
+    [stats]
+  );
+
   return (
     <main style={page}>
       <div style={wrap}>
@@ -202,30 +330,98 @@ export default function HomePage() {
           </p>
 
           <div>
-            <Link href="/login" style={primary}>Enter Members Area</Link>
+            <Link href="/login" style={primary}>{founderActive ? "Secure Founding Access" : "Enter Members Area"}</Link>
             <Link href="/terms" style={secondary}>Read Member Rules</Link>
           </div>
 
           <div style={statRow}>
-            <div style={stat}>
-              <div style={{ ...eyebrow, marginBottom: 8 }}>DEAL FLOW</div>
-              <div style={{ fontSize: 28, fontWeight: 950 }}>Private</div>
-              <p style={muted}>Structured opportunities routed by need, market, and strategy.</p>
+            {liveStats.map((item) => (
+              <div key={item.label} style={stat}>
+                <div style={{ ...eyebrow, marginBottom: 8 }}>{item.label}</div>
+                <div style={{ fontSize: 34, fontWeight: 950 }}>{item.value}</div>
+                <p style={muted}>{item.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {founderActive ? (
+          <section style={countdownBox}>
+            <div style={eyebrow}>FOUNDING MEMBER WINDOW</div>
+            <h2 style={bigLine}>
+              Founding access closes <span style={gold}>May 10.</span>
+            </h2>
+            <p style={{ ...muted, fontSize: 20 }}>
+              Founding Member Access is available until May 10. Join today for
+              <strong style={green}> $49 for your first month</strong>. After the first month,
+              membership renews at <strong style={gold}>$149/month</strong> unless canceled before renewal.
+              After May 10, new member access increases to <strong style={gold}>$99 for the first month</strong>,
+              then <strong style={gold}>$149/month</strong>.
+            </p>
+
+            <div style={countdownGrid}>
+              <div style={timeCard}>
+                <div style={{ fontSize: 34, fontWeight: 950 }}>{timeLeft.days}</div>
+                <div style={{ ...muted, fontSize: 13 }}>DAYS</div>
+              </div>
+              <div style={timeCard}>
+                <div style={{ fontSize: 34, fontWeight: 950 }}>{timeLeft.hours}</div>
+                <div style={{ ...muted, fontSize: 13 }}>HOURS</div>
+              </div>
+              <div style={timeCard}>
+                <div style={{ fontSize: 34, fontWeight: 950 }}>{timeLeft.minutes}</div>
+                <div style={{ ...muted, fontSize: 13 }}>MINUTES</div>
+              </div>
+              <div style={timeCard}>
+                <div style={{ fontSize: 34, fontWeight: 950 }}>{timeLeft.seconds}</div>
+                <div style={{ ...muted, fontSize: 13 }}>SECONDS</div>
+              </div>
             </div>
-            <div style={stat}>
-              <div style={{ ...eyebrow, marginBottom: 8 }}>CAPITAL</div>
-              <div style={{ fontSize: 28, fontWeight: 950 }}>Targeted</div>
-              <p style={muted}>Lenders and capital partners connected to real opportunities.</p>
+
+            <div style={{ marginTop: 20 }}>
+              <Link href="/login" style={primary}>Activate Access — $49 Today</Link>
+              <Link href="/terms" style={secondary}>Review Access Terms</Link>
             </div>
-            <div style={stat}>
-              <div style={{ ...eyebrow, marginBottom: 8 }}>EXECUTION</div>
-              <div style={{ fontSize: 28, fontWeight: 950 }}>Operators</div>
-              <p style={muted}>Contractors, buyers, developers, wholesalers, and partners in one place.</p>
+          </section>
+        ) : (
+          <section style={countdownBox}>
+            <div style={eyebrow}>MEMBER ACCESS</div>
+            <h2 style={bigLine}>Founding access has closed.</h2>
+            <p style={{ ...muted, fontSize: 20 }}>
+              New member access is now <strong style={gold}>$99 for the first month</strong>,
+              then <strong style={gold}>$149/month</strong> unless canceled before renewal.
+            </p>
+            <Link href="/login" style={primary}>Apply for Member Access</Link>
+          </section>
+        )}
+
+        <section style={section}>
+          <div style={eyebrow}>LIVE NETWORK INTELLIGENCE</div>
+          <h2 style={bigLine}>
+            The more members use it, <span style={green}>the smarter the network gets.</span>
+          </h2>
+
+          <div style={grid}>
+            <div style={card}>
+              <h3 style={cardTitle}>Member Demand Signals</h3>
+              <p style={muted}>
+                Buy Bucket saves help reveal what members actually want: markets, price ranges,
+                property types, capital needs, and acquisition appetite.
+              </p>
             </div>
-            <div style={stat}>
-              <div style={{ ...eyebrow, marginBottom: 8 }}>SIGNALS</div>
-              <div style={{ fontSize: 28, fontWeight: 950 }}>AI Routed</div>
-              <p style={muted}>Buy boxes, deal needs, alerts, and member demand organized.</p>
+            <div style={card}>
+              <h3 style={cardTitle}>Deal Room Data</h3>
+              <p style={muted}>
+                Uploaded deal rooms keep photos, numbers, strategy, notes, and next steps organized
+                instead of buried in text chains.
+              </p>
+            </div>
+            <div style={card}>
+              <h3 style={cardTitle}>Routing Signals</h3>
+              <p style={muted}>
+                Deals, member profiles, and saved targets create signals for future alerts,
+                matching, funding routes, and operator connections.
+              </p>
             </div>
           </div>
         </section>
@@ -360,7 +556,9 @@ export default function HomePage() {
             Members do not just browse — they create opportunities, define needs, route signals,
             and connect with people who can move deals forward.
           </p>
-          <Link href="/login" style={primary}>Enter Members Area</Link>
+          <Link href="/login" style={primary}>
+            {founderActive ? "Secure Founding Access — $49 Today" : "Enter Members Area"}
+          </Link>
         </section>
       </div>
     </main>
