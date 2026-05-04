@@ -1,53 +1,42 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
-import { getSessionEmailFromRequest } from "../../../lib/vaultforge-session";
+import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getSupabaseConfig() {
+function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  if (!url || !key) return null;
-  return { url, key };
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+  if (!url || !key) throw new Error("Missing Supabase environment values.");
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
+function clean(v: unknown) { return String(v || "").trim(); }
 
-function makeThreadId(senderEmail: string, recipientEmail: string, dealId: string | null) {
-  const people = [senderEmail.toLowerCase(), recipientEmail.toLowerCase()].sort().join("|");
-  return crypto.createHash("sha256").update(`${dealId || "general"}|${people}`).digest("hex").slice(0, 32);
-}
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const sender = clean(request.headers.get("x-vf-email")).toLowerCase() || clean(body.sender_email).toLowerCase() || "text@text.com";
+    const dealId = clean(body.deal_id);
+    const message = clean(body.body);
+    const subject = clean(body.subject) || "VaultForge Deal Inquiry";
 
-export async function POST(req: Request) {
-  const config = getSupabaseConfig();
-  if (!config) return NextResponse.json({ error: "Supabase environment variables are missing." }, { status: 500 });
+    if (!dealId) return NextResponse.json({ error: "Missing deal id." }, { status: 400 });
+    if (!message) return NextResponse.json({ error: "Message is required." }, { status: 400 });
 
-  const senderEmail = getSessionEmailFromRequest(req);
-  if (!senderEmail) return NextResponse.json({ error: "Not logged in." }, { status: 401 });
+    const supabase = supabaseClient();
+    const { data: deal, error: dealError } = await supabase.from("vf_deals").select("*").eq("id", dealId).maybeSingle();
+    if (dealError) return NextResponse.json({ error: dealError.message }, { status: 500 });
+    if (!deal) return NextResponse.json({ error: "Deal not found." }, { status: 404 });
 
-  const body = await req.json();
-  const recipientEmail = String(body?.recipient_email || "").trim().toLowerCase();
-  const subject = String(body?.subject || "VaultForge message").trim();
-  const message = String(body?.message || "").trim();
-  const dealId = String(body?.deal_id || "").trim() || null;
-  const incomingThreadId = String(body?.thread_id || "").trim();
+    const recipient = clean(deal.owner_contact_email).toLowerCase() || clean(deal.owner_email).toLowerCase() || clean(deal.member_email).toLowerCase();
 
-  if (!recipientEmail || !message) return NextResponse.json({ error: "Recipient and message are required." }, { status: 400 });
+    const insert = { deal_id: dealId, sender_email: sender, recipient_email: recipient, subject, body: message, status: "sent" };
 
-  const threadId = incomingThreadId || makeThreadId(senderEmail, recipientEmail, dealId);
+    const { data, error } = await supabase.from("vf_messages").insert(insert).select("*").single();
+    if (error) return NextResponse.json({ error: error.message, details: error }, { status: 500 });
 
-  const res = await fetch(`${config.url}/rest/v1/vf_messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify({ thread_id: threadId, sender_email: senderEmail, recipient_email: recipientEmail, subject, message, deal_id: dealId, archived: false, read: false }),
-  });
-
-  if (!res.ok) return NextResponse.json({ error: "Failed to send message.", details: await res.text() }, { status: 500 });
-
-  const saved = await res.json();
-  return NextResponse.json({ ok: true, message: saved?.[0] || null, thread_id: threadId });
+    return NextResponse.json({ ok: true, message: data });
+  } catch (error: any) {
+    return NextResponse.json({ error: "Could not send message.", details: error?.message || String(error) }, { status: 500 });
+  }
 }
