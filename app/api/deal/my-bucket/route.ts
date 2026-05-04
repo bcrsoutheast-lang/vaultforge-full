@@ -11,41 +11,33 @@ function supabase() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
-function emailFromRequest(request: Request, body: any) {
-  return request.headers.get("x-vf-email") || body?.buyer_email || body?.email || "member@vaultforge.local";
-}
-
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const dealId = body?.deal_id || body?.dealId || body?.id || "";
-    const buyerEmail = emailFromRequest(request, body);
-    if (!dealId) return NextResponse.json({ error: "Missing deal id." }, { status: 400 });
-
+    const { searchParams } = new URL(request.url);
+    const email = request.headers.get("x-vf-email") || searchParams.get("email") || "member@vaultforge.local";
     const db = supabase();
 
-    const { data: existing, error: existingError } = await db
+    const { data: bucketRows, error } = await db
       .from("vf_buy_bucket")
       .select("*")
-      .eq("deal_id", dealId)
-      .eq("buyer_email", buyerEmail)
-      .maybeSingle();
-
-    if (existingError && existingError.code !== "PGRST116") {
-      return NextResponse.json({ error: existingError.message }, { status: 500 });
-    }
-
-    if (existing) return NextResponse.json({ ok: true, item: existing, already_saved: true });
-
-    const { data, error } = await db
-      .from("vf_buy_bucket")
-      .insert({ deal_id: dealId, buyer_email: buyerEmail, status: "saved" })
-      .select("*")
-      .single();
+      .eq("buyer_email", email)
+      .order("created_at", { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, item: data });
+
+    const rows = bucketRows || [];
+    const ids = rows.map((r: any) => r.deal_id).filter(Boolean);
+    let dealsById: Record<string, any> = {};
+
+    if (ids.length) {
+      const { data: deals, error: dealError } = await db.from("vf_deals").select("*").in("id", ids);
+      if (dealError) return NextResponse.json({ error: dealError.message }, { status: 500 });
+      dealsById = Object.fromEntries((deals || []).map((d: any) => [d.id, d]));
+    }
+
+    const items = rows.map((row: any) => ({ ...row, deal: dealsById[row.deal_id] || null }));
+    return NextResponse.json({ ok: true, items });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Buy Bucket save failed." }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Could not load Buy Bucket." }, { status: 500 });
   }
 }
