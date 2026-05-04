@@ -21,6 +21,39 @@ const states = [
   "West Virginia","Wisconsin","Wyoming"
 ];
 
+const emptyForm: Record<string, string> = {
+  title: "",
+  strategy: "Fix & Flip",
+  city: "",
+  state: "Georgia",
+  address: "",
+  asking_price: "",
+  arv: "",
+  repair_estimate: "",
+  description: "",
+  bedrooms: "",
+  bathrooms: "",
+  building_sqft: "",
+  year_built: "",
+  occupancy: "",
+  condition: "",
+  commercial_type: "",
+  units: "",
+  noi: "",
+  cap_rate: "",
+  zoning: "",
+  tenant_status: "",
+  land_acres: "",
+  frontage: "",
+  utilities: "",
+  road_access: "",
+  topography: "",
+  parcel_id: "",
+  seller_situation: "",
+  access_notes: "",
+  private_notes: "",
+};
+
 const shell: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -43,6 +76,18 @@ const nav: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, m
 const navLink: React.CSSProperties = {
   color: "#06100a",
   background: "#f5d978",
+  textDecoration: "none",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 900,
+  border: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+const greenLink: React.CSSProperties = {
+  color: "#06100a",
+  background: "#9df3bf",
   textDecoration: "none",
   borderRadius: 999,
   padding: "13px 18px",
@@ -128,6 +173,33 @@ async function uploadPhoto(file: File, email: string) {
   return `${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${path}`;
 }
 
+async function createDealWithRetry(payload: Record<string, any>, email: string) {
+  let lastError = "";
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const res = await fetch("/api/deal/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-vf-email": email },
+      body: JSON.stringify(payload),
+    });
+
+    let data: any = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
+    if (res.ok) return data;
+
+    lastError = data?.error || data?.details || `Deal save failed on attempt ${attempt}.`;
+
+    await new Promise((resolve) => setTimeout(resolve, 650));
+  }
+
+  throw new Error(lastError || "Deal save failed.");
+}
+
 export default function SubmitPage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [dealType, setDealType] = useState<DealType>("Residential");
@@ -136,38 +208,9 @@ export default function SubmitPage() {
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
-  const [form, setForm] = useState<Record<string, string>>({
-    title: "",
-    strategy: "Fix & Flip",
-    city: "",
-    state: "Georgia",
-    address: "",
-    asking_price: "",
-    arv: "",
-    repair_estimate: "",
-    description: "",
-    bedrooms: "",
-    bathrooms: "",
-    building_sqft: "",
-    year_built: "",
-    occupancy: "",
-    condition: "",
-    commercial_type: "",
-    units: "",
-    noi: "",
-    cap_rate: "",
-    zoning: "",
-    tenant_status: "",
-    land_acres: "",
-    frontage: "",
-    utilities: "",
-    road_access: "",
-    topography: "",
-    parcel_id: "",
-    seller_situation: "",
-    access_notes: "",
-    private_notes: "",
-  });
+  const [form, setForm] = useState<Record<string, string>>({ ...emptyForm });
+  const [savedDeal, setSavedDeal] = useState<any>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const typeHelp = useMemo(() => {
     if (dealType === "Residential") return "Single-family, small multifamily, flips, rentals, creative finance, or distressed residential opportunities.";
@@ -186,7 +229,22 @@ export default function SubmitPage() {
     setPreviews(selected.map((file) => URL.createObjectURL(file)));
   }
 
+  function resetForNewDeal() {
+    previews.forEach((url) => URL.revokeObjectURL(url));
+    setForm({ ...emptyForm });
+    setFiles([]);
+    setPreviews([]);
+    setSavedDeal(null);
+    setShowSuccess(false);
+    setStatus("");
+    setError("");
+    if (fileRef.current) fileRef.current.value = "";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function submitDeal() {
+    if (busy) return;
+
     setError("");
     setStatus("");
     setBusy(true);
@@ -244,22 +302,29 @@ export default function SubmitPage() {
         private_notes: form.private_notes,
       };
 
-      const res = await fetch("/api/deal/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-vf-email": email },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || data?.details || "Deal save failed.");
+      const data = await createDealWithRetry(payload, email);
+      const deal = data?.deal || data?.data || data;
 
-      setStatus("Deal saved. Open Projects or Buy Bucket to view it.");
-      setForm((current) => ({ ...current, title: "", city: "", address: "", description: "" }));
+      setSavedDeal(deal);
+      setShowSuccess(true);
+      setStatus("Deal saved.");
+      setError("");
+
+      previews.forEach((url) => URL.revokeObjectURL(url));
+      setFiles([]);
+      setPreviews([]);
+      setForm({ ...emptyForm });
+      if (fileRef.current) fileRef.current.value = "";
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: any) {
       setError(err?.message || "Could not submit deal.");
     } finally {
       setBusy(false);
     }
   }
+
+  const savedId = savedDeal?.id || savedDeal?.deal_id || "";
 
   return (
     <main style={shell}>
@@ -271,17 +336,52 @@ export default function SubmitPage() {
           <Link href="/alerts" style={ghostButton}>Alerts</Link>
         </nav>
 
+        {showSuccess && (
+          <div style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            background: "rgba(0,0,0,.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 18,
+          }}>
+            <section style={{
+              ...card,
+              maxWidth: 620,
+              width: "100%",
+              borderColor: "rgba(157,243,191,.55)",
+              background: "linear-gradient(135deg, rgba(9,31,18,.98), rgba(7,19,38,.98))",
+            }}>
+              <div style={{ ...eyebrow, color: "#9df3bf" }}>DEAL SAVED</div>
+              <h2 style={{ fontSize: "clamp(42px, 9vw, 72px)", lineHeight: .9, margin: "0 0 16px" }}>
+                Your deal room was created.
+              </h2>
+              <p style={{ ...muted, fontSize: 20 }}>
+                The form was cleared. Open Projects, Buy Bucket, or create another deal.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 18 }}>
+                {savedId && <Link href={`/deal/${savedId}`} style={greenLink}>Open Deal Room</Link>}
+                <Link href="/projects" style={navLink}>Projects</Link>
+                <Link href="/buy-bucket" style={navLink}>Buy Bucket</Link>
+                <button type="button" onClick={resetForNewDeal} style={ghostButton}>Create Another</button>
+              </div>
+            </section>
+          </div>
+        )}
+
         <section style={card}>
           <div style={eyebrow}>VAULTFORGE CREATE</div>
           <h1 style={{ fontSize: "clamp(54px, 12vw, 104px)", lineHeight: .88, margin: "0 0 18px", letterSpacing: -4 }}>
             Submit a real deal room.
           </h1>
           <p style={muted}>
-            Choose Residential, Commercial, or Land. Each type now opens its own field set and saves with real uploaded photos.
+            Choose Residential, Commercial, or Land. Each type opens its own field set and saves with real uploaded photos.
           </p>
         </section>
 
-        {(error || status) && (
+        {(error || (status && !showSuccess)) && (
           <section style={{ ...card, borderColor: error ? "rgba(255,90,90,.65)" : "rgba(157,243,191,.35)" }}>
             <p style={{ margin: 0, color: error ? "#ffd0d0" : "#9df3bf", fontWeight: 900, fontSize: 18 }}>
               {error || status}
@@ -289,128 +389,144 @@ export default function SubmitPage() {
           </section>
         )}
 
-        <section style={card}>
-          <div style={eyebrow}>DEAL TYPE</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-            {(["Residential", "Commercial", "Land"] as DealType[]).map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setDealType(type)}
-                style={dealType === type ? navLink : ghostButton}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-          <p style={muted}>{typeHelp}</p>
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>DEAL BASICS</div>
-          <div style={grid}>
-            <Field label="Deal Title *" value={form.title} onChange={(v) => update("title", v)} placeholder="Cartersville flip, Atlanta retail strip, 12-acre infill parcel..." />
-            <SelectField label="Strategy" value={form.strategy} onChange={(v) => update("strategy", v)} options={["Fix & Flip", "Rental", "Wholesale", "Creative Finance", "Buy & Hold", "Development", "JV Needed", "Lender Needed", "Buyer Needed"]} />
-            <Field label="City *" value={form.city} onChange={(v) => update("city", v)} />
-            <SelectField label="State *" value={form.state} onChange={(v) => update("state", v)} options={states} />
-            <Field label="Address / Area" value={form.address} onChange={(v) => update("address", v)} />
-            <Field label="Asking Price" value={form.asking_price} onChange={(v) => update("asking_price", v)} placeholder="$" />
-            <Field label="ARV / Value" value={form.arv} onChange={(v) => update("arv", v)} placeholder="$" />
-            <Field label="Repair Estimate" value={form.repair_estimate} onChange={(v) => update("repair_estimate", v)} placeholder="$" />
-          </div>
-        </section>
-
-        {dealType === "Residential" && (
-          <section style={card}>
-            <div style={eyebrow}>RESIDENTIAL FIELDS</div>
-            <div style={grid}>
-              <Field label="Bedrooms" value={form.bedrooms} onChange={(v) => update("bedrooms", v)} />
-              <Field label="Bathrooms" value={form.bathrooms} onChange={(v) => update("bathrooms", v)} />
-              <Field label="Building Sqft" value={form.building_sqft} onChange={(v) => update("building_sqft", v)} />
-              <Field label="Year Built" value={form.year_built} onChange={(v) => update("year_built", v)} />
-              <SelectField label="Occupancy" value={form.occupancy} onChange={(v) => update("occupancy", v)} options={["Vacant", "Owner Occupied", "Tenant Occupied", "Unknown"]} />
-              <SelectField label="Condition" value={form.condition} onChange={(v) => update("condition", v)} options={["Light Cosmetic", "Medium Rehab", "Heavy Rehab", "Fire/Flood", "Tear Down", "Unknown"]} />
+        {savedDeal && !showSuccess ? (
+          <section style={{ ...card, borderColor: "rgba(157,243,191,.45)" }}>
+            <div style={{ ...eyebrow, color: "#9df3bf" }}>SAVED</div>
+            <h2 style={{ fontSize: 44, margin: "0 0 14px" }}>Deal saved.</h2>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+              {savedId && <Link href={`/deal/${savedId}`} style={greenLink}>Open Deal Room</Link>}
+              <Link href="/projects" style={navLink}>Projects</Link>
+              <button type="button" onClick={resetForNewDeal} style={ghostButton}>Create Another</button>
             </div>
           </section>
+        ) : null}
+
+        {!savedDeal && (
+          <>
+            <section style={card}>
+              <div style={eyebrow}>DEAL TYPE</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                {(["Residential", "Commercial", "Land"] as DealType[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setDealType(type)}
+                    style={dealType === type ? navLink : ghostButton}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+              <p style={muted}>{typeHelp}</p>
+            </section>
+
+            <section style={card}>
+              <div style={eyebrow}>DEAL BASICS</div>
+              <div style={grid}>
+                <Field label="Deal Title *" value={form.title} onChange={(v) => update("title", v)} placeholder="Cartersville flip, Atlanta retail strip, 12-acre infill parcel..." />
+                <SelectField label="Strategy" value={form.strategy} onChange={(v) => update("strategy", v)} options={["Fix & Flip", "Rental", "Wholesale", "Creative Finance", "Buy & Hold", "Development", "JV Needed", "Lender Needed", "Buyer Needed"]} />
+                <Field label="City *" value={form.city} onChange={(v) => update("city", v)} />
+                <SelectField label="State *" value={form.state} onChange={(v) => update("state", v)} options={states} />
+                <Field label="Address / Area" value={form.address} onChange={(v) => update("address", v)} />
+                <Field label="Asking Price" value={form.asking_price} onChange={(v) => update("asking_price", v)} placeholder="$" />
+                <Field label="ARV / Value" value={form.arv} onChange={(v) => update("arv", v)} placeholder="$" />
+                <Field label="Repair Estimate" value={form.repair_estimate} onChange={(v) => update("repair_estimate", v)} placeholder="$" />
+              </div>
+            </section>
+
+            {dealType === "Residential" && (
+              <section style={card}>
+                <div style={eyebrow}>RESIDENTIAL FIELDS</div>
+                <div style={grid}>
+                  <Field label="Bedrooms" value={form.bedrooms} onChange={(v) => update("bedrooms", v)} />
+                  <Field label="Bathrooms" value={form.bathrooms} onChange={(v) => update("bathrooms", v)} />
+                  <Field label="Building Sqft" value={form.building_sqft} onChange={(v) => update("building_sqft", v)} />
+                  <Field label="Year Built" value={form.year_built} onChange={(v) => update("year_built", v)} />
+                  <SelectField label="Occupancy" value={form.occupancy} onChange={(v) => update("occupancy", v)} options={["Vacant", "Owner Occupied", "Tenant Occupied", "Unknown"]} />
+                  <SelectField label="Condition" value={form.condition} onChange={(v) => update("condition", v)} options={["Light Cosmetic", "Medium Rehab", "Heavy Rehab", "Fire/Flood", "Tear Down", "Unknown"]} />
+                </div>
+              </section>
+            )}
+
+            {dealType === "Commercial" && (
+              <section style={card}>
+                <div style={eyebrow}>COMMERCIAL FIELDS</div>
+                <div style={grid}>
+                  <SelectField label="Commercial Type" value={form.commercial_type} onChange={(v) => update("commercial_type", v)} options={["Retail", "Office", "Industrial", "Mixed Use", "Multifamily", "Self Storage", "Hospitality", "Mobile Home Park", "Other"]} />
+                  <Field label="Units / Suites" value={form.units} onChange={(v) => update("units", v)} />
+                  <Field label="Building Sqft" value={form.building_sqft} onChange={(v) => update("building_sqft", v)} />
+                  <Field label="NOI" value={form.noi} onChange={(v) => update("noi", v)} placeholder="$" />
+                  <Field label="Cap Rate" value={form.cap_rate} onChange={(v) => update("cap_rate", v)} placeholder="%" />
+                  <Field label="Zoning" value={form.zoning} onChange={(v) => update("zoning", v)} />
+                  <SelectField label="Tenant Status" value={form.tenant_status} onChange={(v) => update("tenant_status", v)} options={["Vacant", "Partially Occupied", "Fully Occupied", "Owner User", "Unknown"]} />
+                </div>
+              </section>
+            )}
+
+            {dealType === "Land" && (
+              <section style={card}>
+                <div style={eyebrow}>LAND FIELDS</div>
+                <div style={grid}>
+                  <Field label="Acres" value={form.land_acres} onChange={(v) => update("land_acres", v)} />
+                  <Field label="Parcel ID" value={form.parcel_id} onChange={(v) => update("parcel_id", v)} />
+                  <Field label="Zoning" value={form.zoning} onChange={(v) => update("zoning", v)} />
+                  <Field label="Road Frontage" value={form.frontage} onChange={(v) => update("frontage", v)} />
+                  <SelectField label="Utilities" value={form.utilities} onChange={(v) => update("utilities", v)} options={["At Site", "Nearby", "Septic/Well", "Unknown", "None"]} />
+                  <SelectField label="Road Access" value={form.road_access} onChange={(v) => update("road_access", v)} options={["Public Road", "Private Road", "Easement", "Landlocked", "Unknown"]} />
+                  <SelectField label="Topography" value={form.topography} onChange={(v) => update("topography", v)} options={["Flat", "Rolling", "Sloped", "Wooded", "Cleared", "Mixed", "Unknown"]} />
+                </div>
+              </section>
+            )}
+
+            <section style={card}>
+              <div style={eyebrow}>PHOTOS</div>
+              <h2 style={{ fontSize: 42, margin: "0 0 10px" }}>Upload deal photos</h2>
+              <p style={muted}>Tap the upload field. Select at least 1 photo for testing. Later we can enforce 5 minimum.</p>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: "none" }}
+                onChange={(event) => chooseFiles(event.target.files)}
+              />
+              <div style={uploadBox} onClick={() => fileRef.current?.click()}>
+                <h3 style={{ color: "#f5d978", fontSize: 30, margin: "0 0 18px" }}>Tap to choose photos</h3>
+                <p style={{ ...muted, margin: 0, fontWeight: 900 }}>Selected photos: {files.length} / 10</p>
+              </div>
+              {previews.length > 0 && (
+                <div style={{ ...grid, marginTop: 18 }}>
+                  {previews.map((src, i) => (
+                    <img key={src} src={src} alt={`Selected ${i + 1}`} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(255,255,255,.16)" }} />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section style={card}>
+              <div style={eyebrow}>CONTEXT</div>
+              <Textarea label="Description / Deal Summary" value={form.description} onChange={(v) => update("description", v)} />
+              <Textarea label="Seller Situation" value={form.seller_situation} onChange={(v) => update("seller_situation", v)} />
+              <Textarea label="Access Notes" value={form.access_notes} onChange={(v) => update("access_notes", v)} />
+              <Textarea label="Private Notes" value={form.private_notes} onChange={(v) => update("private_notes", v)} />
+            </section>
+
+            <button
+              type="button"
+              onClick={submitDeal}
+              disabled={busy}
+              style={{
+                ...navLink,
+                width: "100%",
+                fontSize: 22,
+                padding: "18px 22px",
+                opacity: busy ? .65 : 1,
+              }}
+            >
+              {busy ? "Saving Deal..." : "Submit Deal"}
+            </button>
+          </>
         )}
-
-        {dealType === "Commercial" && (
-          <section style={card}>
-            <div style={eyebrow}>COMMERCIAL FIELDS</div>
-            <div style={grid}>
-              <SelectField label="Commercial Type" value={form.commercial_type} onChange={(v) => update("commercial_type", v)} options={["Retail", "Office", "Industrial", "Mixed Use", "Multifamily", "Self Storage", "Hospitality", "Mobile Home Park", "Other"]} />
-              <Field label="Units / Suites" value={form.units} onChange={(v) => update("units", v)} />
-              <Field label="Building Sqft" value={form.building_sqft} onChange={(v) => update("building_sqft", v)} />
-              <Field label="NOI" value={form.noi} onChange={(v) => update("noi", v)} placeholder="$" />
-              <Field label="Cap Rate" value={form.cap_rate} onChange={(v) => update("cap_rate", v)} placeholder="%" />
-              <Field label="Zoning" value={form.zoning} onChange={(v) => update("zoning", v)} />
-              <SelectField label="Tenant Status" value={form.tenant_status} onChange={(v) => update("tenant_status", v)} options={["Vacant", "Partially Occupied", "Fully Occupied", "Owner User", "Unknown"]} />
-            </div>
-          </section>
-        )}
-
-        {dealType === "Land" && (
-          <section style={card}>
-            <div style={eyebrow}>LAND FIELDS</div>
-            <div style={grid}>
-              <Field label="Acres" value={form.land_acres} onChange={(v) => update("land_acres", v)} />
-              <Field label="Parcel ID" value={form.parcel_id} onChange={(v) => update("parcel_id", v)} />
-              <Field label="Zoning" value={form.zoning} onChange={(v) => update("zoning", v)} />
-              <Field label="Road Frontage" value={form.frontage} onChange={(v) => update("frontage", v)} />
-              <SelectField label="Utilities" value={form.utilities} onChange={(v) => update("utilities", v)} options={["At Site", "Nearby", "Septic/Well", "Unknown", "None"]} />
-              <SelectField label="Road Access" value={form.road_access} onChange={(v) => update("road_access", v)} options={["Public Road", "Private Road", "Easement", "Landlocked", "Unknown"]} />
-              <SelectField label="Topography" value={form.topography} onChange={(v) => update("topography", v)} options={["Flat", "Rolling", "Sloped", "Wooded", "Cleared", "Mixed", "Unknown"]} />
-            </div>
-          </section>
-        )}
-
-        <section style={card}>
-          <div style={eyebrow}>PHOTOS</div>
-          <h2 style={{ fontSize: 42, margin: "0 0 10px" }}>Upload deal photos</h2>
-          <p style={muted}>Tap the upload field. Select at least 1 photo for testing. Later we can enforce 5 minimum.</p>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            style={{ display: "none" }}
-            onChange={(event) => chooseFiles(event.target.files)}
-          />
-          <div style={uploadBox} onClick={() => fileRef.current?.click()}>
-            <h3 style={{ color: "#f5d978", fontSize: 30, margin: "0 0 18px" }}>Tap to choose photos</h3>
-            <p style={{ ...muted, margin: 0, fontWeight: 900 }}>Selected photos: {files.length} / 10</p>
-          </div>
-          {previews.length > 0 && (
-            <div style={{ ...grid, marginTop: 18 }}>
-              {previews.map((src, i) => (
-                <img key={src} src={src} alt={`Selected ${i + 1}`} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(255,255,255,.16)" }} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>CONTEXT</div>
-          <Textarea label="Description / Deal Summary" value={form.description} onChange={(v) => update("description", v)} />
-          <Textarea label="Seller Situation" value={form.seller_situation} onChange={(v) => update("seller_situation", v)} />
-          <Textarea label="Access Notes" value={form.access_notes} onChange={(v) => update("access_notes", v)} />
-          <Textarea label="Private Notes" value={form.private_notes} onChange={(v) => update("private_notes", v)} />
-        </section>
-
-        <button
-          type="button"
-          onClick={submitDeal}
-          disabled={busy}
-          style={{
-            ...navLink,
-            width: "100%",
-            fontSize: 22,
-            padding: "18px 22px",
-            opacity: busy ? .65 : 1,
-          }}
-        >
-          {busy ? "Saving Deal..." : "Submit Deal"}
-        </button>
       </div>
     </main>
   );
