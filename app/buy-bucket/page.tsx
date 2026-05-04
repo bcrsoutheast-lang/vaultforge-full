@@ -3,154 +3,75 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type BucketItem = Record<string, any>;
+type Item = Record<string, any>;
 
-const shell: React.CSSProperties = {
-  minHeight: "100vh",
-  background: "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 30%), linear-gradient(180deg, #07130d 0%, #061006 100%)",
-  color: "#fffdf0",
-  padding: "28px 18px 100px",
-  fontFamily: "Arial, sans-serif",
-};
+const shell: React.CSSProperties = { minHeight: "100vh", background: "linear-gradient(180deg,#071326,#06140d)", color: "#fff", padding: "28px 18px 100px", fontFamily: "Arial, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1120, margin: "0 auto" };
-const panel: React.CSSProperties = { border: "1px solid rgba(232,196,107,.28)", borderRadius: 32, background: "rgba(255,255,255,.035)", padding: 24, marginBottom: 22 };
-const navButton: React.CSSProperties = { display: "inline-block", margin: "0 10px 10px 0", padding: "14px 22px", borderRadius: 999, background: "#ffe187", color: "#071006", textDecoration: "none", fontWeight: 900, border: "0" };
-const card: React.CSSProperties = { border: "1px solid rgba(232,196,107,.22)", borderRadius: 30, background: "rgba(255,255,255,.035)", overflow: "hidden", marginBottom: 22 };
-const body: React.CSSProperties = { padding: 22 };
-const eyebrow: React.CSSProperties = { color: "#ffe187", letterSpacing: 5, fontSize: 12, fontWeight: 900, textTransform: "uppercase", marginBottom: 12 };
-const muted: React.CSSProperties = { color: "rgba(255,255,255,.68)", fontSize: 18, lineHeight: 1.45 };
-const pill: React.CSSProperties = { display: "inline-block", margin: "0 8px 8px 0", padding: "8px 12px", borderRadius: 999, border: "1px solid rgba(157,243,191,.35)", color: "#9df3bf", fontWeight: 900, letterSpacing: 2, fontSize: 12 };
+const hero: React.CSSProperties = { border: "1px solid rgba(255,222,140,.25)", background: "rgba(255,255,255,.035)", borderRadius: 34, padding: 28, marginBottom: 22 };
+const btn: React.CSSProperties = { display: "inline-block", background: "#ffe08a", color: "#071326", padding: "14px 24px", borderRadius: 999, fontWeight: 900, textDecoration: "none", margin: "8px 8px 0 0", border: 0 };
+const card: React.CSSProperties = { border: "1px solid rgba(255,222,140,.22)", background: "rgba(255,255,255,.035)", borderRadius: 28, overflow: "hidden", marginBottom: 22 };
+const imageWrap: React.CSSProperties = { height: 280, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.55)", fontSize: 22 };
+const pill: React.CSSProperties = { display: "inline-block", border: "1px solid rgba(157,243,191,.35)", color: "#9df3bf", borderRadius: 999, padding: "8px 12px", margin: "4px", fontWeight: 800, letterSpacing: 1 };
 
 function getEmail() {
   if (typeof window === "undefined") return "";
-  return (
-    window.localStorage.getItem("vf_email") ||
-    window.sessionStorage.getItem("vf_email") ||
-    window.localStorage.getItem("vf_member_email") ||
-    window.sessionStorage.getItem("vf_member_email") ||
-    ""
-  ).trim().toLowerCase();
+  return (localStorage.getItem("vf_email") || sessionStorage.getItem("vf_email") || "").trim().toLowerCase();
 }
-
-function headers() {
-  return { "Content-Type": "application/json", "x-vf-email": getEmail() };
-}
-
-function money(value: any) {
-  const n = Number(value || 0);
+function money(v: any) {
+  const n = Number(v || 0);
   if (!n) return "Price not listed";
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
-
-function normalizePhotos(value: any): string[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.map(String).filter(Boolean);
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-    } catch {}
-    return value ? [value] : [];
-  }
-  return [];
-}
-
-function getDeal(item: BucketItem) {
-  return item?.deal || item?.vf_deals || item?.deals || item;
-}
-
-function titleOf(deal: any) {
-  return deal?.title || deal?.deal_title || deal?.name || "Untitled Deal";
-}
-
-function cityOf(deal: any) {
-  return deal?.city || deal?.market_city || deal?.property_city || "Unknown City";
-}
-
-function stateOf(deal: any) {
-  return deal?.state || deal?.market_state || deal?.property_state || "Unknown State";
-}
-
-function priceOf(deal: any) {
-  return deal?.asking_price || deal?.price || deal?.ask_price || deal?.purchase_price;
+function firstPhoto(item: Item) {
+  const photos = Array.isArray(item.photo_urls) ? item.photo_urls : Array.isArray(item.deal?.photo_urls) ? item.deal.photo_urls : [];
+  return item.main_photo_url || item.deal?.main_photo_url || photos[0] || "";
 }
 
 export default function BuyBucketPage() {
-  const [items, setItems] = useState<BucketItem[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState("Loading Buy Bucket...");
 
-  async function loadBucket() {
+  async function load() {
     setStatus("Loading Buy Bucket...");
     try {
-      const res = await fetch("/api/deal/my-bucket", { cache: "no-store", headers: headers() });
+      const email = getEmail();
+      const res = await fetch(`/api/deal/my-bucket?email=${encodeURIComponent(email)}`, { cache: "no-store", headers: { "x-vf-email": email } });
       const data = await res.json();
-      if (!res.ok || data?.ok === false) {
-        setStatus(data?.error || data?.details || "Could not load Buy Bucket.");
-        setItems([]);
-        return;
-      }
-      const rows = Array.isArray(data?.items) ? data.items : Array.isArray(data?.deals) ? data.deals : [];
-      setItems(rows);
-      setStatus(rows.length ? "" : "Your Buy Bucket is empty. Open Projects and save a deal.");
-    } catch (error: any) {
-      setStatus(error?.message || "Could not load Buy Bucket.");
-      setItems([]);
+      if (!res.ok || data.ok === false) throw new Error(data.error || "Could not load Buy Bucket.");
+      const list = data.items || data.deals || [];
+      setItems(list);
+      setStatus(list.length ? "" : "Your Buy Bucket is empty. Open Projects and add a deal.");
+    } catch (e: any) {
+      setStatus(e.message || "Could not load Buy Bucket.");
     }
   }
 
-  useEffect(() => {
-    loadBucket();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  return (
-    <main style={shell}>
-      <div style={wrap}>
-        <section style={panel}>
-          <div style={eyebrow}>BUY BUCKET</div>
-          <h1 style={{ fontSize: "clamp(54px, 13vw, 96px)", lineHeight: .9, margin: "0 0 22px", letterSpacing: -3 }}>Saved acquisition targets.</h1>
-          <p style={muted}>Deals you save from Projects land here with the real project title, photos, numbers, and Deal Room link.</p>
-          <div style={{ marginTop: 24 }}>
-            <Link href="/dashboard" style={navButton}>Dashboard</Link>
-            <Link href="/projects" style={navButton}>Projects</Link>
-            <Link href="/submit" style={navButton}>Create</Link>
-            <button type="button" onClick={loadBucket} style={{ ...navButton, cursor: "pointer" }}>Refresh</button>
-          </div>
-        </section>
+  return <main style={shell}><div style={wrap}>
+    <section style={hero}>
+      <div style={{ color: "#ffe08a", letterSpacing: 6, fontWeight: 900 }}>BUY BUCKET</div>
+      <h1 style={{ fontSize: "clamp(52px,12vw,92px)", lineHeight: .9, margin: "18px 0" }}>Saved acquisition targets.</h1>
+      <p style={{ color: "rgba(255,255,255,.7)", fontSize: 22, lineHeight: 1.45 }}>Deals you save from Projects land here with the real project title, photos, numbers, and Deal Room link.</p>
+      <Link href="/dashboard" style={btn}>Dashboard</Link><Link href="/projects" style={btn}>Projects</Link><Link href="/submit" style={btn}>Create</Link><button onClick={load} style={btn}>Refresh</button>
+    </section>
 
-        {status && <section style={{ ...panel, color: "#b7ffc9", fontSize: 20 }}>{status}</section>}
+    {status && <section style={{ ...hero, color: "#b9ffc9", fontSize: 22 }}>{status}</section>}
 
-        {items.map((item, index) => {
-          const deal = getDeal(item) || {};
-          const dealId = String(item?.deal_id || deal?.id || "");
-          const photos = normalizePhotos(deal?.photo_urls);
-          const mainPhoto = deal?.main_photo_url || photos[0] || "";
-
-          return (
-            <section key={item?.bucket_id || item?.id || `${dealId}-${index}`} style={card}>
-              {mainPhoto ? (
-                <img src={mainPhoto} alt={titleOf(deal)} style={{ width: "100%", height: 280, objectFit: "cover", display: "block" }} />
-              ) : (
-                <div style={{ height: 250, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.55)", borderBottom: "1px solid rgba(255,255,255,.1)" }}>No photo</div>
-              )}
-              <div style={body}>
-                <div style={eyebrow}>SAVED DEAL</div>
-                <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>{titleOf(deal)}</h2>
-                <h3 style={{ fontSize: 28, margin: "0 0 16px", color: "#ffe187" }}>{money(priceOf(deal))}</h3>
-                <p style={muted}>{cityOf(deal)}, {stateOf(deal)}</p>
-                <div>
-                  <span style={pill}>{deal?.property_type || "Deal"}</span>
-                  <span style={pill}>{deal?.strategy || "Strategy Needed"}</span>
-                  <span style={pill}>Saved {item?.created_at ? new Date(item.created_at).toLocaleString() : "recently"}</span>
-                </div>
-                <div style={{ marginTop: 18 }}>
-                  {dealId ? <Link href={`/deal/${dealId}`} style={navButton}>Deal Room</Link> : null}
-                  <Link href="/projects" style={navButton}>Back to Projects</Link>
-                </div>
-              </div>
-            </section>
-          );
-        })}
-      </div>
-    </main>
-  );
+    {items.map((item) => {
+      const id = item.deal?.id || item.deal_id || item.id;
+      const photo = firstPhoto(item);
+      return <section key={`${item.id}-${id}`} style={card}>
+        <div style={imageWrap}>{photo ? <img src={photo} alt="Deal" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "No photo"}</div>
+        <div style={{ padding: 24 }}>
+          <div style={{ color: "#ffe08a", letterSpacing: 5, fontWeight: 900 }}>SAVED DEAL</div>
+          <h2 style={{ fontSize: 44, margin: "14px 0 8px" }}>{item.title || item.deal?.title || "Untitled Deal"}</h2>
+          <h3 style={{ color: "#ffe08a", fontSize: 30, margin: "0 0 12px" }}>{money(item.asking_price || item.deal?.asking_price || item.price)}</h3>
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22 }}>{item.city || item.deal?.city || "Unknown City"}, {item.state || item.deal?.state || "Unknown State"}</p>
+          <span style={pill}>{item.property_type || item.deal?.property_type || "Deal"}</span><span style={pill}>{item.strategy || item.deal?.strategy || "Strategy Needed"}</span>
+          <div style={{ marginTop: 18 }}><Link href={`/deal/${id}`} style={btn}>Open Deal Room</Link></div>
+        </div>
+      </section>;
+    })}
+  </div></main>;
 }
