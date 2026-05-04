@@ -1,509 +1,580 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
 
-const STATES = ["Georgia", "Tennessee", "Florida", "North Carolina", "South Carolina", "Texas"];
-const PROPERTY_TYPES = ["Residential", "Commercial", "Land"];
-const STRATEGIES = ["Fix & Flip", "Rental", "Wholesale", "Development", "BRRRR", "Buy & Hold", "Creative Finance", "Private Lending"];
-const DEAL_NEEDS = ["Buyer Needed", "Capital Needed", "Lender Needed", "Contractor Needed", "JV Partner Needed", "Disposition Help", "Due Diligence Help", "Project Management Needed"];
+type PropertyType = "Residential" | "Commercial" | "Land";
+
+type FormState = {
+  title: string;
+  property_type: PropertyType;
+  strategy: string;
+  city: string;
+  state: string;
+  address: string;
+  asking_price: string;
+  arv: string;
+  repairs: string;
+  beds: string;
+  baths: string;
+  sqft: string;
+  lot_size: string;
+  description: string;
+  seller_name: string;
+  seller_phone: string;
+  seller_email: string;
+};
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY =
+const SUPABASE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   "";
 
-const shellStyle: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg, #030509 0%, #071326 55%, #030509 100%)",
-  color: "white",
-  padding: "26px 18px 90px",
-  fontFamily: "Arial, sans-serif",
-};
+const PHOTO_BUCKET = "deal-photos";
 
-const wrapStyle: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
-const navStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 24 };
-const navLinkStyle: React.CSSProperties = { color: "white", textDecoration: "none", border: "1px solid rgba(255,255,255,.18)", borderRadius: 999, padding: "11px 15px", fontSize: 14, background: "rgba(255,255,255,.04)" };
-const heroStyle: React.CSSProperties = { border: "1px solid rgba(255,255,255,.16)", background: "linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.025))", borderRadius: 34, padding: "28px 22px", marginBottom: 22, boxShadow: "0 30px 90px rgba(0,0,0,.45)" };
-const sectionStyle: React.CSSProperties = { border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.035)", borderRadius: 30, padding: 22, marginBottom: 20 };
-const gridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 };
-const inputStyle: React.CSSProperties = { width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,.08)", color: "white", border: "1px solid rgba(255,255,255,.22)", borderRadius: 16, padding: "14px 16px", fontSize: 17, marginTop: 8 };
-const labelStyle: React.CSSProperties = { fontWeight: 900, color: "rgba(255,255,255,.86)", display: "block", marginBottom: 14 };
-const buttonStyle: React.CSSProperties = { border: 0, background: "linear-gradient(135deg, #f4d47b, #9df3bf)", color: "#06101e", borderRadius: 999, padding: "15px 20px", fontWeight: 950, cursor: "pointer", fontSize: 16 };
-const mutedStyle: React.CSSProperties = { color: "rgba(255,255,255,.66)", lineHeight: 1.5, fontSize: 16 };
-const eyebrowStyle: React.CSSProperties = { color: "#e8c46b", letterSpacing: 5, fontWeight: 900, fontSize: 12, marginBottom: 12 };
-const pillStyle: React.CSSProperties = { border: "1px solid rgba(255,255,255,.18)", borderRadius: 999, padding: "10px 13px", cursor: "pointer", display: "inline-block", margin: "5px", fontSize: 14 };
-
-type FormState = {
-  title: string;
-  property_type: string;
-  strategy: string;
-  state: string;
-  city: string;
-  county: string;
-  address: string;
-  price: string;
-  asking_price: string;
-  arv: string;
-  repair_estimate: string;
-  equity: string;
-  debt_balance: string;
-  rent_estimate: string;
-  noi: string;
-  cap_rate: string;
-  lot_size: string;
-  building_sqft: string;
-  land_acres: string;
-  units: string;
-  bedrooms: string;
-  bathrooms: string;
-  year_built: string;
-  occupancy: string;
-  condition: string;
-  timeline: string;
-  seller_situation: string;
-  access_notes: string;
-  private_notes: string;
-  description: string;
-  deal_needs: string[];
-  photo_urls: string[];
-  zoning: string;
-  utilities: string;
-  road_frontage: string;
-  parcel_id: string;
-};
-
-const emptyForm: FormState = {
+const initialForm: FormState = {
   title: "",
   property_type: "Residential",
   strategy: "Fix & Flip",
-  state: "Georgia",
   city: "",
-  county: "",
+  state: "",
   address: "",
-  price: "",
   asking_price: "",
   arv: "",
-  repair_estimate: "",
-  equity: "",
-  debt_balance: "",
-  rent_estimate: "",
-  noi: "",
-  cap_rate: "",
+  repairs: "",
+  beds: "",
+  baths: "",
+  sqft: "",
   lot_size: "",
-  building_sqft: "",
-  land_acres: "",
-  units: "",
-  bedrooms: "",
-  bathrooms: "",
-  year_built: "",
-  occupancy: "",
-  condition: "",
-  timeline: "",
-  seller_situation: "",
-  access_notes: "",
-  private_notes: "",
   description: "",
-  deal_needs: [],
-  photo_urls: [],
-  zoning: "",
-  utilities: "",
-  road_frontage: "",
-  parcel_id: "",
+  seller_name: "",
+  seller_phone: "",
+  seller_email: "",
 };
 
-function getEmail() {
+function getStoredEmail() {
   if (typeof window === "undefined") return "";
   return (
     window.localStorage.getItem("vf_email") ||
-    window.sessionStorage.getItem("vf_email") ||
+    window.localStorage.getItem("vf_member_email") ||
+    window.localStorage.getItem("email") ||
     ""
-  ).trim().toLowerCase();
+  );
 }
 
-function authHeaders() {
-  return {
-    "Content-Type": "application/json",
-    "x-vf-email": getEmail(),
-  };
-}
-
-function toggle(list: string[], value: string) {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+function cleanNumber(value: string) {
+  const cleaned = String(value || "").replace(/[$,\s]/g, "");
+  if (!cleaned) return null;
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : null;
 }
 
 function safeFileName(name: string) {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9.\-_]/g, "-")
+    .replace(/[^a-z0-9.]+/g, "-")
     .replace(/-+/g, "-")
-    .slice(0, 90);
+    .replace(/^-|-$/g, "") || "photo.jpg";
 }
 
-async function uploadDealPhoto(file: File, email: string, index: number) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error("Supabase public environment variables are missing.");
-  }
-
-  const path = `${email.replace(/[^a-z0-9]/g, "-")}/${Date.now()}-${index}-${safeFileName(file.name || "deal-photo.jpg")}`;
-  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/deal-photos/${path}`;
-
-  const uploadRes = await fetch(uploadUrl, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": file.type || "application/octet-stream",
-      "x-upsert": "true",
-    },
-    body: file,
+function makeSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
   });
-
-  if (!uploadRes.ok) {
-    const details = await uploadRes.text();
-    throw new Error(details || "Photo upload failed.");
-  }
-
-  return `${SUPABASE_URL}/storage/v1/object/public/deal-photos/${path}`;
-}
-
-function TextField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-  placeholder?: string;
-  type?: string;
-}) {
-  return (
-    <label style={labelStyle}>
-      {label}
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} type={type} style={inputStyle} />
-    </label>
-  );
-}
-
-function NeedChips({ values, onChange }: { values: string[]; onChange: (next: string[]) => void }) {
-  return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ fontWeight: 900, marginBottom: 8 }}>What does this deal need?</div>
-      {DEAL_NEEDS.map((need) => {
-        const active = values.includes(need);
-        return (
-          <button
-            key={need}
-            type="button"
-            onClick={() => onChange(toggle(values, need))}
-            style={{
-              ...pillStyle,
-              background: active ? "rgba(157,243,191,.16)" : "rgba(255,255,255,.04)",
-              color: active ? "#9df3bf" : "white",
-              borderColor: active ? "rgba(157,243,191,.5)" : "rgba(255,255,255,.18)",
-            }}
-          >
-            {need}
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 export default function SubmitPage() {
-  const [form, setForm] = useState<FormState>(emptyForm);
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
-  const [status, setStatus] = useState("");
-  const [aiSummary, setAiSummary] = useState("");
-  const [routingMessage, setRoutingMessage] = useState("");
+  const supabase = useMemo(() => makeSupabase(), []);
+  const [form, setForm] = useState<FormState>(initialForm);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((current) => ({ ...current, [key]: value }));
   }
 
   function handlePhotos(files: FileList | null) {
-    const selected = Array.from(files || []).filter((file) => file.type.startsWith("image/")).slice(0, 5);
+    setError("");
+    setMessage("");
 
-    setPhotoFiles(selected);
-    setPhotoPreviews((old) => {
-      old.forEach((url) => URL.revokeObjectURL(url));
-      return selected.map((file) => URL.createObjectURL(file));
-    });
+    const picked = Array.from(files || []).filter((file) =>
+      file.type.startsWith("image/")
+    );
 
-    setStatus(selected.length > 0 ? `${selected.length} photo(s) ready to upload.` : "");
+    const limited = picked.slice(0, 10);
+    setPhotos(limited);
+
+    previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    setPreviewUrls(limited.map((file) => URL.createObjectURL(file)));
+
+    if (picked.length > 10) {
+      setMessage("Only the first 10 photos were selected.");
+    }
   }
 
-  async function uploadSelectedPhotos() {
-    const email = getEmail();
+  async function uploadPhotos(dealId: string) {
+    if (!supabase) throw new Error("Missing Supabase environment variables.");
 
-    if (!email) {
-      throw new Error("Session missing. Go to Login and enter your email again.");
-    }
+    const uploadedUrls: string[] = [];
 
-    if (photoFiles.length === 0) return [];
+    for (const file of photos) {
+      const path = `${dealId}/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}-${safeFileName(file.name)}`;
 
-    setUploading(true);
+      const { error: uploadError } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type || "image/jpeg",
+        });
 
-    try {
-      const uploaded = [];
-      for (let i = 0; i < photoFiles.length; i += 1) {
-        const url = await uploadDealPhoto(photoFiles[i], email, i + 1);
-        uploaded.push(url);
+      if (uploadError) {
+        throw new Error(uploadError.message || "Photo upload failed.");
       }
-      return uploaded;
-    } finally {
-      setUploading(false);
+
+      const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+      if (data?.publicUrl) uploadedUrls.push(data.publicUrl);
     }
+
+    return uploadedUrls;
   }
 
-  async function saveDeal() {
-    setStatus("");
-    setAiSummary("");
-    setRoutingMessage("");
-
-    if (!getEmail()) {
-      setStatus("Session missing. Go to Login and enter your email again.");
-      return;
-    }
-
+  async function submitDeal(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setSaving(true);
+    setError("");
+    setMessage("");
 
     try {
-      let uploadedPhotoUrls: string[] = [];
-
-      if (photoFiles.length > 0) {
-        setStatus("Uploading photos...");
-        uploadedPhotoUrls = await uploadSelectedPhotos();
+      if (!supabase) {
+        throw new Error("Missing Supabase URL/key in Vercel environment variables.");
       }
 
-      setStatus("Saving deal...");
+      if (!form.title.trim()) throw new Error("Deal title is required.");
+      if (!form.property_type) throw new Error("Property type is required.");
+      if (!form.city.trim()) throw new Error("City is required.");
+      if (!form.state.trim()) throw new Error("State is required.");
+      if (photos.length < 1) throw new Error("Upload at least 1 photo to test. Later we can require 5.");
+
+      const dealId = crypto.randomUUID();
+      const ownerEmail = getStoredEmail();
+      const uploadedPhotoUrls = await uploadPhotos(dealId);
 
       const payload = {
-        ...form,
+        id: dealId,
+        owner_email: ownerEmail || null,
+        title: form.title.trim(),
+        property_type: form.property_type,
+        strategy: form.strategy || null,
+        city: form.city.trim(),
+        state: form.state.trim(),
+        address: form.address.trim() || null,
+        asking_price: cleanNumber(form.asking_price),
+        arv: cleanNumber(form.arv),
+        repairs: cleanNumber(form.repairs),
+        beds: cleanNumber(form.beds),
+        baths: cleanNumber(form.baths),
+        sqft: cleanNumber(form.sqft),
+        lot_size: form.lot_size.trim() || null,
+        description: form.description.trim() || null,
+        seller_name: form.seller_name.trim() || null,
+        seller_phone: form.seller_phone.trim() || null,
+        seller_email: form.seller_email.trim() || null,
+        status: "active",
         photo_urls: uploadedPhotoUrls,
+        main_photo_url: uploadedPhotoUrls[0] || null,
+        updated_at: new Date().toISOString(),
       };
 
-      const res = await fetch("/api/deal/create", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify(payload),
-      });
+      const { error: insertError } = await supabase.from("vf_deals").insert(payload);
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setStatus(data?.error || data?.details || "Could not save deal.");
-      } else {
-        setStatus("Deal saved with photos, AI analysis, and routing.");
-        setAiSummary(data?.ai?.ai_summary || "");
-        setRoutingMessage(`Routing complete: ${data?.routing?.matched || 0} matching member alert(s) created.`);
-        setForm(emptyForm);
-        setPhotoFiles([]);
-        setPhotoPreviews((old) => {
-          old.forEach((url) => URL.revokeObjectURL(url));
-          return [];
-        });
+      if (insertError) {
+        throw new Error(insertError.message || "Deal save failed.");
       }
-    } catch (err: any) {
-      setStatus(err?.message || "Could not save deal. Refresh and try again.");
-    }
 
-    setSaving(false);
+      setMessage("Deal saved with photos. Check Projects / Deal View now.");
+      setForm(initialForm);
+      setPhotos([]);
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+      setPreviewUrls([]);
+    } catch (err: any) {
+      setError(err?.message || "Something went wrong saving the deal.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  return (
-    <main style={shellStyle}>
-      <div style={wrapStyle}>
-        <nav style={navStyle}>
-          <Link href="/dashboard" style={navLinkStyle}>Dashboard</Link>
-          <Link href="/profile" style={navLinkStyle}>Profile</Link>
-          <Link href="/projects" style={navLinkStyle}>Projects</Link>
-          <Link href="/buy-bucket" style={navLinkStyle}>Buy Bucket</Link>
-          <Link href="/messages" style={navLinkStyle}>Messages</Link>
-          <Link href="/alerts" style={navLinkStyle}>Alerts</Link>
-          <Link href="/network" style={navLinkStyle}>Network</Link>
-        </nav>
+  const typeHelp =
+    form.property_type === "Residential"
+      ? "Single family, condo, duplex, small multifamily."
+      : form.property_type === "Commercial"
+      ? "Retail, office, industrial, mixed-use, larger multifamily."
+      : "Lots, acreage, infill land, development parcels.";
 
-        <section style={heroStyle}>
-          <div style={{ textAlign: "center", marginBottom: 18 }}>
-            <img src="/vaultforge-logo.png" alt="VaultForge" style={{ width: "100%", maxWidth: 360, borderRadius: 22 }} />
-          </div>
-          <div style={eyebrowStyle}>PROFESSIONAL DEAL INTAKE</div>
-          <h1 style={{ fontSize: "clamp(44px, 10vw, 82px)", lineHeight: .9, letterSpacing: -3, margin: "0 0 16px" }}>
-            Create a deal room.
-          </h1>
-          <p style={{ ...mutedStyle, fontSize: 20 }}>
-            Submit structured residential, commercial, or land opportunities with uploaded photos,
-            numbers, needs, and AI routing context.
+  return (
+    <main style={styles.page}>
+      <section style={styles.shell}>
+        <div style={styles.topBar}>
+          <Link href="/dashboard" style={styles.backLink}>← Dashboard</Link>
+          <Link href="/projects" style={styles.backLink}>Projects</Link>
+        </div>
+
+        <section style={styles.heroCard}>
+          <p style={styles.eyebrow}>VaultForge Deal Room</p>
+          <h1 style={styles.title}>Create a real opportunity.</h1>
+          <p style={styles.subtitle}>
+            Submit structured residential, commercial, or land opportunities with real uploaded photos.
           </p>
         </section>
 
-        {status && (
-          <section style={{ ...sectionStyle, color: status.toLowerCase().includes("could") || status.toLowerCase().includes("missing") || status.toLowerCase().includes("required") || status.toLowerCase().includes("failed") ? "#ffd0d0" : "#9df3bf" }}>
-            {status}
-          </section>
-        )}
+        {error ? <div style={styles.errorBox}>{error}</div> : null}
+        {message ? <div style={styles.successBox}>{message}</div> : null}
 
-        <section style={sectionStyle}>
-          <div style={eyebrowStyle}>DEAL BASICS</div>
-          <div style={gridStyle}>
-            <TextField label="Deal Title *" value={form.title} onChange={(v) => update("title", v)} placeholder="Example: Atlanta value-add flip" />
+        <form onSubmit={submitDeal} style={styles.form}>
+          <section style={styles.card}>
+            <p style={styles.sectionLabel}>Photos</p>
+            <h2 style={styles.cardTitle}>Upload deal photos</h2>
+            <p style={styles.helpText}>
+              Tap the upload field below. It should open your phone photo picker. Current test minimum: 1 photo.
+            </p>
 
-            <label style={labelStyle}>
-              Property Type *
-              <select value={form.property_type} onChange={(e) => update("property_type", e.target.value)} style={inputStyle}>
-                {PROPERTY_TYPES.map((item) => <option key={item}>{item}</option>)}
-              </select>
+            <label style={styles.uploadBox}>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => handlePhotos(event.target.files)}
+                style={styles.fileInput}
+              />
+              <span style={styles.uploadTitle}>Tap to choose photos</span>
+              <span style={styles.uploadSub}>Selected photos: {photos.length} / 10</span>
             </label>
 
-            <label style={labelStyle}>
-              Strategy
-              <select value={form.strategy} onChange={(e) => update("strategy", e.target.value)} style={inputStyle}>
-                {STRATEGIES.map((item) => <option key={item}>{item}</option>)}
-              </select>
-            </label>
-
-            <label style={labelStyle}>
-              State *
-              <select value={form.state} onChange={(e) => update("state", e.target.value)} style={inputStyle}>
-                {STATES.map((item) => <option key={item}>{item}</option>)}
-              </select>
-            </label>
-
-            <TextField label="City *" value={form.city} onChange={(v) => update("city", v)} placeholder="City" />
-            <TextField label="County" value={form.county} onChange={(v) => update("county", v)} placeholder="County" />
-            <TextField label="Address / Private Location" value={form.address} onChange={(v) => update("address", v)} placeholder="Optional/private" />
-            <TextField label="Timeline" value={form.timeline} onChange={(v) => update("timeline", v)} placeholder="ASAP, 30 days, 90 days..." />
-          </div>
-        </section>
-
-        <section style={sectionStyle}>
-          <div style={eyebrowStyle}>NUMBERS</div>
-          <div style={gridStyle}>
-            <TextField label="Price" value={form.price} onChange={(v) => update("price", v)} placeholder="250000" type="number" />
-            <TextField label="Asking Price" value={form.asking_price} onChange={(v) => update("asking_price", v)} placeholder="250000" type="number" />
-            <TextField label="ARV / Value" value={form.arv} onChange={(v) => update("arv", v)} placeholder="380000" type="number" />
-            <TextField label="Repair Estimate" value={form.repair_estimate} onChange={(v) => update("repair_estimate", v)} placeholder="50000" type="number" />
-            <TextField label="Equity" value={form.equity} onChange={(v) => update("equity", v)} placeholder="100000" type="number" />
-            <TextField label="Debt Balance" value={form.debt_balance} onChange={(v) => update("debt_balance", v)} placeholder="Optional" type="number" />
-            <TextField label="Rent Estimate" value={form.rent_estimate} onChange={(v) => update("rent_estimate", v)} placeholder="Optional" type="number" />
-            <TextField label="NOI" value={form.noi} onChange={(v) => update("noi", v)} placeholder="Commercial optional" type="number" />
-            <TextField label="Cap Rate" value={form.cap_rate} onChange={(v) => update("cap_rate", v)} placeholder="Commercial optional" type="number" />
-          </div>
-        </section>
-
-        {form.property_type === "Residential" && (
-          <section style={sectionStyle}>
-            <div style={eyebrowStyle}>RESIDENTIAL DETAILS</div>
-            <div style={gridStyle}>
-              <TextField label="Bedrooms" value={form.bedrooms} onChange={(v) => update("bedrooms", v)} placeholder="3" type="number" />
-              <TextField label="Bathrooms" value={form.bathrooms} onChange={(v) => update("bathrooms", v)} placeholder="2" type="number" />
-              <TextField label="Year Built" value={form.year_built} onChange={(v) => update("year_built", v)} placeholder="1985" type="number" />
-              <TextField label="Lot Size" value={form.lot_size} onChange={(v) => update("lot_size", v)} placeholder="0.25 acre" />
-              <TextField label="Occupancy" value={form.occupancy} onChange={(v) => update("occupancy", v)} placeholder="Vacant, tenant, owner occupied" />
-              <TextField label="Condition" value={form.condition} onChange={(v) => update("condition", v)} placeholder="Light, medium, heavy rehab" />
-            </div>
+            {previewUrls.length ? (
+              <div style={styles.previewGrid}>
+                {previewUrls.map((url, index) => (
+                  <img key={url} src={url} alt={`Selected photo ${index + 1}`} style={styles.previewImage} />
+                ))}
+              </div>
+            ) : null}
           </section>
-        )}
 
-        {form.property_type === "Commercial" && (
-          <section style={sectionStyle}>
-            <div style={eyebrowStyle}>COMMERCIAL DETAILS</div>
-            <div style={gridStyle}>
-              <TextField label="Building SQFT" value={form.building_sqft} onChange={(v) => update("building_sqft", v)} placeholder="10000" type="number" />
-              <TextField label="Units / Tenants" value={form.units} onChange={(v) => update("units", v)} placeholder="12" type="number" />
-              <TextField label="Occupancy" value={form.occupancy} onChange={(v) => update("occupancy", v)} placeholder="Vacant, partially occupied, occupied" />
-              <TextField label="Zoning" value={form.zoning} onChange={(v) => update("zoning", v)} placeholder="Commercial zoning" />
-              <TextField label="Condition" value={form.condition} onChange={(v) => update("condition", v)} placeholder="Condition notes" />
-              <TextField label="Year Built" value={form.year_built} onChange={(v) => update("year_built", v)} placeholder="1985" type="number" />
+          <section style={styles.card}>
+            <p style={styles.sectionLabel}>Deal Basics</p>
+
+            <label style={styles.label}>Deal Title *</label>
+            <input style={styles.input} value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="ATL off-market flip" />
+
+            <label style={styles.label}>Property Type *</label>
+            <select style={styles.input} value={form.property_type} onChange={(e) => update("property_type", e.target.value as PropertyType)}>
+              <option>Residential</option>
+              <option>Commercial</option>
+              <option>Land</option>
+            </select>
+            <p style={styles.helpText}>{typeHelp}</p>
+
+            <label style={styles.label}>Strategy</label>
+            <select style={styles.input} value={form.strategy} onChange={(e) => update("strategy", e.target.value)}>
+              <option>Fix & Flip</option>
+              <option>Buy & Hold</option>
+              <option>Wholesale</option>
+              <option>Development</option>
+              <option>Rental / DSCR</option>
+              <option>JV Needed</option>
+              <option>Capital Needed</option>
+              <option>Disposition</option>
+            </select>
+
+            <div style={styles.twoCol}>
+              <div>
+                <label style={styles.label}>City *</label>
+                <input style={styles.input} value={form.city} onChange={(e) => update("city", e.target.value)} placeholder="Atlanta" />
+              </div>
+              <div>
+                <label style={styles.label}>State *</label>
+                <input style={styles.input} value={form.state} onChange={(e) => update("state", e.target.value)} placeholder="GA" />
+              </div>
             </div>
-          </section>
-        )}
 
-        {form.property_type === "Land" && (
-          <section style={sectionStyle}>
-            <div style={eyebrowStyle}>LAND DETAILS</div>
-            <div style={gridStyle}>
-              <TextField label="Acres" value={form.land_acres} onChange={(v) => update("land_acres", v)} placeholder="5" type="number" />
-              <TextField label="Zoning" value={form.zoning} onChange={(v) => update("zoning", v)} placeholder="Residential, commercial, agricultural..." />
-              <TextField label="Utilities" value={form.utilities} onChange={(v) => update("utilities", v)} placeholder="Water, sewer, power, septic..." />
-              <TextField label="Road Frontage" value={form.road_frontage} onChange={(v) => update("road_frontage", v)} placeholder="Paved, gravel, frontage feet..." />
-              <TextField label="Parcel ID" value={form.parcel_id} onChange={(v) => update("parcel_id", v)} placeholder="Optional parcel number" />
-              <TextField label="Lot Size" value={form.lot_size} onChange={(v) => update("lot_size", v)} placeholder="Lot dimensions" />
+            <label style={styles.label}>Address</label>
+            <input style={styles.input} value={form.address} onChange={(e) => update("address", e.target.value)} placeholder="Private address / optional" />
+          </section>
+
+          <section style={styles.card}>
+            <p style={styles.sectionLabel}>Numbers</p>
+
+            <div style={styles.twoCol}>
+              <div>
+                <label style={styles.label}>Asking Price</label>
+                <input style={styles.input} inputMode="numeric" value={form.asking_price} onChange={(e) => update("asking_price", e.target.value)} placeholder="250000" />
+              </div>
+              <div>
+                <label style={styles.label}>ARV</label>
+                <input style={styles.input} inputMode="numeric" value={form.arv} onChange={(e) => update("arv", e.target.value)} placeholder="390000" />
+              </div>
             </div>
-          </section>
-        )}
 
-        <section style={sectionStyle}>
-          <div style={eyebrowStyle}>PHOTO UPLOADS</div>
-          <p style={mutedStyle}>Upload up to 5 images. These upload to Supabase Storage and attach to the deal automatically.</p>
+            <label style={styles.label}>Repairs</label>
+            <input style={styles.input} inputMode="numeric" value={form.repairs} onChange={(e) => update("repairs", e.target.value)} placeholder="65000" />
 
-          <label style={labelStyle}>
-            Upload Deal Photos
-            <input type="file" accept="image/*" multiple onChange={(e) => handlePhotos(e.target.files)} style={inputStyle} />
-          </label>
-
-          {photoPreviews.length > 0 && (
-            <div style={gridStyle}>
-              {photoPreviews.map((src, index) => (
-                <div key={src} style={{ border: "1px solid rgba(255,255,255,.16)", borderRadius: 20, padding: 10, background: "rgba(255,255,255,.04)" }}>
-                  <img src={src} alt={`Deal preview ${index + 1}`} style={{ width: "100%", borderRadius: 16, display: "block" }} />
-                  <p style={{ ...mutedStyle, margin: "8px 0 0" }}>Photo {index + 1}</p>
+            {form.property_type === "Residential" ? (
+              <div style={styles.twoCol}>
+                <div>
+                  <label style={styles.label}>Beds</label>
+                  <input style={styles.input} inputMode="decimal" value={form.beds} onChange={(e) => update("beds", e.target.value)} />
                 </div>
-              ))}
+                <div>
+                  <label style={styles.label}>Baths</label>
+                  <input style={styles.input} inputMode="decimal" value={form.baths} onChange={(e) => update("baths", e.target.value)} />
+                </div>
+              </div>
+            ) : null}
+
+            <div style={styles.twoCol}>
+              <div>
+                <label style={styles.label}>Sq Ft</label>
+                <input style={styles.input} inputMode="numeric" value={form.sqft} onChange={(e) => update("sqft", e.target.value)} />
+              </div>
+              <div>
+                <label style={styles.label}>Lot Size</label>
+                <input style={styles.input} value={form.lot_size} onChange={(e) => update("lot_size", e.target.value)} placeholder="0.25 acre" />
+              </div>
             </div>
-          )}
-        </section>
-
-        <section style={sectionStyle}>
-          <div style={eyebrowStyle}>SITUATION + NEEDS</div>
-          <NeedChips values={form.deal_needs} onChange={(v) => update("deal_needs", v)} />
-
-          <label style={labelStyle}>
-            Seller Situation
-            <textarea value={form.seller_situation} onChange={(e) => update("seller_situation", e.target.value)} placeholder="Motivation, deadline, problem, background..." rows={4} style={inputStyle} />
-          </label>
-
-          <label style={labelStyle}>
-            Public Deal Description
-            <textarea value={form.description} onChange={(e) => update("description", e.target.value)} placeholder="Describe the deal, condition, numbers, strategy, and opportunity." rows={7} style={inputStyle} />
-          </label>
-
-          <label style={labelStyle}>
-            Access Notes
-            <textarea value={form.access_notes} onChange={(e) => update("access_notes", e.target.value)} placeholder="Showing instructions, lockbox, contact notes, private access info." rows={4} style={inputStyle} />
-          </label>
-
-          <label style={labelStyle}>
-            Private Notes
-            <textarea value={form.private_notes} onChange={(e) => update("private_notes", e.target.value)} placeholder="Internal/private notes for your records or routing." rows={4} style={inputStyle} />
-          </label>
-        </section>
-
-        <section style={{ ...sectionStyle, borderColor: "rgba(157,243,191,.38)" }}>
-          <button style={buttonStyle} onClick={saveDeal} disabled={saving || uploading}>
-            {uploading ? "Uploading Photos..." : saving ? "Saving Deal..." : "Save Deal + AI Route"}
-          </button>
-          <p style={mutedStyle}>Required: title, state, city, and property type. Up to 5 photos can be uploaded.</p>
-        </section>
-
-        {routingMessage && <section style={{ ...sectionStyle, color: "#9df3bf" }}>{routingMessage}</section>}
-        {aiSummary && (
-          <section style={sectionStyle}>
-            <div style={eyebrowStyle}>AI DEAL ANALYSIS</div>
-            <p style={{ ...mutedStyle, fontSize: 20 }}>{aiSummary}</p>
           </section>
-        )}
-      </div>
+
+          <section style={styles.card}>
+            <p style={styles.sectionLabel}>Private Context</p>
+
+            <label style={styles.label}>Description</label>
+            <textarea style={styles.textarea} value={form.description} onChange={(e) => update("description", e.target.value)} placeholder="Condition, access notes, timeline, seller motivation, deal help needed." />
+
+            <label style={styles.label}>Seller / Contact Name</label>
+            <input style={styles.input} value={form.seller_name} onChange={(e) => update("seller_name", e.target.value)} />
+
+            <div style={styles.twoCol}>
+              <div>
+                <label style={styles.label}>Seller Phone</label>
+                <input style={styles.input} value={form.seller_phone} onChange={(e) => update("seller_phone", e.target.value)} />
+              </div>
+              <div>
+                <label style={styles.label}>Seller Email</label>
+                <input style={styles.input} type="email" value={form.seller_email} onChange={(e) => update("seller_email", e.target.value)} />
+              </div>
+            </div>
+          </section>
+
+          <button type="submit" disabled={saving} style={saving ? styles.buttonDisabled : styles.button}>
+            {saving ? "Saving deal..." : "Save Deal With Photos"}
+          </button>
+        </form>
+      </section>
     </main>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "radial-gradient(circle at top, #223225 0%, #111713 48%, #080b09 100%)",
+    color: "#f6f3ea",
+    fontFamily: "Arial, Helvetica, sans-serif",
+    padding: "24px 14px 56px",
+  },
+  shell: {
+    width: "100%",
+    maxWidth: 980,
+    margin: "0 auto",
+  },
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 18,
+  },
+  backLink: {
+    color: "#f2d487",
+    textDecoration: "none",
+    border: "1px solid rgba(242,212,135,.35)",
+    borderRadius: 999,
+    padding: "10px 14px",
+    fontWeight: 800,
+  },
+  heroCard: {
+    border: "1px solid rgba(255,255,255,.16)",
+    background: "rgba(255,255,255,.055)",
+    borderRadius: 28,
+    padding: "28px 22px",
+    marginBottom: 18,
+  },
+  eyebrow: {
+    color: "#f2d487",
+    textTransform: "uppercase",
+    letterSpacing: 5,
+    fontSize: 12,
+    fontWeight: 900,
+    margin: 0,
+  },
+  title: {
+    fontSize: "clamp(38px, 12vw, 76px)",
+    lineHeight: .92,
+    margin: "14px 0",
+  },
+  subtitle: {
+    color: "rgba(246,243,234,.72)",
+    fontSize: 19,
+    lineHeight: 1.55,
+    margin: 0,
+  },
+  form: {
+    display: "grid",
+    gap: 18,
+  },
+  card: {
+    border: "1px solid rgba(255,255,255,.15)",
+    background: "rgba(255,255,255,.06)",
+    borderRadius: 24,
+    padding: 20,
+  },
+  sectionLabel: {
+    color: "#f2d487",
+    textTransform: "uppercase",
+    letterSpacing: 5,
+    fontSize: 12,
+    fontWeight: 900,
+    margin: "0 0 12px",
+  },
+  cardTitle: {
+    margin: "0 0 8px",
+    fontSize: 24,
+  },
+  helpText: {
+    color: "rgba(246,243,234,.65)",
+    fontSize: 14,
+    lineHeight: 1.45,
+    margin: "8px 0 14px",
+  },
+  label: {
+    display: "block",
+    fontWeight: 900,
+    margin: "18px 0 8px",
+    color: "#f6f3ea",
+  },
+  input: {
+    width: "100%",
+    boxSizing: "border-box",
+    border: "1px solid rgba(255,255,255,.18)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,.1)",
+    color: "#fff",
+    padding: "16px 16px",
+    fontSize: 17,
+    outline: "none",
+  },
+  textarea: {
+    width: "100%",
+    minHeight: 140,
+    boxSizing: "border-box",
+    border: "1px solid rgba(255,255,255,.18)",
+    borderRadius: 18,
+    background: "rgba(255,255,255,.1)",
+    color: "#fff",
+    padding: "16px 16px",
+    fontSize: 17,
+    outline: "none",
+  },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 14,
+  },
+  uploadBox: {
+    display: "grid",
+    placeItems: "center",
+    minHeight: 150,
+    border: "2px dashed rgba(242,212,135,.55)",
+    borderRadius: 22,
+    background: "rgba(242,212,135,.08)",
+    cursor: "pointer",
+    textAlign: "center",
+    padding: 20,
+  },
+  fileInput: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    opacity: 0,
+    pointerEvents: "none",
+  },
+  uploadTitle: {
+    display: "block",
+    fontSize: 22,
+    fontWeight: 900,
+    color: "#f2d487",
+  },
+  uploadSub: {
+    display: "block",
+    marginTop: 8,
+    color: "rgba(246,243,234,.72)",
+    fontWeight: 800,
+  },
+  previewGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  },
+  previewImage: {
+    width: "100%",
+    height: 120,
+    objectFit: "cover",
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,.15)",
+  },
+  button: {
+    width: "100%",
+    border: 0,
+    borderRadius: 20,
+    background: "linear-gradient(135deg, #f2d487, #d6a735)",
+    color: "#151006",
+    padding: "18px 18px",
+    fontSize: 18,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+  buttonDisabled: {
+    width: "100%",
+    border: 0,
+    borderRadius: 20,
+    background: "rgba(255,255,255,.18)",
+    color: "rgba(255,255,255,.72)",
+    padding: "18px 18px",
+    fontSize: 18,
+    fontWeight: 950,
+  },
+  errorBox: {
+    border: "1px solid rgba(255,90,90,.45)",
+    background: "rgba(255,90,90,.14)",
+    color: "#ffd6d6",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    fontWeight: 800,
+  },
+  successBox: {
+    border: "1px solid rgba(103,255,174,.45)",
+    background: "rgba(103,255,174,.12)",
+    color: "#baffd6",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    fontWeight: 800,
+  },
+};
