@@ -1,580 +1,446 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
 
-type PropertyType = "Residential" | "Commercial" | "Land";
-
-type FormState = {
-  title: string;
-  property_type: PropertyType;
-  strategy: string;
-  city: string;
-  state: string;
-  address: string;
-  asking_price: string;
-  arv: string;
-  repairs: string;
-  beds: string;
-  baths: string;
-  sqft: string;
-  lot_size: string;
-  description: string;
-  seller_name: string;
-  seller_phone: string;
-  seller_email: string;
-};
+type DealType = "Residential" | "Commercial" | "Land";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   "";
-
 const PHOTO_BUCKET = "deal-photos";
 
-const initialForm: FormState = {
-  title: "",
-  property_type: "Residential",
-  strategy: "Fix & Flip",
-  city: "",
-  state: "",
-  address: "",
-  asking_price: "",
-  arv: "",
-  repairs: "",
-  beds: "",
-  baths: "",
-  sqft: "",
-  lot_size: "",
-  description: "",
-  seller_name: "",
-  seller_phone: "",
-  seller_email: "",
+const states = [
+  "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","Florida","Georgia",
+  "Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland",
+  "Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire",
+  "New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania",
+  "Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington",
+  "West Virginia","Wisconsin","Wyoming"
+];
+
+const shell: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg, #06100a 0%, #102015 58%, #06100a 100%)",
+  color: "#fff",
+  padding: "28px 18px 90px",
+  fontFamily: "Arial, sans-serif",
 };
 
-function getStoredEmail() {
+const wrap: React.CSSProperties = { maxWidth: 1100, margin: "0 auto" };
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.28)",
+  background: "linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.025))",
+  borderRadius: 34,
+  padding: "26px 22px",
+  marginBottom: 22,
+  boxShadow: "0 24px 70px rgba(0,0,0,.30)",
+};
+const nav: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 };
+const navLink: React.CSSProperties = {
+  color: "#06100a",
+  background: "#f5d978",
+  textDecoration: "none",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 900,
+  border: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+const ghostButton: React.CSSProperties = {
+  color: "#f5d978",
+  background: "rgba(255,255,255,.035)",
+  textDecoration: "none",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 900,
+  border: "1px solid rgba(245,217,120,.35)",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+const label: React.CSSProperties = { display: "block", fontWeight: 900, margin: "0 0 9px", color: "rgba(255,255,255,.86)", fontSize: 15 };
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.075)",
+  color: "white",
+  padding: "15px 15px",
+  fontSize: 16,
+  outline: "none",
+};
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 14 };
+const eyebrow: React.CSSProperties = { color: "#f5d978", letterSpacing: 5, fontSize: 12, fontWeight: 900, marginBottom: 12 };
+const muted: React.CSSProperties = { color: "rgba(255,255,255,.67)", lineHeight: 1.5, fontSize: 18 };
+const uploadBox: React.CSSProperties = {
+  border: "2px dashed rgba(245,217,120,.55)",
+  borderRadius: 28,
+  padding: "34px 16px",
+  textAlign: "center",
+  cursor: "pointer",
+  background: "rgba(245,217,120,.06)",
+};
+
+function getEmail() {
   if (typeof window === "undefined") return "";
   return (
     window.localStorage.getItem("vf_email") ||
-    window.localStorage.getItem("vf_member_email") ||
-    window.localStorage.getItem("email") ||
-    ""
-  );
+    window.sessionStorage.getItem("vf_email") ||
+    "text@text.com"
+  ).trim().toLowerCase();
 }
 
-function cleanNumber(value: string) {
-  const cleaned = String(value || "").replace(/[$,\s]/g, "");
-  if (!cleaned) return null;
-  const number = Number(cleaned);
-  return Number.isFinite(number) ? number : null;
+function moneyOnly(value: string) {
+  return value.replace(/[^\d.]/g, "");
 }
 
-function safeFileName(name: string) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9.]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "photo.jpg";
+function safeFileName(file: File) {
+  const clean = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/-+/g, "-");
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}-${clean}`;
 }
 
-function makeSupabase() {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
+async function uploadPhoto(file: File, email: string) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error("Missing Supabase environment values.");
+  const path = `${email || "member"}/${safeFileName(file)}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${PHOTO_BUCKET}/${path}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": file.type || "image/jpeg",
+      "x-upsert": "true",
+    },
+    body: file,
   });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Photo upload failed.");
+  }
+
+  return `${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${path}`;
 }
 
 export default function SubmitPage() {
-  const supabase = useMemo(() => makeSupabase(), []);
-  const [form, setForm] = useState<FormState>(initialForm);
-  const [photos, setPhotos] = useState<File[]>([]);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [dealType, setDealType] = useState<DealType>("Residential");
+  const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [form, setForm] = useState<Record<string, string>>({
+    title: "",
+    strategy: "Fix & Flip",
+    city: "",
+    state: "Georgia",
+    address: "",
+    asking_price: "",
+    arv: "",
+    repair_estimate: "",
+    description: "",
+    bedrooms: "",
+    bathrooms: "",
+    building_sqft: "",
+    year_built: "",
+    occupancy: "",
+    condition: "",
+    commercial_type: "",
+    units: "",
+    noi: "",
+    cap_rate: "",
+    zoning: "",
+    tenant_status: "",
+    land_acres: "",
+    frontage: "",
+    utilities: "",
+    road_access: "",
+    topography: "",
+    parcel_id: "",
+    seller_situation: "",
+    access_notes: "",
+    private_notes: "",
+  });
 
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+  const typeHelp = useMemo(() => {
+    if (dealType === "Residential") return "Single-family, small multifamily, flips, rentals, creative finance, or distressed residential opportunities.";
+    if (dealType === "Commercial") return "Retail, industrial, office, mixed-use, multifamily, self-storage, hospitality, and income-producing assets.";
+    return "Lots, acreage, infill parcels, development land, entitled land, timber, agricultural, or recreational land.";
+  }, [dealType]);
+
+  function update(key: string, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function handlePhotos(files: FileList | null) {
-    setError("");
-    setMessage("");
-
-    const picked = Array.from(files || []).filter((file) =>
-      file.type.startsWith("image/")
-    );
-
-    const limited = picked.slice(0, 10);
-    setPhotos(limited);
-
-    previewUrls.forEach((url) => URL.revokeObjectURL(url));
-    setPreviewUrls(limited.map((file) => URL.createObjectURL(file)));
-
-    if (picked.length > 10) {
-      setMessage("Only the first 10 photos were selected.");
-    }
+  function chooseFiles(nextFiles: FileList | null) {
+    const selected = Array.from(nextFiles || []).filter((file) => file.type.startsWith("image/")).slice(0, 10);
+    setFiles(selected);
+    previews.forEach((url) => URL.revokeObjectURL(url));
+    setPreviews(selected.map((file) => URL.createObjectURL(file)));
   }
 
-  async function uploadPhotos(dealId: string) {
-    if (!supabase) throw new Error("Missing Supabase environment variables.");
-
-    const uploadedUrls: string[] = [];
-
-    for (const file of photos) {
-      const path = `${dealId}/${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}-${safeFileName(file.name)}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from(PHOTO_BUCKET)
-        .upload(path, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type || "image/jpeg",
-        });
-
-      if (uploadError) {
-        throw new Error(uploadError.message || "Photo upload failed.");
-      }
-
-      const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
-      if (data?.publicUrl) uploadedUrls.push(data.publicUrl);
-    }
-
-    return uploadedUrls;
-  }
-
-  async function submitDeal(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
+  async function submitDeal() {
     setError("");
-    setMessage("");
+    setStatus("");
+    setBusy(true);
 
     try {
-      if (!supabase) {
-        throw new Error("Missing Supabase URL/key in Vercel environment variables.");
-      }
-
+      const email = getEmail();
       if (!form.title.trim()) throw new Error("Deal title is required.");
-      if (!form.property_type) throw new Error("Property type is required.");
       if (!form.city.trim()) throw new Error("City is required.");
       if (!form.state.trim()) throw new Error("State is required.");
-      if (photos.length < 1) throw new Error("Upload at least 1 photo to test. Later we can require 5.");
+      if (files.length < 1) throw new Error("Upload at least 1 photo for testing.");
 
-      const dealId = crypto.randomUUID();
-      const ownerEmail = getStoredEmail();
-      const uploadedPhotoUrls = await uploadPhotos(dealId);
-
-      const payload = {
-        id: dealId,
-        owner_email: ownerEmail || null,
-        title: form.title.trim(),
-        property_type: form.property_type,
-        strategy: form.strategy || null,
-        city: form.city.trim(),
-        state: form.state.trim(),
-        address: form.address.trim() || null,
-        asking_price: cleanNumber(form.asking_price),
-        arv: cleanNumber(form.arv),
-        repairs: cleanNumber(form.repairs),
-        beds: cleanNumber(form.beds),
-        baths: cleanNumber(form.baths),
-        sqft: cleanNumber(form.sqft),
-        lot_size: form.lot_size.trim() || null,
-        description: form.description.trim() || null,
-        seller_name: form.seller_name.trim() || null,
-        seller_phone: form.seller_phone.trim() || null,
-        seller_email: form.seller_email.trim() || null,
-        status: "active",
-        photo_urls: uploadedPhotoUrls,
-        main_photo_url: uploadedPhotoUrls[0] || null,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error: insertError } = await supabase.from("vf_deals").insert(payload);
-
-      if (insertError) {
-        throw new Error(insertError.message || "Deal save failed.");
+      setStatus(`Uploading ${files.length} photo${files.length === 1 ? "" : "s"}...`);
+      const photo_urls = [];
+      for (const file of files) {
+        photo_urls.push(await uploadPhoto(file, email));
       }
 
-      setMessage("Deal saved with photos. Check Projects / Deal View now.");
-      setForm(initialForm);
-      setPhotos([]);
-      previewUrls.forEach((url) => URL.revokeObjectURL(url));
-      setPreviewUrls([]);
+      setStatus("Saving deal...");
+      const payload = {
+        owner_email: email,
+        member_email: email,
+        title: form.title.trim(),
+        property_type: dealType,
+        strategy: form.strategy,
+        city: form.city.trim(),
+        state: form.state.trim(),
+        address: form.address.trim(),
+        asking_price: moneyOnly(form.asking_price),
+        arv: moneyOnly(form.arv),
+        repair_estimate: moneyOnly(form.repair_estimate),
+        description: form.description.trim(),
+        status: "active",
+        photo_urls,
+        main_photo_url: photo_urls[0] || "",
+        bedrooms: form.bedrooms,
+        bathrooms: form.bathrooms,
+        building_sqft: form.building_sqft,
+        year_built: form.year_built,
+        occupancy: form.occupancy,
+        condition: form.condition,
+        commercial_type: form.commercial_type,
+        units: form.units,
+        noi: form.noi,
+        cap_rate: form.cap_rate,
+        zoning: form.zoning,
+        tenant_status: form.tenant_status,
+        land_acres: form.land_acres,
+        frontage: form.frontage,
+        utilities: form.utilities,
+        road_access: form.road_access,
+        topography: form.topography,
+        parcel_id: form.parcel_id,
+        seller_situation: form.seller_situation,
+        access_notes: form.access_notes,
+        private_notes: form.private_notes,
+      };
+
+      const res = await fetch("/api/deal/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-vf-email": email },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || data?.details || "Deal save failed.");
+
+      setStatus("Deal saved. Open Projects or Buy Bucket to view it.");
+      setForm((current) => ({ ...current, title: "", city: "", address: "", description: "" }));
     } catch (err: any) {
-      setError(err?.message || "Something went wrong saving the deal.");
+      setError(err?.message || "Could not submit deal.");
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
 
-  const typeHelp =
-    form.property_type === "Residential"
-      ? "Single family, condo, duplex, small multifamily."
-      : form.property_type === "Commercial"
-      ? "Retail, office, industrial, mixed-use, larger multifamily."
-      : "Lots, acreage, infill land, development parcels.";
-
   return (
-    <main style={styles.page}>
-      <section style={styles.shell}>
-        <div style={styles.topBar}>
-          <Link href="/dashboard" style={styles.backLink}>← Dashboard</Link>
-          <Link href="/projects" style={styles.backLink}>Projects</Link>
-        </div>
+    <main style={shell}>
+      <div style={wrap}>
+        <nav style={nav}>
+          <Link href="/dashboard" style={navLink}>Dashboard</Link>
+          <Link href="/projects" style={navLink}>Projects</Link>
+          <Link href="/buy-bucket" style={navLink}>Buy Bucket</Link>
+          <Link href="/alerts" style={ghostButton}>Alerts</Link>
+        </nav>
 
-        <section style={styles.heroCard}>
-          <p style={styles.eyebrow}>VaultForge Deal Room</p>
-          <h1 style={styles.title}>Create a real opportunity.</h1>
-          <p style={styles.subtitle}>
-            Submit structured residential, commercial, or land opportunities with real uploaded photos.
+        <section style={card}>
+          <div style={eyebrow}>VAULTFORGE CREATE</div>
+          <h1 style={{ fontSize: "clamp(54px, 12vw, 104px)", lineHeight: .88, margin: "0 0 18px", letterSpacing: -4 }}>
+            Submit a real deal room.
+          </h1>
+          <p style={muted}>
+            Choose Residential, Commercial, or Land. Each type now opens its own field set and saves with real uploaded photos.
           </p>
         </section>
 
-        {error ? <div style={styles.errorBox}>{error}</div> : null}
-        {message ? <div style={styles.successBox}>{message}</div> : null}
-
-        <form onSubmit={submitDeal} style={styles.form}>
-          <section style={styles.card}>
-            <p style={styles.sectionLabel}>Photos</p>
-            <h2 style={styles.cardTitle}>Upload deal photos</h2>
-            <p style={styles.helpText}>
-              Tap the upload field below. It should open your phone photo picker. Current test minimum: 1 photo.
+        {(error || status) && (
+          <section style={{ ...card, borderColor: error ? "rgba(255,90,90,.65)" : "rgba(157,243,191,.35)" }}>
+            <p style={{ margin: 0, color: error ? "#ffd0d0" : "#9df3bf", fontWeight: 900, fontSize: 18 }}>
+              {error || status}
             </p>
-
-            <label style={styles.uploadBox}>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(event) => handlePhotos(event.target.files)}
-                style={styles.fileInput}
-              />
-              <span style={styles.uploadTitle}>Tap to choose photos</span>
-              <span style={styles.uploadSub}>Selected photos: {photos.length} / 10</span>
-            </label>
-
-            {previewUrls.length ? (
-              <div style={styles.previewGrid}>
-                {previewUrls.map((url, index) => (
-                  <img key={url} src={url} alt={`Selected photo ${index + 1}`} style={styles.previewImage} />
-                ))}
-              </div>
-            ) : null}
           </section>
+        )}
 
-          <section style={styles.card}>
-            <p style={styles.sectionLabel}>Deal Basics</p>
+        <section style={card}>
+          <div style={eyebrow}>DEAL TYPE</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {(["Residential", "Commercial", "Land"] as DealType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setDealType(type)}
+                style={dealType === type ? navLink : ghostButton}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+          <p style={muted}>{typeHelp}</p>
+        </section>
 
-            <label style={styles.label}>Deal Title *</label>
-            <input style={styles.input} value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="ATL off-market flip" />
+        <section style={card}>
+          <div style={eyebrow}>DEAL BASICS</div>
+          <div style={grid}>
+            <Field label="Deal Title *" value={form.title} onChange={(v) => update("title", v)} placeholder="Cartersville flip, Atlanta retail strip, 12-acre infill parcel..." />
+            <SelectField label="Strategy" value={form.strategy} onChange={(v) => update("strategy", v)} options={["Fix & Flip", "Rental", "Wholesale", "Creative Finance", "Buy & Hold", "Development", "JV Needed", "Lender Needed", "Buyer Needed"]} />
+            <Field label="City *" value={form.city} onChange={(v) => update("city", v)} />
+            <SelectField label="State *" value={form.state} onChange={(v) => update("state", v)} options={states} />
+            <Field label="Address / Area" value={form.address} onChange={(v) => update("address", v)} />
+            <Field label="Asking Price" value={form.asking_price} onChange={(v) => update("asking_price", v)} placeholder="$" />
+            <Field label="ARV / Value" value={form.arv} onChange={(v) => update("arv", v)} placeholder="$" />
+            <Field label="Repair Estimate" value={form.repair_estimate} onChange={(v) => update("repair_estimate", v)} placeholder="$" />
+          </div>
+        </section>
 
-            <label style={styles.label}>Property Type *</label>
-            <select style={styles.input} value={form.property_type} onChange={(e) => update("property_type", e.target.value as PropertyType)}>
-              <option>Residential</option>
-              <option>Commercial</option>
-              <option>Land</option>
-            </select>
-            <p style={styles.helpText}>{typeHelp}</p>
-
-            <label style={styles.label}>Strategy</label>
-            <select style={styles.input} value={form.strategy} onChange={(e) => update("strategy", e.target.value)}>
-              <option>Fix & Flip</option>
-              <option>Buy & Hold</option>
-              <option>Wholesale</option>
-              <option>Development</option>
-              <option>Rental / DSCR</option>
-              <option>JV Needed</option>
-              <option>Capital Needed</option>
-              <option>Disposition</option>
-            </select>
-
-            <div style={styles.twoCol}>
-              <div>
-                <label style={styles.label}>City *</label>
-                <input style={styles.input} value={form.city} onChange={(e) => update("city", e.target.value)} placeholder="Atlanta" />
-              </div>
-              <div>
-                <label style={styles.label}>State *</label>
-                <input style={styles.input} value={form.state} onChange={(e) => update("state", e.target.value)} placeholder="GA" />
-              </div>
-            </div>
-
-            <label style={styles.label}>Address</label>
-            <input style={styles.input} value={form.address} onChange={(e) => update("address", e.target.value)} placeholder="Private address / optional" />
-          </section>
-
-          <section style={styles.card}>
-            <p style={styles.sectionLabel}>Numbers</p>
-
-            <div style={styles.twoCol}>
-              <div>
-                <label style={styles.label}>Asking Price</label>
-                <input style={styles.input} inputMode="numeric" value={form.asking_price} onChange={(e) => update("asking_price", e.target.value)} placeholder="250000" />
-              </div>
-              <div>
-                <label style={styles.label}>ARV</label>
-                <input style={styles.input} inputMode="numeric" value={form.arv} onChange={(e) => update("arv", e.target.value)} placeholder="390000" />
-              </div>
-            </div>
-
-            <label style={styles.label}>Repairs</label>
-            <input style={styles.input} inputMode="numeric" value={form.repairs} onChange={(e) => update("repairs", e.target.value)} placeholder="65000" />
-
-            {form.property_type === "Residential" ? (
-              <div style={styles.twoCol}>
-                <div>
-                  <label style={styles.label}>Beds</label>
-                  <input style={styles.input} inputMode="decimal" value={form.beds} onChange={(e) => update("beds", e.target.value)} />
-                </div>
-                <div>
-                  <label style={styles.label}>Baths</label>
-                  <input style={styles.input} inputMode="decimal" value={form.baths} onChange={(e) => update("baths", e.target.value)} />
-                </div>
-              </div>
-            ) : null}
-
-            <div style={styles.twoCol}>
-              <div>
-                <label style={styles.label}>Sq Ft</label>
-                <input style={styles.input} inputMode="numeric" value={form.sqft} onChange={(e) => update("sqft", e.target.value)} />
-              </div>
-              <div>
-                <label style={styles.label}>Lot Size</label>
-                <input style={styles.input} value={form.lot_size} onChange={(e) => update("lot_size", e.target.value)} placeholder="0.25 acre" />
-              </div>
+        {dealType === "Residential" && (
+          <section style={card}>
+            <div style={eyebrow}>RESIDENTIAL FIELDS</div>
+            <div style={grid}>
+              <Field label="Bedrooms" value={form.bedrooms} onChange={(v) => update("bedrooms", v)} />
+              <Field label="Bathrooms" value={form.bathrooms} onChange={(v) => update("bathrooms", v)} />
+              <Field label="Building Sqft" value={form.building_sqft} onChange={(v) => update("building_sqft", v)} />
+              <Field label="Year Built" value={form.year_built} onChange={(v) => update("year_built", v)} />
+              <SelectField label="Occupancy" value={form.occupancy} onChange={(v) => update("occupancy", v)} options={["Vacant", "Owner Occupied", "Tenant Occupied", "Unknown"]} />
+              <SelectField label="Condition" value={form.condition} onChange={(v) => update("condition", v)} options={["Light Cosmetic", "Medium Rehab", "Heavy Rehab", "Fire/Flood", "Tear Down", "Unknown"]} />
             </div>
           </section>
+        )}
 
-          <section style={styles.card}>
-            <p style={styles.sectionLabel}>Private Context</p>
-
-            <label style={styles.label}>Description</label>
-            <textarea style={styles.textarea} value={form.description} onChange={(e) => update("description", e.target.value)} placeholder="Condition, access notes, timeline, seller motivation, deal help needed." />
-
-            <label style={styles.label}>Seller / Contact Name</label>
-            <input style={styles.input} value={form.seller_name} onChange={(e) => update("seller_name", e.target.value)} />
-
-            <div style={styles.twoCol}>
-              <div>
-                <label style={styles.label}>Seller Phone</label>
-                <input style={styles.input} value={form.seller_phone} onChange={(e) => update("seller_phone", e.target.value)} />
-              </div>
-              <div>
-                <label style={styles.label}>Seller Email</label>
-                <input style={styles.input} type="email" value={form.seller_email} onChange={(e) => update("seller_email", e.target.value)} />
-              </div>
+        {dealType === "Commercial" && (
+          <section style={card}>
+            <div style={eyebrow}>COMMERCIAL FIELDS</div>
+            <div style={grid}>
+              <SelectField label="Commercial Type" value={form.commercial_type} onChange={(v) => update("commercial_type", v)} options={["Retail", "Office", "Industrial", "Mixed Use", "Multifamily", "Self Storage", "Hospitality", "Mobile Home Park", "Other"]} />
+              <Field label="Units / Suites" value={form.units} onChange={(v) => update("units", v)} />
+              <Field label="Building Sqft" value={form.building_sqft} onChange={(v) => update("building_sqft", v)} />
+              <Field label="NOI" value={form.noi} onChange={(v) => update("noi", v)} placeholder="$" />
+              <Field label="Cap Rate" value={form.cap_rate} onChange={(v) => update("cap_rate", v)} placeholder="%" />
+              <Field label="Zoning" value={form.zoning} onChange={(v) => update("zoning", v)} />
+              <SelectField label="Tenant Status" value={form.tenant_status} onChange={(v) => update("tenant_status", v)} options={["Vacant", "Partially Occupied", "Fully Occupied", "Owner User", "Unknown"]} />
             </div>
           </section>
+        )}
 
-          <button type="submit" disabled={saving} style={saving ? styles.buttonDisabled : styles.button}>
-            {saving ? "Saving deal..." : "Save Deal With Photos"}
-          </button>
-        </form>
-      </section>
+        {dealType === "Land" && (
+          <section style={card}>
+            <div style={eyebrow}>LAND FIELDS</div>
+            <div style={grid}>
+              <Field label="Acres" value={form.land_acres} onChange={(v) => update("land_acres", v)} />
+              <Field label="Parcel ID" value={form.parcel_id} onChange={(v) => update("parcel_id", v)} />
+              <Field label="Zoning" value={form.zoning} onChange={(v) => update("zoning", v)} />
+              <Field label="Road Frontage" value={form.frontage} onChange={(v) => update("frontage", v)} />
+              <SelectField label="Utilities" value={form.utilities} onChange={(v) => update("utilities", v)} options={["At Site", "Nearby", "Septic/Well", "Unknown", "None"]} />
+              <SelectField label="Road Access" value={form.road_access} onChange={(v) => update("road_access", v)} options={["Public Road", "Private Road", "Easement", "Landlocked", "Unknown"]} />
+              <SelectField label="Topography" value={form.topography} onChange={(v) => update("topography", v)} options={["Flat", "Rolling", "Sloped", "Wooded", "Cleared", "Mixed", "Unknown"]} />
+            </div>
+          </section>
+        )}
+
+        <section style={card}>
+          <div style={eyebrow}>PHOTOS</div>
+          <h2 style={{ fontSize: 42, margin: "0 0 10px" }}>Upload deal photos</h2>
+          <p style={muted}>Tap the upload field. Select at least 1 photo for testing. Later we can enforce 5 minimum.</p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(event) => chooseFiles(event.target.files)}
+          />
+          <div style={uploadBox} onClick={() => fileRef.current?.click()}>
+            <h3 style={{ color: "#f5d978", fontSize: 30, margin: "0 0 18px" }}>Tap to choose photos</h3>
+            <p style={{ ...muted, margin: 0, fontWeight: 900 }}>Selected photos: {files.length} / 10</p>
+          </div>
+          {previews.length > 0 && (
+            <div style={{ ...grid, marginTop: 18 }}>
+              {previews.map((src, i) => (
+                <img key={src} src={src} alt={`Selected ${i + 1}`} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(255,255,255,.16)" }} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>CONTEXT</div>
+          <Textarea label="Description / Deal Summary" value={form.description} onChange={(v) => update("description", v)} />
+          <Textarea label="Seller Situation" value={form.seller_situation} onChange={(v) => update("seller_situation", v)} />
+          <Textarea label="Access Notes" value={form.access_notes} onChange={(v) => update("access_notes", v)} />
+          <Textarea label="Private Notes" value={form.private_notes} onChange={(v) => update("private_notes", v)} />
+        </section>
+
+        <button
+          type="button"
+          onClick={submitDeal}
+          disabled={busy}
+          style={{
+            ...navLink,
+            width: "100%",
+            fontSize: 22,
+            padding: "18px 22px",
+            opacity: busy ? .65 : 1,
+          }}
+        >
+          {busy ? "Saving Deal..." : "Submit Deal"}
+        </button>
+      </div>
     </main>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "radial-gradient(circle at top, #223225 0%, #111713 48%, #080b09 100%)",
-    color: "#f6f3ea",
-    fontFamily: "Arial, Helvetica, sans-serif",
-    padding: "24px 14px 56px",
-  },
-  shell: {
-    width: "100%",
-    maxWidth: 980,
-    margin: "0 auto",
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 18,
-  },
-  backLink: {
-    color: "#f2d487",
-    textDecoration: "none",
-    border: "1px solid rgba(242,212,135,.35)",
-    borderRadius: 999,
-    padding: "10px 14px",
-    fontWeight: 800,
-  },
-  heroCard: {
-    border: "1px solid rgba(255,255,255,.16)",
-    background: "rgba(255,255,255,.055)",
-    borderRadius: 28,
-    padding: "28px 22px",
-    marginBottom: 18,
-  },
-  eyebrow: {
-    color: "#f2d487",
-    textTransform: "uppercase",
-    letterSpacing: 5,
-    fontSize: 12,
-    fontWeight: 900,
-    margin: 0,
-  },
-  title: {
-    fontSize: "clamp(38px, 12vw, 76px)",
-    lineHeight: .92,
-    margin: "14px 0",
-  },
-  subtitle: {
-    color: "rgba(246,243,234,.72)",
-    fontSize: 19,
-    lineHeight: 1.55,
-    margin: 0,
-  },
-  form: {
-    display: "grid",
-    gap: 18,
-  },
-  card: {
-    border: "1px solid rgba(255,255,255,.15)",
-    background: "rgba(255,255,255,.06)",
-    borderRadius: 24,
-    padding: 20,
-  },
-  sectionLabel: {
-    color: "#f2d487",
-    textTransform: "uppercase",
-    letterSpacing: 5,
-    fontSize: 12,
-    fontWeight: 900,
-    margin: "0 0 12px",
-  },
-  cardTitle: {
-    margin: "0 0 8px",
-    fontSize: 24,
-  },
-  helpText: {
-    color: "rgba(246,243,234,.65)",
-    fontSize: 14,
-    lineHeight: 1.45,
-    margin: "8px 0 14px",
-  },
-  label: {
-    display: "block",
-    fontWeight: 900,
-    margin: "18px 0 8px",
-    color: "#f6f3ea",
-  },
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    border: "1px solid rgba(255,255,255,.18)",
-    borderRadius: 18,
-    background: "rgba(255,255,255,.1)",
-    color: "#fff",
-    padding: "16px 16px",
-    fontSize: 17,
-    outline: "none",
-  },
-  textarea: {
-    width: "100%",
-    minHeight: 140,
-    boxSizing: "border-box",
-    border: "1px solid rgba(255,255,255,.18)",
-    borderRadius: 18,
-    background: "rgba(255,255,255,.1)",
-    color: "#fff",
-    padding: "16px 16px",
-    fontSize: 17,
-    outline: "none",
-  },
-  twoCol: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 14,
-  },
-  uploadBox: {
-    display: "grid",
-    placeItems: "center",
-    minHeight: 150,
-    border: "2px dashed rgba(242,212,135,.55)",
-    borderRadius: 22,
-    background: "rgba(242,212,135,.08)",
-    cursor: "pointer",
-    textAlign: "center",
-    padding: 20,
-  },
-  fileInput: {
-    position: "absolute",
-    width: 1,
-    height: 1,
-    opacity: 0,
-    pointerEvents: "none",
-  },
-  uploadTitle: {
-    display: "block",
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#f2d487",
-  },
-  uploadSub: {
-    display: "block",
-    marginTop: 8,
-    color: "rgba(246,243,234,.72)",
-    fontWeight: 800,
-  },
-  previewGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-    gap: 10,
-    marginTop: 14,
-  },
-  previewImage: {
-    width: "100%",
-    height: 120,
-    objectFit: "cover",
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,.15)",
-  },
-  button: {
-    width: "100%",
-    border: 0,
-    borderRadius: 20,
-    background: "linear-gradient(135deg, #f2d487, #d6a735)",
-    color: "#151006",
-    padding: "18px 18px",
-    fontSize: 18,
-    fontWeight: 950,
-    cursor: "pointer",
-  },
-  buttonDisabled: {
-    width: "100%",
-    border: 0,
-    borderRadius: 20,
-    background: "rgba(255,255,255,.18)",
-    color: "rgba(255,255,255,.72)",
-    padding: "18px 18px",
-    fontSize: 18,
-    fontWeight: 950,
-  },
-  errorBox: {
-    border: "1px solid rgba(255,90,90,.45)",
-    background: "rgba(255,90,90,.14)",
-    color: "#ffd6d6",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
-    fontWeight: 800,
-  },
-  successBox: {
-    border: "1px solid rgba(103,255,174,.45)",
-    background: "rgba(103,255,174,.12)",
-    color: "#baffd6",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
-    fontWeight: 800,
-  },
-};
+function Field({ label: labelText, value, onChange, placeholder = "" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div>
+      <label style={label}>{labelText}</label>
+      <input style={input} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function SelectField({ label: labelText, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div>
+      <label style={label}>{labelText}</label>
+      <select style={input} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option} value={option} style={{ color: "#111" }}>{option}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function Textarea({ label: labelText, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={label}>{labelText}</label>
+      <textarea style={{ ...input, minHeight: 130, resize: "vertical" }} value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
