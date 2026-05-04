@@ -8,6 +8,12 @@ const PROPERTY_TYPES = ["Residential", "Commercial", "Land"];
 const STRATEGIES = ["Fix & Flip", "Rental", "Wholesale", "Development", "BRRRR", "Buy & Hold", "Creative Finance", "Private Lending"];
 const DEAL_NEEDS = ["Buyer Needed", "Capital Needed", "Lender Needed", "Contractor Needed", "JV Partner Needed", "Disposition Help", "Due Diligence Help", "Project Management Needed"];
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  "";
+
 const shellStyle: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -101,7 +107,7 @@ const emptyForm: FormState = {
   private_notes: "",
   description: "",
   deal_needs: [],
-  photo_urls: ["", "", "", "", ""],
+  photo_urls: [],
   zoning: "",
   utilities: "",
   road_frontage: "",
@@ -126,6 +132,41 @@ function authHeaders() {
 
 function toggle(list: string[], value: string) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+}
+
+function safeFileName(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9.\-_]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 90);
+}
+
+async function uploadDealPhoto(file: File, email: string, index: number) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Supabase public environment variables are missing.");
+  }
+
+  const path = `${email.replace(/[^a-z0-9]/g, "-")}/${Date.now()}-${index}-${safeFileName(file.name || "deal-photo.jpg")}`;
+  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/deal-photos/${path}`;
+
+  const uploadRes = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": file.type || "application/octet-stream",
+      "x-upsert": "true",
+    },
+    body: file,
+  });
+
+  if (!uploadRes.ok) {
+    const details = await uploadRes.text();
+    throw new Error(details || "Photo upload failed.");
+  }
+
+  return `${SUPABASE_URL}/storage/v1/object/public/deal-photos/${path}`;
 }
 
 function TextField({
@@ -177,21 +218,51 @@ function NeedChips({ values, onChange }: { values: string[]; onChange: (next: st
 
 export default function SubmitPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [status, setStatus] = useState("");
   const [aiSummary, setAiSummary] = useState("");
   const [routingMessage, setRoutingMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function updatePhoto(index: number, value: string) {
-    setForm((prev) => {
-      const next = [...prev.photo_urls];
-      next[index] = value;
-      return { ...prev, photo_urls: next };
+  function handlePhotos(files: FileList | null) {
+    const selected = Array.from(files || []).filter((file) => file.type.startsWith("image/")).slice(0, 5);
+
+    setPhotoFiles(selected);
+    setPhotoPreviews((old) => {
+      old.forEach((url) => URL.revokeObjectURL(url));
+      return selected.map((file) => URL.createObjectURL(file));
     });
+
+    setStatus(selected.length > 0 ? `${selected.length} photo(s) ready to upload.` : "");
+  }
+
+  async function uploadSelectedPhotos() {
+    const email = getEmail();
+
+    if (!email) {
+      throw new Error("Session missing. Go to Login and enter your email again.");
+    }
+
+    if (photoFiles.length === 0) return [];
+
+    setUploading(true);
+
+    try {
+      const uploaded = [];
+      for (let i = 0; i < photoFiles.length; i += 1) {
+        const url = await uploadDealPhoto(photoFiles[i], email, i + 1);
+        uploaded.push(url);
+      }
+      return uploaded;
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function saveDeal() {
@@ -207,10 +278,24 @@ export default function SubmitPage() {
     setSaving(true);
 
     try {
+      let uploadedPhotoUrls: string[] = [];
+
+      if (photoFiles.length > 0) {
+        setStatus("Uploading photos...");
+        uploadedPhotoUrls = await uploadSelectedPhotos();
+      }
+
+      setStatus("Saving deal...");
+
+      const payload = {
+        ...form,
+        photo_urls: uploadedPhotoUrls,
+      };
+
       const res = await fetch("/api/deal/create", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -218,13 +303,18 @@ export default function SubmitPage() {
       if (!res.ok) {
         setStatus(data?.error || data?.details || "Could not save deal.");
       } else {
-        setStatus("Deal saved with AI analysis and routing.");
+        setStatus("Deal saved with photos, AI analysis, and routing.");
         setAiSummary(data?.ai?.ai_summary || "");
         setRoutingMessage(`Routing complete: ${data?.routing?.matched || 0} matching member alert(s) created.`);
         setForm(emptyForm);
+        setPhotoFiles([]);
+        setPhotoPreviews((old) => {
+          old.forEach((url) => URL.revokeObjectURL(url));
+          return [];
+        });
       }
-    } catch {
-      setStatus("Could not save deal. Refresh and try again.");
+    } catch (err: any) {
+      setStatus(err?.message || "Could not save deal. Refresh and try again.");
     }
 
     setSaving(false);
@@ -252,13 +342,13 @@ export default function SubmitPage() {
             Create a deal room.
           </h1>
           <p style={{ ...mutedStyle, fontSize: 20 }}>
-            Submit structured residential, commercial, or land opportunities with photos,
+            Submit structured residential, commercial, or land opportunities with uploaded photos,
             numbers, needs, and AI routing context.
           </p>
         </section>
 
         {status && (
-          <section style={{ ...sectionStyle, color: status.toLowerCase().includes("could") || status.toLowerCase().includes("missing") || status.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf" }}>
+          <section style={{ ...sectionStyle, color: status.toLowerCase().includes("could") || status.toLowerCase().includes("missing") || status.toLowerCase().includes("required") || status.toLowerCase().includes("failed") ? "#ffd0d0" : "#9df3bf" }}>
             {status}
           </section>
         )}
@@ -354,21 +444,24 @@ export default function SubmitPage() {
         )}
 
         <section style={sectionStyle}>
-          <div style={eyebrowStyle}>PHOTOS</div>
-          <p style={mutedStyle}>
-            Add up to 5 photo URLs for now. Real direct upload is the next step after this form saves clean.
-          </p>
-          <div style={gridStyle}>
-            {form.photo_urls.map((url, index) => (
-              <TextField
-                key={index}
-                label={`Photo URL ${index + 1}`}
-                value={url}
-                onChange={(v) => updatePhoto(index, v)}
-                placeholder="https://..."
-              />
-            ))}
-          </div>
+          <div style={eyebrowStyle}>PHOTO UPLOADS</div>
+          <p style={mutedStyle}>Upload up to 5 images. These upload to Supabase Storage and attach to the deal automatically.</p>
+
+          <label style={labelStyle}>
+            Upload Deal Photos
+            <input type="file" accept="image/*" multiple onChange={(e) => handlePhotos(e.target.files)} style={inputStyle} />
+          </label>
+
+          {photoPreviews.length > 0 && (
+            <div style={gridStyle}>
+              {photoPreviews.map((src, index) => (
+                <div key={src} style={{ border: "1px solid rgba(255,255,255,.16)", borderRadius: 20, padding: 10, background: "rgba(255,255,255,.04)" }}>
+                  <img src={src} alt={`Deal preview ${index + 1}`} style={{ width: "100%", borderRadius: 16, display: "block" }} />
+                  <p style={{ ...mutedStyle, margin: "8px 0 0" }}>Photo {index + 1}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section style={sectionStyle}>
@@ -397,12 +490,10 @@ export default function SubmitPage() {
         </section>
 
         <section style={{ ...sectionStyle, borderColor: "rgba(157,243,191,.38)" }}>
-          <button style={buttonStyle} onClick={saveDeal} disabled={saving}>
-            {saving ? "Saving Deal..." : "Save Deal + AI Route"}
+          <button style={buttonStyle} onClick={saveDeal} disabled={saving || uploading}>
+            {uploading ? "Uploading Photos..." : saving ? "Saving Deal..." : "Save Deal + AI Route"}
           </button>
-          <p style={mutedStyle}>
-            Required: title, state, city, and property type. Photos are optional but recommended.
-          </p>
+          <p style={mutedStyle}>Required: title, state, city, and property type. Up to 5 photos can be uploaded.</p>
         </section>
 
         {routingMessage && <section style={{ ...sectionStyle, color: "#9df3bf" }}>{routingMessage}</section>}
