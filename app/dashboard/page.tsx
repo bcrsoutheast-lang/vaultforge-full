@@ -529,10 +529,10 @@ export default function Dashboard() {
 
             <section style={sectionStyle}>
               <div style={eyebrowStyle}>TODAY'S COMMAND LIST</div>
-              <div style={listItem}>Review active deals and save anything that fits your buy box.</div>
-              <div style={listItem}>Complete your profile so routing knows who you are and what you need.</div>
-              <div style={listItem}>Create any new opportunity that needs capital, partners, buyers, or execution.</div>
-              <div style={listItem}>Check alerts and messages for current match activity.</div>
+              <div style={listItemStyle}>Review active deals and save anything that fits your buy box.</div>
+              <div style={listItemStyle}>Complete your profile so routing knows who you are and what you need.</div>
+              <div style={listItemStyle}>Create any new opportunity that needs capital, partners, buyers, or execution.</div>
+              <div style={listItemStyle}>Check alerts and messages for current match activity.</div>
             </section>
           </>
         )}
