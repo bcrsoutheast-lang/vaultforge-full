@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { setVaultForgeEmail } from "../lib/vaultforge-client-auth";
 
 const shellStyle: React.CSSProperties = { minHeight: "100vh", background: "#071326", color: "white", padding: "36px 22px 80px", fontFamily: "Arial, sans-serif" };
 const cardStyle: React.CSSProperties = { maxWidth: 520, margin: "0 auto", border: "1px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.04)", borderRadius: 28, padding: 28 };
@@ -15,7 +14,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("vf_email") || "";
+    const saved = window.localStorage.getItem("vf_email") || "";
     if (saved) setEmail(saved);
   }, []);
 
@@ -45,7 +44,8 @@ export default function LoginPage() {
         return;
       }
 
-      setVaultForgeEmail(cleanEmail);
+      window.localStorage.setItem("vf_email", cleanEmail);
+      window.sessionStorage.setItem("vf_email", cleanEmail);
       window.location.href = data.redirectTo || "/dashboard";
     } catch {
       setStatus("Login failed. Refresh and try again.");
