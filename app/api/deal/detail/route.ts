@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function supabase() {
+function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -12,7 +12,9 @@ function supabase() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) throw new Error("Missing Supabase environment variables.");
+  if (!url || !key) {
+    throw new Error("Missing Supabase environment variables.");
+  }
 
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -21,6 +23,7 @@ function supabase() {
 
 export async function GET(request: Request) {
   try {
+    const supabase = supabaseClient();
     const url = new URL(request.url);
     const id = String(url.searchParams.get("id") || "").trim();
 
@@ -28,7 +31,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: false, error: "Missing deal id." }, { status: 400 });
     }
 
-    const { data, error } = await supabase()
+    const { data, error } = await supabase
       .from("vf_deals")
       .select("*")
       .eq("id", id)
@@ -44,6 +47,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ ok: true, deal: data });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error?.message || "Could not load deal." }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "Failed to load deal.", details: error?.message || String(error) },
+      { status: 500 }
+    );
   }
 }
