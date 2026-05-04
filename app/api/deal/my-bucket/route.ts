@@ -1,46 +1,51 @@
 import { NextResponse } from "next/server";
-import { getSessionEmailFromRequest } from "../../../lib/vaultforge-session";
+import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getSupabaseConfig() {
+function supabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  if (!url || !key) return null;
-  return { url, key };
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+  if (!url || !key) throw new Error("Missing Supabase environment variables.");
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
-export async function GET(req: Request) {
-  const config = getSupabaseConfig();
-  if (!config) return NextResponse.json({ error: "Supabase environment variables are missing.", deals: [] }, { status: 500 });
+function emailFromRequest(request: Request, body: any) {
+  return request.headers.get("x-vf-email") || body?.buyer_email || body?.email || "member@vaultforge.local";
+}
 
-  const memberEmail = getSessionEmailFromRequest(req);
-  if (!memberEmail) return NextResponse.json({ error: "Not logged in.", deals: [] }, { status: 401 });
+export async function POST(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const dealId = body?.deal_id || body?.dealId || body?.id || "";
+    const buyerEmail = emailFromRequest(request, body);
+    if (!dealId) return NextResponse.json({ error: "Missing deal id." }, { status: 400 });
 
-  const headers = { apikey: config.key, Authorization: `Bearer ${config.key}` };
-  const bucketRes = await fetch(`${config.url}/rest/v1/vf_buy_bucket?select=deal_id,created_at&member_email=eq.${encodeURIComponent(memberEmail)}&order=created_at.desc`, {
-    headers,
-    cache: "no-store",
-  });
+    const db = supabase();
 
-  if (!bucketRes.ok) return NextResponse.json({ error: "Failed to load buy bucket.", details: await bucketRes.text(), deals: [] }, { status: 500 });
+    const { data: existing, error: existingError } = await db
+      .from("vf_buy_bucket")
+      .select("*")
+      .eq("deal_id", dealId)
+      .eq("buyer_email", buyerEmail)
+      .maybeSingle();
 
-  const bucketRows = await bucketRes.json();
-  const ids = Array.from(new Set(bucketRows.map((row: any) => String(row.deal_id || "").trim()).filter(Boolean)));
-  if (ids.length === 0) return NextResponse.json({ deals: [] });
+    if (existingError && existingError.code !== "PGRST116") {
+      return NextResponse.json({ error: existingError.message }, { status: 500 });
+    }
 
-  const dealsRes = await fetch(`${config.url}/rest/v1/vf_deals?select=*&id=in.(${ids.join(",")})&archived=eq.false`, {
-    headers,
-    cache: "no-store",
-  });
+    if (existing) return NextResponse.json({ ok: true, item: existing, already_saved: true });
 
-  if (!dealsRes.ok) return NextResponse.json({ error: "Failed to load saved deals.", details: await dealsRes.text(), deals: [] }, { status: 500 });
+    const { data, error } = await db
+      .from("vf_buy_bucket")
+      .insert({ deal_id: dealId, buyer_email: buyerEmail, status: "saved" })
+      .select("*")
+      .single();
 
-  const deals = await dealsRes.json();
-  const order = new Map<string, number>();
-  ids.forEach((id: any, index) => order.set(String(id), index));
-  deals.sort((a: any, b: any) => (order.get(String(a.id)) ?? 9999) - (order.get(String(b.id)) ?? 9999));
-
-  return NextResponse.json({ deals });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, item: data });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Buy Bucket save failed." }, { status: 500 });
+  }
 }
