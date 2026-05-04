@@ -1,96 +1,119 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getSupabaseConfig() {
+function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  if (!url || !key) return null;
-  return { url, key };
-}
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    "";
 
-function getCookieValue(cookieHeader: string, name: string) {
-  const parts = cookieHeader.split(";").map((part) => part.trim());
-  const found = parts.find((part) => part.startsWith(`${name}=`));
-  if (!found) return "";
-  return decodeURIComponent(found.slice(name.length + 1));
-}
+  if (!url || !key) throw new Error("Missing Supabase environment values.");
 
-export async function GET(req: Request) {
-  const config = getSupabaseConfig();
-
-  if (!config) {
-    return NextResponse.json(
-      { error: "Supabase environment variables are missing.", threads: [] },
-      { status: 500 }
-    );
-  }
-
-  const cookieHeader = req.headers.get("cookie") || "";
-  const memberEmail =
-    getCookieValue(cookieHeader, "vf_user") ||
-    getCookieValue(cookieHeader, "vf_email");
-
-  if (!memberEmail) {
-    return NextResponse.json({ error: "Not logged in.", threads: [] }, { status: 401 });
-  }
-
-  const email = memberEmail.toLowerCase();
-
-  const url =
-    `${config.url}/rest/v1/vf_messages` +
-    `?select=*` +
-    `&or=(sender_email.eq.${encodeURIComponent(email)},recipient_email.eq.${encodeURIComponent(email)})` +
-    `&archived=eq.false` +
-    `&order=created_at.desc`;
-
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-    },
-    cache: "no-store",
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
   });
+}
 
-  if (!res.ok) {
-    const details = await res.text();
+function cleanEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizePhotos(value: any): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch {}
+    return [value.trim()];
+  }
+  return [];
+}
+
+function normalizeDeal(row: any) {
+  if (!row) return null;
+  const photos = normalizePhotos(row.photo_urls);
+  const main = row.main_photo_url || photos[0] || "";
+  return {
+    ...row,
+    photo_urls: main && !photos.includes(main) ? [main, ...photos] : photos,
+    main_photo_url: main,
+  };
+}
+
+export async function GET(request: Request) {
+  try {
+    const email =
+      cleanEmail(request.headers.get("x-vf-email")) ||
+      cleanEmail(new URL(request.url).searchParams.get("email")) ||
+      "text@text.com";
+
+    const supabase = supabaseClient();
+
+    const { data: messages, error } = await supabase
+      .from("vf_messages")
+      .select("*")
+      .or(`sender_email.eq.${email},recipient_email.eq.${email}`)
+      .eq("archived", false)
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (error) return NextResponse.json({ error: error.message, details: error }, { status: 500 });
+
+    const dealIds = Array.from(new Set((messages || []).map((m: any) => m.deal_id).filter(Boolean)));
+
+    let dealMap = new Map<string, any>();
+
+    if (dealIds.length > 0) {
+      const { data: deals, error: dealError } = await supabase
+        .from("vf_deals")
+        .select("*")
+        .in("id", dealIds);
+
+      if (!dealError && deals) {
+        dealMap = new Map(deals.map((deal: any) => [deal.id, normalizeDeal(deal)]));
+      }
+    }
+
+    const grouped = new Map<string, any>();
+
+    for (const message of messages || []) {
+      const key = String(message.thread_key || message.deal_id || message.id);
+      const existing = grouped.get(key);
+      const deal = dealMap.get(message.deal_id) || null;
+
+      if (!existing) {
+        grouped.set(key, {
+          thread_key: key,
+          deal_id: message.deal_id,
+          deal,
+          latest_message: message,
+          messages: [message],
+          unread_count:
+            message.recipient_email === email && !message.read_at ? 1 : 0,
+        });
+      } else {
+        existing.messages.push(message);
+        if (message.recipient_email === email && !message.read_at) {
+          existing.unread_count += 1;
+        }
+      }
+    }
+
+    const threads = Array.from(grouped.values()).sort((a: any, b: any) => {
+      return new Date(b.latest_message.created_at).getTime() - new Date(a.latest_message.created_at).getTime();
+    });
+
+    return NextResponse.json({ ok: true, email, threads });
+  } catch (error: any) {
     return NextResponse.json(
-      { error: "Failed to load messages.", details, threads: [] },
+      { error: "Could not load messages.", details: error?.message || String(error) },
       { status: 500 }
     );
   }
-
-  const rows = await res.json();
-  const map = new Map<string, any>();
-
-  for (const row of rows) {
-    const threadId = row.thread_id || row.id;
-    if (!map.has(threadId)) {
-      const otherEmail =
-        String(row.sender_email || "").toLowerCase() === email
-          ? row.recipient_email
-          : row.sender_email;
-
-      map.set(threadId, {
-        thread_id: threadId,
-        subject: row.subject || "VaultForge message",
-        deal_id: row.deal_id || null,
-        other_email: otherEmail,
-        latest_message: row.message,
-        latest_sender: row.sender_email,
-        latest_recipient: row.recipient_email,
-        latest_at: row.created_at,
-        unread_count: 0,
-      });
-    }
-
-    if (String(row.recipient_email || "").toLowerCase() === email && !row.read) {
-      const thread = map.get(threadId);
-      thread.unread_count += 1;
-    }
-  }
-
-  return NextResponse.json({ threads: Array.from(map.values()) });
 }
