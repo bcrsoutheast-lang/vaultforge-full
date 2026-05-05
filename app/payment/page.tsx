@@ -3,153 +3,216 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type AccessState = {
+type Access = {
   email: string;
-  profileComplete: boolean;
-  paymentStatus: string;
-  memberStatus: string;
-  accessLevel: string;
-  nextRequiredStep: string;
-  hasFullAccess: boolean;
+  owner: boolean;
+  profile_complete: boolean;
+  payment_status: string;
+  access_status: string;
+  paid: boolean;
+  unlocked: boolean;
+  next_step: string;
 };
 
-const shellStyle: React.CSSProperties = {
+const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg, #030509 0%, #071326 55%, #030509 100%)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
   color: "white",
-  padding: "26px 18px 90px",
+  padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrapStyle: React.CSSProperties = { maxWidth: 1120, margin: "0 auto" };
-const navStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 24 };
-const navLinkStyle: React.CSSProperties = { color: "white", textDecoration: "none", border: "1px solid rgba(255,255,255,.18)", borderRadius: 999, padding: "11px 15px", fontSize: 14, background: "rgba(255,255,255,.04)" };
-const heroStyle: React.CSSProperties = { border: "1px solid rgba(255,255,255,.16)", background: "linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.025))", borderRadius: 34, padding: "30px 22px", marginBottom: 22, boxShadow: "0 30px 90px rgba(0,0,0,.45)" };
-const sectionStyle: React.CSSProperties = { border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.035)", borderRadius: 30, padding: 22, marginBottom: 20 };
-const cardStyle: React.CSSProperties = { border: "1px solid rgba(255,255,255,.15)", background: "linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.025))", borderRadius: 26, padding: 22, color: "white" };
-const gridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16 };
-const eyebrowStyle: React.CSSProperties = { color: "#e8c46b", letterSpacing: 5, fontWeight: 900, fontSize: 12, marginBottom: 12 };
-const titleStyle: React.CSSProperties = { fontSize: "clamp(44px, 10vw, 84px)", lineHeight: 0.9, letterSpacing: -3, margin: "0 0 16px" };
-const mutedStyle: React.CSSProperties = { color: "rgba(255,255,255,.66)", lineHeight: 1.55, fontSize: 16 };
-const disabledButtonStyle: React.CSSProperties = { display: "inline-block", background: "linear-gradient(135deg, #f4d47b, #9df3bf)", color: "#06101e", borderRadius: 999, padding: "15px 20px", textDecoration: "none", fontWeight: 950, marginTop: 14, border: 0, opacity: 0.55, cursor: "not-allowed" };
-const primaryButtonStyle: React.CSSProperties = { display: "inline-block", background: "linear-gradient(135deg, #f4d47b, #9df3bf)", color: "#06101e", borderRadius: 999, padding: "15px 20px", textDecoration: "none", fontWeight: 950, marginTop: 14 };
-const pillStyle: React.CSSProperties = { display: "inline-block", color: "#9df3bf", border: "1px solid rgba(157,243,191,.35)", borderRadius: 999, padding: "7px 12px", fontSize: 12, letterSpacing: 1.4, marginBottom: 14, fontWeight: 900 };
+const wrap: React.CSSProperties = { maxWidth: 980, margin: "0 auto" };
+
+const hero: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.30)",
+  background: "linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.025))",
+  borderRadius: 34,
+  padding: 26,
+  marginBottom: 22,
+  boxShadow: "0 30px 90px rgba(0,0,0,.38)",
+};
+
+const pane: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.13)",
+  background: "rgba(255,255,255,.04)",
+  borderRadius: 28,
+  padding: 22,
+  marginBottom: 18,
+};
+
+const btn: React.CSSProperties = {
+  display: "inline-block",
+  background: "#f5d978",
+  color: "#06100a",
+  textDecoration: "none",
+  borderRadius: 999,
+  padding: "14px 20px",
+  fontWeight: 950,
+  border: "none",
+  margin: "7px 7px 0 0",
+  cursor: "pointer",
+};
+
+const ghost: React.CSSProperties = {
+  display: "inline-block",
+  color: "white",
+  textDecoration: "none",
+  borderRadius: 999,
+  padding: "14px 20px",
+  fontWeight: 900,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.04)",
+  margin: "7px 7px 0 0",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: 5,
+  fontWeight: 900,
+  fontSize: 12,
+  marginBottom: 12,
+  textTransform: "uppercase",
+};
+
+const muted: React.CSSProperties = {
+  color: "rgba(255,255,255,.70)",
+  lineHeight: 1.55,
+  fontSize: 17,
+};
 
 function getEmail() {
   if (typeof window === "undefined") return "";
-  return (window.localStorage.getItem("vf_email") || window.sessionStorage.getItem("vf_email") || "").trim().toLowerCase();
-}
-
-function authHeaders() {
-  return { "Content-Type": "application/json", "x-vf-email": getEmail() };
+  return (
+    localStorage.getItem("vf_email") ||
+    sessionStorage.getItem("vf_email") ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
 }
 
 export default function PaymentPage() {
-  const [access, setAccess] = useState<AccessState | null>(null);
-  const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [access, setAccess] = useState<Access | null>(null);
+  const [status, setStatus] = useState("Checking access...");
 
   async function loadAccess() {
-    setLoading(true);
-    setStatus("");
-
-    if (!getEmail()) {
-      setStatus("Session missing. Go to Login and enter your email again.");
-      setLoading(false);
-      return;
-    }
-
+    setStatus("Checking access...");
     try {
-      const res = await fetch("/api/member/access", { cache: "no-store", headers: authHeaders() });
+      const email = getEmail();
+      const res = await fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
+        cache: "no-store",
+        headers: { "x-vf-email": email },
+      });
       const data = await res.json();
-
-      if (!res.ok) {
-        setStatus(data?.error || "Could not load access status.");
-        setAccess(null);
-      } else {
-        setAccess(data);
-      }
+      setAccess(data);
+      setStatus("");
     } catch {
-      setStatus("Could not load payment status. Refresh and try again.");
-      setAccess(null);
+      setStatus("");
     }
-
-    setLoading(false);
   }
 
-  useEffect(() => { loadAccess(); }, []);
+  useEffect(() => {
+    loadAccess();
+  }, []);
 
-  const profileComplete = Boolean(access?.profileComplete);
-  const hasFullAccess = Boolean(access?.hasFullAccess);
+  const owner = Boolean(access?.owner);
+  const unlocked = Boolean(access?.unlocked);
 
   return (
-    <main style={shellStyle}>
-      <div style={wrapStyle}>
-        <nav style={navStyle}>
-          <Link href="/dashboard" style={navLinkStyle}>Dashboard</Link>
-          <Link href="/profile" style={navLinkStyle}>Profile</Link>
-          <Link href="/terms" style={navLinkStyle}>Terms</Link>
-        </nav>
-
-        <section style={heroStyle}>
-          <div style={{ textAlign: "center", marginBottom: 18 }}>
-            <img src="/vaultforge-logo.png" alt="VaultForge" style={{ width: "100%", maxWidth: 380, borderRadius: 22 }} />
-          </div>
-          <div style={eyebrowStyle}>MEMBER ACCESS</div>
-          <h1 style={titleStyle}>Unlock the VaultForge command center.</h1>
-          <p style={{ ...mutedStyle, fontSize: 20 }}>
-            Payment is the final launch gate after profile completion. Stripe checkout
-            will connect here once your price is ready.
+    <main style={page}>
+      <div style={wrap}>
+        <section style={hero}>
+          <div style={eyebrow}>VaultForge Access</div>
+          <h1 style={{ fontSize: "clamp(54px, 12vw, 96px)", lineHeight: 0.88, margin: "0 0 18px" }}>
+            Activate member access.
+          </h1>
+          <p style={{ ...muted, fontSize: 20 }}>
+            Complete your profile first. Then activate membership to unlock the full VaultForge member area.
           </p>
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <Link href="/profile" style={ghost}>Edit Profile</Link>
         </section>
 
-        {loading && <section style={sectionStyle}>Loading access status...</section>}
-        {status && <section style={{ ...sectionStyle, color: "#ffd0d0" }}>{status}</section>}
+        {status && <section style={pane}>{status}</section>}
 
-        {!loading && access && (
+        {owner && (
+          <section style={{ ...pane, borderColor: "rgba(157,243,191,.45)" }}>
+            <div style={{ ...eyebrow, color: "#9df3bf" }}>Owner Access</div>
+            <h2 style={{ fontSize: 38, margin: "0 0 12px" }}>You are not locked.</h2>
+            <p style={muted}>
+              Owner bypass is active for your account. You can keep testing the site while regular members go through profile and payment steps.
+            </p>
+            <Link href="/dashboard" style={btn}>Continue to Dashboard</Link>
+            <Link href="/projects" style={ghost}>Projects</Link>
+            <Link href="/submit" style={ghost}>Create Deal</Link>
+          </section>
+        )}
+
+        {!owner && unlocked && (
+          <section style={{ ...pane, borderColor: "rgba(157,243,191,.45)" }}>
+            <div style={{ ...eyebrow, color: "#9df3bf" }}>Access Active</div>
+            <h2 style={{ fontSize: 38, margin: "0 0 12px" }}>Your member access is active.</h2>
+            <p style={muted}>You can use the full member area.</p>
+            <Link href="/dashboard" style={btn}>Enter Dashboard</Link>
+          </section>
+        )}
+
+        {!owner && !unlocked && (
           <>
-            <section style={sectionStyle}>
-              <div style={eyebrowStyle}>ACCESS STATUS</div>
-              <div style={gridStyle}>
-                <div style={cardStyle}>
-                  <span style={pillStyle}>PROFILE</span>
-                  <h2 style={{ fontSize: 34, margin: "0 0 10px" }}>{profileComplete ? "Complete" : "Required"}</h2>
-                  <p style={mutedStyle}>
-                    {profileComplete ? "Your operating profile is complete. Payment is the next gate." : "Complete your profile before payment unlock is available."}
-                  </p>
-                  {!profileComplete && <Link href="/profile" style={primaryButtonStyle}>Complete Profile</Link>}
-                </div>
-
-                <div style={cardStyle}>
-                  <span style={pillStyle}>PAYMENT</span>
-                  <h2 style={{ fontSize: 34, margin: "0 0 10px" }}>{hasFullAccess ? "Active" : "Pending"}</h2>
-                  <p style={mutedStyle}>
-                    {hasFullAccess ? "Your member access is active." : "Stripe is not connected yet. This page is ready for checkout when pricing is final."}
-                  </p>
-                  {profileComplete && !hasFullAccess && <button type="button" style={disabledButtonStyle} disabled>Stripe Checkout Coming Next</button>}
-                </div>
-
-                <div style={cardStyle}>
-                  <span style={pillStyle}>ACCESS</span>
-                  <h2 style={{ fontSize: 34, margin: "0 0 10px" }}>{hasFullAccess ? "Unlocked" : "Locked"}</h2>
-                  <p style={mutedStyle}>Current status: {access.memberStatus || "profile_required"} / {access.paymentStatus || "unpaid"}</p>
-                </div>
-              </div>
-            </section>
-
-            <section style={sectionStyle}>
-              <div style={eyebrowStyle}>FOUNDING MEMBER PRICING</div>
-              <h2 style={{ fontSize: "clamp(34px, 8vw, 66px)", lineHeight: .95, margin: "0 0 12px" }}>
-                $49 first month. $149/month after.
-              </h2>
-              <p style={{ ...mutedStyle, fontSize: 19 }}>
-                Use this page as the holding step until Stripe is ready. When Stripe is connected,
-                this same page becomes the payment checkout and then unlocks full member access.
+            <section style={pane}>
+              <div style={eyebrow}>Current Status</div>
+              <p style={muted}>
+                Email: <strong>{access?.email || "Not detected"}</strong>
+              </p>
+              <p style={muted}>
+                Profile: <strong>{access?.profile_complete ? "Complete" : "Incomplete"}</strong>
+              </p>
+              <p style={muted}>
+                Payment: <strong>{access?.paid ? "Active" : "Not active"}</strong>
               </p>
             </section>
+
+            {!access?.profile_complete && (
+              <section style={{ ...pane, borderColor: "rgba(232,196,107,.35)" }}>
+                <div style={eyebrow}>Step 1 Required</div>
+                <h2 style={{ fontSize: 36, margin: "0 0 12px" }}>Complete your profile first.</h2>
+                <p style={muted}>
+                  The member area stays limited until profile information is complete.
+                </p>
+                <Link href="/profile" style={btn}>Complete Profile</Link>
+              </section>
+            )}
+
+            {access?.profile_complete && !access?.paid && (
+              <section style={{ ...pane, borderColor: "rgba(232,196,107,.35)" }}>
+                <div style={eyebrow}>Step 2 Payment</div>
+                <h2 style={{ fontSize: 36, margin: "0 0 12px" }}>Founding access: $49 today.</h2>
+                <p style={muted}>
+                  Founding Member Access is $49 for the first month. After the first month, membership renews at $149/month unless canceled before renewal.
+                </p>
+                <p style={muted}>
+                  After May 10, new member access increases to $99 for the first month, then $149/month.
+                </p>
+                <button
+                  type="button"
+                  style={btn}
+                  onClick={() => alert("Stripe checkout will be connected in the final payment step. Owner testing remains unlocked.")}
+                >
+                  Activate Access — $49 Today
+                </button>
+              </section>
+            )}
           </>
         )}
+
+        <section style={pane}>
+          <div style={eyebrow}>Billing Terms</div>
+          <p style={muted}>
+            Membership may be canceled before renewal. Access, billing, and cancellation controls will connect to Stripe during the final lock step.
+          </p>
+        </section>
       </div>
     </main>
   );
