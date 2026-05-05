@@ -32,20 +32,27 @@ function cleanEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
+function makeThreadKey(dealId: string, sender: string, recipient: string) {
+  const participants = [sender, recipient].map(cleanEmail).filter(Boolean).sort().join("__");
+  return participants ? `${dealId}__${participants}` : dealId;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
     const sender =
       cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(body.sender_email) ||
-      "text@text.com";
+      cleanEmail(body.sender_email);
+
+    if (!sender) {
+      return NextResponse.json({ error: "Missing sender email." }, { status: 401 });
+    }
 
     const dealId = clean(body.deal_id);
     const textMessage = clean(body.body || body.message);
     const subject = clean(body.subject) || "VaultForge Deal Inquiry";
     const explicitRecipient = cleanEmail(body.recipient_email);
-    const threadKey = clean(body.thread_key) || dealId;
 
     if (!dealId) {
       return NextResponse.json({ error: "Missing deal id." }, { status: 400 });
@@ -78,12 +85,16 @@ export async function POST(request: Request) {
       sender;
 
     let recipient = explicitRecipient || ownerEmail;
+    let threadKey = clean(body.thread_key);
 
-    if (recipient === sender) {
+    if (recipient === sender || !recipient) {
+      const lookupThreadKey = threadKey || dealId;
+
       const { data: priorMessages } = await supabase
         .from("vf_messages")
         .select("*")
-        .eq("thread_key", threadKey)
+        .or(`thread_key.eq.${lookupThreadKey},deal_id.eq.${dealId}`)
+        .or(`sender_email.eq.${sender},recipient_email.eq.${sender}`)
         .neq("sender_email", sender)
         .order("created_at", { ascending: false })
         .limit(1);
@@ -92,6 +103,14 @@ export async function POST(request: Request) {
         cleanEmail(priorMessages?.[0]?.sender_email) ||
         cleanEmail(priorMessages?.[0]?.recipient_email) ||
         ownerEmail;
+    }
+
+    if (!recipient) {
+      return NextResponse.json({ error: "Missing recipient email." }, { status: 400 });
+    }
+
+    if (!threadKey) {
+      threadKey = makeThreadKey(dealId, sender, recipient);
     }
 
     const insert: Record<string, any> = {
@@ -103,6 +122,7 @@ export async function POST(request: Request) {
       message: textMessage,
       status: "sent",
       thread_key: threadKey,
+      archived: false,
     };
 
     let { data, error } = await supabase
@@ -139,11 +159,25 @@ export async function POST(request: Request) {
       error = retry.error;
     }
 
+    if (error && /column .*archived.* does not exist|schema cache/i.test(error.message || "")) {
+      const fallback = { ...insert };
+      delete fallback.archived;
+
+      const retry = await supabase
+        .from("vf_messages")
+        .insert(fallback)
+        .select("*")
+        .single();
+
+      data = retry.data;
+      error = retry.error;
+    }
+
     if (error) {
       return NextResponse.json({ error: error.message, details: error }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, message: data });
+    return NextResponse.json({ ok: true, message: data, thread_key: threadKey });
   } catch (error: any) {
     return NextResponse.json(
       { error: "Could not send message.", details: error?.message || String(error) },
