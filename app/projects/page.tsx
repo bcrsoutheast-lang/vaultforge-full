@@ -51,6 +51,7 @@ const btn: React.CSSProperties = {
   fontWeight: 900,
   border: "none",
   margin: "6px 6px 0 0",
+  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -63,6 +64,7 @@ const ghost: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.16)",
   background: "rgba(255,255,255,.04)",
   margin: "6px 6px 0 0",
+  cursor: "pointer",
 };
 
 const danger: React.CSSProperties = {
@@ -140,6 +142,7 @@ function detailLine(deal: Deal) {
 export default function ProjectsPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [status, setStatus] = useState("Loading projects...");
+  const [workingId, setWorkingId] = useState("");
 
   async function load() {
     setStatus("Loading projects...");
@@ -161,51 +164,49 @@ export default function ProjectsPage() {
     }
   }
 
+  async function runAction(id: string, endpoint: string, payload: Record<string, any>, label: string) {
+    setWorkingId(id);
+    setStatus(`${label}...`);
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || data?.details || `${label} failed.`);
+      }
+
+      setStatus(`${label} complete.`);
+      await load();
+    } catch (err: any) {
+      setStatus(err?.message || `${label} failed.`);
+    } finally {
+      setWorkingId("");
+    }
+  }
+
   async function archiveDeal(id: string) {
-    await fetch("/api/deal/archive", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
-      body: JSON.stringify({ id }),
-    });
-    await load();
+    const yes = window.confirm("Archive this deal?");
+    if (!yes) return;
+    await runAction(id, "/api/deal/archive", { id }, "Archiving");
   }
 
   async function deleteDeal(id: string) {
     const yes = window.confirm("Move this deal to trash?");
     if (!yes) return;
-
-    await fetch("/api/deal/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
-      body: JSON.stringify({ id }),
-    });
-    await load();
+    await runAction(id, "/api/deal/delete", { id }, "Deleting");
   }
 
   async function setFolder(id: string, folder: string) {
-    await fetch("/api/deal/folder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
-      body: JSON.stringify({ id, folder }),
-    });
-    await load();
+    await runAction(id, "/api/deal/folder", { id, folder }, "Updating folder");
   }
 
   async function saveDeal(id: string) {
-    try {
-      const res = await fetch("/api/deal/buy-bucket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
-        body: JSON.stringify({ deal_id: id }),
-      });
-      const data = await res.json();
-      if (!res.ok && !String(data?.error || "").toLowerCase().includes("duplicate")) {
-        throw new Error(data?.error || "Save failed.");
-      }
-      alert("Saved to Buy Bucket.");
-    } catch (err: any) {
-      alert(err?.message || "Could not save.");
-    }
+    await runAction(id, "/api/deal/buy-bucket", { deal_id: id }, "Saving");
   }
 
   useEffect(() => {
@@ -239,6 +240,7 @@ export default function ProjectsPage() {
         <section style={paneGrid}>
           {deals.map((deal) => {
             const image = getPhotos(deal)[0];
+            const busy = workingId === deal.id;
 
             return (
               <article key={deal.id} style={pane}>
@@ -290,6 +292,7 @@ export default function ProjectsPage() {
                     value={deal.folder || "Active"}
                     onChange={(event) => setFolder(deal.id, event.target.value)}
                     style={selectStyle}
+                    disabled={busy}
                   >
                     <option style={{ color: "#111" }}>Active</option>
                     <option style={{ color: "#111" }}>Hot</option>
@@ -301,9 +304,15 @@ export default function ProjectsPage() {
 
                   <div style={{ marginTop: 12 }}>
                     <Link href={`/deal/${deal.id}`} style={btn}>Deal Room</Link>
-                    <button type="button" onClick={() => saveDeal(deal.id)} style={ghost}>Save</button>
-                    <button type="button" onClick={() => archiveDeal(deal.id)} style={ghost}>Archive</button>
-                    <button type="button" onClick={() => deleteDeal(deal.id)} style={danger}>Delete</button>
+                    <button type="button" disabled={busy} onClick={() => saveDeal(deal.id)} style={ghost}>
+                      {busy ? "Working..." : "Save"}
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => archiveDeal(deal.id)} style={ghost}>
+                      Archive
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => deleteDeal(deal.id)} style={danger}>
+                      Delete
+                    </button>
                   </div>
                 </div>
               </article>
