@@ -1,89 +1,130 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  if (!url || !key) return null;
-  return { url, key };
-}
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-function getEmail(req: Request) {
-  const headerEmail =
-    req.headers.get("x-vf-email") ||
-    req.headers.get("x-vf-user-email") ||
-    req.headers.get("x-vaultforge-email") ||
+function supabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (headerEmail && headerEmail.includes("@")) {
-    return headerEmail.trim().toLowerCase();
-  }
+  if (!url || !key) return null;
 
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+function cleanEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function emailFromCookie(cookieHeader: string) {
+  const parts = cookieHeader.split(";").map((part) => part.trim());
+  for (const part of parts) {
+    if (part.startsWith("vf_email=")) {
+      return decodeURIComponent(part.replace("vf_email=", "")).toLowerCase();
+    }
+  }
   return "";
 }
 
-export async function GET(req: Request) {
-  const config = getSupabaseConfig();
+async function loadProfile(email: string) {
+  const supabase = supabaseClient();
+  if (!supabase || !email) return null;
 
-  if (!config) {
-    return NextResponse.json(
-      { error: "Supabase environment variables are missing." },
-      { status: 500 }
-    );
+  const tables = ["vf_profiles", "profiles", "member_profiles"];
+
+  for (const table of tables) {
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (!error && data) return data;
+    } catch {
+      // Try next possible profile table.
+    }
   }
 
-  const email = getEmail(req);
+  return null;
+}
 
-  if (!email) {
-    return NextResponse.json({ error: "Not logged in." }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const headerEmail =
+      cleanEmail(request.headers.get("x-vf-email")) ||
+      cleanEmail(url.searchParams.get("email"));
 
-  const url =
-    `${config.url}/rest/v1/vf_member_access_view` +
-    `?select=*` +
-    `&email=eq.${encodeURIComponent(email)}` +
-    `&limit=1`;
+    const cookieEmail = emailFromCookie(request.headers.get("cookie") || "");
+    const email = headerEmail || cookieEmail;
 
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-    },
-    cache: "no-store",
-  });
+    const owner = email === OWNER_EMAIL;
+    const profile = await loadProfile(email);
 
-  if (!res.ok) {
-    return NextResponse.json(
-      { error: "Failed to load access status.", details: await res.text() },
-      { status: 500 }
-    );
-  }
+    const profileComplete =
+      owner ||
+      Boolean(profile?.profile_complete) ||
+      String(profile?.profile_complete || "").toLowerCase() === "true";
 
-  const rows = await res.json();
-  const row = rows?.[0] || null;
+    const paymentStatus = owner
+      ? "owner"
+      : String(profile?.payment_status || profile?.subscription_status || "unpaid").toLowerCase();
 
-  if (!row) {
+    const accessStatus = owner
+      ? "active"
+      : String(profile?.access_status || profile?.member_status || "locked").toLowerCase();
+
+    const paid =
+      owner ||
+      paymentStatus === "paid" ||
+      paymentStatus === "active" ||
+      accessStatus === "active";
+
+    const unlocked = owner || (profileComplete && paid);
+
     return NextResponse.json({
+      ok: true,
       email,
-      profileComplete: false,
-      paymentStatus: "unpaid",
-      memberStatus: "profile_required",
-      accessLevel: "locked",
-      hasFullAccess: false,
-      nextRequiredStep: "profile_required",
+      owner,
+      profile_complete: profileComplete,
+      payment_status: paymentStatus,
+      access_status: accessStatus,
+      paid,
+      unlocked,
+      next_step: owner
+        ? "owner_access"
+        : !profileComplete
+        ? "complete_profile"
+        : !paid
+        ? "payment"
+        : "unlocked",
+      profile: profile || null,
+    });
+  } catch (error: any) {
+    return NextResponse.json({
+      ok: true,
+      email: "",
+      owner: false,
+      profile_complete: false,
+      payment_status: "unpaid",
+      access_status: "locked",
+      paid: false,
+      unlocked: false,
+      next_step: "complete_profile",
+      warning: error?.message || String(error),
     });
   }
-
-  return NextResponse.json({
-    email,
-    profileComplete: Boolean(row.profile_complete),
-    paymentStatus: row.payment_status || "unpaid",
-    memberStatus: row.member_status || "profile_required",
-    accessLevel: row.access_level || "locked",
-    hasFullAccess: Boolean(row.has_full_access),
-    nextRequiredStep: row.next_required_step || "profile_required",
-  });
 }
