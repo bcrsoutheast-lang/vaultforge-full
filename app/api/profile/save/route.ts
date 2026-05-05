@@ -37,6 +37,11 @@ function arr(value: unknown) {
   return [];
 }
 
+function intValue(value: unknown, fallback: number) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -75,6 +80,9 @@ export async function POST(request: Request) {
       profile_complete: profileComplete,
       payment_status: clean(body.payment_status) || "unpaid",
       access_status: profileComplete ? "payment_required" : "locked",
+      alert_frequency: clean(body.alert_frequency) || "daily_digest",
+      max_alerts_per_day: intValue(body.max_alerts_per_day, 10),
+      alert_types: arr(body.alert_types),
       updated_at: new Date().toISOString(),
     };
 
