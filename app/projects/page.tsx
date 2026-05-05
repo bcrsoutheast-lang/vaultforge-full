@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Deal = Record<string, any>;
+type Toast = { type: "success" | "error" | "info"; text: string };
 
 const shell: React.CSSProperties = {
   minHeight: "100vh",
@@ -33,7 +34,7 @@ const paneGrid: React.CSSProperties = {
 const pane: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
   background:
-    "linear-gradient(145deg, rgba(255,255,255,.07), rgba(255,255,255,.025))",
+    "linear-gradient(145deg, rgba(255,255,255,.075), rgba(255,255,255,.025))",
   borderRadius: 30,
   overflow: "hidden",
   boxShadow: "0 25px 75px rgba(0,0,0,.28)",
@@ -67,6 +68,13 @@ const ghost: React.CSSProperties = {
   cursor: "pointer",
 };
 
+const successBtn: React.CSSProperties = {
+  ...ghost,
+  border: "1px solid rgba(157,243,191,.44)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.08)",
+};
+
 const danger: React.CSSProperties = {
   ...ghost,
   border: "1px solid rgba(255,120,120,.32)",
@@ -79,6 +87,7 @@ const eyebrow: React.CSSProperties = {
   fontWeight: 900,
   fontSize: 12,
   marginBottom: 12,
+  textTransform: "uppercase",
 };
 
 const muted: React.CSSProperties = {
@@ -95,6 +104,20 @@ const selectStyle: React.CSSProperties = {
   padding: 12,
   fontWeight: 900,
   marginTop: 10,
+};
+
+const metricGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 10,
+  margin: "14px 0",
+};
+
+const metric: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.10)",
+  borderRadius: 18,
+  padding: 12,
+  background: "rgba(0,0,0,.16)",
 };
 
 function getEmail() {
@@ -118,6 +141,11 @@ function money(value: any) {
   });
 }
 
+function display(value: any, fallback = "Not listed") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
+}
+
 function getPhotos(deal: Deal) {
   const arr = Array.isArray(deal.photo_urls) ? deal.photo_urls.filter(Boolean) : [];
   if (deal.main_photo_url && !arr.includes(deal.main_photo_url)) {
@@ -139,10 +167,64 @@ function detailLine(deal: Deal) {
     .join(" · ");
 }
 
+function ToastBox({ toast }: { toast: Toast | null }) {
+  if (!toast) return null;
+
+  const border =
+    toast.type === "success"
+      ? "rgba(157,243,191,.55)"
+      : toast.type === "error"
+      ? "rgba(255,120,120,.45)"
+      : "rgba(232,196,107,.45)";
+
+  const color =
+    toast.type === "success"
+      ? "#9df3bf"
+      : toast.type === "error"
+      ? "#ffd0d0"
+      : "#e8c46b";
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 18,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 50,
+        width: "calc(100% - 32px)",
+        maxWidth: 620,
+        border: `1px solid ${border}`,
+        background: "rgba(3,5,9,.94)",
+        boxShadow: "0 24px 80px rgba(0,0,0,.45)",
+        borderRadius: 24,
+        padding: "16px 18px",
+        color,
+        fontWeight: 900,
+        textAlign: "center",
+      }}
+    >
+      {toast.text}
+    </div>
+  );
+}
+
 export default function ProjectsPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [status, setStatus] = useState("Loading projects...");
   const [workingId, setWorkingId] = useState("");
+  const [successId, setSuccessId] = useState("");
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  function showToast(next: Toast) {
+    setToast(next);
+    window.setTimeout(() => setToast(null), 1800);
+  }
+
+  function markSuccess(id: string) {
+    setSuccessId(id);
+    window.setTimeout(() => setSuccessId(""), 1200);
+  }
 
   async function load() {
     setStatus("Loading projects...");
@@ -161,12 +243,12 @@ export default function ProjectsPage() {
       setStatus("");
     } catch (err: any) {
       setStatus(err?.message || "Could not load projects.");
+      showToast({ type: "error", text: err?.message || "Could not load projects." });
     }
   }
 
-  async function runAction(id: string, endpoint: string, payload: Record<string, any>, label: string) {
+  async function runAction(id: string, endpoint: string, payload: Record<string, any>, label: string, done: string) {
     setWorkingId(id);
-    setStatus(`${label}...`);
 
     try {
       const res = await fetch(endpoint, {
@@ -180,10 +262,11 @@ export default function ProjectsPage() {
         throw new Error(data?.error || data?.details || `${label} failed.`);
       }
 
-      setStatus(`${label} complete.`);
+      markSuccess(id);
+      showToast({ type: "success", text: done });
       await load();
     } catch (err: any) {
-      setStatus(err?.message || `${label} failed.`);
+      showToast({ type: "error", text: err?.message || `${label} failed.` });
     } finally {
       setWorkingId("");
     }
@@ -192,21 +275,21 @@ export default function ProjectsPage() {
   async function archiveDeal(id: string) {
     const yes = window.confirm("Archive this deal?");
     if (!yes) return;
-    await runAction(id, "/api/deal/archive", { id }, "Archiving");
+    await runAction(id, "/api/deal/archive", { id }, "Archive", "Archived ✓");
   }
 
   async function deleteDeal(id: string) {
     const yes = window.confirm("Move this deal to trash?");
     if (!yes) return;
-    await runAction(id, "/api/deal/delete", { id }, "Deleting");
+    await runAction(id, "/api/deal/delete", { id }, "Delete", "Moved to Trash ✓");
   }
 
   async function setFolder(id: string, folder: string) {
-    await runAction(id, "/api/deal/folder", { id, folder }, "Updating folder");
+    await runAction(id, "/api/deal/folder", { id, folder }, "Folder update", `Moved to ${folder} ✓`);
   }
 
   async function saveDeal(id: string) {
-    await runAction(id, "/api/deal/buy-bucket", { deal_id: id }, "Saving");
+    await runAction(id, "/api/deal/buy-bucket", { deal_id: id }, "Save", "Saved to Buy Bucket ✓");
   }
 
   useEffect(() => {
@@ -215,9 +298,10 @@ export default function ProjectsPage() {
 
   return (
     <main style={shell}>
+      <ToastBox toast={toast} />
       <div style={wrap}>
         <section style={hero}>
-          <div style={eyebrow}>PROJECTS</div>
+          <div style={eyebrow}>Projects</div>
           <h1 style={{ fontSize: "clamp(56px,12vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
             Window pane deal room.
           </h1>
@@ -241,6 +325,7 @@ export default function ProjectsPage() {
           {deals.map((deal) => {
             const image = getPhotos(deal)[0];
             const busy = workingId === deal.id;
+            const done = successId === deal.id;
 
             return (
               <article key={deal.id} style={pane}>
@@ -274,19 +359,37 @@ export default function ProjectsPage() {
                   </h2>
 
                   <p style={{ ...muted, fontSize: 19, margin: "0 0 10px" }}>
-                    {deal.city || "Unknown City"}, {deal.state || "Unknown State"}
+                    {display(deal.city, "Unknown City")}, {display(deal.state, "Unknown State")}
                   </p>
 
-                  <p style={{ margin: "0 0 8px", fontSize: 20 }}>
-                    Ask: {money(deal.asking_price || deal.price)}
-                  </p>
-                  <p style={{ margin: "0 0 8px", fontSize: 20 }}>
-                    ARV: {money(deal.arv)}
-                  </p>
+                  <div style={metricGrid}>
+                    <div style={metric}>
+                      <div style={eyebrow}>Ask</div>
+                      <strong>{money(deal.asking_price || deal.price)}</strong>
+                    </div>
+                    <div style={metric}>
+                      <div style={eyebrow}>ARV</div>
+                      <strong>{money(deal.arv)}</strong>
+                    </div>
+                    <div style={metric}>
+                      <div style={eyebrow}>Repairs</div>
+                      <strong>{money(deal.repair_estimate)}</strong>
+                    </div>
+                    <div style={metric}>
+                      <div style={eyebrow}>Status</div>
+                      <strong>{deal.status || "Active"}</strong>
+                    </div>
+                  </div>
 
                   <p style={{ ...muted, margin: "0 0 10px" }}>
                     {detailLine(deal) || "Additional details in Deal Room"}
                   </p>
+
+                  {(deal.seller_situation || deal.description) && (
+                    <p style={{ ...muted, margin: "0 0 10px" }}>
+                      {String(deal.seller_situation || deal.description).slice(0, 120)}
+                    </p>
+                  )}
 
                   <select
                     value={deal.folder || "Active"}
@@ -304,14 +407,14 @@ export default function ProjectsPage() {
 
                   <div style={{ marginTop: 12 }}>
                     <Link href={`/deal/${deal.id}`} style={btn}>Deal Room</Link>
-                    <button type="button" disabled={busy} onClick={() => saveDeal(deal.id)} style={ghost}>
-                      {busy ? "Working..." : "Save"}
+                    <button type="button" disabled={busy} onClick={() => saveDeal(deal.id)} style={done ? successBtn : ghost}>
+                      {busy ? "Saving..." : done ? "Saved ✓" : "Save"}
                     </button>
                     <button type="button" disabled={busy} onClick={() => archiveDeal(deal.id)} style={ghost}>
-                      Archive
+                      {busy ? "Working..." : "Archive"}
                     </button>
                     <button type="button" disabled={busy} onClick={() => deleteDeal(deal.id)} style={danger}>
-                      Delete
+                      {busy ? "Working..." : "Delete"}
                     </button>
                   </div>
                 </div>
