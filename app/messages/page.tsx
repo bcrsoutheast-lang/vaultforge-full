@@ -29,9 +29,68 @@ const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", bor
 const eyebrow: React.CSSProperties = { color: "#e8c46b", letterSpacing: 5, fontWeight: 900, fontSize: 12, marginBottom: 12, textTransform: "uppercase" };
 const muted: React.CSSProperties = { color: "rgba(255,255,255,.68)", lineHeight: 1.5 };
 
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+  if (!match) return "";
+  return decodeURIComponent(match.slice(name.length + 1)).trim();
+}
+
 function getEmail() {
   if (typeof window === "undefined") return "";
-  return (localStorage.getItem("vf_email") || sessionStorage.getItem("vf_email") || "text@text.com").trim().toLowerCase();
+  return (
+    window.localStorage.getItem("vf_email") ||
+    window.sessionStorage.getItem("vf_email") ||
+    readCookie("vf_email") ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function hasStoredLogin() {
+  if (typeof window === "undefined") return false;
+  const flag =
+    window.localStorage.getItem("vf_member_login") ||
+    window.sessionStorage.getItem("vf_member_login") ||
+    readCookie("vf_member_login") ||
+    "";
+  return Boolean(getEmail()) && flag === "1";
+}
+
+async function verifySoftAccessOrRedirect() {
+  if (typeof window === "undefined") return false;
+
+  const email = getEmail();
+
+  try {
+    const res = await fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
+      cache: "no-store",
+      headers: email ? { "x-vf-email": email } : {},
+    });
+    const data = await res.json().catch(() => null);
+
+    if (data?.owner) {
+      const ownerEmail = String(data.email || email || "").trim().toLowerCase();
+      if (ownerEmail) {
+        window.localStorage.setItem("vf_email", ownerEmail);
+        window.sessionStorage.setItem("vf_email", ownerEmail);
+      }
+      window.localStorage.setItem("vf_member_login", "1");
+      window.sessionStorage.setItem("vf_member_login", "1");
+      return true;
+    }
+
+    if (hasStoredLogin()) return true;
+  } catch {
+    if (hasStoredLogin()) return true;
+  }
+
+  window.location.href = "/login";
+  return false;
 }
 
 function money(value: any) {
@@ -151,7 +210,7 @@ export default function MessagesPage() {
     }
   }
 
-  useEffect(() => { loadThreads(); }, []);
+  useEffect(() => { verifySoftAccessOrRedirect().then((allowed) => { if (allowed) loadThreads(); }); }, []);
 
   return (
     <main style={page}>
@@ -237,4 +296,3 @@ export default function MessagesPage() {
       </div>
     </main>
   );
-}
