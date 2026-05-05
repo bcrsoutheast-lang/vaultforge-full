@@ -81,6 +81,15 @@ const ghost: React.CSSProperties = {
   margin: "6px 6px 0 0",
 };
 
+const topAccount: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
+  marginBottom: 18,
+};
+
 const eyebrow: React.CSSProperties = {
   color: "#e8c46b",
   letterSpacing: 5,
@@ -158,6 +167,7 @@ function AccessNotice({ access }: { access: Access | null }) {
         <p style={{ ...muted, fontSize: 18 }}>
           You are not locked out. Owner access remains open while payment/profile lock is being prepared.
         </p>
+        <Link href="/profile" style={btn}>Edit Profile / Alerts</Link>
       </section>
     );
   }
@@ -167,8 +177,8 @@ function AccessNotice({ access }: { access: Access | null }) {
       <section style={{ ...hero, borderColor: "rgba(232,196,107,.35)" }}>
         <div style={eyebrow}>Profile Required</div>
         <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>Complete your profile to continue.</h2>
-        <p style={muted}>During the final lock step, this will be the only available action until profile completion.</p>
-        <Link href="/profile" style={btn}>Edit Profile</Link>
+        <p style={muted}>Profile controls member type, markets, buy box, and alert preferences.</p>
+        <Link href="/profile" style={btn}>Complete Profile</Link>
       </section>
     );
   }
@@ -180,6 +190,7 @@ function AccessNotice({ access }: { access: Access | null }) {
         <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>Profile complete. Payment unlock is next.</h2>
         <p style={muted}>Stripe lock is not active yet. This is the safe preview step.</p>
         <Link href="/payment" style={btn}>Go to Payment</Link>
+        <Link href="/profile" style={ghost}>Edit Profile</Link>
       </section>
     );
   }
@@ -237,6 +248,14 @@ export default function DashboardPage() {
   return (
     <main style={page}>
       <div style={wrap}>
+        <div style={topAccount}>
+          <div style={{ ...eyebrow, marginBottom: 0 }}>VaultForge</div>
+          <div>
+            <Link href="/profile" style={ghost}>Profile</Link>
+            <Link href="/payment" style={ghost}>Payment</Link>
+          </div>
+        </div>
+
         <section style={hero}>
           <div style={eyebrow}>VaultForge Dashboard</div>
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
@@ -245,12 +264,25 @@ export default function DashboardPage() {
           <p style={{ ...muted, fontSize: 20 }}>
             Track deal flow, saved targets, messages, alerts, and live platform activity.
           </p>
-          <Link href="/submit" style={btn}>Create Deal</Link>
-          <Link href="/projects" style={ghost}>Projects</Link>
-          <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
-          <Link href="/messages" style={ghost}>Messages</Link>
-          <Link href="/alerts" style={ghost}>Alerts</Link>
-          <Link href="/payment" style={ghost}>Payment</Link>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...eyebrow, marginBottom: 6 }}>Main Actions</div>
+            <Link href="/submit" style={btn}>Create Deal</Link>
+            <Link href="/projects" style={ghost}>Projects</Link>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...eyebrow, marginBottom: 6 }}>Management</div>
+            <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+            <Link href="/messages" style={ghost}>Messages</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
+          </div>
+
+          <div>
+            <div style={{ ...eyebrow, marginBottom: 6 }}>Account</div>
+            <Link href="/profile" style={btn}>Profile / Alert Preferences</Link>
+            <Link href="/payment" style={ghost}>Payment</Link>
+          </div>
         </section>
 
         <AccessNotice access={access} />
