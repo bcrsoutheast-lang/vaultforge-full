@@ -207,5 +207,65 @@ export default function SubmitPage() {
   </div></main>;
 }
 
-function Field({label: l, value, onChange}:{label:string;value:string;onChange:(v:string)=>void}) { return <div><label style={label}>{l}</label><input style={input} value={value} onChange={e=>onChange(e.target.value)} /></div>; }
-function Select({label: l, value, onChange, options}:{label:string;value:string;onChange:(v:string)=>void;options:string[]}) { return <div><label style={label}>{l}</label><select style={input} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o} value={o} style={{color:"#111"}}>{o}</option>)}</select></div>; }
+function Field({
+  label: l,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label style={label}>{l}</label>
+      <input style={input} value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function Select({
+  label: l,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  return (
+    <div>
+      <label style={label}>{l}</label>
+      <select style={input} value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => (
+          <option key={o} value={o} style={{ color: "#111" }}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function TextAreaField({
+  label: l,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={label}>{l}</label>
+      <textarea
+        style={{ ...input, minHeight: 120 }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
