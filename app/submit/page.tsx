@@ -56,21 +56,70 @@ export default function SubmitPage() {
   }
   async function submit() {
     if (busy) return;
-    setBusy(true); setMsg(""); setSavedId("");
+
+    setBusy(true);
+    setMsg("");
+    setSavedId("");
+
     try {
       const email = getEmail();
-      if (!form.title || !form.city) throw new Error("Title and city are required.");
-      if (files.length < 1) throw new Error("Upload at least one photo.");
-      const urls: string[] = [];
-      for (const f of files) urls.push(await upload(f, email));
-      const payload = { ...form, owner_email: email, member_email: email, photo_urls: urls, main_photo_url: urls[0] || "" };
-      const res = await fetch("/api/deal/create", { method: "POST", headers: { "Content-Type": "application/json", "x-vf-email": email }, body: JSON.stringify(payload) });
+
+      if (!form.title.trim() || !form.city.trim()) {
+        throw new Error("Title and city are required.");
+      }
+
+      if (files.length < 1) {
+        throw new Error("Upload at least one photo.");
+      }
+
+      setMsg("Uploading photos...");
+
+      const urls: string[] = await Promise.all(files.map((f) => upload(f, email)));
+
+      if (!urls.length) {
+        throw new Error("Photo upload failed.");
+      }
+
+      setMsg("Saving deal...");
+
+      const payload = {
+        ...form,
+        owner_email: email,
+        member_email: email,
+        photo_urls: urls,
+        main_photo_url: urls[0] || "",
+      };
+
+      const res = await fetch("/api/deal/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+        },
+        body: JSON.stringify(payload),
+      });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || data?.details || "Save failed.");
-      setSavedId(data?.deal?.id || ""); setMsg("Deal saved. Form cleared.");
-      setForm(empty as any); setFiles([]); setPreviews([]); if (fileRef.current) fileRef.current.value = ""; window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch(e:any) { setMsg(e?.message || "Could not save."); }
-    finally { setBusy(false); }
+
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || data?.details || "Save failed.");
+      }
+
+      setSavedId(data?.deal?.id || "");
+      setMsg("Deal saved successfully.");
+
+      setForm(empty as any);
+      setFiles([]);
+      setPreviews([]);
+
+      if (fileRef.current) fileRef.current.value = "";
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e: any) {
+      setMsg(e?.message || "Could not save.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return <main style={page}><div style={wrap}>
@@ -80,10 +129,10 @@ export default function SubmitPage() {
       <Link href="/dashboard" style={ghost}>Dashboard</Link><Link href="/projects" style={btn}>Projects</Link><Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
     </section>
 
-    {msg && <section style={card}><p style={{color: msg.includes("saved") ? "#9df3bf" : "#ffd0d0", fontWeight:900, fontSize:20}}>{msg}</p>{savedId && <Link href={`/deal/${savedId}`} style={btn}>Open Deal Room</Link>}<button style={ghost} onClick={()=>setMsg("")}>Create Another</button></section>}
+    {msg && <section style={card}><p style={{color: msg.includes("saved") ? "#9df3bf" : "#ffd0d0", fontWeight:900, fontSize:20}}>{msg}</p>{savedId && <Link href={`/deal/${savedId}`} style={btn}>Open Deal Room</Link>}<button type="button" style={ghost} onClick={()=>setMsg("")}>Create Another</button></section>}
 
     <section style={card}><div style={eyebrow}>DEAL TYPE</div>
-      {(["Residential","Commercial","Land"] as DealType[]).map(t => <button key={t} style={form.property_type===t?btn:ghost} onClick={()=>set("property_type",t)}>{t}</button>)}
+      {(["Residential","Commercial","Land"] as DealType[]).map(t => <button type="button" key={t} style={form.property_type===t?btn:ghost} onClick={()=>set("property_type",t)}>{t}</button>)}
     </section>
 
     <section style={card}><div style={eyebrow}>BASICS</div><div style={grid}>
@@ -116,7 +165,7 @@ export default function SubmitPage() {
       <Field label="Acres" value={form.land_acres} onChange={v=>set("land_acres",v)} /><Field label="Parcel ID" value={form.parcel_id} onChange={v=>set("parcel_id",v)} /><Field label="Zoning" value={form.zoning} onChange={v=>set("zoning",v)} /><Field label="Road Frontage" value={form.frontage} onChange={v=>set("frontage",v)} /><Field label="Utilities" value={form.utilities} onChange={v=>set("utilities",v)} /><Field label="Road Access" value={form.road_access} onChange={v=>set("road_access",v)} /><Field label="Topography" value={form.topography} onChange={v=>set("topography",v)} />
     </div></section>}
 
-    <section style={card}><div style={eyebrow}>PHOTOS</div><input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={e=>pick(e.target.files)} /><button style={btn} onClick={()=>fileRef.current?.click()}>Tap to choose photos ({files.length}/10)</button><div style={{...grid,marginTop:16}}>{previews.map(src=><img key={src} src={src} style={{width:"100%",height:180,objectFit:"cover",borderRadius:20}} />)}</div></section>
+    <section style={card}><div style={eyebrow}>PHOTOS</div><input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={e=>pick(e.target.files)} /><button type="button" style={btn} disabled={busy} onClick={()=>fileRef.current?.click()}>Tap to choose photos ({files.length}/10)</button><div style={{...grid,marginTop:16}}>{previews.map(src=><img key={src} src={src} style={{width:"100%",height:180,objectFit:"cover",borderRadius:20}} />)}</div></section>
 
     <section style={card}><div style={eyebrow}>CONTEXT</div>
       <Text label="Description / Deal Summary" value={form.description} onChange={v=>set("description",v)} />
@@ -125,10 +174,9 @@ export default function SubmitPage() {
       <Text label="Private Notes" value={form.private_notes} onChange={v=>set("private_notes",v)} />
     </section>
 
-    <button onClick={submit} disabled={busy} style={{...btn,width:"100%",fontSize:22,padding:18,opacity:busy?.65:1}}>{busy ? "Saving..." : "Submit Deal"}</button>
+    <button type="button" onClick={submit} disabled={busy} style={{...btn,width:"100%",fontSize:22,padding:18,opacity: busy ? 0.65 : 1}}>{busy ? "Saving..." : "Submit Deal"}</button>
   </div></main>;
 }
 
 function Field({label: l, value, onChange}:{label:string;value:string;onChange:(v:string)=>void}) { return <div><label style={label}>{l}</label><input style={input} value={value} onChange={e=>onChange(e.target.value)} /></div>; }
 function Select({label: l, value, onChange, options}:{label:string;value:string;onChange:(v:string)=>void;options:string[]}) { return <div><label style={label}>{l}</label><select style={input} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o} value={o} style={{color:"#111"}}>{o}</option>)}</select></div>; }
-function Text({label: l, value, onChange}:{label:string;value:string;onChange:(v:string)=>void}) { return <div style={{marginBottom:14}}><label style={label}>{l}</label><textarea style={{...input,minHeight:120}} value={value} onChange={e=>onChange(e.target.value)} /></div>; }
