@@ -12,6 +12,17 @@ const memberTypes = [
   "Buyer", "Lender", "Contractor", "Wholesaler", "Developer", "Operator", "Deal Source", "Investor"
 ];
 
+const alertTypeOptions = [
+  "New deal in my market",
+  "Deal matches my buy box",
+  "Someone saves my deal",
+  "Someone messages me",
+  "Funding needed",
+  "JV needed",
+  "Contractor/operator needed",
+  "Price drop or status change",
+];
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -119,8 +130,20 @@ function splitList(value: any) {
   return String(value || "");
 }
 
+function arrayValue(value: any): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {}
+    return value.split(",").map((x) => x.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 export default function ProfilePage() {
-  const [form, setForm] = useState<Record<string, string>>({
+  const [form, setForm] = useState<Record<string, any>>({
     email: "",
     full_name: "",
     phone: "",
@@ -134,13 +157,29 @@ export default function ProfilePage() {
     funding_capacity: "",
     strategy: "",
     profile_photo_url: "",
+    alert_frequency: "daily_digest",
+    max_alerts_per_day: "10",
+    alert_types: [
+      "Deal matches my buy box",
+      "Someone messages me",
+      "Funding needed",
+    ],
   });
   const [status, setStatus] = useState("Loading profile...");
   const [saving, setSaving] = useState(false);
   const [complete, setComplete] = useState(false);
 
-  function update(key: string, value: string) {
+  function update(key: string, value: any) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleAlertType(type: string) {
+    const current: string[] = Array.isArray(form.alert_types) ? form.alert_types : [];
+    if (current.includes(type)) {
+      update("alert_types", current.filter((item) => item !== type));
+    } else {
+      update("alert_types", [...current, type]);
+    }
   }
 
   async function loadProfile() {
@@ -168,6 +207,11 @@ export default function ProfilePage() {
         funding_capacity: profile.funding_capacity || profile.fundingCapacity || "",
         strategy: profile.strategy || "",
         profile_photo_url: profile.profile_photo_url || profile.profilePhotoUrl || "",
+        alert_frequency: profile.alert_frequency || "daily_digest",
+        max_alerts_per_day: String(profile.max_alerts_per_day || 10),
+        alert_types: arrayValue(profile.alert_types).length
+          ? arrayValue(profile.alert_types)
+          : ["Deal matches my buy box", "Someone messages me", "Funding needed"],
       });
 
       setComplete(Boolean(profile.profile_complete));
@@ -193,6 +237,8 @@ export default function ProfilePage() {
           email,
           markets: form.markets,
           member_types: form.member_types,
+          alert_types: form.alert_types,
+          max_alerts_per_day: Number(form.max_alerts_per_day || 10),
         }),
       });
 
@@ -225,7 +271,7 @@ export default function ProfilePage() {
             Build your VaultForge identity.
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
-            Complete your profile first. Once required fields are filled, the payment step becomes active.
+            Complete your profile, control your alert volume, and define the opportunities you want to see.
           </p>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/payment" style={ghost}>Payment</Link>
@@ -263,6 +309,58 @@ export default function ProfilePage() {
           </div>
           <div style={{ marginTop: 14 }}>
             <Text label="Strategy / What You Need" value={form.strategy} onChange={(v) => update("strategy", v)} />
+          </div>
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Alert Preferences</div>
+          <p style={muted}>
+            Control how loud VaultForge gets. Messages stay important, but deal/match alerts should match your appetite.
+          </p>
+
+          <div style={grid}>
+            <Select
+              label="Alert Frequency"
+              value={form.alert_frequency}
+              onChange={(v) => update("alert_frequency", v)}
+              options={["instant", "daily_digest", "weekly_digest", "off"]}
+            />
+            <Select
+              label="Max Alerts Per Day"
+              value={String(form.max_alerts_per_day)}
+              onChange={(v) => update("max_alerts_per_day", v)}
+              options={["0", "3", "5", "10", "25"]}
+            />
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <div style={label}>Alert Types</div>
+            <div style={{ display: "grid", gap: 10 }}>
+              {alertTypeOptions.map((type) => {
+                const checked = Array.isArray(form.alert_types) && form.alert_types.includes(type);
+                return (
+                  <label
+                    key={type}
+                    style={{
+                      border: checked ? "1px solid rgba(157,243,191,.45)" : "1px solid rgba(255,255,255,.13)",
+                      background: checked ? "rgba(157,243,191,.08)" : "rgba(255,255,255,.035)",
+                      borderRadius: 18,
+                      padding: 14,
+                      cursor: "pointer",
+                      fontWeight: 800,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleAlertType(type)}
+                      style={{ marginRight: 10 }}
+                    />
+                    {type}
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </section>
 
