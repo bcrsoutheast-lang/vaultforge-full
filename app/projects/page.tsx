@@ -120,15 +120,47 @@ const metric: React.CSSProperties = {
   background: "rgba(0,0,0,.16)",
 };
 
-function getEmail() {
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
+function getStoredEmail() {
   if (typeof window === "undefined") return "";
   return (
     localStorage.getItem("vf_email") ||
     sessionStorage.getItem("vf_email") ||
-    "text@text.com"
+    readCookie("vf_email") ||
+    ""
   )
     .trim()
     .toLowerCase();
+}
+
+function hasStoredLogin() {
+  if (typeof window === "undefined") return false;
+
+  const email = getStoredEmail();
+  const localFlag = localStorage.getItem("vf_member_login") || "";
+  const sessionFlag = sessionStorage.getItem("vf_member_login") || "";
+  const cookieFlag = readCookie("vf_member_login") || "";
+
+  return Boolean(email) && (localFlag === "1" || sessionFlag === "1" || cookieFlag === "1");
+}
+
+function getEmail() {
+  return getStoredEmail();
 }
 
 function money(value: any) {
@@ -211,7 +243,7 @@ function ToastBox({ toast }: { toast: Toast | null }) {
 
 export default function ProjectsPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [status, setStatus] = useState("Loading projects...");
+  const [status, setStatus] = useState("Checking access...");
   const [workingId, setWorkingId] = useState("");
   const [successId, setSuccessId] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
@@ -229,9 +261,16 @@ export default function ProjectsPage() {
   async function load() {
     setStatus("Loading projects...");
     try {
+      const email = getEmail();
+
+      if (!email || !hasStoredLogin()) {
+        window.location.replace("/login");
+        return;
+      }
+
       const res = await fetch("/api/deal/list", {
         cache: "no-store",
-        headers: { "x-vf-email": getEmail() },
+        headers: { "x-vf-email": email },
       });
       const data = await res.json();
 
@@ -251,9 +290,16 @@ export default function ProjectsPage() {
     setWorkingId(id);
 
     try {
+      const email = getEmail();
+
+      if (!email || !hasStoredLogin()) {
+        window.location.replace("/login");
+        return;
+      }
+
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
+        headers: { "Content-Type": "application/json", "x-vf-email": email },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -293,6 +339,11 @@ export default function ProjectsPage() {
   }
 
   useEffect(() => {
+    if (!hasStoredLogin()) {
+      window.location.replace("/login");
+      return;
+    }
+
     load();
   }, []);
 
