@@ -12,6 +12,17 @@ type Stats = {
   warning?: string;
 };
 
+type Access = {
+  email: string;
+  owner: boolean;
+  profile_complete: boolean;
+  payment_status: string;
+  access_status: string;
+  paid: boolean;
+  unlocked: boolean;
+  next_step: string;
+};
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -76,12 +87,24 @@ const eyebrow: React.CSSProperties = {
   fontWeight: 900,
   fontSize: 12,
   marginBottom: 12,
+  textTransform: "uppercase",
 };
 
 const muted: React.CSSProperties = {
   color: "rgba(255,255,255,.68)",
   lineHeight: 1.5,
 };
+
+function getEmail() {
+  if (typeof window === "undefined") return "";
+  return (
+    localStorage.getItem("vf_email") ||
+    sessionStorage.getItem("vf_email") ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+}
 
 function FounderCountdown() {
   const launchDate = new Date("2026-05-10T00:00:00-04:00").getTime();
@@ -104,7 +127,7 @@ function FounderCountdown() {
 
   return (
     <section style={{ ...hero, borderColor: "rgba(157,243,191,.35)" }}>
-      <div style={{ ...eyebrow, color: "#9df3bf" }}>FOUNDING MEMBER WINDOW</div>
+      <div style={{ ...eyebrow, color: "#9df3bf" }}>Founding Member Window</div>
       <h2 style={{ fontSize: "clamp(36px,8vw,70px)", lineHeight: 0.95, margin: "0 0 14px" }}>
         {days}d {hours}h {minutes}m {seconds}s
       </h2>
@@ -125,6 +148,45 @@ function StatPane({ label, value, detail }: { label: string; value: number; deta
   );
 }
 
+function AccessNotice({ access }: { access: Access | null }) {
+  if (!access) return null;
+
+  if (access.owner) {
+    return (
+      <section style={{ ...hero, borderColor: "rgba(157,243,191,.35)" }}>
+        <div style={{ ...eyebrow, color: "#9df3bf" }}>Owner Bypass Active</div>
+        <p style={{ ...muted, fontSize: 18 }}>
+          You are not locked out. Owner access remains open while payment/profile lock is being prepared.
+        </p>
+      </section>
+    );
+  }
+
+  if (!access.profile_complete) {
+    return (
+      <section style={{ ...hero, borderColor: "rgba(232,196,107,.35)" }}>
+        <div style={eyebrow}>Profile Required</div>
+        <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>Complete your profile to continue.</h2>
+        <p style={muted}>During the final lock step, this will be the only available action until profile completion.</p>
+        <Link href="/profile" style={btn}>Edit Profile</Link>
+      </section>
+    );
+  }
+
+  if (!access.paid) {
+    return (
+      <section style={{ ...hero, borderColor: "rgba(232,196,107,.35)" }}>
+        <div style={eyebrow}>Payment Next</div>
+        <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>Profile complete. Payment unlock is next.</h2>
+        <p style={muted}>Stripe lock is not active yet. This is the safe preview step.</p>
+        <Link href="/payment" style={btn}>Go to Payment</Link>
+      </section>
+    );
+  }
+
+  return null;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({
     deals: 0,
@@ -133,21 +195,35 @@ export default function DashboardPage() {
     messages: 0,
     alerts: 0,
   });
+  const [access, setAccess] = useState<Access | null>(null);
   const [status, setStatus] = useState("Loading dashboard...");
 
-  async function loadStats() {
+  async function loadDashboard() {
     setStatus("Loading dashboard...");
     try {
-      const res = await fetch("/api/dashboard/stats", { cache: "no-store" });
-      const data = await res.json();
+      const email = getEmail();
+
+      const [statsRes, accessRes] = await Promise.all([
+        fetch("/api/dashboard/stats", { cache: "no-store" }),
+        fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
+          cache: "no-store",
+          headers: { "x-vf-email": email },
+        }),
+      ]);
+
+      const statsData = await statsRes.json();
+      const accessData = await accessRes.json();
+
       setStats({
-        deals: Number(data?.deals || 0),
-        members: Number(data?.members || 0),
-        bucket: Number(data?.bucket || 0),
-        messages: Number(data?.messages || 0),
-        alerts: Number(data?.alerts || 0),
-        warning: data?.warning || "",
+        deals: Number(statsData?.deals || 0),
+        members: Number(statsData?.members || 0),
+        bucket: Number(statsData?.bucket || 0),
+        messages: Number(statsData?.messages || 0),
+        alerts: Number(statsData?.alerts || 0),
+        warning: statsData?.warning || "",
       });
+
+      setAccess(accessData);
       setStatus("");
     } catch {
       setStatus("");
@@ -155,14 +231,14 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    loadStats();
+    loadDashboard();
   }, []);
 
   return (
     <main style={page}>
       <div style={wrap}>
         <section style={hero}>
-          <div style={eyebrow}>VAULTFORGE DASHBOARD</div>
+          <div style={eyebrow}>VaultForge Dashboard</div>
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
             Member command center.
           </h1>
@@ -174,8 +250,10 @@ export default function DashboardPage() {
           <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
           <Link href="/messages" style={ghost}>Messages</Link>
           <Link href="/alerts" style={ghost}>Alerts</Link>
+          <Link href="/payment" style={ghost}>Payment</Link>
         </section>
 
+        <AccessNotice access={access} />
         <FounderCountdown />
 
         {status && <section style={hero}>{status}</section>}
@@ -187,11 +265,11 @@ export default function DashboardPage() {
         )}
 
         <section style={grid}>
-          <StatPane label="ACTIVE DEALS" value={stats.deals} detail="Total deal rooms in the system." />
-          <StatPane label="MEMBERS" value={stats.members} detail="Member records tracked." />
-          <StatPane label="BUY BUCKET" value={stats.bucket} detail="Saved acquisition targets." />
-          <StatPane label="MESSAGES" value={stats.messages} detail="Deal-tied conversations." />
-          <StatPane label="ALERTS" value={stats.alerts} detail="Routing and match signals." />
+          <StatPane label="Active Deals" value={stats.deals} detail="Total deal rooms in the system." />
+          <StatPane label="Members" value={stats.members} detail="Member records tracked." />
+          <StatPane label="Buy Bucket" value={stats.bucket} detail="Saved acquisition targets." />
+          <StatPane label="Messages" value={stats.messages} detail="Deal-tied conversations." />
+          <StatPane label="Alerts" value={stats.alerts} detail="Routing and match signals." />
         </section>
       </div>
     </main>
