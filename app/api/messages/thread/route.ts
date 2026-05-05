@@ -49,12 +49,18 @@ function normalizeDeal(row: any) {
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const threadKey = url.searchParams.get("thread_key") || "";
-    const dealId = url.searchParams.get("deal_id") || "";
+    const threadKey = String(url.searchParams.get("thread_key") || "").trim();
+    const dealId = String(url.searchParams.get("deal_id") || "").trim();
     const email =
       cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(url.searchParams.get("email")) ||
-      "text@text.com";
+      cleanEmail(url.searchParams.get("email"));
+
+    if (!email) {
+      return NextResponse.json(
+        { error: "Missing member email for message thread." },
+        { status: 401 }
+      );
+    }
 
     if (!threadKey && !dealId) {
       return NextResponse.json({ error: "Missing thread_key or deal_id." }, { status: 400 });
@@ -62,22 +68,65 @@ export async function GET(request: Request) {
 
     const supabase = supabaseClient();
 
-    let query = supabase
-      .from("vf_messages")
-      .select("*")
-      .order("created_at", { ascending: true });
+    let messages: any[] = [];
+    let error: any = null;
 
     if (threadKey) {
-      query = query.eq("thread_key", threadKey);
-    } else {
-      query = query.eq("deal_id", dealId);
-    }
+      const byThread = await supabase
+        .from("vf_messages")
+        .select("*")
+        .eq("thread_key", threadKey)
+        .or(`sender_email.eq.${email},recipient_email.eq.${email}`)
+        .order("created_at", { ascending: true });
 
-    const { data: messages, error } = await query;
+      messages = byThread.data || [];
+      error = byThread.error;
+
+      if (!error && messages.length === 0) {
+        const byLegacyDeal = await supabase
+          .from("vf_messages")
+          .select("*")
+          .eq("deal_id", threadKey)
+          .or(`sender_email.eq.${email},recipient_email.eq.${email}`)
+          .order("created_at", { ascending: true });
+
+        messages = byLegacyDeal.data || [];
+        error = byLegacyDeal.error;
+      }
+    } else {
+      const byDeal = await supabase
+        .from("vf_messages")
+        .select("*")
+        .eq("deal_id", dealId)
+        .or(`sender_email.eq.${email},recipient_email.eq.${email}`)
+        .order("created_at", { ascending: true });
+
+      messages = byDeal.data || [];
+      error = byDeal.error;
+    }
 
     if (error) return NextResponse.json({ error: error.message, details: error }, { status: 500 });
 
-    const resolvedDealId = dealId || messages?.[0]?.deal_id || "";
+    const resolvedThreadKey = threadKey || String(messages?.[0]?.thread_key || messages?.[0]?.deal_id || "").trim();
+    const resolvedDealId = dealId || String(messages?.[0]?.deal_id || "").trim();
+
+    const missingThreadKeyIds = messages
+      .filter((message: any) => !String(message?.thread_key || "").trim() && resolvedThreadKey)
+      .map((message: any) => message.id)
+      .filter(Boolean);
+
+    if (missingThreadKeyIds.length > 0) {
+      await supabase
+        .from("vf_messages")
+        .update({ thread_key: resolvedThreadKey })
+        .in("id", missingThreadKeyIds);
+
+      messages = messages.map((message: any) =>
+        missingThreadKeyIds.includes(message.id)
+          ? { ...message, thread_key: resolvedThreadKey }
+          : message
+      );
+    }
 
     let deal = null;
     if (resolvedDealId) {
@@ -90,9 +139,10 @@ export async function GET(request: Request) {
       deal = normalizeDeal(data);
     }
 
-    const unreadIds = (messages || [])
-      .filter((m: any) => m.recipient_email === email && !m.read_at)
-      .map((m: any) => m.id);
+    const unreadIds = messages
+      .filter((m: any) => cleanEmail(m.recipient_email) === email && !m.read_at)
+      .map((m: any) => m.id)
+      .filter(Boolean);
 
     if (unreadIds.length > 0) {
       await supabase
@@ -115,6 +165,14 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const threadKey = String(body.thread_key || "").trim();
     const archived = Boolean(body.archived);
+    const email = cleanEmail(request.headers.get("x-vf-email")) || cleanEmail(body.email);
+
+    if (!email) {
+      return NextResponse.json(
+        { error: "Missing member email for archive." },
+        { status: 401 }
+      );
+    }
 
     if (!threadKey) {
       return NextResponse.json({ error: "Missing thread_key." }, { status: 400 });
@@ -125,7 +183,8 @@ export async function PATCH(request: Request) {
     const { error } = await supabase
       .from("vf_messages")
       .update({ archived })
-      .eq("thread_key", threadKey);
+      .eq("thread_key", threadKey)
+      .or(`sender_email.eq.${email},recipient_email.eq.${email}`);
 
     if (error) return NextResponse.json({ error: error.message, details: error }, { status: 500 });
 
