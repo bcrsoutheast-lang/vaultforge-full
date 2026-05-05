@@ -19,7 +19,6 @@ type Member = {
 const STATES = ["All", "Georgia", "Tennessee", "Florida", "North Carolina", "South Carolina", "Texas"];
 const ROLES = ["All", "Buyer", "Lender", "Contractor", "Developer", "Partner"];
 
-
 const shellStyle: React.CSSProperties = {
   minHeight: "100vh",
   background: "#071326",
@@ -84,13 +83,6 @@ const buttonStyle: React.CSSProperties = {
   marginTop: 10,
 };
 
-const archiveButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
-  background: "transparent",
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,107,107,.55)",
-};
-
 const pillStyle: React.CSSProperties = {
   display: "inline-block",
   color: "#9df3bf",
@@ -106,12 +98,17 @@ const pillStyle: React.CSSProperties = {
 function cleanError(value: string) {
   if (!value) return "";
   const lower = value.toLowerCase();
-  if (lower.includes("supabase") || lower.includes("pgrst") || lower.includes("violates") || lower.includes("schema") || lower.includes("failed to fetch")) {
+  if (
+    lower.includes("supabase") ||
+    lower.includes("pgrst") ||
+    lower.includes("violates") ||
+    lower.includes("schema") ||
+    lower.includes("failed to fetch")
+  ) {
     return "Something did not save correctly. Refresh and try again.";
   }
   return value;
 }
-
 
 function Nav() {
   return (
@@ -128,10 +125,15 @@ function Nav() {
   );
 }
 
-
 function TagList({ values }: { values?: string[] | null }) {
   if (!values || values.length === 0) return null;
-  return <div style={{ marginTop: 10 }}>{values.map((v) => <span key={v} style={pillStyle}>{v}</span>)}</div>;
+  return (
+    <div style={{ marginTop: 10 }}>
+      {values.map((v) => (
+        <span key={v} style={pillStyle}>{v}</span>
+      ))}
+    </div>
+  );
 }
 
 export default function NetworkClient() {
@@ -167,7 +169,9 @@ export default function NetworkClient() {
     setLoading(false);
   }
 
-  useEffect(() => { loadMembers(); }, []);
+  useEffect(() => {
+    loadMembers();
+  }, []);
 
   return (
     <main style={shellStyle}>
@@ -183,13 +187,31 @@ export default function NetworkClient() {
 
       <section style={cardStyle}>
         <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>State</label>
-        <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); loadMembers(e.target.value, roleFilter); }} style={inputStyle}>
-          {STATES.map((s) => <option key={s}>{s}</option>)}
+        <select
+          value={stateFilter}
+          onChange={(e) => {
+            setStateFilter(e.target.value);
+            loadMembers(e.target.value, roleFilter);
+          }}
+          style={inputStyle}
+        >
+          {STATES.map((s) => (
+            <option key={s}>{s}</option>
+          ))}
         </select>
 
         <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>Role</label>
-        <select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); loadMembers(stateFilter, e.target.value); }} style={inputStyle}>
-          {ROLES.map((r) => <option key={r}>{r}</option>)}
+        <select
+          value={roleFilter}
+          onChange={(e) => {
+            setRoleFilter(e.target.value);
+            loadMembers(stateFilter, e.target.value);
+          }}
+          style={inputStyle}
+        >
+          {ROLES.map((r) => (
+            <option key={r}>{r}</option>
+          ))}
         </select>
       </section>
 
@@ -199,22 +221,33 @@ export default function NetworkClient() {
       {!loading && !error && members.length === 0 && (
         <section style={cardStyle}>
           <h2>No matching members yet.</h2>
-          <p style={{ color: "rgba(255,255,255,.68)" }}>Try another state or role, or complete your profile to add yourself to the network.</p>
+          <p style={{ color: "rgba(255,255,255,.68)" }}>
+            Try another state or role, or complete your profile to add yourself to the network.
+          </p>
           <Link href="/profile" style={navLinkStyle}>Complete Profile</Link>
         </section>
       )}
 
       {!loading && !error && members.map((m) => (
         <section key={m.id} style={cardStyle}>
-          <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>{m.state || "Unknown"} • {m.role || "Member"}</p>
+          <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>
+            {m.state || "Unknown"} • {m.role || "Member"}
+          </p>
           <h2 style={{ fontSize: 34, margin: "0 0 8px" }}>{m.name || "Unnamed Member"}</h2>
-          {m.company && <h3 style={{ color: "rgba(255,255,255,.7)", margin: "0 0 14px" }}>{m.company}</h3>}
-          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.45 }}>{m.bio || "No bio yet."}</p>
+          {m.company && (
+            <h3 style={{ color: "rgba(255,255,255,.7)", margin: "0 0 14px" }}>{m.company}</h3>
+          )}
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.45 }}>
+            {m.bio || "No bio yet."}
+          </p>
           <TagList values={m.buy_box_states} />
           <TagList values={m.buy_box_types} />
           <TagList values={m.buy_box_strategies} />
-          <a href={`mailto:${m.email}`} style={{ ...buttonStyle, display: "inline-block", textDecoration: "none" }}>Message</a>
+          <a href={`mailto:${m.email}`} style={{ ...buttonStyle, display: "inline-block", textDecoration: "none" }}>
+            Message
+          </a>
         </section>
       ))}
     </main>
   );
+}
