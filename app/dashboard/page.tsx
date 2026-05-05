@@ -141,6 +141,11 @@ async function verifySoftAccessOrRedirect() {
 
   const email = getEmail();
 
+  if (!hasStoredLogin()) {
+    window.location.replace("/login");
+    return false;
+  }
+
   try {
     const res = await fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
       cache: "no-store",
@@ -159,13 +164,10 @@ async function verifySoftAccessOrRedirect() {
       return true;
     }
 
-    if (hasStoredLogin()) return true;
+    return true;
   } catch {
-    if (hasStoredLogin()) return true;
+    return true;
   }
-
-  window.location.href = "/login";
-  return false;
 }
 
 function FounderCountdown() {
