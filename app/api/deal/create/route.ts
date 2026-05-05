@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -16,10 +17,7 @@ function supabaseClient() {
   }
 
   return createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+    auth: { autoRefreshToken: false, persistSession: false },
   });
 }
 
@@ -33,23 +31,34 @@ function cleanEmail(value: unknown) {
 
 function cleanNumber(value: unknown) {
   const raw = String(value ?? "").trim();
-
   if (!raw) return null;
 
   const cleaned = raw.replace(/[^\d.-]/g, "");
-
-  if (!cleaned || cleaned === "." || cleaned === "-" || cleaned === "-.") {
-    return null;
-  }
+  if (!cleaned || cleaned === "." || cleaned === "-" || cleaned === "-.") return null;
 
   const number = Number(cleaned);
-
   return Number.isFinite(number) ? number : null;
 }
 
 function cleanTextOrNull(value: unknown) {
   const text = cleanString(value);
   return text ? text : null;
+}
+
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const cleaned = cleanString(value);
+    if (cleaned) return cleaned;
+  }
+  return "";
+}
+
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    const cleaned = cleanNumber(value);
+    if (cleaned !== null) return cleaned;
+  }
+  return null;
 }
 
 function photoArray(value: unknown): string[] {
@@ -66,12 +75,14 @@ function photoArray(value: unknown): string[] {
     } catch {
       return [value.trim()];
     }
+
+    return [value.trim()];
   }
 
   return [];
 }
 
-function removeUndefinedAndEmptyNumeric(row: Record<string, any>) {
+function removeUndefined(row: Record<string, any>) {
   const cleaned: Record<string, any> = {};
 
   for (const [key, value] of Object.entries(row)) {
@@ -93,32 +104,40 @@ export async function POST(request: Request) {
       "text@text.com";
 
     const photos = photoArray(body.photo_urls);
+    const priceValue = firstNumber(body.price, body.asking_price);
+    const askingPriceValue = firstNumber(body.asking_price, body.price);
+    const propertyType = firstText(body.property_type, body.deal_type, "Deal");
 
-    const insertable = removeUndefinedAndEmptyNumeric({
+    const insertable = removeUndefined({
       owner_email: email,
       member_email: email,
 
-      title: cleanString(body.title) || "Untitled Deal",
-      property_type: cleanString(body.property_type) || "Deal",
-      strategy: cleanString(body.strategy) || "Strategy Needed",
+      title: firstText(body.title, "Untitled Deal"),
+      property_type: propertyType,
+      deal_type: propertyType,
+      strategy: firstText(body.strategy, "Strategy Needed"),
 
-      city: cleanString(body.city),
-      state: cleanString(body.state),
-      address: cleanString(body.address),
+      city: firstText(body.city, "Unknown City"),
+      state: firstText(body.state, "Unknown State"),
+      address: cleanTextOrNull(body.address),
 
-      asking_price: cleanNumber(body.asking_price),
+      price: priceValue,
+      asking_price: askingPriceValue,
       arv: cleanNumber(body.arv),
       repair_estimate: cleanNumber(body.repair_estimate),
 
-      description: cleanString(body.description),
-      status: cleanString(body.status) || "active",
+      description: cleanTextOrNull(body.description),
+      status: firstText(body.status, "active"),
 
       photo_urls: photos,
-      main_photo_url: cleanString(body.main_photo_url) || photos[0] || "",
+      main_photo_url: photos[0] || cleanTextOrNull(body.main_photo_url),
 
-      bedrooms: cleanTextOrNull(body.bedrooms),
-      bathrooms: cleanTextOrNull(body.bathrooms),
-      building_sqft: cleanTextOrNull(body.building_sqft),
+      bedrooms: cleanTextOrNull(body.bedrooms ?? body.beds),
+      bathrooms: cleanTextOrNull(body.bathrooms ?? body.baths),
+      beds: cleanTextOrNull(body.beds ?? body.bedrooms),
+      baths: cleanTextOrNull(body.baths ?? body.bathrooms),
+      building_sqft: cleanTextOrNull(body.building_sqft ?? body.sqft),
+      sqft: cleanTextOrNull(body.sqft ?? body.building_sqft),
       year_built: cleanTextOrNull(body.year_built),
       occupancy: cleanTextOrNull(body.occupancy),
       condition: cleanTextOrNull(body.condition),
@@ -137,14 +156,20 @@ export async function POST(request: Request) {
       topography: cleanTextOrNull(body.topography),
       parcel_id: cleanTextOrNull(body.parcel_id),
 
-      seller_situation: cleanString(body.seller_situation),
-      access_notes: cleanString(body.access_notes),
-      private_notes: cleanString(body.private_notes),
+      seller_situation: cleanTextOrNull(body.seller_situation),
+      access_notes: cleanTextOrNull(body.access_notes),
+      private_notes: cleanTextOrNull(body.private_notes),
 
-      owner_name: cleanString(body.owner_name),
-      owner_phone: cleanString(body.owner_phone),
-      owner_contact_email: cleanString(body.owner_contact_email),
-      preferred_contact: cleanString(body.preferred_contact),
+      owner_name: cleanTextOrNull(body.owner_name ?? body.contact_name ?? body.seller_name),
+      contact_name: cleanTextOrNull(body.contact_name ?? body.owner_name ?? body.seller_name),
+      seller_name: cleanTextOrNull(body.seller_name ?? body.owner_name ?? body.contact_name),
+      owner_phone: cleanTextOrNull(body.owner_phone ?? body.contact_phone ?? body.seller_phone),
+      contact_phone: cleanTextOrNull(body.contact_phone ?? body.owner_phone ?? body.seller_phone),
+      seller_phone: cleanTextOrNull(body.seller_phone ?? body.owner_phone ?? body.contact_phone),
+      owner_contact_email: cleanTextOrNull(body.owner_contact_email ?? body.contact_email ?? body.seller_email),
+      contact_email: cleanTextOrNull(body.contact_email ?? body.owner_contact_email ?? body.seller_email),
+      seller_email: cleanTextOrNull(body.seller_email ?? body.owner_contact_email ?? body.contact_email),
+      preferred_contact: cleanTextOrNull(body.preferred_contact),
     });
 
     const supabase = supabaseClient();
