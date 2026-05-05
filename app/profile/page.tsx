@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 const states = [
@@ -142,6 +142,12 @@ function arrayValue(value: any): string[] {
   return [];
 }
 
+function completionScore(form: Record<string, any>) {
+  const required = ["email", "full_name", "phone", "role", "city", "state"];
+  const done = required.filter((key) => String(form[key] || "").trim()).length;
+  return Math.round((done / required.length) * 100);
+}
+
 export default function ProfilePage() {
   const [form, setForm] = useState<Record<string, any>>({
     email: "",
@@ -168,6 +174,8 @@ export default function ProfilePage() {
   const [status, setStatus] = useState("Loading profile...");
   const [saving, setSaving] = useState(false);
   const [complete, setComplete] = useState(false);
+
+  const progress = useMemo(() => completionScore(form), [form]);
 
   function update(key: string, value: any) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -268,26 +276,34 @@ export default function ProfilePage() {
         <section style={hero}>
           <div style={eyebrow}>Member Profile</div>
           <h1 style={{ fontSize: "clamp(54px, 12vw, 96px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            Build your VaultForge identity.
+            Profile, routing, alerts.
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
-            Complete your profile, control your alert volume, and define the opportunities you want to see.
+            Your profile controls member type, markets, buy box, routing, and alert volume.
           </p>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/payment" style={ghost}>Payment</Link>
         </section>
 
-        {status && (
-          <section style={{ ...pane, borderColor: complete ? "rgba(157,243,191,.45)" : "rgba(232,196,107,.35)" }}>
+        <section style={{ ...pane, borderColor: complete ? "rgba(157,243,191,.45)" : "rgba(232,196,107,.35)" }}>
+          <div style={eyebrow}>Profile Progress</div>
+          <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>
+            {complete ? "Complete ✓" : `${progress}% complete`}
+          </h2>
+          <div style={{ width: "100%", height: 14, borderRadius: 999, background: "rgba(255,255,255,.08)", overflow: "hidden", marginBottom: 14 }}>
+            <div style={{ width: `${progress}%`, height: "100%", background: complete ? "#9df3bf" : "#f5d978" }} />
+          </div>
+          {status && (
             <p style={{ margin: 0, color: complete ? "#9df3bf" : "#e8c46b", fontWeight: 900 }}>
               {status}
             </p>
-            {complete && <Link href="/payment" style={btn}>Continue to Payment</Link>}
-          </section>
-        )}
+          )}
+          {complete && <Link href="/payment" style={btn}>Continue to Payment</Link>}
+        </section>
 
         <section style={pane}>
           <div style={eyebrow}>Required Fields</div>
+          <p style={muted}>Required to move into payment-ready status: name, phone, role, city, state, and email.</p>
           <div style={grid}>
             <Field label="Email" value={form.email} onChange={(v) => update("email", v)} />
             <Field label="Full Name" value={form.full_name} onChange={(v) => update("full_name", v)} />
