@@ -39,7 +39,7 @@ const pane: React.CSSProperties = {
   boxShadow: "0 25px 75px rgba(0,0,0,.28)",
 };
 
-const body: React.CSSProperties = { padding: 20 };
+const bodyStyle: React.CSSProperties = { padding: 20 };
 
 const btn: React.CSSProperties = {
   display: "inline-block",
@@ -217,31 +217,17 @@ export default function ProjectsPage() {
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>PROJECTS</div>
-          <h1
-            style={{
-              fontSize: "clamp(56px,12vw,96px)",
-              lineHeight: 0.9,
-              margin: "0 0 18px",
-            }}
-          >
+          <h1 style={{ fontSize: "clamp(56px,12vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
             Window pane deal room.
           </h1>
           <p style={muted}>
             Organize live opportunities with folders, archive controls, deal room links,
             and clean member actions.
           </p>
-          <Link href="/dashboard" style={ghost}>
-            Dashboard
-          </Link>
-          <Link href="/submit" style={btn}>
-            Create
-          </Link>
-          <Link href="/buy-bucket" style={ghost}>
-            Buy Bucket
-          </Link>
-          <button type="button" onClick={load} style={btn}>
-            Refresh
-          </button>
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <Link href="/submit" style={btn}>Create</Link>
+          <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+          <button type="button" onClick={load} style={btn}>Refresh</button>
         </section>
 
         {status && <section style={hero}>{status}</section>}
@@ -260,12 +246,7 @@ export default function ProjectsPage() {
                   <img
                     src={image}
                     alt={deal.title || "Deal"}
-                    style={{
-                      width: "100%",
-                      height: 230,
-                      objectFit: "cover",
-                      display: "block",
-                    }}
+                    style={{ width: "100%", height: 230, objectFit: "cover", display: "block" }}
                   />
                 ) : (
                   <div
@@ -281,10 +262,9 @@ export default function ProjectsPage() {
                   </div>
                 )}
 
-                <div style={body}>
+                <div style={bodyStyle}>
                   <div style={eyebrow}>
-                    {deal.folder || "Active"} · {deal.property_type || "Deal"} ·{" "}
-                    {deal.strategy || "Strategy Needed"}
+                    {deal.folder || "Active"} · {deal.property_type || "Deal"} · {deal.strategy || "Strategy Needed"}
                   </div>
 
                   <h2 style={{ fontSize: 34, margin: "0 0 8px" }}>
@@ -320,18 +300,10 @@ export default function ProjectsPage() {
                   </select>
 
                   <div style={{ marginTop: 12 }}>
-                    <Link href={`/deal/${deal.id}`} style={btn}>
-                      Deal Room
-                    </Link>
-                    <button type="button" onClick={() => saveDeal(deal.id)} style={ghost}>
-                      Save
-                    </button>
-                    <button type="button" onClick={() => archiveDeal(deal.id)} style={ghost}>
-                      Archive
-                    </button>
-                    <button type="button" onClick={() => deleteDeal(deal.id)} style={danger}>
-                      Delete
-                    </button>
+                    <Link href={`/deal/${deal.id}`} style={btn}>Deal Room</Link>
+                    <button type="button" onClick={() => saveDeal(deal.id)} style={ghost}>Save</button>
+                    <button type="button" onClick={() => archiveDeal(deal.id)} style={ghost}>Archive</button>
+                    <button type="button" onClick={() => deleteDeal(deal.id)} style={danger}>Delete</button>
                   </div>
                 </div>
               </article>
