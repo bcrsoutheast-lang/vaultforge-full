@@ -46,12 +46,29 @@ function normalizeDeal(row: any) {
   };
 }
 
+function stableThreadKey(message: any) {
+  const explicit = String(message?.thread_key || "").trim();
+  if (explicit) return explicit;
+
+  const dealId = String(message?.deal_id || "").trim();
+  if (dealId) return dealId;
+
+  return String(message?.id || "").trim();
+}
+
 export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
     const email =
       cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(new URL(request.url).searchParams.get("email")) ||
-      "text@text.com";
+      cleanEmail(url.searchParams.get("email"));
+
+    if (!email) {
+      return NextResponse.json(
+        { error: "Missing member email for messages." },
+        { status: 401 }
+      );
+    }
 
     const supabase = supabaseClient();
 
@@ -65,7 +82,26 @@ export async function GET(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message, details: error }, { status: 500 });
 
-    const dealIds = Array.from(new Set((messages || []).map((m: any) => m.deal_id).filter(Boolean)));
+    const rows = messages || [];
+    const missingThreadKeyIds = rows
+      .filter((message: any) => !String(message?.thread_key || "").trim() && String(message?.deal_id || "").trim())
+      .map((message: any) => message.id)
+      .filter(Boolean);
+
+    if (missingThreadKeyIds.length > 0) {
+      await Promise.all(
+        rows
+          .filter((message: any) => missingThreadKeyIds.includes(message.id))
+          .map((message: any) =>
+            supabase
+              .from("vf_messages")
+              .update({ thread_key: String(message.deal_id) })
+              .eq("id", message.id)
+          )
+      );
+    }
+
+    const dealIds = Array.from(new Set(rows.map((m: any) => m.deal_id).filter(Boolean)));
 
     let dealMap = new Map<string, any>();
 
@@ -76,16 +112,23 @@ export async function GET(request: Request) {
         .in("id", dealIds);
 
       if (!dealError && deals) {
-        dealMap = new Map(deals.map((deal: any) => [deal.id, normalizeDeal(deal)]));
+        dealMap = new Map(deals.map((deal: any) => [String(deal.id), normalizeDeal(deal)]));
       }
     }
 
     const grouped = new Map<string, any>();
 
-    for (const message of messages || []) {
-      const key = String(message.thread_key || message.deal_id || message.id);
+    for (const originalMessage of rows) {
+      const key = stableThreadKey(originalMessage);
+      if (!key) continue;
+
+      const message = {
+        ...originalMessage,
+        thread_key: String(originalMessage.thread_key || key),
+      };
+
       const existing = grouped.get(key);
-      const deal = dealMap.get(message.deal_id) || null;
+      const deal = dealMap.get(String(message.deal_id)) || null;
 
       if (!existing) {
         grouped.set(key, {
@@ -95,11 +138,11 @@ export async function GET(request: Request) {
           latest_message: message,
           messages: [message],
           unread_count:
-            message.recipient_email === email && !message.read_at ? 1 : 0,
+            cleanEmail(message.recipient_email) === email && !message.read_at ? 1 : 0,
         });
       } else {
         existing.messages.push(message);
-        if (message.recipient_email === email && !message.read_at) {
+        if (cleanEmail(message.recipient_email) === email && !message.read_at) {
           existing.unread_count += 1;
         }
       }
