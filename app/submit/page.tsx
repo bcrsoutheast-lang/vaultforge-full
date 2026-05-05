@@ -7,7 +7,7 @@ type DealType = "Residential" | "Commercial" | "Land";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
-const BUCKET = "deal-photos";
+const BUCKETS = ["deal-photos", "deal-photo", "project-images"];
 
 const states = ["Georgia","Tennessee","Florida","North Carolina","South Carolina","Texas","Alabama","California","New York","Ohio","Pennsylvania","Other"];
 
@@ -25,10 +25,38 @@ const muted: React.CSSProperties = { color: "rgba(255,255,255,.68)", lineHeight:
 function getEmail() { if (typeof window === "undefined") return ""; return (localStorage.getItem("vf_email") || sessionStorage.getItem("vf_email") || "text@text.com").trim().toLowerCase(); }
 function cleanFileName(file: File) { return `${Date.now()}-${Math.random().toString(16).slice(2)}-${file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-")}`; }
 async function upload(file: File, email: string) {
-  const path = `${email}/${cleanFileName(file)}`;
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`, { method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": file.type || "image/jpeg", "x-upsert": "true" }, body: file });
-  if (!res.ok) throw new Error((await res.text()) || "Photo upload failed.");
-  return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`;
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("Supabase storage settings are missing.");
+  }
+
+  const safeEmail = (email || "guest").replace(/[^a-z0-9@._-]+/gi, "-");
+  const path = `${safeEmail}/${cleanFileName(file)}`;
+  let lastError = "";
+
+  for (const bucket of BUCKETS) {
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": file.type || "image/jpeg",
+        "x-upsert": "true",
+      },
+      body: file,
+    });
+
+    if (res.ok) {
+      return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
+    }
+
+    lastError = await res.text();
+  }
+
+  if (lastError.includes("Bucket not found")) {
+    throw new Error("Photo bucket not found. Create a public bucket named deal-photo or deal-photos.");
+  }
+
+  throw new Error(lastError || "Photo upload failed.");
 }
 
 const empty = {
@@ -116,7 +144,8 @@ export default function SubmitPage() {
 
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e: any) {
-      setMsg(e?.message || "Could not save.");
+      const raw = String(e?.message || "Could not save.");
+      setMsg(raw.includes("<html") ? "Photo upload failed. Check Supabase bucket is public and upload policy is enabled." : raw);
     } finally {
       setBusy(false);
     }
@@ -180,7 +209,3 @@ export default function SubmitPage() {
 
 function Field({label: l, value, onChange}:{label:string;value:string;onChange:(v:string)=>void}) { return <div><label style={label}>{l}</label><input style={input} value={value} onChange={e=>onChange(e.target.value)} /></div>; }
 function Select({label: l, value, onChange, options}:{label:string;value:string;onChange:(v:string)=>void;options:string[]}) { return <div><label style={label}>{l}</label><select style={input} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o} value={o} style={{color:"#111"}}>{o}</option>)}</select></div>; }
-
-function TextAreaField({label: l, value, onChange}:{label:string;value:string;onChange:(v:string)=>void}) {
-  return <div style={{marginBottom:14}}><label style={label}>{l}</label><textarea style={{...input,minHeight:120}} value={value} onChange={e=>onChange(e.target.value)} /></div>;
-}
