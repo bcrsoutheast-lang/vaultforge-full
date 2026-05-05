@@ -59,6 +59,40 @@ async function upload(file: File, email: string) {
   throw new Error(lastError || "Photo upload failed.");
 }
 
+async function saveDealWithRetry(payload: Record<string, any>, email: string) {
+  let lastError = "Save failed.";
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const res = await fetch("/api/deal/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vf-email": email,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    let data: any = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
+    if (res.ok && !data?.error) {
+      return data;
+    }
+
+    lastError = data?.error || data?.details || `Save failed on attempt ${attempt}.`;
+
+    if (attempt === 1) {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+  }
+
+  throw new Error(lastError);
+}
+
 const empty = {
   title:"", property_type:"Residential" as DealType, strategy:"Fix & Flip", city:"", state:"Georgia", address:"", asking_price:"", arv:"", repair_estimate:"", description:"",
   bedrooms:"", bathrooms:"", building_sqft:"", year_built:"", occupancy:"", condition:"",
@@ -118,20 +152,7 @@ export default function SubmitPage() {
         main_photo_url: urls[0] || "",
       };
 
-      const res = await fetch("/api/deal/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || data?.error) {
-        throw new Error(data?.error || data?.details || "Save failed.");
-      }
+      const data = await saveDealWithRetry(payload, email);
 
       setSavedId(data?.deal?.id || "");
       setMsg("Deal saved successfully. Form cleared.");
