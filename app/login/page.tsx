@@ -121,6 +121,13 @@ function cleanEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+function setClientCookie(name: string, value: string, maxAgeSeconds: number) {
+  if (typeof document === "undefined") return;
+
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
+}
+
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -172,9 +179,13 @@ export default function LoginPage() {
       window.localStorage.setItem("vf_member_login", "1");
       window.sessionStorage.setItem("vf_member_login", "1");
 
+      const maxAge = 60 * 60 * 24 * 7;
+      setClientCookie("vf_email", normalizedEmail, maxAge);
+      setClientCookie("vf_member_login", "1", maxAge);
+
       setMessage(data?.message || "Success.");
 
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
 
       window.location.href = data?.redirect_to || "/dashboard";
     } catch (err: any) {
