@@ -5,6 +5,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+const MAX_ALERTS_PER_RUN = 150;
+const MAX_DEALS_SCANNED = 150;
+const MAX_MEMBERS_SCANNED = 300;
 
 type Deal = Record<string, any>;
 type Member = Record<string, any>;
@@ -48,6 +51,23 @@ function emailFromCookie(cookieHeader: string) {
   }
 
   return "";
+}
+
+function getRequestEmail(request: Request, body: any) {
+  const cookieEmail = emailFromCookie(request.headers.get("cookie") || "");
+  const headerEmail = cleanEmail(request.headers.get("x-vf-email"));
+  const bodyEmail = cleanEmail(body?.email);
+
+  return cookieEmail || headerEmail || bodyEmail;
+}
+
+function isOwnerRequest(request: Request, body: any) {
+  const email = getRequestEmail(request, body);
+
+  return {
+    email,
+    owner: email === OWNER_EMAIL,
+  };
 }
 
 function asList(value: unknown): string[] {
@@ -338,34 +358,29 @@ export async function POST(request: Request) {
     const supabase = supabaseClient();
     const body = await request.json().catch(() => ({}));
 
-    const url = new URL(request.url);
-    const email =
-      cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(body.email) ||
-      cleanEmail(url.searchParams.get("email")) ||
-      emailFromCookie(request.headers.get("cookie") || "");
+    const ownerCheck = isOwnerRequest(request, body);
 
-    const owner =
-      email === OWNER_EMAIL ||
-      cleanEmail(request.headers.get("x-vf-admin")) === "1" ||
-      cleanEmail(body.owner) === "1" ||
-      cleanEmail(url.searchParams.get("owner")) === "1";
-
-    if (!owner) {
+    if (!ownerCheck.owner) {
       return NextResponse.json(
-        { ok: false, error: "Owner access required to generate smart alerts." },
+        {
+          ok: false,
+          error: "Owner access required to generate smart alerts.",
+          details: "Smart generation is limited to the VaultForge owner account.",
+        },
         { status: 403 }
       );
     }
 
-    const minScore = Number(body.min_score || url.searchParams.get("min_score") || 45);
-    const limit = Math.min(Number(body.limit || url.searchParams.get("limit") || 300), 500);
+    const requestedMinScore = Number(body.min_score || 45);
+    const minScore = Math.max(35, Math.min(140, requestedMinScore));
+    const requestedLimit = Number(body.limit || MAX_ALERTS_PER_RUN);
+    const limit = Math.max(1, Math.min(MAX_ALERTS_PER_RUN, requestedLimit));
 
     const { data: deals, error: dealsError } = await supabase
       .from("vf_deals")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(150);
+      .limit(MAX_DEALS_SCANNED);
 
     if (dealsError) {
       return NextResponse.json({ ok: false, error: dealsError.message, details: dealsError }, { status: 500 });
@@ -375,7 +390,7 @@ export async function POST(request: Request) {
       .from("vf_members")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(300);
+      .limit(MAX_MEMBERS_SCANNED);
 
     if (membersError) {
       return NextResponse.json({ ok: false, error: membersError.message, details: membersError }, { status: 500 });
@@ -445,7 +460,9 @@ export async function POST(request: Request) {
         ok: true,
         inserted: 0,
         scanned: { deals: liveDeals.length, members: liveMembers.length },
-        message: "No new smart alerts met the match threshold.",
+        minScore,
+        limit,
+        message: "No new smart alerts met the match threshold or all matching alerts already exist.",
       });
     }
 
@@ -466,6 +483,7 @@ export async function POST(request: Request) {
       inserted: inserted?.length || 0,
       scanned: { deals: liveDeals.length, members: liveMembers.length },
       minScore,
+      limit,
       alerts: inserted || [],
     });
   } catch (error: any) {
