@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
 function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
@@ -45,15 +47,65 @@ function emailFromCookie(cookieHeader: string) {
   return "";
 }
 
-async function readTable(supabase: any, table: string, email: string) {
+function normalizeAlert(item: any) {
+  const title =
+    item.alert_title ||
+    item.title ||
+    item.deal_title ||
+    item.match_title ||
+    "VaultForge Match Alert";
+
+  const message =
+    item.alert_message ||
+    item.message ||
+    item.body ||
+    item.reason ||
+    item.match_reason ||
+    "VaultForge found a routing signal.";
+
+  return {
+    ...item,
+    id: item.id,
+    source_table: "vf_match_alerts",
+    title,
+    alert_title: title,
+    message,
+    body: message,
+    alert_type: item.alert_type || item.type || "smart_match",
+    type: item.type || item.alert_type || "smart_match",
+    score: Number(item.score || item.match_score || 0),
+    match_score: Number(item.match_score || item.score || 0),
+    reason: item.reason || item.match_reason || "",
+    match_reason: item.match_reason || item.reason || "",
+    is_read: Boolean(item.is_read || item.read || item.read_at),
+    read: Boolean(item.read || item.is_read || item.read_at),
+    is_dismissed: Boolean(item.is_dismissed || item.dismissed || item.dismissed_at),
+    dismissed: Boolean(item.dismissed || item.is_dismissed || item.dismissed_at),
+  };
+}
+
+export async function GET(request: Request) {
   try {
+    const supabase = supabaseClient();
+    const url = new URL(request.url);
+
+    const email =
+      cleanEmail(request.headers.get("x-vf-email")) ||
+      cleanEmail(url.searchParams.get("email")) ||
+      emailFromCookie(request.headers.get("cookie") || "");
+
+    const owner =
+      email === OWNER_EMAIL ||
+      cleanEmail(request.headers.get("x-vf-admin")) === "1" ||
+      cleanEmail(url.searchParams.get("owner")) === "1";
+
     let query = supabase
-      .from(table)
+      .from("vf_match_alerts")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(200);
 
-    if (email) {
+    if (!owner && email) {
       query = query.or(
         [
           `member_email.eq.${email}`,
@@ -69,51 +121,28 @@ async function readTable(supabase: any, table: string, email: string) {
     const { data, error } = await query;
 
     if (error) {
-      return [];
+      return NextResponse.json(
+        {
+          ok: false,
+          error: error.message,
+          details: error,
+          alerts: [],
+        },
+        { status: 500 }
+      );
     }
 
-    return (data || []).map((item: any) => ({
-      ...item,
-      source_table: table,
-    }));
-  } catch {
-    return [];
-  }
-}
-
-export async function GET(request: Request) {
-  try {
-    const supabase = supabaseClient();
-    const url = new URL(request.url);
-
-    const email =
-      cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(url.searchParams.get("email")) ||
-      emailFromCookie(request.headers.get("cookie") || "");
-
-    const [vfAlerts, memberAlerts, matchAlerts] = await Promise.all([
-      readTable(supabase, "vf_match_alerts", email),
-      readTable(supabase, "member_alerts", email),
-      readTable(supabase, "matches", email),
-    ]);
-
-    const alerts = [...vfAlerts, ...memberAlerts, ...matchAlerts]
-      .filter((item) => !item.is_dismissed && !item.dismissed)
-      .sort((a, b) => {
-        const aTime = new Date(a.created_at || a.updated_at || 0).getTime();
-        const bTime = new Date(b.created_at || b.updated_at || 0).getTime();
-        return bTime - aTime;
-      });
+    const alerts = (data || [])
+      .map(normalizeAlert)
+      .filter((item: any) => !item.is_dismissed && !item.dismissed);
 
     return NextResponse.json({
       ok: true,
       email,
+      owner,
       alerts,
-      sources: {
-        primary: "vf_match_alerts",
-        secondary: "member_alerts",
-        fallback: "matches",
-      },
+      count: alerts.length,
+      source: "vf_match_alerts",
     });
   } catch (error: any) {
     return NextResponse.json(
