@@ -27,126 +27,124 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function getRequestEmail(request: Request, body: any) {
-  return (
-    request.headers.get("x-vf-email") ||
-    request.headers.get("x-email") ||
-    body?.owner_email ||
-    body?.admin_email ||
-    body?.email ||
-    ""
-  )
-    .trim()
-    .toLowerCase();
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
 }
 
-function allowedAction(value: string) {
-  return [
-    "activate",
-    "lock",
-    "suspend",
-    "restore",
-    "mark_paid",
-    "mark_unpaid",
-  ].includes(value);
+function emailFromCookie(cookieHeader: string) {
+  const parts = cookieHeader.split(";").map((part) => part.trim());
+
+  for (const part of parts) {
+    if (part.startsWith("vf_email=")) {
+      try {
+        return decodeURIComponent(part.replace("vf_email=", "")).trim().toLowerCase();
+      } catch {
+        return part.replace("vf_email=", "").trim().toLowerCase();
+      }
+    }
+  }
+
+  return "";
+}
+
+function requestEmail(request: Request, body: any) {
+  return (
+    emailFromCookie(request.headers.get("cookie") || "") ||
+    cleanEmail(request.headers.get("x-vf-email")) ||
+    cleanEmail(body?.email)
+  );
+}
+
+function isOwnerRequest(request: Request, body: any) {
+  return requestEmail(request, body) === OWNER_EMAIL;
 }
 
 function payloadForAction(action: string) {
-  const now = new Date().toISOString();
+  const normalized = clean(action).toLowerCase();
 
-  if (action === "activate") {
+  if (["activate", "active", "approve", "unlock"].includes(normalized)) {
     return {
+      member_status: "active",
       is_active: true,
       is_suspended: false,
       is_deleted: false,
-      member_status: "active",
-      status: "active",
-      updated_at: now,
+      updated_at: new Date().toISOString(),
     };
   }
 
-  if (action === "lock" || action === "suspend") {
+  if (["suspend", "lock", "locked", "inactive"].includes(normalized)) {
     return {
+      member_status: "suspended",
       is_active: false,
       is_suspended: true,
-      member_status: "suspended",
-      status: "suspended",
-      updated_at: now,
+      updated_at: new Date().toISOString(),
     };
   }
 
-  if (action === "restore") {
+  if (["payment_required", "unpaid", "mark_unpaid"].includes(normalized)) {
     return {
-      is_active: true,
-      is_suspended: false,
-      is_deleted: false,
-      member_status: "active",
-      status: "active",
-      updated_at: now,
+      payment_status: "unpaid",
+      member_status: "profile_required",
+      is_active: false,
+      updated_at: new Date().toISOString(),
     };
   }
 
-  if (action === "mark_paid") {
+  if (["paid", "mark_paid"].includes(normalized)) {
     return {
       payment_status: "paid",
       member_status: "active",
       is_active: true,
       is_suspended: false,
-      updated_at: now,
+      is_deleted: false,
+      updated_at: new Date().toISOString(),
     };
   }
 
-  if (action === "mark_unpaid") {
-    return {
-      payment_status: "unpaid",
-      updated_at: now,
-    };
-  }
-
-  return { updated_at: now };
+  return null;
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
 
-    const id = clean(body?.id || body?.member_id);
-    const action = clean(body?.action).toLowerCase();
-    const requestEmail = getRequestEmail(request, body);
-
-    if (requestEmail !== OWNER_EMAIL) {
+    if (!isOwnerRequest(request, body)) {
       return NextResponse.json(
-        { ok: false, error: "Owner access required." },
+        {
+          ok: false,
+          error: "Owner access required for member status controls.",
+        },
         { status: 403 }
       );
     }
 
+    const id = clean(body.id || body.member_id);
+    const action = clean(body.action || body.status);
+
     if (!id) {
-      return NextResponse.json(
-        { ok: false, error: "Missing member id." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Missing member id." }, { status: 400 });
     }
 
-    if (!allowedAction(action)) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid member action." },
-        { status: 400 }
-      );
-    }
+    const payload = payloadForAction(action);
 
-    const updatePayload = payloadForAction(action);
+    if (!payload) {
+      return NextResponse.json({ ok: false, error: "Invalid member action." }, { status: 400 });
+    }
 
     const { data, error } = await supabaseClient()
       .from("vf_members")
-      .update(updatePayload)
+      .update(payload)
       .eq("id", id)
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json(
-        { ok: false, error: error.message, details: error },
+        {
+          ok: false,
+          error: error.message,
+          details: error,
+        },
         { status: 500 }
       );
     }
@@ -155,13 +153,12 @@ export async function POST(request: Request) {
       ok: true,
       member: data,
       action,
-      message: `Member ${action.replace("_", " ")} complete.`,
     });
   } catch (error: any) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Could not update member.",
+        error: "Could not update member status.",
         details: error?.message || String(error),
       },
       { status: 500 }
