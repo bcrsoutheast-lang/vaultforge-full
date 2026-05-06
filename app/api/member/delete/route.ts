@@ -34,117 +34,208 @@ function getSupabase() {
   });
 }
 
-function getRequesterEmail(request: Request, body: any) {
+function cookieValue(cookieHeader: string, name: string) {
+  const found = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!found) return "";
+
+  try {
+    return decodeURIComponent(found.replace(`${name}=`, ""));
+  } catch {
+    return found.replace(`${name}=`, "");
+  }
+}
+
+function requesterEmail(request: Request, body: any) {
   const cookieHeader = request.headers.get("cookie") || "";
-  const cookieEmail =
-    cookieHeader
-      .split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith("vf_email="))
-      ?.replace("vf_email=", "") || "";
 
   return cleanEmail(
     request.headers.get("x-vf-email") ||
       request.headers.get("x-email") ||
       body?.requester_email ||
       body?.admin_email ||
-      cookieEmail
+      cookieValue(cookieHeader, "vf_email")
   );
 }
 
 function isOwnerRequest(request: Request, body: any) {
-  const requesterEmail = getRequesterEmail(request, body);
+  const email = requesterEmail(request, body);
   const cookieHeader = (request.headers.get("cookie") || "").toLowerCase();
 
   return (
-    requesterEmail === OWNER_EMAIL ||
+    email === OWNER_EMAIL ||
     cookieHeader.includes("vf_admin=1") ||
     cookieHeader.includes("isadmin=true") ||
     cookieHeader.includes("bcrsoutheast%40gmail.com")
   );
 }
 
-async function softRemoveFromTable(table: string, memberId: string, memberEmail: string) {
-  const supabase = getSupabase();
+function memberSelectors(memberId: string, email: string) {
+  const selectors: { column: string; value: string }[] = [];
 
-  // Do NOT use deleted_at. Live vf_members does not have that column.
-  const attempts: Record<string, any>[] = [
-    { access_status: "removed", member_status: "removed", payment_status: "removed", suspended: true, is_active: false },
-    { access_status: "removed", member_status: "removed", payment_status: "removed" },
-    { access_status: "removed", member_status: "removed" },
+  if (memberId) {
+    selectors.push({ column: "id", value: memberId });
+    selectors.push({ column: "profile_id", value: memberId });
+    selectors.push({ column: "member_id", value: memberId });
+  }
+
+  if (email) {
+    selectors.push({ column: "email", value: email });
+    selectors.push({ column: "member_email", value: email });
+    selectors.push({ column: "owner_email", value: email });
+    selectors.push({ column: "user_email", value: email });
+  }
+
+  const seen = new Set<string>();
+
+  return selectors.filter((selector) => {
+    const key = `${selector.column}:${selector.value}`;
+    if (!selector.value || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function removalPayloads() {
+  return [
+    {
+      member_status: "removed",
+      access_status: "removed",
+      payment_status: "removed",
+      suspended: true,
+      is_active: false,
+    },
+    {
+      member_status: "removed",
+      access_status: "removed",
+      payment_status: "removed",
+    },
+    {
+      member_status: "removed",
+      access_status: "removed",
+    },
     { member_status: "removed" },
     { access_status: "removed" },
   ];
+}
 
-  let lastError = "";
+async function tryUpdate(table: string, selector: { column: string; value: string }, payload: Record<string, any>) {
+  const supabase = getSupabase();
 
-  for (const payload of attempts) {
-    let query = supabase.from(table).update(payload).select("*");
+  const { data, error } = await supabase
+    .from(table)
+    .update(payload)
+    .eq(selector.column, selector.value)
+    .select("*");
 
-    if (memberId) {
-      query = query.eq("id", memberId);
-    } else {
-      query = query.eq("email", memberEmail);
-    }
-
-    const { data, error } = await query;
-
-    if (!error) {
-      return {
-        ok: true,
-        table,
-        member: Array.isArray(data) ? data[0] || null : data,
-        payload,
-      };
-    }
-
-    lastError = error.message || String(error);
+  if (error) {
+    return {
+      ok: false,
+      error: error.message || String(error),
+      data: [],
+      count: 0,
+    };
   }
 
-  return { ok: false, table, error: lastError || "Member remove failed." };
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+
+  if (!rows.length) {
+    return {
+      ok: false,
+      error: `No row matched ${table}.${selector.column}=${selector.value}`,
+      data: [],
+      count: 0,
+    };
+  }
+
+  return {
+    ok: true,
+    error: "",
+    data: rows,
+    count: rows.length,
+  };
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
 
     if (!isOwnerRequest(request, body)) {
-      return NextResponse.json({ ok: false, error: "Owner access required." }, { status: 403 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Owner access required.",
+        },
+        { status: 403 }
+      );
     }
 
     const memberId = clean(body?.id || body?.member_id || body?.profile_id);
-    const memberEmail = cleanEmail(body?.email || body?.member_email);
+    const email = cleanEmail(body?.email || body?.member_email || body?.owner_email || body?.user_email);
 
-    if (!memberId && !memberEmail) {
-      return NextResponse.json({ ok: false, error: "Missing member id or email." }, { status: 400 });
+    if (!memberId && !email) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Missing member id or email.",
+        },
+        { status: 400 }
+      );
     }
 
     const tables = ["vf_members", "vf_profiles", "profiles", "member_profiles"];
-    const results = [];
+    const selectors = memberSelectors(memberId, email);
+    const payloads = removalPayloads();
+    const attempts: any[] = [];
 
     for (const table of tables) {
-      const result = await softRemoveFromTable(table, memberId, memberEmail);
-      results.push(result);
+      for (const selector of selectors) {
+        for (const payload of payloads) {
+          const result = await tryUpdate(table, selector, payload);
 
-      if (result.ok) {
-        return NextResponse.json({
-          ok: true,
-          action: "removed",
-          table,
-          member: result.member,
-          payload: result.payload,
-          message: "Member removed from active network.",
-        });
+          attempts.push({
+            table,
+            selector,
+            payload,
+            ok: result.ok,
+            count: result.count,
+            error: result.error,
+          });
+
+          if (result.ok && result.count > 0) {
+            return NextResponse.json({
+              ok: true,
+              action: "removed",
+              table,
+              selector,
+              payload,
+              updated_count: result.count,
+              member: result.data[0],
+              message: "Member removed from active network.",
+            });
+          }
+        }
       }
     }
 
     return NextResponse.json(
-      { ok: false, error: "Could not remove member.", details: results },
+      {
+        ok: false,
+        error: "No member row was removed. The button sent an id/email that did not match any live row, or the live table uses different status columns.",
+        attempts,
+      },
       { status: 500 }
     );
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: "Member remove route failed.", details: error?.message || String(error) },
+      {
+        ok: false,
+        error: "Member remove route failed.",
+        details: error?.message || String(error),
+      },
       { status: 500 }
     );
   }
