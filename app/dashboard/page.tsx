@@ -215,7 +215,10 @@ export default function DashboardPage() {
       const email = getEmail();
 
       const [statsRes, accessRes] = await Promise.all([
-        fetch("/api/dashboard/stats", { cache: "no-store" }),
+        fetch(`/api/dashboard/stats?email=${encodeURIComponent(email)}`, {
+          cache: "no-store",
+          headers: { "x-vf-email": email },
+        }),
         fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
           cache: "no-store",
           headers: { "x-vf-email": email },
@@ -225,13 +228,15 @@ export default function DashboardPage() {
       const statsData = await statsRes.json();
       const accessData = await accessRes.json();
 
+      const statsPayload = statsData?.stats || statsData || {};
+
       setStats({
-        deals: Number(statsData?.deals || 0),
-        members: Number(statsData?.members || 0),
-        bucket: Number(statsData?.bucket || 0),
-        messages: Number(statsData?.messages || 0),
-        alerts: Number(statsData?.alerts || 0),
-        warning: statsData?.warning || "",
+        deals: Number(statsPayload?.deals || 0),
+        members: Number(statsPayload?.members || 0),
+        bucket: Number(statsPayload?.bucket || 0),
+        messages: Number(statsPayload?.messages || 0),
+        alerts: Number(statsPayload?.alerts || 0),
+        warning: statsPayload?.warning || statsData?.warning || "",
       });
 
       setAccess(accessData);
@@ -253,6 +258,7 @@ export default function DashboardPage() {
           <div>
             <Link href="/profile" style={ghost}>Profile</Link>
             <Link href="/payment" style={ghost}>Payment</Link>
+            <Link href="/logout" style={ghost}>Logout</Link>
           </div>
         </div>
 
