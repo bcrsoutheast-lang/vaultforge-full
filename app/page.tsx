@@ -3,19 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-const FOUNDER_DEADLINE = new Date("2026-05-10T00:00:00-04:00").getTime();
+const FOUNDER_DEADLINE = new Date("2026-05-15T23:59:59-04:00").getTime();
+const FOUNDER_LIMIT = 50;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top, rgba(214,170,62,.18), transparent 34%), radial-gradient(circle at 80% 10%, rgba(157,243,191,.11), transparent 26%), linear-gradient(180deg, #030509 0%, #071326 58%, #030509 100%)",
+    "radial-gradient(circle at top, rgba(214,170,62,.20), transparent 34%), radial-gradient(circle at 80% 10%, rgba(157,243,191,.13), transparent 26%), linear-gradient(180deg, #030509 0%, #071326 58%, #030509 100%)",
   color: "white",
   fontFamily: "Arial, sans-serif",
   padding: "28px 18px 90px",
 };
 
 const wrap: React.CSSProperties = {
-  maxWidth: 1180,
+  maxWidth: 1200,
   margin: "0 auto",
 };
 
@@ -49,7 +50,7 @@ const hero: React.CSSProperties = {
 
 const logo: React.CSSProperties = {
   width: "100%",
-  maxWidth: 640,
+  maxWidth: 620,
   borderRadius: 26,
   boxShadow: "0 25px 80px rgba(0,0,0,.55)",
   marginBottom: 30,
@@ -61,26 +62,34 @@ const eyebrow: React.CSSProperties = {
   fontWeight: 900,
   fontSize: 13,
   marginBottom: 14,
+  textTransform: "uppercase",
+};
+
+const greenEyebrow: React.CSSProperties = {
+  ...eyebrow,
+  color: "#9df3bf",
 };
 
 const title: React.CSSProperties = {
-  fontSize: "clamp(46px, 11vw, 96px)",
-  lineHeight: 0.9,
+  fontSize: "clamp(48px, 11vw, 106px)",
+  lineHeight: 0.88,
   letterSpacing: -3,
   margin: "0 auto 22px",
-  maxWidth: 980,
+  maxWidth: 1020,
 };
 
 const subtitle: React.CSSProperties = {
-  color: "rgba(255,255,255,.72)",
-  fontSize: "clamp(20px, 4vw, 28px)",
+  color: "rgba(255,255,255,.76)",
+  fontSize: "clamp(20px, 4vw, 29px)",
   lineHeight: 1.35,
-  maxWidth: 860,
+  maxWidth: 920,
   margin: "0 auto 28px",
 };
 
 const primary: React.CSSProperties = {
-  display: "inline-block",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   background: "linear-gradient(135deg, #f4d47b, #9df3bf)",
   color: "#06101e",
   textDecoration: "none",
@@ -89,10 +98,13 @@ const primary: React.CSSProperties = {
   fontWeight: 950,
   fontSize: 17,
   margin: "8px",
+  minHeight: 50,
 };
 
 const secondary: React.CSSProperties = {
-  display: "inline-block",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   color: "white",
   textDecoration: "none",
   border: "1px solid rgba(255,255,255,.22)",
@@ -102,6 +114,7 @@ const secondary: React.CSSProperties = {
   fontSize: 17,
   margin: "8px",
   background: "rgba(255,255,255,.04)",
+  minHeight: 50,
 };
 
 const statRow: React.CSSProperties = {
@@ -133,6 +146,13 @@ const section: React.CSSProperties = {
   padding: 24,
 };
 
+const commandSection: React.CSSProperties = {
+  ...section,
+  border: "1px solid rgba(157,243,191,.24)",
+  background:
+    "linear-gradient(145deg, rgba(157,243,191,.08), rgba(255,255,255,.035))",
+};
+
 const card: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
   background:
@@ -147,13 +167,13 @@ const cardTitle: React.CSSProperties = {
 };
 
 const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.66)",
+  color: "rgba(255,255,255,.68)",
   lineHeight: 1.55,
   fontSize: 16,
 };
 
 const bigLine: React.CSSProperties = {
-  fontSize: "clamp(34px, 8vw, 70px)",
+  fontSize: "clamp(36px, 8vw, 76px)",
   lineHeight: 0.95,
   letterSpacing: -2,
   margin: "0 0 14px",
@@ -170,7 +190,7 @@ const green: React.CSSProperties = {
 const listItem: React.CSSProperties = {
   borderBottom: "1px solid rgba(255,255,255,.1)",
   padding: "14px 0",
-  color: "rgba(255,255,255,.76)",
+  color: "rgba(255,255,255,.78)",
   fontSize: 17,
   lineHeight: 1.45,
 };
@@ -200,6 +220,18 @@ const timeCard: React.CSSProperties = {
   textAlign: "center",
 };
 
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.25)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 800,
+  fontSize: 13,
+  margin: "0 7px 7px 0",
+};
+
 function formatNumber(value: number) {
   return Number(value || 0).toLocaleString("en-US");
 }
@@ -226,6 +258,33 @@ function getTimeLeft() {
   };
 }
 
+function FeatureCard({
+  label,
+  title,
+  text,
+  tags = [],
+}: {
+  label: string;
+  title: string;
+  text: string;
+  tags?: string[];
+}) {
+  return (
+    <div style={card}>
+      <div style={greenEyebrow}>{label}</div>
+      <h3 style={cardTitle}>{title}</h3>
+      <p style={muted}>{text}</p>
+      {tags.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          {tags.map((tag) => (
+            <span key={tag} style={chip}>{tag}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [stats, setStats] = useState({
     members: 0,
@@ -233,6 +292,7 @@ export default function HomePage() {
     saved: 0,
     alerts: 0,
     markets: 6,
+    founders: 0,
   });
 
   const [timeLeft, setTimeLeft] = useState(getTimeLeft());
@@ -242,8 +302,14 @@ export default function HomePage() {
 
     async function loadStats() {
       try {
-        const res = await fetch("/api/public/stats", { cache: "no-store" });
-        const data = await res.json();
+        const [statsRes, founderRes] = await Promise.all([
+          fetch("/api/public/stats", { cache: "no-store" }),
+          fetch("/api/founder/status", { cache: "no-store" }),
+        ]);
+
+        const data = await statsRes.json();
+        const founderData = await founderRes.json();
+
         if (!mounted) return;
 
         setStats({
@@ -252,6 +318,7 @@ export default function HomePage() {
           saved: Number(data?.saved || 0),
           alerts: Number(data?.alerts || 0),
           markets: Number(data?.markets || 6),
+          founders: Number(founderData?.founder?.count || 0),
         });
       } catch {
         // Keep homepage live even if stats are temporarily unavailable.
@@ -273,7 +340,8 @@ export default function HomePage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const founderActive = !timeLeft.expired;
+  const founderActive = !timeLeft.expired && stats.founders < FOUNDER_LIMIT;
+  const founderSlotsLeft = Math.max(0, FOUNDER_LIMIT - stats.founders);
 
   const liveStats = useMemo(
     () => [
@@ -285,12 +353,12 @@ export default function HomePage() {
       {
         label: "DEALS",
         value: stats.deals > 0 ? formatNumber(stats.deals) : "Building",
-        text: "Structured residential, commercial, and land opportunities routed through the system.",
+        text: "Structured residential, commercial, and land opportunities routed through the intelligence engine.",
       },
       {
-        label: "SAVED TARGETS",
-        value: formatNumber(stats.saved),
-        text: "Buy Bucket saves that show real member demand and acquisition interest.",
+        label: "SMART ALERTS",
+        value: formatNumber(stats.alerts),
+        text: "AI-style routing signals generated from deal data, profiles, markets, buy boxes, and member needs.",
       },
       {
         label: "MARKETS",
@@ -303,6 +371,22 @@ export default function HomePage() {
 
   return (
     <main style={page}>
+      <style>{`
+        @media (max-width: 760px) {
+          .vf-home-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .vf-home-actions > * {
+            width: 100%;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+
       <div style={wrap}>
         <header style={topBar}>
           <div style={{ color: "#e8c46b", fontWeight: 900, letterSpacing: 4 }}>
@@ -317,20 +401,23 @@ export default function HomePage() {
         <section style={hero}>
           <img src="/vaultforge-logo.png" alt="VaultForge" style={logo} />
 
-          <div style={eyebrow}>PRIVATE REAL ESTATE COMMAND NETWORK</div>
+          <div style={greenEyebrow}>PRIVATE AI REAL ESTATE INTELLIGENCE NETWORK</div>
 
           <h1 style={title}>
-            Deals. Capital. Operators. <span style={gold}>One private system.</span>
+            The command center for <span style={gold}>deals, capital, operators, and private opportunity.</span>
           </h1>
 
           <p style={subtitle}>
-            VaultForge is the members-only command center for serious real estate players
-            who need private deal flow, funding routes, execution partners, and fast
-            connection to the right people.
+            VaultForge uses AI-powered routing, smart match scoring, member buy boxes, deal rooms,
+            and private network intelligence to move serious real estate opportunities to the people
+            who can actually act on them.
           </p>
 
-          <div>
-            <Link href="/login" style={primary}>{founderActive ? "Secure Founding Access" : "Enter Members Area"}</Link>
+          <div className="vf-home-actions">
+            <Link href="/login" style={primary}>
+              {founderActive ? "Secure Founding Access" : "Request Member Access"}
+            </Link>
+            <Link href="/dashboard" style={secondary}>Enter Member Command Center</Link>
             <Link href="/terms" style={secondary}>Read Member Rules</Link>
           </div>
 
@@ -349,14 +436,13 @@ export default function HomePage() {
           <section style={countdownBox}>
             <div style={eyebrow}>FOUNDING MEMBER WINDOW</div>
             <h2 style={bigLine}>
-              Founding access closes <span style={gold}>May 10.</span>
+              First <span style={green}>50 founders</span> or <span style={gold}>May 15</span> — whichever comes first.
             </h2>
             <p style={{ ...muted, fontSize: 20 }}>
-              Founding Member Access is available until May 10. Join today for
-              <strong style={green}> $49 for your first month</strong>. After the first month,
-              membership renews at <strong style={gold}>$149/month</strong> unless canceled before renewal.
-              After May 10, new member access increases to <strong style={gold}>$99 for the first month</strong>,
-              then <strong style={gold}>$149/month</strong>.
+              Founding members get access for <strong style={green}>$49 for the first month</strong>,
+              then <strong style={gold}>$199/month</strong> unless canceled before renewal.
+              When the first 50 founder slots are claimed or May 15 hits, standard access becomes
+              <strong style={gold}> $99 to join</strong>, then <strong style={gold}>$199/month</strong>.
             </p>
 
             <div style={countdownGrid}>
@@ -378,187 +464,177 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div style={{ marginTop: 20 }}>
-              <Link href="/login" style={primary}>Activate Access — $49 Today</Link>
-              <Link href="/terms" style={secondary}>Review Access Terms</Link>
+            <div style={statRow}>
+              <div style={stat}>
+                <div style={{ ...eyebrow, marginBottom: 8 }}>FOUNDER SLOTS LEFT</div>
+                <div style={{ fontSize: 38, fontWeight: 950 }}>{founderSlotsLeft}</div>
+                <p style={muted}>Founder access closes automatically at 50 members or May 15.</p>
+              </div>
+              <div style={stat}>
+                <div style={{ ...eyebrow, marginBottom: 8 }}>FOUNDERS CLAIMED</div>
+                <div style={{ fontSize: 38, fontWeight: 950 }}>{stats.founders}/{FOUNDER_LIMIT}</div>
+                <p style={muted}>Early members get priority position inside the private network.</p>
+              </div>
+            </div>
+
+            <div className="vf-home-actions" style={{ marginTop: 20 }}>
+              <Link href="/login" style={primary}>Activate Access — $49 First Month</Link>
+              <Link href="/profile" style={secondary}>Build Your Profile</Link>
             </div>
           </section>
         ) : (
           <section style={countdownBox}>
-            <div style={eyebrow}>MEMBER ACCESS</div>
-            <h2 style={bigLine}>Founding access has closed.</h2>
+            <div style={eyebrow}>STANDARD MEMBER ACCESS</div>
+            <h2 style={bigLine}>Founder access has closed.</h2>
             <p style={{ ...muted, fontSize: 20 }}>
-              New member access is now <strong style={gold}>$99 for the first month</strong>,
-              then <strong style={gold}>$149/month</strong> unless canceled before renewal.
+              Standard access is now <strong style={gold}>$99 to join</strong>,
+              then <strong style={gold}>$199/month</strong> unless canceled before renewal.
             </p>
             <Link href="/login" style={primary}>Apply for Member Access</Link>
           </section>
         )}
 
-        <section style={section}>
-          <div style={eyebrow}>LIVE NETWORK INTELLIGENCE</div>
+        <section style={commandSection}>
+          <div style={greenEyebrow}>WHAT VAULTFORGE IS</div>
           <h2 style={bigLine}>
-            The more members use it, <span style={green}>the smarter the network gets.</span>
-          </h2>
-
-          <div style={grid}>
-            <div style={card}>
-              <h3 style={cardTitle}>Member Demand Signals</h3>
-              <p style={muted}>
-                Buy Bucket saves help reveal what members actually want: markets, price ranges,
-                property types, capital needs, and acquisition appetite.
-              </p>
-            </div>
-            <div style={card}>
-              <h3 style={cardTitle}>Deal Room Data</h3>
-              <p style={muted}>
-                Uploaded deal rooms keep photos, numbers, strategy, notes, and next steps organized
-                instead of buried in text chains.
-              </p>
-            </div>
-            <div style={card}>
-              <h3 style={cardTitle}>Routing Signals</h3>
-              <p style={muted}>
-                Deals, member profiles, and saved targets create signals for future alerts,
-                matching, funding routes, and operator connections.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section style={section}>
-          <div style={eyebrow}>WHY VAULTFORGE EXISTS</div>
-          <h2 style={bigLine}>
-            Real estate is messy. <span style={green}>VaultForge makes it executable.</span>
+            Not a listing site. <span style={green}>A private real estate operating system.</span>
           </h2>
           <p style={{ ...muted, fontSize: 20 }}>
-            Most opportunities die because the right buyer, lender, operator, or partner
-            never sees them at the right time. VaultForge turns scattered relationships
-            into a private command system: submit the opportunity, define the need,
-            route it to the right members, and move toward execution.
+            VaultForge is built for people who need speed, access, intelligence, and execution.
+            Members do not just browse. They create deal rooms, train profiles, save targets,
+            receive smart routing alerts, and connect with buyers, lenders, operators, contractors,
+            developers, sellers, and partners.
           </p>
 
           <div style={grid}>
-            <div style={card}>
-              <h3 style={cardTitle}>For Buyers</h3>
-              <p style={muted}>
-                Build your buy box, save opportunities, track markets, and get matched
-                to deals that fit your strategy.
-              </p>
-            </div>
-
-            <div style={card}>
-              <h3 style={cardTitle}>For Lenders</h3>
-              <p style={muted}>
-                See who needs capital, what the asset is, what the strategy is, and where
-                funding can move the deal forward.
-              </p>
-            </div>
-
-            <div style={card}>
-              <h3 style={cardTitle}>For Operators</h3>
-              <p style={muted}>
-                Contractors, developers, and execution partners can connect where real
-                projects need work, speed, and problem solving.
-              </p>
-            </div>
-
-            <div style={card}>
-              <h3 style={cardTitle}>For Deal Makers</h3>
-              <p style={muted}>
-                Wholesalers, investors, and partners can push opportunities into a system
-                built for routing instead of random texting.
-              </p>
-            </div>
+            <FeatureCard
+              label="AI Routing"
+              title="Smart Match Engine"
+              text="The system compares deals against member profiles, markets, project types, strategies, needs, capital, and provider abilities."
+              tags={["Score", "Why Matched", "Routing"]}
+            />
+            <FeatureCard
+              label="Command Center"
+              title="Member Command Center"
+              text="One place for deals, alerts, buy buckets, messages, member network intelligence, and profile-driven routing."
+              tags={["Deals", "Alerts", "Network"]}
+            />
+            <FeatureCard
+              label="Private Network"
+              title="Execution-Focused Members"
+              text="The platform is for serious buyers, lenders, operators, contractors, wholesalers, sellers, developers, and real estate problem solvers."
+              tags={["Private", "Vetted", "Action"]}
+            />
           </div>
         </section>
 
         <section style={section}>
-          <div style={eyebrow}>INSIDE THE MEMBER AREA</div>
-          <h2 style={bigLine}>A command center built for action.</h2>
-
-          <div style={grid}>
-            <div style={card}>
-              <h3 style={cardTitle}>Create Deals</h3>
-              <p style={muted}>
-                Submit residential, commercial, and land opportunities with structured fields
-                built for routing and decision making.
-              </p>
-            </div>
-
-            <div style={card}>
-              <h3 style={cardTitle}>Buy Bucket</h3>
-              <p style={muted}>
-                Save opportunities you want to track. Your saves become demand signals for
-                matching and network intelligence.
-              </p>
-            </div>
-
-            <div style={card}>
-              <h3 style={cardTitle}>Alerts</h3>
-              <p style={muted}>
-                Get notified when a deal, member, market, or need lines up with your profile
-                and business focus.
-              </p>
-            </div>
-
-            <div style={card}>
-              <h3 style={cardTitle}>Messages</h3>
-              <p style={muted}>
-                Keep deal conversations organized instead of buried across texts, DMs, and calls.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section style={section}>
-          <div style={eyebrow}>MEMBER NETWORK</div>
+          <div style={eyebrow}>WHAT MEMBERS GET INSIDE</div>
           <h2 style={bigLine}>
-            Built for <span style={gold}>Georgia, Tennessee, Florida, North Carolina, South Carolina, and Texas.</span>
+            Every section exists to help members <span style={green}>find, route, and execute opportunity.</span>
           </h2>
 
           <div style={grid}>
-            <div style={card}>
-              <h3 style={cardTitle}>Current Focus States</h3>
-              <p style={muted}>
-                GA • TN • FL • NC • SC • TX
-              </p>
-            </div>
-            <div style={card}>
-              <h3 style={cardTitle}>Core Buckets</h3>
-              <p style={muted}>
-                Buyers • Lenders • Contractors • Developers • Operators • Deal Sources
-              </p>
-            </div>
-            <div style={card}>
-              <h3 style={cardTitle}>Deal Types</h3>
-              <p style={muted}>
-                Residential • Commercial • Land • Distress • Capital Needs • Partner Needs
-              </p>
-            </div>
+            <FeatureCard
+              label="Create"
+              title="Deal Rooms"
+              text="Submit residential, commercial, and land opportunities with photos, pricing, strategy, seller situation, repair estimates, notes, and routing fields."
+              tags={["Photos", "Numbers", "Strategy"]}
+            />
+            <FeatureCard
+              label="Alerts"
+              title="AI Smart Alerts"
+              text="See why the system matched a deal to a member, buyer, lender, operator, strategy, or market."
+              tags={["Match Score", "Why Matched", "Confidence"]}
+            />
+            <FeatureCard
+              label="Buy Side"
+              title="Buy Bucket"
+              text="Save opportunities, track targets, and create demand signals that help the platform understand what members actually want."
+              tags={["Watchlist", "Demand", "Targets"]}
+            />
+            <FeatureCard
+              label="Network"
+              title="Member Directory"
+              text="Find members by role, state, project type, strategy, needs, and what they can provide."
+              tags={["Buyers", "Lenders", "Operators"]}
+            />
+            <FeatureCard
+              label="Messaging"
+              title="Deal Communication"
+              text="Keep opportunity conversations and member communications tied to the system instead of scattered across random messages."
+              tags={["Threads", "Contact", "Follow Up"]}
+            />
+            <FeatureCard
+              label="Profile"
+              title="AI Training Profile"
+              text="Members train the engine with markets, roles, buy boxes, project types, strategies, needs, provider abilities, and alert preferences."
+              tags={["Buy Box", "Needs", "Can Provide"]}
+            />
           </div>
         </section>
 
         <section style={section}>
-          <div style={eyebrow}>THE VAULTFORGE DIFFERENCE</div>
-          <div style={listItem}>Private member access instead of public noise.</div>
-          <div style={listItem}>Structured deal intake instead of scattered screenshots.</div>
-          <div style={listItem}>Buy boxes and needs that help route the right opportunity to the right person.</div>
-          <div style={listItem}>AI-assisted summaries and alerts to speed up action.</div>
-          <div style={listItem}>Built around real execution: deals, capital, connections, results.</div>
+          <div style={eyebrow}>WHO WE ARE LOOKING FOR</div>
+          <h2 style={bigLine}>
+            Built for serious real estate players. <span style={gold}>Not spectators.</span>
+          </h2>
+
+          <div style={grid}>
+            {[
+              "Buyers looking for targeted acquisition flow.",
+              "Private lenders and capital sources looking for opportunities.",
+              "Wholesalers and deal sources with real inventory.",
+              "Contractors and operators who can execute projects.",
+              "Developers looking for land, commercial, and value-add plays.",
+              "Sellers and problem-solvers who need routing, capital, or operators.",
+              "Realtors and brokers with access to deal flow and relationships.",
+              "JV partners who can bring money, skill, execution, or access."
+            ].map((item) => (
+              <div key={item} style={card}>
+                <p style={{ ...muted, fontSize: 18, margin: 0 }}>{item}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section style={section}>
+          <div style={eyebrow}>THE AI ADVANTAGE</div>
+          <h2 style={bigLine}>
+            The AI does not just store deals. <span style={green}>It routes opportunity.</span>
+          </h2>
+          <div style={listItem}>Scans live deals against member markets, roles, buy boxes, and strategies.</div>
+          <div style={listItem}>Scores member/deal fit and surfaces confidence signals.</div>
+          <div style={listItem}>Explains why a match appeared, including market fit, asset fit, strategy fit, capital fit, and margin signals.</div>
+          <div style={listItem}>Turns member profiles into a routing engine instead of a static directory.</div>
+          <div style={listItem}>Creates a private intelligence feed that becomes stronger as more members and deals enter the system.</div>
+        </section>
+
+        <section style={section}>
+          <div style={eyebrow}>WHY $199/MONTH MAKES SENSE</div>
+          <h2 style={bigLine}>
+            One useful relationship or routed opportunity can pay for the year.
+          </h2>
+          <p style={{ ...muted, fontSize: 20 }}>
+            VaultForge is not priced like a generic software tool because it is not trying to be one.
+            The value is access, signal, routing, private network density, organized deal intelligence,
+            and speed to the right person. Members are paying for leverage.
+          </p>
         </section>
 
         <section style={{ ...hero, marginTop: 26 }}>
-          <div style={eyebrow}>PRIVATE ACCESS</div>
-          <h2 style={bigLine}>This is not another listing site.</h2>
+          <div style={greenEyebrow}>PRIVATE ACCESS</div>
+          <h2 style={bigLine}>If you need access, speed, capital, operators, or smarter deal flow — this is where you belong.</h2>
           <p style={subtitle}>
-            VaultForge is being built as a private deal-flow and execution operating system.
-            Members do not just browse — they create opportunities, define needs, route signals,
-            and connect with people who can move deals forward.
+            VaultForge is being built as a private AI-powered real estate intelligence network.
+            Members create opportunities, define needs, route signals, and connect with people who can move deals forward.
           </p>
-          <Link href="/login" style={primary}>
-            {founderActive ? "Secure Founding Access — $49 Today" : "Enter Members Area"}
-          </Link>
+          <div className="vf-home-actions">
+            <Link href="/login" style={primary}>
+              {founderActive ? "Secure Founding Access — $49 First Month" : "Apply for Member Access"}
+            </Link>
+            <Link href="/dashboard" style={secondary}>View Member Command Center</Link>
+          </div>
         </section>
       </div>
     </main>
