@@ -24,29 +24,19 @@ function supabaseClient() {
   });
 }
 
-async function safeCount(
-  supabase: any,
-  table: string,
-  filters?: (query: any) => any
-) {
+async function safeCount(supabase: any, table: string) {
   try {
-    let query = supabase.from(table).select("*", {
-      count: "exact",
-      head: true,
-    });
+    const { count } = await supabase
+      .from(table)
+      .select("*", { count: "exact", head: true });
 
-    if (filters) {
-      query = filters(query);
-    }
-
-    const { count } = await query;
     return Number(count || 0);
   } catch {
     return 0;
   }
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const supabase = supabaseClient();
 
@@ -62,36 +52,12 @@ export async function GET(request: Request) {
       });
     }
 
-    const cookieHeader = request.headers.get("cookie") || "";
-    const emailMatch = cookieHeader.match(/vf_email=([^;]+)/i);
-
-    const email = emailMatch?.[1]
-      ? decodeURIComponent(emailMatch[1]).trim().toLowerCase()
-      : "";
-
     const [deals, members, bucket, messages] = await Promise.all([
       safeCount(supabase, "vf_deals"),
       safeCount(supabase, "vf_profiles"),
-      safeCount(
-        supabase,
-        "vf_buy_bucket",
-        email
-          ? (query) => query.eq("member_email", email)
-          : undefined
-      ),
-      safeCount(
-        supabase,
-        "vf_messages",
-        email
-          ? (query) =>
-              query.or(
-                `sender_email.eq.${email},recipient_email.eq.${email}`
-              )
-          : undefined
-      ),
+      safeCount(supabase, "vf_buy_bucket"),
+      safeCount(supabase, "vf_messages"),
     ]);
-
-    const alerts = bucket + messages;
 
     return NextResponse.json({
       ok: true,
@@ -99,7 +65,7 @@ export async function GET(request: Request) {
       members,
       bucket,
       messages,
-      alerts,
+      alerts: bucket + messages,
     });
   } catch (error: any) {
     return NextResponse.json({
