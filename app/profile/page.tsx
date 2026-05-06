@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
+
+const PROFILE_BUCKET = "profile-photo";
 
 const states = [
   "Georgia", "Tennessee", "Florida", "North Carolina", "South Carolina", "Texas",
@@ -148,6 +151,45 @@ function completionScore(form: Record<string, any>) {
   return Math.round((done / required.length) * 100);
 }
 
+
+function safeFileName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function fileExtension(file: File) {
+  const name = file.name || "";
+  const ext = name.includes(".") ? name.split(".").pop() || "" : "";
+  if (ext) return ext.toLowerCase();
+
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  if (file.type === "image/gif") return "gif";
+  return "jpg";
+}
+
+function supabaseBrowserClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    "";
+
+  if (!url || !key) {
+    throw new Error("Supabase public environment values are missing.");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
 export default function ProfilePage() {
   const [form, setForm] = useState<Record<string, any>>({
     email: "",
@@ -174,6 +216,7 @@ export default function ProfilePage() {
   const [status, setStatus] = useState("Loading profile...");
   const [saving, setSaving] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const progress = useMemo(() => completionScore(form), [form]);
 
@@ -187,6 +230,66 @@ export default function ProfilePage() {
       update("alert_types", current.filter((item) => item !== type));
     } else {
       update("alert_types", [...current, type]);
+    }
+  }
+
+
+  async function uploadProfilePhoto(file: File) {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setStatus("Choose an image file for your profile photo.");
+      return;
+    }
+
+    const maxSize = 6 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setStatus("Profile photo is too large. Use an image under 6MB.");
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setStatus("Uploading profile photo...");
+
+    try {
+      const email = form.email || getEmail();
+      if (!email || !email.includes("@")) {
+        throw new Error("Add your email before uploading a profile photo.");
+      }
+
+      const supabase = supabaseBrowserClient();
+      const ext = fileExtension(file);
+      const cleanBase = safeFileName(email.split("@")[0] || "member");
+      const path = `${safeFileName(email)}/${cleanBase}-${Date.now()}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from(PROFILE_BUCKET)
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: file.type || `image/${ext}`,
+        });
+
+      if (error) {
+        throw new Error(error.message || "Profile photo upload failed.");
+      }
+
+      const { data } = supabase.storage
+        .from(PROFILE_BUCKET)
+        .getPublicUrl(path);
+
+      const publicUrl = data?.publicUrl || "";
+
+      if (!publicUrl) {
+        throw new Error("Could not get public profile photo URL.");
+      }
+
+      update("profile_photo_url", publicUrl);
+      setStatus("Profile photo uploaded. Click Save Profile to lock it in.");
+    } catch (error: any) {
+      setStatus(error?.message || "Could not upload profile photo.");
+    } finally {
+      setUploadingPhoto(false);
     }
   }
 
@@ -283,6 +386,7 @@ export default function ProfilePage() {
           </p>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/payment" style={ghost}>Payment</Link>
+          <Link href="/logout" style={ghost}>Logout</Link>
         </section>
 
         <section style={{ ...pane, borderColor: complete ? "rgba(157,243,191,.45)" : "rgba(232,196,107,.35)" }}>
@@ -383,13 +487,50 @@ export default function ProfilePage() {
         <section style={pane}>
           <div style={eyebrow}>Profile Photo</div>
           <p style={muted}>
-            For now, use an image URL. Upload-based profile photos can be added after payment lock is finished.
+            Upload a profile photo from your device. After upload, click Save Profile to store it with your member profile.
           </p>
-          <Field label="Profile Photo URL" value={form.profile_photo_url} onChange={(v) => update("profile_photo_url", v)} />
+
+          {form.profile_photo_url && (
+            <div style={{ marginBottom: 16 }}>
+              <img
+                src={form.profile_photo_url}
+                alt="Profile preview"
+                style={{
+                  width: 150,
+                  height: 150,
+                  borderRadius: 999,
+                  objectFit: "cover",
+                  border: "2px solid rgba(157,243,191,.50)",
+                  display: "block",
+                  marginBottom: 12,
+                }}
+              />
+            </div>
+          )}
+
+          <input
+            type="file"
+            accept="image/*"
+            disabled={uploadingPhoto}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) uploadProfilePhoto(file);
+              event.currentTarget.value = "";
+            }}
+            style={{
+              ...input,
+              cursor: uploadingPhoto ? "not-allowed" : "pointer",
+              opacity: uploadingPhoto ? 0.7 : 1,
+            }}
+          />
+
+          <p style={{ ...muted, fontSize: 14, marginTop: 10 }}>
+            {uploadingPhoto ? "Uploading..." : "Accepted: JPG, PNG, WEBP, GIF under 6MB."}
+          </p>
         </section>
 
-        <button type="button" onClick={saveProfile} disabled={saving} style={{ ...btn, width: "100%", fontSize: 22, padding: 18, opacity: saving ? 0.65 : 1 }}>
-          {saving ? "Saving Profile..." : "Save Profile"}
+        <button type="button" onClick={saveProfile} disabled={saving || uploadingPhoto} style={{ ...btn, width: "100%", fontSize: 22, padding: 18, opacity: saving || uploadingPhoto ? 0.65 : 1 }}>
+          {saving ? "Saving Profile..." : uploadingPhoto ? "Uploading Photo..." : "Save Profile"}
         </button>
       </div>
     </main>
@@ -426,4 +567,3 @@ function Text({ label: labelText, value, onChange }: { label: string; value: str
       <textarea style={{ ...input, minHeight: 130, resize: "vertical" }} value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
-}
