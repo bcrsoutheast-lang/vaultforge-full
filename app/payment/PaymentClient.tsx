@@ -65,6 +65,7 @@ const ghost: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.18)",
   background: "rgba(255,255,255,.04)",
   margin: "7px 7px 0 0",
+  cursor: "pointer",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -200,8 +201,12 @@ export default function PaymentClient() {
               <section style={{ ...pane, borderColor: "rgba(232,196,107,.35)" }}>
                 <div style={eyebrow}>Step 2 Payment</div>
                 <h2 style={{ fontSize: 36, margin: "0 0 12px" }}>Founding access: $49 today.</h2>
-                <p style={muted}>Founding Member Access is $49 for the first month. After the first month, membership renews at $149/month unless canceled before renewal.</p>
-                <p style={muted}>After May 10, new member access increases to $99 for the first month, then $149/month.</p>
+                <p style={muted}>
+                  Founding Member Access is $49 for the first month. After the first month, membership renews at $149/month unless canceled before renewal.
+                </p>
+                <p style={muted}>
+                  After May 10, new member access increases to $99 for the first month, then $149/month.
+                </p>
                 <button type="button" style={btn} onClick={startCheckout}>Activate Access — $49 Today</button>
               </section>
             )}
@@ -216,6 +221,11 @@ export default function PaymentClient() {
 
         <section style={pane}>
           <div style={eyebrow}>Billing Terms</div>
-          <p style={muted}>Membership may be canceled before renewal. Access, billing, and cancellation controls will connect to Stripe during the final lock step.</p>
+          <p style={muted}>
+            Membership may be canceled before renewal. Access, billing, and cancellation controls will connect to Stripe during the final lock step.
+          </p>
         </section>
       </div>
+    </main>
+  );
+}
