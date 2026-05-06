@@ -1,329 +1,145 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
 
-const page: React.CSSProperties = {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const shell: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 32%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 30%), linear-gradient(180deg, #030509 0%, #071326 55%, #030509 100%)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.12), transparent 30%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
   color: "white",
+  padding: "40px 18px",
   fontFamily: "Arial, sans-serif",
-  padding: "28px 18px 90px",
 };
 
 const wrap: React.CSSProperties = {
-  maxWidth: 1040,
+  maxWidth: 520,
   margin: "0 auto",
-};
-
-const topBar: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 14,
-  marginBottom: 30,
-};
-
-const navBtn: React.CSSProperties = {
-  color: "white",
-  textDecoration: "none",
-  border: "1px solid rgba(255,255,255,.18)",
-  borderRadius: 999,
-  padding: "11px 16px",
-  fontSize: 14,
-  background: "rgba(255,255,255,.04)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-  gap: 20,
-  alignItems: "stretch",
 };
 
 const card: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.14)",
-  background:
-    "linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.025))",
-  borderRadius: 32,
-  padding: 24,
-  boxShadow: "0 24px 80px rgba(0,0,0,.38)",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: 5,
-  fontWeight: 900,
-  fontSize: 12,
-  marginBottom: 12,
-};
-
-const title: React.CSSProperties = {
-  fontSize: "clamp(44px, 10vw, 84px)",
-  lineHeight: .9,
-  letterSpacing: -3,
-  margin: "0 0 16px",
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.70)",
-  lineHeight: 1.55,
-  fontSize: 17,
-};
-
-const label: React.CSSProperties = {
-  display: "block",
-  color: "rgba(255,255,255,.86)",
-  fontWeight: 900,
-  marginBottom: 8,
-  fontSize: 15,
+  borderRadius: 30,
+  padding: 30,
+  background: "rgba(255,255,255,.04)",
 };
 
 const input: React.CSSProperties = {
   width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.12)",
   color: "white",
-  padding: "15px 15px",
-  fontSize: 16,
-  outline: "none",
-  marginBottom: 14,
+  borderRadius: 18,
+  padding: "16px",
+  fontSize: 18,
+  marginBottom: 18,
 };
 
-const primary: React.CSSProperties = {
+const button: React.CSSProperties = {
   width: "100%",
   border: 0,
   borderRadius: 999,
-  padding: "16px 22px",
-  background: "linear-gradient(135deg, #f4d47b, #9df3bf)",
-  color: "#06101e",
-  fontWeight: 950,
-  fontSize: 17,
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  width: "100%",
-  border: "1px solid rgba(255,255,255,.22)",
-  borderRadius: 999,
-  padding: "16px 22px",
-  background: "rgba(255,255,255,.04)",
-  color: "white",
+  background: "#f1d874",
+  color: "#071326",
+  padding: "18px",
   fontWeight: 900,
-  fontSize: 17,
+  fontSize: 20,
   cursor: "pointer",
 };
 
-function cleanEmail(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function setClientCookie(name: string, value: string, maxAgeSeconds: number) {
-  if (typeof document === "undefined") return;
-
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
-}
-
-export default function LoginPage() {
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("created") === "1") {
-      setMessage("Account created. Log in with your email and password.");
-    }
-  }, []);
-
-  async function submit() {
-    if (busy) return;
-
-    setBusy(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const endpoint = mode === "signup" ? "/api/member/signup" : "/api/member/login";
-      const normalizedEmail = cleanEmail(email);
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: normalizedEmail,
-          password,
-          full_name: fullName,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || data?.details || "Authentication failed.");
-      }
-
-      window.localStorage.setItem("vf_email", normalizedEmail);
-      window.sessionStorage.setItem("vf_email", normalizedEmail);
-      window.localStorage.setItem("vf_member_login", "1");
-      window.sessionStorage.setItem("vf_member_login", "1");
-
-      const maxAge = 60 * 60 * 24 * 7;
-      setClientCookie("vf_email", normalizedEmail, maxAge);
-      setClientCookie("vf_member_login", "1", maxAge);
-
-      setMessage(data?.message || "Success.");
-
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
-
-      window.location.href = data?.redirect_to || "/dashboard";
-    } catch (err: any) {
-      setError(err?.message || "Could not sign in.");
-    } finally {
-      setBusy(false);
-    }
-  }
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string };
+}) {
+  const error = searchParams?.error;
 
   return (
-    <main style={page}>
+    <main style={shell}>
       <div style={wrap}>
-        <header style={topBar}>
-          <Link href="/" style={{ color: "#e8c46b", fontWeight: 900, letterSpacing: 4, textDecoration: "none" }}>
-            VAULTFORGE
-          </Link>
-          <div>
-            <Link href="/" style={navBtn}>Home</Link>{" "}
-            <Link href="/terms" style={navBtn}>Terms</Link>
-          </div>
-        </header>
-
-        <section style={grid}>
-          <div style={card}>
-            <div style={eyebrow}>SECURE MEMBER ACCESS</div>
-            <h1 style={title}>
-              Enter the private command network.
-            </h1>
-            <p style={muted}>
-              VaultForge access is moving to real Supabase Auth. This is step one of securing the platform:
-              real accounts, verified sessions, profile gating, and payment unlock.
-            </p>
-
-            <div style={{
-              border: "1px solid rgba(232,196,107,.24)",
-              background: "rgba(232,196,107,.08)",
-              borderRadius: 24,
-              padding: 18,
-              marginTop: 18,
-            }}>
-              <div style={eyebrow}>FOUNDING ACCESS</div>
-              <p style={{ ...muted, margin: 0 }}>
-                Founding Member Access is $49 for the first month, then renews at $149/month unless canceled before renewal.
-              </p>
-            </div>
+        <div style={card}>
+          <div
+            style={{
+              letterSpacing: 6,
+              color: "#f1d874",
+              fontWeight: 900,
+              marginBottom: 16,
+            }}
+          >
+            VAULTFORGE ACCESS
           </div>
 
-          <div style={card}>
-            <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
-              <button
-                type="button"
-                onClick={() => setMode("login")}
-                style={mode === "login" ? primary : ghost}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("signup")}
-                style={mode === "signup" ? primary : ghost}
-              >
-                Create Login
-              </button>
-            </div>
+          <h1
+            style={{
+              fontSize: "clamp(54px,10vw,88px)",
+              lineHeight: 0.92,
+              margin: "0 0 20px",
+            }}
+          >
+            Member Login
+          </h1>
 
-            {message && (
-              <div style={{
-                border: "1px solid rgba(157,243,191,.35)",
-                background: "rgba(157,243,191,.08)",
-                color: "#9df3bf",
+          <p
+            style={{
+              color: "rgba(255,255,255,.7)",
+              fontSize: 20,
+              lineHeight: 1.5,
+              marginBottom: 28,
+            }}
+          >
+            Secure access to the VaultForge member command center.
+          </p>
+
+          {error && (
+            <div
+              style={{
+                marginBottom: 18,
+                padding: 16,
                 borderRadius: 18,
-                padding: 14,
-                marginBottom: 14,
-                fontWeight: 900,
-              }}>
-                {message}
-              </div>
-            )}
-
-            {error && (
-              <div style={{
-                border: "1px solid rgba(255,110,110,.35)",
-                background: "rgba(255,110,110,.08)",
-                color: "#ffd0d0",
-                borderRadius: 18,
-                padding: 14,
-                marginBottom: 14,
-                fontWeight: 900,
-              }}>
-                {error}
-              </div>
-            )}
-
-            {mode === "signup" && (
-              <>
-                <label style={label}>Full Name</label>
-                <input
-                  style={input}
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  placeholder="Your name"
-                  autoComplete="name"
-                />
-              </>
-            )}
-
-            <label style={label}>Email</label>
-            <input
-              style={input}
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              type="email"
-              autoComplete="email"
-            />
-
-            <label style={label}>Password</label>
-            <input
-              style={input}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Minimum 6 characters"
-              type="password"
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submit();
+                background: "rgba(255,0,0,.12)",
+                border: "1px solid rgba(255,0,0,.25)",
+                color: "#ffb5b5",
               }}
+            >
+              Login failed. Check your credentials and try again.
+            </div>
+          )}
+
+          <form method="POST" action="/api/member/login">
+            <input
+              type="email"
+              name="email"
+              placeholder="Email"
+              required
+              style={input}
             />
 
-            <button type="button" onClick={submit} disabled={busy} style={{ ...primary, opacity: busy ? .65 : 1 }}>
-              {busy ? "Working..." : mode === "signup" ? "Create Secure Login" : "Enter Members Area"}
-            </button>
+            <input
+              type="password"
+              name="password"
+              placeholder="Password"
+              required
+              style={input}
+            />
 
-            <p style={{ ...muted, fontSize: 14, marginTop: 16 }}>
-              After login, the next security step is profile completion, then payment activation, then full member unlock.
-            </p>
+            <button type="submit" style={button}>
+              Access VaultForge
+            </button>
+          </form>
+
+          <div style={{ marginTop: 24 }}>
+            <Link
+              href="/"
+              style={{
+                color: "#9df3bf",
+                textDecoration: "none",
+                fontWeight: 700,
+              }}
+            >
+              ← Back Home
+            </Link>
           </div>
-        </section>
+        </div>
       </div>
     </main>
   );
