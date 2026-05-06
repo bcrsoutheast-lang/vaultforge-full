@@ -41,12 +41,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const state = clean(searchParams.get("state"));
     const role = clean(searchParams.get("role"));
+    const includeRemoved = clean(searchParams.get("includeRemoved")) === "1";
 
     const table = "vf_members";
 
     let queryUrl =
       `${config.url}/rest/v1/${table}` +
-      `?select=id,name,email,state,role,company,bio,buy_box_states,buy_box_types,buy_box_strategies,created_at` +
+      `?select=id,name,email,state,role,company,bio,buy_box_states,buy_box_types,buy_box_strategies,profile_photo_url,is_active,is_suspended,is_deleted,member_status,status,payment_status,created_at,updated_at` +
       `&order=created_at.desc`;
 
     if (state && state !== "All") {
@@ -55,6 +56,10 @@ export async function GET(request: Request) {
 
     if (role && role !== "All") {
       queryUrl += `&role=eq.${encodeFilterValue(role)}`;
+    }
+
+    if (!includeRemoved) {
+      queryUrl += `&or=(is_deleted.is.null,is_deleted.eq.false)`;
     }
 
     const response = await fetch(queryUrl, {
