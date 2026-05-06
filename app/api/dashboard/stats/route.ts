@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export const dynamic = "force-dynamic"; // 🔥 IMPORTANT
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 function supabaseClient() {
@@ -13,7 +13,6 @@ function supabaseClient() {
     "";
 
   if (!url || !key) {
-    // 🚨 DO NOT CRASH BUILD
     return null;
   }
 
@@ -25,41 +24,92 @@ function supabaseClient() {
   });
 }
 
-export async function GET() {
+async function safeCount(
+  supabase: any,
+  table: string,
+  filters?: (query: any) => any
+) {
+  try {
+    let query = supabase.from(table).select("*", {
+      count: "exact",
+      head: true,
+    });
+
+    if (filters) {
+      query = filters(query);
+    }
+
+    const { count } = await query;
+    return Number(count || 0);
+  } catch {
+    return 0;
+  }
+}
+
+export async function GET(request: Request) {
   try {
     const supabase = supabaseClient();
 
     if (!supabase) {
-      // ✅ prevents build crash
       return NextResponse.json({
         ok: true,
-        stats: {
-          deals: 0,
-          members: 0,
-          messages: 0,
-        },
+        deals: 0,
+        members: 0,
+        bucket: 0,
+        messages: 0,
+        alerts: 0,
+        warning: "Supabase environment values missing.",
       });
     }
 
-    const [{ count: deals }, { count: messages }] = await Promise.all([
-      supabase.from("vf_deals").select("*", { count: "exact", head: true }),
-      supabase.from("vf_messages").select("*", { count: "exact", head: true }),
+    const cookieHeader = request.headers.get("cookie") || "";
+    const emailMatch = cookieHeader.match(/vf_email=([^;]+)/i);
+
+    const email = emailMatch?.[1]
+      ? decodeURIComponent(emailMatch[1]).trim().toLowerCase()
+      : "";
+
+    const [deals, members, bucket, messages] = await Promise.all([
+      safeCount(supabase, "vf_deals"),
+      safeCount(supabase, "vf_profiles"),
+      safeCount(
+        supabase,
+        "vf_buy_bucket",
+        email
+          ? (query) => query.eq("member_email", email)
+          : undefined
+      ),
+      safeCount(
+        supabase,
+        "vf_messages",
+        email
+          ? (query) =>
+              query.or(
+                `sender_email.eq.${email},recipient_email.eq.${email}`
+              )
+          : undefined
+      ),
     ]);
+
+    const alerts = bucket + messages;
 
     return NextResponse.json({
       ok: true,
-      stats: {
-        deals: deals || 0,
-        messages: messages || 0,
-      },
+      deals,
+      members,
+      bucket,
+      messages,
+      alerts,
     });
   } catch (error: any) {
     return NextResponse.json({
       ok: true,
-      stats: {
-        deals: 0,
-        messages: 0,
-      },
+      deals: 0,
+      members: 0,
+      bucket: 0,
+      messages: 0,
+      alerts: 0,
+      warning: error?.message || "Dashboard stats failed.",
     });
   }
 }
