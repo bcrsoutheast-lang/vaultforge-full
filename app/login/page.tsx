@@ -13,7 +13,7 @@ const page: React.CSSProperties = {
 };
 
 const wrap: React.CSSProperties = {
-  maxWidth: 1040,
+  maxWidth: 1080,
   margin: "0 auto",
 };
 
@@ -51,17 +51,32 @@ const card: React.CSSProperties = {
   boxShadow: "0 24px 80px rgba(0,0,0,.38)",
 };
 
+const goldCard: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.30)",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 34%), linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.025))",
+  borderRadius: 32,
+  padding: 24,
+  boxShadow: "0 24px 80px rgba(0,0,0,.38)",
+};
+
 const eyebrow: React.CSSProperties = {
   color: "#e8c46b",
   letterSpacing: 5,
   fontWeight: 900,
   fontSize: 12,
   marginBottom: 12,
+  textTransform: "uppercase",
+};
+
+const greenEyebrow: React.CSSProperties = {
+  ...eyebrow,
+  color: "#9df3bf",
 };
 
 const title: React.CSSProperties = {
   fontSize: "clamp(44px, 10vw, 84px)",
-  lineHeight: .9,
+  lineHeight: 0.9,
   letterSpacing: -3,
   margin: "0 0 16px",
 };
@@ -117,6 +132,34 @@ const ghost: React.CSSProperties = {
   cursor: "pointer",
 };
 
+const linkButton: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "white",
+  textDecoration: "none",
+  border: "1px solid rgba(255,255,255,.18)",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 900,
+  background: "rgba(255,255,255,.04)",
+  margin: "8px 8px 0 0",
+};
+
+const stepGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
+  gap: 12,
+  marginTop: 18,
+};
+
+const stepCard: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  background: "rgba(0,0,0,.16)",
+  borderRadius: 20,
+  padding: 16,
+};
+
 function cleanEmail(value: string) {
   return value.trim().toLowerCase();
 }
@@ -132,8 +175,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
     if (params.get("created") === "1") {
       setMessage("Account created. Log in with your email and password.");
+      setMode("login");
+    }
+
+    if (params.get("signup") === "1" || params.get("create") === "1") {
+      setMode("signup");
     }
   }, []);
 
@@ -148,6 +197,18 @@ export default function LoginPage() {
       const endpoint = mode === "signup" ? "/api/member/signup" : "/api/member/login";
       const normalizedEmail = cleanEmail(email);
 
+      if (!normalizedEmail || !normalizedEmail.includes("@")) {
+        throw new Error("Enter a valid email.");
+      }
+
+      if (!password || password.length < 6) {
+        throw new Error("Password must be at least 6 characters.");
+      }
+
+      if (mode === "signup" && !fullName.trim()) {
+        throw new Error("Enter your full name.");
+      }
+
       const res = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -156,7 +217,7 @@ export default function LoginPage() {
         body: JSON.stringify({
           email: normalizedEmail,
           password,
-          full_name: fullName,
+          full_name: fullName.trim(),
         }),
       });
 
@@ -173,6 +234,11 @@ export default function LoginPage() {
 
       setMessage(data?.message || "Success.");
 
+      if (mode === "signup") {
+        window.location.href = data?.redirect_to || "/profile";
+        return;
+      }
+
       window.location.href = data?.redirect_to || "/dashboard";
     } catch (err: any) {
       setError(err?.message || "Could not sign in.");
@@ -183,39 +249,104 @@ export default function LoginPage() {
 
   return (
     <main style={page}>
+      <style>{`
+        @media (max-width: 760px) {
+          .vf-login-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .vf-login-actions > * {
+            width: 100%;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+
       <div style={wrap}>
         <header style={topBar}>
-          <Link href="/" style={{ color: "#e8c46b", fontWeight: 900, letterSpacing: 4, textDecoration: "none" }}>
+          <Link
+            href="/"
+            style={{
+              color: "#e8c46b",
+              fontWeight: 900,
+              letterSpacing: 4,
+              textDecoration: "none",
+            }}
+          >
             VAULTFORGE
           </Link>
+
           <div>
             <Link href="/" style={navBtn}>Home</Link>{" "}
+            <Link href="/apply" style={navBtn}>Access</Link>{" "}
             <Link href="/terms" style={navBtn}>Terms</Link>
           </div>
         </header>
 
         <section style={grid}>
-          <div style={card}>
-            <div style={eyebrow}>SECURE MEMBER ACCESS</div>
+          <div style={goldCard}>
+            <div style={greenEyebrow}>MEMBER ACCESS FLOW</div>
+
             <h1 style={title}>
-              Enter the private command network.
+              Create access first. Then train your AI profile.
             </h1>
-            <p style={muted}>
-              VaultForge access is moving to real Supabase Auth. This is step one of securing the platform:
-              real accounts, verified sessions, profile gating, and payment unlock.
+
+            <p style={{ ...muted, fontSize: 19 }}>
+              VaultForge profiles should be built after account creation. Your login connects your profile,
+              markets, buy box, needs, provider abilities, smart alerts, and future payment status to one member record.
             </p>
 
-            <div style={{
-              border: "1px solid rgba(232,196,107,.24)",
-              background: "rgba(232,196,107,.08)",
-              borderRadius: 24,
-              padding: 18,
-              marginTop: 18,
-            }}>
+            <div style={stepGrid}>
+              <div style={stepCard}>
+                <div style={greenEyebrow}>STEP 1</div>
+                <strong>Create Login</strong>
+                <p style={{ ...muted, marginBottom: 0, fontSize: 14 }}>
+                  Start with email, password, and name.
+                </p>
+              </div>
+
+              <div style={stepCard}>
+                <div style={greenEyebrow}>STEP 2</div>
+                <strong>Train Profile</strong>
+                <p style={{ ...muted, marginBottom: 0, fontSize: 14 }}>
+                  Add markets, roles, buy box, strategy, and alerts.
+                </p>
+              </div>
+
+              <div style={stepCard}>
+                <div style={greenEyebrow}>STEP 3</div>
+                <strong>Unlock Access</strong>
+                <p style={{ ...muted, marginBottom: 0, fontSize: 14 }}>
+                  Payment unlocks full access when Stripe goes live.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                border: "1px solid rgba(232,196,107,.24)",
+                background: "rgba(232,196,107,.08)",
+                borderRadius: 24,
+                padding: 18,
+                marginTop: 18,
+              }}
+            >
               <div style={eyebrow}>FOUNDING ACCESS</div>
               <p style={{ ...muted, margin: 0 }}>
-                Founding Member Access is $49 for the first month, then renews at $149/month unless canceled before renewal.
+                First 50 founders or May 15 — whichever comes first. Founding access is
+                <strong style={{ color: "#9df3bf" }}> $49 for the first month</strong>, then
+                <strong style={{ color: "#e8c46b" }}> $199/month</strong>. After that, standard access is
+                <strong style={{ color: "#e8c46b" }}> $99 to join</strong>, then
+                <strong style={{ color: "#e8c46b" }}> $199/month</strong>.
               </p>
+            </div>
+
+            <div className="vf-login-actions" style={{ marginTop: 16 }}>
+              <Link href="/apply" style={linkButton}>Back To Access Page</Link>
+              <Link href="/dashboard" style={linkButton}>Preview Command Center</Link>
             </div>
           </div>
 
@@ -228,6 +359,7 @@ export default function LoginPage() {
               >
                 Login
               </button>
+
               <button
                 type="button"
                 onClick={() => setMode("signup")}
@@ -238,29 +370,33 @@ export default function LoginPage() {
             </div>
 
             {message && (
-              <div style={{
-                border: "1px solid rgba(157,243,191,.35)",
-                background: "rgba(157,243,191,.08)",
-                color: "#9df3bf",
-                borderRadius: 18,
-                padding: 14,
-                marginBottom: 14,
-                fontWeight: 900,
-              }}>
+              <div
+                style={{
+                  border: "1px solid rgba(157,243,191,.35)",
+                  background: "rgba(157,243,191,.08)",
+                  color: "#9df3bf",
+                  borderRadius: 18,
+                  padding: 14,
+                  marginBottom: 14,
+                  fontWeight: 900,
+                }}
+              >
                 {message}
               </div>
             )}
 
             {error && (
-              <div style={{
-                border: "1px solid rgba(255,110,110,.35)",
-                background: "rgba(255,110,110,.08)",
-                color: "#ffd0d0",
-                borderRadius: 18,
-                padding: 14,
-                marginBottom: 14,
-                fontWeight: 900,
-              }}>
+              <div
+                style={{
+                  border: "1px solid rgba(255,110,110,.35)",
+                  background: "rgba(255,110,110,.08)",
+                  color: "#ffd0d0",
+                  borderRadius: 18,
+                  padding: 14,
+                  marginBottom: 14,
+                  fontWeight: 900,
+                }}
+              >
                 {error}
               </div>
             )}
@@ -301,13 +437,28 @@ export default function LoginPage() {
               }}
             />
 
-            <button type="button" onClick={submit} disabled={busy} style={{ ...primary, opacity: busy ? .65 : 1 }}>
-              {busy ? "Working..." : mode === "signup" ? "Create Secure Login" : "Enter Members Area"}
+            <button
+              type="button"
+              onClick={submit}
+              disabled={busy}
+              style={{ ...primary, opacity: busy ? 0.65 : 1 }}
+            >
+              {busy
+                ? "Working..."
+                : mode === "signup"
+                ? "Create Member Access"
+                : "Enter Member Command Center"}
             </button>
 
             <p style={{ ...muted, fontSize: 14, marginTop: 16 }}>
-              After login, the next security step is profile completion, then payment activation, then full member unlock.
+              After signup, go to Profile to train the AI routing engine. After profile completion,
+              payment activation unlocks full member access when Stripe is connected.
             </p>
+
+            <div className="vf-login-actions" style={{ marginTop: 16 }}>
+              <Link href="/profile" style={linkButton}>Profile After Login</Link>
+              <Link href="/payment" style={linkButton}>Payment Step</Link>
+            </div>
           </div>
         </section>
       </div>
