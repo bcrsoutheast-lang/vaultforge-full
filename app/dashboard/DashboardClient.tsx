@@ -253,6 +253,7 @@ export default function DashboardClient() {
           <div>
             <Link href="/profile" style={ghost}>Profile</Link>
             <Link href="/payment" style={ghost}>Payment</Link>
+            <Link href="/logout" style={ghost}>Logout</Link>
           </div>
         </div>
 
