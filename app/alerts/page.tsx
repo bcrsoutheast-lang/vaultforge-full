@@ -6,6 +6,8 @@ import Link from "next/link";
 type AlertItem = Record<string, any>;
 type Toast = { type: "success" | "error" | "info"; text: string };
 
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
 const shell: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -15,10 +17,7 @@ const shell: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1150,
-  margin: "0 auto",
-};
+const wrap: React.CSSProperties = { maxWidth: 1150, margin: "0 auto" };
 
 const nav: React.CSSProperties = {
   display: "flex",
@@ -69,6 +68,13 @@ const card: React.CSSProperties = {
   marginBottom: 18,
 };
 
+const ownerCard: React.CSSProperties = {
+  ...card,
+  border: "1px solid rgba(232,196,107,.34)",
+  background:
+    "linear-gradient(145deg, rgba(232,196,107,.10), rgba(255,255,255,.03))",
+};
+
 const btn: React.CSSProperties = {
   display: "inline-block",
   background: "#9df3bf",
@@ -80,6 +86,12 @@ const btn: React.CSSProperties = {
   margin: "8px 8px 0 0",
   border: 0,
   cursor: "pointer",
+};
+
+const goldBtn: React.CSSProperties = {
+  ...btn,
+  background: "#f5d978",
+  color: "#061120",
 };
 
 const ghost: React.CSSProperties = {
@@ -127,6 +139,10 @@ function getEmail() {
   )
     .trim()
     .toLowerCase();
+}
+
+function isOwner() {
+  return getEmail() === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
 function clean(value: any, fallback = "") {
@@ -180,6 +196,14 @@ function dealId(item: AlertItem) {
   return clean(item.deal_id || item.project_id || item.property_id || item.related_deal_id);
 }
 
+function scoreLabel(item: AlertItem) {
+  const score = Number(item.score || item.match_score || 0);
+  if (!score) return "";
+  if (score >= 100) return `Elite Match · ${score}`;
+  if (score >= 70) return `Strong Match · ${score}`;
+  return `Signal Score · ${score}`;
+}
+
 function ToastBox({ toast }: { toast: Toast | null }) {
   if (!toast) return null;
 
@@ -226,11 +250,13 @@ export default function AlertsPage() {
   const [items, setItems] = useState<AlertItem[]>([]);
   const [status, setStatus] = useState("Loading alerts...");
   const [workingId, setWorkingId] = useState("");
+  const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [owner, setOwner] = useState(false);
 
   function showToast(next: Toast) {
     setToast(next);
-    window.setTimeout(() => setToast(null), 1800);
+    window.setTimeout(() => setToast(null), 2200);
   }
 
   async function load() {
@@ -257,6 +283,44 @@ export default function AlertsPage() {
       setItems([]);
       setStatus(error?.message || "Could not load alerts.");
       showToast({ type: "error", text: error?.message || "Could not load alerts." });
+    }
+  }
+
+  async function generateSmartAlerts() {
+    const yes = window.confirm("Generate smart match alerts from live deals and members?");
+    if (!yes) return;
+
+    setGenerating(true);
+
+    try {
+      const email = getEmail();
+
+      const res = await fetch("/api/alerts/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+          "x-vf-admin": owner ? "1" : "",
+        },
+        body: JSON.stringify({ email, owner: owner ? "1" : "", min_score: 55 }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Smart generation failed.");
+      }
+
+      showToast({
+        type: "success",
+        text: `Smart engine complete: ${data.inserted || 0} alerts created.`,
+      });
+
+      await load();
+    } catch (error: any) {
+      showToast({ type: "error", text: error?.message || "Smart generation failed." });
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -312,6 +376,7 @@ export default function AlertsPage() {
   }
 
   useEffect(() => {
+    setOwner(isOwner());
     load();
   }, []);
 
@@ -364,6 +429,28 @@ export default function AlertsPage() {
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
         </section>
+
+        {owner && (
+          <section style={ownerCard}>
+            <div style={{ color: "#f5d978", letterSpacing: 5, fontWeight: 900 }}>
+              OWNER SMART ENGINE
+            </div>
+
+            <h2 style={{ fontSize: 36, margin: "12px 0" }}>
+              Generate intelligent routing alerts
+            </h2>
+
+            <p style={{ ...muted, fontSize: 19 }}>
+              Scans live deals and active members, scores market fit, role fit, buy-box fit,
+              asset fit, strategy fit, deal needs, photos, AI summaries, and margin signals.
+              Inserts real alerts into <strong>vf_match_alerts</strong>.
+            </p>
+
+            <button type="button" disabled={generating} onClick={generateSmartAlerts} style={goldBtn}>
+              {generating ? "Generating..." : "Generate Smart Alerts"}
+            </button>
+          </section>
+        )}
 
         <section style={statGrid}>
           <div style={statCard}>
@@ -418,7 +505,7 @@ export default function AlertsPage() {
                     fontWeight: 900,
                   }}
                 >
-                  {alertType(item)} · {item.source_table || "alerts"}
+                  {alertType(item)} · {scoreLabel(item) || item.source_table || "alerts"}
                 </div>
 
                 <h2 style={{ fontSize: 36, margin: "8px 0" }}>
