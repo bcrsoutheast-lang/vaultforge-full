@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Member = {
@@ -16,47 +16,102 @@ type Member = {
   buy_box_strategies: string[] | null;
 };
 
-const STATES = ["All", "Georgia", "Tennessee", "Florida", "North Carolina", "South Carolina", "Texas"];
-const ROLES = ["All", "Buyer", "Lender", "Contractor", "Developer", "Partner"];
+const STATES = [
+  "All",
+  "Georgia",
+  "Tennessee",
+  "Florida",
+  "North Carolina",
+  "South Carolina",
+  "Texas",
+];
+
+const ROLES = [
+  "All",
+  "Buyer",
+  "Lender",
+  "Contractor",
+  "Developer",
+  "Partner",
+];
 
 const shellStyle: React.CSSProperties = {
   minHeight: "100vh",
-  background: "#071326",
+  background:
+    "radial-gradient(circle at top left, rgba(157,243,191,.08), transparent 24%), linear-gradient(180deg,#030509,#071326 60%,#030509)",
   color: "white",
-  padding: "32px 18px 80px",
+  padding: "32px 18px 90px",
   fontFamily: "Arial, sans-serif",
+};
+
+const wrapStyle: React.CSSProperties = {
+  maxWidth: 1250,
+  margin: "0 auto",
 };
 
 const navStyle: React.CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
   gap: 10,
-  marginBottom: 24,
+  marginBottom: 22,
 };
 
 const navLinkStyle: React.CSSProperties = {
   color: "white",
   textDecoration: "none",
-  border: "1px solid rgba(255,255,255,.25)",
+  border: "1px solid rgba(255,255,255,.20)",
   borderRadius: 999,
-  padding: "11px 15px",
-  fontSize: 15,
+  padding: "11px 16px",
+  fontSize: 14,
+  background: "rgba(255,255,255,.04)",
 };
 
 const heroStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.2)",
-  background: "rgba(255,255,255,.05)",
-  borderRadius: 26,
-  padding: 24,
-  marginBottom: 20,
+  border: "1px solid rgba(255,255,255,.15)",
+  background: "linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.03))",
+  borderRadius: 34,
+  padding: 30,
+  marginBottom: 24,
+};
+
+const statGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gap: 14,
+  marginBottom: 22,
+};
+
+const statCard: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.14)",
+  borderRadius: 24,
+  padding: 20,
+  background: "rgba(255,255,255,.04)",
 };
 
 const cardStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.18)",
+  border: "1px solid rgba(255,255,255,.14)",
   background: "rgba(255,255,255,.04)",
-  borderRadius: 22,
-  padding: 20,
-  marginBottom: 16,
+  borderRadius: 28,
+  padding: 24,
+  marginBottom: 18,
+};
+
+const stateGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))",
+  gap: 12,
+  marginBottom: 22,
+};
+
+const stateButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.16)",
+  background: "rgba(255,255,255,.05)",
+  borderRadius: 20,
+  padding: "16px 12px",
+  cursor: "pointer",
+  color: "white",
+  fontWeight: 800,
+  textAlign: "center",
 };
 
 const inputStyle: React.CSSProperties = {
@@ -64,23 +119,11 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
   background: "rgba(255,255,255,.08)",
   color: "white",
-  border: "1px solid rgba(255,255,255,.25)",
-  borderRadius: 16,
-  padding: "14px 16px",
-  fontSize: 17,
+  border: "1px solid rgba(255,255,255,.20)",
+  borderRadius: 18,
+  padding: "15px 16px",
+  fontSize: 16,
   marginBottom: 14,
-};
-
-const buttonStyle: React.CSSProperties = {
-  border: 0,
-  background: "#9df3bf",
-  color: "#071326",
-  borderRadius: 999,
-  padding: "12px 15px",
-  fontWeight: 800,
-  cursor: "pointer",
-  marginRight: 8,
-  marginTop: 10,
 };
 
 const pillStyle: React.CSSProperties = {
@@ -88,27 +131,23 @@ const pillStyle: React.CSSProperties = {
   color: "#9df3bf",
   border: "1px solid rgba(157,243,191,.35)",
   borderRadius: 999,
-  padding: "7px 11px",
+  padding: "7px 12px",
   fontSize: 12,
-  letterSpacing: 1.1,
-  marginRight: 7,
+  letterSpacing: 1,
+  marginRight: 8,
   marginBottom: 8,
 };
 
-function cleanError(value: string) {
-  if (!value) return "";
-  const lower = value.toLowerCase();
-  if (
-    lower.includes("supabase") ||
-    lower.includes("pgrst") ||
-    lower.includes("violates") ||
-    lower.includes("schema") ||
-    lower.includes("failed to fetch")
-  ) {
-    return "Something did not save correctly. Refresh and try again.";
-  }
-  return value;
-}
+const actionStyle: React.CSSProperties = {
+  display: "inline-block",
+  background: "#9df3bf",
+  color: "#071326",
+  textDecoration: "none",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 900,
+  marginTop: 14,
+};
 
 function Nav() {
   return (
@@ -121,49 +160,75 @@ function Nav() {
       <Link href="/alerts" style={navLinkStyle}>Alerts</Link>
       <Link href="/messages" style={navLinkStyle}>Messages</Link>
       <Link href="/network" style={navLinkStyle}>Network</Link>
+      <Link href="/logout" style={navLinkStyle}>Logout</Link>
     </nav>
   );
 }
 
 function TagList({ values }: { values?: string[] | null }) {
   if (!values || values.length === 0) return null;
+
   return (
-    <div style={{ marginTop: 10 }}>
-      {values.map((v) => (
-        <span key={v} style={pillStyle}>{v}</span>
+    <div style={{ marginTop: 12 }}>
+      {values.map((value) => (
+        <span key={value} style={pillStyle}>{value}</span>
       ))}
     </div>
   );
 }
 
+function cleanError(value: string) {
+  if (!value) return "";
+
+  const lower = value.toLowerCase();
+
+  if (
+    lower.includes("supabase") ||
+    lower.includes("schema") ||
+    lower.includes("failed")
+  ) {
+    return "Could not load member network.";
+  }
+
+  return value;
+}
+
 export default function NetworkPage() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [stateFilter, setStateFilter] = useState("All");
-  const [roleFilter, setRoleFilter] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [stateFilter, setStateFilter] = useState("All");
+  const [roleFilter, setRoleFilter] = useState("All");
 
   async function loadMembers(nextState = stateFilter, nextRole = roleFilter) {
     setLoading(true);
     setError("");
 
-    const params = new URLSearchParams();
-    if (nextState !== "All") params.set("state", nextState);
-    if (nextRole !== "All") params.set("role", nextRole);
-
     try {
-      const res = await fetch(`/api/network/list?${params.toString()}`, { cache: "no-store" });
+      const params = new URLSearchParams();
+
+      if (nextState !== "All") {
+        params.set("state", nextState);
+      }
+
+      if (nextRole !== "All") {
+        params.set("role", nextRole);
+      }
+
+      const res = await fetch(`/api/network/list?${params.toString()}`, {
+        cache: "no-store",
+      });
+
       const data = await res.json();
 
       if (!res.ok) {
-        setError(cleanError(data?.error || data?.details || "Could not load network."));
-        setMembers([]);
-      } else {
-        setMembers(data.members || []);
+        throw new Error(data?.error || data?.details || "Could not load members.");
       }
-    } catch {
-      setError("Could not load network. Refresh and try again.");
+
+      setMembers(data?.members || []);
+    } catch (error: any) {
       setMembers([]);
+      setError(cleanError(error?.message || "Could not load network."));
     }
 
     setLoading(false);
@@ -173,81 +238,203 @@ export default function NetworkPage() {
     loadMembers();
   }, []);
 
+  const totalMembers = useMemo(() => members.length, [members]);
+
   return (
     <main style={shellStyle}>
-      <Nav />
+      <div style={wrapStyle}>
+        <Nav />
 
-      <section style={heroStyle}>
-        <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>VAULTFORGE NETWORK</p>
-        <h1 style={{ fontSize: 50, lineHeight: 1, margin: "10px 0 18px" }}>Member Directory</h1>
-        <p style={{ color: "rgba(255,255,255,.72)", fontSize: 20, lineHeight: 1.45 }}>
-          Buyers, lenders, contractors, developers, and partners across your locked states.
-        </p>
-      </section>
+        <section style={heroStyle}>
+          <div
+            style={{
+              color: "#9df3bf",
+              letterSpacing: 5,
+              fontWeight: 900,
+              marginBottom: 12,
+            }}
+          >
+            VAULTFORGE NETWORK
+          </div>
 
-      <section style={cardStyle}>
-        <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>State</label>
-        <select
-          value={stateFilter}
-          onChange={(e) => {
-            setStateFilter(e.target.value);
-            loadMembers(e.target.value, roleFilter);
-          }}
-          style={inputStyle}
-        >
-          {STATES.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
+          <h1
+            style={{
+              fontSize: "clamp(54px,10vw,96px)",
+              lineHeight: 0.9,
+              margin: "0 0 16px",
+            }}
+          >
+            Member Command Directory
+          </h1>
 
-        <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>Role</label>
-        <select
-          value={roleFilter}
-          onChange={(e) => {
-            setRoleFilter(e.target.value);
-            loadMembers(stateFilter, e.target.value);
-          }}
-          style={inputStyle}
-        >
-          {ROLES.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-      </section>
+          <p
+            style={{
+              color: "rgba(255,255,255,.72)",
+              fontSize: 22,
+              lineHeight: 1.5,
+              maxWidth: 900,
+            }}
+          >
+            Buyers, lenders, contractors, developers, operators, and partners
+            across your target states and deal flow network.
+          </p>
+        </section>
 
-      {loading && <section style={cardStyle}>Loading network...</section>}
-      {error && <section style={{ ...cardStyle, color: "#ffd0d0" }}>{error}</section>}
+        <section style={statGrid}>
+          <div style={statCard}>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Members</div>
+            <div style={{ fontSize: 46, fontWeight: 900 }}>{totalMembers}</div>
+          </div>
 
-      {!loading && !error && members.length === 0 && (
+          <div style={statCard}>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Current State</div>
+            <div style={{ fontSize: 26, fontWeight: 900 }}>{stateFilter}</div>
+          </div>
+
+          <div style={statCard}>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Role Filter</div>
+            <div style={{ fontSize: 26, fontWeight: 900 }}>{roleFilter}</div>
+          </div>
+        </section>
+
         <section style={cardStyle}>
-          <h2>No matching members yet.</h2>
-          <p style={{ color: "rgba(255,255,255,.68)" }}>
-            Try another state or role, or complete your profile to add yourself to the network.
-          </p>
-          <Link href="/profile" style={navLinkStyle}>Complete Profile</Link>
-        </section>
-      )}
+          <h2 style={{ marginTop: 0 }}>Target States</h2>
 
-      {!loading && !error && members.map((m) => (
-        <section key={m.id} style={cardStyle}>
-          <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>
-            {m.state || "Unknown"} • {m.role || "Member"}
-          </p>
-          <h2 style={{ fontSize: 34, margin: "0 0 8px" }}>{m.name || "Unnamed Member"}</h2>
-          {m.company && (
-            <h3 style={{ color: "rgba(255,255,255,.7)", margin: "0 0 14px" }}>{m.company}</h3>
-          )}
-          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.45 }}>
-            {m.bio || "No bio yet."}
-          </p>
-          <TagList values={m.buy_box_states} />
-          <TagList values={m.buy_box_types} />
-          <TagList values={m.buy_box_strategies} />
-          <a href={`mailto:${m.email}`} style={{ ...buttonStyle, display: "inline-block", textDecoration: "none" }}>
-            Message
-          </a>
+          <div style={stateGrid}>
+            {STATES.map((state) => (
+              <button
+                key={state}
+                type="button"
+                style={{
+                  ...stateButtonStyle,
+                  border:
+                    stateFilter === state
+                      ? "1px solid rgba(157,243,191,.65)"
+                      : stateButtonStyle.border,
+                  background:
+                    stateFilter === state
+                      ? "rgba(157,243,191,.12)"
+                      : stateButtonStyle.background,
+                }}
+                onClick={() => {
+                  setStateFilter(state);
+                  loadMembers(state, roleFilter);
+                }}
+              >
+                {state}
+              </button>
+            ))}
+          </div>
+
+          <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>
+            Filter By Role
+          </label>
+
+          <select
+            value={roleFilter}
+            onChange={(event) => {
+              setRoleFilter(event.target.value);
+              loadMembers(stateFilter, event.target.value);
+            }}
+            style={inputStyle}
+          >
+            {ROLES.map((role) => (
+              <option key={role}>{role}</option>
+            ))}
+          </select>
         </section>
-      ))}
+
+        {loading && (
+          <section style={cardStyle}>
+            Loading member network...
+          </section>
+        )}
+
+        {error && (
+          <section style={{ ...cardStyle, color: "#ffd0d0" }}>
+            {error}
+          </section>
+        )}
+
+        {!loading && !error && members.length === 0 && (
+          <section style={cardStyle}>
+            <h2>No matching members yet.</h2>
+
+            <p style={{ color: "rgba(255,255,255,.72)" }}>
+              Try another state or role filter.
+            </p>
+          </section>
+        )}
+
+        {!loading &&
+          !error &&
+          members.map((member) => (
+            <section key={member.id} style={cardStyle}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 18,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      color: "#9df3bf",
+                      fontWeight: 900,
+                      letterSpacing: 3,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {member.state || "Unknown"} • {member.role || "Member"}
+                  </div>
+
+                  <h2
+                    style={{
+                      fontSize: 38,
+                      margin: "0 0 8px",
+                    }}
+                  >
+                    {member.name || "Unnamed Member"}
+                  </h2>
+
+                  {member.company && (
+                    <h3
+                      style={{
+                        color: "rgba(255,255,255,.68)",
+                        margin: "0 0 14px",
+                      }}
+                    >
+                      {member.company}
+                    </h3>
+                  )}
+
+                  <p
+                    style={{
+                      color: "rgba(255,255,255,.74)",
+                      lineHeight: 1.5,
+                      fontSize: 18,
+                    }}
+                  >
+                    {member.bio || "No bio yet."}
+                  </p>
+
+                  <TagList values={member.buy_box_states} />
+                  <TagList values={member.buy_box_types} />
+                  <TagList values={member.buy_box_strategies} />
+
+                  <a
+                    href={`mailto:${member.email}`}
+                    style={actionStyle}
+                  >
+                    Contact Member
+                  </a>
+                </div>
+              </div>
+            </section>
+          ))}
+      </div>
     </main>
   );
 }
