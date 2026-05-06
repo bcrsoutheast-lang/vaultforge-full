@@ -7,12 +7,29 @@ import { createClient } from "@supabase/supabase-js";
 const PROFILE_BUCKET = "profile-photo";
 
 const states = [
-  "Georgia", "Tennessee", "Florida", "North Carolina", "South Carolina", "Texas",
-  "Alabama", "California", "New York", "Ohio", "Pennsylvania", "Other"
+  "Georgia",
+  "Tennessee",
+  "Florida",
+  "North Carolina",
+  "South Carolina",
+  "Texas",
+  "Alabama",
+  "California",
+  "New York",
+  "Ohio",
+  "Pennsylvania",
+  "Other",
 ];
 
 const memberTypes = [
-  "Buyer", "Lender", "Contractor", "Wholesaler", "Developer", "Operator", "Deal Source", "Investor"
+  "Buyer",
+  "Lender",
+  "Contractor",
+  "Wholesaler",
+  "Developer",
+  "Operator",
+  "Deal Source",
+  "Investor",
 ];
 
 const alertTypeOptions = [
@@ -135,13 +152,19 @@ function splitList(value: any) {
 
 function arrayValue(value: any): string[] {
   if (Array.isArray(value)) return value.map(String);
+
   if (typeof value === "string" && value.trim()) {
     try {
       const parsed = JSON.parse(value);
       if (Array.isArray(parsed)) return parsed.map(String);
     } catch {}
-    return value.split(",").map((x) => x.trim()).filter(Boolean);
+
+    return value
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
+
   return [];
 }
 
@@ -150,7 +173,6 @@ function completionScore(form: Record<string, any>) {
   const done = required.filter((key) => String(form[key] || "").trim()).length;
   return Math.round((done / required.length) * 100);
 }
-
 
 function safeFileName(value: string) {
   return value
@@ -163,11 +185,12 @@ function safeFileName(value: string) {
 function fileExtension(file: File) {
   const name = file.name || "";
   const ext = name.includes(".") ? name.split(".").pop() || "" : "";
-  if (ext) return ext.toLowerCase();
 
+  if (ext) return ext.toLowerCase();
   if (file.type === "image/png") return "png";
   if (file.type === "image/webp") return "webp";
   if (file.type === "image/gif") return "gif";
+
   return "jpg";
 }
 
@@ -213,6 +236,7 @@ export default function ProfilePage() {
       "Funding needed",
     ],
   });
+
   const [status, setStatus] = useState("Loading profile...");
   const [saving, setSaving] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -225,14 +249,19 @@ export default function ProfilePage() {
   }
 
   function toggleAlertType(type: string) {
-    const current: string[] = Array.isArray(form.alert_types) ? form.alert_types : [];
+    const current: string[] = Array.isArray(form.alert_types)
+      ? form.alert_types
+      : [];
+
     if (current.includes(type)) {
-      update("alert_types", current.filter((item) => item !== type));
+      update(
+        "alert_types",
+        current.filter((item) => item !== type)
+      );
     } else {
       update("alert_types", [...current, type]);
     }
   }
-
 
   async function uploadProfilePhoto(file: File) {
     if (!file) return;
@@ -243,6 +272,7 @@ export default function ProfilePage() {
     }
 
     const maxSize = 6 * 1024 * 1024;
+
     if (file.size > maxSize) {
       setStatus("Profile photo is too large. Use an image under 6MB.");
       return;
@@ -253,6 +283,7 @@ export default function ProfilePage() {
 
     try {
       const email = form.email || getEmail();
+
       if (!email || !email.includes("@")) {
         throw new Error("Add your email before uploading a profile photo.");
       }
@@ -274,10 +305,7 @@ export default function ProfilePage() {
         throw new Error(error.message || "Profile photo upload failed.");
       }
 
-      const { data } = supabase.storage
-        .from(PROFILE_BUCKET)
-        .getPublicUrl(path);
-
+      const { data } = supabase.storage.from(PROFILE_BUCKET).getPublicUrl(path);
       const publicUrl = data?.publicUrl || "";
 
       if (!publicUrl) {
@@ -295,12 +323,14 @@ export default function ProfilePage() {
 
   async function loadProfile() {
     setStatus("Loading profile...");
+
     try {
       const email = getEmail();
       const res = await fetch(`/api/profile/me?email=${encodeURIComponent(email)}`, {
         cache: "no-store",
         headers: { "x-vf-email": email },
       });
+
       const data = await res.json();
       const profile = data?.profile || {};
 
@@ -335,6 +365,7 @@ export default function ProfilePage() {
   async function saveProfile() {
     setSaving(true);
     setStatus("Saving profile...");
+
     try {
       const email = form.email || getEmail();
       const res = await fetch("/api/profile/save", {
@@ -360,7 +391,12 @@ export default function ProfilePage() {
       }
 
       setComplete(Boolean(data?.profile_complete));
-      setStatus(data?.profile_complete ? "Profile complete. Payment step is ready." : "Profile saved. Complete required fields to unlock payment step.");
+      setStatus(
+        data?.profile_complete
+          ? "Profile complete. Payment step is ready."
+          : "Profile saved. Complete required fields to unlock payment step."
+      );
+
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error: any) {
       setStatus(error?.message || "Could not save profile.");
@@ -378,7 +414,13 @@ export default function ProfilePage() {
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>Member Profile</div>
-          <h1 style={{ fontSize: "clamp(54px, 12vw, 96px)", lineHeight: 0.88, margin: "0 0 18px" }}>
+          <h1
+            style={{
+              fontSize: "clamp(54px, 12vw, 96px)",
+              lineHeight: 0.88,
+              margin: "0 0 18px",
+            }}
+          >
             Profile, routing, alerts.
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
@@ -389,16 +431,44 @@ export default function ProfilePage() {
           <Link href="/logout" style={ghost}>Logout</Link>
         </section>
 
-        <section style={{ ...pane, borderColor: complete ? "rgba(157,243,191,.45)" : "rgba(232,196,107,.35)" }}>
+        <section
+          style={{
+            ...pane,
+            borderColor: complete
+              ? "rgba(157,243,191,.45)"
+              : "rgba(232,196,107,.35)",
+          }}
+        >
           <div style={eyebrow}>Profile Progress</div>
           <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>
             {complete ? "Complete ✓" : `${progress}% complete`}
           </h2>
-          <div style={{ width: "100%", height: 14, borderRadius: 999, background: "rgba(255,255,255,.08)", overflow: "hidden", marginBottom: 14 }}>
-            <div style={{ width: `${progress}%`, height: "100%", background: complete ? "#9df3bf" : "#f5d978" }} />
+          <div
+            style={{
+              width: "100%",
+              height: 14,
+              borderRadius: 999,
+              background: "rgba(255,255,255,.08)",
+              overflow: "hidden",
+              marginBottom: 14,
+            }}
+          >
+            <div
+              style={{
+                width: `${progress}%`,
+                height: "100%",
+                background: complete ? "#9df3bf" : "#f5d978",
+              }}
+            />
           </div>
           {status && (
-            <p style={{ margin: 0, color: complete ? "#9df3bf" : "#e8c46b", fontWeight: 900 }}>
+            <p
+              style={{
+                margin: 0,
+                color: complete ? "#9df3bf" : "#e8c46b",
+                fontWeight: 900,
+              }}
+            >
               {status}
             </p>
           )}
@@ -407,13 +477,20 @@ export default function ProfilePage() {
 
         <section style={pane}>
           <div style={eyebrow}>Required Fields</div>
-          <p style={muted}>Required to move into payment-ready status: name, phone, role, city, state, and email.</p>
+          <p style={muted}>
+            Required to move into payment-ready status: name, phone, role, city, state, and email.
+          </p>
           <div style={grid}>
             <Field label="Email" value={form.email} onChange={(v) => update("email", v)} />
             <Field label="Full Name" value={form.full_name} onChange={(v) => update("full_name", v)} />
             <Field label="Phone" value={form.phone} onChange={(v) => update("phone", v)} />
             <Field label="Company" value={form.company} onChange={(v) => update("company", v)} />
-            <Field label="Primary Role" value={form.role} onChange={(v) => update("role", v)} placeholder="Buyer, lender, investor, contractor..." />
+            <Field
+              label="Primary Role"
+              value={form.role}
+              onChange={(v) => update("role", v)}
+              placeholder="Buyer, lender, investor, contractor..."
+            />
             <Field label="City" value={form.city} onChange={(v) => update("city", v)} />
             <Select label="State" value={form.state} onChange={(v) => update("state", v)} options={states} />
           </div>
@@ -422,10 +499,30 @@ export default function ProfilePage() {
         <section style={pane}>
           <div style={eyebrow}>Network Fit</div>
           <div style={grid}>
-            <Select label="Primary Member Type" value={form.member_types} onChange={(v) => update("member_types", v)} options={memberTypes} />
-            <Field label="Markets" value={form.markets} onChange={(v) => update("markets", v)} placeholder="Atlanta, Nashville, Tampa..." />
-            <Field label="Buy Box / Focus" value={form.buy_box} onChange={(v) => update("buy_box", v)} placeholder="SFR flips, land, commercial..." />
-            <Field label="Funding Capacity" value={form.funding_capacity} onChange={(v) => update("funding_capacity", v)} placeholder="$250k, $1M+, private lending..." />
+            <Select
+              label="Primary Member Type"
+              value={form.member_types}
+              onChange={(v) => update("member_types", v)}
+              options={memberTypes}
+            />
+            <Field
+              label="Markets"
+              value={form.markets}
+              onChange={(v) => update("markets", v)}
+              placeholder="Atlanta, Nashville, Tampa..."
+            />
+            <Field
+              label="Buy Box / Focus"
+              value={form.buy_box}
+              onChange={(v) => update("buy_box", v)}
+              placeholder="SFR flips, land, commercial..."
+            />
+            <Field
+              label="Funding Capacity"
+              value={form.funding_capacity}
+              onChange={(v) => update("funding_capacity", v)}
+              placeholder="$250k, $1M+, private lending..."
+            />
           </div>
           <div style={{ marginTop: 14 }}>
             <Text label="Strategy / What You Need" value={form.strategy} onChange={(v) => update("strategy", v)} />
@@ -457,13 +554,19 @@ export default function ProfilePage() {
             <div style={label}>Alert Types</div>
             <div style={{ display: "grid", gap: 10 }}>
               {alertTypeOptions.map((type) => {
-                const checked = Array.isArray(form.alert_types) && form.alert_types.includes(type);
+                const checked =
+                  Array.isArray(form.alert_types) && form.alert_types.includes(type);
+
                 return (
                   <label
                     key={type}
                     style={{
-                      border: checked ? "1px solid rgba(157,243,191,.45)" : "1px solid rgba(255,255,255,.13)",
-                      background: checked ? "rgba(157,243,191,.08)" : "rgba(255,255,255,.035)",
+                      border: checked
+                        ? "1px solid rgba(157,243,191,.45)"
+                        : "1px solid rgba(255,255,255,.13)",
+                      background: checked
+                        ? "rgba(157,243,191,.08)"
+                        : "rgba(255,255,255,.035)",
                       borderRadius: 18,
                       padding: 14,
                       cursor: "pointer",
@@ -529,7 +632,18 @@ export default function ProfilePage() {
           </p>
         </section>
 
-        <button type="button" onClick={saveProfile} disabled={saving || uploadingPhoto} style={{ ...btn, width: "100%", fontSize: 22, padding: 18, opacity: saving || uploadingPhoto ? 0.65 : 1 }}>
+        <button
+          type="button"
+          onClick={saveProfile}
+          disabled={saving || uploadingPhoto}
+          style={{
+            ...btn,
+            width: "100%",
+            fontSize: 22,
+            padding: 18,
+            opacity: saving || uploadingPhoto ? 0.65 : 1,
+          }}
+        >
           {saving ? "Saving Profile..." : uploadingPhoto ? "Uploading Photo..." : "Save Profile"}
         </button>
       </div>
@@ -537,33 +651,77 @@ export default function ProfilePage() {
   );
 }
 
-function Field({ label: labelText, value, onChange, placeholder = "" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+function Field({
+  label: labelText,
+  value,
+  onChange,
+  placeholder = "",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
   return (
     <div>
       <label style={label}>{labelText}</label>
-      <input style={input} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <input
+        style={input}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 }
 
-function Select({ label: labelText, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+function Select({
+  label: labelText,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
   return (
     <div>
       <label style={label}>{labelText}</label>
-      <select style={input} value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        style={input}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
         <option value="" style={{ color: "#111" }}>Select</option>
         {options.map((option) => (
-          <option key={option} value={option} style={{ color: "#111" }}>{option}</option>
+          <option key={option} value={option} style={{ color: "#111" }}>
+            {option}
+          </option>
         ))}
       </select>
     </div>
   );
 }
 
-function Text({ label: labelText, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function Text({
+  label: labelText,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div>
       <label style={label}>{labelText}</label>
-      <textarea style={{ ...input, minHeight: 130, resize: "vertical" }} value={value} onChange={(event) => onChange(event.target.value)} />
+      <textarea
+        style={{ ...input, minHeight: 130, resize: "vertical" }}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
+}
