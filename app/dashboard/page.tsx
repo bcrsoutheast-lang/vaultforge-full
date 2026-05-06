@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
 type Stats = {
   deals: number;
   members: number;
@@ -10,6 +12,15 @@ type Stats = {
   messages: number;
   alerts: number;
   warning?: string;
+  admin?: {
+    owner: boolean;
+    pendingDeals: number;
+    archivedDeals: number;
+    lockedMembers: number;
+    paymentRequiredMembers: number;
+    activeMembers: number;
+  };
+  sources?: Record<string, string>;
 };
 
 type Access = {
@@ -81,6 +92,12 @@ const ghost: React.CSSProperties = {
   margin: "6px 6px 0 0",
 };
 
+const danger: React.CSSProperties = {
+  ...ghost,
+  border: "1px solid rgba(255,120,120,.38)",
+  color: "#ffd0d0",
+};
+
 const topAccount: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -113,6 +130,10 @@ function getEmail() {
   )
     .trim()
     .toLowerCase();
+}
+
+function isOwnerEmail(email: string) {
+  return email.trim().toLowerCase() === OWNER_EMAIL;
 }
 
 function FounderCountdown() {
@@ -157,20 +178,21 @@ function StatPane({ label, value, detail }: { label: string; value: number; deta
   );
 }
 
-function AccessNotice({ access }: { access: Access | null }) {
-  if (!access) return null;
-
-  if (access.owner) {
+function AccessNotice({ access, owner }: { access: Access | null; owner: boolean }) {
+  if (owner) {
     return (
       <section style={{ ...hero, borderColor: "rgba(157,243,191,.35)" }}>
         <div style={{ ...eyebrow, color: "#9df3bf" }}>Owner Bypass Active</div>
         <p style={{ ...muted, fontSize: 18 }}>
-          You are not locked out. Owner access remains open while payment/profile lock is being prepared.
+          This is your owner/admin view. Members should not see admin controls.
         </p>
         <Link href="/profile" style={btn}>Edit Profile / Alerts</Link>
+        <Link href="/admin" style={ghost}>Admin Home</Link>
       </section>
     );
   }
+
+  if (!access) return null;
 
   if (!access.profile_complete) {
     return (
@@ -198,6 +220,55 @@ function AccessNotice({ access }: { access: Access | null }) {
   return null;
 }
 
+
+function OwnerAdminPanel({ stats }: { stats: Stats }) {
+  const admin = stats.admin || {
+    owner: false,
+    pendingDeals: 0,
+    archivedDeals: 0,
+    lockedMembers: 0,
+    paymentRequiredMembers: 0,
+    activeMembers: 0,
+  };
+
+  return (
+    <section style={{ ...hero, borderColor: "rgba(232,196,107,.42)" }}>
+      <div style={eyebrow}>Owner / Soft Admin Controls</div>
+      <h2 style={{ fontSize: 40, lineHeight: 1, margin: "0 0 12px" }}>
+        Control center
+      </h2>
+      <p style={muted}>
+        These controls are for you only. Normal members should not see delete, archive, approval, member status, or global review tools.
+      </p>
+
+      <section style={grid}>
+        <StatPane label="Pending Deals" value={admin.pendingDeals} detail="Deals that may need review." />
+        <StatPane label="Archived Deals" value={admin.archivedDeals} detail="Deals hidden from active flow." />
+        <StatPane label="Active Members" value={admin.activeMembers} detail="Members currently marked active." />
+        <StatPane label="Locked Members" value={admin.lockedMembers} detail="Members locked or incomplete." />
+        <StatPane label="Payment Required" value={admin.paymentRequiredMembers} detail="Members waiting on payment." />
+      </section>
+
+      <div style={{ marginTop: 16 }}>
+        <div style={{ ...eyebrow, marginBottom: 6 }}>Admin Navigation</div>
+        <Link href="/admin" style={btn}>Admin Home</Link>
+        <Link href="/projects" style={ghost}>Review Deals</Link>
+        <Link href="/network" style={ghost}>Manage Members</Link>
+        <Link href="/messages" style={ghost}>All Messages</Link>
+        <Link href="/buy-bucket" style={ghost}>Buy Buckets</Link>
+        <Link href="/alerts" style={ghost}>Alerts Control</Link>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <div style={{ ...eyebrow, marginBottom: 6 }}>Soft Admin Actions Coming Next</div>
+        <Link href="/projects" style={danger}>Delete / Archive Deals</Link>
+        <Link href="/network" style={danger}>Lock / Activate Members</Link>
+        <Link href="/payment" style={ghost}>Payment Status Control</Link>
+      </div>
+    </section>
+  );
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({
     deals: 0,
@@ -208,16 +279,22 @@ export default function DashboardPage() {
   });
   const [access, setAccess] = useState<Access | null>(null);
   const [status, setStatus] = useState("Loading dashboard...");
+  const [email, setEmail] = useState("");
 
   async function loadDashboard() {
     setStatus("Loading dashboard...");
     try {
       const email = getEmail();
+      setEmail(email);
+      const owner = isOwnerEmail(email);
 
       const [statsRes, accessRes] = await Promise.all([
-        fetch(`/api/dashboard/stats?email=${encodeURIComponent(email)}`, {
+        fetch(`/api/dashboard/stats?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`, {
           cache: "no-store",
-          headers: { "x-vf-email": email },
+          headers: {
+            "x-vf-email": email,
+            "x-vf-admin": owner ? "1" : "0",
+          },
         }),
         fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
           cache: "no-store",
@@ -237,6 +314,8 @@ export default function DashboardPage() {
         messages: Number(statsPayload?.messages || 0),
         alerts: Number(statsPayload?.alerts || 0),
         warning: statsPayload?.warning || statsData?.warning || "",
+        admin: statsPayload?.admin || statsData?.admin,
+        sources: statsPayload?.sources || statsData?.sources,
       });
 
       setAccess(accessData);
@@ -249,6 +328,8 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  const owner = isOwnerEmail(email) || Boolean(access?.owner);
 
   return (
     <main style={page}>
@@ -265,7 +346,7 @@ export default function DashboardPage() {
         <section style={hero}>
           <div style={eyebrow}>VaultForge Dashboard</div>
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            Member command center.
+            {owner ? "Owner command center." : "Member command center."}
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
             Track deal flow, saved targets, messages, alerts, and live platform activity.
@@ -275,6 +356,7 @@ export default function DashboardPage() {
             <div style={{ ...eyebrow, marginBottom: 6 }}>Main Actions</div>
             <Link href="/submit" style={btn}>Create Deal</Link>
             <Link href="/projects" style={ghost}>Projects</Link>
+            <Link href="/network" style={ghost}>Network</Link>
           </div>
 
           <div style={{ marginBottom: 12 }}>
@@ -291,7 +373,8 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <AccessNotice access={access} />
+        <AccessNotice access={access} owner={owner} />
+        {owner && <OwnerAdminPanel stats={stats} />}
         <FounderCountdown />
 
         {status && <section style={hero}>{status}</section>}
