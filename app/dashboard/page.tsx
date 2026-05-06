@@ -253,50 +253,6 @@ function ToolCard({
   );
 }
 
-function AccessNotice({ access, owner }: { access: Access | null; owner: boolean }) {
-  if (owner) {
-    return (
-      <section style={{ ...hero, borderColor: "rgba(157,243,191,.35)" }}>
-        <div style={greenEyebrow}>Owner Bypass Active</div>
-        <p style={{ ...muted, fontSize: 18 }}>
-          This is your owner/admin view. Members should not see admin controls.
-        </p>
-        <Link href="/profile" style={btn}>Edit Profile / Alerts</Link>
-        <Link href="/admin" style={ghost}>Admin Home</Link>
-      </section>
-    );
-  }
-
-  if (!access) return null;
-
-  if (!access.profile_complete) {
-    return (
-      <section style={{ ...hero, borderColor: "rgba(232,196,107,.35)" }}>
-        <div style={eyebrow}>Profile Required</div>
-        <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>Complete your profile to train the engine.</h2>
-        <p style={muted}>
-          Your profile controls member type, markets, project types, buy box, needs, what you can provide, and alert preferences.
-        </p>
-        <Link href="/profile" style={btn}>Complete Profile</Link>
-      </section>
-    );
-  }
-
-  if (!access.paid) {
-    return (
-      <section style={{ ...hero, borderColor: "rgba(232,196,107,.35)" }}>
-        <div style={eyebrow}>Payment Next</div>
-        <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>Profile complete. Payment unlock is next.</h2>
-        <p style={muted}>Stripe lock is not active yet. This is the safe preview step.</p>
-        <Link href="/payment" style={btn}>Go to Payment</Link>
-        <Link href="/profile" style={ghost}>Edit Profile</Link>
-      </section>
-    );
-  }
-
-  return null;
-}
-
 function OwnerAdminPanel({ stats }: { stats: Stats }) {
   const admin = stats.admin || {
     owner: false,
@@ -346,6 +302,46 @@ function OwnerAdminPanel({ stats }: { stats: Stats }) {
   );
 }
 
+function LockedScreen({ reason }: { reason: "profile" | "payment" | "login" | "loading" }) {
+  const isProfile = reason === "profile";
+  const isPayment = reason === "payment";
+  const isLogin = reason === "login";
+
+  return (
+    <main style={page}>
+      <div style={wrap}>
+        <section style={hero}>
+          <div style={greenEyebrow}>MEMBER COMMAND CENTER</div>
+          <h1 style={{ fontSize: "clamp(54px,12vw,96px)", lineHeight: 0.88, margin: "0 0 18px" }}>
+            {reason === "loading"
+              ? "Checking access..."
+              : isLogin
+              ? "Create member access first."
+              : isProfile
+              ? "Train your profile first."
+              : "Payment unlock is next."}
+          </h1>
+
+          <p style={{ ...muted, fontSize: 21 }}>
+            {reason === "loading"
+              ? "VaultForge is checking your profile and payment status."
+              : isLogin
+              ? "Log in or create member access before entering the command center."
+              : isProfile
+              ? "Your AI profile tells VaultForge what markets, strategies, roles, needs, and alerts matter to you."
+              : "Your profile is complete. Activate membership to unlock the full command center."}
+          </p>
+
+          {isLogin && <Link href="/login" style={btn}>Create / Login</Link>}
+          {isProfile && <Link href="/profile" style={btn}>Complete Profile</Link>}
+          {isPayment && <Link href="/payment" style={btn}>Go To Payment</Link>}
+          <Link href="/" style={ghost}>Home</Link>
+        </section>
+      </div>
+    </main>
+  );
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({
     deals: 0,
@@ -355,33 +351,56 @@ export default function DashboardPage() {
     alerts: 0,
   });
   const [access, setAccess] = useState<Access | null>(null);
-  const [status, setStatus] = useState("Loading command center...");
+  const [status, setStatus] = useState("Checking access...");
   const [email, setEmail] = useState("");
+  const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
 
   async function loadDashboard() {
-    setStatus("Loading command center...");
+    setStatus("Checking access...");
+
     try {
       const email = getEmail();
       setEmail(email);
-      const owner = isOwnerEmail(email);
 
-      const [statsRes, accessRes] = await Promise.all([
-        fetch(`/api/dashboard/stats?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": email,
-            "x-vf-admin": owner ? "1" : "0",
-          },
-        }),
-        fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
-          cache: "no-store",
-          headers: { "x-vf-email": email },
-        }),
-      ]);
+      if (!email) {
+        setLockReason("login");
+        setStatus("");
+        return;
+      }
+
+      const accessRes = await fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
+        cache: "no-store",
+        headers: { "x-vf-email": email },
+      });
+
+      const accessData = await accessRes.json();
+      setAccess(accessData);
+
+      if (!accessData?.owner && !accessData?.profile_complete) {
+        setLockReason("profile");
+        setStatus("");
+        return;
+      }
+
+      if (!accessData?.owner && !accessData?.paid && !accessData?.unlocked) {
+        setLockReason("payment");
+        setStatus("");
+        return;
+      }
+
+      setLockReason("open");
+
+      const owner = isOwnerEmail(email) || Boolean(accessData?.owner);
+
+      const statsRes = await fetch(`/api/dashboard/stats?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": email,
+          "x-vf-admin": owner ? "1" : "0",
+        },
+      });
 
       const statsData = await statsRes.json();
-      const accessData = await accessRes.json();
-
       const statsPayload = statsData?.stats || statsData || {};
 
       setStats({
@@ -395,9 +414,9 @@ export default function DashboardPage() {
         sources: statsPayload?.sources || statsData?.sources,
       });
 
-      setAccess(accessData);
       setStatus("");
     } catch {
+      setLockReason("login");
       setStatus("");
     }
   }
@@ -405,6 +424,10 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  if (lockReason !== "open") {
+    return <LockedScreen reason={lockReason} />;
+  }
 
   const owner = isOwnerEmail(email) || Boolean(access?.owner);
 
@@ -454,7 +477,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <AccessNotice access={access} owner={owner} />
         {owner && <OwnerAdminPanel stats={stats} />}
         <FounderCountdown />
 
