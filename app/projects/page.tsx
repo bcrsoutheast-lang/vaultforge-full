@@ -1,5 +1,3 @@
-"use client";
-
 import ProjectsClient from "./ProjectsClient";
 
 export const dynamic = "force-dynamic";
