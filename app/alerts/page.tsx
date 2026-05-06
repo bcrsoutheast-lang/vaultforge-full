@@ -91,7 +91,9 @@ const resultCard: React.CSSProperties = {
 };
 
 const btn: React.CSSProperties = {
-  display: "inline-block",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   background: "#9df3bf",
   color: "#071326",
   borderRadius: 999,
@@ -101,6 +103,7 @@ const btn: React.CSSProperties = {
   margin: "8px 8px 0 0",
   border: 0,
   cursor: "pointer",
+  minHeight: 46,
 };
 
 const goldBtn: React.CSSProperties = {
@@ -167,30 +170,28 @@ function clean(value: any, fallback = "") {
 
 function alertTitle(item: AlertItem) {
   return clean(
-    item.title ||
-      item.alert_title ||
-      item.subject ||
-      item.match_title ||
+    item.alert_title ||
+      item.title ||
       item.deal_title ||
-      item.type,
-    "VaultForge Alert"
+      item.match_title ||
+      item.subject ||
+      "VaultForge Match Alert"
   );
 }
 
 function alertBody(item: AlertItem) {
   return clean(
-    item.body ||
+    item.alert_message ||
       item.message ||
-      item.description ||
-      item.summary ||
+      item.body ||
       item.reason ||
-      item.match_reason,
-    "New activity is available in your VaultForge workspace."
+      item.match_reason ||
+      "VaultForge found a routing signal."
   );
 }
 
 function alertType(item: AlertItem) {
-  return clean(item.alert_type || item.type || item.category || item.source, "Alert");
+  return clean(item.alert_type || item.type || item.category || item.source, "Smart Match");
 }
 
 function isRead(item: AlertItem) {
@@ -244,7 +245,7 @@ function ToastBox({ toast }: { toast: Toast | null }) {
         top: 18,
         left: "50%",
         transform: "translateX(-50%)",
-        zIndex: 50,
+        zIndex: 9999,
         width: "calc(100% - 32px)",
         maxWidth: 640,
         border: `1px solid ${border}`,
@@ -296,9 +297,7 @@ function GenerateResultBox({ result }: { result: GenerateResult }) {
           : `${result.inserted} alert${result.inserted === 1 ? "" : "s"} created`}
       </h2>
 
-      <p style={{ ...muted, fontSize: 19, marginTop: 0 }}>
-        {result.message}
-      </p>
+      <p style={{ ...muted, fontSize: 19, marginTop: 0 }}>{result.message}</p>
 
       {!isGenerating && !isError && (
         <div style={statGrid}>
@@ -319,14 +318,6 @@ function GenerateResultBox({ result }: { result: GenerateResult }) {
             <div style={{ fontSize: 40, fontWeight: 900 }}>{result.minScore || 45}</div>
           </div>
         </div>
-      )}
-
-      {!isGenerating && !isError && result.inserted === 0 && (
-        <p style={{ ...muted, fontSize: 17 }}>
-          Zero usually means one of these: not enough completed member profiles, member preferences do not match live deals,
-          alerts already exist for those deal/member pairs, or live deals are archived/deleted. Create a deal and make sure at
-          least one member profile has matching states, project types, strategies, and member roles.
-        </p>
       )}
     </section>
   );
@@ -357,10 +348,14 @@ export default function AlertsPage() {
 
     try {
       const email = getEmail();
+      const ownerNow = isOwner();
 
-      const res = await fetch(`/api/alerts/list?email=${encodeURIComponent(email)}`, {
+      const res = await fetch(`/api/alerts/list?email=${encodeURIComponent(email)}&owner=${ownerNow ? "1" : ""}`, {
         cache: "no-store",
-        headers: { "x-vf-email": email },
+        headers: {
+          "x-vf-email": email,
+          "x-vf-admin": ownerNow ? "1" : "",
+        },
       });
 
       const data = await res.json();
@@ -475,7 +470,7 @@ export default function AlertsPage() {
     await runAction(
       String(item.id || ""),
       "/api/alerts/read",
-      { id: item.id, source_table: item.source_table },
+      { id: item.id, source_table: item.source_table || "vf_match_alerts" },
       "Marked read ✓"
     );
   }
@@ -487,7 +482,7 @@ export default function AlertsPage() {
     await runAction(
       String(item.id || ""),
       "/api/alerts/dismiss",
-      { id: item.id, source_table: item.source_table },
+      { id: item.id, source_table: item.source_table || "vf_match_alerts" },
       "Dismissed ✓"
     );
   }
@@ -624,6 +619,25 @@ export default function AlertsPage() {
                   {alertBody(item)}
                 </p>
 
+                {item.reason || item.match_reason ? (
+                  <div
+                    style={{
+                      border: "1px solid rgba(232,196,107,.20)",
+                      background: "rgba(232,196,107,.06)",
+                      borderRadius: 20,
+                      padding: 14,
+                      margin: "16px 0",
+                    }}
+                  >
+                    <div style={{ color: "#f5d978", letterSpacing: 3, fontWeight: 900, marginBottom: 8 }}>
+                      WHY THIS MATCHED
+                    </div>
+                    <p style={{ ...muted, margin: 0 }}>
+                      {item.reason || item.match_reason}
+                    </p>
+                  </div>
+                ) : null}
+
                 {createdLabel(item) && (
                   <p style={{ color: "rgba(255,255,255,.45)" }}>
                     {createdLabel(item)}
@@ -632,12 +646,18 @@ export default function AlertsPage() {
 
                 {relatedDealId ? (
                   <Link href={`/deal/${relatedDealId}`} style={btn}>
-                    Open Deal Room
+                    Open Matched Deal
                   </Link>
                 ) : (
                   <Link href="/projects" style={ghost}>
                     View Projects
                   </Link>
+                )}
+
+                {item.member_email && (
+                  <a href={`mailto:${item.member_email}`} style={ghost}>
+                    Message Matched Member
+                  </a>
                 )}
 
                 {!isRead(item) && (
