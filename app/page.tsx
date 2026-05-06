@@ -439,7 +439,7 @@ export default function HomePage() {
           </p>
 
           <div className="vf-home-actions">
-            <Link href="/login" style={primary}>
+            <Link href="/apply" style={primary}>
               {founderActive ? "Create Member Access" : "Request Member Access"}
             </Link>
             <Link href="/dashboard" style={secondary}>
@@ -511,7 +511,7 @@ export default function HomePage() {
             </div>
 
             <div className="vf-home-actions" style={{ marginTop: 20 }}>
-              <Link href="/login" style={primary}>
+              <Link href="/apply" style={primary}>
                 Create Member Access — $49 First Month
               </Link>
               <Link href="/dashboard" style={secondary}>
@@ -527,7 +527,7 @@ export default function HomePage() {
               Standard access is now <strong style={gold}>$99 to join</strong>,
               then <strong style={gold}> $199/month</strong> unless canceled before renewal.
             </p>
-            <Link href="/login" style={primary}>
+            <Link href="/apply" style={primary}>
               Apply for Member Access
             </Link>
           </section>
@@ -548,7 +548,7 @@ export default function HomePage() {
             <FlowCard
               step="STEP 1"
               title="Create Member Access"
-              text="Create your account to enter the VaultForge ecosystem and access the preview command center."
+              text="Start at the access page, then create your login. Public visitors should not fill out the AI profile before account creation."
             />
             <FlowCard
               step="STEP 2"
@@ -561,6 +561,10 @@ export default function HomePage() {
               text="Founding members unlock the full Member Command Center, smart alerts, network routing, deal rooms, and messaging."
             />
           </div>
+
+          <Link href="/apply" style={primary}>
+            Start Access Flow
+          </Link>
         </section>
 
         <section style={commandSection}>
@@ -705,7 +709,7 @@ export default function HomePage() {
             Members create opportunities, define needs, route signals, and connect with people who can move deals forward.
           </p>
           <div className="vf-home-actions">
-            <Link href="/login" style={primary}>
+            <Link href="/apply" style={primary}>
               {founderActive ? "Create Member Access — $49 First Month" : "Apply for Member Access"}
             </Link>
             <Link href="/dashboard" style={secondary}>
