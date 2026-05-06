@@ -13,9 +13,14 @@ const shell: React.CSSProperties = {
   color: "white",
   padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif",
+  overflowX: "hidden",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
+const wrap: React.CSSProperties = {
+  maxWidth: 1180,
+  margin: "0 auto",
+  width: "100%",
+};
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.28)",
@@ -25,12 +30,6 @@ const hero: React.CSSProperties = {
   marginBottom: 22,
 };
 
-const paneGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(290px,1fr))",
-  gap: 18,
-};
-
 const pane: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
   background:
@@ -38,34 +37,42 @@ const pane: React.CSSProperties = {
   borderRadius: 30,
   overflow: "hidden",
   boxShadow: "0 25px 75px rgba(0,0,0,.28)",
+  position: "relative",
+  zIndex: 1,
 };
 
 const bodyStyle: React.CSSProperties = { padding: 20 };
 
+const baseButton: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 48,
+  borderRadius: 999,
+  padding: "13px 17px",
+  fontWeight: 900,
+  textDecoration: "none",
+  margin: "7px 7px 0 0",
+  cursor: "pointer",
+  touchAction: "manipulation",
+  WebkitTapHighlightColor: "transparent",
+  position: "relative",
+  zIndex: 5,
+  userSelect: "none",
+};
+
 const btn: React.CSSProperties = {
-  display: "inline-block",
+  ...baseButton,
   background: "#f5d978",
   color: "#06100a",
-  textDecoration: "none",
-  borderRadius: 999,
-  padding: "12px 15px",
-  fontWeight: 900,
   border: "none",
-  margin: "6px 6px 0 0",
-  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
-  display: "inline-block",
+  ...baseButton,
   color: "white",
-  textDecoration: "none",
-  borderRadius: 999,
-  padding: "12px 15px",
-  fontWeight: 900,
   border: "1px solid rgba(255,255,255,.16)",
   background: "rgba(255,255,255,.04)",
-  margin: "6px 6px 0 0",
-  cursor: "pointer",
 };
 
 const successBtn: React.CSSProperties = {
@@ -77,8 +84,13 @@ const successBtn: React.CSSProperties = {
 
 const danger: React.CSSProperties = {
   ...ghost,
-  border: "1px solid rgba(255,120,120,.32)",
+  border: "1px solid rgba(255,120,120,.38)",
   color: "#ffd0d0",
+};
+
+const disabledButton: React.CSSProperties = {
+  opacity: 0.58,
+  cursor: "not-allowed",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -104,6 +116,9 @@ const selectStyle: React.CSSProperties = {
   padding: 12,
   fontWeight: 900,
   marginTop: 10,
+  minHeight: 46,
+  position: "relative",
+  zIndex: 4,
 };
 
 const metricGrid: React.CSSProperties = {
@@ -208,11 +223,11 @@ function ToastBox({ toast }: { toast: Toast | null }) {
         top: 18,
         left: "50%",
         transform: "translateX(-50%)",
-        zIndex: 50,
+        zIndex: 9999,
         width: "calc(100% - 32px)",
         maxWidth: 620,
         border: `1px solid ${border}`,
-        background: "rgba(3,5,9,.94)",
+        background: "rgba(3,5,9,.96)",
         boxShadow: "0 24px 80px rgba(0,0,0,.45)",
         borderRadius: 24,
         padding: "16px 18px",
@@ -226,6 +241,38 @@ function ToastBox({ toast }: { toast: Toast | null }) {
   );
 }
 
+function ActionButton({
+  children,
+  onClick,
+  disabled,
+  style,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  style: React.CSSProperties;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onPointerDown={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!disabled) onClick();
+      }}
+      style={{
+        ...style,
+        ...(disabled ? disabledButton : {}),
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function ProjectsClient() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [status, setStatus] = useState("Loading projects...");
@@ -235,12 +282,12 @@ export default function ProjectsClient() {
 
   function showToast(next: Toast) {
     setToast(next);
-    window.setTimeout(() => setToast(null), 1800);
+    window.setTimeout(() => setToast(null), 2000);
   }
 
   function markSuccess(id: string) {
     setSuccessId(id);
-    window.setTimeout(() => setSuccessId(""), 1200);
+    window.setTimeout(() => setSuccessId(""), 1400);
   }
 
   async function load() {
@@ -265,6 +312,11 @@ export default function ProjectsClient() {
   }
 
   async function runAction(id: string, endpoint: string, payload: Record<string, any>, label: string, done: string) {
+    if (!id) {
+      showToast({ type: "error", text: "Missing deal id." });
+      return;
+    }
+
     setWorkingId(id);
 
     try {
@@ -273,9 +325,10 @@ export default function ProjectsClient() {
         headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
         body: JSON.stringify(payload),
       });
+
       const data = await res.json();
 
-      if (!res.ok || data?.error) {
+      if (!res.ok || data?.error || data?.ok === false) {
         throw new Error(data?.error || data?.details || `${label} failed.`);
       }
 
@@ -315,7 +368,74 @@ export default function ProjectsClient() {
 
   return (
     <main style={shell}>
+      <style>{`
+        .vf-project-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+          gap: 18px;
+          align-items: start;
+        }
+
+        .vf-project-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          align-items: center;
+          position: relative;
+          z-index: 6;
+          margin-top: 14px;
+        }
+
+        .vf-project-action-link {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 48px;
+          border-radius: 999px;
+          padding: 13px 17px;
+          font-weight: 900;
+          text-decoration: none;
+          margin: 7px 7px 0 0;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+          position: relative;
+          z-index: 5;
+          background: #f5d978;
+          color: #06100a;
+        }
+
+        @media (max-width: 760px) {
+          .vf-project-grid {
+            grid-template-columns: 1fr;
+            gap: 22px;
+          }
+
+          .vf-project-card {
+            width: 100%;
+            max-width: 100%;
+          }
+
+          .vf-project-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+
+          .vf-project-actions > * {
+            width: 100%;
+            margin: 0 !important;
+          }
+
+          .vf-project-action-link {
+            width: 100%;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+
       <ToastBox toast={toast} />
+
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>Projects</div>
@@ -329,7 +449,7 @@ export default function ProjectsClient() {
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/submit" style={btn}>Create</Link>
           <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
-          <button type="button" onClick={load} style={btn}>Refresh</button>
+          <ActionButton onClick={load} style={btn}>Refresh</ActionButton>
         </section>
 
         {status && <section style={hero}>{status}</section>}
@@ -338,19 +458,26 @@ export default function ProjectsClient() {
           <section style={hero}>No active projects yet. Create a deal to start.</section>
         )}
 
-        <section style={paneGrid}>
+        <section className="vf-project-grid">
           {deals.map((deal) => {
+            const id = String(deal.id || "");
             const image = getPhotos(deal)[0];
-            const busy = workingId === deal.id;
-            const done = successId === deal.id;
+            const busy = workingId === id;
+            const done = successId === id;
 
             return (
-              <article key={deal.id} style={pane}>
+              <article key={id} className="vf-project-card" style={pane}>
                 {image ? (
                   <img
                     src={image}
                     alt={deal.title || "Deal"}
-                    style={{ width: "100%", height: 230, objectFit: "cover", display: "block" }}
+                    style={{
+                      width: "100%",
+                      height: 230,
+                      objectFit: "cover",
+                      display: "block",
+                      pointerEvents: "none",
+                    }}
                   />
                 ) : (
                   <div
@@ -371,7 +498,7 @@ export default function ProjectsClient() {
                     {deal.folder || "Active"} · {deal.property_type || "Deal"} · {deal.strategy || "Strategy Needed"}
                   </div>
 
-                  <h2 style={{ fontSize: 34, margin: "0 0 8px" }}>
+                  <h2 style={{ fontSize: 34, margin: "0 0 8px", overflowWrap: "anywhere" }}>
                     {deal.title || "Untitled Deal"}
                   </h2>
 
@@ -403,14 +530,14 @@ export default function ProjectsClient() {
                   </p>
 
                   {(deal.seller_situation || deal.description) && (
-                    <p style={{ ...muted, margin: "0 0 10px" }}>
+                    <p style={{ ...muted, margin: "0 0 10px", overflowWrap: "anywhere" }}>
                       {String(deal.seller_situation || deal.description).slice(0, 120)}
                     </p>
                   )}
 
                   <select
                     value={deal.folder || "Active"}
-                    onChange={(event) => setFolder(deal.id, event.target.value)}
+                    onChange={(event) => setFolder(id, event.target.value)}
                     style={selectStyle}
                     disabled={busy}
                   >
@@ -422,17 +549,34 @@ export default function ProjectsClient() {
                     <option style={{ color: "#111" }}>Passed</option>
                   </select>
 
-                  <div style={{ marginTop: 12 }}>
-                    <Link href={`/deal/${deal.id}`} style={btn}>Deal Room</Link>
-                    <button type="button" disabled={busy} onClick={() => saveDeal(deal.id)} style={done ? successBtn : ghost}>
+                  <div className="vf-project-actions">
+                    <Link href={`/deal/${id}`} className="vf-project-action-link">
+                      Deal Room
+                    </Link>
+
+                    <ActionButton
+                      disabled={busy}
+                      onClick={() => saveDeal(id)}
+                      style={done ? successBtn : ghost}
+                    >
                       {busy ? "Saving..." : done ? "Saved ✓" : "Save"}
-                    </button>
-                    <button type="button" disabled={busy} onClick={() => archiveDeal(deal.id)} style={ghost}>
+                    </ActionButton>
+
+                    <ActionButton
+                      disabled={busy}
+                      onClick={() => archiveDeal(id)}
+                      style={ghost}
+                    >
                       {busy ? "Working..." : "Archive"}
-                    </button>
-                    <button type="button" disabled={busy} onClick={() => deleteDeal(deal.id)} style={danger}>
+                    </ActionButton>
+
+                    <ActionButton
+                      disabled={busy}
+                      onClick={() => deleteDeal(id)}
+                      style={danger}
+                    >
                       {busy ? "Working..." : "Delete"}
-                    </button>
+                    </ActionButton>
                   </div>
                 </div>
               </article>
