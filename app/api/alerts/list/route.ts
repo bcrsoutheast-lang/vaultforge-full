@@ -1,100 +1,129 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getSupabaseConfig() {
+function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  if (!url || !key) return null;
-  return { url, key };
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    "";
+
+  if (!url || !key) {
+    throw new Error("Missing Supabase environment values.");
+  }
+
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 }
 
-function getCookieValue(cookieHeader: string, name: string) {
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
+
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function emailFromCookie(cookieHeader: string) {
   const parts = cookieHeader.split(";").map((part) => part.trim());
-  const found = parts.find((part) => part.startsWith(`${name}=`));
-  if (!found) return "";
-  return decodeURIComponent(found.slice(name.length + 1));
+
+  for (const part of parts) {
+    if (part.startsWith("vf_email=")) {
+      try {
+        return decodeURIComponent(part.replace("vf_email=", "")).trim().toLowerCase();
+      } catch {
+        return part.replace("vf_email=", "").trim().toLowerCase();
+      }
+    }
+  }
+
+  return "";
 }
 
-export async function GET(req: Request) {
-  const config = getSupabaseConfig();
+async function readTable(supabase: any, table: string, email: string) {
+  try {
+    let query = supabase
+      .from(table)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
 
-  if (!config) {
+    if (email) {
+      query = query.or(
+        [
+          `member_email.eq.${email}`,
+          `recipient_email.eq.${email}`,
+          `email.eq.${email}`,
+          `user_email.eq.${email}`,
+          `owner_email.eq.${email}`,
+          `buyer_email.eq.${email}`,
+        ].join(",")
+      );
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return [];
+    }
+
+    return (data || []).map((item: any) => ({
+      ...item,
+      source_table: table,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const supabase = supabaseClient();
+    const url = new URL(request.url);
+
+    const email =
+      cleanEmail(request.headers.get("x-vf-email")) ||
+      cleanEmail(url.searchParams.get("email")) ||
+      emailFromCookie(request.headers.get("cookie") || "");
+
+    const [vfAlerts, memberAlerts, matchAlerts] = await Promise.all([
+      readTable(supabase, "vf_match_alerts", email),
+      readTable(supabase, "member_alerts", email),
+      readTable(supabase, "matches", email),
+    ]);
+
+    const alerts = [...vfAlerts, ...memberAlerts, ...matchAlerts]
+      .filter((item) => !item.is_dismissed && !item.dismissed)
+      .sort((a, b) => {
+        const aTime = new Date(a.created_at || a.updated_at || 0).getTime();
+        const bTime = new Date(b.created_at || b.updated_at || 0).getTime();
+        return bTime - aTime;
+      });
+
+    return NextResponse.json({
+      ok: true,
+      email,
+      alerts,
+      sources: {
+        primary: "vf_match_alerts",
+        secondary: "member_alerts",
+        fallback: "matches",
+      },
+    });
+  } catch (error: any) {
     return NextResponse.json(
-      { error: "Supabase environment variables are missing.", alerts: [] },
+      {
+        ok: false,
+        error: "Could not load alerts.",
+        details: error?.message || String(error),
+        alerts: [],
+      },
       { status: 500 }
     );
   }
-
-  const cookieHeader = req.headers.get("cookie") || "";
-  const memberEmail =
-    getCookieValue(cookieHeader, "vf_user") ||
-    getCookieValue(cookieHeader, "vf_email");
-
-  if (!memberEmail) {
-    return NextResponse.json({ error: "Not logged in.", alerts: [] }, { status: 401 });
-  }
-
-  const headers = {
-    apikey: config.key,
-    Authorization: `Bearer ${config.key}`,
-  };
-
-  const matchUrl =
-    `${config.url}/rest/v1/vf_match_alerts` +
-    `?select=id,deal_id,deal_title,deal_state,deal_property_type,deal_strategy,match_role,alert_title,alert_message,read,created_at` +
-    `&member_email=eq.${encodeURIComponent(memberEmail.toLowerCase())}` +
-    `&order=created_at.desc` +
-    `&limit=25`;
-
-  const bucketUrl =
-    `${config.url}/rest/v1/vf_buy_bucket` +
-    `?select=deal_id,created_at` +
-    `&member_email=eq.${encodeURIComponent(memberEmail)}` +
-    `&order=created_at.desc` +
-    `&limit=10`;
-
-  const [matchRes, bucketRes] = await Promise.all([
-    fetch(matchUrl, { method: "GET", headers, cache: "no-store" }),
-    fetch(bucketUrl, { method: "GET", headers, cache: "no-store" }),
-  ]);
-
-  const alerts: any[] = [];
-
-  if (matchRes.ok) {
-    const rows = await matchRes.json();
-    for (const row of rows) {
-      alerts.push({
-        id: `match-${row.id}`,
-        type: "Match Alert",
-        title: row.alert_title || `Matched deal: ${row.deal_title}`,
-        message: row.alert_message || "A deal matched your buy box.",
-        href: "/projects",
-        created_at: row.created_at,
-      });
-    }
-  }
-
-  if (bucketRes.ok) {
-    const rows = await bucketRes.json();
-    for (const row of rows) {
-      alerts.push({
-        id: `bucket-${row.deal_id}-${row.created_at}`,
-        type: "Buy Bucket",
-        title: "Deal saved to Buy Bucket",
-        message: "You added an opportunity to your Buy Bucket for tracking.",
-        href: "/buy-bucket",
-        created_at: row.created_at,
-      });
-    }
-  }
-
-  alerts.sort((a, b) => {
-    const aTime = new Date(a.created_at || 0).getTime();
-    const bTime = new Date(b.created_at || 0).getTime();
-    return bTime - aTime;
-  });
-
-  return NextResponse.json({ alerts: alerts.slice(0, 30) });
 }
