@@ -150,6 +150,7 @@ export default function LoginPage() {
 
       const res = await fetch(endpoint, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -172,6 +173,8 @@ export default function LoginPage() {
       window.sessionStorage.setItem("vf_member_login", "1");
 
       setMessage(data?.message || "Success.");
+
+      await new Promise((resolve) => setTimeout(resolve, 350));
 
       window.location.href = data?.redirect_to || "/dashboard";
     } catch (err: any) {
