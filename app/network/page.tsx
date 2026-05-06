@@ -3,86 +3,125 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type Member = {
-  id: string;
-  name: string;
-  email: string;
-  state: string;
-  role: string;
-  company: string;
-  bio: string;
-  profile_photo_url?: string;
-  buy_box_states: string[] | null;
-  buy_box_types: string[] | null;
-  buy_box_strategies: string[] | null;
-  is_active?: boolean | null;
-  is_suspended?: boolean | null;
-  is_deleted?: boolean | null;
-  member_status?: string | null;
-  status?: string | null;
-  payment_status?: string | null;
-};
-
+type Member = Record<string, any>;
 type Toast = { type: "success" | "error" | "info"; text: string };
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-const STATES = [
+const STATE_OPTIONS = [
   "All",
   "Georgia",
   "Tennessee",
   "Florida",
   "North Carolina",
   "South Carolina",
+  "Alabama",
   "Texas",
+  "National",
 ];
 
-const ROLES = [
+const ROLE_OPTIONS = [
   "All",
   "Buyer",
+  "Seller",
   "Lender",
+  "Private Money",
+  "Wholesaler",
   "Contractor",
   "Developer",
-  "Partner",
+  "Operator",
+  "Realtor",
+  "Broker",
+  "Property Manager",
+  "JV Partner",
+  "Investor",
+  "Deal Source",
 ];
 
-const shellStyle: React.CSSProperties = {
+const shell: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(157,243,191,.08), transparent 24%), linear-gradient(180deg,#030509,#071326 60%,#030509)",
+    "radial-gradient(circle at top left, rgba(157,243,191,.10), transparent 30%), linear-gradient(180deg,#030509,#071326 58%,#030509)",
   color: "white",
-  padding: "32px 18px 90px",
+  padding: "28px 18px 100px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrapStyle: React.CSSProperties = {
-  maxWidth: 1250,
+const wrap: React.CSSProperties = {
+  maxWidth: 1180,
   margin: "0 auto",
 };
 
-const navStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 10,
+const hero: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.16)",
+  background:
+    "linear-gradient(145deg, rgba(255,255,255,.065), rgba(255,255,255,.025))",
+  borderRadius: 34,
+  padding: 28,
   marginBottom: 22,
 };
 
-const navLinkStyle: React.CSSProperties = {
-  color: "white",
-  textDecoration: "none",
-  border: "1px solid rgba(255,255,255,.20)",
-  borderRadius: 999,
-  padding: "11px 16px",
-  fontSize: 14,
+const pane: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.13)",
   background: "rgba(255,255,255,.04)",
+  borderRadius: 28,
+  padding: 22,
+  marginBottom: 18,
 };
 
-const heroStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.15)",
-  background: "linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.03))",
-  borderRadius: 34,
-  padding: 30,
-  marginBottom: 24,
+const card: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.14)",
+  background:
+    "linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.022))",
+  borderRadius: 28,
+  padding: 22,
+  marginBottom: 18,
+};
+
+const btn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#9df3bf",
+  color: "#071326",
+  borderRadius: 999,
+  padding: "13px 17px",
+  fontWeight: 900,
+  textDecoration: "none",
+  margin: "8px 8px 0 0",
+  border: 0,
+  cursor: "pointer",
+  minHeight: 46,
+};
+
+const goldBtn: React.CSSProperties = {
+  ...btn,
+  background: "#f5d978",
+  color: "#061120",
+};
+
+const ghost: React.CSSProperties = {
+  ...btn,
+  background: "rgba(255,255,255,.05)",
+  color: "white",
+  border: "1px solid rgba(255,255,255,.18)",
+};
+
+const danger: React.CSSProperties = {
+  ...ghost,
+  color: "#ffd0d0",
+  border: "1px solid rgba(255,120,120,.35)",
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.075)",
+  color: "white",
+  padding: 14,
+  fontSize: 16,
 };
 
 const statGrid: React.CSSProperties = {
@@ -93,93 +132,24 @@ const statGrid: React.CSSProperties = {
 };
 
 const statCard: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.14)",
+  border: "1px solid rgba(255,255,255,.13)",
   borderRadius: 24,
-  padding: 20,
+  padding: 18,
   background: "rgba(255,255,255,.04)",
 };
 
-const cardStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.14)",
-  background: "rgba(255,255,255,.04)",
-  borderRadius: 28,
-  padding: 24,
-  marginBottom: 18,
+const muted: React.CSSProperties = {
+  color: "rgba(255,255,255,.70)",
+  lineHeight: 1.5,
 };
 
-const stateGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))",
-  gap: 12,
-  marginBottom: 22,
-};
-
-const stateButtonStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.05)",
-  borderRadius: 20,
-  padding: "16px 12px",
-  cursor: "pointer",
-  color: "white",
-  fontWeight: 800,
-  textAlign: "center",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  background: "rgba(255,255,255,.08)",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.20)",
-  borderRadius: 18,
-  padding: "15px 16px",
-  fontSize: 16,
-  marginBottom: 14,
-};
-
-const pillStyle: React.CSSProperties = {
-  display: "inline-block",
+const eyebrow: React.CSSProperties = {
   color: "#9df3bf",
-  border: "1px solid rgba(157,243,191,.35)",
-  borderRadius: 999,
-  padding: "7px 12px",
+  letterSpacing: 5,
+  fontWeight: 900,
   fontSize: 12,
-  letterSpacing: 1,
-  marginRight: 8,
-  marginBottom: 8,
-};
-
-const actionStyle: React.CSSProperties = {
-  display: "inline-block",
-  background: "#9df3bf",
-  color: "#071326",
-  textDecoration: "none",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 900,
-  marginTop: 14,
-  border: "none",
-  cursor: "pointer",
-};
-
-const ghostButton: React.CSSProperties = {
-  display: "inline-block",
-  background: "rgba(255,255,255,.06)",
-  color: "white",
-  textDecoration: "none",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 900,
-  marginTop: 14,
-  marginRight: 8,
-  border: "1px solid rgba(255,255,255,.18)",
-  cursor: "pointer",
-};
-
-const dangerButton: React.CSSProperties = {
-  ...ghostButton,
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.34)",
+  marginBottom: 12,
+  textTransform: "uppercase",
 };
 
 function readCookie(name: string) {
@@ -210,61 +180,85 @@ function getEmail() {
     .toLowerCase();
 }
 
-function Nav() {
-  return (
-    <nav style={navStyle}>
-      <Link href="/dashboard" style={navLinkStyle}>Dashboard</Link>
-      <Link href="/profile" style={navLinkStyle}>Profile</Link>
-      <Link href="/submit" style={navLinkStyle}>Create Deal</Link>
-      <Link href="/projects" style={navLinkStyle}>Projects</Link>
-      <Link href="/buy-bucket" style={navLinkStyle}>Buy Bucket</Link>
-      <Link href="/alerts" style={navLinkStyle}>Alerts</Link>
-      <Link href="/messages" style={navLinkStyle}>Messages</Link>
-      <Link href="/network" style={navLinkStyle}>Network</Link>
-      <Link href="/logout" style={navLinkStyle}>Logout</Link>
-    </nav>
-  );
+function isOwner() {
+  return getEmail() === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
-function TagList({ values }: { values?: string[] | null }) {
-  if (!values || values.length === 0) return null;
+function asList(value: any): string[] {
+  if (Array.isArray(value)) return value.map(String).map((x) => x.trim()).filter(Boolean);
 
-  return (
-    <div style={{ marginTop: 12 }}>
-      {values.map((value) => (
-        <span key={value} style={pillStyle}>{value}</span>
-      ))}
-    </div>
-  );
-}
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String).map((x) => x.trim()).filter(Boolean);
+    } catch {
+      // continue
+    }
 
-function cleanError(value: string) {
-  if (!value) return "";
-
-  const lower = value.toLowerCase();
-
-  if (
-    lower.includes("supabase") ||
-    lower.includes("schema") ||
-    lower.includes("failed")
-  ) {
-    return "Could not load member network.";
+    return value
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
 
-  return value;
+  return [];
 }
 
-function statusLabel(member: Member) {
+function display(value: any, fallback = "Not listed") {
+  const text = String(value || "").trim();
+  return text || fallback;
+}
+
+function memberName(member: Member) {
+  return display(member.name || member.full_name || member.company || member.email || member.member_email, "VaultForge Member");
+}
+
+function memberEmail(member: Member) {
+  return String(member.email || member.member_email || member.user_email || "").trim().toLowerCase();
+}
+
+function memberRole(member: Member) {
+  return display(member.role || member.member_role || asList(member.member_types)[0], "Member");
+}
+
+function memberState(member: Member) {
+  return display(member.state || asList(member.buy_box_states)[0], "Not listed");
+}
+
+function memberStatus(member: Member) {
   if (member.is_deleted) return "Removed";
   if (member.is_suspended) return "Suspended";
-  if (member.member_status) return member.member_status;
-  if (member.status) return member.status;
-  if (member.is_active === false) return "Inactive";
-  return "Active";
+  return display(member.member_status || member.status, "active");
 }
 
-function paymentLabel(member: Member) {
-  return member.payment_status || "unpaid";
+function ChipList({ label, items }: { label: string; items: any }) {
+  const list = asList(items).slice(0, 8);
+
+  if (!list.length) return null;
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ color: "#9df3bf", fontWeight: 900, marginBottom: 8 }}>{label}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {list.map((item) => (
+          <span
+            key={item}
+            style={{
+              border: "1px solid rgba(157,243,191,.25)",
+              background: "rgba(157,243,191,.07)",
+              color: "#b9ffc9",
+              borderRadius: 999,
+              padding: "8px 11px",
+              fontWeight: 800,
+              fontSize: 13,
+            }}
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ToastBox({ toast }: { toast: Toast | null }) {
@@ -291,9 +285,9 @@ function ToastBox({ toast }: { toast: Toast | null }) {
         top: 18,
         left: "50%",
         transform: "translateX(-50%)",
-        zIndex: 50,
+        zIndex: 9999,
         width: "calc(100% - 32px)",
-        maxWidth: 620,
+        maxWidth: 640,
         border: `1px solid ${border}`,
         background: "rgba(3,5,9,.94)",
         boxShadow: "0 24px 80px rgba(0,0,0,.45)",
@@ -311,226 +305,206 @@ function ToastBox({ toast }: { toast: Toast | null }) {
 
 export default function NetworkPage() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [status, setStatus] = useState("Loading member network...");
   const [stateFilter, setStateFilter] = useState("All");
   const [roleFilter, setRoleFilter] = useState("All");
+  const [owner, setOwner] = useState(false);
   const [workingId, setWorkingId] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
-  const [email, setEmail] = useState("");
-
-  const isOwner = email === OWNER_EMAIL;
+  const [rawCount, setRawCount] = useState(0);
 
   function showToast(next: Toast) {
     setToast(next);
-    window.setTimeout(() => setToast(null), 1800);
+    window.setTimeout(() => setToast(null), 2000);
   }
 
-  async function loadMembers(nextState = stateFilter, nextRole = roleFilter) {
-    setLoading(true);
-    setError("");
+  async function load(nextState = stateFilter, nextRole = roleFilter) {
+    setStatus("Loading member network...");
 
     try {
-      const params = new URLSearchParams();
-
-      if (nextState !== "All") {
-        params.set("state", nextState);
-      }
-
-      if (nextRole !== "All") {
-        params.set("role", nextRole);
-      }
-
-      if (isOwner) {
-        params.set("includeRemoved", "1");
-      }
+      const params = new URLSearchParams({
+        state: nextState,
+        role: nextRole,
+        includeInactive: isOwner() ? "1" : "",
+      });
 
       const res = await fetch(`/api/network/list?${params.toString()}`, {
         cache: "no-store",
+        headers: { "x-vf-email": getEmail() },
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data?.error || data?.details || "Could not load members.");
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not load member network.");
       }
 
-      setMembers(data?.members || []);
+      const list = Array.isArray(data.members) ? data.members : [];
+      setMembers(list);
+      setRawCount(Number(data.counts?.raw || list.length));
+      setStatus("");
     } catch (error: any) {
       setMembers([]);
-      setError(cleanError(error?.message || "Could not load network."));
+      setStatus(error?.message || "Could not load member network.");
+      showToast({ type: "error", text: error?.message || "Could not load member network." });
     }
-
-    setLoading(false);
   }
 
-  async function runMemberStatus(memberId: string, action: string, label: string) {
-    setWorkingId(memberId);
+  async function runMemberAction(id: string, action: string, done: string) {
+    if (!id) {
+      showToast({ type: "error", text: "Missing member id." });
+      return;
+    }
+
+    setWorkingId(id);
 
     try {
-      const res = await fetch("/api/member/status", {
+      const res = await fetch(action === "remove" ? "/api/member/delete" : "/api/member/status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-vf-email": getEmail(),
         },
-        body: JSON.stringify({ id: memberId, action }),
+        body: JSON.stringify({ id, action }),
       });
 
       const data = await res.json();
 
-      if (!res.ok || data?.error) {
-        throw new Error(data?.error || data?.details || `${label} failed.`);
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Member action failed.");
       }
 
-      showToast({ type: "success", text: `${label} complete ✓` });
-      await loadMembers();
+      showToast({ type: "success", text: done });
+      await load();
     } catch (error: any) {
-      showToast({ type: "error", text: error?.message || `${label} failed.` });
+      showToast({ type: "error", text: error?.message || "Member action failed." });
     } finally {
       setWorkingId("");
     }
   }
 
-  async function removeMember(memberId: string) {
-    const yes = window.confirm("Soft remove this member from the live network?");
+  async function removeMember(id: string) {
+    const yes = window.confirm("Soft-remove this member from active network?");
     if (!yes) return;
 
-    setWorkingId(memberId);
-
-    try {
-      const res = await fetch("/api/member/delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": getEmail(),
-        },
-        body: JSON.stringify({ id: memberId }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || data?.error) {
-        throw new Error(data?.error || data?.details || "Remove member failed.");
-      }
-
-      showToast({ type: "success", text: "Member removed ✓" });
-      await loadMembers();
-    } catch (error: any) {
-      showToast({ type: "error", text: error?.message || "Remove member failed." });
-    } finally {
-      setWorkingId("");
-    }
+    await runMemberAction(id, "remove", "Member removed ✓");
   }
 
   useEffect(() => {
-    setEmail(getEmail());
+    setOwner(isOwner());
+    load("All", "All");
   }, []);
 
-  useEffect(() => {
-    loadMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [email]);
+  const activeCount = useMemo(
+    () => members.filter((m) => !m.is_deleted && !m.is_suspended).length,
+    [members]
+  );
 
-  const totalMembers = useMemo(() => members.length, [members]);
+  const suspendedCount = useMemo(
+    () => members.filter((m) => m.is_suspended).length,
+    [members]
+  );
 
   return (
-    <main style={shellStyle}>
+    <main style={shell}>
+      <style>{`
+        .vf-member-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+          gap: 18px;
+          align-items: start;
+        }
+
+        @media (max-width: 760px) {
+          .vf-member-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .vf-network-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .vf-network-actions > * {
+            width: 100%;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+
       <ToastBox toast={toast} />
 
-      <div style={wrapStyle}>
-        <Nav />
-
-        <section style={heroStyle}>
-          <div
-            style={{
-              color: "#9df3bf",
-              letterSpacing: 5,
-              fontWeight: 900,
-              marginBottom: 12,
-            }}
-          >
-            VAULTFORGE NETWORK
-          </div>
-
-          <h1
-            style={{
-              fontSize: "clamp(54px,10vw,96px)",
-              lineHeight: 0.9,
-              margin: "0 0 16px",
-            }}
-          >
+      <div style={wrap}>
+        <section style={hero}>
+          <div style={eyebrow}>VaultForge Network</div>
+          <h1 style={{ fontSize: "clamp(56px,13vw,92px)", lineHeight: 0.9, margin: "0 0 18px" }}>
             Member Command Directory
           </h1>
-
-          <p
-            style={{
-              color: "rgba(255,255,255,.72)",
-              fontSize: 22,
-              lineHeight: 1.5,
-              maxWidth: 900,
-            }}
-          >
-            Buyers, lenders, contractors, developers, operators, and partners
-            across your target states and deal flow network.
+          <p style={{ ...muted, fontSize: 22 }}>
+            Buyers, lenders, contractors, developers, operators, and partners across your target states and deal-flow network.
           </p>
 
-          {isOwner && (
+          {owner && (
             <div
               style={{
-                marginTop: 18,
-                border: "1px solid rgba(232,196,107,.32)",
-                background: "rgba(232,196,107,.08)",
+                border: "1px solid rgba(232,196,107,.30)",
+                color: "#f5d978",
                 borderRadius: 22,
                 padding: 16,
-                color: "#e8c46b",
                 fontWeight: 900,
+                marginTop: 18,
+                background: "rgba(232,196,107,.07)",
               }}
             >
-              Owner controls are active on this browser. This is still soft-admin mode, not hard auth.
+              Owner controls are active on this browser. Still soft-admin mode, not hard auth.
             </div>
           )}
+
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <Link href="/profile" style={goldBtn}>Edit Profile / Alerts</Link>
+          <Link href="/alerts" style={ghost}>Alerts</Link>
+          <button type="button" onClick={() => load()} style={btn}>Refresh Members</button>
         </section>
 
         <section style={statGrid}>
           <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Members</div>
-            <div style={{ fontSize: 46, fontWeight: 900 }}>{totalMembers}</div>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Displayed</div>
+            <div style={{ fontSize: 44, fontWeight: 900 }}>{members.length}</div>
           </div>
 
           <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Current State</div>
-            <div style={{ fontSize: 26, fontWeight: 900 }}>{stateFilter}</div>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Raw Members</div>
+            <div style={{ fontSize: 44, fontWeight: 900 }}>{rawCount}</div>
           </div>
 
           <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Role Filter</div>
-            <div style={{ fontSize: 26, fontWeight: 900 }}>{roleFilter}</div>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Active</div>
+            <div style={{ fontSize: 44, fontWeight: 900 }}>{activeCount}</div>
+          </div>
+
+          <div style={statCard}>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Suspended</div>
+            <div style={{ fontSize: 44, fontWeight: 900 }}>{suspendedCount}</div>
           </div>
         </section>
 
-        <section style={cardStyle}>
-          <h2 style={{ marginTop: 0 }}>Target States</h2>
-
-          <div style={stateGrid}>
-            {STATES.map((state) => (
+        <section style={pane}>
+          <h2 style={{ marginTop: 0, fontSize: 30 }}>Target States</h2>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
+            {STATE_OPTIONS.map((state) => (
               <button
                 key={state}
                 type="button"
-                style={{
-                  ...stateButtonStyle,
-                  border:
-                    stateFilter === state
-                      ? "1px solid rgba(157,243,191,.65)"
-                      : stateButtonStyle.border,
-                  background:
-                    stateFilter === state
-                      ? "rgba(157,243,191,.12)"
-                      : stateButtonStyle.background,
-                }}
                 onClick={() => {
                   setStateFilter(state);
-                  loadMembers(state, roleFilter);
+                  load(state, roleFilter);
+                }}
+                style={{
+                  ...ghost,
+                  border: stateFilter === state ? "1px solid rgba(157,243,191,.65)" : ghost.border,
+                  color: stateFilter === state ? "#9df3bf" : "white",
                 }}
               >
                 {state}
@@ -538,221 +512,168 @@ export default function NetworkPage() {
             ))}
           </div>
 
-          <label style={{ display: "block", fontWeight: 800, marginBottom: 8 }}>
-            Filter By Role
-          </label>
-
+          <h2 style={{ fontSize: 30 }}>Filter By Role</h2>
           <select
             value={roleFilter}
             onChange={(event) => {
               setRoleFilter(event.target.value);
-              loadMembers(stateFilter, event.target.value);
+              load(stateFilter, event.target.value);
             }}
-            style={inputStyle}
+            style={input}
           >
-            {ROLES.map((role) => (
-              <option key={role}>{role}</option>
+            {ROLE_OPTIONS.map((role) => (
+              <option key={role} value={role} style={{ color: "#111" }}>
+                {role}
+              </option>
             ))}
           </select>
         </section>
 
-        {loading && (
-          <section style={cardStyle}>
-            Loading member network...
+        {status && (
+          <section
+            style={{
+              ...pane,
+              color: status.toLowerCase().includes("could") || status.toLowerCase().includes("failed") ? "#ffd0d0" : "#b9ffc9",
+              fontSize: 22,
+            }}
+          >
+            {status}
           </section>
         )}
 
-        {error && (
-          <section style={{ ...cardStyle, color: "#ffd0d0" }}>
-            {error}
+        {!status && members.length === 0 && (
+          <section style={{ ...pane, color: "#b9ffc9", fontSize: 22 }}>
+            No members matched this filter. Try All states and All roles.
           </section>
         )}
 
-        {!loading && !error && members.length === 0 && (
-          <section style={cardStyle}>
-            <h2>No matching members yet.</h2>
+        <section className="vf-member-grid">
+          {!status &&
+            members.map((member) => {
+              const id = String(member.id || "");
+              const email = memberEmail(member);
+              const busy = workingId === id;
 
-            <p style={{ color: "rgba(255,255,255,.72)" }}>
-              Try another state or role filter.
-            </p>
-          </section>
-        )}
-
-        {!loading &&
-          !error &&
-          members.map((member) => {
-            const busy = workingId === member.id;
-
-            return (
-              <section key={member.id} style={cardStyle}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 18,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
+              return (
+                <article key={id || email} style={card}>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 14 }}>
                     {member.profile_photo_url ? (
                       <img
                         src={member.profile_photo_url}
-                        alt={member.name || "Member"}
+                        alt={memberName(member)}
                         style={{
-                          width: 92,
-                          height: 92,
-                          borderRadius: 24,
+                          width: 74,
+                          height: 74,
+                          borderRadius: 999,
                           objectFit: "cover",
-                          border: "1px solid rgba(157,243,191,.32)",
+                          border: "2px solid rgba(157,243,191,.45)",
                         }}
                       />
                     ) : (
                       <div
                         style={{
-                          width: 92,
-                          height: 92,
-                          borderRadius: 24,
+                          width: 74,
+                          height: 74,
+                          borderRadius: 999,
                           display: "grid",
                           placeItems: "center",
-                          background: "rgba(255,255,255,.06)",
-                          border: "1px solid rgba(255,255,255,.12)",
-                          color: "rgba(255,255,255,.55)",
+                          background: "rgba(157,243,191,.10)",
+                          border: "2px solid rgba(157,243,191,.25)",
+                          color: "#9df3bf",
                           fontWeight: 900,
+                          fontSize: 26,
                         }}
                       >
-                        VF
+                        {memberName(member).charAt(0).toUpperCase()}
                       </div>
                     )}
 
                     <div>
-                      <div
-                        style={{
-                          color: "#9df3bf",
-                          fontWeight: 900,
-                          letterSpacing: 3,
-                          marginBottom: 8,
-                        }}
-                      >
-                        {member.state || "Unknown"} • {member.role || "Member"}
+                      <div style={{ color: "#9df3bf", fontWeight: 900 }}>
+                        {memberRole(member)} · {memberState(member)}
                       </div>
-
-                      <h2
-                        style={{
-                          fontSize: 38,
-                          margin: "0 0 8px",
-                        }}
-                      >
-                        {member.name || "Unnamed Member"}
+                      <h2 style={{ margin: "6px 0", fontSize: 30 }}>
+                        {memberName(member)}
                       </h2>
-
-                      {member.company && (
-                        <h3
-                          style={{
-                            color: "rgba(255,255,255,.68)",
-                            margin: "0 0 14px",
-                          }}
-                        >
-                          {member.company}
-                        </h3>
-                      )}
-
-                      <div style={{ marginBottom: 12 }}>
-                        <span style={pillStyle}>Status: {statusLabel(member)}</span>
-                        <span style={pillStyle}>Payment: {paymentLabel(member)}</span>
+                      <div style={{ color: "rgba(255,255,255,.58)" }}>
+                        {email || "No email listed"}
                       </div>
-
-                      <p
-                        style={{
-                          color: "rgba(255,255,255,.74)",
-                          lineHeight: 1.5,
-                          fontSize: 18,
-                        }}
-                      >
-                        {member.bio || "No bio yet."}
-                      </p>
-
-                      <TagList values={member.buy_box_states} />
-                      <TagList values={member.buy_box_types} />
-                      <TagList values={member.buy_box_strategies} />
-
-                      <a
-                        href={`mailto:${member.email}`}
-                        style={actionStyle}
-                      >
-                        Contact Member
-                      </a>
-
-                      {isOwner && (
-                        <div
-                          style={{
-                            marginTop: 18,
-                            borderTop: "1px solid rgba(255,255,255,.10)",
-                            paddingTop: 14,
-                          }}
-                        >
-                          <div
-                            style={{
-                              color: "#e8c46b",
-                              fontWeight: 900,
-                              marginBottom: 8,
-                              letterSpacing: 2,
-                            }}
-                          >
-                            OWNER MEMBER CONTROLS
-                          </div>
-
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => runMemberStatus(member.id, "activate", "Activate member")}
-                            style={ghostButton}
-                          >
-                            {busy ? "Working..." : "Activate"}
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => runMemberStatus(member.id, "suspend", "Suspend member")}
-                            style={ghostButton}
-                          >
-                            {busy ? "Working..." : "Suspend"}
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => runMemberStatus(member.id, "mark_paid", "Mark paid")}
-                            style={ghostButton}
-                          >
-                            {busy ? "Working..." : "Mark Paid"}
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => runMemberStatus(member.id, "mark_unpaid", "Mark unpaid")}
-                            style={ghostButton}
-                          >
-                            {busy ? "Working..." : "Mark Unpaid"}
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => removeMember(member.id)}
-                            style={dangerButton}
-                          >
-                            {busy ? "Working..." : "Remove"}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
-              </section>
-            );
-          })}
+
+                  <p style={{ ...muted, fontSize: 18 }}>
+                    {display(member.bio || member.buy_box || member.strategy, "No network notes listed yet.")}
+                  </p>
+
+                  <ChipList label="Member Types" items={member.member_types} />
+                  <ChipList label="Markets" items={member.buy_box_states || member.markets} />
+                  <ChipList label="Project Types" items={member.buy_box_types} />
+                  <ChipList label="Strategies" items={member.buy_box_strategies} />
+                  <ChipList label="Needs" items={member.needs} />
+                  <ChipList label="Can Provide" items={member.can_provide} />
+
+                  {member.funding_capacity && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{ color: "#f5d978", fontWeight: 900 }}>Funding Capacity</div>
+                      <p style={{ ...muted, marginTop: 6 }}>{member.funding_capacity}</p>
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      border: "1px solid rgba(255,255,255,.10)",
+                      background: "rgba(0,0,0,.15)",
+                      borderRadius: 18,
+                      padding: 13,
+                      marginTop: 16,
+                    }}
+                  >
+                    <strong>Status:</strong> {memberStatus(member)} · <strong>Payment:</strong>{" "}
+                    {display(member.payment_status, "unpaid")}
+                  </div>
+
+                  <div className="vf-network-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+                    {email && (
+                      <a href={`mailto:${email}`} style={btn}>
+                        Email Member
+                      </a>
+                    )}
+
+                    {owner && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => runMemberAction(id, "activate", "Member activated ✓")}
+                          style={ghost}
+                        >
+                          {busy ? "Working..." : "Activate"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => runMemberAction(id, "suspend", "Member suspended ✓")}
+                          style={danger}
+                        >
+                          {busy ? "Working..." : "Suspend"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => removeMember(id)}
+                          style={danger}
+                        >
+                          {busy ? "Working..." : "Remove"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+        </section>
       </div>
     </main>
   );
