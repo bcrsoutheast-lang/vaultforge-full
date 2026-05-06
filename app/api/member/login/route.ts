@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
 function supabaseAuthClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
@@ -47,24 +49,40 @@ function cleanEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
-function cookieOptions(maxAge: number) {
-  return {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    maxAge,
-  };
+function cookieHeader(
+  name: string,
+  value: string,
+  maxAge: number,
+  options: { httpOnly?: boolean } = {}
+) {
+  const encodedName = encodeURIComponent(name);
+  const encodedValue = encodeURIComponent(value);
+  const parts = [
+    `${encodedName}=${encodedValue}`,
+    "Path=/",
+    `Max-Age=${maxAge}`,
+    "SameSite=Lax",
+  ];
+
+  if (process.env.NODE_ENV === "production") {
+    parts.push("Secure");
+  }
+
+  if (options.httpOnly) {
+    parts.push("HttpOnly");
+  }
+
+  return parts.join("; ");
 }
 
-function publicCookieOptions(maxAge: number) {
-  return {
-    path: "/",
-    httpOnly: false,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    maxAge,
-  };
+function setSessionCookie(
+  response: NextResponse,
+  name: string,
+  value: string,
+  maxAge: number,
+  options: { httpOnly?: boolean } = {}
+) {
+  response.headers.append("Set-Cookie", cookieHeader(name, value, maxAge, options));
 }
 
 async function upsertProfile(email: string, authUserId: string) {
@@ -121,20 +139,34 @@ export async function POST(request: Request) {
 
     await upsertProfile(email, data.user.id);
 
+    const sessionMaxAge = data.session.expires_in || 60 * 60 * 24 * 7;
+    const refreshMaxAge = 60 * 60 * 24 * 30;
+    const isOwner = email === OWNER_EMAIL;
+
     const response = NextResponse.json({
       ok: true,
       email,
       auth_user_id: data.user.id,
       redirect_to: "/dashboard",
+      cookies_set: true,
     });
 
-    const sessionMaxAge = data.session.expires_in || 60 * 60 * 24 * 7;
+    setSessionCookie(response, "vf_auth_access_token", data.session.access_token, sessionMaxAge, { httpOnly: true });
+    setSessionCookie(response, "vf_auth_refresh_token", data.session.refresh_token, refreshMaxAge, { httpOnly: true });
+    setSessionCookie(response, "vf_auth_user_id", data.user.id, sessionMaxAge, { httpOnly: true });
 
-    response.cookies.set("vf_auth_access_token", data.session.access_token, cookieOptions(sessionMaxAge));
-    response.cookies.set("vf_auth_refresh_token", data.session.refresh_token, cookieOptions(60 * 60 * 24 * 30));
-    response.cookies.set("vf_auth_user_id", data.user.id, cookieOptions(sessionMaxAge));
-    response.cookies.set("vf_email", email, publicCookieOptions(sessionMaxAge));
-    response.cookies.set("vf_member_login", "1", publicCookieOptions(sessionMaxAge));
+    setSessionCookie(response, "vf_email", email, sessionMaxAge);
+    setSessionCookie(response, "vf_member_login", "1", sessionMaxAge);
+
+    if (isOwner) {
+      setSessionCookie(response, "vf_admin", "1", sessionMaxAge);
+      setSessionCookie(response, "vf_admin_email", email, sessionMaxAge);
+      setSessionCookie(response, "isAdmin", "true", sessionMaxAge);
+    } else {
+      setSessionCookie(response, "vf_admin", "", 0);
+      setSessionCookie(response, "vf_admin_email", "", 0);
+      setSessionCookie(response, "isAdmin", "", 0);
+    }
 
     return response;
   } catch (error: any) {
