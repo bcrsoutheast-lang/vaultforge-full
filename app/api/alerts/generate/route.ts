@@ -399,6 +399,7 @@ export async function POST(request: Request) {
         const exists = await alreadyExists(supabase, "vf_match_alerts", member_email, deal_id);
         if (exists) continue;
 
+        const generatedTitle = alertTitleFor(deal, match.score);
         const message = alertMessageFor(deal, member, match.reasons, match.score);
 
         inserts.push({
@@ -406,18 +407,27 @@ export async function POST(request: Request) {
           recipient_email: member_email,
           deal_id,
           deal_title: dealTitle(deal),
-          title: alertTitleFor(deal, match.score),
+
+          alert_title: generatedTitle,
+          title: generatedTitle,
+
+          alert_message: message,
           message,
           body: message,
+          description: message,
+
           alert_type: "smart_match",
           type: "smart_match",
           status: "active",
+
           score: match.score,
           match_score: match.score,
           reason: match.reasons.join(" · "),
           match_reason: match.reasons.join(" · "),
+
           source: "vaultforge_smart_engine",
           source_table: "vf_deals",
+
           is_read: false,
           read: false,
           is_dismissed: false,
@@ -443,7 +453,7 @@ export async function POST(request: Request) {
     const { data: inserted, error: insertError } = await supabase
       .from("vf_match_alerts")
       .insert(inserts)
-      .select("id,member_email,deal_id,score,title");
+      .select("id,member_email,deal_id,score,title,alert_title");
 
     if (insertError) {
       return NextResponse.json(
