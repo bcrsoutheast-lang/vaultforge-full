@@ -185,7 +185,7 @@ export default function LoginPage() {
 
       setMessage(data?.message || "Success.");
 
-      await new Promise((resolve) => window.setTimeout(resolve, 350));
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
 
       window.location.href = data?.redirect_to || "/dashboard";
     } catch (err: any) {
