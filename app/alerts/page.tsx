@@ -5,6 +5,14 @@ import Link from "next/link";
 
 type AlertItem = Record<string, any>;
 type Toast = { type: "success" | "error" | "info"; text: string };
+type GenerateResult = {
+  status: "idle" | "generating" | "done" | "error";
+  inserted: number;
+  deals: number;
+  members: number;
+  message: string;
+  minScore?: number;
+};
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -73,6 +81,13 @@ const ownerCard: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.34)",
   background:
     "linear-gradient(145deg, rgba(232,196,107,.10), rgba(255,255,255,.03))",
+};
+
+const resultCard: React.CSSProperties = {
+  ...card,
+  border: "1px solid rgba(157,243,191,.34)",
+  background:
+    "linear-gradient(145deg, rgba(157,243,191,.09), rgba(255,255,255,.03))",
 };
 
 const btn: React.CSSProperties = {
@@ -199,7 +214,8 @@ function dealId(item: AlertItem) {
 function scoreLabel(item: AlertItem) {
   const score = Number(item.score || item.match_score || 0);
   if (!score) return "";
-  if (score >= 100) return `Elite Match · ${score}`;
+  if (score >= 120) return `Elite Match · ${score}`;
+  if (score >= 90) return `High-Confidence Match · ${score}`;
   if (score >= 70) return `Strong Match · ${score}`;
   return `Signal Score · ${score}`;
 }
@@ -246,6 +262,76 @@ function ToastBox({ toast }: { toast: Toast | null }) {
   );
 }
 
+function GenerateResultBox({ result }: { result: GenerateResult }) {
+  if (result.status === "idle") return null;
+
+  const isError = result.status === "error";
+  const isGenerating = result.status === "generating";
+
+  return (
+    <section
+      style={{
+        ...resultCard,
+        border: isError
+          ? "1px solid rgba(255,120,120,.45)"
+          : "1px solid rgba(157,243,191,.40)",
+      }}
+    >
+      <div
+        style={{
+          color: isError ? "#ffd0d0" : "#9df3bf",
+          letterSpacing: 5,
+          fontWeight: 900,
+          marginBottom: 10,
+        }}
+      >
+        {isGenerating ? "SMART ENGINE RUNNING" : isError ? "SMART ENGINE ERROR" : "SMART ENGINE COMPLETE"}
+      </div>
+
+      <h2 style={{ fontSize: 36, margin: "0 0 12px" }}>
+        {isGenerating
+          ? "Generating alerts..."
+          : isError
+          ? "Generation failed"
+          : `${result.inserted} alert${result.inserted === 1 ? "" : "s"} created`}
+      </h2>
+
+      <p style={{ ...muted, fontSize: 19, marginTop: 0 }}>
+        {result.message}
+      </p>
+
+      {!isGenerating && !isError && (
+        <div style={statGrid}>
+          <div style={statCard}>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Created</div>
+            <div style={{ fontSize: 40, fontWeight: 900 }}>{result.inserted}</div>
+          </div>
+          <div style={statCard}>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Deals Scanned</div>
+            <div style={{ fontSize: 40, fontWeight: 900 }}>{result.deals}</div>
+          </div>
+          <div style={statCard}>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Members Scanned</div>
+            <div style={{ fontSize: 40, fontWeight: 900 }}>{result.members}</div>
+          </div>
+          <div style={statCard}>
+            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Min Score</div>
+            <div style={{ fontSize: 40, fontWeight: 900 }}>{result.minScore || 45}</div>
+          </div>
+        </div>
+      )}
+
+      {!isGenerating && !isError && result.inserted === 0 && (
+        <p style={{ ...muted, fontSize: 17 }}>
+          Zero usually means one of these: not enough completed member profiles, member preferences do not match live deals,
+          alerts already exist for those deal/member pairs, or live deals are archived/deleted. Create a deal and make sure at
+          least one member profile has matching states, project types, strategies, and member roles.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export default function AlertsPage() {
   const [items, setItems] = useState<AlertItem[]>([]);
   const [status, setStatus] = useState("Loading alerts...");
@@ -253,6 +339,13 @@ export default function AlertsPage() {
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [owner, setOwner] = useState(false);
+  const [generateResult, setGenerateResult] = useState<GenerateResult>({
+    status: "idle",
+    inserted: 0,
+    deals: 0,
+    members: 0,
+    message: "",
+  });
 
   function showToast(next: Toast) {
     setToast(next);
@@ -287,10 +380,14 @@ export default function AlertsPage() {
   }
 
   async function generateSmartAlerts() {
-    const yes = window.confirm("Generate smart match alerts from live deals and members?");
-    if (!yes) return;
-
     setGenerating(true);
+    setGenerateResult({
+      status: "generating",
+      inserted: 0,
+      deals: 0,
+      members: 0,
+      message: "VaultForge is scanning live deals, member roles, markets, project types, strategies, needs, provider abilities, photos, AI summaries, and margin signals.",
+    });
 
     try {
       const email = getEmail();
@@ -302,7 +399,7 @@ export default function AlertsPage() {
           "x-vf-email": email,
           "x-vf-admin": owner ? "1" : "",
         },
-        body: JSON.stringify({ email, owner: owner ? "1" : "", min_score: 55 }),
+        body: JSON.stringify({ email, owner: owner ? "1" : "", min_score: 45 }),
       });
 
       const data = await res.json();
@@ -311,13 +408,33 @@ export default function AlertsPage() {
         throw new Error(data?.error || data?.details || "Smart generation failed.");
       }
 
-      showToast({
-        type: "success",
-        text: `Smart engine complete: ${data.inserted || 0} alerts created.`,
+      const inserted = Number(data.inserted || 0);
+      const deals = Number(data.scanned?.deals || 0);
+      const members = Number(data.scanned?.members || 0);
+
+      setGenerateResult({
+        status: "done",
+        inserted,
+        deals,
+        members,
+        minScore: Number(data.minScore || 45),
+        message:
+          inserted > 0
+            ? `Done. VaultForge created ${inserted} smart alert${inserted === 1 ? "" : "s"} from ${deals} live deal${deals === 1 ? "" : "s"} and ${members} active member profile${members === 1 ? "" : "s"}.`
+            : data.message ||
+              `Done. VaultForge scanned ${deals} live deal${deals === 1 ? "" : "s"} and ${members} active member profile${members === 1 ? "" : "s"}, but did not find new matches above the score threshold.`,
       });
 
+      showToast({ type: "success", text: `Smart engine complete: ${inserted} alerts created.` });
       await load();
     } catch (error: any) {
+      setGenerateResult({
+        status: "error",
+        inserted: 0,
+        deals: 0,
+        members: 0,
+        message: error?.message || "Smart generation failed.",
+      });
       showToast({ type: "error", text: error?.message || "Smart generation failed." });
     } finally {
       setGenerating(false);
@@ -395,28 +512,16 @@ export default function AlertsPage() {
           <Link href="/messages" style={navLink}>Messages</Link>
           <Link href="/network" style={navLink}>Network</Link>
           <Link href="/profile" style={navLink}>Profile</Link>
+          <Link href="/submit" style={navLink}>Create Deal</Link>
           <Link href="/logout" style={navLink}>Logout</Link>
         </nav>
 
         <section style={hero}>
-          <div
-            style={{
-              color: "#9df3bf",
-              letterSpacing: 5,
-              fontWeight: 900,
-              marginBottom: 12,
-            }}
-          >
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 900, marginBottom: 12 }}>
             VAULTFORGE ALERTS
           </div>
 
-          <h1
-            style={{
-              fontSize: "clamp(56px,13vw,96px)",
-              lineHeight: 0.9,
-              margin: "0 0 18px",
-            }}
-          >
+          <h1 style={{ fontSize: "clamp(56px,13vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
             Routing Signal Feed
           </h1>
 
@@ -428,6 +533,7 @@ export default function AlertsPage() {
           <button type="button" onClick={load} style={btn}>Refresh Alerts</button>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+          <Link href="/submit" style={ghost}>Create Deal</Link>
         </section>
 
         {owner && (
@@ -451,6 +557,8 @@ export default function AlertsPage() {
             </button>
           </section>
         )}
+
+        <GenerateResultBox result={generateResult} />
 
         <section style={statGrid}>
           <div style={statCard}>
@@ -522,29 +630,23 @@ export default function AlertsPage() {
                   </p>
                 )}
 
-                {relatedDealId && (
+                {relatedDealId ? (
                   <Link href={`/deal/${relatedDealId}`} style={btn}>
                     Open Deal Room
+                  </Link>
+                ) : (
+                  <Link href="/projects" style={ghost}>
+                    View Projects
                   </Link>
                 )}
 
                 {!isRead(item) && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => markRead(item)}
-                    style={ghost}
-                  >
+                  <button type="button" disabled={busy} onClick={() => markRead(item)} style={ghost}>
                     {busy ? "Working..." : "Mark Read"}
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => dismiss(item)}
-                  style={danger}
-                >
+                <button type="button" disabled={busy} onClick={() => dismiss(item)} style={danger}>
                   {busy ? "Working..." : "Dismiss"}
                 </button>
               </section>
