@@ -51,31 +51,21 @@ function emailFromCookie(cookieHeader: string) {
 async function countRows(supabase: any, table: string, filter?: (query: any) => any) {
   try {
     let query = supabase.from(table).select("*", { count: "exact", head: true });
-    if (filter) query = filter(query);
 
-    const { count, error } = await query;
-    if (error) return { count: 0, ok: false, error: error.message };
-
-    return { count: Number(count || 0), ok: true, error: "" };
-  } catch (error: any) {
-    return { count: 0, ok: false, error: error?.message || String(error) };
-  }
-}
-
-async function countFirstWorkingTable(supabase: any, tableNames: string[], filter?: (query: any) => any) {
-  const tried: Record<string, string> = {};
-
-  for (const table of tableNames) {
-    const result = await countRows(supabase, table, filter);
-
-    if (result.ok) {
-      return { count: result.count, table, tried };
+    if (filter) {
+      query = filter(query);
     }
 
-    tried[table] = result.error;
-  }
+    const { count, error } = await query;
 
-  return { count: 0, table: "", tried };
+    if (error) {
+      return 0;
+    }
+
+    return Number(count || 0);
+  } catch {
+    return 0;
+  }
 }
 
 export async function GET(request: Request) {
@@ -90,19 +80,11 @@ export async function GET(request: Request) {
         bucket: 0,
         messages: 0,
         alerts: 0,
-        admin: {
-          owner: false,
-          pendingDeals: 0,
-          archivedDeals: 0,
-          lockedMembers: 0,
-          paymentRequiredMembers: 0,
-          activeMembers: 0,
-        },
-        warning: "Supabase environment values are missing.",
       });
     }
 
     const url = new URL(request.url);
+
     const email =
       cleanEmail(request.headers.get("x-vf-email")) ||
       cleanEmail(url.searchParams.get("email")) ||
@@ -114,62 +96,67 @@ export async function GET(request: Request) {
       cleanEmail(url.searchParams.get("owner")) === "1";
 
     const [
-      dealsResult,
-      membersResult,
-      bucketResult,
-      messagesResult,
-      pendingDealsResult,
-      archivedDealsResult,
-      lockedMembersResult,
-      paymentMembersResult,
-      activeMembersResult,
+      deals,
+      members,
+      bucket,
+      messages,
+      pendingDeals,
+      archivedDeals,
+      lockedMembers,
+      unpaidMembers,
+      activeMembers,
     ] = await Promise.all([
-      countFirstWorkingTable(supabase, ["vf_deals", "deals", "property_cards"]),
-      countFirstWorkingTable(supabase, ["vf_members", "vf_profiles", "profiles", "member_profiles", "members"]),
-      countFirstWorkingTable(
+      countRows(supabase, "vf_deals"),
+      countRows(supabase, "vf_members"),
+      countRows(
         supabase,
-        ["vf_buy_bucket", "buy_bucket", "vf_saved_deals", "saved_deals"],
+        "vf_buy_bucket",
         email
           ? (query) =>
               query.or(
-                `member_email.eq.${email},email.eq.${email},user_email.eq.${email},owner_email.eq.${email}`
+                `member_email.eq.${email},buyer_email.eq.${email}`
               )
           : undefined
       ),
-      countFirstWorkingTable(
+      countRows(
         supabase,
-        ["vf_messages", "messages"],
+        "vf_messages",
         email
           ? (query) =>
               query.or(
-                `sender_email.eq.${email},recipient_email.eq.${email},email.eq.${email}`
+                `sender_email.eq.${email},recipient_email.eq.${email}`
               )
           : undefined
       ),
-      countFirstWorkingTable(
+      countRows(
         supabase,
-        ["vf_deals", "deals", "property_cards"],
-        (query) => query.or("status.eq.pending,status.eq.review,status.eq.submitted")
+        "vf_deals",
+        (query) =>
+          query.or("status.eq.pending,status.eq.review,status.eq.submitted")
       ),
-      countFirstWorkingTable(
+      countRows(
         supabase,
-        ["vf_deals", "deals", "property_cards"],
-        (query) => query.or("archived.eq.true,status.eq.archived")
+        "vf_deals",
+        (query) =>
+          query.or("archived.eq.true,status.eq.archived")
       ),
-      countFirstWorkingTable(
+      countRows(
         supabase,
-        ["vf_members", "vf_profiles", "profiles", "member_profiles", "members"],
-        (query) => query.or("access_status.eq.locked,member_status.eq.locked,status.eq.locked")
+        "vf_members",
+        (query) =>
+          query.or("member_status.eq.locked,is_suspended.eq.true")
       ),
-      countFirstWorkingTable(
+      countRows(
         supabase,
-        ["vf_members", "vf_profiles", "profiles", "member_profiles", "members"],
-        (query) => query.or("access_status.eq.payment_required,payment_status.eq.unpaid,subscription_status.eq.unpaid")
+        "vf_members",
+        (query) =>
+          query.or("payment_status.eq.unpaid,payment_status.eq.inactive")
       ),
-      countFirstWorkingTable(
+      countRows(
         supabase,
-        ["vf_members", "vf_profiles", "profiles", "member_profiles", "members"],
-        (query) => query.or("access_status.eq.active,member_status.eq.active,status.eq.active,payment_status.eq.active,subscription_status.eq.active")
+        "vf_members",
+        (query) =>
+          query.or("member_status.eq.active,is_active.eq.true")
       ),
     ]);
 
@@ -177,43 +164,30 @@ export async function GET(request: Request) {
       ok: true,
       email,
       owner,
-      deals: dealsResult.count,
-      members: membersResult.count,
-      bucket: bucketResult.count,
-      messages: messagesResult.count,
-      alerts: bucketResult.count + messagesResult.count,
+      deals,
+      members,
+      bucket,
+      messages,
+      alerts: bucket + messages,
       admin: {
         owner,
-        pendingDeals: pendingDealsResult.count,
-        archivedDeals: archivedDealsResult.count,
-        lockedMembers: lockedMembersResult.count,
-        paymentRequiredMembers: paymentMembersResult.count,
-        activeMembers: activeMembersResult.count,
+        pendingDeals,
+        archivedDeals,
+        lockedMembers,
+        paymentRequiredMembers: unpaidMembers,
+        activeMembers,
       },
       sources: {
-        deals: dealsResult.table,
-        members: membersResult.table,
-        bucket: bucketResult.table,
-        messages: messagesResult.table,
+        deals: "vf_deals",
+        members: "vf_members",
+        bucket: "vf_buy_bucket",
+        messages: "vf_messages",
       },
     });
   } catch (error: any) {
     return NextResponse.json({
-      ok: true,
-      deals: 0,
-      members: 0,
-      bucket: 0,
-      messages: 0,
-      alerts: 0,
-      admin: {
-        owner: false,
-        pendingDeals: 0,
-        archivedDeals: 0,
-        lockedMembers: 0,
-        paymentRequiredMembers: 0,
-        activeMembers: 0,
-      },
-      warning: error?.message || "Dashboard stats failed.",
+      ok: false,
+      error: error?.message || "Dashboard stats failed.",
     });
   }
 }
