@@ -51,26 +51,19 @@ function emailFromCookie(cookieHeader: string) {
 }
 
 function asList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((item) => clean(item)).filter(Boolean);
-  }
+  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean);
 
   const text = clean(value);
   if (!text) return [];
 
   try {
     const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) {
-      return parsed.map((item) => clean(item)).filter(Boolean);
-    }
+    if (Array.isArray(parsed)) return parsed.map((item) => clean(item)).filter(Boolean);
   } catch {
     // continue
   }
 
-  return text
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return text.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
 function lowerList(value: unknown): string[] {
@@ -127,7 +120,11 @@ function memberName(member: Member) {
 }
 
 function memberRole(member: Member) {
-  return clean(member.role || member.member_type || member.type || "Member");
+  return clean(member.role || member.member_role || member.type || "Member");
+}
+
+function memberRoles(member: Member) {
+  return lowerList(member.member_types || member.role || member.member_role);
 }
 
 function isDealLive(deal: Deal) {
@@ -152,6 +149,9 @@ function isMemberLive(member: Member) {
   const status = clean(member.member_status || member.status || "active").toLowerCase();
   if (["deleted", "removed", "suspended", "locked"].includes(status)) return false;
 
+  const alertFrequency = clean(member.alert_frequency).toLowerCase();
+  if (alertFrequency === "off") return false;
+
   return true;
 }
 
@@ -160,55 +160,87 @@ function scoreMatch(deal: Deal, member: Member) {
   const reasons: string[] = [];
 
   const state = dealState(deal).toLowerCase();
-  const city = dealCity(deal);
+  const city = dealCity(deal).toLowerCase();
   const propertyType = dealType(deal).toLowerCase();
   const strategy = dealStrategy(deal).toLowerCase();
   const needs = dealNeeds(deal);
   const role = memberRole(member).toLowerCase();
+  const roles = memberRoles(member);
 
   const memberState = clean(member.state).toLowerCase();
-  const buyStates = lowerList(member.buy_box_states);
-  const buyTypes = lowerList(member.buy_box_types);
-  const buyStrategies = lowerList(member.buy_box_strategies);
+  const markets = lowerList(member.markets);
+  const buyStates = lowerList(member.buy_box_states || member.market_states || member.markets);
+  const buyTypes = lowerList(member.buy_box_types || member.property_types || member.asset_types);
+  const buyStrategies = lowerList(member.buy_box_strategies || member.strategies);
+  const memberNeeds = lowerList(member.needs || member.deal_needs || member.what_i_need);
+  const canProvide = lowerList(member.can_provide || member.what_i_provide);
+  const alertTypes = lowerList(member.alert_types);
 
   if (state && memberState && state === memberState) {
-    score += 35;
-    reasons.push(`Same state: ${dealState(deal)}`);
+    score += 25;
+    reasons.push(`Same home state: ${dealState(deal)}`);
   }
 
   if (state && buyStates.includes(state)) {
-    score += 35;
-    reasons.push(`Inside buy-box state: ${dealState(deal)}`);
+    score += 40;
+    reasons.push(`Inside selected market: ${dealState(deal)}`);
+  }
+
+  if (city && markets.some((market) => market.includes(city) || city.includes(market))) {
+    score += 30;
+    reasons.push(`City/market match: ${dealCity(deal)}`);
   }
 
   if (propertyType && buyTypes.length && includesAny(buyTypes, [propertyType])) {
-    score += 25;
-    reasons.push(`Asset type match: ${dealType(deal)}`);
+    score += 30;
+    reasons.push(`Project type match: ${dealType(deal)}`);
   }
 
   if (strategy && buyStrategies.length && includesAny(buyStrategies, [strategy])) {
-    score += 25;
+    score += 30;
     reasons.push(`Strategy match: ${dealStrategy(deal)}`);
   }
 
-  if (needs.includes("buyer needed") && role.includes("buyer")) {
-    score += 40;
-    reasons.push("Deal needs a buyer");
+  if (memberNeeds.includes("off-market deals")) {
+    score += 10;
+    reasons.push("Member wants off-market deal flow");
   }
 
-  if (needs.includes("lender needed") && role.includes("lender")) {
-    score += 40;
-    reasons.push("Deal needs a lender");
+  if (memberNeeds.includes("funding") && (needs.includes("funding") || needs.includes("lender needed"))) {
+    score += 20;
+    reasons.push("Funding need detected");
   }
 
-  if (needs.includes("contractor needed") && role.includes("contractor")) {
-    score += 40;
-    reasons.push("Deal needs a contractor");
+  if (memberNeeds.includes("buyers") || memberNeeds.includes("buyer needed")) {
+    if (roles.includes("buyer") || role.includes("buyer")) {
+      score += 25;
+      reasons.push("Buyer appetite detected");
+    }
   }
 
-  if (needs.includes("partner needed") && (role.includes("partner") || role.includes("operator"))) {
-    score += 35;
-    reasons.push("Deal needs an operating/JV partner");
+  if ((needs.includes("buyer needed") || needs.includes("buyer")) && (roles.includes("buyer") || role.includes("buyer") || canProvide.includes("cash buyer"))) {
+    score += 45;
+    reasons.push("Deal needs a buyer and member can buy");
+  }
+
+  if ((needs.includes("funding") || needs.includes("lender needed")) && (roles.includes("lender") || role.includes("lender") || canProvide.includes("private lending") || canProvide.includes("hard money"))) {
+    score += 45;
+    reasons.push("Deal needs funding and member can fund");
+  }
+
+  if ((needs.includes("contractor needed") || needs.includes("contractor")) && (roles.includes("contractor") || role.includes("contractor") || canProvide.includes("contractor crew") || canProvide.includes("construction"))) {
+    score += 45;
+    reasons.push("Deal needs contractor/operator support");
+  }
+
+  if ((needs.includes("jv partner") || needs.includes("partner needed")) && (roles.includes("jv partner") || role.includes("partner") || canProvide.includes("project management"))) {
+    score += 40;
+    reasons.push("JV/operator alignment");
+  }
+
+  if (alertTypes.includes("high-margin deal") || alertTypes.includes("ai opportunity signal")) {
+    score += 5;
+    reasons.push("Member wants higher-signal alerts");
   }
 
   const asking = Number(deal.asking_price || deal.price || 0);
@@ -223,33 +255,44 @@ function scoreMatch(deal: Deal, member: Member) {
     }
 
     if (arv > 0 && spread / arv >= 0.15) {
-      score += 15;
+      score += 20;
       reasons.push("Strong margin signal");
     }
   }
 
   if (deal.ai_summary) {
-    score += 5;
+    score += 8;
     reasons.push("AI summary available");
   }
 
   if (deal.main_photo_url || (Array.isArray(deal.photo_urls) && deal.photo_urls.length > 0)) {
-    score += 5;
+    score += 7;
     reasons.push("Photos attached");
   }
 
-  if (city) {
-    reasons.push(`Market: ${city}`);
+  if (deal.seller_situation) {
+    score += 5;
+    reasons.push("Seller situation captured");
+  }
+
+  if (deal.private_notes || deal.access_notes) {
+    score += 5;
+    reasons.push("Private deal intelligence available");
   }
 
   return {
     score,
-    reasons: Array.from(new Set(reasons)).slice(0, 7),
+    reasons: Array.from(new Set(reasons)).slice(0, 8),
   };
 }
 
 function alertTitleFor(deal: Deal, score: number) {
-  const strength = score >= 100 ? "High-Confidence Match" : score >= 70 ? "Strong Routing Signal" : "New Deal Signal";
+  const strength =
+    score >= 120 ? "Elite VaultForge Match" :
+    score >= 90 ? "High-Confidence Match" :
+    score >= 70 ? "Strong Routing Signal" :
+    "New Deal Signal";
+
   return `${strength}: ${dealTitle(deal)}`;
 }
 
@@ -261,13 +304,13 @@ function alertMessageFor(deal: Deal, member: Member, reasons: string[], score: n
   const arv = money(deal.arv);
 
   const parts = [
-    `${dealTitle(deal)} was matched to ${memberName(member)} with a VaultForge score of ${score}.`,
+    `${dealTitle(deal)} was matched to ${memberName(member)} with a VaultForge intelligence score of ${score}.`,
     location ? `Market: ${location}.` : "",
     dealType(deal) ? `Type: ${dealType(deal)}.` : "",
     dealStrategy(deal) ? `Strategy: ${dealStrategy(deal)}.` : "",
     price ? `Ask: ${price}.` : "",
     arv ? `ARV: ${arv}.` : "",
-    reasons.length ? `Why: ${reasons.join(" · ")}.` : "",
+    reasons.length ? `Why matched: ${reasons.join(" · ")}.` : "",
   ];
 
   return parts.filter(Boolean).join(" ");
@@ -310,22 +353,19 @@ export async function POST(request: Request) {
 
     if (!owner) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Owner access required to generate smart alerts.",
-        },
+        { ok: false, error: "Owner access required to generate smart alerts." },
         { status: 403 }
       );
     }
 
-    const minScore = Number(body.min_score || url.searchParams.get("min_score") || 55);
+    const minScore = Number(body.min_score || url.searchParams.get("min_score") || 45);
     const limit = Math.min(Number(body.limit || url.searchParams.get("limit") || 300), 500);
 
     const { data: deals, error: dealsError } = await supabase
       .from("vf_deals")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(120);
+      .limit(150);
 
     if (dealsError) {
       return NextResponse.json({ ok: false, error: dealsError.message, details: dealsError }, { status: 500 });
@@ -335,7 +375,7 @@ export async function POST(request: Request) {
       .from("vf_members")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(250);
+      .limit(300);
 
     if (membersError) {
       return NextResponse.json({ ok: false, error: membersError.message, details: membersError }, { status: 500 });
@@ -359,14 +399,16 @@ export async function POST(request: Request) {
         const exists = await alreadyExists(supabase, "vf_match_alerts", member_email, deal_id);
         if (exists) continue;
 
+        const message = alertMessageFor(deal, member, match.reasons, match.score);
+
         inserts.push({
           member_email,
           recipient_email: member_email,
           deal_id,
           deal_title: dealTitle(deal),
           title: alertTitleFor(deal, match.score),
-          message: alertMessageFor(deal, member, match.reasons, match.score),
-          body: alertMessageFor(deal, member, match.reasons, match.score),
+          message,
+          body: message,
           alert_type: "smart_match",
           type: "smart_match",
           status: "active",
@@ -393,10 +435,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         inserted: 0,
-        scanned: {
-          deals: liveDeals.length,
-          members: liveMembers.length,
-        },
+        scanned: { deals: liveDeals.length, members: liveMembers.length },
         message: "No new smart alerts met the match threshold.",
       });
     }
@@ -408,12 +447,7 @@ export async function POST(request: Request) {
 
     if (insertError) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: insertError.message,
-          details: insertError,
-          attempted: inserts.length,
-        },
+        { ok: false, error: insertError.message, details: insertError, attempted: inserts.length },
         { status: 500 }
       );
     }
@@ -421,10 +455,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       inserted: inserted?.length || 0,
-      scanned: {
-        deals: liveDeals.length,
-        members: liveMembers.length,
-      },
+      scanned: { deals: liveDeals.length, members: liveMembers.length },
       minScore,
       alerts: inserted || [],
     });
