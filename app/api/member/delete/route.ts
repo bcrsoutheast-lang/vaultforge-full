@@ -27,59 +27,79 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function getRequestEmail(request: Request, body: any) {
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function emailFromCookie(cookieHeader: string) {
+  const parts = cookieHeader.split(";").map((part) => part.trim());
+
+  for (const part of parts) {
+    if (part.startsWith("vf_email=")) {
+      try {
+        return decodeURIComponent(part.replace("vf_email=", "")).trim().toLowerCase();
+      } catch {
+        return part.replace("vf_email=", "").trim().toLowerCase();
+      }
+    }
+  }
+
+  return "";
+}
+
+function requestEmail(request: Request, body: any) {
   return (
-    request.headers.get("x-vf-email") ||
-    request.headers.get("x-email") ||
-    body?.owner_email ||
-    body?.admin_email ||
-    body?.email ||
-    ""
-  )
-    .trim()
-    .toLowerCase();
+    emailFromCookie(request.headers.get("cookie") || "") ||
+    cleanEmail(request.headers.get("x-vf-email")) ||
+    cleanEmail(body?.email)
+  );
+}
+
+function isOwnerRequest(request: Request, body: any) {
+  return requestEmail(request, body) === OWNER_EMAIL;
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
 
-    const id = clean(body?.id || body?.member_id);
-    const requestEmail = getRequestEmail(request, body);
-
-    if (requestEmail !== OWNER_EMAIL) {
+    if (!isOwnerRequest(request, body)) {
       return NextResponse.json(
-        { ok: false, error: "Owner access required." },
+        {
+          ok: false,
+          error: "Owner access required for member removal.",
+        },
         { status: 403 }
       );
     }
 
-    if (!id) {
-      return NextResponse.json(
-        { ok: false, error: "Missing member id." },
-        { status: 400 }
-      );
-    }
+    const id = clean(body.id || body.member_id);
 
-    const now = new Date().toISOString();
+    if (!id) {
+      return NextResponse.json({ ok: false, error: "Missing member id." }, { status: 400 });
+    }
 
     const { data, error } = await supabaseClient()
       .from("vf_members")
       .update({
+        member_status: "removed",
         is_active: false,
         is_suspended: true,
         is_deleted: true,
-        member_status: "removed",
-        status: "removed",
-        updated_at: now,
+        deleted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json(
-        { ok: false, error: error.message, details: error },
+        {
+          ok: false,
+          error: error.message,
+          details: error,
+        },
         { status: 500 }
       );
     }
@@ -87,7 +107,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       member: data,
-      message: "Member moved to removed.",
     });
   } catch (error: any) {
     return NextResponse.json(
