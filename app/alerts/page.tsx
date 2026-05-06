@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type AlertItem = Record<string, any>;
@@ -104,6 +104,7 @@ const btn: React.CSSProperties = {
   border: 0,
   cursor: "pointer",
   minHeight: 46,
+  touchAction: "manipulation",
 };
 
 const goldBtn: React.CSSProperties = {
@@ -212,13 +213,52 @@ function dealId(item: AlertItem) {
   return clean(item.deal_id || item.project_id || item.property_id || item.related_deal_id);
 }
 
+function scoreValue(item: AlertItem) {
+  return Number(item.score || item.match_score || 0);
+}
+
 function scoreLabel(item: AlertItem) {
-  const score = Number(item.score || item.match_score || 0);
-  if (!score) return "";
+  const score = scoreValue(item);
+  if (!score) return "Signal";
   if (score >= 120) return `Elite Match · ${score}`;
   if (score >= 90) return `High-Confidence Match · ${score}`;
   if (score >= 70) return `Strong Match · ${score}`;
   return `Signal Score · ${score}`;
+}
+
+function matchCategory(item: AlertItem) {
+  const text = `${alertTitle(item)} ${alertBody(item)} ${item.reason || ""} ${item.match_reason || ""}`.toLowerCase();
+
+  if (text.includes("fund") || text.includes("lender") || text.includes("capital")) return "Capital Match";
+  if (text.includes("buyer") || text.includes("cash buyer")) return "Buyer Match";
+  if (text.includes("contractor") || text.includes("construction")) return "Operator Match";
+  if (text.includes("jv") || text.includes("partner")) return "JV Match";
+  if (text.includes("margin") || text.includes("spread")) return "Margin Signal";
+  if (text.includes("market") || text.includes("state") || text.includes("city")) return "Market Signal";
+  return "Deal Routing";
+}
+
+function confidenceText(score: number) {
+  if (score >= 120) return "Elite";
+  if (score >= 90) return "High";
+  if (score >= 70) return "Strong";
+  if (score >= 45) return "Qualified";
+  return "Watch";
+}
+
+function confidencePercent(score: number) {
+  if (!score) return 8;
+  return Math.max(8, Math.min(100, Math.round((score / 140) * 100)));
+}
+
+function reasonChips(item: AlertItem) {
+  const raw = String(item.reason || item.match_reason || "").trim();
+  if (!raw) return [];
+  return raw
+    .split("·")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 8);
 }
 
 function ToastBox({ toast }: { toast: Toast | null }) {
@@ -323,6 +363,100 @@ function GenerateResultBox({ result }: { result: GenerateResult }) {
   );
 }
 
+function ConfidencePanel({ item }: { item: AlertItem }) {
+  const score = scoreValue(item);
+  const percent = confidencePercent(score);
+
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(157,243,191,.18)",
+        background: "rgba(0,0,0,.16)",
+        borderRadius: 22,
+        padding: 16,
+        margin: "16px 0",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+          marginBottom: 10,
+        }}
+      >
+        <div style={{ color: "#9df3bf", letterSpacing: 3, fontWeight: 900 }}>
+          CONFIDENCE
+        </div>
+        <div style={{ color: "#f5d978", fontWeight: 900 }}>
+          {confidenceText(score)} · {score || "No score"}
+        </div>
+      </div>
+
+      <div
+        style={{
+          height: 12,
+          borderRadius: 999,
+          background: "rgba(255,255,255,.08)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${percent}%`,
+            borderRadius: 999,
+            background:
+              "linear-gradient(90deg, rgba(157,243,191,.65), rgba(245,217,120,.95))",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ReasonPanel({ item }: { item: AlertItem }) {
+  const chips = reasonChips(item);
+
+  if (!chips.length) return null;
+
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(232,196,107,.20)",
+        background: "rgba(232,196,107,.06)",
+        borderRadius: 20,
+        padding: 14,
+        margin: "16px 0",
+      }}
+    >
+      <div style={{ color: "#f5d978", letterSpacing: 3, fontWeight: 900, marginBottom: 10 }}>
+        WHY THIS MATCHED
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {chips.map((chip) => (
+          <span
+            key={chip}
+            style={{
+              border: "1px solid rgba(232,196,107,.25)",
+              background: "rgba(255,255,255,.04)",
+              borderRadius: 999,
+              padding: "8px 11px",
+              color: "rgba(255,255,255,.82)",
+              fontWeight: 800,
+              fontSize: 13,
+            }}
+          >
+            {chip}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AlertsPage() {
   const [items, setItems] = useState<AlertItem[]>([]);
   const [status, setStatus] = useState("Loading alerts...");
@@ -337,6 +471,15 @@ export default function AlertsPage() {
     members: 0,
     message: "",
   });
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const item of items) {
+      const category = matchCategory(item);
+      counts[category] = (counts[category] || 0) + 1;
+    }
+    return Object.entries(counts).slice(0, 4);
+  }, [items]);
 
   function showToast(next: Toast) {
     setToast(next);
@@ -487,6 +630,22 @@ export default function AlertsPage() {
     );
   }
 
+  async function saveToBuyBucket(item: AlertItem) {
+    const id = dealId(item);
+
+    if (!id) {
+      showToast({ type: "error", text: "No deal id attached to this alert." });
+      return;
+    }
+
+    await runAction(
+      String(item.id || id),
+      "/api/deal/buy-bucket",
+      { deal_id: id },
+      "Saved to Buy Bucket ✓"
+    );
+  }
+
   useEffect(() => {
     setOwner(isOwner());
     load();
@@ -497,6 +656,22 @@ export default function AlertsPage() {
 
   return (
     <main style={shell}>
+      <style>{`
+        @media (max-width: 760px) {
+          .vf-alert-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .vf-alert-actions > * {
+            width: 100%;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+
       <ToastBox toast={toast} />
 
       <div style={wrap}>
@@ -572,6 +747,17 @@ export default function AlertsPage() {
           </div>
         </section>
 
+        {categoryCounts.length > 0 && (
+          <section style={statGrid}>
+            {categoryCounts.map(([category, count]) => (
+              <div key={category} style={statCard}>
+                <div style={{ color: "#f5d978", fontWeight: 900 }}>{category}</div>
+                <div style={{ fontSize: 36, fontWeight: 900 }}>{count}</div>
+              </div>
+            ))}
+          </section>
+        )}
+
         {status && (
           <section style={{ ...card, color: "#b9ffc9", fontSize: 22 }}>
             {status}
@@ -583,6 +769,7 @@ export default function AlertsPage() {
             const id = String(item.id || "");
             const busy = workingId === id;
             const relatedDealId = dealId(item);
+            const score = scoreValue(item);
 
             return (
               <section
@@ -594,7 +781,7 @@ export default function AlertsPage() {
                     : "1px solid rgba(157,243,191,.36)",
                   background: isRead(item)
                     ? "rgba(255,255,255,.03)"
-                    : "rgba(157,243,191,.055)",
+                    : "linear-gradient(145deg, rgba(157,243,191,.07), rgba(255,255,255,.035))",
                 }}
               >
                 <div
@@ -604,11 +791,22 @@ export default function AlertsPage() {
                     display: "inline-block",
                     borderRadius: 999,
                     padding: "8px 14px",
-                    marginBottom: 14,
+                    marginBottom: 10,
                     fontWeight: 900,
                   }}
                 >
-                  {alertType(item)} · {scoreLabel(item) || item.source_table || "alerts"}
+                  {matchCategory(item)} · {scoreLabel(item)}
+                </div>
+
+                <div
+                  style={{
+                    color: "#f5d978",
+                    letterSpacing: 3,
+                    fontWeight: 900,
+                    marginBottom: 10,
+                  }}
+                >
+                  {alertType(item)}
                 </div>
 
                 <h2 style={{ fontSize: 36, margin: "8px 0" }}>
@@ -619,24 +817,8 @@ export default function AlertsPage() {
                   {alertBody(item)}
                 </p>
 
-                {item.reason || item.match_reason ? (
-                  <div
-                    style={{
-                      border: "1px solid rgba(232,196,107,.20)",
-                      background: "rgba(232,196,107,.06)",
-                      borderRadius: 20,
-                      padding: 14,
-                      margin: "16px 0",
-                    }}
-                  >
-                    <div style={{ color: "#f5d978", letterSpacing: 3, fontWeight: 900, marginBottom: 8 }}>
-                      WHY THIS MATCHED
-                    </div>
-                    <p style={{ ...muted, margin: 0 }}>
-                      {item.reason || item.match_reason}
-                    </p>
-                  </div>
-                ) : null}
+                <ConfidencePanel item={item} />
+                <ReasonPanel item={item} />
 
                 {createdLabel(item) && (
                   <p style={{ color: "rgba(255,255,255,.45)" }}>
@@ -644,31 +826,45 @@ export default function AlertsPage() {
                   </p>
                 )}
 
-                {relatedDealId ? (
-                  <Link href={`/deal/${relatedDealId}`} style={btn}>
-                    Open Matched Deal
-                  </Link>
-                ) : (
-                  <Link href="/projects" style={ghost}>
-                    View Projects
-                  </Link>
-                )}
+                <div className="vf-alert-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {relatedDealId ? (
+                    <Link href={`/deal/${relatedDealId}`} style={btn}>
+                      Open Deal Room
+                    </Link>
+                  ) : (
+                    <Link href="/projects" style={ghost}>
+                      View Projects
+                    </Link>
+                  )}
 
-                {item.member_email && (
-                  <a href={`mailto:${item.member_email}`} style={ghost}>
-                    Message Matched Member
-                  </a>
-                )}
-
-                {!isRead(item) && (
-                  <button type="button" disabled={busy} onClick={() => markRead(item)} style={ghost}>
-                    {busy ? "Working..." : "Mark Read"}
+                  <button
+                    type="button"
+                    disabled={busy || !relatedDealId}
+                    onClick={() => saveToBuyBucket(item)}
+                    style={{
+                      ...goldBtn,
+                      opacity: busy || !relatedDealId ? 0.55 : 1,
+                    }}
+                  >
+                    {busy ? "Working..." : "Save to Buy Bucket"}
                   </button>
-                )}
 
-                <button type="button" disabled={busy} onClick={() => dismiss(item)} style={danger}>
-                  {busy ? "Working..." : "Dismiss"}
-                </button>
+                  {item.member_email && (
+                    <a href={`mailto:${item.member_email}`} style={ghost}>
+                      Message Member
+                    </a>
+                  )}
+
+                  {!isRead(item) && (
+                    <button type="button" disabled={busy} onClick={() => markRead(item)} style={ghost}>
+                      {busy ? "Working..." : "Mark Read"}
+                    </button>
+                  )}
+
+                  <button type="button" disabled={busy} onClick={() => dismiss(item)} style={danger}>
+                    {busy ? "Working..." : "Dismiss"}
+                  </button>
+                </div>
               </section>
             );
           })}
