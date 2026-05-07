@@ -374,7 +374,7 @@ function PainButtonPanel({ owner, stats }: { owner: boolean; stats: Stats }) {
             <p style={muted}>{item.text}</p>
 
             <div style={{ marginTop: 14 }}>
-              <Link href="/submit" style={ghost}>
+              <Link href="/pain-submit" style={ghost}>
                 Route Through VaultForge
               </Link>
             </div>
@@ -1150,6 +1150,7 @@ export default function DashboardPage() {
 
           <div className="vf-command-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
             <Link href="/submit" style={btn}>Create Deal</Link>
+            <Link href="/pain-submit" style={ghost}>Pain Button</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/projects" style={ghost}>Deal Rooms</Link>
             <Link href="/network" style={ghost}>Member Network</Link>
@@ -1202,7 +1203,7 @@ export default function DashboardPage() {
             label="Distress Signals"
             value={stats.pain}
             detail="Pain Button and problem-routing submissions."
-            href="/submit"
+            href="/pain"
           />
           <ClickableStatPane
             label="Routing Activity"
