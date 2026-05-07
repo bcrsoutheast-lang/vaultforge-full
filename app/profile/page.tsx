@@ -124,7 +124,7 @@ const ALERT_FREQUENCIES = [
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#03110d 100%)",
   color: "white",
   padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif",
@@ -134,16 +134,16 @@ const wrap: React.CSSProperties = { maxWidth: 1060, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.30)",
-  background: "linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.025))",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
   borderRadius: 34,
   padding: 26,
   marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.38)",
+  boxShadow: "0 38px 110px rgba(0,0,0,.46)",
 };
 
 const pane: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(145deg, rgba(181,92,255,.10), rgba(157,243,191,.06), rgba(255,255,255,.03))",
   borderRadius: 28,
   padding: 22,
   marginBottom: 18,
@@ -153,7 +153,7 @@ const goldPane: React.CSSProperties = {
   ...pane,
   border: "1px solid rgba(232,196,107,.28)",
   background:
-    "linear-gradient(145deg, rgba(232,196,107,.08), rgba(255,255,255,.035))",
+    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.03))",
 };
 
 const grid: React.CSSProperties = {
@@ -164,7 +164,7 @@ const grid: React.CSSProperties = {
 
 const btn: React.CSSProperties = {
   display: "inline-block",
-  background: "#f5d978",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   color: "#06100a",
   textDecoration: "none",
   borderRadius: 999,
@@ -183,7 +183,7 @@ const ghost: React.CSSProperties = {
   padding: "14px 20px",
   fontWeight: 900,
   border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(145deg, rgba(181,92,255,.10), rgba(157,243,191,.06), rgba(255,255,255,.03))",
   margin: "7px 7px 0 0",
 };
 
@@ -192,7 +192,7 @@ const input: React.CSSProperties = {
   boxSizing: "border-box",
   borderRadius: 18,
   border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.14), rgba(255,255,255,.06))",
   color: "white",
   padding: 14,
   fontSize: 16,
@@ -559,6 +559,24 @@ export default function ProfilePage() {
 
   return (
     <main style={page}>
+      <style>{`
+        button:hover,
+        a:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        @media (max-width: 760px) {
+          button,
+          a,
+          input,
+          select,
+          textarea {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>Member Intelligence Profile</div>
@@ -580,6 +598,75 @@ export default function ProfilePage() {
           <Link href="/payment" style={ghost}>Payment</Link>
           <Link href="/logout" style={ghost}>Logout</Link>
         </section>
+
+        
+        <section
+          style={{
+            ...goldPane,
+            border: "1px solid rgba(181,92,255,.36)",
+            background:
+              "linear-gradient(145deg, rgba(181,92,255,.16), rgba(157,243,191,.08), rgba(255,255,255,.03))",
+          }}
+        >
+          <div style={eyebrow}>VaultForge Intelligence Layer</div>
+
+          <h2 style={{ fontSize: "clamp(38px,8vw,72px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+            Your profile powers the routing engine.
+          </h2>
+
+          <p style={{ ...muted, fontSize: 19 }}>
+            VaultForge uses your markets, buy boxes, strategies, needs, capabilities,
+            and alert settings to improve deal routing, member matching, distress signals,
+            lender fit, operator fit, and future AI opportunity scoring.
+          </p>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
+            <span style={{
+              border:"1px solid rgba(181,92,255,.40)",
+              color:"#dcb8ff",
+              borderRadius:999,
+              padding:"10px 14px",
+              fontWeight:900,
+              background:"rgba(181,92,255,.12)"
+            }}>
+              Routing Ready: {progress}%
+            </span>
+
+            <span style={{
+              border:"1px solid rgba(157,243,191,.40)",
+              color:"#9df3bf",
+              borderRadius:999,
+              padding:"10px 14px",
+              fontWeight:900,
+              background:"rgba(157,243,191,.12)"
+            }}>
+              Markets: {asArray(form.buy_box_states).length}
+            </span>
+
+            <span style={{
+              border:"1px solid rgba(245,217,120,.40)",
+              color:"#f5d978",
+              borderRadius:999,
+              padding:"10px 14px",
+              fontWeight:900,
+              background:"rgba(245,217,120,.10)"
+            }}>
+              Roles: {asArray(form.member_types).length}
+            </span>
+
+            <span style={{
+              border:"1px solid rgba(255,255,255,.20)",
+              color:"white",
+              borderRadius:999,
+              padding:"10px 14px",
+              fontWeight:900,
+              background:"rgba(255,255,255,.05)"
+            }}>
+              Strategies: {asArray(form.buy_box_strategies).length}
+            </span>
+          </div>
+        </section>
+
 
         <section
           style={{
@@ -962,4 +1049,3 @@ function Text({
       />
     </div>
   );
-}
