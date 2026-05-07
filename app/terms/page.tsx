@@ -2,7 +2,8 @@ import Link from "next/link";
 
 const shellStyle: React.CSSProperties = {
   minHeight: "100vh",
-  background: "#071326",
+  background:
+    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
   color: "white",
   padding: "36px 22px 80px",
   fontFamily: "Arial, sans-serif",
@@ -22,27 +23,57 @@ const navLinkStyle: React.CSSProperties = {
   borderRadius: 999,
   padding: "11px 15px",
   fontSize: 15,
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
 };
 
 const heroStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.2)",
-  background: "rgba(255,255,255,.05)",
-  borderRadius: 26,
-  padding: 24,
+  border: "1px solid rgba(232,196,107,.24)",
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
+  borderRadius: 30,
+  padding: 28,
   marginBottom: 20,
+  boxShadow: "0 30px 90px rgba(0,0,0,.42)",
 };
 
 const cardStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.04)",
-  borderRadius: 22,
-  padding: 20,
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.12), rgba(157,243,191,.07), rgba(255,255,255,.03))",
+  borderRadius: 24,
+  padding: 22,
   marginBottom: 16,
+};
+
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.25)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 800,
+  fontSize: 13,
+  margin: "0 7px 7px 0",
 };
 
 export default function TermsPage() {
   return (
     <main style={shellStyle}>
+      <style>{`
+        a:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        @media (max-width: 760px) {
+          a {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+
       <nav style={navStyle}>
         <Link href="/" style={navLinkStyle}>Home</Link>
         <Link href="/login" style={navLinkStyle}>Login</Link>
@@ -53,9 +84,24 @@ export default function TermsPage() {
         <p style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 800 }}>
           VAULTFORGE TERMS
         </p>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          <span style={chip}>Private Intelligence Network</span>
+          <span style={chip}>AI Routing Platform</span>
+          <span style={chip}>Bloomberg-Style Real Estate System</span>
+        </div>
+
         <h1 style={{ fontSize: 48, lineHeight: 1, margin: "10px 0 18px" }}>
           Terms, Disclaimers & Member Rules
         </h1>
+
         <p style={{ color: "rgba(255,255,255,.72)", fontSize: 20, lineHeight: 1.45 }}>
           This is starter legal framing for testing. Have a qualified attorney review before public launch.
         </p>
