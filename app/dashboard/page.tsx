@@ -258,6 +258,129 @@ function ToolCard({
 
 
 
+
+function PainButtonPanel({ owner }: { owner: boolean }) {
+  const cases = [
+    {
+      code: "DISTRESS",
+      title: "Distressed Seller",
+      text: "Behind payments, inherited property, tax pressure, vacancy, or urgent liquidation.",
+      tone: "#ff8b8b",
+    },
+    {
+      code: "STALLED",
+      title: "Stalled Project",
+      text: "Construction stopped, contractor issues, funding gaps, permit delays, or execution problems.",
+      tone: "#f5d978",
+    },
+    {
+      code: "CAPITAL",
+      title: "Capital Needed",
+      text: "Bridge lender, JV partner, equity injection, hard money, or refinance needed.",
+      tone: "#9df3bf",
+    },
+    {
+      code: "ROUTE",
+      title: "Need Operator Match",
+      text: "Buyer, contractor, developer, operator, or specialist needed to solve the situation.",
+      tone: "#b55cff",
+    },
+  ];
+
+  return (
+    <section
+      style={{
+        ...hero,
+        marginTop: 22,
+        border: "1px solid rgba(255,120,120,.32)",
+        background:
+          "linear-gradient(145deg, rgba(120,0,0,.14), rgba(181,92,255,.08), rgba(255,255,255,.03))",
+      }}
+    >
+      <div style={{ ...greenEyebrow, color: "#ff8b8b" }}>
+        Pain Button™ Command Layer
+      </div>
+
+      <h2
+        style={{
+          fontSize: "clamp(40px,8vw,80px)",
+          lineHeight: 0.92,
+          margin: "0 0 14px",
+        }}
+      >
+        Route problems before they become losses.
+      </h2>
+
+      <p style={{ ...muted, fontSize: 20 }}>
+        The Pain Button™ is VaultForge’s signature operational layer. Instead of only listing deals,
+        members can route distressed situations, stalled projects, funding gaps, and execution problems
+        into the network for solutions.
+      </p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+        <span style={{ ...chip, borderColor: "rgba(255,120,120,.35)", color: "#ff9f9f" }}>
+          Emergency Routing
+        </span>
+        <span style={chip}>Capital Match</span>
+        <span style={chip}>Operator Match</span>
+        <span style={chip}>Distress Signals</span>
+      </div>
+
+      <section style={{ ...grid, marginTop: 18 }}>
+        {cases.map((item) => (
+          <div
+            key={item.code}
+            style={{
+              ...pane,
+              border: `1px solid ${item.tone}`,
+              background:
+                "linear-gradient(145deg, rgba(0,0,0,.28), rgba(255,255,255,.045))",
+            }}
+          >
+            <div style={{ ...eyebrow, color: item.tone }}>{item.code}</div>
+
+            <h3 style={{ fontSize: 28, lineHeight: 1.05, margin: "0 0 10px" }}>
+              {item.title}
+            </h3>
+
+            <p style={muted}>{item.text}</p>
+
+            <div style={{ marginTop: 14 }}>
+              <Link href="/submit" style={ghost}>
+                Route Through VaultForge
+              </Link>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section
+        style={{
+          ...section,
+          marginTop: 18,
+          borderColor: "rgba(255,120,120,.26)",
+          background:
+            "linear-gradient(145deg, rgba(255,120,120,.08), rgba(255,255,255,.03))",
+        }}
+      >
+        <div style={{ ...eyebrow, color: "#ff9f9f" }}>
+          Future Intelligence Expansion
+        </div>
+
+        <p style={{ ...muted, fontSize: 18 }}>
+          Later versions can connect Pain Button™ submissions to real smart routing:
+          lenders, contractors, operators, wholesalers, developers, equity partners,
+          buyers, and emergency deal rescue workflows.
+          {owner
+            ? " Admin controls can later prioritize and route high-value distress opportunities."
+            : " Member profiles and buy boxes can later drive automated match scoring."}
+        </p>
+      </section>
+    </section>
+  );
+}
+
+
 function DealPipelinePanel({ stats }: { stats: Stats }) {
   const totalDeals = Number(stats.deals || 0);
 
@@ -997,6 +1120,8 @@ export default function DashboardPage() {
         <NotificationCenter owner={owner} stats={stats} access={access} />
 
         <DealPipelinePanel stats={stats} />
+
+        <PainButtonPanel owner={owner} />
 
         <ActivityFeed owner={owner} stats={stats} />
 
