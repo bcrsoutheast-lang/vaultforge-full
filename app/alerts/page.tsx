@@ -3,91 +3,61 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type AlertItem = Record<string, any>;
-type Toast = { type: "success" | "error" | "info"; text: string };
-type GenerateResult = {
-  status: "idle" | "generating" | "done" | "error";
-  inserted: number;
-  deals: number;
-  members: number;
-  message: string;
-  minScore?: number;
-};
+type AlertRow = Record<string, any>;
 
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-
-const shell: React.CSSProperties = {
+const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(157,243,191,.10), transparent 30%), linear-gradient(180deg,#030509,#061120 60%,#030509)",
+    "radial-gradient(circle at top left, rgba(157,243,191,.12), transparent 30%), radial-gradient(circle at top right, rgba(232,196,107,.10), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
   color: "white",
   padding: "28px 18px 100px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1150, margin: "0 auto" };
-
-const nav: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 10,
-  marginBottom: 22,
-};
-
-const navLink: React.CSSProperties = {
-  color: "white",
-  textDecoration: "none",
-  border: "1px solid rgba(255,255,255,.18)",
-  borderRadius: 999,
-  padding: "11px 15px",
-  fontWeight: 800,
-  background: "rgba(255,255,255,.04)",
+const wrap: React.CSSProperties = {
+  maxWidth: 1120,
+  margin: "0 auto",
 };
 
 const hero: React.CSSProperties = {
-  border: "1px solid rgba(157,243,191,.25)",
-  borderRadius: 34,
-  padding: 28,
+  border: "1px solid rgba(157,243,191,.22)",
   background:
-    "linear-gradient(145deg, rgba(157,243,191,.075), rgba(255,255,255,.025))",
-  marginBottom: 24,
-  boxShadow: "0 24px 80px rgba(0,0,0,.28)",
+    "linear-gradient(145deg, rgba(157,243,191,.07), rgba(255,255,255,.025))",
+  borderRadius: 34,
+  padding: 26,
+  marginBottom: 22,
+};
+
+const engine: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.30)",
+  background:
+    "linear-gradient(145deg, rgba(232,196,107,.08), rgba(255,255,255,.025))",
+  borderRadius: 30,
+  padding: 24,
+  marginBottom: 22,
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(157,243,191,.26)",
+  background:
+    "linear-gradient(145deg, rgba(157,243,191,.09), rgba(255,255,255,.025))",
+  borderRadius: 30,
+  padding: 24,
+  marginBottom: 22,
 };
 
 const statGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
   gap: 14,
   marginBottom: 22,
 };
 
 const statCard: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.14)",
-  borderRadius: 24,
-  padding: 18,
+  border: "1px solid rgba(255,255,255,.13)",
   background: "rgba(255,255,255,.04)",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.16)",
-  borderRadius: 28,
-  padding: 24,
-  background: "rgba(255,255,255,.035)",
-  marginBottom: 18,
-};
-
-const ownerCard: React.CSSProperties = {
-  ...card,
-  border: "1px solid rgba(232,196,107,.34)",
-  background:
-    "linear-gradient(145deg, rgba(232,196,107,.10), rgba(255,255,255,.03))",
-};
-
-const resultCard: React.CSSProperties = {
-  ...card,
-  border: "1px solid rgba(157,243,191,.34)",
-  background:
-    "linear-gradient(145deg, rgba(157,243,191,.09), rgba(255,255,255,.03))",
+  borderRadius: 24,
+  padding: 20,
 };
 
 const btn: React.CSSProperties = {
@@ -95,57 +65,72 @@ const btn: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   background: "#9df3bf",
-  color: "#071326",
+  color: "#061120",
+  border: "none",
   borderRadius: 999,
   padding: "13px 18px",
-  fontWeight: 900,
+  fontWeight: 950,
   textDecoration: "none",
-  margin: "8px 8px 0 0",
-  border: 0,
   cursor: "pointer",
-  minHeight: 46,
-  touchAction: "manipulation",
+  margin: "7px 7px 0 0",
 };
 
 const goldBtn: React.CSSProperties = {
   ...btn,
   background: "#f5d978",
-  color: "#061120",
 };
 
 const ghost: React.CSSProperties = {
-  ...btn,
-  background: "rgba(255,255,255,.05)",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.04)",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 900,
+  textDecoration: "none",
+  cursor: "pointer",
+  margin: "7px 7px 0 0",
 };
 
 const danger: React.CSSProperties = {
   ...ghost,
   color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.35)",
+  border: "1px solid rgba(255,120,120,.38)",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: 5,
+  fontWeight: 950,
+  fontSize: 12,
+  marginBottom: 12,
+  textTransform: "uppercase",
+};
+
+const greenEyebrow: React.CSSProperties = {
+  ...eyebrow,
+  color: "#9df3bf",
 };
 
 const muted: React.CSSProperties = {
   color: "rgba(255,255,255,.70)",
-  lineHeight: 1.5,
+  lineHeight: 1.55,
 };
 
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-
-  if (!match) return "";
-
-  try {
-    return decodeURIComponent(match.slice(name.length + 1));
-  } catch {
-    return match.slice(name.length + 1);
-  }
-}
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.25)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 800,
+  fontSize: 13,
+  margin: "0 7px 7px 0",
+};
 
 function getEmail() {
   if (typeof window === "undefined") return "";
@@ -153,379 +138,203 @@ function getEmail() {
   return (
     localStorage.getItem("vf_email") ||
     sessionStorage.getItem("vf_email") ||
-    readCookie("vf_email") ||
     ""
   )
     .trim()
     .toLowerCase();
 }
 
-function isOwner() {
-  return getEmail() === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
+function asText(value: unknown) {
+  return String(value || "").trim();
 }
 
-function clean(value: any, fallback = "") {
-  const text = String(value || "").trim();
-  return text || fallback;
-}
-
-function alertTitle(item: AlertItem) {
-  return clean(
-    item.alert_title ||
-      item.title ||
-      item.deal_title ||
-      item.match_title ||
-      item.subject ||
-      "VaultForge Match Alert"
-  );
-}
-
-function alertBody(item: AlertItem) {
-  return clean(
-    item.alert_message ||
-      item.message ||
-      item.body ||
-      item.reason ||
-      item.match_reason ||
-      "VaultForge found a routing signal."
-  );
-}
-
-function alertType(item: AlertItem) {
-  return clean(item.alert_type || item.type || item.category || item.source, "Smart Match");
-}
-
-function isRead(item: AlertItem) {
-  return Boolean(item.read || item.is_read || item.read_at || item.dismissed || item.is_dismissed);
-}
-
-function createdLabel(item: AlertItem) {
-  const raw = item.created_at || item.inserted_at || item.updated_at;
-  if (!raw) return "";
-  try {
-    return new Date(raw).toLocaleString();
-  } catch {
-    return String(raw);
+function first(...values: unknown[]) {
+  for (const value of values) {
+    const cleaned = asText(value);
+    if (cleaned) return cleaned;
   }
+  return "";
 }
 
-function dealId(item: AlertItem) {
-  return clean(item.deal_id || item.project_id || item.property_id || item.related_deal_id);
+function lower(value: unknown) {
+  return asText(value).toLowerCase();
 }
 
-function scoreValue(item: AlertItem) {
-  return Number(item.score || item.match_score || 0);
+function asNumber(value: unknown) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function scoreLabel(item: AlertItem) {
-  const score = scoreValue(item);
-  if (!score) return "Signal";
-  if (score >= 120) return `Elite Match · ${score}`;
-  if (score >= 90) return `High-Confidence Match · ${score}`;
-  if (score >= 70) return `Strong Match · ${score}`;
-  return `Signal Score · ${score}`;
+function alertId(item: AlertRow) {
+  return first(item.id, item.alert_id, item.match_alert_id);
 }
 
-function matchCategory(item: AlertItem) {
-  const text = `${alertTitle(item)} ${alertBody(item)} ${item.reason || ""} ${item.match_reason || ""}`.toLowerCase();
-
-  if (text.includes("fund") || text.includes("lender") || text.includes("capital")) return "Capital Match";
-  if (text.includes("buyer") || text.includes("cash buyer")) return "Buyer Match";
-  if (text.includes("contractor") || text.includes("construction")) return "Operator Match";
-  if (text.includes("jv") || text.includes("partner")) return "JV Match";
-  if (text.includes("margin") || text.includes("spread")) return "Margin Signal";
-  if (text.includes("market") || text.includes("state") || text.includes("city")) return "Market Signal";
-  return "Deal Routing";
+function dealId(item: AlertRow) {
+  return first(
+    item.deal_id,
+    item.project_id,
+    item.property_id,
+    item.target_deal_id,
+    item.deal?.id,
+    item.project?.id
+  );
 }
 
-function confidenceText(score: number) {
-  if (score >= 120) return "Elite";
-  if (score >= 90) return "High";
-  if (score >= 70) return "Strong";
-  if (score >= 45) return "Qualified";
-  return "Watch";
+function memberEmail(item: AlertRow) {
+  return first(
+    item.member_email,
+    item.buyer_email,
+    item.recipient_email,
+    item.matched_member_email,
+    item.email
+  );
 }
 
-function confidencePercent(score: number) {
-  if (!score) return 8;
-  return Math.max(8, Math.min(100, Math.round((score / 140) * 100)));
+function alertTitle(item: AlertRow) {
+  return first(
+    item.alert_title,
+    item.title,
+    item.match_title,
+    item.deal_title,
+    item.project_title,
+    item.deal?.title,
+    item.project?.title,
+    "VaultForge Match Alert"
+  );
 }
 
-function reasonChips(item: AlertItem) {
-  const raw = String(item.reason || item.match_reason || "").trim();
+function alertBody(item: AlertRow) {
+  return first(
+    item.alert_body,
+    item.body,
+    item.message,
+    item.description,
+    item.summary,
+    item.ai_summary,
+    item.reason,
+    item.why_matched,
+    "VaultForge found a member/deal routing signal."
+  );
+}
+
+function alertType(item: AlertRow) {
+  return first(item.alert_type, item.type, item.category, "smart_match");
+}
+
+function confidence(item: AlertRow) {
+  return asNumber(first(item.confidence_score, item.score, item.match_score, item.ai_score));
+}
+
+function isRead(item: AlertRow) {
+  return (
+    item.read === true ||
+    item.is_read === true ||
+    lower(item.status) === "read" ||
+    lower(item.alert_status) === "read"
+  );
+}
+
+function isDismissed(item: AlertRow) {
+  return (
+    item.dismissed === true ||
+    item.is_dismissed === true ||
+    lower(item.status) === "dismissed" ||
+    lower(item.alert_status) === "dismissed"
+  );
+}
+
+function reasonList(item: AlertRow) {
+  const raw = first(item.why_matched, item.reasons, item.match_reasons, item.reason);
+
   if (!raw) return [];
+
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+  } catch {
+    // fall through
+  }
+
   return raw
     .split("·")
+    .join(",")
+    .split(",")
     .map((part) => part.trim())
     .filter(Boolean)
     .slice(0, 8);
 }
 
-function ToastBox({ toast }: { toast: Toast | null }) {
-  if (!toast) return null;
-
-  const border =
-    toast.type === "success"
-      ? "rgba(157,243,191,.55)"
-      : toast.type === "error"
-      ? "rgba(255,120,120,.45)"
-      : "rgba(232,196,107,.45)";
-
-  const color =
-    toast.type === "success"
-      ? "#9df3bf"
-      : toast.type === "error"
-      ? "#ffd0d0"
-      : "#e8c46b";
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: 18,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 9999,
-        width: "calc(100% - 32px)",
-        maxWidth: 640,
-        border: `1px solid ${border}`,
-        background: "rgba(3,5,9,.94)",
-        boxShadow: "0 24px 80px rgba(0,0,0,.45)",
-        borderRadius: 24,
-        padding: "16px 18px",
-        color,
-        fontWeight: 900,
-        textAlign: "center",
-      }}
-    >
-      {toast.text}
-    </div>
-  );
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
 }
 
-function GenerateResultBox({ result }: { result: GenerateResult }) {
-  if (result.status === "idle") return null;
-
-  const isError = result.status === "error";
-  const isGenerating = result.status === "generating";
-
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <section
-      style={{
-        ...resultCard,
-        border: isError
-          ? "1px solid rgba(255,120,120,.45)"
-          : "1px solid rgba(157,243,191,.40)",
-      }}
-    >
-      <div
-        style={{
-          color: isError ? "#ffd0d0" : "#9df3bf",
-          letterSpacing: 5,
-          fontWeight: 900,
-          marginBottom: 10,
-        }}
-      >
-        {isGenerating ? "SMART ENGINE RUNNING" : isError ? "SMART ENGINE ERROR" : "SMART ENGINE COMPLETE"}
-      </div>
-
-      <h2 style={{ fontSize: 36, margin: "0 0 12px" }}>
-        {isGenerating
-          ? "Generating alerts..."
-          : isError
-          ? "Generation failed"
-          : `${result.inserted} alert${result.inserted === 1 ? "" : "s"} created`}
-      </h2>
-
-      <p style={{ ...muted, fontSize: 19, marginTop: 0 }}>{result.message}</p>
-
-      {!isGenerating && !isError && (
-        <div style={statGrid}>
-          <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Created</div>
-            <div style={{ fontSize: 40, fontWeight: 900 }}>{result.inserted}</div>
-          </div>
-          <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Deals Scanned</div>
-            <div style={{ fontSize: 40, fontWeight: 900 }}>{result.deals}</div>
-          </div>
-          <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Members Scanned</div>
-            <div style={{ fontSize: 40, fontWeight: 900 }}>{result.members}</div>
-          </div>
-          <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Min Score</div>
-            <div style={{ fontSize: 40, fontWeight: 900 }}>{result.minScore || 45}</div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ConfidencePanel({ item }: { item: AlertItem }) {
-  const score = scoreValue(item);
-  const percent = confidencePercent(score);
-
-  return (
-    <div
-      style={{
-        border: "1px solid rgba(157,243,191,.18)",
-        background: "rgba(0,0,0,.16)",
-        borderRadius: 22,
-        padding: 16,
-        margin: "16px 0",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-          marginBottom: 10,
-        }}
-      >
-        <div style={{ color: "#9df3bf", letterSpacing: 3, fontWeight: 900 }}>
-          CONFIDENCE
-        </div>
-        <div style={{ color: "#f5d978", fontWeight: 900 }}>
-          {confidenceText(score)} · {score || "No score"}
-        </div>
-      </div>
-
-      <div
-        style={{
-          height: 12,
-          borderRadius: 999,
-          background: "rgba(255,255,255,.08)",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${percent}%`,
-            borderRadius: 999,
-            background:
-              "linear-gradient(90deg, rgba(157,243,191,.65), rgba(245,217,120,.95))",
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ReasonPanel({ item }: { item: AlertItem }) {
-  const chips = reasonChips(item);
-
-  if (!chips.length) return null;
-
-  return (
-    <div
-      style={{
-        border: "1px solid rgba(232,196,107,.20)",
-        background: "rgba(232,196,107,.06)",
-        borderRadius: 20,
-        padding: 14,
-        margin: "16px 0",
-      }}
-    >
-      <div style={{ color: "#f5d978", letterSpacing: 3, fontWeight: 900, marginBottom: 10 }}>
-        WHY THIS MATCHED
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {chips.map((chip) => (
-          <span
-            key={chip}
-            style={{
-              border: "1px solid rgba(232,196,107,.25)",
-              background: "rgba(255,255,255,.04)",
-              borderRadius: 999,
-              padding: "8px 11px",
-              color: "rgba(255,255,255,.82)",
-              fontWeight: 800,
-              fontSize: 13,
-            }}
-          >
-            {chip}
-          </span>
-        ))}
-      </div>
+    <div style={statCard}>
+      <div style={greenEyebrow}>{label}</div>
+      <div style={{ fontSize: 50, fontWeight: 950, lineHeight: 1 }}>{value}</div>
     </div>
   );
 }
 
 export default function AlertsPage() {
-  const [items, setItems] = useState<AlertItem[]>([]);
+  const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [status, setStatus] = useState("Loading alerts...");
-  const [workingId, setWorkingId] = useState("");
-  const [generating, setGenerating] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
-  const [owner, setOwner] = useState(false);
-  const [generateResult, setGenerateResult] = useState<GenerateResult>({
-    status: "idle",
-    inserted: 0,
-    deals: 0,
-    members: 0,
-    message: "",
-  });
+  const [toast, setToast] = useState("");
+  const [engineResult, setEngineResult] = useState<Record<string, any> | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const item of items) {
-      const category = matchCategory(item);
-      counts[category] = (counts[category] || 0) + 1;
-    }
-    return Object.entries(counts).slice(0, 4);
-  }, [items]);
-
-  function showToast(next: Toast) {
-    setToast(next);
-    window.setTimeout(() => setToast(null), 2200);
-  }
-
-  async function load() {
+  async function loadAlerts() {
     setStatus("Loading alerts...");
+    setToast("");
 
     try {
       const email = getEmail();
-      const ownerNow = isOwner();
 
-      const res = await fetch(`/api/alerts/list?email=${encodeURIComponent(email)}&owner=${ownerNow ? "1" : ""}`, {
+      const res = await fetch(`/api/alerts/list?email=${encodeURIComponent(email)}`, {
         cache: "no-store",
         headers: {
           "x-vf-email": email,
-          "x-vf-admin": ownerNow ? "1" : "",
         },
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
         throw new Error(data?.error || data?.details || "Could not load alerts.");
       }
 
-      const list = Array.isArray(data?.alerts) ? data.alerts : [];
-      setItems(list);
-      setStatus(list.length ? "" : "No alerts yet.");
+      const list = Array.isArray(data?.alerts)
+        ? data.alerts
+        : Array.isArray(data?.items)
+        ? data.items
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      setAlerts(list);
+      setStatus("");
     } catch (error: any) {
-      setItems([]);
       setStatus(error?.message || "Could not load alerts.");
-      showToast({ type: "error", text: error?.message || "Could not load alerts." });
     }
   }
 
+  useEffect(() => {
+    loadAlerts();
+  }, []);
+
   async function generateSmartAlerts() {
-    setGenerating(true);
-    setGenerateResult({
-      status: "generating",
-      inserted: 0,
-      deals: 0,
-      members: 0,
-      message: "VaultForge is scanning live deals, member roles, markets, project types, strategies, needs, provider abilities, photos, AI summaries, and margin signals.",
-    });
+    if (busy) return;
+
+    setBusy(true);
+    setToast("Generating smart alerts...");
+    setEngineResult(null);
 
     try {
       const email = getEmail();
@@ -535,127 +344,121 @@ export default function AlertsPage() {
         headers: {
           "Content-Type": "application/json",
           "x-vf-email": email,
-          "x-vf-admin": owner ? "1" : "",
         },
-        body: JSON.stringify({ email, owner: owner ? "1" : "", min_score: 45 }),
+        body: JSON.stringify({ email }),
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Smart generation failed.");
+        throw new Error(data?.error || data?.details || "Generation failed.");
       }
 
-      const inserted = Number(data.inserted || 0);
-      const deals = Number(data.scanned?.deals || 0);
-      const members = Number(data.scanned?.members || 0);
-
-      setGenerateResult({
-        status: "done",
-        inserted,
-        deals,
-        members,
-        minScore: Number(data.minScore || 45),
-        message:
-          inserted > 0
-            ? `Done. VaultForge created ${inserted} smart alert${inserted === 1 ? "" : "s"} from ${deals} live deal${deals === 1 ? "" : "s"} and ${members} active member profile${members === 1 ? "" : "s"}.`
-            : data.message ||
-              `Done. VaultForge scanned ${deals} live deal${deals === 1 ? "" : "s"} and ${members} active member profile${members === 1 ? "" : "s"}, but did not find new matches above the score threshold.`,
-      });
-
-      showToast({ type: "success", text: `Smart engine complete: ${inserted} alerts created.` });
-      await load();
+      setEngineResult(data);
+      setToast(data?.message || "Smart alerts generated.");
+      await loadAlerts();
     } catch (error: any) {
-      setGenerateResult({
-        status: "error",
-        inserted: 0,
-        deals: 0,
-        members: 0,
-        message: error?.message || "Smart generation failed.",
-      });
-      showToast({ type: "error", text: error?.message || "Smart generation failed." });
+      setToast(error?.message || "Could not generate alerts.");
     } finally {
-      setGenerating(false);
+      setBusy(false);
     }
   }
 
-  async function runAction(id: string, endpoint: string, payload: Record<string, any>, done: string) {
-    setWorkingId(id);
+  async function saveToBucket(item: AlertRow) {
+    const id = dealId(item);
+    const email = getEmail();
+
+    if (!id) {
+      setToast("Cannot save: this alert does not include a deal id.");
+      return;
+    }
+
+    if (!email) {
+      setToast("Cannot save: log in again so VaultForge knows your email.");
+      return;
+    }
+
+    setToast("Saving to Buy Bucket...");
 
     try {
-      const email = getEmail();
-
-      const res = await fetch(endpoint, {
+      const res = await fetch("/api/deal/save-to-bucket", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-vf-email": email,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          deal_id: id,
+          id,
+          buyer_email: email,
+          member_email: email,
+        }),
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Action failed.");
+        throw new Error(data?.error || data?.details || "Could not save to Buy Bucket.");
       }
 
-      showToast({ type: "success", text: done });
-      await load();
+      setToast(data?.message || "Saved to Buy Bucket.");
     } catch (error: any) {
-      showToast({ type: "error", text: error?.message || "Action failed." });
-    } finally {
-      setWorkingId("");
+      setToast(error?.message || "Could not save to Buy Bucket.");
     }
   }
 
-  async function markRead(item: AlertItem) {
-    await runAction(
-      String(item.id || ""),
-      "/api/alerts/read",
-      { id: item.id, source_table: item.source_table || "vf_match_alerts" },
-      "Marked read ✓"
-    );
-  }
-
-  async function dismiss(item: AlertItem) {
-    const yes = window.confirm("Dismiss this alert?");
-    if (!yes) return;
-
-    await runAction(
-      String(item.id || ""),
-      "/api/alerts/dismiss",
-      { id: item.id, source_table: item.source_table || "vf_match_alerts" },
-      "Dismissed ✓"
-    );
-  }
-
-  async function saveToBuyBucket(item: AlertItem) {
-    const id = dealId(item);
+  async function alertAction(item: AlertRow, action: "read" | "dismissed") {
+    const id = alertId(item);
+    const email = getEmail();
 
     if (!id) {
-      showToast({ type: "error", text: "No deal id attached to this alert." });
+      setToast(`Cannot ${action === "read" ? "mark read" : "dismiss"}: this alert does not include an alert id.`);
       return;
     }
 
-    await runAction(
-      String(item.id || id),
-      "/api/deal/buy-bucket",
-      { deal_id: id },
-      "Saved to Buy Bucket ✓"
-    );
+    setToast(action === "read" ? "Marking alert read..." : "Dismissing alert...");
+
+    try {
+      const res = await fetch("/api/alerts/action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+        },
+        body: JSON.stringify({
+          id,
+          alert_id: id,
+          action,
+          email,
+          member_email: email,
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not update alert.");
+      }
+
+      setToast(data?.message || "Alert updated.");
+      await loadAlerts();
+    } catch (error: any) {
+      setToast(error?.message || "Could not update alert.");
+    }
   }
 
-  useEffect(() => {
-    setOwner(isOwner());
-    load();
-  }, []);
+  const visibleAlerts = useMemo(
+    () => alerts.filter((item) => !isDismissed(item)),
+    [alerts]
+  );
 
-  const unread = items.filter((item) => !isRead(item)).length;
-  const read = items.length - unread;
+  const unreadCount = visibleAlerts.filter((item) => !isRead(item)).length;
+  const readCount = visibleAlerts.filter(isRead).length;
+  const capitalCount = visibleAlerts.filter((item) => lower(alertType(item)).includes("capital") || lower(alertBody(item)).includes("lender")).length;
+  const buyerCount = visibleAlerts.filter((item) => lower(alertType(item)).includes("buyer") || lower(alertBody(item)).includes("buyer")).length;
 
   return (
-    <main style={shell}>
+    <main style={page}>
       <style>{`
         @media (max-width: 760px) {
           .vf-alert-actions {
@@ -672,202 +475,184 @@ export default function AlertsPage() {
         }
       `}</style>
 
-      <ToastBox toast={toast} />
-
       <div style={wrap}>
-        <nav style={nav}>
-          <Link href="/dashboard" style={navLink}>Dashboard</Link>
-          <Link href="/projects" style={navLink}>Projects</Link>
-          <Link href="/buy-bucket" style={navLink}>Buy Bucket</Link>
-          <Link href="/messages" style={navLink}>Messages</Link>
-          <Link href="/network" style={navLink}>Network</Link>
-          <Link href="/profile" style={navLink}>Profile</Link>
-          <Link href="/submit" style={navLink}>Create Deal</Link>
-          <Link href="/logout" style={navLink}>Logout</Link>
-        </nav>
-
         <section style={hero}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 900, marginBottom: 12 }}>
-            VAULTFORGE ALERTS
-          </div>
+          <div style={greenEyebrow}>VaultForge Alerts</div>
 
-          <h1 style={{ fontSize: "clamp(56px,13vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
+          <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
             Routing Signal Feed
           </h1>
 
-          <p style={{ ...muted, fontSize: 23, maxWidth: 880 }}>
-            Match alerts, network signals, buy-side opportunities, routing notices,
-            and member activity inside your VaultForge command center.
+          <p style={{ ...muted, fontSize: 21 }}>
+            Match alerts, network signals, buy-side opportunities, routing notices, and member activity inside your VaultForge command center.
           </p>
 
-          <button type="button" onClick={load} style={btn}>Refresh Alerts</button>
-          <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
-          <Link href="/submit" style={ghost}>Create Deal</Link>
+          <div className="vf-alert-actions" style={{ marginTop: 18 }}>
+            <button type="button" style={btn} onClick={loadAlerts}>Refresh Alerts</button>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+            <Link href="/submit" style={ghost}>Create Deal</Link>
+          </div>
         </section>
 
-        {owner && (
-          <section style={ownerCard}>
-            <div style={{ color: "#f5d978", letterSpacing: 5, fontWeight: 900 }}>
-              OWNER SMART ENGINE
-            </div>
+        <section style={engine}>
+          <div style={eyebrow}>Owner Smart Engine</div>
+          <h2 style={{ fontSize: 38, margin: "0 0 10px" }}>Generate intelligent routing alerts</h2>
+          <p style={{ ...muted, fontSize: 19 }}>
+            Scans live deals and active members, scores market fit, role fit, buy-box fit, asset fit, strategy fit, deal needs, photos, AI summaries, and margin signals.
+          </p>
+          <button type="button" onClick={generateSmartAlerts} style={goldBtn} disabled={busy}>
+            {busy ? "Generating..." : "Generate Smart Alerts"}
+          </button>
+        </section>
 
-            <h2 style={{ fontSize: 36, margin: "12px 0" }}>
-              Generate intelligent routing alerts
+        {engineResult && (
+          <section style={hero}>
+            <div style={greenEyebrow}>Smart Engine Complete</div>
+            <h2 style={{ fontSize: 36, margin: "0 0 10px" }}>
+              {asNumber(engineResult.created || engineResult.created_count || engineResult.alerts_created)} alerts created
             </h2>
-
             <p style={{ ...muted, fontSize: 19 }}>
-              Scans live deals and active members, scores market fit, role fit, buy-box fit,
-              asset fit, strategy fit, deal needs, photos, AI summaries, and margin signals.
-              Inserts real alerts into <strong>vf_match_alerts</strong>.
+              Done. VaultForge scanned live deals and active member profiles.
             </p>
-
-            <button type="button" disabled={generating} onClick={generateSmartAlerts} style={goldBtn}>
-              {generating ? "Generating..." : "Generate Smart Alerts"}
-            </button>
           </section>
         )}
 
-        <GenerateResultBox result={generateResult} />
+        {toast && (
+          <section
+            style={{
+              ...hero,
+              color:
+                toast.toLowerCase().includes("could not") ||
+                toast.toLowerCase().includes("cannot") ||
+                toast.toLowerCase().includes("failed") ||
+                toast.toLowerCase().includes("error")
+                  ? "#ffd0d0"
+                  : "#9df3bf",
+            }}
+          >
+            <strong>{toast}</strong>
+          </section>
+        )}
 
         <section style={statGrid}>
-          <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Total Alerts</div>
-            <div style={{ fontSize: 44, fontWeight: 900 }}>{items.length}</div>
-          </div>
-
-          <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Unread</div>
-            <div style={{ fontSize: 44, fontWeight: 900 }}>{unread}</div>
-          </div>
-
-          <div style={statCard}>
-            <div style={{ color: "#9df3bf", fontWeight: 900 }}>Read/Dismissed</div>
-            <div style={{ fontSize: 44, fontWeight: 900 }}>{read}</div>
-          </div>
+          <StatCard label="Total Alerts" value={visibleAlerts.length} />
+          <StatCard label="Unread" value={unreadCount} />
+          <StatCard label="Read/Dismissed" value={readCount} />
+          <StatCard label="Capital Match" value={capitalCount} />
+          <StatCard label="Buyer Match" value={buyerCount} />
         </section>
 
-        {categoryCounts.length > 0 && (
-          <section style={statGrid}>
-            {categoryCounts.map(([category, count]) => (
-              <div key={category} style={statCard}>
-                <div style={{ color: "#f5d978", fontWeight: 900 }}>{category}</div>
-                <div style={{ fontSize: 36, fontWeight: 900 }}>{count}</div>
-              </div>
-            ))}
-          </section>
-        )}
-
         {status && (
-          <section style={{ ...card, color: "#b9ffc9", fontSize: 22 }}>
-            {status}
+          <section style={hero}>
+            <strong>{status}</strong>
           </section>
         )}
 
-        {!status &&
-          items.map((item) => {
-            const id = String(item.id || "");
-            const busy = workingId === id;
-            const relatedDealId = dealId(item);
-            const score = scoreValue(item);
+        {!status && visibleAlerts.length === 0 && (
+          <section style={hero}>
+            <strong>No alerts yet.</strong>
+          </section>
+        )}
 
-            return (
-              <section
-                key={`${item.source_table || "alert"}-${id}`}
-                style={{
-                  ...card,
-                  border: isRead(item)
-                    ? "1px solid rgba(255,255,255,.13)"
-                    : "1px solid rgba(157,243,191,.36)",
-                  background: isRead(item)
-                    ? "rgba(255,255,255,.03)"
-                    : "linear-gradient(145deg, rgba(157,243,191,.07), rgba(255,255,255,.035))",
-                }}
-              >
+        {visibleAlerts.map((item, index) => {
+          const id = alertId(item);
+          const dId = dealId(item);
+          const score = confidence(item);
+          const type = alertType(item);
+          const read = isRead(item);
+          const reasons = reasonList(item);
+          const dealHref = dId ? `/deal/${encodeURIComponent(dId)}` : "/projects";
+
+          return (
+            <section key={`${id || index}-${dId || "alert"}`} style={card}>
+              <div style={chip}>
+                {type} · {score >= 100 ? "High-Confidence Match" : "Smart Match"} · {score || 0}
+              </div>
+
+              <div style={{ ...eyebrow, marginTop: 14 }}>{type}</div>
+
+              <h2 style={{ fontSize: "clamp(32px,7vw,52px)", lineHeight: 1, margin: "0 0 16px" }}>
+                {alertTitle(item)}
+              </h2>
+
+              <p style={{ ...muted, fontSize: 21 }}>
+                {alertBody(item)}
+              </p>
+
+              {score > 0 && (
                 <div
                   style={{
-                    color: "#9df3bf",
-                    border: "1px solid rgba(157,243,191,.35)",
-                    display: "inline-block",
-                    borderRadius: 999,
-                    padding: "8px 14px",
-                    marginBottom: 10,
-                    fontWeight: 900,
+                    border: "1px solid rgba(255,255,255,.12)",
+                    borderRadius: 18,
+                    background: "rgba(0,0,0,.20)",
+                    padding: 16,
+                    marginTop: 18,
                   }}
                 >
-                  {matchCategory(item)} · {scoreLabel(item)}
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+                    <strong style={{ color: "#9df3bf", letterSpacing: 4 }}>CONFIDENCE</strong>
+                    <strong style={{ color: "#f5d978" }}>{score >= 100 ? "High" : "Active"} · {score}</strong>
+                  </div>
+                  <div style={{ height: 13, borderRadius: 999, background: "rgba(255,255,255,.10)", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.min(100, Math.max(5, score))}%`,
+                        background: "linear-gradient(90deg,#9df3bf,#f5d978)",
+                      }}
+                    />
+                  </div>
                 </div>
+              )}
 
+              {reasons.length > 0 && (
                 <div
                   style={{
-                    color: "#f5d978",
-                    letterSpacing: 3,
-                    fontWeight: 900,
-                    marginBottom: 10,
+                    border: "1px solid rgba(232,196,107,.25)",
+                    borderRadius: 20,
+                    background: "rgba(232,196,107,.08)",
+                    padding: 16,
+                    marginTop: 18,
                   }}
                 >
-                  {alertType(item)}
+                  <div style={eyebrow}>Why This Matched</div>
+                  {reasons.map((reason) => (
+                    <span key={reason} style={chip}>{reason}</span>
+                  ))}
                 </div>
+              )}
 
-                <h2 style={{ fontSize: 36, margin: "8px 0" }}>
-                  {alertTitle(item)}
-                </h2>
+              <p style={{ ...muted, marginTop: 18 }}>
+                {first(item.created_at, item.inserted_at) ? new Date(first(item.created_at, item.inserted_at)).toLocaleString() : ""}
+              </p>
 
-                <p style={{ ...muted, fontSize: 20 }}>
-                  {alertBody(item)}
-                </p>
+              <div className="vf-alert-actions" style={{ marginTop: 16 }}>
+                <Link href={dealHref} style={btn}>Open Deal Room</Link>
 
-                <ConfidencePanel item={item} />
-                <ReasonPanel item={item} />
+                <button type="button" style={goldBtn} onClick={() => saveToBucket(item)}>
+                  Save to Buy Bucket
+                </button>
 
-                {createdLabel(item) && (
-                  <p style={{ color: "rgba(255,255,255,.45)" }}>
-                    {createdLabel(item)}
-                  </p>
+                {memberEmail(item) && (
+                  <a href={`mailto:${memberEmail(item)}`} style={ghost}>
+                    Message Member
+                  </a>
                 )}
 
-                <div className="vf-alert-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {relatedDealId ? (
-                    <Link href={`/deal/${relatedDealId}`} style={btn}>
-                      Open Deal Room
-                    </Link>
-                  ) : (
-                    <Link href="/projects" style={ghost}>
-                      View Projects
-                    </Link>
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={busy || !relatedDealId}
-                    onClick={() => saveToBuyBucket(item)}
-                    style={{
-                      ...goldBtn,
-                      opacity: busy || !relatedDealId ? 0.55 : 1,
-                    }}
-                  >
-                    {busy ? "Working..." : "Save to Buy Bucket"}
+                {!read && (
+                  <button type="button" style={ghost} onClick={() => alertAction(item, "read")}>
+                    Mark Read
                   </button>
+                )}
 
-                  {item.member_email && (
-                    <a href={`mailto:${item.member_email}`} style={ghost}>
-                      Message Member
-                    </a>
-                  )}
-
-                  {!isRead(item) && (
-                    <button type="button" disabled={busy} onClick={() => markRead(item)} style={ghost}>
-                      {busy ? "Working..." : "Mark Read"}
-                    </button>
-                  )}
-
-                  <button type="button" disabled={busy} onClick={() => dismiss(item)} style={danger}>
-                    {busy ? "Working..." : "Dismiss"}
-                  </button>
-                </div>
-              </section>
-            );
-          })}
+                <button type="button" style={danger} onClick={() => alertAction(item, "dismissed")}>
+                  Dismiss
+                </button>
+              </div>
+            </section>
+          );
+        })}
       </div>
     </main>
   );
