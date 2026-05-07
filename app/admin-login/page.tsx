@@ -9,7 +9,7 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 const shell: React.CSSProperties = {
   minHeight: "100vh",
-  background: "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
+  background: "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
   color: "white",
   padding: "34px 18px 90px",
   fontFamily: "Arial, sans-serif",
@@ -19,7 +19,7 @@ const wrap: React.CSSProperties = { maxWidth: 760, margin: "0 auto" };
 
 const card: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.26)",
-  background: "linear-gradient(145deg, rgba(255,255,255,.075), rgba(255,255,255,.025))",
+  background: "linear-gradient(145deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
   borderRadius: 34,
   padding: 26,
   boxShadow: "0 30px 90px rgba(0,0,0,.45)",
@@ -30,7 +30,7 @@ const input: React.CSSProperties = {
   boxSizing: "border-box",
   borderRadius: 18,
   border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.08)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.16), rgba(255,255,255,.07))",
   color: "white",
   padding: 15,
   fontSize: 17,
@@ -42,7 +42,7 @@ const btn: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  background: "#f5d978",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   color: "#061120",
   border: "none",
   borderRadius: 999,
@@ -55,7 +55,7 @@ const btn: React.CSSProperties = {
 
 const ghost: React.CSSProperties = {
   ...btn,
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
 };
@@ -132,10 +132,79 @@ export default async function AdminLoginPage({
 
   return (
     <main style={shell}>
+      <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        input:focus {
+          border-color: rgba(181,92,255,.45);
+          box-shadow: 0 0 0 3px rgba(181,92,255,.14);
+        }
+
+        @media (max-width: 760px) {
+          a,
+          button,
+          input {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
       <div style={wrap}>
         <section style={card}>
           <div style={{ color: "#e8c46b", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Owner Access
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <span
+              style={{
+                border: "1px solid rgba(181,92,255,.36)",
+                color: "#dcb8ff",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(181,92,255,.12)",
+              }}
+            >
+              Owner Command Access
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(157,243,191,.36)",
+                color: "#9df3bf",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(157,243,191,.10)",
+              }}
+            >
+              Admin Control Layer
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(245,217,120,.36)",
+                color: "#f5d978",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(245,217,120,.10)",
+              }}
+            >
+              Bloomberg-Style Admin
+            </span>
           </div>
 
           <h1 style={{ fontSize: "clamp(54px,11vw,88px)", lineHeight: 0.9, margin: "0 0 18px" }}>
