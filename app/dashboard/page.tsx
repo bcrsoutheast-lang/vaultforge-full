@@ -253,6 +253,109 @@ function ToolCard({
   );
 }
 
+
+function ActivityFeed({ owner, stats }: { owner: boolean; stats: Stats }) {
+  const feed = [
+    {
+      code: "LIVE",
+      label: "Network Pulse",
+      title: "Member intelligence engine active",
+      text: "VaultForge is watching deals, profiles, buy buckets, messages, and routing signals from one command center.",
+      tone: "#9df3bf",
+    },
+    {
+      code: "DEAL",
+      label: "Deal Flow",
+      title: `${stats.deals || 0} active deal rooms tracked`,
+      text: "Submitted Residential, Commercial, and Land opportunities can be opened from Projects and Deal Rooms.",
+      tone: "#f5d978",
+    },
+    {
+      code: "BUCKET",
+      label: "Demand Signal",
+      title: `${stats.bucket || 0} saved acquisition targets`,
+      text: "Buy Bucket activity helps show what members are watching, underwriting, or preparing to pursue.",
+      tone: "#b55cff",
+    },
+    {
+      code: "MSG",
+      label: "Communication",
+      title: `${stats.messages || 0} deal-tied messages`,
+      text: "Messages keep opportunity conversations attached to the platform instead of scattered across texts and calls.",
+      tone: "#9df3bf",
+    },
+    {
+      code: "ALERT",
+      label: "Smart Routing",
+      title: `${stats.alerts || 0} routing signals available`,
+      text: "Smart Alerts will become the private intelligence feed for match scores, buyer fit, lender fit, and operator fit.",
+      tone: "#f5d978",
+    },
+    {
+      code: owner ? "ADMIN" : "MEMBER",
+      label: owner ? "Owner Desk" : "Member Desk",
+      title: owner ? "Owner command controls online" : "Member command center online",
+      text: owner
+        ? "Admin controls should stay concentrated here while core auth and API security are hardened."
+        : "Complete profile and buy-box data improves future routing accuracy and alert quality.",
+      tone: owner ? "#b55cff" : "#9df3bf",
+    },
+  ];
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(181,92,255,.36)" }}>
+      <div style={greenEyebrow}>Live Intelligence Feed</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,76px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        Network activity, deal signals, and command alerts.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>
+        A Bloomberg-style readout for what matters now. This is display-only for stability and can later connect to real events, alerts, matches, and member actions.
+      </p>
+
+      <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+        {feed.map((item) => (
+          <div
+            key={`${item.code}-${item.title}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "88px 1fr",
+              gap: 14,
+              alignItems: "start",
+              border: "1px solid rgba(255,255,255,.13)",
+              background: "linear-gradient(135deg, rgba(0,0,0,.24), rgba(255,255,255,.035))",
+              borderRadius: 22,
+              padding: 14,
+              boxShadow: "0 18px 55px rgba(0,0,0,.24)",
+            }}
+          >
+            <div
+              style={{
+                border: `1px solid ${item.tone}`,
+                color: item.tone,
+                borderRadius: 16,
+                padding: "10px 8px",
+                textAlign: "center",
+                fontWeight: 950,
+                letterSpacing: 1.5,
+                background: "rgba(0,0,0,.24)",
+              }}
+            >
+              {item.code}
+            </div>
+
+            <div>
+              <div style={{ ...eyebrow, color: item.tone, marginBottom: 6 }}>{item.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 950, marginBottom: 4 }}>{item.title}</div>
+              <p style={{ ...muted, margin: 0 }}>{item.text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+
 function OwnerAdminPanel({ stats }: { stats: Stats }) {
   const admin = stats.admin || {
     owner: false,
@@ -494,6 +597,8 @@ export default function DashboardPage() {
             {stats.warning}
           </section>
         )}
+
+        <ActivityFeed owner={owner} stats={stats} />
 
         <section style={grid}>
           <StatPane label="Active Deals" value={stats.deals} detail="Total deal rooms in the system." />
