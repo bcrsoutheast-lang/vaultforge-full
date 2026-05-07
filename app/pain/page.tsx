@@ -302,7 +302,7 @@ export default function PainPage() {
           </p>
 
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <Link href="/submit" style={btn}>Submit Signal</Link>
+          <Link href="/pain-submit" style={btn}>Submit Signal</Link>
           <Link href="/alerts" style={ghost}>Smart Alerts</Link>
           <button type="button" onClick={load} style={btn}>Refresh</button>
         </section>
@@ -375,7 +375,7 @@ export default function PainPage() {
                     </Link>
                   )}
                   <Link href="/alerts" style={ghost}>View Match Alerts</Link>
-                  <Link href="/submit" style={ghost}>Create Related Signal</Link>
+                  <Link href="/pain-submit" style={ghost}>Create Related Signal</Link>
                 </div>
 
                 <p style={{ ...muted, marginTop: 14 }}>
