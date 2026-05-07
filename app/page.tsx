@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 export default function HomePage() {
   return (
     <main
@@ -23,6 +20,7 @@ export default function HomePage() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            gap: 14,
             marginBottom: 34,
           }}
         >
@@ -148,6 +146,52 @@ export default function HomePage() {
               Preview Member Command Center
             </Link>
           </div>
+        </section>
+
+        <section
+          style={{
+            marginTop: 26,
+            border: "1px solid rgba(157,243,191,.24)",
+            background:
+              "linear-gradient(145deg, rgba(157,243,191,.08), rgba(255,255,255,.035))",
+            borderRadius: 30,
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              color: "#9df3bf",
+              letterSpacing: 5,
+              fontWeight: 900,
+              fontSize: 13,
+              marginBottom: 14,
+            }}
+          >
+            WHAT VAULTFORGE IS
+          </div>
+
+          <h2
+            style={{
+              fontSize: "clamp(36px, 8vw, 76px)",
+              lineHeight: 0.95,
+              letterSpacing: -2,
+              margin: "0 0 14px",
+            }}
+          >
+            Not a listing site. A private real estate operating system.
+          </h2>
+
+          <p
+            style={{
+              color: "rgba(255,255,255,.68)",
+              lineHeight: 1.55,
+              fontSize: 20,
+            }}
+          >
+            Members create deal rooms, train profiles, save acquisition targets,
+            receive smart routing alerts, and connect with buyers, lenders,
+            operators, contractors, developers, sellers, and partners.
+          </p>
         </section>
       </div>
     </main>
