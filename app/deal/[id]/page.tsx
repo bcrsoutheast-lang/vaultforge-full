@@ -9,7 +9,7 @@ type Deal = Record<string, any>;
 const shell: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#030509 0%,#071326 55%,#030509 100%)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.16), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
   color: "white",
   padding: "26px 18px 90px",
   fontFamily: "Arial, sans-serif",
@@ -29,7 +29,7 @@ const nav: React.CSSProperties = {
 
 const navLink: React.CSSProperties = {
   color: "#06100a",
-  background: "#f5d978",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   textDecoration: "none",
   borderRadius: 999,
   padding: "12px 16px",
@@ -45,22 +45,22 @@ const ghost: React.CSSProperties = {
   borderRadius: 999,
   padding: "12px 16px",
   fontWeight: 900,
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.20), rgba(255,255,255,.05))",
 };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.16)",
   background:
-    "linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.025))",
+    "linear-gradient(135deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
   borderRadius: 34,
   padding: "28px 22px",
   marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.45)",
+  boxShadow: "0 38px 115px rgba(0,0,0,.52)",
 };
 
 const section: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
-  background: "rgba(255,255,255,.035)",
+  background: "linear-gradient(145deg, rgba(181,92,255,.10), rgba(157,243,191,.055), rgba(255,255,255,.03))",
   borderRadius: 30,
   padding: 22,
   marginBottom: 20,
@@ -111,7 +111,7 @@ const input: React.CSSProperties = {
   boxSizing: "border-box",
   borderRadius: 18,
   border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.07)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.13), rgba(255,255,255,.06))",
   color: "white",
   padding: 14,
   fontSize: 16,
@@ -373,6 +373,26 @@ export default function DealRoomPage() {
 
   return (
     <main style={shell}>
+      <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        img {
+          box-shadow: 0 24px 70px rgba(0,0,0,.32);
+        }
+
+        @media (max-width: 760px) {
+          a,
+          button,
+          textarea {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
       <div style={wrap}>
         <nav style={nav}>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
