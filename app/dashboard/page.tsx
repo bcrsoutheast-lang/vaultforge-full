@@ -255,6 +255,83 @@ function ToolCard({
 
 
 
+
+function BuyBoxPanel({ owner }: { owner: boolean }) {
+  const buyBoxes = [
+    {
+      code: "ATL-FLIP",
+      title: "Atlanta Metro Flip Box",
+      market: "Georgia",
+      target: "Residential · Fix & Flip",
+      range: "$150k - $425k",
+      signal: "High demand",
+      tone: "#9df3bf",
+    },
+    {
+      code: "TN-LAND",
+      title: "Tennessee Land Watch",
+      market: "Tennessee",
+      target: "Land · Builder Lots · Entitlement",
+      range: "2 - 50 acres",
+      signal: "Builder-ready preferred",
+      tone: "#b55cff",
+    },
+    {
+      code: "SE-MF",
+      title: "Southeast Multifamily Value Add",
+      market: "GA / TN / Carolinas",
+      target: "Commercial · Value Add",
+      range: "5+ units",
+      signal: "Capital fit pending",
+      tone: "#f5d978",
+    },
+    {
+      code: "DISTRESS",
+      title: "Stuck Project / Pain Watch",
+      market: "Regional",
+      target: "Needs lender, operator, contractor, buyer",
+      range: "Any size",
+      signal: owner ? "Admin routing candidate" : "Profile match candidate",
+      tone: "#9df3bf",
+    },
+  ];
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(245,217,120,.34)" }}>
+      <div style={greenEyebrow}>Buy Boxes / Saved Searches</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        Watchlists that turn demand into routing intelligence.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>
+        Bloomberg-style workflows rely on monitors, watchlists, and customizable panels so users can scan what matters fast. This first version is read-only and safe; later it can connect to saved searches and real alert rules.
+      </p>
+
+      <section style={grid}>
+        {buyBoxes.map((box) => (
+          <div
+            key={box.code}
+            style={{
+              ...pane,
+              border: `1px solid ${box.tone}`,
+              background: "linear-gradient(145deg, rgba(0,0,0,.26), rgba(255,255,255,.045))",
+            }}
+          >
+            <div style={{ ...eyebrow, color: box.tone }}>{box.code}</div>
+            <h3 style={{ fontSize: 27, lineHeight: 1.05, margin: "0 0 10px" }}>{box.title}</h3>
+            <div style={{ display: "grid", gap: 8 }}>
+              <span style={{ ...chip, borderColor: box.tone, color: box.tone }}>{box.market}</span>
+              <span style={chip}>{box.target}</span>
+              <span style={chip}>{box.range}</span>
+              <span style={{ ...chip, borderColor: "rgba(255,255,255,.26)", color: "white" }}>{box.signal}</span>
+            </div>
+          </div>
+        ))}
+      </section>
+    </section>
+  );
+}
+
+
 function MemberBadgePanel({
   email,
   owner,
@@ -700,6 +777,8 @@ export default function DashboardPage() {
         )}
 
         <MemberBadgePanel email={email} owner={owner} access={access} />
+
+        <BuyBoxPanel owner={owner} />
 
         <ActivityFeed owner={owner} stats={stats} />
 
