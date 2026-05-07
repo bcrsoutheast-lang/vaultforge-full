@@ -31,19 +31,7 @@ const muted: React.CSSProperties = { color: "rgba(255,255,255,.68)", lineHeight:
 
 function getEmail() {
   if (typeof window === "undefined") return "";
-  return (localStorage.getItem("vf_email") || sessionStorage.getItem("vf_email") || "").trim().toLowerCase();
-}
-
-function hasStoredLogin() {
-  if (typeof window === "undefined") return false;
-  const email = getEmail();
-  const memberLogin =
-    localStorage.getItem("vf_member_login") ||
-    sessionStorage.getItem("vf_member_login") ||
-    localStorage.getItem("vf_login") ||
-    sessionStorage.getItem("vf_login") ||
-    "";
-  return Boolean(email) && (memberLogin === "1" || memberLogin.toLowerCase() === "true");
+  return (localStorage.getItem("vf_email") || sessionStorage.getItem("vf_email") || "text@text.com").trim().toLowerCase();
 }
 
 function money(value: any) {
@@ -68,24 +56,7 @@ function ToastBox({ toast }: { toast: Toast | null }) {
   );
 }
 
-function LockedScreen() {
-  return (
-    <main style={page}>
-      <div style={wrap}>
-        <section style={hero}>
-          <div style={eyebrow}>Login Required</div>
-          <h1 style={{ fontSize: "clamp(52px,12vw,92px)", lineHeight: 0.9, margin: "0 0 18px" }}>Messages are locked.</h1>
-          <p style={muted}>Sign in to view deal-tied conversations.</p>
-          <Link href="/login" style={btn}>Go to Login</Link>
-        </section>
-      </div>
-    </main>
-  );
-}
-
 export default function MessagesClient() {
-  const [ready, setReady] = useState(false);
-  const [allowed, setAllowed] = useState(false);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selected, setSelected] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -180,19 +151,7 @@ export default function MessagesClient() {
     }
   }
 
-  useEffect(() => {
-    const ok = hasStoredLogin();
-    setAllowed(ok);
-    setReady(true);
-    if (!ok) {
-      window.location.replace("/login");
-      return;
-    }
-    loadThreads();
-  }, []);
-
-  if (!ready) return <LockedScreen />;
-  if (!allowed) return <LockedScreen />;
+  useEffect(() => { loadThreads(); }, []);
 
   return (
     <main style={page}>
