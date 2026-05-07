@@ -20,6 +20,7 @@ function supabaseClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+      detectSessionInUrl: false,
     },
   });
 }
@@ -36,16 +37,38 @@ function emailFromCookie(cookieHeader: string) {
   const parts = cookieHeader.split(";").map((part) => part.trim());
 
   for (const part of parts) {
-    if (part.startsWith("vf_email=")) {
-      try {
-        return decodeURIComponent(part.replace("vf_email=", "")).trim().toLowerCase();
-      } catch {
-        return part.replace("vf_email=", "").trim().toLowerCase();
-      }
+    if (!part.startsWith("vf_email=")) continue;
+
+    const raw = part.replace("vf_email=", "");
+
+    try {
+      return cleanEmail(decodeURIComponent(raw));
+    } catch {
+      return cleanEmail(raw);
     }
   }
 
   return "";
+}
+
+function requestEmail(request: Request) {
+  const url = new URL(request.url);
+
+  return (
+    cleanEmail(request.headers.get("x-vf-email")) ||
+    cleanEmail(url.searchParams.get("email")) ||
+    emailFromCookie(request.headers.get("cookie") || "")
+  );
+}
+
+function requestOwner(request: Request, email: string) {
+  const url = new URL(request.url);
+
+  return (
+    email === OWNER_EMAIL ||
+    cleanEmail(request.headers.get("x-vf-admin")) === "1" ||
+    cleanEmail(url.searchParams.get("owner")) === "1"
+  );
 }
 
 async function countRows(supabase: any, table: string, filter?: (query: any) => any) {
@@ -68,6 +91,13 @@ async function countRows(supabase: any, table: string, filter?: (query: any) => 
   }
 }
 
+function alertFilterForEmail(email: string) {
+  return (query: any) =>
+    query
+      .or(`member_email.eq.${email},recipient_email.eq.${email}`)
+      .or("dismissed.is.null,dismissed.eq.false,is_dismissed.is.null,is_dismissed.eq.false");
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = supabaseClient();
@@ -80,26 +110,25 @@ export async function GET(request: Request) {
         bucket: 0,
         messages: 0,
         alerts: 0,
+        pain: 0,
+        routing: 0,
+        activity: 0,
+        warning: "Supabase environment values are missing.",
       });
     }
 
-    const url = new URL(request.url);
-
-    const email =
-      cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(url.searchParams.get("email")) ||
-      emailFromCookie(request.headers.get("cookie") || "");
-
-    const owner =
-      email === OWNER_EMAIL ||
-      cleanEmail(request.headers.get("x-vf-admin")) === "1" ||
-      cleanEmail(url.searchParams.get("owner")) === "1";
+    const email = requestEmail(request);
+    const owner = requestOwner(request, email);
 
     const [
       deals,
       members,
       bucket,
       messages,
+      alerts,
+      pain,
+      routing,
+      activity,
       pendingDeals,
       archivedDeals,
       lockedMembers,
@@ -113,9 +142,10 @@ export async function GET(request: Request) {
         "vf_buy_bucket",
         email
           ? (query) =>
-              query.or(
-                `member_email.eq.${email},buyer_email.eq.${email}`
-              )
+              query
+                .or(`member_email.eq.${email},buyer_email.eq.${email}`)
+                .or("deleted.is.null,deleted.eq.false")
+                .or("archived.is.null,archived.eq.false")
           : undefined
       ),
       countRows(
@@ -123,40 +153,72 @@ export async function GET(request: Request) {
         "vf_messages",
         email
           ? (query) =>
-              query.or(
-                `sender_email.eq.${email},recipient_email.eq.${email}`
-              )
+              query
+                .or(`sender_email.eq.${email},recipient_email.eq.${email}`)
+                .or("archived.is.null,archived.eq.false")
+          : undefined
+      ),
+      countRows(
+        supabase,
+        "vf_match_alerts",
+        owner
+          ? (query) =>
+              query.or("dismissed.is.null,dismissed.eq.false,is_dismissed.is.null,is_dismissed.eq.false")
+          : email
+          ? alertFilterForEmail(email)
+          : undefined
+      ),
+      countRows(
+        supabase,
+        "vf_pain_submissions",
+        owner
+          ? undefined
+          : email
+          ? (query) => query.eq("member_email", email)
+          : undefined
+      ),
+      countRows(
+        supabase,
+        "vf_routing_signals",
+        owner
+          ? undefined
+          : email
+          ? (query) => query.eq("member_email", email)
+          : undefined
+      ),
+      countRows(
+        supabase,
+        "vf_activity_events",
+        owner
+          ? undefined
+          : email
+          ? (query) => query.eq("member_email", email)
           : undefined
       ),
       countRows(
         supabase,
         "vf_deals",
-        (query) =>
-          query.or("status.eq.pending,status.eq.review,status.eq.submitted")
+        (query) => query.or("status.eq.pending,status.eq.review,status.eq.submitted")
       ),
       countRows(
         supabase,
         "vf_deals",
-        (query) =>
-          query.or("archived.eq.true,status.eq.archived")
+        (query) => query.or("archived.eq.true,status.eq.archived")
       ),
       countRows(
         supabase,
         "vf_members",
-        (query) =>
-          query.or("member_status.eq.locked,is_suspended.eq.true")
+        (query) => query.or("member_status.eq.locked,is_suspended.eq.true")
       ),
       countRows(
         supabase,
         "vf_members",
-        (query) =>
-          query.or("payment_status.eq.unpaid,payment_status.eq.inactive")
+        (query) => query.or("payment_status.eq.unpaid,payment_status.eq.inactive")
       ),
       countRows(
         supabase,
         "vf_members",
-        (query) =>
-          query.or("member_status.eq.active,is_active.eq.true")
+        (query) => query.or("member_status.eq.active,is_active.eq.true")
       ),
     ]);
 
@@ -168,7 +230,10 @@ export async function GET(request: Request) {
       members,
       bucket,
       messages,
-      alerts: bucket + messages,
+      alerts,
+      pain,
+      routing,
+      activity,
       admin: {
         owner,
         pendingDeals,
@@ -182,6 +247,10 @@ export async function GET(request: Request) {
         members: "vf_members",
         bucket: "vf_buy_bucket",
         messages: "vf_messages",
+        alerts: "vf_match_alerts",
+        pain: "vf_pain_submissions",
+        routing: "vf_routing_signals",
+        activity: "vf_activity_events",
       },
     });
   } catch (error: any) {
