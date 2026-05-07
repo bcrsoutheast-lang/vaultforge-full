@@ -62,7 +62,7 @@ function publicCookieOptions(maxAge: number) {
     path: "/",
     httpOnly: false,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: false,
     maxAge,
   };
 }
