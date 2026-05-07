@@ -33,19 +33,7 @@ const metric: React.CSSProperties = { border: "1px solid rgba(255,255,255,.10)",
 
 function getEmail() {
   if (typeof window === "undefined") return "";
-  return (localStorage.getItem("vf_email") || sessionStorage.getItem("vf_email") || "").trim().toLowerCase();
-}
-
-function hasStoredLogin() {
-  if (typeof window === "undefined") return false;
-  const email = getEmail();
-  const memberLogin =
-    localStorage.getItem("vf_member_login") ||
-    sessionStorage.getItem("vf_member_login") ||
-    localStorage.getItem("vf_login") ||
-    sessionStorage.getItem("vf_login") ||
-    "";
-  return Boolean(email) && (memberLogin === "1" || memberLogin.toLowerCase() === "true");
+  return (localStorage.getItem("vf_email") || sessionStorage.getItem("vf_email") || "text@text.com").trim().toLowerCase();
 }
 
 function money(value: any) {
@@ -102,24 +90,7 @@ function ToastBox({ toast }: { toast: Toast | null }) {
   );
 }
 
-function LockedScreen() {
-  return (
-    <main style={shell}>
-      <div style={wrap}>
-        <section style={hero}>
-          <div style={eyebrow}>Login Required</div>
-          <h1 style={{ fontSize: "clamp(52px,12vw,92px)", lineHeight: 0.9, margin: "0 0 18px" }}>Buy Bucket is locked.</h1>
-          <p style={muted}>Sign in to view saved acquisition targets.</p>
-          <Link href="/login" style={btn}>Go to Login</Link>
-        </section>
-      </div>
-    </main>
-  );
-}
-
 export default function BuyBucketClient() {
-  const [ready, setReady] = useState(false);
-  const [allowed, setAllowed] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [status, setStatus] = useState("Loading Buy Bucket...");
   const [workingId, setWorkingId] = useState("");
@@ -182,19 +153,7 @@ export default function BuyBucketClient() {
     await runAction(id, "/api/deal/bucket-folder", { id, folder }, "Folder update", `Moved to ${folder} ✓`);
   }
 
-  useEffect(() => {
-    const ok = hasStoredLogin();
-    setAllowed(ok);
-    setReady(true);
-    if (!ok) {
-      window.location.replace("/login");
-      return;
-    }
-    load();
-  }, []);
-
-  if (!ready) return <LockedScreen />;
-  if (!allowed) return <LockedScreen />;
+  useEffect(() => { load(); }, []);
 
   return (
     <main style={shell}>
