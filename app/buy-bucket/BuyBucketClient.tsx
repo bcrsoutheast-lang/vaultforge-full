@@ -10,26 +10,26 @@ type Toast = { type: "success" | "error" | "info"; text: string };
 const shell: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 30%), linear-gradient(180deg,#06100a,#102015 55%,#06100a)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#102015 45%,#06100a 100%)",
   color: "white",
   padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif",
 };
 
 const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
-const hero: React.CSSProperties = { border: "1px solid rgba(232,196,107,.28)", background: "rgba(255,255,255,.045)", borderRadius: 34, padding: 24, marginBottom: 22 };
+const hero: React.CSSProperties = { border: "1px solid rgba(232,196,107,.28)", background: "linear-gradient(145deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))", borderRadius: 34, padding: 24, marginBottom: 22 };
 const paneGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(290px,1fr))", gap: 18 };
-const pane: React.CSSProperties = { border: "1px solid rgba(232,196,107,.24)", background: "linear-gradient(145deg, rgba(255,255,255,.075), rgba(255,255,255,.025))", borderRadius: 30, overflow: "hidden", boxShadow: "0 25px 75px rgba(0,0,0,.28)" };
+const pane: React.CSSProperties = { border: "1px solid rgba(232,196,107,.24)", background: "linear-gradient(145deg, rgba(181,92,255,.14), rgba(157,243,191,.07), rgba(255,255,255,.03))", borderRadius: 30, overflow: "hidden", boxShadow: "0 25px 75px rgba(0,0,0,.28)" };
 const bodyStyle: React.CSSProperties = { padding: 20 };
-const btn: React.CSSProperties = { display: "inline-block", background: "#f5d978", color: "#06100a", textDecoration: "none", borderRadius: 999, padding: "12px 15px", fontWeight: 900, border: "none", margin: "6px 6px 0 0", cursor: "pointer" };
-const ghost: React.CSSProperties = { display: "inline-block", color: "white", textDecoration: "none", borderRadius: 999, padding: "12px 15px", fontWeight: 900, border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.04)", margin: "6px 6px 0 0", cursor: "pointer" };
-const successBtn: React.CSSProperties = { ...ghost, border: "1px solid rgba(157,243,191,.44)", color: "#9df3bf", background: "rgba(157,243,191,.08)" };
+const btn: React.CSSProperties = { display: "inline-block", background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)", color: "#06100a", textDecoration: "none", borderRadius: 999, padding: "12px 15px", fontWeight: 900, border: "none", margin: "6px 6px 0 0", cursor: "pointer" };
+const ghost: React.CSSProperties = { display: "inline-block", color: "white", textDecoration: "none", borderRadius: 999, padding: "12px 15px", fontWeight: 900, border: "1px solid rgba(255,255,255,.16)", background: "linear-gradient(135deg, rgba(181,92,255,.20), rgba(255,255,255,.05))", margin: "6px 6px 0 0", cursor: "pointer" };
+const successBtn: React.CSSProperties = { ...ghost, border: "1px solid rgba(157,243,191,.44)", color: "#9df3bf", background: "linear-gradient(145deg, rgba(157,243,191,.14), rgba(181,92,255,.08))" };
 const danger: React.CSSProperties = { ...ghost, border: "1px solid rgba(255,120,120,.32)", color: "#ffd0d0" };
 const eyebrow: React.CSSProperties = { color: "#e8c46b", letterSpacing: 5, fontWeight: 900, fontSize: 12, marginBottom: 12, textTransform: "uppercase" };
 const muted: React.CSSProperties = { color: "rgba(255,255,255,.68)", lineHeight: 1.5 };
 const selectStyle: React.CSSProperties = { width: "100%", borderRadius: 18, border: "1px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.08)", color: "white", padding: 12, fontWeight: 900, marginTop: 10 };
 const metricGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, margin: "14px 0" };
-const metric: React.CSSProperties = { border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: 12, background: "rgba(0,0,0,.16)" };
+const metric: React.CSSProperties = { border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: 12, background: "linear-gradient(145deg, rgba(0,0,0,.26), rgba(181,92,255,.08))" };
 
 function getEmail() {
   if (typeof window === "undefined") return "";
@@ -157,10 +157,79 @@ export default function BuyBucketClient() {
 
   return (
     <main style={shell}>
+      <style>{`
+        a:hover,
+        button:hover,
+        select:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        img {
+          box-shadow: 0 26px 70px rgba(0,0,0,.34);
+        }
+
+        @media (max-width: 760px) {
+          a,
+          button,
+          select {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
       <ToastBox toast={toast} />
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>Buy Bucket</div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <span
+              style={{
+                border: "1px solid rgba(181,92,255,.36)",
+                color: "#dcb8ff",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(181,92,255,.12)",
+              }}
+            >
+              Watchlist Engine
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(157,243,191,.36)",
+                color: "#9df3bf",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(157,243,191,.10)",
+              }}
+            >
+              Acquisition Tracking
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(245,217,120,.36)",
+                color: "#f5d978",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(245,217,120,.10)",
+              }}
+            >
+              Bloomberg-Style Watchlists
+            </span>
+          </div>
           <h1 style={{ fontSize: "clamp(56px,12vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
             Saved window panes.
           </h1>
