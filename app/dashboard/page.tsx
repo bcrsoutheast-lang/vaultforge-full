@@ -356,7 +356,7 @@ function PainButtonPanel({ owner }: { owner: boolean }) {
 
       <section
         style={{
-          ...section,
+          ...pane,
           marginTop: 18,
           borderColor: "rgba(255,120,120,.26)",
           background:
