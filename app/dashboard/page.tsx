@@ -37,7 +37,7 @@ type Access = {
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.15), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.22), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.18), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 40%,#03110d 100%)",
   color: "white",
   padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif",
@@ -47,7 +47,7 @@ const wrap: React.CSSProperties = { maxWidth: 1200, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.28)",
-  background: "rgba(255,255,255,.045)",
+  background: "linear-gradient(145deg, rgba(181,92,255,.10), rgba(157,243,191,.07), rgba(255,255,255,.04))",
   borderRadius: 34,
   padding: 24,
   marginBottom: 22,
@@ -68,24 +68,24 @@ const toolGrid: React.CSSProperties = {
 const pane: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
   background:
-    "linear-gradient(145deg, rgba(255,255,255,.07), rgba(255,255,255,.025))",
+    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(157,243,191,.06), rgba(255,255,255,.03))",
   borderRadius: 28,
   padding: 22,
-  boxShadow: "0 25px 75px rgba(0,0,0,.22)",
+  boxShadow: "0 30px 90px rgba(0,0,0,.35)",
 };
 
 const commandPane: React.CSSProperties = {
   ...pane,
   border: "1px solid rgba(157,243,191,.22)",
   background:
-    "linear-gradient(145deg, rgba(157,243,191,.075), rgba(255,255,255,.028))",
+    "linear-gradient(145deg, rgba(157,243,191,.12), rgba(181,92,255,.12), rgba(255,255,255,.03))",
 };
 
 const btn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#f5d978",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   color: "#06100a",
   textDecoration: "none",
   borderRadius: 999,
@@ -106,7 +106,7 @@ const ghost: React.CSSProperties = {
   padding: "13px 18px",
   fontWeight: 900,
   border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   margin: "6px 6px 0 0",
   minHeight: 46,
 };
@@ -433,6 +433,7 @@ export default function DashboardPage() {
 
   return (
     <main style={page}>
+
       <style>{`
         @media (max-width: 760px) {
           .vf-command-actions {
@@ -447,7 +448,13 @@ export default function DashboardPage() {
             box-sizing: border-box;
           }
         }
+
+        a:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+        }
       `}</style>
+
 
       <div style={wrap}>
         <div style={topAccount}>
