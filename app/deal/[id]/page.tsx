@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -12,19 +12,19 @@ const shell: React.CSSProperties = {
     "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#030509 0%,#071326 55%,#030509 100%)",
   color: "white",
   padding: "26px 18px 90px",
-  fontFamily: "Arial, sans-serif"
+  fontFamily: "Arial, sans-serif",
 };
 
 const wrap: React.CSSProperties = {
   maxWidth: 1180,
-  margin: "0 auto"
+  margin: "0 auto",
 };
 
 const nav: React.CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
   gap: 10,
-  marginBottom: 24
+  marginBottom: 24,
 };
 
 const navLink: React.CSSProperties = {
@@ -34,7 +34,8 @@ const navLink: React.CSSProperties = {
   borderRadius: 999,
   padding: "12px 16px",
   fontWeight: 900,
-  border: "none"
+  border: "none",
+  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -44,7 +45,7 @@ const ghost: React.CSSProperties = {
   borderRadius: 999,
   padding: "12px 16px",
   fontWeight: 900,
-  background: "rgba(255,255,255,.04)"
+  background: "rgba(255,255,255,.04)",
 };
 
 const hero: React.CSSProperties = {
@@ -54,7 +55,7 @@ const hero: React.CSSProperties = {
   borderRadius: 34,
   padding: "28px 22px",
   marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.45)"
+  boxShadow: "0 30px 90px rgba(0,0,0,.45)",
 };
 
 const section: React.CSSProperties = {
@@ -62,19 +63,19 @@ const section: React.CSSProperties = {
   background: "rgba(255,255,255,.035)",
   borderRadius: 30,
   padding: 22,
-  marginBottom: 20
+  marginBottom: 20,
 };
 
 const grid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-  gap: 16
+  gap: 16,
 };
 
 const muted: React.CSSProperties = {
   color: "rgba(255,255,255,.66)",
   lineHeight: 1.5,
-  fontSize: 16
+  fontSize: 16,
 };
 
 const eyebrow: React.CSSProperties = {
@@ -82,7 +83,7 @@ const eyebrow: React.CSSProperties = {
   letterSpacing: 5,
   fontWeight: 900,
   fontSize: 12,
-  marginBottom: 12
+  marginBottom: 12,
 };
 
 const pill: React.CSSProperties = {
@@ -94,7 +95,7 @@ const pill: React.CSSProperties = {
   fontSize: 12,
   letterSpacing: 1.4,
   margin: "0 8px 10px 0",
-  fontWeight: 900
+  fontWeight: 900,
 };
 
 const image: React.CSSProperties = {
@@ -102,7 +103,7 @@ const image: React.CSSProperties = {
   borderRadius: 24,
   display: "block",
   border: "1px solid rgba(255,255,255,.12)",
-  objectFit: "cover"
+  objectFit: "cover",
 };
 
 const input: React.CSSProperties = {
@@ -113,7 +114,7 @@ const input: React.CSSProperties = {
   background: "rgba(255,255,255,.07)",
   color: "white",
   padding: 14,
-  fontSize: 16
+  fontSize: 16,
 };
 
 function getEmail() {
@@ -123,13 +124,15 @@ function getEmail() {
     window.localStorage.getItem("vf_email") ||
     window.sessionStorage.getItem("vf_email") ||
     "text@text.com"
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
 }
 
 function headers() {
   return {
     "Content-Type": "application/json",
-    "x-vf-email": getEmail()
+    "x-vf-email": getEmail(),
   };
 }
 
@@ -141,7 +144,7 @@ function money(value: unknown) {
   return n.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 0
+    maximumFractionDigits: 0,
   });
 }
 
@@ -149,49 +152,48 @@ function valueOf(deal: Deal | null, keys: string[]) {
   if (!deal) return "";
 
   for (const key of keys) {
-    const v = deal[key];
+    const value = deal[key];
 
     if (
-      v !== null &&
-      v !== undefined &&
-      v !== "" &&
-      !(Array.isArray(v) && v.length === 0)
+      value !== null &&
+      value !== undefined &&
+      value !== "" &&
+      !(Array.isArray(value) && value.length === 0)
     ) {
-      return v;
+      return value;
     }
   }
 
   return "";
 }
 
-function Field({
-  label,
-  value
-}: {
-  label: string;
-  value: any;
-}) {
-  if (
+function isEmpty(value: any) {
+  return (
     value === null ||
     value === undefined ||
     value === "" ||
     (Array.isArray(value) && value.length === 0)
-  ) {
-    return null;
-  }
+  );
+}
+
+function formatLabel(key: string) {
+  return String(key).replace(/_/g, " ").toUpperCase();
+}
+
+function formatValue(value: any) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function Field({ label, value }: { label: string; value: any }) {
+  if (isEmpty(value)) return null;
 
   return (
     <div style={section}>
       <div style={eyebrow}>{label}</div>
-
-      <p
-        style={{
-          ...muted,
-          fontSize: 20,
-          margin: 0
-        }}
-      >
-        {Array.isArray(value) ? value.join(", ") : String(value)}
+      <p style={{ ...muted, fontSize: 20, margin: 0, overflowWrap: "break-word" }}>
+        {formatValue(value)}
       </p>
     </div>
   );
@@ -212,13 +214,10 @@ export default function DealRoomPage() {
     setStatus("");
 
     try {
-      const res = await fetch(
-        `/api/deal/detail?id=${encodeURIComponent(id)}`,
-        {
-          cache: "no-store",
-          headers: headers()
-        }
-      );
+      const res = await fetch(`/api/deal/detail?id=${encodeURIComponent(id)}`, {
+        cache: "no-store",
+        headers: headers(),
+      });
 
       const data = await res.json();
 
@@ -249,16 +248,14 @@ export default function DealRoomPage() {
         body: JSON.stringify({
           deal_id: id,
           subject: `Inquiry on ${deal?.title || "VaultForge deal"}`,
-          body: message.trim()
-        })
+          body: message.trim(),
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(
-          data?.error || data?.details || "Message failed."
-        );
+        throw new Error(data?.error || data?.details || "Message failed.");
       }
 
       setMessage("");
@@ -269,73 +266,60 @@ export default function DealRoomPage() {
   }
 
   useEffect(() => {
-    if (id) {
-      loadDeal();
-    }
+    if (id) loadDeal();
   }, [id]);
 
-  const photos: string[] = Array.isArray(deal?.photo_urls)
-    ? deal.photo_urls.filter(Boolean)
-    : [];
+  const photos: string[] = useMemo(() => {
+    const next = Array.isArray(deal?.photo_urls)
+      ? deal.photo_urls.filter(Boolean)
+      : [];
 
-  if (deal?.main_photo_url && !photos.includes(deal.main_photo_url)) {
-    photos.unshift(deal.main_photo_url);
-  }
+    if (deal?.main_photo_url && !next.includes(deal.main_photo_url)) {
+      next.unshift(deal.main_photo_url);
+    }
 
-  const ownerName = valueOf(deal, [
-    "owner_name",
-    "contact_name",
-    "seller_name"
-  ]);
+    return next;
+  }, [deal]);
 
-  const ownerPhone = valueOf(deal, [
-    "owner_phone",
-    "contact_phone",
-    "seller_phone"
-  ]);
-
+  const ownerName = valueOf(deal, ["owner_name", "contact_name", "seller_name"]);
+  const ownerPhone = valueOf(deal, ["owner_phone", "contact_phone", "seller_phone"]);
   const ownerEmail = valueOf(deal, [
     "owner_contact_email",
     "contact_email",
     "seller_email",
     "owner_email",
-    "member_email"
+    "member_email",
   ]);
+
+  const hiddenKeys = new Set([
+    "id",
+    "created_at",
+    "updated_at",
+    "photo_urls",
+    "main_photo_url",
+  ]);
+
+  const allFields = deal
+    ? Object.entries(deal).filter(([key, value]) => {
+        if (hiddenKeys.has(key)) return false;
+        return !isEmpty(value);
+      })
+    : [];
 
   return (
     <main style={shell}>
       <div style={wrap}>
         <nav style={nav}>
-          <Link href="/dashboard" style={ghost}>
-            Dashboard
-          </Link>
-
-          <Link href="/projects" style={ghost}>
-            Projects
-          </Link>
-
-          <Link href="/buy-bucket" style={ghost}>
-            Buy Bucket
-          </Link>
-
-          <Link href="/submit" style={navLink}>
-            Create Deal
-          </Link>
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <Link href="/projects" style={ghost}>Projects</Link>
+          <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+          <Link href="/submit" style={navLink}>Create Deal</Link>
         </nav>
 
-        {loading && (
-          <section style={section}>
-            Loading deal room...
-          </section>
-        )}
+        {loading && <section style={section}>Loading deal room...</section>}
 
         {status && (
-          <section
-            style={{
-              ...section,
-              color: "#ffd0d0"
-            }}
-          >
+          <section style={{ ...section, color: "#ffd0d0" }}>
             {status}
           </section>
         )}
@@ -350,19 +334,13 @@ export default function DealRoomPage() {
                   fontSize: "clamp(52px,12vw,96px)",
                   lineHeight: 0.9,
                   letterSpacing: -4,
-                  margin: "0 0 18px"
+                  margin: "0 0 18px",
                 }}
               >
                 {deal.title || "Untitled Deal"}
               </h1>
 
-              <h2
-                style={{
-                  fontSize: 34,
-                  margin: "0 0 16px",
-                  color: "#e8c46b"
-                }}
-              >
+              <h2 style={{ fontSize: 34, margin: "0 0 16px", color: "#e8c46b" }}>
                 {money(valueOf(deal, ["asking_price", "price"]))}
               </h2>
 
@@ -371,12 +349,7 @@ export default function DealRoomPage() {
               <span style={pill}>{deal.property_type || "Deal"}</span>
               <span style={pill}>{deal.strategy || "No strategy"}</span>
 
-              <p
-                style={{
-                  ...muted,
-                  fontSize: 20
-                }}
-              >
+              <p style={{ ...muted, fontSize: 20 }}>
                 {deal.description || "No description."}
               </p>
             </section>
@@ -393,10 +366,7 @@ export default function DealRoomPage() {
                       key={`${src}-${i}`}
                       src={src}
                       alt={`Deal photo ${i + 1}`}
-                      style={{
-                        ...image,
-                        height: i === 0 ? 360 : 240
-                      }}
+                      style={{ ...image, height: i === 0 ? 360 : 240 }}
                     />
                   ))}
                 </div>
@@ -408,23 +378,12 @@ export default function DealRoomPage() {
 
               <textarea
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(event) => setMessage(event.target.value)}
                 placeholder="I'm interested in this deal."
-                style={{
-                  ...input,
-                  minHeight: 130,
-                  resize: "vertical"
-                }}
+                style={{ ...input, minHeight: 130, resize: "vertical" }}
               />
 
-              <button
-                type="button"
-                onClick={sendMessage}
-                style={{
-                  ...navLink,
-                  marginTop: 12
-                }}
-              >
+              <button type="button" onClick={sendMessage} style={{ ...navLink, marginTop: 12 }}>
                 Message Owner
               </button>
 
@@ -434,7 +393,7 @@ export default function DealRoomPage() {
                     color: messageStatus.toLowerCase().includes("sent")
                       ? "#9df3bf"
                       : "#ffd0d0",
-                    fontWeight: 900
+                    fontWeight: 900,
                   }}
                 >
                   {messageStatus}
@@ -443,217 +402,63 @@ export default function DealRoomPage() {
             </section>
 
             <section style={grid}>
-              <Field
-                label="ASKING PRICE"
-                value={money(valueOf(deal, ["asking_price", "price"]))}
-              />
-
-              <Field
-                label="ARV / VALUE"
-                value={deal.arv ? money(deal.arv) : ""}
-              />
-
-              <Field
-                label="REPAIR ESTIMATE"
-                value={deal.repair_estimate ? money(deal.repair_estimate) : ""}
-              />
-
-              <Field
-                label="ADDRESS / AREA"
-                value={deal.address}
-              />
-
-              <Field
-                label="BEDROOMS"
-                value={valueOf(deal, ["bedrooms", "beds"])}
-              />
-
-              <Field
-                label="BATHROOMS"
-                value={valueOf(deal, ["bathrooms", "baths"])}
-              />
-
-              <Field
-                label="SQUARE FEET"
-                value={valueOf(deal, ["square_feet", "building_sqft", "sqft"])}
-              />
-
-              <Field
-                label="ACRES"
-                value={valueOf(deal, ["acres", "land_acres"])}
-              />
-
-              <Field
-                label="YEAR BUILT"
-                value={deal.year_built}
-              />
-
-              <Field
-                label="OCCUPANCY"
-                value={deal.occupancy}
-              />
-
-              <Field
-                label="CONDITION"
-                value={deal.condition}
-              />
-
-              <Field
-                label="COMMERCIAL TYPE"
-                value={deal.commercial_type}
-              />
-
-              <Field
-                label="UNITS / SUITES"
-                value={deal.units}
-              />
-
-              <Field
-                label="NOI"
-                value={deal.noi}
-              />
-
-              <Field
-                label="CAP RATE"
-                value={deal.cap_rate}
-              />
-
-              <Field
-                label="ZONING"
-                value={deal.zoning}
-              />
-
-              <Field
-                label="TENANT STATUS"
-                value={deal.tenant_status}
-              />
-
-              <Field
-                label="PARCEL ID"
-                value={deal.parcel_id}
-              />
-
-              <Field
-                label="ROAD FRONTAGE"
-                value={deal.frontage}
-              />
-
-              <Field
-                label="UTILITIES"
-                value={valueOf(deal, ["utilities", "access_notes"])}
-              />
-
-              <Field
-                label="ROAD ACCESS"
-                value={deal.road_access}
-              />
-
-              <Field
-                label="TOPOGRAPHY"
-                value={deal.topography}
-              />
-
-              <Field
-                label="DEAL NEEDS"
-                value={valueOf(deal, ["deal_needs", "needs", "routing_needs"])}
-              />
+              <Field label="ASKING PRICE" value={money(valueOf(deal, ["asking_price", "price"]))} />
+              <Field label="ARV / VALUE" value={deal.arv ? money(deal.arv) : ""} />
+              <Field label="REPAIR ESTIMATE" value={deal.repair_estimate ? money(deal.repair_estimate) : ""} />
+              <Field label="ADDRESS / AREA" value={deal.address} />
+              <Field label="BEDROOMS" value={valueOf(deal, ["bedrooms", "beds"])} />
+              <Field label="BATHROOMS" value={valueOf(deal, ["bathrooms", "baths"])} />
+              <Field label="SQUARE FEET" value={valueOf(deal, ["square_feet", "building_sqft", "sqft"])} />
+              <Field label="ACRES" value={valueOf(deal, ["acres", "land_acres"])} />
+              <Field label="YEAR BUILT" value={deal.year_built} />
+              <Field label="OCCUPANCY" value={deal.occupancy} />
+              <Field label="CONDITION" value={deal.condition} />
+              <Field label="COMMERCIAL TYPE" value={deal.commercial_type} />
+              <Field label="UNITS / SUITES" value={deal.units} />
+              <Field label="NOI" value={deal.noi} />
+              <Field label="CAP RATE" value={deal.cap_rate} />
+              <Field label="ZONING" value={deal.zoning} />
+              <Field label="TENANT STATUS" value={deal.tenant_status} />
+              <Field label="PARCEL ID" value={deal.parcel_id} />
+              <Field label="ROAD FRONTAGE" value={deal.frontage} />
+              <Field label="UTILITIES" value={valueOf(deal, ["utilities", "access_notes"])} />
+              <Field label="ROAD ACCESS" value={deal.road_access} />
+              <Field label="TOPOGRAPHY" value={deal.topography} />
+              <Field label="DEAL NEEDS" value={valueOf(deal, ["deal_needs", "needs", "routing_needs"])} />
             </section>
 
             <section style={grid}>
-              <Field
-                label="OWNER / CONTACT NAME"
-                value={ownerName}
-              />
-
-              <Field
-                label="OWNER PHONE"
-                value={ownerPhone}
-              />
-
-              <Field
-                label="OWNER EMAIL"
-                value={ownerEmail}
-              />
-
-              <Field
-                label="PREFERRED CONTACT"
-                value={deal.preferred_contact}
-              />
+              <Field label="OWNER / CONTACT NAME" value={ownerName} />
+              <Field label="OWNER PHONE" value={ownerPhone} />
+              <Field label="OWNER EMAIL" value={ownerEmail} />
+              <Field label="PREFERRED CONTACT" value={deal.preferred_contact} />
             </section>
 
-            <Field
-              label="SELLER SITUATION"
-              value={deal.seller_situation}
-            />
-
-            <Field
-              label="ACCESS NOTES"
-              value={deal.access_notes}
-            />
-
-            <Field
-              label="PRIVATE NOTES"
-              value={deal.private_notes}
-            />
-
+            <Field label="SELLER SITUATION" value={deal.seller_situation} />
+            <Field label="ACCESS NOTES" value={deal.access_notes} />
+            <Field label="PRIVATE NOTES" value={deal.private_notes} />
 
             <section style={section}>
               <div style={eyebrow}>ALL PROJECT DATA</div>
+              <p style={muted}>
+                This section automatically shows every saved field on this project so new Residential,
+                Commercial, Land, or custom fields do not disappear from the Deal Room.
+              </p>
 
               <div style={grid}>
-                {Object.entries(deal)
-                  .filter(([key, value]) => {
-                    if (
-                      value === null ||
-                      value === undefined ||
-                      value === "" ||
-                      (Array.isArray(value) && value.length === 0)
-                    ) {
-                      return false;
-                    }
-
-                    const hidden = [
-                      "id",
-                      "created_at",
-                      "updated_at",
-                      "photo_urls",
-                      "main_photo_url"
-                    ];
-
-                    return !hidden.includes(key);
-                  })
-                  .map(([key, value]) => (
-                    <div
-                      key={key}
-                      style={section}
-                    >
-                      <div style={eyebrow}>
-                        {String(key)
-                          .replace(/_/g, " ")
-                          .toUpperCase()}
-                      </div>
-
-                      <p
-                        style={{
-                          ...muted,
-                          fontSize: 18,
-                          margin: 0,
-                          overflowWrap: "break-word"
-                        }}
-                      >
-                        {Array.isArray(value)
-                          ? value.join(", ")
-                          : typeof value === "object"
-                          ? JSON.stringify(value)
-                          : String(value)}
-                      </p>
-                    </div>
-                  ))}
+                {allFields.map(([key, value]) => (
+                  <div key={key} style={section}>
+                    <div style={eyebrow}>{formatLabel(key)}</div>
+                    <p style={{ ...muted, fontSize: 18, margin: 0, overflowWrap: "break-word" }}>
+                      {formatValue(value)}
+                    </p>
+                  </div>
+                ))}
               </div>
             </section>
-
           </>
         )}
       </div>
     </main>
   );
+}
