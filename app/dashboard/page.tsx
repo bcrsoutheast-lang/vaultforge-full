@@ -257,6 +257,104 @@ function ToolCard({
 
 
 
+
+function DealPipelinePanel({ stats }: { stats: Stats }) {
+  const totalDeals = Number(stats.deals || 0);
+
+  const pipeline = [
+    {
+      stage: "NEW",
+      title: "New Intake",
+      count: totalDeals,
+      text: "Fresh deal rooms submitted into VaultForge.",
+      tone: "#9df3bf",
+    },
+    {
+      stage: "REVIEW",
+      title: "Under Review",
+      count: Math.max(0, Math.min(totalDeals, Number(stats.admin?.pendingDeals || 0))),
+      text: "Deals needing number, photo, owner, or routing review.",
+      tone: "#f5d978",
+    },
+    {
+      stage: "MATCH",
+      title: "Matched / Routed",
+      count: Number(stats.alerts || 0),
+      text: "Routing signals and alert candidates for member fit.",
+      tone: "#b55cff",
+    },
+    {
+      stage: "WATCH",
+      title: "Saved / Watched",
+      count: Number(stats.bucket || 0),
+      text: "Deals saved into Buy Buckets as demand signals.",
+      tone: "#9df3bf",
+    },
+    {
+      stage: "COMMS",
+      title: "Conversation",
+      count: Number(stats.messages || 0),
+      text: "Deals with message activity or member follow-up.",
+      tone: "#f5d978",
+    },
+    {
+      stage: "CLOSED",
+      title: "Closed / Dead",
+      count: 0,
+      text: "Future pipeline status for closed, dead, funded, or completed deals.",
+      tone: "#b55cff",
+    },
+  ];
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(181,92,255,.38)" }}>
+      <div style={greenEyebrow}>Deal Status Pipeline</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        From intake to routing to execution.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>
+        A read-only pipeline board for launch stability. Later, these stages can connect to real status fields, admin controls, smart routing, and deal lifecycle analytics.
+      </p>
+
+      <section style={grid}>
+        {pipeline.map((item) => (
+          <div
+            key={item.stage}
+            style={{
+              ...pane,
+              border: `1px solid ${item.tone}`,
+              background: "linear-gradient(145deg, rgba(0,0,0,.28), rgba(255,255,255,.045))",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: -26,
+                right: -22,
+                width: 90,
+                height: 90,
+                borderRadius: 999,
+                background: item.tone,
+                opacity: 0.12,
+              }}
+            />
+
+            <div style={{ ...eyebrow, color: item.tone }}>{item.stage}</div>
+            <h3 style={{ fontSize: 28, lineHeight: 1.05, margin: "0 0 8px" }}>{item.title}</h3>
+            <div style={{ fontSize: 54, fontWeight: 950, lineHeight: 1, color: item.tone }}>
+              {item.count}
+            </div>
+            <p style={muted}>{item.text}</p>
+          </div>
+        ))}
+      </section>
+    </section>
+  );
+}
+
+
 function NotificationCenter({
   owner,
   stats,
@@ -897,6 +995,8 @@ export default function DashboardPage() {
         <BuyBoxPanel owner={owner} />
 
         <NotificationCenter owner={owner} stats={stats} access={access} />
+
+        <DealPipelinePanel stats={stats} />
 
         <ActivityFeed owner={owner} stats={stats} />
 
