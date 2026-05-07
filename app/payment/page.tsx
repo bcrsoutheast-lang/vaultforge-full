@@ -17,7 +17,7 @@ type Access = {
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
   color: "white",
   padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif",
@@ -31,7 +31,7 @@ const wrap: React.CSSProperties = {
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.30)",
   background:
-    "linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.025))",
+    "linear-gradient(135deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
   borderRadius: 34,
   padding: 28,
   marginBottom: 22,
@@ -40,7 +40,7 @@ const hero: React.CSSProperties = {
 
 const pane: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   borderRadius: 28,
   padding: 22,
   marginBottom: 18,
@@ -50,14 +50,14 @@ const greenPane: React.CSSProperties = {
   ...pane,
   border: "1px solid rgba(157,243,191,.28)",
   background:
-    "linear-gradient(145deg, rgba(157,243,191,.08), rgba(255,255,255,.03))",
+    "linear-gradient(145deg, rgba(157,243,191,.14), rgba(181,92,255,.08), rgba(255,255,255,.03))",
 };
 
 const goldPane: React.CSSProperties = {
   ...pane,
   border: "1px solid rgba(232,196,107,.30)",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 34%), rgba(255,255,255,.035)",
+    "linear-gradient(145deg, rgba(232,196,107,.14), rgba(181,92,255,.10), rgba(255,255,255,.03))",
 };
 
 const grid: React.CSSProperties = {
@@ -69,7 +69,7 @@ const grid: React.CSSProperties = {
 
 const card: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.12)",
-  background: "rgba(0,0,0,.18)",
+  background: "linear-gradient(145deg, rgba(0,0,0,.28), rgba(181,92,255,.08))",
   borderRadius: 24,
   padding: 20,
 };
@@ -78,7 +78,7 @@ const btn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf)",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   color: "#06100a",
   textDecoration: "none",
   borderRadius: 999,
@@ -99,7 +99,7 @@ const ghost: React.CSSProperties = {
   padding: "14px 22px",
   fontWeight: 900,
   border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   margin: "7px 7px 0 0",
   cursor: "pointer",
 };
@@ -209,6 +209,21 @@ export default function PaymentPage() {
   return (
     <main style={page}>
       <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        @media (max-width: 760px) {
+          a,
+          button {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+      <style>{`
         @media (max-width: 760px) {
           .vf-payment-actions {
             display: grid !important;
@@ -227,6 +242,54 @@ export default function PaymentPage() {
       <div style={wrap}>
         <section style={hero}>
           <div style={greenEyebrow}>MEMBER ACCESS ACTIVATION</div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <span
+              style={{
+                border: "1px solid rgba(181,92,255,.36)",
+                color: "#dcb8ff",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(181,92,255,.12)",
+              }}
+            >
+              AI Routing Access
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(157,243,191,.36)",
+                color: "#9df3bf",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(157,243,191,.10)",
+              }}
+            >
+              Founder Intelligence Network
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(245,217,120,.36)",
+                color: "#f5d978",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(245,217,120,.10)",
+              }}
+            >
+              Bloomberg-Style Access Layer
+            </span>
+          </div>
 
           <h1
             style={{
