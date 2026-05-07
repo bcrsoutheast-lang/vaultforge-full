@@ -199,6 +199,71 @@ function Field({ label, value }: { label: string; value: any }) {
   );
 }
 
+
+function numberValue(value: any) {
+  const clean = String(value || "").replace(/[^0-9.-]/g, "");
+  const n = Number(clean);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getAiSummary(deal: Deal) {
+  const ask = numberValue(valueOf(deal, ["asking_price", "price"]));
+  const arv = numberValue(deal.arv);
+  const repairs = numberValue(deal.repair_estimate);
+  const spread = arv && ask ? arv - ask - repairs : 0;
+  const margin = arv && spread ? Math.round((spread / arv) * 100) : 0;
+  const type = String(deal.property_type || "Deal");
+  const strategy = String(deal.strategy || "Strategy not listed");
+  const city = String(deal.city || "Unknown market");
+  const state = String(deal.state || "");
+
+  let risk = "Needs Review";
+  if (spread > 0 && margin >= 20) risk = "Strong Spread";
+  if (spread > 0 && margin > 0 && margin < 20) risk = "Tight Spread";
+  if (ask && arv && spread <= 0) risk = "High Risk";
+
+  let buyerFit = "General investor";
+  if (type.toLowerCase().includes("land")) buyerFit = "Builder / developer / land buyer";
+  if (type.toLowerCase().includes("commercial")) buyerFit = "Commercial investor / operator / lender";
+  if (type.toLowerCase().includes("residential")) buyerFit = "Fix-flip buyer / rental buyer / local operator";
+
+  return {
+    risk,
+    spread,
+    margin,
+    buyerFit,
+    headline: `${type} opportunity in ${city}${state ? ", " + state : ""}`,
+    strategy,
+  };
+}
+
+function AiDealSummary({ deal }: { deal: Deal }) {
+  const summary = getAiSummary(deal);
+
+  return (
+    <section style={{ ...section, borderColor: "rgba(181,92,255,.38)", background: "linear-gradient(145deg, rgba(181,92,255,.14), rgba(157,243,191,.07), rgba(255,255,255,.035))" }}>
+      <div style={eyebrow}>AI DEAL SUMMARY</div>
+      <h2 style={{ fontSize: "clamp(34px,7vw,66px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        {summary.headline}
+      </h2>
+
+      <p style={{ ...muted, fontSize: 19 }}>
+        VaultForge readout based on saved deal fields. This is a lightweight intelligence card for fast scanning and can later connect to deeper underwriting, routing scores, and real AI summaries.
+      </p>
+
+      <div style={grid}>
+        <Field label="RISK / SPREAD SIGNAL" value={summary.risk} />
+        <Field label="ESTIMATED SPREAD" value={summary.spread ? money(summary.spread) : "Not enough data"} />
+        <Field label="ESTIMATED MARGIN" value={summary.margin ? `${summary.margin}%` : "Not enough data"} />
+        <Field label="LIKELY BUYER FIT" value={summary.buyerFit} />
+        <Field label="STRATEGY READ" value={summary.strategy} />
+        <Field label="NEXT ACTION" value="Review photos, verify numbers, message owner, and compare against Buy Box demand." />
+      </div>
+    </section>
+  );
+}
+
+
 export default function DealRoomPage() {
   const params = useParams();
   const id = String(params?.id || "");
@@ -353,6 +418,8 @@ export default function DealRoomPage() {
                 {deal.description || "No description."}
               </p>
             </section>
+
+            <AiDealSummary deal={deal} />
 
             <section style={section}>
               <div style={eyebrow}>PHOTO GALLERY</div>
