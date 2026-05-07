@@ -10,7 +10,7 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
+    "radial-gradient(circle at top left, rgba(157,243,191,.12), transparent 30%), radial-gradient(circle at top right, rgba(232,196,107,.12), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
   color: "white",
   padding: "28px 18px 100px",
   fontFamily: "Arial, sans-serif",
@@ -24,7 +24,7 @@ const wrap: React.CSSProperties = {
 const hero: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.14)",
   background:
-    "linear-gradient(145deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
+    "linear-gradient(145deg, rgba(255,255,255,.07), rgba(255,255,255,.025))",
   borderRadius: 34,
   padding: 26,
   marginBottom: 22,
@@ -33,7 +33,7 @@ const hero: React.CSSProperties = {
 const card: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
   background:
-    "linear-gradient(145deg, rgba(181,92,255,.14), rgba(157,243,191,.07), rgba(255,255,255,.03))",
+    "linear-gradient(145deg, rgba(255,255,255,.06), rgba(255,255,255,.025))",
   borderRadius: 28,
   padding: 22,
 };
@@ -55,7 +55,7 @@ const btn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "linear-gradient(135deg,#9df3bf,#b55cff)",
+  background: "#9df3bf",
   color: "#061120",
   border: "none",
   borderRadius: 999,
@@ -68,7 +68,7 @@ const btn: React.CSSProperties = {
 
 const goldBtn: React.CSSProperties = {
   ...btn,
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
+  background: "#f5d978",
 };
 
 const ghost: React.CSSProperties = {
@@ -77,7 +77,7 @@ const ghost: React.CSSProperties = {
   justifyContent: "center",
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
-  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
+  background: "rgba(255,255,255,.04)",
   borderRadius: 999,
   padding: "13px 18px",
   fontWeight: 900,
@@ -115,7 +115,7 @@ const chip: React.CSSProperties = {
   display: "inline-flex",
   border: "1px solid rgba(157,243,191,.25)",
   color: "#9df3bf",
-  background: "linear-gradient(145deg, rgba(157,243,191,.14), rgba(181,92,255,.08))",
+  background: "rgba(157,243,191,.07)",
   borderRadius: 999,
   padding: "8px 11px",
   fontWeight: 800,
@@ -127,7 +127,7 @@ const select: React.CSSProperties = {
   width: "100%",
   borderRadius: 18,
   border: "1px solid rgba(255,255,255,.18)",
-  background: "linear-gradient(135deg, rgba(181,92,255,.13), rgba(255,255,255,.06))",
+  background: "rgba(255,255,255,.075)",
   color: "white",
   padding: 14,
   fontSize: 16,
@@ -550,27 +550,6 @@ export default function NetworkPage() {
   return (
     <main style={page}>
       <style>{`
-        a:hover,
-        button:hover,
-        select:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
-        img {
-          box-shadow: 0 24px 70px rgba(0,0,0,.32);
-        }
-
-        @media (max-width: 760px) {
-          a,
-          button,
-          select {
-            box-sizing: border-box;
-          }
-        }
-      `}</style>
-      <style>{`
         @media (max-width: 760px) {
           .vf-network-actions {
             display: grid !important;
@@ -589,54 +568,6 @@ export default function NetworkPage() {
       <div style={wrap}>
         <section style={hero}>
           <div style={greenEyebrow}>VaultForge Network</div>
-
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginBottom: 16,
-            }}
-          >
-            <span
-              style={{
-                border: "1px solid rgba(181,92,255,.36)",
-                color: "#dcb8ff",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(181,92,255,.12)",
-              }}
-            >
-              Private Member Intelligence
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(157,243,191,.36)",
-                color: "#9df3bf",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(157,243,191,.10)",
-              }}
-            >
-              Operator / Lender / Buyer Network
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(245,217,120,.36)",
-                color: "#f5d978",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(245,217,120,.10)",
-              }}
-            >
-              Bloomberg-Style Directory
-            </span>
-          </div>
 
           <h1 style={{ fontSize: "clamp(54px,12vw,100px)", lineHeight: 0.88, margin: "0 0 18px" }}>
             Member Command Directory
@@ -839,7 +770,7 @@ export default function NetworkPage() {
                 <div
                   style={{
                     border: "1px solid rgba(255,255,255,.12)",
-                    background: "linear-gradient(145deg, rgba(0,0,0,.28), rgba(181,92,255,.08))",
+                    background: "rgba(0,0,0,.18)",
                     borderRadius: 18,
                     padding: 14,
                     marginTop: 18,
@@ -883,3 +814,4 @@ export default function NetworkPage() {
       </div>
     </main>
   );
+}
