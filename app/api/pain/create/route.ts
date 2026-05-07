@@ -33,9 +33,12 @@ function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function asNumber(value: unknown) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? n : 0;
+function asNumberOrNull(value: unknown) {
+  const text = clean(value);
+  if (!text) return null;
+
+  const n = Number(text.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
 }
 
 function createTags(body: any) {
@@ -46,20 +49,22 @@ function createTags(body: any) {
     body?.requested_help,
     body?.description,
     body?.urgency_level,
+    body?.asset_type,
   ]
     .map((v) => clean(v).toLowerCase())
     .join(" ");
 
-  const rules = [
+  const rules: Array<[string, string[]]> = [
     ["capital", ["capital", "funding", "loan", "lender", "cash"]],
     ["title", ["title", "lien", "probate"]],
     ["zoning", ["zoning", "permit", "city"]],
-    ["contractor", ["contractor", "rehab", "repair"]],
+    ["contractor", ["contractor", "rehab", "repair", "construction"]],
     ["operator", ["operator", "partner", "joint venture", "jv"]],
-    ["seller_distress", ["foreclosure", "distress", "urgent", "liquidation"]],
+    ["seller_distress", ["foreclosure", "distress", "urgent", "liquidation", "behind"]],
     ["multifamily", ["multifamily", "apartment"]],
-    ["commercial", ["commercial", "retail", "office"]],
-    ["residential", ["house", "single family", "duplex"]],
+    ["commercial", ["commercial", "retail", "office", "industrial"]],
+    ["residential", ["house", "single family", "duplex", "residential"]],
+    ["land", ["land", "acre", "zoning", "entitlement"]],
   ];
 
   for (const [tag, words] of rules) {
@@ -71,33 +76,139 @@ function createTags(body: any) {
   return Array.from(tags);
 }
 
-function urgencyScore(level: string) {
-  const normalized = clean(level).toLowerCase();
+function urgencyScore(level: unknown) {
+  const text = clean(level).toLowerCase();
 
-  if (
-    normalized.includes("emergency") ||
-    normalized.includes("critical")
-  ) {
-    return 95;
+  if (text.includes("emergency") || text.includes("critical")) return 95;
+  if (text.includes("urgent")) return 85;
+  if (text.includes("high")) return 75;
+  if (text.includes("medium")) return 50;
+
+  return 25;
+}
+
+function routingFits(tags: string[]) {
+  const lower = tags.map((tag) => tag.toLowerCase());
+
+  return {
+    investor_fit:
+      lower.includes("seller_distress") ||
+      lower.includes("residential") ||
+      lower.includes("commercial") ||
+      lower.includes("multifamily") ||
+      lower.includes("land"),
+    lender_fit: lower.includes("capital"),
+    operator_fit:
+      lower.includes("operator") ||
+      lower.includes("seller_distress") ||
+      lower.includes("commercial") ||
+      lower.includes("multifamily"),
+    contractor_fit: lower.includes("contractor"),
+  };
+}
+
+function buildRoutingReason({
+  painType,
+  urgencyLevel,
+  requestedHelp,
+  tags,
+}: {
+  painType: string;
+  urgencyLevel: string;
+  requestedHelp: string;
+  tags: string[];
+}) {
+  const parts = [
+    `Pain type: ${painType}.`,
+    `Urgency: ${urgencyLevel}.`,
+    requestedHelp ? `Requested help: ${requestedHelp}.` : "",
+    tags.length ? `Routing tags: ${tags.join(", ")}.` : "",
+  ];
+
+  return parts.filter(Boolean).join(" ");
+}
+
+async function insertRoutingSignal(supabase: any, signal: any, tags: string[]) {
+  const score = urgencyScore(signal.urgency_level);
+  const fits = routingFits(tags);
+  const reason = buildRoutingReason({
+    painType: signal.pain_type,
+    urgencyLevel: signal.urgency_level,
+    requestedHelp: signal.requested_help || "",
+    tags,
+  });
+
+  try {
+    const { error } = await supabase.from("vf_routing_signals").insert({
+      source_type: "pain_submission",
+      source_id: signal.id,
+
+      deal_id: signal.deal_id || null,
+      member_email: signal.member_email || null,
+
+      signal_type: signal.pain_type || "pain_submission",
+
+      match_score: Math.min(100, score + Math.min(tags.length * 5, 20)),
+      urgency_score: score,
+      market_score: signal.city || signal.state ? 25 : 0,
+
+      routing_reason: reason,
+      ai_explanation:
+        signal.ai_summary ||
+        "VaultForge created this routing signal from a Pain Button submission.",
+
+      investor_fit: fits.investor_fit,
+      lender_fit: fits.lender_fit,
+      operator_fit: fits.operator_fit,
+      contractor_fit: fits.contractor_fit,
+
+      tags,
+
+      routed_to: null,
+      routing_status: "pending",
+    });
+
+    return !error;
+  } catch {
+    return false;
   }
+}
 
-  if (
-    normalized.includes("urgent") ||
-    normalized.includes("high")
-  ) {
-    return 80;
+async function insertActivityEvent(supabase: any, signal: any, tags: string[]) {
+  try {
+    const { error } = await supabase.from("vf_activity_events").insert({
+      event_type: "pain_submitted",
+      event_title: signal.title || "Pain Button signal submitted",
+      event_description:
+        signal.description ||
+        "A new distress signal was submitted into VaultForge.",
+
+      member_email: signal.member_email || null,
+
+      related_deal_id: signal.deal_id || null,
+      related_message_id: null,
+      related_alert_id: null,
+
+      visibility: "member",
+
+      metadata: {
+        pain_id: signal.id,
+        pain_type: signal.pain_type,
+        urgency_level: signal.urgency_level,
+        routing_status: signal.routing_status,
+        tags,
+      },
+    });
+
+    return !error;
+  } catch {
+    return false;
   }
-
-  if (normalized.includes("medium")) {
-    return 55;
-  }
-
-  return 30;
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
 
     const email =
       cleanEmail(request.headers.get("x-vf-email")) ||
@@ -105,9 +216,10 @@ export async function POST(request: Request) {
       cleanEmail(body?.email);
 
     const painType = clean(body?.pain_type || body?.type || "General Distress");
+    const title = clean(body?.title || painType);
     const description = clean(body?.description);
     const requestedHelp = clean(body?.requested_help);
-    const urgencyLevel = clean(body?.urgency_level || "normal");
+    const urgencyLevel = clean(body?.urgency_level || "Normal");
 
     if (!description) {
       return NextResponse.json(
@@ -119,38 +231,46 @@ export async function POST(request: Request) {
       );
     }
 
-    const tags = createTags(body);
+    const aiTags = createTags(body);
+
+    const aiSummary = clean(body?.ai_summary) ||
+      [
+        `Pain signal: ${painType}.`,
+        requestedHelp ? `Requested help: ${requestedHelp}.` : "",
+        urgencyLevel ? `Urgency: ${urgencyLevel}.` : "",
+        aiTags.length ? `Routing tags: ${aiTags.join(", ")}.` : "",
+      ].filter(Boolean).join(" ");
 
     const payload = {
       member_email: email || null,
-
-      title: clean(body?.title || painType),
-      description,
+      member_name: clean(body?.member_name) || null,
 
       pain_type: painType,
-      requested_help: requestedHelp,
-
       urgency_level: urgencyLevel,
-      urgency_score: urgencyScore(urgencyLevel),
 
-      capital_needed: asNumber(body?.capital_needed),
-      estimated_value: asNumber(body?.estimated_value),
-      estimated_repairs: asNumber(body?.estimated_repairs),
+      title,
+      description,
 
-      city: clean(body?.city),
-      state: clean(body?.state),
+      asset_type: clean(body?.asset_type) || null,
+      property_address: clean(body?.property_address) || null,
+      city: clean(body?.city) || null,
+      state: clean(body?.state) || null,
+      zip_code: clean(body?.zip_code) || null,
 
+      deal_id: clean(body?.deal_id) || null,
+
+      capital_needed: asNumberOrNull(body?.capital_needed),
+      estimated_value: asNumberOrNull(body?.estimated_value),
+      estimated_repairs: asNumberOrNull(body?.estimated_repairs),
+
+      requested_help: requestedHelp || null,
       routing_status: "pending",
 
-      ai_summary:
-        clean(body?.ai_summary) ||
-        `Routing signal created for ${painType.toLowerCase()}.`,
+      ai_summary: aiSummary,
+      ai_tags: aiTags,
 
-      routing_tags: tags,
-
-      source: "pain_button",
-
-      created_at: new Date().toISOString(),
+      assigned_to: null,
+      resolved: false,
     };
 
     const supabase = supabaseClient();
@@ -172,15 +292,24 @@ export async function POST(request: Request) {
       );
     }
 
+    const [routingInserted, activityInserted] = await Promise.all([
+      insertRoutingSignal(supabase, data, aiTags),
+      insertActivityEvent(supabase, data, aiTags),
+    ]);
+
     return NextResponse.json({
       ok: true,
       signal: data,
-      routing: {
-        urgency_score: payload.urgency_score,
-        tags,
-        status: "pending",
-      },
+      message: "Distress signal routed into VaultForge.",
       source: "vf_pain_submissions",
+      routing: {
+        created: routingInserted,
+        source: "vf_routing_signals",
+      },
+      activity: {
+        created: activityInserted,
+        source: "vf_activity_events",
+      },
     });
   } catch (error: any) {
     return NextResponse.json(
