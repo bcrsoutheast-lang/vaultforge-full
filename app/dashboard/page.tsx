@@ -11,6 +11,9 @@ type Stats = {
   bucket: number;
   messages: number;
   alerts: number;
+  pain: number;
+  routing: number;
+  activity: number;
   warning?: string;
   admin?: {
     owner: boolean;
@@ -47,7 +50,8 @@ const wrap: React.CSSProperties = { maxWidth: 1200, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.28)",
-  background: "linear-gradient(145deg, rgba(181,92,255,.10), rgba(157,243,191,.07), rgba(255,255,255,.04))",
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(157,243,191,.07), rgba(255,255,255,.04))",
   borderRadius: 34,
   padding: 24,
   marginBottom: 22,
@@ -253,13 +257,7 @@ function ToolCard({
   );
 }
 
-
-
-
-
-
-
-function PainButtonPanel({ owner }: { owner: boolean }) {
+function PainButtonPanel({ owner, stats }: { owner: boolean; stats: Stats }) {
   const cases = [
     {
       code: "DISTRESS",
@@ -312,9 +310,9 @@ function PainButtonPanel({ owner }: { owner: boolean }) {
       </h2>
 
       <p style={{ ...muted, fontSize: 20 }}>
-        The Pain Button™ is VaultForge’s signature operational layer. Instead of only listing deals,
-        members can route distressed situations, stalled projects, funding gaps, and execution problems
-        into the network for solutions.
+        VaultForge is now tracking {stats.pain || 0} distress signals and {stats.routing || 0} routing records.
+        The Pain Button™ is the operational layer for distressed situations, stalled projects, funding gaps,
+        and execution problems.
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
@@ -364,22 +362,20 @@ function PainButtonPanel({ owner }: { owner: boolean }) {
         }}
       >
         <div style={{ ...eyebrow, color: "#ff9f9f" }}>
-          Future Intelligence Expansion
+          Live Intelligence Expansion
         </div>
 
         <p style={{ ...muted, fontSize: 18 }}>
-          Later versions can connect Pain Button™ submissions to real smart routing:
-          lenders, contractors, operators, wholesalers, developers, equity partners,
-          buyers, and emergency deal rescue workflows.
+          This dashboard now reads the real intelligence backbone:
+          distress signals, routing signals, and activity events.
           {owner
-            ? " Admin controls can later prioritize and route high-value distress opportunities."
+            ? " Owner controls can later prioritize and route high-value distress opportunities."
             : " Member profiles and buy boxes can later drive automated match scoring."}
         </p>
       </section>
     </section>
   );
 }
-
 
 function DealPipelinePanel({ stats }: { stats: Stats }) {
   const totalDeals = Number(stats.deals || 0);
@@ -403,7 +399,7 @@ function DealPipelinePanel({ stats }: { stats: Stats }) {
       stage: "MATCH",
       title: "Matched / Routed",
       count: Number(stats.alerts || 0),
-      text: "Routing signals and alert candidates for member fit.",
+      text: "Real match alerts from vf_match_alerts.",
       tone: "#b55cff",
     },
     {
@@ -421,10 +417,10 @@ function DealPipelinePanel({ stats }: { stats: Stats }) {
       tone: "#f5d978",
     },
     {
-      stage: "CLOSED",
-      title: "Closed / Dead",
-      count: 0,
-      text: "Future pipeline status for closed, dead, funded, or completed deals.",
+      stage: "ROUTE",
+      title: "Routing Intelligence",
+      count: Number(stats.routing || 0),
+      text: "Machine-readable routing signals for AI matching.",
       tone: "#b55cff",
     },
   ];
@@ -436,7 +432,7 @@ function DealPipelinePanel({ stats }: { stats: Stats }) {
         From intake to routing to execution.
       </h2>
       <p style={{ ...muted, fontSize: 19 }}>
-        A read-only pipeline board for launch stability. Later, these stages can connect to real status fields, admin controls, smart routing, and deal lifecycle analytics.
+        The pipeline now reflects real dashboard counts from the canonical VaultForge tables.
       </p>
 
       <section style={grid}>
@@ -477,7 +473,6 @@ function DealPipelinePanel({ stats }: { stats: Stats }) {
   );
 }
 
-
 function NotificationCenter({
   owner,
   stats,
@@ -500,13 +495,21 @@ function NotificationCenter({
     },
     {
       level: "MATCH",
-      title: "Buy box signals need member profile data",
+      title: `${stats.alerts || 0} real match alerts`,
       text: access?.profile_complete
         ? "Profile data is active and can support future match scoring, alerts, and routing intelligence."
         : "Complete profile fields to improve future saved-search and smart-alert accuracy.",
-      href: "/profile",
-      action: "Open Profile",
+      href: "/alerts",
+      action: "Open Alerts",
       tone: "#9df3bf",
+    },
+    {
+      level: "PAIN",
+      title: `${stats.pain || 0} distress signals`,
+      text: "Pain Button submissions become routing input for capital needs, stalled projects, seller pressure, and urgent deal rescue.",
+      href: "/submit",
+      action: "Route Signal",
+      tone: "#ff8b8b",
     },
     {
       level: "WATCH",
@@ -543,7 +546,7 @@ function NotificationCenter({
         Priority signals, actions, and command alerts.
       </h2>
       <p style={{ ...muted, fontSize: 19 }}>
-        A read-only alert panel for fast scanning. Bloomberg-style workspaces rely on monitors, news panels, alerts, and customized views so users can keep the most important signals visible.
+        A read-only alert panel for fast scanning. These values now come from the canonical VaultForge intelligence tables.
       </p>
 
       <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
@@ -591,7 +594,6 @@ function NotificationCenter({
     </section>
   );
 }
-
 
 function BuyBoxPanel({ owner }: { owner: boolean }) {
   const buyBoxes = [
@@ -667,7 +669,6 @@ function BuyBoxPanel({ owner }: { owner: boolean }) {
     </section>
   );
 }
-
 
 function MemberBadgePanel({
   email,
@@ -768,14 +769,13 @@ function MemberBadgePanel({
   );
 }
 
-
 function ActivityFeed({ owner, stats }: { owner: boolean; stats: Stats }) {
   const feed = [
     {
       code: "LIVE",
       label: "Network Pulse",
       title: "Member intelligence engine active",
-      text: "VaultForge is watching deals, profiles, buy buckets, messages, and routing signals from one command center.",
+      text: "VaultForge is watching deals, profiles, buy buckets, messages, alerts, routing signals, pain submissions, and activity events from one command center.",
       tone: "#9df3bf",
     },
     {
@@ -802,9 +802,30 @@ function ActivityFeed({ owner, stats }: { owner: boolean; stats: Stats }) {
     {
       code: "ALERT",
       label: "Smart Routing",
-      title: `${stats.alerts || 0} routing signals available`,
-      text: "Smart Alerts will become the private intelligence feed for match scores, buyer fit, lender fit, and operator fit.",
+      title: `${stats.alerts || 0} real match alerts`,
+      text: "Smart Alerts are the private intelligence feed for match scores, buyer fit, lender fit, and operator fit.",
       tone: "#f5d978",
+    },
+    {
+      code: "PAIN",
+      label: "Distress Intake",
+      title: `${stats.pain || 0} distress signals tracked`,
+      text: "Pain submissions become routing input for capital, execution, title, contractor, seller, and project problems.",
+      tone: "#ff8b8b",
+    },
+    {
+      code: "ROUTE",
+      label: "Routing Brain",
+      title: `${stats.routing || 0} routing signals available`,
+      text: "Routing signals are the machine-readable layer for explainable matching and AI recommendations.",
+      tone: "#b55cff",
+    },
+    {
+      code: "EVENT",
+      label: "Activity Events",
+      title: `${stats.activity || 0} activity records logged`,
+      text: "Activity events power telemetry, engagement scoring, command feeds, and later notifications.",
+      tone: "#9df3bf",
     },
     {
       code: owner ? "ADMIN" : "MEMBER",
@@ -824,7 +845,7 @@ function ActivityFeed({ owner, stats }: { owner: boolean; stats: Stats }) {
         Network activity, deal signals, and command alerts.
       </h2>
       <p style={{ ...muted, fontSize: 19 }}>
-        A Bloomberg-style readout for what matters now. This is display-only for stability and can later connect to real events, alerts, matches, and member actions.
+        A Bloomberg-style readout for what matters now. These cards now display real counts from the canonical intelligence layer.
       </p>
 
       <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
@@ -869,7 +890,6 @@ function ActivityFeed({ owner, stats }: { owner: boolean; stats: Stats }) {
     </section>
   );
 }
-
 
 function OwnerAdminPanel({ stats }: { stats: Stats }) {
   const admin = stats.admin || {
@@ -967,6 +987,9 @@ export default function DashboardPage() {
     bucket: 0,
     messages: 0,
     alerts: 0,
+    pain: 0,
+    routing: 0,
+    activity: 0,
   });
   const [access, setAccess] = useState<Access | null>(null);
   const [status, setStatus] = useState("Checking access...");
@@ -1027,6 +1050,9 @@ export default function DashboardPage() {
         bucket: Number(statsPayload?.bucket || 0),
         messages: Number(statsPayload?.messages || 0),
         alerts: Number(statsPayload?.alerts || 0),
+        pain: Number(statsPayload?.pain || 0),
+        routing: Number(statsPayload?.routing || 0),
+        activity: Number(statsPayload?.activity || 0),
         warning: statsPayload?.warning || statsData?.warning || "",
         admin: statsPayload?.admin || statsData?.admin,
         sources: statsPayload?.sources || statsData?.sources,
@@ -1051,7 +1077,6 @@ export default function DashboardPage() {
 
   return (
     <main style={page}>
-
       <style>{`
         @media (max-width: 760px) {
           .vf-command-actions {
@@ -1073,7 +1098,6 @@ export default function DashboardPage() {
         }
       `}</style>
 
-
       <div style={wrap}>
         <div style={topAccount}>
           <div style={{ ...eyebrow, marginBottom: 0 }}>VaultForge</div>
@@ -1090,8 +1114,8 @@ export default function DashboardPage() {
             {owner ? "Owner command center." : "Your real estate intelligence desk."}
           </h1>
           <p style={{ ...muted, fontSize: 21 }}>
-            VaultForge turns deals, members, buy boxes, alerts, messages, and routing signals into one operating system.
-            Each section below explains what it does and where to go next.
+            VaultForge now reads deals, members, buy buckets, match alerts, messages, distress signals,
+            routing signals, and activity events from one operating system.
           </p>
 
           <div className="vf-command-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
@@ -1113,6 +1137,17 @@ export default function DashboardPage() {
           </section>
         )}
 
+        <section style={grid}>
+          <StatPane label="Active Deals" value={stats.deals} detail="Total active deal rooms in the system." />
+          <StatPane label="Members" value={stats.members} detail="Canonical member records tracked." />
+          <StatPane label="Buy Bucket" value={stats.bucket} detail="Saved acquisition targets." />
+          <StatPane label="Messages" value={stats.messages} detail="Deal-tied conversations." />
+          <StatPane label="Alerts" value={stats.alerts} detail="Real match alerts from vf_match_alerts." />
+          <StatPane label="Distress Signals" value={stats.pain} detail="Pain Button and problem-routing submissions." />
+          <StatPane label="Routing Activity" value={stats.routing} detail="AI routing signals and match logic records." />
+          <StatPane label="Activity Events" value={stats.activity} detail="Telemetry records for network activity and engagement." />
+        </section>
+
         <MemberBadgePanel email={email} owner={owner} access={access} />
 
         <BuyBoxPanel owner={owner} />
@@ -1121,17 +1156,9 @@ export default function DashboardPage() {
 
         <DealPipelinePanel stats={stats} />
 
-        <PainButtonPanel owner={owner} />
+        <PainButtonPanel owner={owner} stats={stats} />
 
         <ActivityFeed owner={owner} stats={stats} />
-
-        <section style={grid}>
-          <StatPane label="Active Deals" value={stats.deals} detail="Total deal rooms in the system." />
-          <StatPane label="Members" value={stats.members} detail="Member records tracked." />
-          <StatPane label="Buy Bucket" value={stats.bucket} detail="Saved acquisition targets." />
-          <StatPane label="Messages" value={stats.messages} detail="Deal-tied conversations." />
-          <StatPane label="Alerts" value={stats.alerts} detail="Routing and match signals." />
-        </section>
 
         <section style={{ ...hero, marginTop: 22 }}>
           <div style={greenEyebrow}>Command Tools</div>
@@ -1159,7 +1186,7 @@ export default function DashboardPage() {
             primary
             label="Intelligence"
             title="Smart Alerts"
-            text="Your AI-style routing feed. VaultForge scores deals against member profiles, markets, roles, buy boxes, strategies, needs, and provider abilities, then explains why each match surfaced."
+            text="Your routing feed. VaultForge scores deals against member profiles, markets, roles, buy boxes, strategies, needs, and provider abilities, then explains why each match surfaced."
             href="/alerts"
             button="Open Smart Alerts"
             tags={["Match Score", "Why Matched", "Deal Routing", "Buyer/Lender Fit"]}
@@ -1223,12 +1250,12 @@ export default function DashboardPage() {
         <section style={{ ...hero, marginTop: 22, borderColor: "rgba(157,243,191,.30)" }}>
           <div style={greenEyebrow}>How The Engine Works</div>
           <h2 style={{ fontSize: "clamp(38px,8vw,72px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-            Deal data + member profiles = routing intelligence.
+            Deal data + member profiles + pain signals = routing intelligence.
           </h2>
           <p style={{ ...muted, fontSize: 19 }}>
-            VaultForge compares opportunity data against member profiles. It looks at states, markets,
-            property types, strategies, needs, provider abilities, photos, summaries, pricing, spreads,
-            and member roles. Then it creates explainable routing alerts so members can move faster.
+            VaultForge compares opportunity data against member profiles. It also tracks distress signals,
+            routing signals, match alerts, messages, and activity events. That is the foundation for explainable
+            matching, AI recommendations, and command-center intelligence.
           </p>
 
           <div style={grid}>
@@ -1239,12 +1266,12 @@ export default function DashboardPage() {
             </div>
             <div style={pane}>
               <div style={greenEyebrow}>Step 2</div>
-              <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>Deals enter the engine.</h3>
-              <p style={muted}>Structured deal rooms give the system enough data to route, score, and explain.</p>
+              <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>Deals and pain signals enter the engine.</h3>
+              <p style={muted}>Structured deal rooms and distress submissions give the system enough data to route, score, and explain.</p>
             </div>
             <div style={pane}>
               <div style={greenEyebrow}>Step 3</div>
-              <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>Alerts surface matches.</h3>
+              <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>Alerts and routing signals surface matches.</h3>
               <p style={muted}>The command center shows what matched, why it matched, and where to take action.</p>
             </div>
           </div>
