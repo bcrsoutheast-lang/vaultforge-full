@@ -219,6 +219,36 @@ function StatPane({ label, value, detail }: { label: string; value: number; deta
   );
 }
 
+function ClickableStatPane({
+  label,
+  value,
+  detail,
+  href,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      style={{
+        ...pane,
+        display: "block",
+        color: "white",
+        textDecoration: "none",
+        minHeight: 168,
+      }}
+    >
+      <div style={eyebrow}>{label}</div>
+      <div style={{ fontSize: 54, fontWeight: 950, lineHeight: 1 }}>{value}</div>
+      <p style={muted}>{detail}</p>
+      <div style={{ ...chip, marginTop: 8 }}>Open</div>
+    </Link>
+  );
+}
+
 function ToolCard({
   label,
   title,
@@ -1138,14 +1168,54 @@ export default function DashboardPage() {
         )}
 
         <section style={grid}>
-          <StatPane label="Active Deals" value={stats.deals} detail="Total active deal rooms in the system." />
-          <StatPane label="Members" value={stats.members} detail="Canonical member records tracked." />
-          <StatPane label="Buy Bucket" value={stats.bucket} detail="Saved acquisition targets." />
-          <StatPane label="Messages" value={stats.messages} detail="Deal-tied conversations." />
-          <StatPane label="Alerts" value={stats.alerts} detail="Real match alerts from vf_match_alerts." />
-          <StatPane label="Distress Signals" value={stats.pain} detail="Pain Button and problem-routing submissions." />
-          <StatPane label="Routing Activity" value={stats.routing} detail="AI routing signals and match logic records." />
-          <StatPane label="Activity Events" value={stats.activity} detail="Telemetry records for network activity and engagement." />
+          <ClickableStatPane
+            label="Active Deals"
+            value={stats.deals}
+            detail="Total active deal rooms in the system."
+            href="/projects"
+          />
+          <ClickableStatPane
+            label="Members"
+            value={stats.members}
+            detail="Canonical member records tracked."
+            href="/network"
+          />
+          <ClickableStatPane
+            label="Buy Bucket"
+            value={stats.bucket}
+            detail="Saved acquisition targets."
+            href="/buy-bucket"
+          />
+          <ClickableStatPane
+            label="Messages"
+            value={stats.messages}
+            detail="Deal-tied conversations."
+            href="/messages"
+          />
+          <ClickableStatPane
+            label="Alerts"
+            value={stats.alerts}
+            detail="Real match alerts from vf_match_alerts."
+            href="/alerts"
+          />
+          <ClickableStatPane
+            label="Distress Signals"
+            value={stats.pain}
+            detail="Pain Button and problem-routing submissions."
+            href="/submit"
+          />
+          <ClickableStatPane
+            label="Routing Activity"
+            value={stats.routing}
+            detail="AI routing signals and match logic records."
+            href="/alerts"
+          />
+          <ClickableStatPane
+            label="Activity Events"
+            value={stats.activity}
+            detail="Telemetry records for network activity and engagement."
+            href="/dashboard"
+          />
         </section>
 
         <MemberBadgePanel email={email} owner={owner} access={access} />
