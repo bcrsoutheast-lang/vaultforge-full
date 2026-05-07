@@ -595,9 +595,65 @@ export default function DealRoomPage() {
               label="PRIVATE NOTES"
               value={deal.private_notes}
             />
+
+
+            <section style={section}>
+              <div style={eyebrow}>ALL PROJECT DATA</div>
+
+              <div style={grid}>
+                {Object.entries(deal)
+                  .filter(([key, value]) => {
+                    if (
+                      value === null ||
+                      value === undefined ||
+                      value === "" ||
+                      (Array.isArray(value) && value.length === 0)
+                    ) {
+                      return false;
+                    }
+
+                    const hidden = [
+                      "id",
+                      "created_at",
+                      "updated_at",
+                      "photo_urls",
+                      "main_photo_url"
+                    ];
+
+                    return !hidden.includes(key);
+                  })
+                  .map(([key, value]) => (
+                    <div
+                      key={key}
+                      style={section}
+                    >
+                      <div style={eyebrow}>
+                        {String(key)
+                          .replace(/_/g, " ")
+                          .toUpperCase()}
+                      </div>
+
+                      <p
+                        style={{
+                          ...muted,
+                          fontSize: 18,
+                          margin: 0,
+                          overflowWrap: "break-word"
+                        }}
+                      >
+                        {Array.isArray(value)
+                          ? value.join(", ")
+                          : typeof value === "object"
+                          ? JSON.stringify(value)
+                          : String(value)}
+                      </p>
+                    </div>
+                  ))}
+              </div>
+            </section>
+
           </>
         )}
       </div>
     </main>
   );
-}
