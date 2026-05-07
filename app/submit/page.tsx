@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type Access = {
@@ -24,48 +24,79 @@ const SUPABASE_KEY =
 
 const BUCKETS = ["deal-photos", "deal-photo", "project-images"];
 
-const states = [
+const STATES = [
   "Georgia","Tennessee","Florida","North Carolina","South Carolina","Texas",
   "Alabama","California","New York","Ohio","Pennsylvania","Other"
+];
+
+const RESIDENTIAL_STRATEGIES = [
+  "Fix & Flip",
+  "Buy & Hold",
+  "BRRRR",
+  "Wholesale",
+  "Short-Term Rental",
+  "Subto / Seller Finance"
+];
+
+const COMMERCIAL_STRATEGIES = [
+  "Value Add",
+  "Ground Up",
+  "Mixed Use",
+  "Office Conversion",
+  "Retail Redevelopment",
+  "Industrial"
+];
+
+const LAND_STRATEGIES = [
+  "Subdivision",
+  "Entitlement",
+  "Builder Lot",
+  "Mobile Home Park",
+  "RV Park",
+  "Raw Land Hold"
 ];
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "linear-gradient(180deg,#06100a,#102015,#06100a)",
+    "radial-gradient(circle at top left, rgba(157,243,191,.10), transparent 26%), radial-gradient(circle at top right, rgba(232,196,107,.12), transparent 24%), linear-gradient(180deg,#031008,#07180f 55%,#031008)",
   color: "white",
   padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif"
 };
 
 const wrap: React.CSSProperties = {
-  maxWidth: 1100,
+  maxWidth: 1180,
   margin: "0 auto"
 };
 
 const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.28)",
-  background: "rgba(255,255,255,.045)",
-  borderRadius: 30,
-  padding: 22,
-  marginBottom: 20
+  border: "1px solid rgba(232,196,107,.22)",
+  background:
+    "linear-gradient(145deg, rgba(255,255,255,.05), rgba(255,255,255,.02))",
+  borderRadius: 32,
+  padding: 24,
+  marginBottom: 22,
+  boxShadow: "0 20px 60px rgba(0,0,0,.35)"
 };
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))",
-  gap: 14
+  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+  gap: 16
 };
 
 const btn: React.CSSProperties = {
-  background: "#f5d978",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf)",
   color: "#06100a",
   border: "none",
   borderRadius: 999,
-  padding: "13px 18px",
+  padding: "14px 18px",
   fontWeight: 900,
   textDecoration: "none",
-  display: "inline-block",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   margin: "6px 6px 0 0",
   cursor: "pointer"
 };
@@ -75,10 +106,12 @@ const ghost: React.CSSProperties = {
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
   borderRadius: 999,
-  padding: "13px 18px",
+  padding: "14px 18px",
   fontWeight: 900,
   textDecoration: "none",
-  display: "inline-block",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   margin: "6px 6px 0 0",
   cursor: "pointer"
 };
@@ -90,7 +123,7 @@ const input: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.18)",
   background: "rgba(255,255,255,.075)",
   color: "white",
-  padding: 14,
+  padding: 15,
   fontSize: 16
 };
 
@@ -115,6 +148,7 @@ const greenEyebrow: React.CSSProperties = {
 
 function getEmail() {
   if (typeof window === "undefined") return "";
+
   return (
     localStorage.getItem("vf_email") ||
     sessionStorage.getItem("vf_email") ||
@@ -169,14 +203,28 @@ const empty = {
   asking_price:"",
   arv:"",
   repair_estimate:"",
-  description:""
+  beds:"",
+  baths:"",
+  square_feet:"",
+  year_built:"",
+  zoning:"",
+  acres:"",
+  occupancy:"",
+  noi:"",
+  cap_rate:"",
+  description:"",
+  seller_situation:"",
+  access_notes:"",
+  deal_needs:""
 };
 
-function LockedScreen({
-  reason
-}: {
-  reason: "login" | "profile" | "payment" | "loading";
-}) {
+function strategyOptions(type: DealType) {
+  if (type === "Commercial") return COMMERCIAL_STRATEGIES;
+  if (type === "Land") return LAND_STRATEGIES;
+  return RESIDENTIAL_STRATEGIES;
+}
+
+function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "loading"; }) {
   return (
     <main style={page}>
       <div style={wrap}>
@@ -184,7 +232,7 @@ function LockedScreen({
           <div style={greenEyebrow}>VAULTFORGE CREATE</div>
 
           <h1 style={{
-            fontSize: "clamp(54px,12vw,96px)",
+            fontSize: "clamp(52px,12vw,94px)",
             lineHeight: .9,
             margin: "0 0 14px"
           }}>
@@ -194,21 +242,15 @@ function LockedScreen({
               ? "Create member access first."
               : reason === "profile"
               ? "Complete your profile first."
-              : "Activate member access first."}
+              : "Activate access first."}
           </h1>
 
           <p style={{
-            color: "rgba(255,255,255,.7)",
+            color: "rgba(255,255,255,.72)",
             fontSize: 20,
             lineHeight: 1.5
           }}>
-            {reason === "login"
-              ? "Login or create member access before submitting opportunities."
-              : reason === "profile"
-              ? "Your profile trains the routing engine before deal creation is unlocked."
-              : reason === "payment"
-              ? "Profile complete. Activate member access to unlock live deal creation."
-              : "VaultForge is checking your member access."}
+            VaultForge gates live deal creation behind member access, profile completion, and activation.
           </p>
 
           {reason === "login" && <Link href="/login" style={btn}>Login / Create Access</Link>}
@@ -225,7 +267,6 @@ function LockedScreen({
 export default function SubmitPage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const [access, setAccess] = useState<Access | null>(null);
   const [lockReason, setLockReason] = useState<
     "loading" | "login" | "profile" | "payment" | "open"
   >("loading");
@@ -256,9 +297,7 @@ export default function SubmitPage() {
           }
         );
 
-        const data = await res.json();
-
-        setAccess(data);
+        const data: Access = await res.json();
 
         if (!data?.owner && !data?.profile_complete) {
           setLockReason("profile");
@@ -283,6 +322,14 @@ export default function SubmitPage() {
     setForm((x) => ({ ...x, [k]: v }));
   }
 
+  function switchType(type: DealType) {
+    setForm((x) => ({
+      ...x,
+      property_type: type,
+      strategy: strategyOptions(type)[0]
+    }));
+  }
+
   function pick(list: FileList | null) {
     const chosen = Array.from(list || [])
       .filter((f) => f.type.startsWith("image/"))
@@ -302,7 +349,7 @@ export default function SubmitPage() {
       const email = getEmail();
 
       if (!form.title.trim() || !form.city.trim()) {
-        throw new Error("Title and city are required.");
+        throw new Error("Deal title and city are required.");
       }
 
       if (!files.length) {
@@ -315,7 +362,7 @@ export default function SubmitPage() {
         files.map((f) => upload(f, email))
       );
 
-      setMsg("Saving deal...");
+      setMsg("Saving deal room...");
 
       const res = await fetch("/api/deal/create", {
         method: "POST",
@@ -338,7 +385,7 @@ export default function SubmitPage() {
         throw new Error(data?.error || "Save failed.");
       }
 
-      setMsg("Deal saved successfully.");
+      setMsg("Deal room saved successfully.");
 
       setForm(empty as any);
       setFiles([]);
@@ -354,34 +401,58 @@ export default function SubmitPage() {
     }
   }
 
+  const currentStrategies = useMemo(
+    () => strategyOptions(form.property_type as DealType),
+    [form.property_type]
+  );
+
   if (lockReason !== "open") {
     return <LockedScreen reason={lockReason} />;
   }
 
   return (
     <main style={page}>
+      <style>{`
+        @media (max-width: 760px) {
+          .vf-submit-actions {
+            display:grid !important;
+            grid-template-columns:1fr !important;
+            gap:10px !important;
+          }
+
+          .vf-submit-actions > * {
+            width:100%;
+            margin:0 !important;
+            box-sizing:border-box;
+          }
+        }
+      `}</style>
+
       <div style={wrap}>
         <section style={card}>
           <div style={greenEyebrow}>VAULTFORGE CREATE</div>
 
           <h1 style={{
-            fontSize: "clamp(52px,12vw,96px)",
-            lineHeight: .9,
+            fontSize: "clamp(58px,12vw,108px)",
+            lineHeight: .88,
             margin: "0 0 14px"
           }}>
             Submit a real deal room.
           </h1>
 
           <p style={{
-            color: "rgba(255,255,255,.7)",
-            fontSize: 19
+            color: "rgba(255,255,255,.72)",
+            fontSize: 22,
+            lineHeight: 1.45
           }}>
             Residential, commercial, and land opportunities routed through the member intelligence network.
           </p>
 
-          <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <Link href="/projects" style={btn}>Projects</Link>
-          <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+          <div className="vf-submit-actions">
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/projects" style={btn}>Projects</Link>
+            <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+          </div>
         </section>
 
         {msg && (
@@ -398,7 +469,7 @@ export default function SubmitPage() {
               key={t}
               type="button"
               style={form.property_type === t ? btn : ghost}
-              onClick={() => set("property_type", t)}
+              onClick={() => switchType(t)}
             >
               {t}
             </button>
@@ -419,7 +490,7 @@ export default function SubmitPage() {
                 value={form.state}
                 onChange={(e) => set("state", e.target.value)}
               >
-                {states.map((s) => (
+                {STATES.map((s) => (
                   <option key={s} value={s} style={{ color: "#111" }}>
                     {s}
                   </option>
@@ -428,10 +499,68 @@ export default function SubmitPage() {
             </div>
 
             <Field label="Address" value={form.address} onChange={(v) => set("address", v)} />
+
+            <div>
+              <label style={label}>Strategy</label>
+              <select
+                style={input}
+                value={form.strategy}
+                onChange={(e) => set("strategy", e.target.value)}
+              >
+                {currentStrategies.map((s) => (
+                  <option key={s} value={s} style={{ color: "#111" }}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <Field label="Asking Price" value={form.asking_price} onChange={(v) => set("asking_price", v)} />
             <Field label="ARV / Value" value={form.arv} onChange={(v) => set("arv", v)} />
+            <Field label="Repair Estimate" value={form.repair_estimate} onChange={(v) => set("repair_estimate", v)} />
           </div>
         </section>
+
+        {form.property_type === "Residential" && (
+          <section style={card}>
+            <div style={eyebrow}>RESIDENTIAL DETAILS</div>
+
+            <div style={grid}>
+              <Field label="Bedrooms" value={form.beds} onChange={(v) => set("beds", v)} />
+              <Field label="Bathrooms" value={form.baths} onChange={(v) => set("baths", v)} />
+              <Field label="Square Feet" value={form.square_feet} onChange={(v) => set("square_feet", v)} />
+              <Field label="Year Built" value={form.year_built} onChange={(v) => set("year_built", v)} />
+              <Field label="Occupancy" value={form.occupancy} onChange={(v) => set("occupancy", v)} />
+            </div>
+          </section>
+        )}
+
+        {form.property_type === "Commercial" && (
+          <section style={card}>
+            <div style={eyebrow}>COMMERCIAL DETAILS</div>
+
+            <div style={grid}>
+              <Field label="Square Feet" value={form.square_feet} onChange={(v) => set("square_feet", v)} />
+              <Field label="NOI" value={form.noi} onChange={(v) => set("noi", v)} />
+              <Field label="Cap Rate" value={form.cap_rate} onChange={(v) => set("cap_rate", v)} />
+              <Field label="Occupancy" value={form.occupancy} onChange={(v) => set("occupancy", v)} />
+              <Field label="Zoning" value={form.zoning} onChange={(v) => set("zoning", v)} />
+            </div>
+          </section>
+        )}
+
+        {form.property_type === "Land" && (
+          <section style={card}>
+            <div style={eyebrow}>LAND DETAILS</div>
+
+            <div style={grid}>
+              <Field label="Acres" value={form.acres} onChange={(v) => set("acres", v)} />
+              <Field label="Zoning" value={form.zoning} onChange={(v) => set("zoning", v)} />
+              <Field label="Utilities" value={form.access_notes} onChange={(v) => set("access_notes", v)} />
+              <Field label="Road Access" value={form.occupancy} onChange={(v) => set("occupancy", v)} />
+            </div>
+          </section>
+        )}
 
         <section style={card}>
           <div style={eyebrow}>PHOTOS</div>
@@ -460,12 +589,35 @@ export default function SubmitPage() {
                 src={src}
                 style={{
                   width: "100%",
-                  height: 180,
+                  height: 220,
                   objectFit: "cover",
-                  borderRadius: 20
+                  borderRadius: 20,
+                  border: "1px solid rgba(255,255,255,.15)"
                 }}
               />
             ))}
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>DEAL INTELLIGENCE</div>
+
+          <div style={grid}>
+            <Field label="Seller Situation" value={form.seller_situation} onChange={(v) => set("seller_situation", v)} />
+            <Field label="Deal Needs" value={form.deal_needs} onChange={(v) => set("deal_needs", v)} />
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <label style={label}>Access / Private Notes</label>
+
+            <textarea
+              style={{
+                ...input,
+                minHeight: 120
+              }}
+              value={form.access_notes}
+              onChange={(e) => set("access_notes", e.target.value)}
+            />
           </div>
         </section>
 
@@ -475,7 +627,7 @@ export default function SubmitPage() {
           <textarea
             style={{
               ...input,
-              minHeight: 140
+              minHeight: 180
             }}
             value={form.description}
             onChange={(e) => set("description", e.target.value)}
@@ -489,8 +641,8 @@ export default function SubmitPage() {
           style={{
             ...btn,
             width: "100%",
-            fontSize: 22,
-            padding: 18,
+            fontSize: 24,
+            padding: 20,
             opacity: busy ? .65 : 1
           }}
         >
