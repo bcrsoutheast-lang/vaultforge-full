@@ -9,7 +9,7 @@ const FOUNDER_LIMIT = 50;
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 32%), radial-gradient(circle at top right, rgba(157,243,191,.12), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
   color: "white",
   padding: "28px 18px 100px",
   fontFamily: "Arial, sans-serif",
@@ -36,7 +36,7 @@ const navBtn: React.CSSProperties = {
   borderRadius: 999,
   padding: "12px 16px",
   fontWeight: 850,
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
 };
 
 const hero: React.CSSProperties = {
@@ -44,7 +44,7 @@ const hero: React.CSSProperties = {
   borderRadius: 34,
   padding: 28,
   background:
-    "linear-gradient(145deg, rgba(255,255,255,.075), rgba(255,255,255,.025))",
+    "linear-gradient(145deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
   boxShadow: "0 28px 85px rgba(0,0,0,.36)",
   marginBottom: 22,
 };
@@ -53,7 +53,7 @@ const section: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.14)",
   borderRadius: 30,
   padding: 24,
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   marginTop: 22,
 };
 
@@ -61,14 +61,14 @@ const greenSection: React.CSSProperties = {
   ...section,
   border: "1px solid rgba(157,243,191,.26)",
   background:
-    "linear-gradient(145deg, rgba(157,243,191,.08), rgba(255,255,255,.03))",
+    "linear-gradient(145deg, rgba(157,243,191,.14), rgba(181,92,255,.08), rgba(255,255,255,.03))",
 };
 
 const goldSection: React.CSSProperties = {
   ...section,
   border: "1px solid rgba(232,196,107,.34)",
   background:
-    "linear-gradient(145deg, rgba(232,196,107,.10), rgba(255,255,255,.03))",
+    "linear-gradient(145deg, rgba(232,196,107,.14), rgba(181,92,255,.10), rgba(255,255,255,.03))",
 };
 
 const grid: React.CSSProperties = {
@@ -83,7 +83,7 @@ const card: React.CSSProperties = {
   borderRadius: 24,
   padding: 20,
   background:
-    "linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.02))",
+    "linear-gradient(145deg, rgba(181,92,255,.14), rgba(157,243,191,.07), rgba(255,255,255,.03))",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -123,7 +123,7 @@ const primary: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf)",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   color: "#061120",
   borderRadius: 999,
   padding: "15px 22px",
@@ -139,7 +139,7 @@ const ghost: React.CSSProperties = {
   justifyContent: "center",
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   borderRadius: 999,
   padding: "15px 22px",
   minHeight: 50,
@@ -152,7 +152,7 @@ const chip: React.CSSProperties = {
   display: "inline-flex",
   border: "1px solid rgba(157,243,191,.25)",
   color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
+  background: "linear-gradient(145deg, rgba(157,243,191,.14), rgba(181,92,255,.08))",
   borderRadius: 999,
   padding: "8px 11px",
   fontWeight: 800,
@@ -268,6 +268,21 @@ export default function ApplyPage() {
   return (
     <main style={page}>
       <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        @media (max-width: 760px) {
+          a,
+          button {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+      <style>{`
         @media (max-width: 760px) {
           .vf-apply-actions {
             display: grid !important;
@@ -300,6 +315,54 @@ export default function ApplyPage() {
 
         <section style={hero}>
           <div style={greenEyebrow}>MEMBER ACCESS</div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <span
+              style={{
+                border: "1px solid rgba(181,92,255,.36)",
+                color: "#dcb8ff",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(181,92,255,.12)",
+              }}
+            >
+              AI Opportunity Routing
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(157,243,191,.36)",
+                color: "#9df3bf",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(157,243,191,.10)",
+              }}
+            >
+              Founder Intelligence Access
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(245,217,120,.36)",
+                color: "#f5d978",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(245,217,120,.10)",
+              }}
+            >
+              Bloomberg-Style Network
+            </span>
+          </div>
 
           <h1 style={title}>
             Create access. Train your AI profile. Unlock the private real estate command network.
