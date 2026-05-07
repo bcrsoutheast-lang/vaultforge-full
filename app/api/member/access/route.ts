@@ -6,6 +6,8 @@ export const revalidate = 0;
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
+type AnyRecord = Record<string, any>;
+
 function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
@@ -20,98 +22,255 @@ function supabaseClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+      detectSessionInUrl: false,
     },
   });
 }
 
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
+
 function cleanEmail(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+  return clean(value).toLowerCase();
 }
 
 function emailFromCookie(cookieHeader: string) {
   const parts = cookieHeader.split(";").map((part) => part.trim());
+
   for (const part of parts) {
-    if (part.startsWith("vf_email=")) {
-      return decodeURIComponent(part.replace("vf_email=", "")).toLowerCase();
+    if (!part.startsWith("vf_email=")) continue;
+
+    const raw = part.replace("vf_email=", "");
+
+    try {
+      return cleanEmail(decodeURIComponent(raw));
+    } catch {
+      return cleanEmail(raw);
     }
   }
+
   return "";
 }
 
-async function loadProfile(email: string) {
-  const supabase = supabaseClient();
-  if (!supabase || !email) return null;
+function requestEmail(request: Request) {
+  const url = new URL(request.url);
 
-  const tables = ["vf_profiles", "profiles", "member_profiles"];
+  return (
+    cleanEmail(request.headers.get("x-vf-email")) ||
+    cleanEmail(url.searchParams.get("email")) ||
+    emailFromCookie(request.headers.get("cookie") || "")
+  );
+}
 
-  for (const table of tables) {
+function truthy(value: unknown) {
+  if (value === true) return true;
+
+  const text = clean(value).toLowerCase();
+
+  return ["true", "1", "yes", "active", "complete", "completed", "paid"].includes(text);
+}
+
+function loweredFirst(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value).toLowerCase();
+    if (text) return text;
+  }
+
+  return "";
+}
+
+async function findByEmail(
+  supabase: any,
+  table: string,
+  email: string,
+  columns: string[]
+): Promise<AnyRecord | null> {
+  if (!email) return null;
+
+  for (const column of columns) {
     try {
       const { data, error } = await supabase
         .from(table)
         .select("*")
-        .eq("email", email)
+        .eq(column, email)
         .maybeSingle();
 
       if (!error && data) return data;
     } catch {
-      // Try next possible profile table.
+      // Try next possible canonical email column.
     }
   }
 
   return null;
 }
 
+function memberPaymentStatus(member: AnyRecord | null) {
+  return loweredFirst(
+    member?.payment_status,
+    member?.subscription_status,
+    member?.billing_status,
+    member?.stripe_status,
+    member?.status
+  );
+}
+
+function memberAccessStatus(member: AnyRecord | null) {
+  return loweredFirst(
+    member?.access_status,
+    member?.member_status,
+    member?.account_status,
+    member?.status
+  );
+}
+
+function isMemberPaid(member: AnyRecord | null) {
+  const paymentStatus = memberPaymentStatus(member);
+  const accessStatus = memberAccessStatus(member);
+
+  return (
+    truthy(member?.paid) ||
+    truthy(member?.is_paid) ||
+    truthy(member?.is_active) ||
+    paymentStatus === "paid" ||
+    paymentStatus === "active" ||
+    paymentStatus === "trialing" ||
+    accessStatus === "active" ||
+    accessStatus === "approved"
+  );
+}
+
+function isMemberBlocked(member: AnyRecord | null) {
+  const accessStatus = memberAccessStatus(member);
+
+  return (
+    truthy(member?.is_suspended) ||
+    truthy(member?.suspended) ||
+    truthy(member?.locked) ||
+    ["locked", "suspended", "removed", "deleted", "inactive"].includes(accessStatus)
+  );
+}
+
+function isProfileComplete(profile: AnyRecord | null) {
+  return (
+    truthy(profile?.profile_complete) ||
+    truthy(profile?.is_complete) ||
+    truthy(profile?.completed) ||
+    truthy(profile?.onboarding_complete)
+  );
+}
+
 export async function GET(request: Request) {
   try {
-    const url = new URL(request.url);
-    const headerEmail =
-      cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(url.searchParams.get("email"));
-
-    const cookieEmail = emailFromCookie(request.headers.get("cookie") || "");
-    const email = headerEmail || cookieEmail;
-
+    const supabase = supabaseClient();
+    const email = requestEmail(request);
     const owner = email === OWNER_EMAIL;
-    const profile = await loadProfile(email);
 
-    const profileComplete =
-      owner ||
-      Boolean(profile?.profile_complete) ||
-      String(profile?.profile_complete || "").toLowerCase() === "true";
+    if (owner) {
+      return NextResponse.json({
+        ok: true,
+        email,
+        owner: true,
+        profile_complete: true,
+        payment_status: "owner",
+        access_status: "active",
+        paid: true,
+        unlocked: true,
+        next_step: "owner_access",
+        member: {
+          email,
+          owner: true,
+        },
+        profile: {
+          email,
+          owner: true,
+          profile_complete: true,
+        },
+        sources: {
+          member: "owner_email",
+          profile: "owner_email",
+        },
+      });
+    }
 
-    const paymentStatus = owner
-      ? "owner"
-      : String(profile?.payment_status || profile?.subscription_status || "unpaid").toLowerCase();
+    if (!email) {
+      return NextResponse.json({
+        ok: true,
+        email: "",
+        owner: false,
+        profile_complete: false,
+        payment_status: "unpaid",
+        access_status: "locked",
+        paid: false,
+        unlocked: false,
+        next_step: "login",
+        member: null,
+        profile: null,
+        warning: "No VaultForge email was found in the request.",
+        sources: {
+          member: "vf_members",
+          profile: "vf_profiles",
+        },
+      });
+    }
 
-    const accessStatus = owner
-      ? "active"
-      : String(profile?.access_status || profile?.member_status || "locked").toLowerCase();
+    if (!supabase) {
+      return NextResponse.json({
+        ok: true,
+        email,
+        owner: false,
+        profile_complete: false,
+        payment_status: "unpaid",
+        access_status: "locked",
+        paid: false,
+        unlocked: false,
+        next_step: "complete_profile",
+        member: null,
+        profile: null,
+        warning: "Supabase environment values are missing.",
+        sources: {
+          member: "vf_members",
+          profile: "vf_profiles",
+        },
+      });
+    }
 
-    const paid =
-      owner ||
-      paymentStatus === "paid" ||
-      paymentStatus === "active" ||
-      accessStatus === "active";
+    const [member, profile] = await Promise.all([
+      findByEmail(supabase, "vf_members", email, ["email", "member_email", "user_email"]),
+      findByEmail(supabase, "vf_profiles", email, ["email", "member_email", "user_email"]),
+    ]);
 
-    const unlocked = owner || (profileComplete && paid);
+    const profileComplete = isProfileComplete(profile);
+    const blocked = isMemberBlocked(member);
+
+    const paymentStatus = memberPaymentStatus(member) || "unpaid";
+    const accessStatus = blocked
+      ? "locked"
+      : memberAccessStatus(member) || "locked";
+
+    const paid = !blocked && isMemberPaid(member);
+    const unlocked = Boolean(profileComplete && paid && !blocked);
 
     return NextResponse.json({
       ok: true,
       email,
-      owner,
+      owner: false,
       profile_complete: profileComplete,
       payment_status: paymentStatus,
       access_status: accessStatus,
       paid,
       unlocked,
-      next_step: owner
-        ? "owner_access"
-        : !profileComplete
+      next_step: !profileComplete
         ? "complete_profile"
         : !paid
         ? "payment"
         : "unlocked",
+      member: member || null,
       profile: profile || null,
+      sources: {
+        member: "vf_members",
+        profile: "vf_profiles",
+      },
     });
   } catch (error: any) {
     return NextResponse.json({
@@ -124,7 +283,13 @@ export async function GET(request: Request) {
       paid: false,
       unlocked: false,
       next_step: "complete_profile",
+      member: null,
+      profile: null,
       warning: error?.message || String(error),
+      sources: {
+        member: "vf_members",
+        profile: "vf_profiles",
+      },
     });
   }
 }
