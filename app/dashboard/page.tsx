@@ -256,6 +256,122 @@ function ToolCard({
 
 
 
+
+function NotificationCenter({
+  owner,
+  stats,
+  access,
+}: {
+  owner: boolean;
+  stats: Stats;
+  access: Access | null;
+}) {
+  const notices = [
+    {
+      level: "HIGH",
+      title: stats.deals > 0 ? "Review active deal rooms" : "Deal pipeline ready",
+      text: stats.deals > 0
+        ? `${stats.deals} active deal rooms are available for review, routing, or save-to-bucket actions.`
+        : "Create the first live opportunity to start routing demand through the network.",
+      href: stats.deals > 0 ? "/projects" : "/submit",
+      action: stats.deals > 0 ? "Open Projects" : "Create Deal",
+      tone: "#f5d978",
+    },
+    {
+      level: "MATCH",
+      title: "Buy box signals need member profile data",
+      text: access?.profile_complete
+        ? "Profile data is active and can support future match scoring, alerts, and routing intelligence."
+        : "Complete profile fields to improve future saved-search and smart-alert accuracy.",
+      href: "/profile",
+      action: "Open Profile",
+      tone: "#9df3bf",
+    },
+    {
+      level: "WATCH",
+      title: `${stats.bucket || 0} saved target signals`,
+      text: "Buy Bucket activity can become a demand map showing what members are watching, pursuing, and underwriting.",
+      href: "/buy-bucket",
+      action: "Open Buy Bucket",
+      tone: "#b55cff",
+    },
+    {
+      level: "COMMS",
+      title: `${stats.messages || 0} deal communication records`,
+      text: "Message volume should become part of deal heat, urgency, and engagement scoring later.",
+      href: "/messages",
+      action: "Open Messages",
+      tone: "#9df3bf",
+    },
+    {
+      level: owner ? "ADMIN" : "ACCESS",
+      title: owner ? "Admin launch review needed" : "Membership status check",
+      text: owner
+        ? "Before public launch, audit admin actions, API protection, member locks, Stripe, and RLS."
+        : "Membership access and payment status control what tools unlock inside the command center.",
+      href: owner ? "/admin" : "/payment",
+      action: owner ? "Open Admin" : "Open Payment",
+      tone: owner ? "#b55cff" : "#f5d978",
+    },
+  ];
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(157,243,191,.34)" }}>
+      <div style={greenEyebrow}>Notifications Center</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        Priority signals, actions, and command alerts.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>
+        A read-only alert panel for fast scanning. Bloomberg-style workspaces rely on monitors, news panels, alerts, and customized views so users can keep the most important signals visible.
+      </p>
+
+      <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+        {notices.map((notice) => (
+          <div
+            key={`${notice.level}-${notice.title}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "92px 1fr auto",
+              gap: 14,
+              alignItems: "center",
+              border: "1px solid rgba(255,255,255,.13)",
+              background: "linear-gradient(135deg, rgba(0,0,0,.26), rgba(255,255,255,.04))",
+              borderRadius: 22,
+              padding: 14,
+              boxShadow: "0 18px 55px rgba(0,0,0,.24)",
+            }}
+          >
+            <div
+              style={{
+                border: `1px solid ${notice.tone}`,
+                color: notice.tone,
+                borderRadius: 16,
+                padding: "10px 8px",
+                textAlign: "center",
+                fontWeight: 950,
+                letterSpacing: 1.5,
+                background: "rgba(0,0,0,.24)",
+              }}
+            >
+              {notice.level}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 950, marginBottom: 4 }}>{notice.title}</div>
+              <p style={{ ...muted, margin: 0 }}>{notice.text}</p>
+            </div>
+
+            <Link href={notice.href} style={ghost}>
+              {notice.action}
+            </Link>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+
 function BuyBoxPanel({ owner }: { owner: boolean }) {
   const buyBoxes = [
     {
@@ -779,6 +895,8 @@ export default function DashboardPage() {
         <MemberBadgePanel email={email} owner={owner} access={access} />
 
         <BuyBoxPanel owner={owner} />
+
+        <NotificationCenter owner={owner} stats={stats} access={access} />
 
         <ActivityFeed owner={owner} stats={stats} />
 
