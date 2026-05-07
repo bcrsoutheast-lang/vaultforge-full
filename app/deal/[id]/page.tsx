@@ -9,7 +9,7 @@ type Deal = Record<string, any>;
 const shell: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg, #030509 0%, #071326 55%, #030509 100%)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#030509 0%,#071326 55%,#030509 100%)",
   color: "white",
   padding: "26px 18px 90px",
   fontFamily: "Arial, sans-serif"
@@ -164,7 +164,13 @@ function valueOf(deal: Deal | null, keys: string[]) {
   return "";
 }
 
-function Field({ label, value }: { label: string; value: any }) {
+function Field({
+  label,
+  value
+}: {
+  label: string;
+  value: any;
+}) {
   if (
     value === null ||
     value === undefined ||
@@ -178,11 +184,13 @@ function Field({ label, value }: { label: string; value: any }) {
     <div style={section}>
       <div style={eyebrow}>{label}</div>
 
-      <p style={{
-        ...muted,
-        fontSize: 20,
-        margin: 0
-      }}>
+      <p
+        style={{
+          ...muted,
+          fontSize: 20,
+          margin: 0
+        }}
+      >
         {Array.isArray(value) ? value.join(", ") : String(value)}
       </p>
     </div>
@@ -261,7 +269,9 @@ export default function DealRoomPage() {
   }
 
   useEffect(() => {
-    if (id) loadDeal();
+    if (id) {
+      loadDeal();
+    }
   }, [id]);
 
   const photos: string[] = Array.isArray(deal?.photo_urls)
@@ -296,10 +306,21 @@ export default function DealRoomPage() {
     <main style={shell}>
       <div style={wrap}>
         <nav style={nav}>
-          <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <Link href="/projects" style={ghost}>Projects</Link>
-          <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
-          <Link href="/submit" style={navLink}>Create Deal</Link>
+          <Link href="/dashboard" style={ghost}>
+            Dashboard
+          </Link>
+
+          <Link href="/projects" style={ghost}>
+            Projects
+          </Link>
+
+          <Link href="/buy-bucket" style={ghost}>
+            Buy Bucket
+          </Link>
+
+          <Link href="/submit" style={navLink}>
+            Create Deal
+          </Link>
         </nav>
 
         {loading && (
@@ -309,10 +330,12 @@ export default function DealRoomPage() {
         )}
 
         {status && (
-          <section style={{
-            ...section,
-            color: "#ffd0d0"
-          }}>
+          <section
+            style={{
+              ...section,
+              color: "#ffd0d0"
+            }}
+          >
             {status}
           </section>
         )}
@@ -322,20 +345,24 @@ export default function DealRoomPage() {
             <section style={hero}>
               <div style={eyebrow}>VAULTFORGE DEAL ROOM</div>
 
-              <h1 style={{
-                fontSize: "clamp(52px, 12vw, 96px)",
-                lineHeight: .9,
-                letterSpacing: -4,
-                margin: "0 0 18px"
-              }}>
+              <h1
+                style={{
+                  fontSize: "clamp(52px,12vw,96px)",
+                  lineHeight: 0.9,
+                  letterSpacing: -4,
+                  margin: "0 0 18px"
+                }}
+              >
                 {deal.title || "Untitled Deal"}
               </h1>
 
-              <h2 style={{
-                fontSize: 34,
-                margin: "0 0 16px",
-                color: "#e8c46b"
-              }}>
+              <h2
+                style={{
+                  fontSize: 34,
+                  margin: "0 0 16px",
+                  color: "#e8c46b"
+                }}
+              >
                 {money(valueOf(deal, ["asking_price", "price"]))}
               </h2>
 
@@ -344,10 +371,12 @@ export default function DealRoomPage() {
               <span style={pill}>{deal.property_type || "Deal"}</span>
               <span style={pill}>{deal.strategy || "No strategy"}</span>
 
-              <p style={{
-                ...muted,
-                fontSize: 20
-              }}>
+              <p
+                style={{
+                  ...muted,
+                  fontSize: 20
+                }}
+              >
                 {deal.description || "No description."}
               </p>
             </section>
@@ -356,9 +385,7 @@ export default function DealRoomPage() {
               <div style={eyebrow}>PHOTO GALLERY</div>
 
               {photos.length === 0 ? (
-                <p style={muted}>
-                  No photos uploaded for this deal.
-                </p>
+                <p style={muted}>No photos uploaded for this deal.</p>
               ) : (
                 <div style={grid}>
                   {photos.map((src, i) => (
@@ -379,21 +406,10 @@ export default function DealRoomPage() {
             <section style={section}>
               <div style={eyebrow}>MESSAGE DEAL OWNER</div>
 
-              <h2 style={{
-                fontSize: 34,
-                margin: "0 0 10px"
-              }}>
-                Ask about this opportunity.
-              </h2>
-
-              <p style={muted}>
-                Send a deal-tied message. It is stored with this opportunity for follow-up.
-              </p>
-
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="I'm interested in this deal. Can you send more details or next steps?"
+                placeholder="I'm interested in this deal."
                 style={{
                   ...input,
                   minHeight: 130,
@@ -413,60 +429,175 @@ export default function DealRoomPage() {
               </button>
 
               {messageStatus && (
-                <p style={{
-                  color: messageStatus.toLowerCase().includes("sent")
-                    ? "#9df3bf"
-                    : "#ffd0d0",
-                  fontWeight: 900
-                }}>
+                <p
+                  style={{
+                    color: messageStatus.toLowerCase().includes("sent")
+                      ? "#9df3bf"
+                      : "#ffd0d0",
+                    fontWeight: 900
+                  }}
+                >
                   {messageStatus}
                 </p>
               )}
             </section>
 
             <section style={grid}>
-              <Field label="ASKING PRICE" value={money(valueOf(deal, ["asking_price", "price"]))} />
-              <Field label="ARV / VALUE" value={deal.arv ? money(deal.arv) : ""} />
-              <Field label="REPAIR ESTIMATE" value={deal.repair_estimate ? money(deal.repair_estimate) : ""} />
-              <Field label="ADDRESS / AREA" value={deal.address} />
+              <Field
+                label="ASKING PRICE"
+                value={money(valueOf(deal, ["asking_price", "price"]))}
+              />
 
-              <Field label="BEDROOMS" value={valueOf(deal, ["bedrooms", "beds"])} />
-              <Field label="BATHROOMS" value={valueOf(deal, ["bathrooms", "baths"])} />
+              <Field
+                label="ARV / VALUE"
+                value={deal.arv ? money(deal.arv) : ""}
+              />
 
-              <Field label="SQUARE FEET" value={valueOf(deal, ["square_feet", "building_sqft", "sqft"])} />
+              <Field
+                label="REPAIR ESTIMATE"
+                value={deal.repair_estimate ? money(deal.repair_estimate) : ""}
+              />
 
-              <Field label="YEAR BUILT" value={deal.year_built} />
-              <Field label="OCCUPANCY" value={deal.occupancy} />
-              <Field label="CONDITION" value={deal.condition} />
+              <Field
+                label="ADDRESS / AREA"
+                value={deal.address}
+              />
 
-              <Field label="COMMERCIAL TYPE" value={deal.commercial_type} />
-              <Field label="UNITS / SUITES" value={deal.units} />
-              <Field label="NOI" value={deal.noi} />
-              <Field label="CAP RATE" value={deal.cap_rate} />
-              <Field label="ZONING" value={deal.zoning} />
-              <Field label="TENANT STATUS" value={deal.tenant_status} />
+              <Field
+                label="BEDROOMS"
+                value={valueOf(deal, ["bedrooms", "beds"])}
+              />
 
-              <Field label="ACRES" value={valueOf(deal, ["acres", "land_acres"])} />
-              <Field label="PARCEL ID" value={deal.parcel_id} />
-              <Field label="ROAD FRONTAGE" value={deal.frontage} />
-              <Field label="UTILITIES" value={valueOf(deal, ["utilities", "access_notes"])} />
-              <Field label="ROAD ACCESS" value={deal.road_access} />
-              <Field label="TOPOGRAPHY" value={deal.topography} />
+              <Field
+                label="BATHROOMS"
+                value={valueOf(deal, ["bathrooms", "baths"])}
+              />
 
-              <Field label="DEAL NEEDS" value={valueOf(deal, ["deal_needs", "needs", "routing_needs"])} />
+              <Field
+                label="SQUARE FEET"
+                value={valueOf(deal, ["square_feet", "building_sqft", "sqft"])}
+              />
+
+              <Field
+                label="ACRES"
+                value={valueOf(deal, ["acres", "land_acres"])}
+              />
+
+              <Field
+                label="YEAR BUILT"
+                value={deal.year_built}
+              />
+
+              <Field
+                label="OCCUPANCY"
+                value={deal.occupancy}
+              />
+
+              <Field
+                label="CONDITION"
+                value={deal.condition}
+              />
+
+              <Field
+                label="COMMERCIAL TYPE"
+                value={deal.commercial_type}
+              />
+
+              <Field
+                label="UNITS / SUITES"
+                value={deal.units}
+              />
+
+              <Field
+                label="NOI"
+                value={deal.noi}
+              />
+
+              <Field
+                label="CAP RATE"
+                value={deal.cap_rate}
+              />
+
+              <Field
+                label="ZONING"
+                value={deal.zoning}
+              />
+
+              <Field
+                label="TENANT STATUS"
+                value={deal.tenant_status}
+              />
+
+              <Field
+                label="PARCEL ID"
+                value={deal.parcel_id}
+              />
+
+              <Field
+                label="ROAD FRONTAGE"
+                value={deal.frontage}
+              />
+
+              <Field
+                label="UTILITIES"
+                value={valueOf(deal, ["utilities", "access_notes"])}
+              />
+
+              <Field
+                label="ROAD ACCESS"
+                value={deal.road_access}
+              />
+
+              <Field
+                label="TOPOGRAPHY"
+                value={deal.topography}
+              />
+
+              <Field
+                label="DEAL NEEDS"
+                value={valueOf(deal, ["deal_needs", "needs", "routing_needs"])}
+              />
             </section>
 
             <section style={grid}>
-              <Field label="OWNER / CONTACT NAME" value={ownerName} />
-              <Field label="OWNER PHONE" value={ownerPhone} />
-              <Field label="OWNER EMAIL" value={ownerEmail} />
-              <Field label="PREFERRED CONTACT" value={deal.preferred_contact} />
+              <Field
+                label="OWNER / CONTACT NAME"
+                value={ownerName}
+              />
+
+              <Field
+                label="OWNER PHONE"
+                value={ownerPhone}
+              />
+
+              <Field
+                label="OWNER EMAIL"
+                value={ownerEmail}
+              />
+
+              <Field
+                label="PREFERRED CONTACT"
+                value={deal.preferred_contact}
+              />
             </section>
 
-            <Field label="SELLER SITUATION" value={deal.seller_situation} />
-            <Field label="ACCESS NOTES" value={deal.access_notes} />
-            <Field label="PRIVATE NOTES" value={deal.private_notes} />
+            <Field
+              label="SELLER SITUATION"
+              value={deal.seller_situation}
+            />
+
+            <Field
+              label="ACCESS NOTES"
+              value={deal.access_notes}
+            />
+
+            <Field
+              label="PRIVATE NOTES"
+              value={deal.private_notes}
+            />
           </>
         )}
       </div>
     </main>
+  );
+}
