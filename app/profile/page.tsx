@@ -599,75 +599,6 @@ export default function ProfilePage() {
           <Link href="/logout" style={ghost}>Logout</Link>
         </section>
 
-        
-        <section
-          style={{
-            ...goldPane,
-            border: "1px solid rgba(181,92,255,.36)",
-            background:
-              "linear-gradient(145deg, rgba(181,92,255,.16), rgba(157,243,191,.08), rgba(255,255,255,.03))",
-          }}
-        >
-          <div style={eyebrow}>VaultForge Intelligence Layer</div>
-
-          <h2 style={{ fontSize: "clamp(38px,8vw,72px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-            Your profile powers the routing engine.
-          </h2>
-
-          <p style={{ ...muted, fontSize: 19 }}>
-            VaultForge uses your markets, buy boxes, strategies, needs, capabilities,
-            and alert settings to improve deal routing, member matching, distress signals,
-            lender fit, operator fit, and future AI opportunity scoring.
-          </p>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-            <span style={{
-              border:"1px solid rgba(181,92,255,.40)",
-              color:"#dcb8ff",
-              borderRadius:999,
-              padding:"10px 14px",
-              fontWeight:900,
-              background:"rgba(181,92,255,.12)"
-            }}>
-              Routing Ready: {progress}%
-            </span>
-
-            <span style={{
-              border:"1px solid rgba(157,243,191,.40)",
-              color:"#9df3bf",
-              borderRadius:999,
-              padding:"10px 14px",
-              fontWeight:900,
-              background:"rgba(157,243,191,.12)"
-            }}>
-              Markets: {asArray(form.buy_box_states).length}
-            </span>
-
-            <span style={{
-              border:"1px solid rgba(245,217,120,.40)",
-              color:"#f5d978",
-              borderRadius:999,
-              padding:"10px 14px",
-              fontWeight:900,
-              background:"rgba(245,217,120,.10)"
-            }}>
-              Roles: {asArray(form.member_types).length}
-            </span>
-
-            <span style={{
-              border:"1px solid rgba(255,255,255,.20)",
-              color:"white",
-              borderRadius:999,
-              padding:"10px 14px",
-              fontWeight:900,
-              background:"rgba(255,255,255,.05)"
-            }}>
-              Strategies: {asArray(form.buy_box_strategies).length}
-            </span>
-          </div>
-        </section>
-
-
         <section
           style={{
             ...pane,
@@ -694,7 +625,7 @@ export default function ProfilePage() {
               style={{
                 width: `${progress}%`,
                 height: "100%",
-                background: complete ? "#9df3bf" : "#f5d978",
+                background: complete ? "linear-gradient(135deg,#9df3bf,#b55cff)" : "linear-gradient(135deg,#f5d978,#b55cff)",
               }}
             />
           </div>
