@@ -97,10 +97,10 @@ export default function DealRoomClient() {
           <section style={hero}>
             <div style={eyebrow}>VAULTFORGE DEAL ROOM</div>
             <h1 style={{ fontSize: "clamp(52px, 12vw, 96px)", lineHeight: .9, letterSpacing: -4, margin: "0 0 18px" }}>{deal.title || "Untitled Deal"}</h1>
-            <h2 style={{ fontSize: 34, margin: "0 0 16px", color: "#e8c46b" }}>{money(deal.asking_price || deal.price)}</h2>
+            <h2 style={{ fontSize: 34, margin: "0 0 16px", color: "#e8c46b" }}>{money(valueOf(deal, ["asking_price","price"]))}</h2>
             <span style={pill}>{deal.city || "Unknown City"}</span>
             <span style={pill}>{deal.state || "Unknown State"}</span>
-            <span style={pill}>{deal.property_type || "Deal"}</span>
+            <span style={pill}>{deal.property_type || deal.deal_type || "Deal"}</span>
             <span style={pill}>{deal.strategy || "No strategy"}</span>
             <p style={{ ...muted, fontSize: 20 }}>{deal.description || "No description."}</p>
           </section>
@@ -120,13 +120,13 @@ export default function DealRoomClient() {
           </section>
 
           <section style={grid}>
-            <Field label="ASKING PRICE" value={money(deal.asking_price || deal.price)} />
+            <Field label="ASKING PRICE" value={money(valueOf(deal, ["asking_price","price"]))} />
             <Field label="ARV / VALUE" value={deal.arv ? money(deal.arv) : ""} />
             <Field label="REPAIR ESTIMATE" value={deal.repair_estimate ? money(deal.repair_estimate) : ""} />
             <Field label="ADDRESS / AREA" value={deal.address} />
             <Field label="BEDROOMS" value={valueOf(deal, ["bedrooms", "beds"])} />
             <Field label="BATHROOMS" value={valueOf(deal, ["bathrooms", "baths"])} />
-            <Field label="BUILDING SQFT" value={valueOf(deal, ["building_sqft", "sqft"])} />
+            <Field label="BUILDING SQFT" value={valueOf(deal, ["building_sqft","square_feet","sqft"])} />
             <Field label="YEAR BUILT" value={deal.year_built} />
             <Field label="OCCUPANCY" value={deal.occupancy} />
             <Field label="CONDITION" value={deal.condition} />
@@ -136,12 +136,13 @@ export default function DealRoomClient() {
             <Field label="CAP RATE" value={deal.cap_rate} />
             <Field label="ZONING" value={deal.zoning} />
             <Field label="TENANT STATUS" value={deal.tenant_status} />
-            <Field label="ACRES" value={deal.land_acres} />
+            <Field label="ACRES" value={valueOf(deal, ["land_acres","acres"])} />
             <Field label="PARCEL ID" value={deal.parcel_id} />
             <Field label="ROAD FRONTAGE" value={deal.frontage} />
             <Field label="UTILITIES" value={deal.utilities} />
             <Field label="ROAD ACCESS" value={deal.road_access} />
             <Field label="TOPOGRAPHY" value={deal.topography} />
+            <Field label="DEAL NEEDS" value={valueOf(deal, ["deal_needs","needs"])} />
           </section>
 
           <section style={grid}>
