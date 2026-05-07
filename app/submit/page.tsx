@@ -216,6 +216,54 @@ function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "l
         <section style={card}>
           <div style={greenEyebrow}>VAULTFORGE CREATE</div>
 
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <span
+              style={{
+                border: "1px solid rgba(181,92,255,.36)",
+                color: "#dcb8ff",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(181,92,255,.12)",
+              }}
+            >
+              Deal Intake Engine
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(157,243,191,.36)",
+                color: "#9df3bf",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(157,243,191,.10)",
+              }}
+            >
+              AI Routing Source
+            </span>
+
+            <span
+              style={{
+                border: "1px solid rgba(245,217,120,.36)",
+                color: "#f5d978",
+                borderRadius: 999,
+                padding: "9px 13px",
+                fontWeight: 900,
+                background: "rgba(245,217,120,.10)",
+              }}
+            >
+              Bloomberg-Style Intake
+            </span>
+          </div>
+
           <h1 style={{
             fontSize: "clamp(52px,12vw,94px)",
             lineHeight: .9,
