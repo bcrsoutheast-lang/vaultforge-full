@@ -159,14 +159,43 @@ function painBody(row: PainRow) {
 }
 
 function painLocation(row: PainRow) {
-  return [row.city, row.state].map(asText).filter(Boolean).join(", ");
+  return [row.city, row.state]
+    .map((value) => asText(value))
+    .filter(Boolean)
+    .join(", ");
 }
 
-function StatCard({ label, value, detail }: { label: string; value: number; detail: string }) {
+function NumberStatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+}) {
   return (
     <div style={card}>
       <div style={greenEyebrow}>{label}</div>
       <div style={{ fontSize: 54, fontWeight: 950, lineHeight: 1 }}>{value}</div>
+      <p style={muted}>{detail}</p>
+    </div>
+  );
+}
+
+function DetailCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div style={card}>
+      <div style={greenEyebrow}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 950, lineHeight: 1.05 }}>{value}</div>
       <p style={muted}>{detail}</p>
     </div>
   );
@@ -285,10 +314,10 @@ export default function PainPage() {
         )}
 
         <section style={{ ...grid, marginBottom: 22 }}>
-          <StatCard label="Total Signals" value={rows.length} detail="All distress and pain submissions loaded." />
-          <StatCard label="Open Signals" value={openRows.length} detail="Unresolved routing opportunities." />
-          <StatCard label="Urgent" value={urgentRows.length} detail="High-priority or emergency signals." />
-          <StatCard label="Capital Need" value={capitalRows.length} detail="Funding, lender, or capital-related requests." />
+          <NumberStatCard label="Total Signals" value={rows.length} detail="All distress and pain submissions loaded." />
+          <NumberStatCard label="Open Signals" value={openRows.length} detail="Unresolved routing opportunities." />
+          <NumberStatCard label="Urgent" value={urgentRows.length} detail="High-priority or emergency signals." />
+          <NumberStatCard label="Capital Need" value={capitalRows.length} detail="Funding, lender, or capital-related requests." />
         </section>
 
         {status && <section style={hero}>{status}</section>}
@@ -331,11 +360,13 @@ export default function PainPage() {
                   {painBody(row)}
                 </p>
 
-                <section style={grid}>
-                  {capital && <StatCard label="Capital Needed" value={Number(row.capital_needed || 0)} detail={capital} />}
-                  {value && <StatCard label="Estimated Value" value={Number(row.estimated_value || 0)} detail={value} />}
-                  {repairs && <StatCard label="Repairs" value={Number(row.estimated_repairs || 0)} detail={repairs} />}
-                </section>
+                {(capital || value || repairs) && (
+                  <section style={grid}>
+                    {capital && <DetailCard label="Capital Needed" value={capital} detail="Requested capital or funding gap." />}
+                    {value && <DetailCard label="Estimated Value" value={value} detail="Estimated property or project value." />}
+                    {repairs && <DetailCard label="Repairs" value={repairs} detail="Estimated repairs or execution cost." />}
+                  </section>
+                )}
 
                 <div style={{ marginTop: 14 }}>
                   {row.deal_id && (
