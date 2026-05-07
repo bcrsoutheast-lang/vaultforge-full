@@ -9,7 +9,7 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 const shell: React.CSSProperties = {
   minHeight: "100vh",
-  background: "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
+  background: "radial-gradient(circle at top left, rgba(181,92,255,.28), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.16), transparent 26%), radial-gradient(circle at bottom right, rgba(232,196,107,.18), transparent 30%), linear-gradient(180deg,#030208 0%,#130526 45%,#04120d 100%)",
   color: "white",
   padding: "30px 18px 90px",
   fontFamily: "Arial, sans-serif",
@@ -19,11 +19,11 @@ const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.28)",
-  background: "linear-gradient(145deg, rgba(232,196,107,.08), rgba(255,255,255,.025))",
+  background: "linear-gradient(145deg, rgba(181,92,255,.20), rgba(232,196,107,.10), rgba(157,243,191,.07), rgba(255,255,255,.03))",
   borderRadius: 34,
   padding: 26,
   marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.38)",
+  boxShadow: "0 36px 110px rgba(0,0,0,.46)",
 };
 
 const grid: React.CSSProperties = {
@@ -33,8 +33,8 @@ const grid: React.CSSProperties = {
 };
 
 const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.13)",
-  background: "rgba(255,255,255,.045)",
+  border: "1px solid rgba(181,92,255,.28)",
+  background: "linear-gradient(145deg, rgba(181,92,255,.13), rgba(157,243,191,.06), rgba(255,255,255,.035))",
   borderRadius: 28,
   padding: 22,
 };
@@ -43,7 +43,7 @@ const btn: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  background: "#f5d978",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 58%,#b55cff)",
   color: "#061120",
   border: "none",
   borderRadius: 999,
@@ -56,7 +56,7 @@ const btn: React.CSSProperties = {
 
 const ghost: React.CSSProperties = {
   ...btn,
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.22), rgba(255,255,255,.055))",
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
 };
@@ -119,6 +119,19 @@ export default async function AdminPage() {
 
   return (
     <main style={shell}>
+      <style>{`
+        a:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.08);
+        }
+
+        @media (max-width: 760px) {
+          a {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
       <div style={wrap}>
         <section style={hero}>
           <div style={{ color: "#e8c46b", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
