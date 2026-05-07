@@ -47,6 +47,16 @@ function display(value: any, fallback = "Not listed") {
   return clean || fallback;
 }
 
+function first(...values: any[]) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    const text = String(value).trim();
+    if (text) return value;
+  }
+  return "";
+}
+
 function getDeal(item: Item): Deal {
   return item.deal || item.vf_deals || item.project || item;
 }
@@ -59,12 +69,12 @@ function getPhotos(deal: Deal) {
 
 function detailLine(deal: Deal) {
   return [
-    deal.bedrooms ? `${deal.bedrooms} bed` : "",
-    deal.bathrooms ? `${deal.bathrooms} bath` : "",
-    deal.building_sqft ? `${deal.building_sqft} sqft` : "",
-    deal.land_acres ? `${deal.land_acres} acres` : "",
-    deal.commercial_type || "",
-    deal.condition || "",
+    first(deal.bedrooms, deal.beds) ? `${first(deal.bedrooms, deal.beds)} bed` : "",
+    first(deal.bathrooms, deal.baths) ? `${first(deal.bathrooms, deal.baths)} bath` : "",
+    first(deal.building_sqft, deal.square_feet, deal.sqft) ? `${first(deal.building_sqft, deal.square_feet, deal.sqft)} sqft` : "",
+    first(deal.land_acres, deal.acres) ? `${first(deal.land_acres, deal.acres)} acres` : "",
+    first(deal.commercial_type, deal.property_type) || "",
+    first(deal.condition, deal.strategy) || "",
   ].filter(Boolean).join(" · ");
 }
 
@@ -182,12 +192,12 @@ export default function BuyBucketClient() {
                 )}
 
                 <div style={bodyStyle}>
-                  <div style={eyebrow}>{item.folder || "Active"} · Saved Deal · {deal.property_type || "Deal"}</div>
+                  <div style={eyebrow}>{item.folder || "Active"} · Saved Deal · {deal.property_type || deal.deal_type || "Deal"}</div>
                   <h2 style={{ fontSize: 34, margin: "0 0 8px" }}>{deal.title || "Untitled Deal"}</h2>
                   <p style={{ ...muted, fontSize: 19, margin: "0 0 10px" }}>{display(deal.city, "Unknown City")}, {display(deal.state, "Unknown State")}</p>
 
                   <div style={metricGrid}>
-                    <div style={metric}><div style={eyebrow}>Ask</div><strong>{money(deal.asking_price || deal.price)}</strong></div>
+                    <div style={metric}><div style={eyebrow}>Ask</div><strong>{money(first(deal.asking_price, deal.price))}</strong></div>
                     <div style={metric}><div style={eyebrow}>ARV</div><strong>{money(deal.arv)}</strong></div>
                     <div style={metric}><div style={eyebrow}>Saved</div><strong>{item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recently"}</strong></div>
                     <div style={metric}><div style={eyebrow}>Folder</div><strong>{item.folder || "Active"}</strong></div>
