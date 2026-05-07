@@ -254,6 +254,107 @@ function ToolCard({
 }
 
 
+
+function MemberBadgePanel({
+  email,
+  owner,
+  access,
+}: {
+  email: string;
+  owner: boolean;
+  access: Access | null;
+}) {
+  const paid = Boolean(access?.paid || access?.unlocked || owner);
+  const profileComplete = Boolean(access?.profile_complete || owner);
+
+  const badges = [
+    {
+      label: owner ? "OWNER" : "MEMBER",
+      title: owner ? "VaultForge Owner" : "Private Member",
+      text: owner
+        ? "Full command access for admin review, deal routing, network controls, and launch monitoring."
+        : "Member workspace for deal rooms, buy boxes, saved targets, messages, and routing intelligence.",
+      tone: owner ? "#b55cff" : "#9df3bf",
+    },
+    {
+      label: profileComplete ? "PROFILE" : "TRAIN",
+      title: profileComplete ? "Profile Trained" : "Profile Needs Training",
+      text: profileComplete
+        ? "Your profile can feed markets, roles, strategies, needs, and routing preferences into the intelligence layer."
+        : "Complete your profile to improve future routing, alerts, matching, and member visibility.",
+      tone: profileComplete ? "#9df3bf" : "#f5d978",
+    },
+    {
+      label: paid ? "ACCESS" : "LOCKED",
+      title: paid ? "Command Access Active" : "Payment Step Pending",
+      text: paid
+        ? "Member command tools are available from this dashboard."
+        : "Payment activation unlocks the full member command center when billing is active.",
+      tone: paid ? "#9df3bf" : "#f5d978",
+    },
+    {
+      label: "FOUNDER",
+      title: owner ? "Founder Seat: Owner" : "Founder Window Candidate",
+      text: "Founder positioning is part of the private network identity layer and can later connect to actual founder numbers.",
+      tone: "#b55cff",
+    },
+  ];
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(157,243,191,.34)" }}>
+      <div style={greenEyebrow}>Member Identity Layer</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        Badges, access status, and network role.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>
+        This creates the professional member identity layer without changing the database yet. Later, these badges can connect to verified roles, founder numbers, lender status, operator status, and admin approvals.
+      </p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "16px 0" }}>
+        <span style={{ ...chip, borderColor: "rgba(181,92,255,.45)", color: "#d9b8ff", background: "rgba(181,92,255,.12)" }}>
+          {email || "member"}
+        </span>
+        <span style={chip}>{owner ? "Owner/Admin" : "Member"}</span>
+        <span style={chip}>{profileComplete ? "Profile Complete" : "Profile Pending"}</span>
+        <span style={chip}>{paid ? "Access Active" : "Payment Pending"}</span>
+      </div>
+
+      <section style={grid}>
+        {badges.map((badge) => (
+          <div
+            key={badge.label}
+            style={{
+              ...pane,
+              border: `1px solid ${badge.tone}`,
+              background: "linear-gradient(145deg, rgba(0,0,0,.24), rgba(255,255,255,.045))",
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                color: badge.tone,
+                border: `1px solid ${badge.tone}`,
+                borderRadius: 999,
+                padding: "7px 11px",
+                fontWeight: 950,
+                letterSpacing: 2,
+                fontSize: 12,
+                marginBottom: 12,
+                background: "rgba(0,0,0,.20)",
+              }}
+            >
+              {badge.label}
+            </div>
+            <h3 style={{ fontSize: 26, lineHeight: 1.05, margin: "0 0 10px" }}>{badge.title}</h3>
+            <p style={muted}>{badge.text}</p>
+          </div>
+        ))}
+      </section>
+    </section>
+  );
+}
+
+
 function ActivityFeed({ owner, stats }: { owner: boolean; stats: Stats }) {
   const feed = [
     {
@@ -597,6 +698,8 @@ export default function DashboardPage() {
             {stats.warning}
           </section>
         )}
+
+        <MemberBadgePanel email={email} owner={owner} access={access} />
 
         <ActivityFeed owner={owner} stats={stats} />
 
