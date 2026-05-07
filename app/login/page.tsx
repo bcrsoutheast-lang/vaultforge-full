@@ -6,7 +6,7 @@ import Link from "next/link";
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 32%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 30%), linear-gradient(180deg, #030509 0%, #071326 55%, #030509 100%)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
   color: "white",
   fontFamily: "Arial, sans-serif",
   padding: "28px 18px 90px",
@@ -32,7 +32,7 @@ const navBtn: React.CSSProperties = {
   borderRadius: 999,
   padding: "11px 16px",
   fontSize: 14,
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
 };
 
 const grid: React.CSSProperties = {
@@ -45,7 +45,7 @@ const grid: React.CSSProperties = {
 const card: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.14)",
   background:
-    "linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.025))",
+    "linear-gradient(135deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
   borderRadius: 32,
   padding: 24,
   boxShadow: "0 24px 80px rgba(0,0,0,.38)",
@@ -54,7 +54,7 @@ const card: React.CSSProperties = {
 const goldCard: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.30)",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 34%), linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.025))",
+    "linear-gradient(145deg, rgba(232,196,107,.14), rgba(181,92,255,.10), rgba(255,255,255,.03))",
   borderRadius: 32,
   padding: 24,
   boxShadow: "0 24px 80px rgba(0,0,0,.38)",
@@ -113,7 +113,7 @@ const primary: React.CSSProperties = {
   border: 0,
   borderRadius: 999,
   padding: "16px 22px",
-  background: "linear-gradient(135deg, #f4d47b, #9df3bf)",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   color: "#06101e",
   fontWeight: 950,
   fontSize: 17,
@@ -125,7 +125,7 @@ const ghost: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.22)",
   borderRadius: 999,
   padding: "16px 22px",
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   color: "white",
   fontWeight: 900,
   fontSize: 17,
@@ -142,7 +142,7 @@ const linkButton: React.CSSProperties = {
   borderRadius: 999,
   padding: "13px 18px",
   fontWeight: 900,
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   margin: "8px 8px 0 0",
 };
 
@@ -155,7 +155,7 @@ const stepGrid: React.CSSProperties = {
 
 const stepCard: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.12)",
-  background: "rgba(0,0,0,.16)",
+  background: "linear-gradient(145deg, rgba(0,0,0,.28), rgba(181,92,255,.08))",
   borderRadius: 20,
   padding: 16,
 };
@@ -250,6 +250,27 @@ export default function LoginPage() {
   return (
     <main style={page}>
       <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        input:focus {
+          border-color: rgba(181,92,255,.45);
+          box-shadow: 0 0 0 3px rgba(181,92,255,.14);
+        }
+
+        @media (max-width: 760px) {
+          a,
+          button,
+          input {
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+      <style>{`
         @media (max-width: 760px) {
           .vf-login-actions {
             display: grid !important;
@@ -289,6 +310,54 @@ export default function LoginPage() {
         <section style={grid}>
           <div style={goldCard}>
             <div style={greenEyebrow}>MEMBER ACCESS FLOW</div>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                marginBottom: 16,
+              }}
+            >
+              <span
+                style={{
+                  border: "1px solid rgba(181,92,255,.36)",
+                  color: "#dcb8ff",
+                  borderRadius: 999,
+                  padding: "9px 13px",
+                  fontWeight: 900,
+                  background: "rgba(181,92,255,.12)",
+                }}
+              >
+                AI Routing Access
+              </span>
+
+              <span
+                style={{
+                  border: "1px solid rgba(157,243,191,.36)",
+                  color: "#9df3bf",
+                  borderRadius: 999,
+                  padding: "9px 13px",
+                  fontWeight: 900,
+                  background: "rgba(157,243,191,.10)",
+                }}
+              >
+                Founder Intelligence Network
+              </span>
+
+              <span
+                style={{
+                  border: "1px solid rgba(245,217,120,.36)",
+                  color: "#f5d978",
+                  borderRadius: 999,
+                  padding: "9px 13px",
+                  fontWeight: 900,
+                  background: "rgba(245,217,120,.10)",
+                }}
+              >
+                Bloomberg-Style Login
+              </span>
+            </div>
 
             <h1 style={title}>
               Create access first. Then train your AI profile.
