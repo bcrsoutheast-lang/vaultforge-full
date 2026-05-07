@@ -16,14 +16,6 @@ type Access = {
 
 type DealType = "Residential" | "Commercial" | "Land";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  "";
-
-const BUCKETS = ["deal-photos", "deal-photo", "project-images"];
-
 const STATES = [
   "Georgia","Tennessee","Florida","North Carolina","South Carolina","Texas",
   "Alabama","California","New York","Ohio","Pennsylvania","Other"
@@ -156,41 +148,34 @@ function getEmail() {
   ).trim().toLowerCase();
 }
 
-function cleanFileName(file: File) {
-  return `${Date.now()}-${Math.random()
-    .toString(16)
-    .slice(2)}-${file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-")}`;
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
 }
 
 async function upload(file: File, email: string) {
-  const safeEmail = (email || "guest").replace(/[^a-z0-9@._-]+/gi, "-");
-  const path = `${safeEmail}/${cleanFileName(file)}`;
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("email", email);
 
-  let lastError = "";
+  const res = await fetch("/api/deal/upload-photo", {
+    method: "POST",
+    headers: {
+      "x-vf-email": email
+    },
+    body: formData
+  });
 
-  for (const bucket of BUCKETS) {
-    const res = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`,
-      {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-          "Content-Type": file.type || "image/jpeg",
-          "x-upsert": "true"
-        },
-        body: file
-      }
-    );
+  const data = await safeJson(res);
 
-    if (res.ok) {
-      return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
-    }
-
-    lastError = await res.text();
+  if (!res.ok || data?.ok === false || !data?.url) {
+    throw new Error(data?.error || data?.details || "Photo upload failed.");
   }
 
-  throw new Error(lastError || "Upload failed.");
+  return String(data.url);
 }
 
 const empty = {
@@ -335,6 +320,8 @@ export default function SubmitPage() {
       .filter((f) => f.type.startsWith("image/"))
       .slice(0, 10);
 
+    previews.forEach((src) => URL.revokeObjectURL(src));
+
     setFiles(chosen);
     setPreviews(chosen.map((f) => URL.createObjectURL(f)));
   }
@@ -348,6 +335,10 @@ export default function SubmitPage() {
     try {
       const email = getEmail();
 
+      if (!email) {
+        throw new Error("Login expired. Log in again before submitting.");
+      }
+
       if (!form.title.trim() || !form.city.trim()) {
         throw new Error("Deal title and city are required.");
       }
@@ -356,11 +347,13 @@ export default function SubmitPage() {
         throw new Error("Upload at least one photo.");
       }
 
-      setMsg("Uploading photos...");
+      const urls: string[] = [];
 
-      const urls = await Promise.all(
-        files.map((f) => upload(f, email))
-      );
+      for (let index = 0; index < files.length; index += 1) {
+        setMsg(`Uploading photo ${index + 1} of ${files.length}...`);
+        const url = await upload(files[index], email);
+        urls.push(url);
+      }
 
       setMsg("Saving deal room...");
 
@@ -379,16 +372,17 @@ export default function SubmitPage() {
         })
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
-      if (!res.ok || data?.error) {
-        throw new Error(data?.error || "Save failed.");
+      if (!res.ok || data?.ok === false || data?.error) {
+        throw new Error(data?.error || data?.details || "Deal save failed.");
       }
 
       setMsg("Deal room saved successfully.");
 
       setForm(empty as any);
       setFiles([]);
+      previews.forEach((src) => URL.revokeObjectURL(src));
       setPreviews([]);
 
       if (fileRef.current) {
@@ -582,11 +576,16 @@ export default function SubmitPage() {
             Choose Photos ({files.length}/10)
           </button>
 
+          <p style={{ color: "rgba(255,255,255,.66)", lineHeight: 1.5 }}>
+            Upload actual property photos. VaultForge will save them through the server so mobile browsers do not block the upload.
+          </p>
+
           <div style={{ ...grid, marginTop: 16 }}>
             {previews.map((src) => (
               <img
                 key={src}
                 src={src}
+                alt="Selected property preview"
                 style={{
                   width: "100%",
                   height: 220,
