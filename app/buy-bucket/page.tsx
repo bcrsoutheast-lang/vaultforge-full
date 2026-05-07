@@ -47,6 +47,20 @@ function display(value: any, fallback = "Not listed") {
   return clean || fallback;
 }
 
+function first(...values: any[]) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+
+    if (Array.isArray(value) && value.length === 0) continue;
+
+    const text = String(value).trim();
+
+    if (text) return value;
+  }
+
+  return "";
+}
+
 function getDeal(item: Item): Deal {
   return item.deal || item.vf_deals || item.project || item;
 }
@@ -59,22 +73,48 @@ function getPhotos(deal: Deal) {
 
 function detailLine(deal: Deal) {
   return [
-    deal.bedrooms ? `${deal.bedrooms} bed` : "",
-    deal.bathrooms ? `${deal.bathrooms} bath` : "",
-    deal.building_sqft ? `${deal.building_sqft} sqft` : "",
-    deal.land_acres ? `${deal.land_acres} acres` : "",
-    deal.commercial_type || "",
-    deal.condition || "",
+    first(deal.bedrooms, deal.beds) ? `${first(deal.bedrooms, deal.beds)} bed` : "",
+    first(deal.bathrooms, deal.baths) ? `${first(deal.bathrooms, deal.baths)} bath` : "",
+    first(deal.square_feet, deal.building_sqft, deal.sqft) ? `${first(deal.square_feet, deal.building_sqft, deal.sqft)} sqft` : "",
+    first(deal.acres, deal.land_acres) ? `${first(deal.acres, deal.land_acres)} acres` : "",
+    first(deal.commercial_type, deal.property_type) || "",
+    first(deal.condition, deal.strategy) || "",
   ].filter(Boolean).join(" · ");
 }
 
 function ToastBox({ toast }: { toast: Toast | null }) {
   if (!toast) return null;
-  const border = toast.type === "success" ? "rgba(157,243,191,.55)" : toast.type === "error" ? "rgba(255,120,120,.45)" : "rgba(232,196,107,.45)";
-  const color = toast.type === "success" ? "#9df3bf" : toast.type === "error" ? "#ffd0d0" : "#e8c46b";
+
+  const border = toast.type === "success"
+    ? "rgba(157,243,191,.55)"
+    : toast.type === "error"
+    ? "rgba(255,120,120,.45)"
+    : "rgba(232,196,107,.45)";
+
+  const color = toast.type === "success"
+    ? "#9df3bf"
+    : toast.type === "error"
+    ? "#ffd0d0"
+    : "#e8c46b";
 
   return (
-    <div style={{ position: "fixed", top: 18, left: "50%", transform: "translateX(-50%)", zIndex: 50, width: "calc(100% - 32px)", maxWidth: 620, border: `1px solid ${border}`, background: "rgba(3,5,9,.94)", boxShadow: "0 24px 80px rgba(0,0,0,.45)", borderRadius: 24, padding: "16px 18px", color, fontWeight: 900, textAlign: "center" }}>
+    <div style={{
+      position: "fixed",
+      top: 18,
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: 50,
+      width: "calc(100% - 32px)",
+      maxWidth: 620,
+      border: `1px solid ${border}`,
+      background: "rgba(3,5,9,.94)",
+      boxShadow: "0 24px 80px rgba(0,0,0,.45)",
+      borderRadius: 24,
+      padding: "16px 18px",
+      color,
+      fontWeight: 900,
+      textAlign: "center"
+    }}>
       {toast.text}
     </div>
   );
@@ -99,29 +139,63 @@ export default function BuyBucketPage() {
 
   async function load() {
     setStatus("Loading Buy Bucket...");
+
     try {
-      const res = await fetch("/api/deal/my-bucket", { cache: "no-store", headers: { "x-vf-email": getEmail() } });
+      const res = await fetch("/api/deal/my-bucket", {
+        cache: "no-store",
+        headers: { "x-vf-email": getEmail() }
+      });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || data?.details || "Could not load Buy Bucket.");
+
+      if (!res.ok) {
+        throw new Error(data?.error || data?.details || "Could not load Buy Bucket.");
+      }
+
       setItems(data?.deals || data?.items || []);
       setStatus("");
     } catch (err: any) {
       setStatus(err?.message || "Could not load Buy Bucket.");
-      showToast({ type: "error", text: err?.message || "Could not load Buy Bucket." });
+
+      showToast({
+        type: "error",
+        text: err?.message || "Could not load Buy Bucket."
+      });
     }
   }
 
   async function runAction(id: string, endpoint: string, payload: Record<string, any>, label: string, done: string) {
     setWorkingId(id);
+
     try {
-      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", "x-vf-email": getEmail() }, body: JSON.stringify(payload) });
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": getEmail()
+        },
+        body: JSON.stringify(payload)
+      });
+
       const data = await res.json();
-      if (!res.ok || data?.error) throw new Error(data?.error || data?.details || `${label} failed.`);
+
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || data?.details || `${label} failed.`);
+      }
+
       markSuccess(id);
-      showToast({ type: "success", text: done });
+
+      showToast({
+        type: "success",
+        text: done
+      });
+
       await load();
     } catch (err: any) {
-      showToast({ type: "error", text: err?.message || `${label} failed.` });
+      showToast({
+        type: "error",
+        text: err?.message || `${label} failed.`
+      });
     } finally {
       setWorkingId("");
     }
@@ -130,39 +204,81 @@ export default function BuyBucketPage() {
   async function archiveItem(id: string) {
     const yes = window.confirm("Archive this saved deal?");
     if (!yes) return;
-    await runAction(id, "/api/deal/bucket-archive", { id }, "Archive", "Archived saved deal ✓");
+
+    await runAction(
+      id,
+      "/api/deal/bucket-archive",
+      { id },
+      "Archive",
+      "Archived saved deal ✓"
+    );
   }
 
   async function removeItem(id: string) {
     const yes = window.confirm("Remove this deal from your Buy Bucket?");
     if (!yes) return;
-    await runAction(id, "/api/deal/bucket-remove", { id }, "Remove", "Removed from Buy Bucket ✓");
+
+    await runAction(
+      id,
+      "/api/deal/bucket-remove",
+      { id },
+      "Remove",
+      "Removed from Buy Bucket ✓"
+    );
   }
 
   async function setFolder(id: string, folder: string) {
-    await runAction(id, "/api/deal/bucket-folder", { id, folder }, "Folder update", `Moved to ${folder} ✓`);
+    await runAction(
+      id,
+      "/api/deal/bucket-folder",
+      { id, folder },
+      "Folder update",
+      `Moved to ${folder} ✓`
+    );
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   return (
     <main style={shell}>
       <ToastBox toast={toast} />
+
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>Buy Bucket</div>
-          <h1 style={{ fontSize: "clamp(56px,12vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
+
+          <h1 style={{
+            fontSize: "clamp(56px,12vw,96px)",
+            lineHeight: 0.9,
+            margin: "0 0 18px"
+          }}>
             Saved window panes.
           </h1>
-          <p style={muted}>Track saved acquisition targets, organize follow-up folders, and remove clutter.</p>
+
+          <p style={muted}>
+            Track saved acquisition targets, organize follow-up folders, and remove clutter.
+          </p>
+
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/projects" style={btn}>Projects</Link>
           <Link href="/submit" style={ghost}>Create</Link>
-          <button type="button" onClick={load} style={btn}>Refresh</button>
+
+          <button type="button" onClick={load} style={btn}>
+            Refresh
+          </button>
         </section>
 
-        {status && <section style={hero}>{status}</section>}
-        {!status && items.length === 0 && <section style={hero}>Your Buy Bucket is empty. Open Projects and save a deal.</section>}
+        {status && (
+          <section style={hero}>{status}</section>
+        )}
+
+        {!status && items.length === 0 && (
+          <section style={hero}>
+            Your Buy Bucket is empty. Open Projects and save a deal.
+          </section>
+        )}
 
         <section style={paneGrid}>
           {items.map((item) => {
@@ -176,26 +292,95 @@ export default function BuyBucketPage() {
             return (
               <article key={itemId || dealId} style={pane}>
                 {image ? (
-                  <img src={image} alt={deal.title || "Deal"} style={{ width: "100%", height: 230, objectFit: "cover", display: "block" }} />
+                  <img
+                    src={image}
+                    alt={deal.title || "Deal"}
+                    style={{
+                      width: "100%",
+                      height: 230,
+                      objectFit: "cover",
+                      display: "block"
+                    }}
+                  />
                 ) : (
-                  <div style={{ height: 230, display: "grid", placeItems: "center", color: "rgba(255,255,255,.55)", borderBottom: "1px solid rgba(255,255,255,.10)" }}>No photo</div>
+                  <div style={{
+                    height: 230,
+                    display: "grid",
+                    placeItems: "center",
+                    color: "rgba(255,255,255,.55)",
+                    borderBottom: "1px solid rgba(255,255,255,.10)"
+                  }}>
+                    No photo
+                  </div>
                 )}
 
                 <div style={bodyStyle}>
-                  <div style={eyebrow}>{item.folder || "Active"} · Saved Deal · {deal.property_type || "Deal"}</div>
-                  <h2 style={{ fontSize: 34, margin: "0 0 8px" }}>{deal.title || "Untitled Deal"}</h2>
-                  <p style={{ ...muted, fontSize: 19, margin: "0 0 10px" }}>{display(deal.city, "Unknown City")}, {display(deal.state, "Unknown State")}</p>
-
-                  <div style={metricGrid}>
-                    <div style={metric}><div style={eyebrow}>Ask</div><strong>{money(deal.asking_price || deal.price)}</strong></div>
-                    <div style={metric}><div style={eyebrow}>ARV</div><strong>{money(deal.arv)}</strong></div>
-                    <div style={metric}><div style={eyebrow}>Saved</div><strong>{item.created_at ? new Date(item.created_at).toLocaleDateString() : "Recently"}</strong></div>
-                    <div style={metric}><div style={eyebrow}>Folder</div><strong>{item.folder || "Active"}</strong></div>
+                  <div style={eyebrow}>
+                    {item.folder || "Active"} · Saved Deal · {deal.property_type || "Deal"}
                   </div>
 
-                  <p style={{ ...muted, margin: "0 0 10px" }}>{detailLine(deal) || "Additional details in Deal Room"}</p>
+                  <h2 style={{
+                    fontSize: 34,
+                    margin: "0 0 8px"
+                  }}>
+                    {deal.title || "Untitled Deal"}
+                  </h2>
 
-                  <select value={item.folder || "Active"} onChange={(event) => setFolder(itemId, event.target.value)} style={selectStyle} disabled={busy}>
+                  <p style={{
+                    ...muted,
+                    fontSize: 19,
+                    margin: "0 0 10px"
+                  }}>
+                    {display(deal.city, "Unknown City")}, {display(deal.state, "Unknown State")}
+                  </p>
+
+                  <div style={metricGrid}>
+                    <div style={metric}>
+                      <div style={eyebrow}>Ask</div>
+                      <strong>{money(first(deal.asking_price, deal.price))}</strong>
+                    </div>
+
+                    <div style={metric}>
+                      <div style={eyebrow}>ARV</div>
+                      <strong>{money(deal.arv)}</strong>
+                    </div>
+
+                    <div style={metric}>
+                      <div style={eyebrow}>Saved</div>
+                      <strong>
+                        {item.created_at
+                          ? new Date(item.created_at).toLocaleDateString()
+                          : "Recently"}
+                      </strong>
+                    </div>
+
+                    <div style={metric}>
+                      <div style={eyebrow}>Strategy</div>
+                      <strong>{first(deal.strategy, "Not listed")}</strong>
+                    </div>
+                  </div>
+
+                  <p style={{
+                    ...muted,
+                    margin: "0 0 10px"
+                  }}>
+                    {detailLine(deal) || "Additional details in Deal Room"}
+                  </p>
+
+                  <p style={{
+                    ...muted,
+                    fontSize: 15,
+                    minHeight: 44
+                  }}>
+                    {display(deal.description, "No description added.")}
+                  </p>
+
+                  <select
+                    value={item.folder || "Active"}
+                    onChange={(event) => setFolder(itemId, event.target.value)}
+                    style={selectStyle}
+                    disabled={busy}
+                  >
                     <option style={{ color: "#111" }}>Active</option>
                     <option style={{ color: "#111" }}>Hot</option>
                     <option style={{ color: "#111" }}>Follow Up</option>
@@ -205,12 +390,31 @@ export default function BuyBucketPage() {
                   </select>
 
                   <div style={{ marginTop: 12 }}>
-                    {dealId && <Link href={`/deal/${dealId}`} style={btn}>Deal Room</Link>}
-                    <Link href="/messages" style={ghost}>Messages</Link>
-                    <button type="button" disabled={busy} onClick={() => archiveItem(itemId)} style={done ? successBtn : ghost}>
+                    {dealId && (
+                      <Link href={`/deal/${dealId}`} style={btn}>
+                        Deal Room
+                      </Link>
+                    )}
+
+                    <Link href="/messages" style={ghost}>
+                      Messages
+                    </Link>
+
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => archiveItem(itemId)}
+                      style={done ? successBtn : ghost}
+                    >
                       {busy ? "Archiving..." : done ? "Done ✓" : "Archive"}
                     </button>
-                    <button type="button" disabled={busy} onClick={() => removeItem(itemId)} style={danger}>
+
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => removeItem(itemId)}
+                      style={danger}
+                    >
                       {busy ? "Removing..." : "Remove"}
                     </button>
                   </div>
@@ -221,5 +425,3 @@ export default function BuyBucketPage() {
         </section>
       </div>
     </main>
-  );
-}
