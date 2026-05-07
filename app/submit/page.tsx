@@ -51,7 +51,7 @@ const LAND_STRATEGIES = [
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(157,243,191,.10), transparent 26%), radial-gradient(circle at top right, rgba(232,196,107,.12), transparent 24%), linear-gradient(180deg,#031008,#07180f 55%,#031008)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.20), transparent 26%), radial-gradient(circle at top right, rgba(157,243,191,.16), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 26%), linear-gradient(180deg,#02040a 0%,#07180f 40%,#031008 100%)",
   color: "white",
   padding: "28px 18px 90px",
   fontFamily: "Arial, sans-serif"
@@ -65,11 +65,11 @@ const wrap: React.CSSProperties = {
 const card: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.22)",
   background:
-    "linear-gradient(145deg, rgba(255,255,255,.05), rgba(255,255,255,.02))",
+    "linear-gradient(145deg, rgba(181,92,255,.12), rgba(157,243,191,.08), rgba(255,255,255,.03))",
   borderRadius: 32,
   padding: 24,
   marginBottom: 22,
-  boxShadow: "0 20px 60px rgba(0,0,0,.35)"
+  boxShadow: "0 30px 90px rgba(0,0,0,.42)"
 };
 
 const grid: React.CSSProperties = {
@@ -79,7 +79,7 @@ const grid: React.CSSProperties = {
 };
 
 const btn: React.CSSProperties = {
-  background: "linear-gradient(135deg,#f5d978,#9df3bf)",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   color: "#06100a",
   border: "none",
   borderRadius: 999,
@@ -94,7 +94,7 @@ const btn: React.CSSProperties = {
 };
 
 const ghost: React.CSSProperties = {
-  background: "rgba(255,255,255,.04)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.20), rgba(255,255,255,.05))",
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
   borderRadius: 999,
@@ -113,7 +113,7 @@ const input: React.CSSProperties = {
   boxSizing: "border-box",
   borderRadius: 18,
   border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
+  background: "linear-gradient(135deg, rgba(181,92,255,.16), rgba(255,255,255,.07))",
   color: "white",
   padding: 15,
   fontSize: 16
@@ -407,6 +407,13 @@ export default function SubmitPage() {
   return (
     <main style={page}>
       <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
         @media (max-width: 760px) {
           .vf-submit-actions {
             display:grid !important;
@@ -456,7 +463,16 @@ export default function SubmitPage() {
         )}
 
         <section style={card}>
-          <div style={eyebrow}>DEAL TYPE</div>
+          <div style={greenEyebrow}>DEAL TYPE</div>
+
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            fontSize:18,
+            lineHeight:1.5,
+            marginBottom:18
+          }}>
+            Choose the type of opportunity you are routing through the VaultForge network.
+          </p>
 
           {(["Residential","Commercial","Land"] as DealType[]).map((t) => (
             <button
