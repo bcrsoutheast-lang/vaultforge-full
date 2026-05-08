@@ -78,6 +78,12 @@ const ghost: React.CSSProperties = {
   cursor: "pointer",
 };
 
+const danger: React.CSSProperties = {
+  ...ghost,
+  border: "1px solid rgba(255,120,120,.36)",
+  color: "#ffd0d0",
+};
+
 const eyebrow: React.CSSProperties = {
   color: "#ff9f9f",
   letterSpacing: 5,
@@ -120,13 +126,17 @@ const image: React.CSSProperties = {
 
 function getEmail() {
   if (typeof window === "undefined") return "";
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    ""
-  )
-    .trim()
-    .toLowerCase();
+  try {
+    return (
+      localStorage.getItem("vf_email") ||
+      sessionStorage.getItem("vf_email") ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 function asText(value: unknown, fallback = "") {
@@ -165,11 +175,7 @@ function painTitle(row: PainRow) {
 }
 
 function painBody(row: PainRow) {
-  return first(
-    row.description,
-    row.requested_help,
-    "No description yet."
-  );
+  return first(row.description, row.requested_help, "No description yet.");
 }
 
 function painLocation(row: PainRow) {
@@ -208,13 +214,15 @@ function normalizePhotos(value: unknown, row?: PainRow) {
         continue;
       }
     } catch {
-      // continue
+      // Continue.
     }
 
     out.push(text);
   }
 
-  return Array.from(new Set(out)).filter((src) => src.startsWith("data:image") || src.startsWith("http"));
+  return Array.from(new Set(out)).filter(
+    (src) => src.startsWith("data:image") || src.startsWith("http")
+  );
 }
 
 function normalizeTags(row: PainRow) {
@@ -233,10 +241,30 @@ function normalizeTags(row: PainRow) {
       return parsed.map(String).filter(Boolean);
     }
   } catch {
-    // continue
+    // Continue.
   }
 
   return text.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function normalizeArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean);
+  }
+
+  const text = asText(value);
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean);
+    }
+  } catch {
+    // Continue.
+  }
+
+  return text.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
 }
 
 function urgencyTone(value: unknown) {
@@ -315,9 +343,12 @@ export default function PainPage() {
   const [rows, setRows] = useState<PainRow[]>([]);
   const [status, setStatus] = useState("Loading distress signals...");
   const [filter, setFilter] = useState("all");
+  const [busyId, setBusyId] = useState("");
+  const [toast, setToast] = useState("");
 
   async function load() {
     setStatus("Loading distress signals...");
+    setToast("");
 
     try {
       const email = getEmail();
@@ -341,12 +372,58 @@ export default function PainPage() {
     }
   }
 
+  async function painAction(id: string, action: string) {
+    const email = getEmail();
+
+    if (!email) {
+      setToast("Log in again so VaultForge can attach this action to your member account.");
+      return;
+    }
+
+    setBusyId(`${id}-${action}`);
+    setToast("");
+
+    try {
+      const res = await fetch("/api/pain/action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+        },
+        body: JSON.stringify({
+          id,
+          action,
+          email,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Pain action failed.");
+      }
+
+      setToast(data?.message || `Pain signal ${action} saved.`);
+      await load();
+    } catch (error: any) {
+      setToast(error?.message || "Pain action failed.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   useEffect(() => {
     load();
   }, []);
 
   const openRows = useMemo(
-    () => rows.filter((row) => row.resolved !== true && asText(row.routing_status).toLowerCase() !== "resolved"),
+    () =>
+      rows.filter(
+        (row) =>
+          row.archived !== true &&
+          row.resolved !== true &&
+          asText(row.routing_status).toLowerCase() !== "resolved"
+      ),
     [rows]
   );
 
@@ -368,14 +445,28 @@ export default function PainPage() {
     [rows]
   );
 
+  const email = getEmail();
+
+  const savedRows = useMemo(
+    () => rows.filter((row) => normalizeArray(row.saved_by).includes(email)),
+    [email, rows]
+  );
+
+  const interestedRows = useMemo(
+    () => rows.filter((row) => normalizeArray(row.interested_by).includes(email)),
+    [email, rows]
+  );
+
   const filteredRows = useMemo(() => {
     if (filter === "open") return openRows;
     if (filter === "urgent") return urgentRows;
     if (filter === "capital") return capitalRows;
+    if (filter === "saved") return savedRows;
+    if (filter === "interested") return interestedRows;
     if (filter === "photos") return rows.filter((row) => normalizePhotos(row.photo_urls, row).length > 0);
 
-    return rows;
-  }, [capitalRows, filter, openRows, rows, urgentRows]);
+    return rows.filter((row) => row.archived !== true);
+  }, [capitalRows, filter, interestedRows, openRows, rows, savedRows, urgentRows]);
 
   return (
     <main style={page}>
@@ -404,10 +495,9 @@ export default function PainPage() {
             <span style={{ ...chip, borderColor: "rgba(255,120,120,.38)", color: "#ff9f9f" }}>
               Distress Signals
             </span>
+            <span style={chip}>Member Actions</span>
             <span style={chip}>AI Analysis</span>
-            <span style={chip}>Capital Needs</span>
-            <span style={chip}>Operator Routing</span>
-            <span style={chip}>Photo-Aware Intake</span>
+            <span style={chip}>Save / Interested / Dismiss</span>
           </div>
 
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
@@ -415,8 +505,7 @@ export default function PainPage() {
           </h1>
 
           <p style={{ ...muted, fontSize: 21 }}>
-            Each signal is now analyzed for best route, risk flags, next action, capital fit, operator fit,
-            and execution path. Photos are detected from multiple possible fields.
+            Members can now save signals, mark interest, dismiss noise, open routing, and move conversations into messages.
           </p>
 
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
@@ -426,11 +515,17 @@ export default function PainPage() {
           <button type="button" onClick={load} style={btn}>Refresh</button>
         </section>
 
+        {toast && (
+          <section style={{ ...hero, color: toast.toLowerCase().includes("failed") || toast.toLowerCase().includes("error") ? "#ffd0d0" : "#9df3bf" }}>
+            {toast}
+          </section>
+        )}
+
         <section style={{ ...grid, marginBottom: 22 }}>
           <NumberStatCard label="Total Signals" value={rows.length} detail="All distress and pain submissions loaded." />
           <NumberStatCard label="Open Signals" value={openRows.length} detail="Unresolved routing opportunities." />
-          <NumberStatCard label="Urgent" value={urgentRows.length} detail="High-priority or emergency signals." />
-          <NumberStatCard label="Capital Need" value={capitalRows.length} detail="Funding, lender, or capital-related requests." />
+          <NumberStatCard label="Saved" value={savedRows.length} detail="Signals saved by this member." />
+          <NumberStatCard label="Interested" value={interestedRows.length} detail="Signals this member marked interested." />
         </section>
 
         <section style={{ ...hero, borderColor: "rgba(157,243,191,.28)" }}>
@@ -439,6 +534,8 @@ export default function PainPage() {
           <button type="button" onClick={() => setFilter("open")} style={filter === "open" ? btn : ghost}>Open</button>
           <button type="button" onClick={() => setFilter("urgent")} style={filter === "urgent" ? btn : ghost}>Urgent</button>
           <button type="button" onClick={() => setFilter("capital")} style={filter === "capital" ? btn : ghost}>Capital</button>
+          <button type="button" onClick={() => setFilter("saved")} style={filter === "saved" ? btn : ghost}>Saved</button>
+          <button type="button" onClick={() => setFilter("interested")} style={filter === "interested" ? btn : ghost}>Interested</button>
           <button type="button" onClick={() => setFilter("photos")} style={filter === "photos" ? btn : ghost}>With Photos</button>
         </section>
 
@@ -475,9 +572,15 @@ export default function PainPage() {
             const photos = normalizePhotos(row.photo_urls, row);
             const tone = urgencyTone(urgency);
             const analysisLines = splitAnalysis(row.ai_summary);
+            const savedBy = normalizeArray(row.saved_by);
+            const interestedBy = normalizeArray(row.interested_by);
+            const dismissedBy = normalizeArray(row.dismissed_by);
+            const isSaved = savedBy.includes(email);
+            const isInterested = interestedBy.includes(email);
+            const isDismissed = dismissedBy.includes(email);
 
             return (
-              <article key={id} style={{ ...signalCard, borderColor: `${tone}66` }}>
+              <article key={id} style={{ ...signalCard, borderColor: `${tone}66`, opacity: isDismissed ? 0.58 : 1 }}>
                 <div
                   style={{
                     position: "absolute",
@@ -498,6 +601,9 @@ export default function PainPage() {
                   <span style={chip}>{statusLabel}</span>
                   {location && <span style={chip}>{location}</span>}
                   {photos.length > 0 && <span style={chip}>{photos.length} Photo{photos.length === 1 ? "" : "s"}</span>}
+                  {isSaved && <span style={chip}>Saved</span>}
+                  {isInterested && <span style={chip}>Interested</span>}
+                  {isDismissed && <span style={chip}>Dismissed</span>}
                 </div>
 
                 {photos.length > 0 && (
@@ -560,6 +666,44 @@ export default function PainPage() {
                 )}
 
                 <div style={{ marginTop: 14 }}>
+                  <button
+                    type="button"
+                    onClick={() => painAction(id, isSaved ? "unsave" : "save")}
+                    disabled={busyId === `${id}-save` || busyId === `${id}-unsave`}
+                    style={isSaved ? ghost : btn}
+                  >
+                    {isSaved ? "Unsave" : "Save"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => painAction(id, "interested")}
+                    disabled={busyId === `${id}-interested`}
+                    style={isInterested ? ghost : btn}
+                  >
+                    {isInterested ? "Interested ✓" : "Interested"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => painAction(id, "dismiss")}
+                    disabled={busyId === `${id}-dismiss`}
+                    style={danger}
+                  >
+                    Dismiss
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => painAction(id, "archive")}
+                    disabled={busyId === `${id}-archive`}
+                    style={danger}
+                  >
+                    Archive
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 8 }}>
                   {row.deal_id && (
                     <ActionButton href={`/deal/${encodeURIComponent(String(row.deal_id))}`} primary>
                       Open Deal Room
