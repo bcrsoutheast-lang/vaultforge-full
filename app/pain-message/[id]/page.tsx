@@ -167,7 +167,7 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
         throw new Error(data?.error || data?.details || "Could not send message.");
       }
 
-      setStatus("Message sent about this pain signal.");
+      setStatus("Message sent about this pain signal. Open Pain Messages to view the thread.");
       setMessage("");
     } catch (error: any) {
       setStatus(error?.message || "Could not send message.");
@@ -215,7 +215,8 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
 
           <Link href="/pain" style={ghost}>Pain Feed</Link>
           <Link href="/routing" style={ghost}>Routing</Link>
-          <Link href="/messages" style={ghost}>Messages</Link>
+          <Link href="/pain-messages" style={ghost}>Pain Messages</Link>
+          <Link href="/messages" style={ghost}>All Messages</Link>
         </section>
 
         {signal && (
