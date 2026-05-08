@@ -361,8 +361,10 @@ export default function DealRoomPage() {
             <Link href="/projects" style={ghost}>Projects</Link>
             <Link href="/alerts" style={ghost}>Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
+            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/messages" style={ghost}>Messages</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
+            {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
             <button type="button" onClick={load} style={ghost}>Refresh Room</button>
             <Link href="/logout" style={danger}>Logout</Link>
           </div>
@@ -450,7 +452,8 @@ export default function DealRoomPage() {
               </h2>
               <p style={{ ...muted, fontSize: 19 }}>
                 Next layers can add signal threads, buyer/lender/operator routing, comments, status updates,
-                saved pursuit actions, and notification history.
+                saved pursuit actions, and notification history. Routing decisions now flow through Routing Rooms,
+                Admin Routing, and the member Routing Inbox.
               </p>
             </section>
 
