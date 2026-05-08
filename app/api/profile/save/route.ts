@@ -30,16 +30,148 @@ function cleanEmail(value: unknown) {
 }
 
 function arr(value: unknown) {
-  if (Array.isArray(value)) return value.map((v) => String(v || "").trim()).filter(Boolean);
-  if (typeof value === "string" && value.trim()) {
-    return value.split(",").map((v) => v.trim()).filter(Boolean);
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v || "").trim()).filter(Boolean);
   }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v || "").trim()).filter(Boolean);
+      }
+    } catch {
+      // Continue to comma split.
+    }
+
+    return value
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
   return [];
+}
+
+function join(value: unknown) {
+  return arr(value).join(", ");
 }
 
 function intValue(value: unknown, fallback: number) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function compactPayload(payload: Record<string, any>, allowed: string[]) {
+  const next: Record<string, any> = {};
+
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(payload, key)) {
+      next[key] = payload[key];
+    }
+  }
+
+  return next;
+}
+
+async function saveToTable(supabase: any, table: string, payload: Record<string, any>) {
+  const variants = [
+    payload,
+    compactPayload(payload, [
+      "email",
+      "full_name",
+      "phone",
+      "company",
+      "role",
+      "member_role",
+      "city",
+      "state",
+      "markets",
+      "member_types",
+      "buy_box",
+      "funding_capacity",
+      "strategy",
+      "profile_photo_url",
+      "profile_complete",
+      "payment_status",
+      "access_status",
+      "alert_frequency",
+      "max_alerts_per_day",
+      "alert_types",
+      "buy_box_states",
+      "buy_box_types",
+      "buy_box_strategies",
+      "needs",
+      "deal_needs",
+      "what_i_need",
+      "can_provide",
+      "what_i_provide",
+      "updated_at",
+    ]),
+    compactPayload(payload, [
+      "email",
+      "full_name",
+      "phone",
+      "company",
+      "role",
+      "city",
+      "state",
+      "markets",
+      "member_types",
+      "buy_box",
+      "funding_capacity",
+      "strategy",
+      "profile_photo_url",
+      "profile_complete",
+      "payment_status",
+      "access_status",
+      "alert_frequency",
+      "max_alerts_per_day",
+      "alert_types",
+      "updated_at",
+    ]),
+    compactPayload(payload, [
+      "email",
+      "full_name",
+      "phone",
+      "company",
+      "role",
+      "city",
+      "state",
+      "markets",
+      "profile_complete",
+      "payment_status",
+      "access_status",
+      "updated_at",
+    ]),
+  ];
+
+  const errors: string[] = [];
+
+  for (const variant of variants) {
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .upsert(variant, { onConflict: "email" })
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        return { ok: true, data, table, keys: Object.keys(variant) };
+      }
+
+      if (error?.message) errors.push(error.message);
+    } catch (error: any) {
+      if (error?.message) errors.push(error.message);
+    }
+  }
+
+  return {
+    ok: false,
+    data: null,
+    table,
+    error: errors[0] || "Profile save failed for this table.",
+  };
 }
 
 export async function POST(request: Request) {
@@ -57,59 +189,94 @@ export async function POST(request: Request) {
     const fullName = clean(body.full_name || body.fullName || body.name);
     const phone = clean(body.phone);
     const company = clean(body.company);
-    const role = clean(body.role || body.member_role);
+    const memberTypes = arr(body.member_types || body.memberTypes);
+    const primaryRole = clean(body.role || body.member_role || memberTypes[0]);
     const city = clean(body.city);
-    const state = clean(body.state);
+    const state = clean(body.state || arr(body.buy_box_states)[0]);
 
-    const profileComplete = Boolean(fullName && phone && role && city && state);
+    const buyBoxStates = arr(body.buy_box_states || body.market_states || body.markets || state);
+    const buyBoxTypes = arr(body.buy_box_types || body.property_types || body.asset_types);
+    const buyBoxStrategies = arr(body.buy_box_strategies || body.strategies || body.strategy);
+    const needs = arr(body.needs || body.deal_needs || body.what_i_need);
+    const canProvide = arr(body.can_provide || body.what_i_provide);
+    const alertTypes = arr(body.alert_types);
+
+    const profileComplete = Boolean(fullName && phone && primaryRole && city && state);
+
+    const currentPayment = clean(body.payment_status);
+    const currentAccess = clean(body.access_status);
 
     const payload: Record<string, any> = {
       email,
       full_name: fullName,
       phone,
       company,
-      role,
+      role: primaryRole,
+      member_role: primaryRole,
       city,
       state,
-      markets: arr(body.markets),
-      member_types: arr(body.member_types || body.memberTypes),
+
+      markets: join(buyBoxStates),
+      market_states: buyBoxStates,
+
+      member_types: memberTypes.length ? memberTypes : primaryRole ? [primaryRole] : [],
+
       buy_box: clean(body.buy_box || body.buyBox),
       funding_capacity: clean(body.funding_capacity || body.fundingCapacity),
       strategy: clean(body.strategy),
       profile_photo_url: clean(body.profile_photo_url || body.profilePhotoUrl),
+
+      buy_box_states: buyBoxStates,
+      buy_box_types: buyBoxTypes,
+      buy_box_strategies: buyBoxStrategies,
+
+      property_types: buyBoxTypes,
+      asset_types: buyBoxTypes,
+      strategies: buyBoxStrategies,
+
+      needs,
+      deal_needs: needs,
+      what_i_need: needs,
+
+      can_provide: canProvide,
+      what_i_provide: canProvide,
+
       profile_complete: profileComplete,
-      payment_status: clean(body.payment_status) || "unpaid",
-      access_status: profileComplete ? "payment_required" : "locked",
+
+      payment_status: currentPayment || "unpaid",
+      access_status: currentAccess || (profileComplete ? "payment_required" : "locked"),
+
       alert_frequency: clean(body.alert_frequency) || "daily_digest",
       max_alerts_per_day: intValue(body.max_alerts_per_day, 10),
-      alert_types: arr(body.alert_types),
+      alert_types: alertTypes,
+
       updated_at: new Date().toISOString(),
     };
 
     const supabase = supabaseClient();
 
     const tables = ["vf_profiles", "profiles", "member_profiles"];
-    let lastError: any = null;
+    let lastError = "";
     let saved: any = null;
+    let savedTable = "";
+    let savedKeys: string[] = [];
 
     for (const table of tables) {
-      const { data, error } = await supabase
-        .from(table)
-        .upsert(payload, { onConflict: "email" })
-        .select("*")
-        .single();
+      const result = await saveToTable(supabase, table, payload);
 
-      if (!error) {
-        saved = data;
-        lastError = null;
+      if (result.ok) {
+        saved = result.data;
+        savedTable = result.table;
+        savedKeys = result.keys || [];
+        lastError = "";
         break;
       }
 
-      lastError = error;
+      lastError = result.error || `Could not save to ${table}.`;
     }
 
-    if (lastError) {
-      return NextResponse.json({ error: lastError.message, details: lastError }, { status: 500 });
+    if (lastError || !saved) {
+      return NextResponse.json({ error: lastError || "Profile save failed." }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -117,6 +284,11 @@ export async function POST(request: Request) {
       profile: saved,
       profile_complete: profileComplete,
       next_step: profileComplete ? "payment" : "profile",
+      saved_table: savedTable,
+      saved_keys: savedKeys,
+      message: profileComplete
+        ? "Profile complete. Smart routing fields saved."
+        : "Profile saved. Complete required fields to unlock payment step.",
     });
   } catch (error: any) {
     return NextResponse.json(
