@@ -302,12 +302,6 @@ function dealRoomHref(alert: FeedAlert) {
   return `/deal-room/${encodeURIComponent(itemId)}`;
 }
 
-function routingRoomHref(alert: FeedAlert) {
-  const signalId = String(alert.id || "").trim();
-  if (!signalId) return "";
-  return `/routing-room/${encodeURIComponent(signalId)}`;
-}
-
 function StatCard({ label, value, detail, href }: { label: string; value: number | string; detail: string; href: string }) {
   return (
     <Link href={href} style={{ ...card, color: "white", textDecoration: "none", display: "block" }}>
@@ -374,10 +368,6 @@ function AlertCard({ alert }: { alert: FeedAlert }) {
 
       {dealRoomHref(alert) && (
         <Link href={dealRoomHref(alert)} style={ghost}>Open Exact Deal Room</Link>
-      )}
-
-      {routingRoomHref(alert) && (
-        <Link href={routingRoomHref(alert)} style={ghost}>Open Routing Room</Link>
       )}
 
       <Link href={alert.safe_href || "/projects"} style={ghost}>Open Work Area</Link>
@@ -571,6 +561,7 @@ export default function IntelligencePage() {
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <button type="button" onClick={load} style={btn}>Refresh Intelligence</button>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
+            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/submit" style={ghost}>Create Deal</Link>
             <Link href="/pain-submit" style={ghost}>Pain Button</Link>
             <Link href="/projects" style={ghost}>Deal Rooms</Link>
@@ -662,9 +653,17 @@ export default function IntelligencePage() {
               </p>
             </div>
             <div style={card}>
+              <div style={greenEyebrow}>Routing Inbox</div>
+              <p style={muted}>
+                Members can review routed opportunities that admin has logged toward their role/email.
+              </p>
+              <Link href="/routing-inbox" style={btn}>Open Routing Inbox</Link>
+            </div>
+
+            <div style={card}>
               <div style={greenEyebrow}>Current Build Mode</div>
               <p style={muted}>
-                Read-only generation only. This keeps the intelligence layer safe while the data model stabilizes.
+                Read-only generation plus owner-approved routing logs. No automatic dispatch yet.
               </p>
             </div>
           </div>
