@@ -55,6 +55,7 @@ function asArray(value: unknown): string[] {
   if (typeof value === "string" && value.trim()) {
     try {
       const parsed = JSON.parse(value);
+
       if (Array.isArray(parsed)) {
         return parsed.map((item) => clean(item)).filter(Boolean);
       }
@@ -76,7 +77,9 @@ function unique(values: string[]) {
 
   for (const value of values) {
     const text = clean(value);
+
     if (!text) continue;
+
     map.set(text.toLowerCase(), text);
   }
 
@@ -88,7 +91,13 @@ function mergeArrays(...values: unknown[]) {
 }
 
 function timestamp(row: Row) {
-  return new Date(row?.updated_at || row?.modified_at || row?.created_at || row?.inserted_at || 0).getTime();
+  return new Date(
+    row?.updated_at ||
+      row?.modified_at ||
+      row?.created_at ||
+      row?.inserted_at ||
+      0
+  ).getTime();
 }
 
 function pickBest(rows: Row[]) {
@@ -100,8 +109,15 @@ function pickBest(rows: Row[]) {
       return 0;
     };
 
-    const aScore = tableScore(a) + (a.profile_complete ? 10 : 0) + timestamp(a) / 10000000000000;
-    const bScore = tableScore(b) + (b.profile_complete ? 10 : 0) + timestamp(b) / 10000000000000;
+    const aScore =
+      tableScore(a) +
+      (a.profile_complete ? 10 : 0) +
+      timestamp(a) / 10000000000000;
+
+    const bScore =
+      tableScore(b) +
+      (b.profile_complete ? 10 : 0) +
+      timestamp(b) / 10000000000000;
 
     return bScore - aScore;
   });
@@ -170,7 +186,9 @@ function mergeProfiles(rows: Row[]) {
     email: cleanEmail(merged.email || rows[0]?.email),
     full_name: clean(merged.full_name || merged.fullName || merged.name),
     role: clean(merged.role || merged.member_role || memberTypes[0]),
-    member_role: clean(merged.member_role || merged.role || memberTypes[0]),
+    member_role: clean(
+      merged.member_role || merged.role || memberTypes[0]
+    ),
     state: clean(merged.state || buyBoxStates[0] || "Georgia"),
     markets: clean(merged.markets) || buyBoxStates.join(", "),
     member_types: memberTypes,
@@ -192,10 +210,19 @@ function mergeProfiles(rows: Row[]) {
   };
 }
 
-async function findRows(supabase: any, table: string, email: string) {
+async function findRows(
+  supabase: any,
+  table: string,
+  email: string
+) {
   const rows: Row[] = [];
 
-  for (const column of ["email", "member_email", "user_email", "owner_email"]) {
+  for (const column of [
+    "email",
+    "member_email",
+    "user_email",
+    "owner_email",
+  ]) {
     try {
       const { data, error } = await supabase
         .from(table)
@@ -204,7 +231,12 @@ async function findRows(supabase: any, table: string, email: string) {
         .limit(10);
 
       if (!error && Array.isArray(data)) {
-        rows.push(...data.map((row) => ({ ...row, _source_table: table })));
+        rows.push(
+          ...data.map((row) => ({
+            ...row,
+            _source_table: table,
+          }))
+        );
       }
     } catch {
       // Try next column.
@@ -214,10 +246,19 @@ async function findRows(supabase: any, table: string, email: string) {
   const seen = new Set<string>();
 
   return rows.filter((row) => {
-    const key = clean(row.id || row.profile_id || row.auth_user_id || `${table}-${row.email}-${row.updated_at}`);
+    const key = clean(
+      row.id ||
+        row.profile_id ||
+        row.auth_user_id ||
+        `${table}-${row.email}-${row.updated_at}`
+    );
+
     if (!key) return true;
+
     if (seen.has(key)) return false;
+
     seen.add(key);
+
     return true;
   });
 }
@@ -225,16 +266,22 @@ async function findRows(supabase: any, table: string, email: string) {
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
+
     const email =
       cleanEmail(request.headers.get("x-vf-email")) ||
       cleanEmail(url.searchParams.get("email")) ||
       emailFromCookie(request.headers.get("cookie") || "");
 
     if (!email) {
-      return NextResponse.json({ ok: true, profile: null, email: "" });
+      return NextResponse.json({
+        ok: true,
+        profile: null,
+        email: "",
+      });
     }
 
     const supabase = supabaseClient();
+
     if (!supabase) {
       return NextResponse.json({
         ok: true,
@@ -244,8 +291,12 @@ export async function GET(request: Request) {
       });
     }
 
-    const allRowsNested = await Promise.all(TABLES.map((table) => findRows(supabase, table, email)));
+    const allRowsNested = await Promise.all(
+      TABLES.map((table) => findRows(supabase, table, email))
+    );
+
     const rows = allRowsNested.flat();
+
     const profile = mergeProfiles(rows);
 
     if (profile) {
@@ -253,7 +304,7 @@ export async function GET(request: Request) {
         ok: true,
         profile,
         email,
-        table: profile._source_table || "merged",
+        table: (profile as any)._source_table || "merged",
         sources_checked: TABLES,
         rows_found: rows.length,
       });
