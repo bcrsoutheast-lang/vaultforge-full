@@ -24,6 +24,52 @@ type Stats = {
   };
 };
 
+type FeedAlert = {
+  id: string;
+  source: string;
+  alert_type: string;
+  priority: string;
+  score: number;
+  title: string;
+  message: string;
+  member_email?: string;
+  member_name?: string;
+  item_id?: string;
+  item_title?: string;
+  state?: string;
+  market?: string;
+  source_table?: string;
+  safe_href?: string;
+  created_at?: string;
+};
+
+type MarketWindow = {
+  state: string;
+  total_signals: number;
+  pain_signals: number;
+  capital_needed: number;
+  buyer_needed: number;
+  operator_needed: number;
+  status: string;
+};
+
+type Feed = {
+  ok?: boolean;
+  mode?: string;
+  owner?: boolean;
+  alerts?: FeedAlert[];
+  counts?: {
+    profiles?: number;
+    target_profiles?: number;
+    deals?: number;
+    pain?: number;
+    generated_alerts?: number;
+  };
+  market_windows?: MarketWindow[];
+  note?: string;
+  error?: string;
+};
+
 type ControlWindow = {
   code: string;
   title: string;
@@ -274,17 +320,22 @@ function toneColor(tone: ControlWindow["tone"]) {
   return "#f5d978";
 }
 
-function StatCard({
-  label,
-  value,
-  detail,
-  href,
-}: {
-  label: string;
-  value: number | string;
-  detail: string;
-  href: string;
-}) {
+function priorityTone(priority: string) {
+  const p = String(priority || "").toLowerCase();
+  if (p === "urgent") return "#ff9f9f";
+  if (p === "high") return "#f5d978";
+  if (p === "medium") return "#9df3bf";
+  return "#d8b5ff";
+}
+
+function statusTone(status: string) {
+  const s = String(status || "").toLowerCase();
+  if (s === "active") return "#9df3bf";
+  if (s === "watching") return "#f5d978";
+  return "#d8b5ff";
+}
+
+function StatCard({ label, value, detail, href }: { label: string; value: number | string; detail: string; href: string }) {
   return (
     <Link href={href} style={{ ...card, color: "white", textDecoration: "none", display: "block" }}>
       <div style={greenEyebrow}>{label}</div>
@@ -325,6 +376,93 @@ function ControlCard({ window }: { window: ControlWindow }) {
   );
 }
 
+function AlertCard({
+  alert,
+  email,
+  storingId,
+  onStore,
+}: {
+  alert: FeedAlert;
+  email: string;
+  storingId: string;
+  onStore: (alert: FeedAlert) => void;
+}) {
+  const tone = priorityTone(alert.priority);
+
+  return (
+    <article style={{ ...terminal, borderColor: `${tone}66` }}>
+      <div style={{ ...greenEyebrow, color: tone }}>
+        {alert.priority || "signal"} · {alert.alert_type || "opportunity"} · score {alert.score || 0}
+      </div>
+      <h3 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>{alert.title}</h3>
+      <p style={{ ...muted, fontSize: 17 }}>{alert.message}</p>
+
+      <div style={{ margin: "14px 0" }}>
+        {alert.member_name && <span style={chip}>{alert.member_name}</span>}
+        {alert.member_email && <span style={chip}>{alert.member_email}</span>}
+        {alert.state && <span style={chip}>{alert.state}</span>}
+        {alert.market && <span style={chip}>{alert.market}</span>}
+        {alert.source && <span style={chip}>{alert.source}</span>}
+        {alert.source_table && <span style={chip}>{alert.source_table}</span>}
+      </div>
+
+      <Link href={alert.safe_href || "/projects"} style={btn}>Open Work Area</Link>
+
+      <button
+        type="button"
+        style={ghost}
+        disabled={storingId === alert.id}
+        onClick={() => onStore(alert)}
+      >
+        {storingId === alert.id ? "Storing..." : "Store Approved Signal"}
+      </button>
+    </article>
+  );
+}
+
+function MarketRow({ item }: { item: MarketWindow }) {
+  const tone = statusTone(item.status);
+
+  return (
+    <div style={{ ...card, borderColor: `${tone}66` }}>
+      <div style={{ ...greenEyebrow, color: tone }}>{item.state} · {item.status}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <span style={chip}>{item.total_signals} total</span>
+        <span style={chip}>{item.pain_signals} pain</span>
+        <span style={chip}>{item.capital_needed} capital</span>
+        <span style={chip}>{item.buyer_needed} buyer</span>
+        <span style={chip}>{item.operator_needed} operator</span>
+      </div>
+    </div>
+  );
+}
+
+
+async function storeSignal(alert: FeedAlert, email: string) {
+  const res = await fetch("/api/intelligence/store", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-vf-email": email,
+      "x-vf-admin": "1",
+    },
+    body: JSON.stringify({
+      email,
+      owner: "1",
+      admin_email: email,
+      alert,
+    }),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || data?.details || "Could not store signal.");
+  }
+
+  return data;
+}
+
 function Locked() {
   return (
     <main style={page}>
@@ -361,6 +499,9 @@ export default function AdminIntelligencePage() {
     routing: 0,
     activity: 0,
   });
+  const [feed, setFeed] = useState<Feed>({});
+  const [storingId, setStoringId] = useState("");
+  const [storeMessage, setStoreMessage] = useState("");
 
   async function load() {
     setLoading(true);
@@ -376,15 +517,24 @@ export default function AdminIntelligencePage() {
         return;
       }
 
-      const res = await fetch(`/api/dashboard/stats?email=${encodeURIComponent(currentEmail)}&owner=1`, {
-        cache: "no-store",
-        headers: {
-          "x-vf-email": currentEmail,
-          "x-vf-admin": "1",
-        },
-      });
+      const [statsRes, feedRes] = await Promise.all([
+        fetch(`/api/dashboard/stats?email=${encodeURIComponent(currentEmail)}&owner=1`, {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": currentEmail,
+            "x-vf-admin": "1",
+          },
+        }),
+        fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=1`, {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": currentEmail,
+            "x-vf-admin": "1",
+          },
+        }),
+      ]);
 
-      const data = await safeJson(res);
+      const data = await safeJson(statsRes);
       const payload = data?.stats || data || {};
 
       setStats({
@@ -398,8 +548,30 @@ export default function AdminIntelligencePage() {
         activity: Number(payload.activity || 0),
         admin: payload.admin || data?.admin,
       });
+
+      const feedData = await safeJson(feedRes);
+      setFeed(feedData || {});
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleStore(alert: FeedAlert) {
+    if (!owner) {
+      setStoreMessage("Only owner/admin can store approved signals.");
+      return;
+    }
+
+    setStoringId(alert.id);
+    setStoreMessage("Storing approved signal...");
+
+    try {
+      const result = await storeSignal(alert, email);
+      setStoreMessage(result?.message || "Signal stored safely.");
+    } catch (error: any) {
+      setStoreMessage(error?.message || "Could not store signal.");
+    } finally {
+      setStoringId("");
     }
   }
 
@@ -408,6 +580,9 @@ export default function AdminIntelligencePage() {
   }, []);
 
   const admin = useMemo(() => stats.admin || {}, [stats.admin]);
+  const alerts = feed.alerts || [];
+  const urgentAlerts = alerts.filter((alert) => String(alert.priority).toLowerCase() === "urgent");
+  const highAlerts = alerts.filter((alert) => String(alert.priority).toLowerCase() === "high");
 
   if (!loading && !owner) {
     return <Locked />;
@@ -443,15 +618,16 @@ export default function AdminIntelligencePage() {
           <div style={greenEyebrow}>VaultForge Owner Intelligence Control</div>
 
           <h1 style={{ fontSize: "clamp(58px,12vw,108px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            Control tower, not manual labor.
+            Global signal supervision.
           </h1>
 
           <p style={{ ...muted, fontSize: 22 }}>
-            Admin should supervise the intelligence engine, not manually match every deal.
-            This page maps what should automate, what admin should review, and what must stay secured.
+            This now reads the same read-only intelligence feed in owner mode. It gives admin global visibility
+            without writing alerts, changing members, or touching auth.
           </p>
 
           <div className="vf-admin-intel-actions" style={{ marginTop: 18 }}>
+            <button type="button" onClick={load} style={btn}>Refresh Owner Signals</button>
             <Link href="/admin" style={btn}>Admin Home</Link>
             <Link href="/intelligence" style={ghost}>Member Intelligence Map</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
@@ -465,15 +641,33 @@ export default function AdminIntelligencePage() {
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Owner: {email || OWNER_EMAIL}</span>
             <span style={chip}>Admin Controls: Active</span>
-            <span style={chip}>Mode: Intelligence Supervision</span>
+            <span style={chip}>Mode: Read-Only Intelligence Supervision</span>
+            {feed.error && <span style={{ ...chip, color: "#ffd0d0", borderColor: "rgba(255,120,120,.4)" }}>{feed.error}</span>}
           </div>
+
+          {storeMessage && (
+            <p
+              style={{
+                color:
+                  storeMessage.toLowerCase().includes("could not") ||
+                  storeMessage.toLowerCase().includes("only")
+                    ? "#ffd0d0"
+                    : "#9df3bf",
+                fontWeight: 900,
+              }}
+            >
+              {storeMessage}
+            </p>
+          )}
         </section>
 
         <section style={statGrid}>
           <StatCard label="Deals" value={stats.deals} detail="Active deal rooms to score and route." href="/projects" />
           <StatCard label="Members" value={stats.members} detail="Network nodes and routing targets." href="/network" />
-          <StatCard label="Alerts" value={stats.alerts} detail="Generated intelligence alerts." href="/alerts" />
-          <StatCard label="Pain" value={stats.pain} detail="Distress/friction opportunities." href="/pain-submit" />
+          <StatCard label="Generated Signals" value={feed.counts?.generated_alerts || 0} detail="Read-only global intelligence feed." href="/admin-intelligence" />
+          <StatCard label="Urgent Signals" value={urgentAlerts.length} detail="Highest priority review candidates." href="/admin-intelligence" />
+          <StatCard label="High Signals" value={highAlerts.length} detail="Strong opportunity or capital signals." href="/admin-intelligence" />
+          <StatCard label="Pain Inputs" value={feed.counts?.pain || stats.pain} detail="Distress/friction opportunity source." href="/pain-submit" />
           <StatCard label="Locked Members" value={Number(admin.lockedMembers || 0)} detail="Members needing admin/payment/profile action." href="/network" />
           <StatCard label="Active Members" value={Number(admin.activeMembers || 0)} detail="Members currently available to route." href="/network" />
         </section>
@@ -487,6 +681,61 @@ export default function AdminIntelligencePage() {
             Smart Alerts should detect, score, route, and prioritize. Admin should approve edge cases,
             tune thresholds, moderate bad actors, and intervene only where human judgment adds value.
           </p>
+        </section>
+
+        <section style={hero}>
+          <div style={greenEyebrow}>Market Window Health</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            Core state signal map.
+          </h2>
+          <p style={{ ...muted, fontSize: 19 }}>
+            This is based on existing deals and pain records only. Quiet windows mean more data is needed,
+            not that the page is broken.
+          </p>
+        </section>
+
+        <section style={grid}>
+          {(feed.market_windows || []).map((item) => (
+            <MarketRow key={item.state} item={item} />
+          ))}
+        </section>
+
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={greenEyebrow}>Global Read-Only Signal Feed</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            What the intelligence layer sees.
+          </h2>
+          <p style={{ ...muted, fontSize: 19 }}>
+            These are not stored alerts yet. They are generated safely from existing data to prove the signal logic first.
+          </p>
+        </section>
+
+        {alerts.length === 0 ? (
+          <section style={hero}>
+            <strong>No generated owner signals yet.</strong>
+            <p style={muted}>
+              Complete more member profiles, add deal rooms with routing needs, or submit pain signals.
+            </p>
+          </section>
+        ) : (
+          <section style={grid}>
+            {alerts.slice(0, 24).map((alert) => (
+              <AlertCard
+                key={alert.id}
+                alert={alert}
+                email={email}
+                storingId={storingId}
+                onStore={handleStore}
+              />
+            ))}
+          </section>
+        )}
+
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={greenEyebrow}>Control Map</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            What each intelligence system is supposed to do.
+          </h2>
         </section>
 
         <section style={grid}>
