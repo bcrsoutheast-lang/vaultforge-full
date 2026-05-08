@@ -42,6 +42,38 @@ type Signal = {
   raw?: Record<string, any>;
 };
 
+type RelatedItem = {
+  id?: string;
+  title?: string;
+  source_table?: string;
+  item_kind?: string;
+  city?: string;
+  state?: string;
+  county?: string;
+  property_type?: string;
+  strategy?: string;
+  status?: string;
+  asking_price_display?: string;
+  arv_display?: string;
+  repair_estimate_display?: string;
+  beds?: string;
+  baths?: string;
+  square_feet?: string;
+  acres?: string;
+  occupancy?: string;
+  seller_situation?: string;
+  deal_needs?: string[];
+  description?: string;
+  photo_urls?: string[];
+  main_photo_url?: string;
+  safe_href?: string;
+  exact_address?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  private_notes?: string;
+  raw?: Record<string, any>;
+};
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -286,6 +318,7 @@ export default function SignalDetailPage() {
   const [access, setAccess] = useState<Access | null>(null);
   const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
   const [signal, setSignal] = useState<Signal | null>(null);
+  const [relatedItem, setRelatedItem] = useState<RelatedItem | null>(null);
   const [source, setSource] = useState("");
   const [status, setStatus] = useState("Loading signal...");
 
@@ -359,6 +392,22 @@ export default function SignalDetailPage() {
 
       setSignal(found);
       setSource(foundStored ? "stored approved signal" : foundGenerated ? "live generated signal" : "not found");
+
+      const itemId = clean(found?.item_id || found?.deal_id);
+      if (itemId) {
+        const itemRes = await fetch(`/api/intelligence/item/${encodeURIComponent(itemId)}?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": currentEmail,
+            "x-vf-admin": owner ? "1" : "0",
+          },
+        });
+        const itemData = await safeJson(itemRes);
+        setRelatedItem(itemData?.item || null);
+      } else {
+        setRelatedItem(null);
+      }
+
       setLockReason("open");
       setStatus(found ? "" : "Signal not found in current stored or generated feed.");
     } catch (error: any) {
@@ -461,6 +510,68 @@ export default function SignalDetailPage() {
               {owner && <InfoBox label="Matched Member" value={signal.member_name || signal.member_email} />}
               {owner && <InfoBox label="Stored By" value={signal.stored_by} />}
             </section>
+
+            {relatedItem && (
+              <section style={{ ...hero, marginTop: 22 }}>
+                <div style={greenEyebrow}>Related Deal / Pain Object</div>
+                <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+                  {relatedItem.title || "Related item"}
+                </h2>
+
+                {relatedItem.main_photo_url && (
+                  <img
+                    src={relatedItem.main_photo_url}
+                    alt={relatedItem.title || "Related item"}
+                    style={{
+                      width: "100%",
+                      maxHeight: 360,
+                      objectFit: "cover",
+                      borderRadius: 24,
+                      border: "1px solid rgba(255,255,255,.16)",
+                      marginBottom: 18,
+                    }}
+                  />
+                )}
+
+                <p style={{ ...muted, fontSize: 19 }}>
+                  {relatedItem.description || "This is the real item behind the signal when VaultForge can match the item id."}
+                </p>
+
+                <div style={{ margin: "16px 0" }}>
+                  {relatedItem.source_table && <span style={chip}>{relatedItem.source_table}</span>}
+                  {relatedItem.item_kind && <span style={chip}>{relatedItem.item_kind}</span>}
+                  {relatedItem.state && <span style={chip}>{relatedItem.state}</span>}
+                  {relatedItem.city && <span style={chip}>{relatedItem.city}</span>}
+                  {relatedItem.property_type && <span style={chip}>{relatedItem.property_type}</span>}
+                  {relatedItem.strategy && <span style={chip}>{relatedItem.strategy}</span>}
+                  {relatedItem.status && <span style={chip}>{relatedItem.status}</span>}
+                </div>
+
+                <section style={grid}>
+                  <InfoBox label="Asking Price" value={relatedItem.asking_price_display} />
+                  <InfoBox label="ARV / Value" value={relatedItem.arv_display} />
+                  <InfoBox label="Repairs" value={relatedItem.repair_estimate_display} />
+                  <InfoBox label="Beds / Baths" value={[relatedItem.beds, relatedItem.baths].filter(Boolean).join(" / ")} />
+                  <InfoBox label="Square Feet" value={relatedItem.square_feet} />
+                  <InfoBox label="Acres" value={relatedItem.acres} />
+                  <InfoBox label="Occupancy" value={relatedItem.occupancy} />
+                  <InfoBox label="Seller Situation" value={relatedItem.seller_situation} />
+                  {owner && <InfoBox label="Exact Address" value={relatedItem.exact_address} />}
+                  {owner && <InfoBox label="Contact Email" value={relatedItem.contact_email} />}
+                  {owner && <InfoBox label="Contact Phone" value={relatedItem.contact_phone} />}
+                  {owner && <InfoBox label="Private Notes" value={relatedItem.private_notes} />}
+                </section>
+
+                {(relatedItem.deal_needs || []).length > 0 && (
+                  <div style={{ marginTop: 18 }}>
+                    <div style={greenEyebrow}>Deal Needs</div>
+                    {(relatedItem.deal_needs || []).map((need) => (
+                      <span key={need} style={chip}>{need}</span>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             <section style={{ ...hero, marginTop: 22 }}>
               <div style={greenEyebrow}>Execution Layer</div>
