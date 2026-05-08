@@ -276,6 +276,12 @@ function detailHref(signal: Signal) {
   return "/projects";
 }
 
+function dealRoomHref(signal: Signal) {
+  const itemId = clean(signal.item_id || signal.deal_id);
+  if (!itemId) return "";
+  return `/deal-room/${encodeURIComponent(itemId)}`;
+}
+
 function InfoBox({ label, value }: { label: string; value: string | number | undefined }) {
   return (
     <div style={card}>
@@ -480,7 +486,8 @@ export default function SignalDetailPage() {
             <Link href="/alerts" style={ghost}>Back to Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
-            {signal && <Link href={detailHref(signal)} style={btn}>Open Related Work Area</Link>}
+            {signal && dealRoomHref(signal) && <Link href={dealRoomHref(signal)} style={btn}>Open Exact Deal Room</Link>}
+            {signal && <Link href={detailHref(signal)} style={ghost}>Open Related Work Area</Link>}
             {signal?.deal_id && <Link href={`/projects?focus=${encodeURIComponent(signal.deal_id)}`} style={ghost}>Open Deal Focus</Link>}
             <button type="button" onClick={load} style={ghost}>Refresh Signal</button>
             <Link href="/logout" style={danger}>Logout</Link>
@@ -579,8 +586,9 @@ export default function SignalDetailPage() {
                 This is the exact signal object.
               </h2>
               <p style={{ ...muted, fontSize: 19 }}>
-                Next layers can attach this signal to a deal room, capital room, buyer match room,
-                operator-needed room, or pain thread. For now, this page gives VaultForge a stable exact-detail destination.
+                This signal can now open its exact Deal Room when the signal includes a real item id.
+                Next layers can add capital rooms, buyer match rooms, operator-needed rooms, pain threads,
+                comments, and notification history.
               </p>
             </section>
 
