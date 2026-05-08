@@ -64,10 +64,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1020,
-  margin: "0 auto",
-};
+const wrap: React.CSSProperties = { maxWidth: 1020, margin: "0 auto" };
 
 const panel: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.14)",
@@ -144,17 +141,8 @@ const ghost: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const activeChoice: React.CSSProperties = {
-  ...btn,
-  width: "100%",
-  margin: 0,
-};
-
-const inactiveChoice: React.CSSProperties = {
-  ...ghost,
-  width: "100%",
-  margin: 0,
-};
+const activeChoice: React.CSSProperties = { ...btn, width: "100%", margin: 0 };
+const inactiveChoice: React.CSSProperties = { ...ghost, width: "100%", margin: 0 };
 
 const eyebrow: React.CSSProperties = {
   color: "#ff9f9f",
@@ -193,12 +181,40 @@ function getEmail() {
   }
 }
 
-function toDataUrl(file: File) {
+function compressImage(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
 
-    reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(new Error("Could not read image file."));
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onerror = () => reject(new Error("Could not process image file."));
+
+      img.onload = () => {
+        const maxSide = 900;
+        const ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * ratio));
+        const height = Math.max(1, Math.round(img.height * ratio));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Could not prepare image upload."));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
+      };
+
+      img.src = String(reader.result || "");
+    };
+
     reader.readAsDataURL(file);
   });
 }
@@ -253,8 +269,10 @@ export default function PainSubmitPage() {
     const next = Array.from(files).slice(0, Math.max(0, 6 - photos.length));
 
     try {
-      const urls = await Promise.all(next.map(toDataUrl));
+      setStatus("Compressing photos...");
+      const urls = await Promise.all(next.map(compressImage));
       setPhotos((current) => [...current, ...urls].slice(0, 6));
+      setStatus(`${urls.length} photo${urls.length === 1 ? "" : "s"} ready.`);
     } catch (error: any) {
       setStatus(error?.message || "Could not upload image preview.");
     }
@@ -283,6 +301,8 @@ export default function PainSubmitPage() {
           ...form,
           member_email: email,
           photo_urls: photos,
+          photos,
+          image_urls: photos,
           ai_summary: [
             `${form.asset_type} pain signal.`,
             form.bedrooms ? `${form.bedrooms} bedrooms.` : "",
@@ -563,7 +583,7 @@ export default function PainSubmitPage() {
         <section style={panel}>
           <div style={eyebrow}>Photo Upload</div>
           <p style={muted}>
-            Add up to 6 photos. This uses browser upload previews and stores them with the distress signal.
+            Add up to 6 photos. Photos are compressed before saving so they can display in the Pain Feed.
           </p>
 
           <input
@@ -583,7 +603,7 @@ export default function PainSubmitPage() {
             <section style={{ ...grid, marginTop: 14 }}>
               {photos.map((src, index) => (
                 <div key={`${src.slice(0, 20)}-${index}`}>
-                  <img src={src} alt={`Pain upload ${index + 1}`} style={thumb} />
+                  <img src={src} alt={`Pain upload ${index + 1}`} style={{ width: "100%", height: 150, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(255,255,255,.14)" }} />
                   <button
                     type="button"
                     onClick={() => setPhotos((current) => current.filter((_, i) => i !== index))}
@@ -608,7 +628,7 @@ export default function PainSubmitPage() {
           </button>
 
           {status && (
-            <p style={{ color: status.toLowerCase().includes("routed") ? "#9df3bf" : "#ffd0d0", fontWeight: 950 }}>
+            <p style={{ color: status.toLowerCase().includes("routed") || status.toLowerCase().includes("ready") ? "#9df3bf" : "#ffd0d0", fontWeight: 950 }}>
               {status}
             </p>
           )}
