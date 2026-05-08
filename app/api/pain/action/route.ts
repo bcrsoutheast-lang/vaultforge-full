@@ -90,6 +90,14 @@ function removeValue(list: string[], email: string) {
   return list.filter((item) => item !== email);
 }
 
+async function logActivity(supabase: any, payload: Record<string, any>) {
+  try {
+    await supabase.from("vf_activity_events").insert(payload);
+  } catch {
+    // Activity logging is best-effort and must never break the main pain action.
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -172,7 +180,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: error.message, details: error }, { status: 500 });
     }
 
-    await supabase.from("vf_activity_events").insert({
+    await logActivity(supabase, {
       event_type: `pain_${action}`,
       event_title: `Pain signal ${action}`,
       event_description: `${email} performed ${action} on ${current.title || current.pain_type || "pain signal"}.`,
@@ -186,7 +194,7 @@ export async function POST(request: Request) {
         action,
         note,
       },
-    }).catch(() => null);
+    });
 
     return NextResponse.json({
       ok: true,
