@@ -26,6 +26,7 @@ const MEMBER_TYPE_OPTIONS = [
   "Seller",
   "Lender",
   "Private Money",
+  "Hard Money Lender",
   "Wholesaler",
   "Contractor",
   "Developer",
@@ -36,6 +37,10 @@ const MEMBER_TYPE_OPTIONS = [
   "JV Partner",
   "Investor",
   "Deal Source",
+  "Title / Attorney",
+  "Insurance",
+  "Builder",
+  "Land Specialist",
 ];
 
 const PROPERTY_TYPE_OPTIONS = [
@@ -49,6 +54,11 @@ const PROPERTY_TYPE_OPTIONS = [
   "Mixed Use",
   "Rental",
   "Short-Term Rental",
+  "Builder Lot",
+  "RV Park",
+  "Raw Land",
+  "Office",
+  "Retail",
 ];
 
 const STRATEGY_OPTIONS = [
@@ -64,38 +74,77 @@ const STRATEGY_OPTIONS = [
   "Airbnb",
   "Distressed",
   "Equity Play",
+  "Value Add",
+  "Ground Up",
+  "Subdivision",
+  "Entitlement",
+  "Builder Lot",
+  "Partner / JV",
 ];
 
 const NEED_OPTIONS = [
   "Funding",
   "Buyer Needed",
+  "Lender Needed",
+  "Private Capital Needed",
   "Seller Leads",
   "Contractor Needed",
-  "JV Partner",
   "Operator Needed",
+  "JV Partner",
+  "JV Partner Needed",
+  "Wholesaler Needed",
+  "Realtor Needed",
+  "Title / Attorney Needed",
+  "Property Manager Needed",
+  "Insurance Help Needed",
+  "Permit Help Needed",
   "Off-Market Deals",
   "Disposition Help",
   "Due Diligence",
   "Property Management",
   "Title/Closing Help",
   "Creative Finance",
+  "Stalled Project Help",
+  "Funding Gap Help",
 ];
 
 const CAN_PROVIDE_OPTIONS = [
   "Cash Buyer",
   "Private Lending",
   "Hard Money",
+  "Capital",
   "Contractor Crew",
   "Deal Sourcing",
   "Disposition",
   "Project Management",
   "Construction",
+  "Operator Support",
+  "JV Equity",
   "Realtor Access",
   "MLS Access",
   "Wholesaling",
   "Land Development",
   "Commercial Analysis",
   "Local Market Knowledge",
+  "Title / Attorney Help",
+  "Permit Help",
+  "Property Management",
+  "Insurance Help",
+];
+
+const DISTRESS_SIGNAL_OPTIONS = [
+  "Behind Payments",
+  "Inherited Property",
+  "Vacant Property",
+  "Tired Landlord",
+  "Code Violations",
+  "Tax Pressure",
+  "Divorce / Probate",
+  "Stalled Construction",
+  "Contractor Problem",
+  "Funding Gap",
+  "Permit Delay",
+  "Needs Fast Close",
 ];
 
 const ALERT_TYPE_OPTIONS = [
@@ -103,14 +152,18 @@ const ALERT_TYPE_OPTIONS = [
   "New deal in my market",
   "Buyer match",
   "Funding match",
+  "Capital match",
+  "Lender match",
   "Contractor/operator match",
   "JV opportunity",
   "Distressed opportunity",
+  "Pain signal",
   "High-margin deal",
   "Someone saves my deal",
   "Someone messages me",
   "Price drop or status change",
   "AI opportunity signal",
+  "Routing notice",
 ];
 
 const ALERT_FREQUENCIES = [
@@ -253,6 +306,15 @@ function getEmail() {
     .toLowerCase();
 }
 
+function normalizeChip(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/\s*-\s*/g, "-");
+}
+
 function asArray(value: any): string[] {
   if (Array.isArray(value)) return value.map(String).map((x) => x.trim()).filter(Boolean);
 
@@ -271,6 +333,18 @@ function asArray(value: any): string[] {
   }
 
   return [];
+}
+
+function uniqueList(values: string[]) {
+  const map = new Map<string, string>();
+
+  for (const value of values) {
+    const cleanValue = String(value || "").trim();
+    if (!cleanValue) continue;
+    map.set(normalizeChip(cleanValue), cleanValue);
+  }
+
+  return Array.from(map.values());
 }
 
 function joinList(value: any) {
@@ -337,8 +411,15 @@ function supabaseBrowserClient() {
 }
 
 function toggleInList(list: string[], value: string) {
-  if (list.includes(value)) return list.filter((item) => item !== value);
-  return [...list, value];
+  const normalizedValue = normalizeChip(value);
+  const exists = list.some((item) => normalizeChip(item) === normalizedValue);
+
+  if (exists) return list.filter((item) => normalizeChip(item) !== normalizedValue);
+  return uniqueList([...list, value]);
+}
+
+function mergeOptions(base: string[], selected: string[]) {
+  return uniqueList([...base, ...selected]);
 }
 
 export default function ProfilePage() {
@@ -357,13 +438,14 @@ export default function ProfilePage() {
     profile_photo_url: "",
     alert_frequency: "daily_digest",
     max_alerts_per_day: "10",
-    alert_types: ["Deal matches my buy box", "Someone messages me", "Funding needed"],
+    alert_types: ["Deal matches my buy box", "Someone messages me", "Funding match"],
     member_types: ["Buyer"],
     buy_box_states: ["Georgia"],
     buy_box_types: [],
     buy_box_strategies: [],
     needs: [],
     can_provide: [],
+    distress_signals: [],
   });
 
   const [status, setStatus] = useState("Loading profile...");
@@ -455,12 +537,14 @@ export default function ProfilePage() {
       const data = await res.json();
       const profile = data?.profile || {};
 
-      const loadedMemberTypes = asArray(profile.member_types || profile.memberTypes);
-      const loadedStates = asArray(profile.buy_box_states || profile.markets || profile.market_states);
+      const loadedMemberTypes = asArray(profile.member_types || profile.memberTypes || profile.role || profile.member_role);
+      const loadedStates = asArray(profile.buy_box_states || profile.market_states || profile.markets || profile.state);
       const loadedTypes = asArray(profile.buy_box_types || profile.property_types || profile.asset_types);
-      const loadedStrategies = asArray(profile.buy_box_strategies || profile.strategies);
+      const loadedStrategies = asArray(profile.buy_box_strategies || profile.strategies || profile.strategy);
       const loadedNeeds = asArray(profile.needs || profile.deal_needs || profile.what_i_need);
       const loadedProvide = asArray(profile.can_provide || profile.what_i_provide);
+      const loadedDistress = asArray(profile.distress_signals || profile.pain_signals || profile.problem_signals);
+      const loadedAlerts = asArray(profile.alert_types);
 
       setForm({
         email: profile.email || email,
@@ -471,21 +555,22 @@ export default function ProfilePage() {
         city: profile.city || "",
         state: profile.state || loadedStates[0] || "Georgia",
         markets: profile.markets || joinList(loadedStates),
-        member_types: loadedMemberTypes.length ? loadedMemberTypes : asArray(profile.role || profile.member_role),
+        member_types: loadedMemberTypes.length ? loadedMemberTypes : ["Buyer"],
         buy_box: profile.buy_box || profile.buyBox || "",
         funding_capacity: profile.funding_capacity || profile.fundingCapacity || "",
         strategy: profile.strategy || "",
         profile_photo_url: profile.profile_photo_url || profile.profilePhotoUrl || "",
         alert_frequency: profile.alert_frequency || "daily_digest",
         max_alerts_per_day: String(profile.max_alerts_per_day || 10),
-        alert_types: asArray(profile.alert_types).length
-          ? asArray(profile.alert_types)
-          : ["Deal matches my buy box", "Someone messages me", "Funding needed"],
+        alert_types: loadedAlerts.length
+          ? loadedAlerts
+          : ["Deal matches my buy box", "Someone messages me", "Funding match"],
         buy_box_states: loadedStates.length ? loadedStates : [profile.state || "Georgia"],
         buy_box_types: loadedTypes,
         buy_box_strategies: loadedStrategies,
         needs: loadedNeeds,
         can_provide: loadedProvide,
+        distress_signals: loadedDistress,
       });
 
       setComplete(Boolean(profile.profile_complete));
@@ -510,15 +595,21 @@ export default function ProfilePage() {
         member_role: primaryRole,
         state: form.state || asArray(form.buy_box_states)[0] || "Georgia",
         markets: joinList(form.buy_box_states),
+        market_states: asArray(form.buy_box_states),
         member_types: asArray(form.member_types),
         buy_box_states: asArray(form.buy_box_states),
         buy_box_types: asArray(form.buy_box_types),
+        property_types: asArray(form.buy_box_types),
+        asset_types: asArray(form.buy_box_types),
         buy_box_strategies: asArray(form.buy_box_strategies),
+        strategies: asArray(form.buy_box_strategies),
         needs: asArray(form.needs),
         deal_needs: asArray(form.needs),
         what_i_need: asArray(form.needs),
         can_provide: asArray(form.can_provide),
         what_i_provide: asArray(form.can_provide),
+        distress_signals: asArray(form.distress_signals),
+        pain_signals: asArray(form.distress_signals),
         alert_types: asArray(form.alert_types),
         max_alerts_per_day: Number(form.max_alerts_per_day || 10),
       };
@@ -541,10 +632,11 @@ export default function ProfilePage() {
       setComplete(Boolean(data?.profile_complete));
       setStatus(
         data?.profile_complete
-          ? "Profile complete. Smart routing is now stronger."
+          ? "Profile complete. Smart routing fields saved."
           : "Profile saved. Complete required fields to unlock payment step."
       );
 
+      await loadProfile();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error: any) {
       setStatus(error?.message || "Could not save profile.");
@@ -556,6 +648,15 @@ export default function ProfilePage() {
   useEffect(() => {
     loadProfile();
   }, []);
+
+  const memberTypeOptions = mergeOptions(MEMBER_TYPE_OPTIONS, asArray(form.member_types));
+  const stateOptions = mergeOptions(STATE_OPTIONS, asArray(form.buy_box_states));
+  const typeOptions = mergeOptions(PROPERTY_TYPE_OPTIONS, asArray(form.buy_box_types));
+  const strategyOptions = mergeOptions(STRATEGY_OPTIONS, asArray(form.buy_box_strategies));
+  const needOptions = mergeOptions(NEED_OPTIONS, asArray(form.needs));
+  const provideOptions = mergeOptions(CAN_PROVIDE_OPTIONS, asArray(form.can_provide));
+  const alertOptions = mergeOptions(ALERT_TYPE_OPTIONS, asArray(form.alert_types));
+  const distressOptions = mergeOptions(DISTRESS_SIGNAL_OPTIONS, asArray(form.distress_signals));
 
   return (
     <main style={page}>
@@ -572,8 +673,8 @@ export default function ProfilePage() {
             Train your VaultForge engine.
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
-            Your profile now powers smart alerts, member routing, deal matching, buy-box intelligence,
-            market signals, and future AI recommendations.
+            Your profile powers smart alerts, member routing, deal matching, buy-box intelligence,
+            market signals, pain routing, and future AI recommendations.
           </p>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/alerts" style={ghost}>Alerts</Link>
@@ -653,7 +754,7 @@ export default function ProfilePage() {
           </p>
           <ChipGroup
             values={form.member_types}
-            options={MEMBER_TYPE_OPTIONS}
+            options={memberTypeOptions}
             onToggle={(value) => toggle("member_types", value)}
           />
         </section>
@@ -665,7 +766,7 @@ export default function ProfilePage() {
           </p>
           <ChipGroup
             values={form.buy_box_states}
-            options={STATE_OPTIONS}
+            options={stateOptions}
             onToggle={(value) => toggle("buy_box_states", value)}
           />
           <div style={{ marginTop: 16 }}>
@@ -685,7 +786,7 @@ export default function ProfilePage() {
           </p>
           <ChipGroup
             values={form.buy_box_types}
-            options={PROPERTY_TYPE_OPTIONS}
+            options={typeOptions}
             onToggle={(value) => toggle("buy_box_types", value)}
           />
         </section>
@@ -697,7 +798,7 @@ export default function ProfilePage() {
           </p>
           <ChipGroup
             values={form.buy_box_strategies}
-            options={STRATEGY_OPTIONS}
+            options={strategyOptions}
             onToggle={(value) => toggle("buy_box_strategies", value)}
           />
         </section>
@@ -709,7 +810,7 @@ export default function ProfilePage() {
           </p>
           <ChipGroup
             values={form.needs}
-            options={NEED_OPTIONS}
+            options={needOptions}
             onToggle={(value) => toggle("needs", value)}
           />
         </section>
@@ -721,8 +822,20 @@ export default function ProfilePage() {
           </p>
           <ChipGroup
             values={form.can_provide}
-            options={CAN_PROVIDE_OPTIONS}
+            options={provideOptions}
             onToggle={(value) => toggle("can_provide", value)}
+          />
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Pain / Distress Signals</div>
+          <p style={muted}>
+            Choose the pain signals you can help with or want to be alerted about.
+          </p>
+          <ChipGroup
+            values={form.distress_signals}
+            options={distressOptions}
+            onToggle={(value) => toggle("distress_signals", value)}
           />
         </section>
 
@@ -773,7 +886,7 @@ export default function ProfilePage() {
             <div style={label}>Alert Types</div>
             <ChipGroup
               values={form.alert_types}
-              options={ALERT_TYPE_OPTIONS}
+              options={alertOptions}
               onToggle={(value) => toggle("alert_types", value)}
             />
           </div>
@@ -853,11 +966,12 @@ function ChipGroup({
   onToggle: (value: string) => void;
 }) {
   const selected = asArray(values);
+  const selectedSet = new Set(selected.map(normalizeChip));
 
   return (
     <div style={chipWrap}>
       {options.map((option) => {
-        const active = selected.includes(option);
+        const active = selectedSet.has(normalizeChip(option));
 
         return (
           <button
@@ -866,16 +980,17 @@ function ChipGroup({
             onClick={() => onToggle(option)}
             style={{
               border: active
-                ? "1px solid rgba(157,243,191,.70)"
+                ? "1px solid rgba(157,243,191,.85)"
                 : "1px solid rgba(255,255,255,.16)",
               background: active
-                ? "rgba(157,243,191,.14)"
+                ? "linear-gradient(135deg, rgba(157,243,191,.22), rgba(181,92,255,.14))"
                 : "rgba(255,255,255,.04)",
               color: active ? "#9df3bf" : "white",
               borderRadius: 999,
               padding: "11px 14px",
               fontWeight: 900,
               cursor: "pointer",
+              boxShadow: active ? "0 0 0 1px rgba(157,243,191,.18) inset" : "none",
             }}
           >
             {active ? "✓ " : ""}
