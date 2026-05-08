@@ -163,6 +163,43 @@ async function safeJson(res: Response) {
   }
 }
 
+async function saveResponse({
+  email,
+  action,
+  response,
+}: {
+  email: string;
+  action: RoutingAction;
+  response: string;
+}) {
+  const res = await fetch("/api/routing/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-vf-email": email,
+    },
+    body: JSON.stringify({
+      email,
+      signal_id: action.signal_id,
+      action_id: action.id,
+      item_id: action.item_id,
+      title: action.title,
+      priority: action.priority,
+      source: "routing_inbox",
+      response,
+      note: action.note,
+    }),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || data?.details || "Could not save routing response.");
+  }
+
+  return data;
+}
+
 function Stat({
   label,
   value,
@@ -185,6 +222,8 @@ export default function RoutingInboxPage() {
   const [email, setEmail] = useState("");
   const [actions, setActions] = useState<RoutingAction[]>([]);
   const [status, setStatus] = useState("Loading routing inbox...");
+  const [responseBusy, setResponseBusy] = useState("");
+  const [responseMessage, setResponseMessage] = useState("");
 
   async function load() {
     try {
@@ -234,6 +273,27 @@ export default function RoutingInboxPage() {
     };
   }, [actions]);
 
+  async function handleResponse(action: RoutingAction, response: string) {
+    try {
+      const email = getEmail();
+
+      setResponseBusy(`${action.id}-${response}`);
+      setResponseMessage("Saving routing response...");
+
+      const result = await saveResponse({
+        email,
+        action,
+        response,
+      });
+
+      setResponseMessage(result?.message || "Routing response saved safely.");
+    } catch (error: any) {
+      setResponseMessage(error?.message || "Could not save routing response.");
+    } finally {
+      setResponseBusy("");
+    }
+  }
+
   return (
     <main style={page}>
       <div style={wrap}>
@@ -259,6 +319,20 @@ export default function RoutingInboxPage() {
           {status && (
             <p style={{ color: "#f5d978", fontWeight: 900 }}>
               {status}
+            </p>
+          )}
+
+          {responseMessage && (
+            <p
+              style={{
+                color:
+                  responseMessage.toLowerCase().includes("could not")
+                    ? "#ffd0d0"
+                    : "#9df3bf",
+                fontWeight: 900,
+              }}
+            >
+              {responseMessage}
             </p>
           )}
         </section>
@@ -324,6 +398,63 @@ export default function RoutingInboxPage() {
                     Open Deal Room
                   </Link>
                 )}
+
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    style={btn}
+                    disabled={!!responseBusy}
+                    onClick={() => handleResponse(action, "interested")}
+                  >
+                    {responseBusy === `${action.id}-interested`
+                      ? "Saving..."
+                      : "Interested"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!responseBusy}
+                    onClick={() => handleResponse(action, "need_more_info")}
+                  >
+                    {responseBusy === `${action.id}-need_more_info`
+                      ? "Saving..."
+                      : "Need More Info"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!responseBusy}
+                    onClick={() => handleResponse(action, "request_call")}
+                  >
+                    {responseBusy === `${action.id}-request_call`
+                      ? "Saving..."
+                      : "Request Call"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!responseBusy}
+                    onClick={() => handleResponse(action, "request_intro")}
+                  >
+                    {responseBusy === `${action.id}-request_intro`
+                      ? "Saving..."
+                      : "Request Intro"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!responseBusy}
+                    onClick={() => handleResponse(action, "pass")}
+                  >
+                    {responseBusy === `${action.id}-pass`
+                      ? "Saving..."
+                      : "Pass"}
+                  </button>
+                </div>
               </article>
             ))}
           </section>
