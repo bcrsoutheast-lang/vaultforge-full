@@ -109,6 +109,16 @@ const WINDOWS: ControlWindow[] = [
     tone: "green",
   },
   {
+    code: "ACTIONS",
+    title: "Routing Action Log",
+    purpose: "Shows owner/admin decisions logged from routing rooms: buyer, lender, operator, contractor, watch, and needs review.",
+    automatedJob: "No automatic dispatch yet. This is a safe audit trail before automation.",
+    adminJob: "Review logged routing decisions and open the exact routing room, signal, or deal room.",
+    risk: "Must remain owner-only until member-specific action visibility is finalized.",
+    href: "/admin-routing",
+    tone: "gold",
+  },
+  {
     code: "MEMBERS",
     title: "Member Intelligence Graph",
     purpose: "Tracks buyers, lenders, sellers, contractors, operators, developers, and deal sources.",
@@ -342,18 +352,6 @@ function priorityTone(priority: string) {
   if (p === "high") return "#f5d978";
   if (p === "medium") return "#9df3bf";
   return "#d8b5ff";
-}
-
-function dealRoomHref(alert: FeedAlert) {
-  const itemId = String(alert.item_id || "").trim();
-  if (!itemId) return "";
-  return `/deal-room/${encodeURIComponent(itemId)}`;
-}
-
-function routingRoomHref(alert: FeedAlert) {
-  const signalId = String(alert.id || "").trim();
-  if (!signalId) return "";
-  return `/routing-room/${encodeURIComponent(signalId)}`;
 }
 
 function statusTone(status: string) {
@@ -677,6 +675,7 @@ export default function AdminIntelligencePage() {
           <div className="vf-admin-intel-actions" style={{ marginTop: 18 }}>
             <button type="button" onClick={load} style={btn}>Refresh Owner Signals</button>
             <Link href="/admin" style={btn}>Admin Home</Link>
+            <Link href="/admin-routing" style={btn}>Admin Routing</Link>
             <Link href="/intelligence" style={ghost}>Member Intelligence Map</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/network" style={ghost}>Network</Link>
