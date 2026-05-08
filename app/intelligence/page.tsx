@@ -27,97 +27,94 @@ type Stats = {
   activity: number;
 };
 
-type MarketWindow = {
-  code: string;
+type FeedAlert = {
+  id: string;
+  source: string;
+  alert_type: string;
+  priority: string;
+  score: number;
   title: string;
-  region: string;
-  thesis: string;
-  signal: string;
-  feeds: string[];
-  memberUse: string;
-  adminUse: string;
-  href: string;
-  tone: "gold" | "green" | "purple" | "red";
+  message: string;
+  member_email?: string;
+  member_name?: string;
+  item_id?: string;
+  item_title?: string;
+  state?: string;
+  market?: string;
+  source_table?: string;
+  safe_href?: string;
+  created_at?: string;
 };
 
-const MARKETS: MarketWindow[] = [
+type MarketWindow = {
+  state: string;
+  total_signals: number;
+  pain_signals: number;
+  capital_needed: number;
+  buyer_needed: number;
+  operator_needed: number;
+  status: string;
+};
+
+type Feed = {
+  ok?: boolean;
+  mode?: string;
+  owner?: boolean;
+  alerts?: FeedAlert[];
+  counts?: {
+    profiles?: number;
+    target_profiles?: number;
+    deals?: number;
+    pain?: number;
+    generated_alerts?: number;
+  };
+  market_windows?: MarketWindow[];
+  note?: string;
+  error?: string;
+};
+
+const STATIC_WINDOWS = [
   {
+    state: "Georgia",
     code: "GA-FLIP",
     title: "Georgia Flip Demand",
-    region: "Georgia / Atlanta Metro / Northwest GA",
-    thesis:
-      "Tracks rehab demand, distressed inventory, buyer appetite, contractor need, and lender pressure in Georgia flip corridors.",
-    signal: "Flip pressure, buyer demand, rehab execution, capital need",
-    feeds: ["Fix & Flip", "Buyer Match", "Contractor Need", "Funding Gap", "Pain Signal"],
-    memberUse: "Members see Georgia opportunities, buyer/lender/operator fits, and saved deal intelligence.",
-    adminUse: "Owner monitors demand spikes, stuck deals, capital gaps, and high-priority routing.",
+    thesis: "Rehab demand, distressed inventory, buyer appetite, contractor need, and lender pressure.",
     href: "/alerts",
-    tone: "green",
   },
   {
+    state: "Tennessee",
     code: "TN-LAND",
     title: "Tennessee Land Watch",
-    region: "Tennessee / Growth Corridors / Builder Markets",
-    thesis:
-      "Tracks acreage, builder lots, entitlement opportunities, zoning signals, and development pressure.",
-    signal: "Land absorption, builder demand, entitlement pressure",
-    feeds: ["Land", "Builder Lot", "Entitlement", "Development", "Capital Match"],
-    memberUse: "Members see land/development signals tied to their buy box and role.",
-    adminUse: "Owner watches zoning, builder demand, and development partner gaps.",
+    thesis: "Acreage, builder lots, entitlement opportunities, zoning signals, and development pressure.",
     href: "/projects",
-    tone: "purple",
   },
   {
+    state: "Alabama",
     code: "AL-DISTRESS",
     title: "Alabama Distress Corridor",
-    region: "Alabama / Secondary Markets / Pain Signals",
-    thesis:
-      "Tracks distressed sellers, stalled rehabs, funding gaps, contractor problems, and rescue opportunities.",
-    signal: "Pain, urgency, lender need, contractor shortage",
-    feeds: ["Pain Button", "Funding Gap", "Contractor Needed", "JV Needed", "Urgent"],
-    memberUse: "Members see rescue opportunities only when their profile says they can help.",
-    adminUse: "Owner identifies high-friction opportunities and routes support fast.",
+    thesis: "Distressed sellers, stalled rehabs, funding gaps, contractor problems, and rescue opportunities.",
     href: "/pain-submit",
-    tone: "red",
   },
   {
+    state: "Florida",
     code: "FL-BUYER",
     title: "Florida Buyer Demand",
-    region: "Florida / Investor Demand / High Velocity",
-    thesis:
-      "Tracks buyer appetite, rental demand, capital movement, short-term rental interest, and disposition pressure.",
-    signal: "Buyer surge, rental demand, disposition opportunity",
-    feeds: ["Buyer Match", "Short-Term Rental", "Cash Buyer", "Disposition", "Funding"],
-    memberUse: "Members see matched Florida opportunities and buyer demand signals.",
-    adminUse: "Owner watches buyer demand and routes deals to active capital/buyers.",
+    thesis: "Buyer appetite, rental demand, capital movement, short-term rental interest, and disposition pressure.",
     href: "/buy-bucket",
-    tone: "gold",
   },
   {
-    code: "CAR-MF",
+    state: "North Carolina",
+    code: "NC-SC-MF",
     title: "Carolinas Multifamily Value Add",
-    region: "North Carolina / South Carolina / Multifamily",
-    thesis:
-      "Tracks multifamily value-add demand, operator gaps, lender appetite, and rent-growth corridors.",
-    signal: "Multifamily, operator demand, capital fit",
-    feeds: ["Multifamily", "Value Add", "Operator Match", "Capital Match", "Messages"],
-    memberUse: "Members see larger deal signals based on capital, market, and operator profile.",
-    adminUse: "Owner sees where operators, lenders, and buyers need to be connected.",
+    thesis: "Multifamily value-add demand, operator gaps, lender appetite, and rent-growth corridors.",
     href: "/network",
-    tone: "green",
   },
   {
+    state: "Texas",
     code: "TX-CAP",
     title: "Texas Capital & Land Flow",
-    region: "Texas / Land / Capital / Scale",
-    thesis:
-      "Tracks larger capital needs, land plays, development demand, private money, and investor flow.",
-    signal: "Capital demand, land flow, scale opportunities",
-    feeds: ["Private Money", "Land", "Development", "JV Equity", "Investor Demand"],
-    memberUse: "Members see opportunities matching their capital, strategy, and state preferences.",
-    adminUse: "Owner monitors larger capital gaps, scale plays, and partnership opportunities.",
+    thesis: "Larger capital needs, land plays, development demand, private money, and investor flow.",
     href: "/alerts",
-    tone: "purple",
   },
 ];
 
@@ -130,10 +127,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1240,
-  margin: "0 auto",
-};
+const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.34)",
@@ -221,10 +215,7 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-const greenEyebrow: React.CSSProperties = {
-  ...eyebrow,
-  color: "#9df3bf",
-};
+const greenEyebrow: React.CSSProperties = { ...eyebrow, color: "#9df3bf" };
 
 const muted: React.CSSProperties = {
   color: "rgba(255,255,255,.70)",
@@ -290,24 +281,22 @@ async function safeJson(res: Response) {
   }
 }
 
-function toneColor(tone: MarketWindow["tone"]) {
-  if (tone === "green") return "#9df3bf";
-  if (tone === "purple") return "#d8b5ff";
-  if (tone === "red") return "#ff9f9f";
-  return "#f5d978";
+function priorityTone(priority: string) {
+  const p = String(priority || "").toLowerCase();
+  if (p === "urgent") return "#ff9f9f";
+  if (p === "high") return "#f5d978";
+  if (p === "medium") return "#9df3bf";
+  return "#d8b5ff";
 }
 
-function StatCard({
-  label,
-  value,
-  detail,
-  href,
-}: {
-  label: string;
-  value: number | string;
-  detail: string;
-  href: string;
-}) {
+function statusTone(status: string) {
+  const s = String(status || "").toLowerCase();
+  if (s === "active") return "#9df3bf";
+  if (s === "watching") return "#f5d978";
+  return "#d8b5ff";
+}
+
+function StatCard({ label, value, detail, href }: { label: string; value: number | string; detail: string; href: string }) {
   return (
     <Link href={href} style={{ ...card, color: "white", textDecoration: "none", display: "block" }}>
       <div style={greenEyebrow}>{label}</div>
@@ -317,68 +306,59 @@ function StatCard({
   );
 }
 
-function MarketWindowCard({ window, owner }: { window: MarketWindow; owner: boolean }) {
-  const tone = toneColor(window.tone);
+function MarketWindowCard({
+  base,
+  live,
+}: {
+  base: typeof STATIC_WINDOWS[number];
+  live?: MarketWindow;
+}) {
+  const tone = statusTone(live?.status || "quiet");
 
   return (
-    <article
-      style={{
-        ...terminal,
-        borderColor: `${tone}66`,
-      }}
-    >
-      <div style={{ ...greenEyebrow, color: tone }}>{window.code}</div>
-
-      <h2 style={{ fontSize: 36, lineHeight: 1, margin: "0 0 10px" }}>
-        {window.title}
-      </h2>
-
-      <p style={{ ...muted, fontSize: 18, marginTop: 0 }}>
-        <strong style={{ color: tone }}>{window.region}</strong>
-      </p>
-
-      <p style={{ ...muted, fontSize: 17 }}>{window.thesis}</p>
-
-      <div
-        style={{
-          border: `1px solid ${tone}66`,
-          background: "rgba(0,0,0,.22)",
-          borderRadius: 20,
-          padding: 14,
-          margin: "16px 0",
-        }}
-      >
-        <div style={{ ...eyebrow, color: tone, marginBottom: 8 }}>Live Signal Purpose</div>
-        <strong>{window.signal}</strong>
-      </div>
+    <article style={{ ...terminal, borderColor: `${tone}66` }}>
+      <div style={{ ...greenEyebrow, color: tone }}>{base.code}</div>
+      <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 10px" }}>{base.title}</h2>
+      <p style={{ ...muted, fontSize: 17 }}>{base.thesis}</p>
 
       <div style={{ margin: "16px 0" }}>
-        {window.feeds.map((feed) => (
-          <span key={feed} style={{ ...chip, borderColor: `${tone}88`, color: tone }}>
-            {feed}
-          </span>
-        ))}
+        <span style={{ ...chip, color: tone, borderColor: `${tone}88` }}>
+          {live?.status || "quiet"}
+        </span>
+        <span style={chip}>{live?.total_signals || 0} total signals</span>
+        <span style={chip}>{live?.pain_signals || 0} pain</span>
+        <span style={chip}>{live?.capital_needed || 0} capital</span>
+        <span style={chip}>{live?.buyer_needed || 0} buyer</span>
+        <span style={chip}>{live?.operator_needed || 0} operator</span>
       </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
-        <div>
-          <div style={greenEyebrow}>Member View</div>
-          <p style={{ ...muted, marginTop: 0 }}>{window.memberUse}</p>
-        </div>
+      <Link href={base.href} style={btn}>Open Window</Link>
+    </article>
+  );
+}
 
-        <div>
-          <div style={{ ...greenEyebrow, color: "#e8c46b" }}>Owner View</div>
-          <p style={{ ...muted, marginTop: 0 }}>
-            {owner
-              ? window.adminUse
-              : "Owner controls are hidden. Members only see safe matched intelligence."}
-          </p>
-        </div>
+function AlertCard({ alert }: { alert: FeedAlert }) {
+  const tone = priorityTone(alert.priority);
+
+  return (
+    <article style={{ ...terminal, borderColor: `${tone}66` }}>
+      <div style={{ ...greenEyebrow, color: tone }}>
+        {alert.priority || "signal"} · {alert.alert_type || "opportunity"} · score {alert.score || 0}
+      </div>
+      <h3 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>
+        {alert.title || "Intelligence Signal"}
+      </h3>
+      <p style={{ ...muted, fontSize: 17 }}>{alert.message}</p>
+
+      <div style={{ margin: "14px 0" }}>
+        {alert.state && <span style={chip}>{alert.state}</span>}
+        {alert.market && <span style={chip}>{alert.market}</span>}
+        {alert.source && <span style={chip}>{alert.source}</span>}
+        {alert.source_table && <span style={chip}>{alert.source_table}</span>}
+        {alert.member_name && <span style={chip}>{alert.member_name}</span>}
       </div>
 
-      <Link href={window.href} style={btn}>
-        Open Intelligence Feed
-      </Link>
+      <Link href={alert.safe_href || "/projects"} style={btn}>Open Work Area</Link>
     </article>
   );
 }
@@ -401,7 +381,7 @@ function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "l
           </h1>
 
           <p style={{ ...muted, fontSize: 21 }}>
-            The Intelligence Map uses profile, market, role, strategy, and alert data to create the member-facing terminal.
+            The Intelligence Map uses profile, market, role, strategy, deal, and pain data to create the member-facing terminal.
           </p>
 
           {reason === "login" && <Link href="/login" style={btn}>Login / Create Access</Link>}
@@ -428,6 +408,7 @@ export default function IntelligencePage() {
     routing: 0,
     activity: 0,
   });
+  const [feed, setFeed] = useState<Feed>({});
   const [status, setStatus] = useState("Loading intelligence map...");
 
   async function load() {
@@ -465,20 +446,25 @@ export default function IntelligencePage() {
 
       const owner = isOwner(currentEmail, accessData);
 
-      const statsRes = await fetch(
-        `/api/dashboard/stats?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`,
-        {
+      const [statsRes, feedRes] = await Promise.all([
+        fetch(`/api/dashboard/stats?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
           cache: "no-store",
           headers: {
             "x-vf-email": currentEmail,
             "x-vf-admin": owner ? "1" : "0",
           },
-        }
-      );
+        }),
+        fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": currentEmail,
+            "x-vf-admin": owner ? "1" : "0",
+          },
+        }),
+      ]);
 
       const statsData = await safeJson(statsRes);
       const payload = statsData?.stats || statsData || {};
-
       setStats({
         deals: Number(payload.deals || 0),
         members: Number(payload.members || 0),
@@ -489,6 +475,9 @@ export default function IntelligencePage() {
         routing: Number(payload.routing || 0),
         activity: Number(payload.activity || 0),
       });
+
+      const feedData = await safeJson(feedRes);
+      setFeed(feedData || {});
 
       setLockReason("open");
       setStatus("");
@@ -503,6 +492,16 @@ export default function IntelligencePage() {
   }, []);
 
   const owner = useMemo(() => isOwner(email, access), [email, access]);
+
+  const liveWindowByState = useMemo(() => {
+    const map = new Map<string, MarketWindow>();
+    for (const item of feed.market_windows || []) {
+      map.set(String(item.state || "").toLowerCase(), item);
+    }
+    return map;
+  }, [feed.market_windows]);
+
+  const alerts = feed.alerts || [];
 
   if (lockReason !== "open") {
     return <LockedScreen reason={lockReason} />;
@@ -538,55 +537,87 @@ export default function IntelligencePage() {
           <div style={greenEyebrow}>VaultForge Intelligence Map · {owner ? "Owner + Member View" : "Member View"}</div>
 
           <h1 style={{ fontSize: "clamp(58px,12vw,108px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            Bloomberg-style real estate signal map.
+            Live real estate signal map.
           </h1>
 
           <p style={{ ...muted, fontSize: 22 }}>
-            This is the member-facing intelligence terminal. It turns markets, profiles, deal rooms,
-            pain signals, buy buckets, and alerts into opportunity windows instead of static property cards.
+            This now reads the read-only intelligence feed. It turns profiles, deals, pain, markets,
+            buy boxes, and roles into safe opportunity signals without writing to the database.
           </p>
 
           <div className="vf-intel-actions" style={{ marginTop: 18 }}>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
-            <Link href="/alerts" style={btn}>Smart Alerts</Link>
+            <button type="button" onClick={load} style={btn}>Refresh Intelligence</button>
+            <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/submit" style={ghost}>Create Deal</Link>
             <Link href="/pain-submit" style={ghost}>Pain Button</Link>
             <Link href="/projects" style={ghost}>Deal Rooms</Link>
             <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
             <Link href="/network" style={ghost}>Network</Link>
-            {owner && <Link href="/admin" style={btn}>Admin Control</Link>}
+            {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
             <Link href="/logout" style={danger}>Logout</Link>
           </div>
 
           {status && <p style={{ ...muted, marginTop: 16 }}>{status}</p>}
+          {feed.error && <p style={{ color: "#ffd0d0", fontWeight: 900 }}>{feed.error}</p>}
         </section>
 
         <section style={statGrid}>
           <StatCard label="Deal Rooms" value={stats.deals} detail="Live opportunities available for routing." href="/projects" />
           <StatCard label="Members" value={stats.members} detail="Network intelligence nodes." href="/network" />
-          <StatCard label="Smart Alerts" value={stats.alerts} detail="AI/routing signals waiting for review." href="/alerts" />
-          <StatCard label="Pain Signals" value={stats.pain} detail="Friction that can become opportunity." href="/pain-submit" />
+          <StatCard label="Feed Alerts" value={feed.counts?.generated_alerts || 0} detail="Read-only generated intelligence signals." href="/intelligence" />
+          <StatCard label="Pain Signals" value={feed.counts?.pain || stats.pain} detail="Friction that can become opportunity." href="/pain-submit" />
           <StatCard label="Buy Bucket" value={stats.bucket} detail="Saved demand and acquisition targets." href="/buy-bucket" />
-          <StatCard label="Messages" value={stats.messages} detail="Deal and member communication activity." href="/messages" />
+          <StatCard label="Profiles Scanned" value={feed.counts?.target_profiles || 0} detail={owner ? "Owner global scan." : "Your member profile."} href="/profile" />
         </section>
 
         <section style={hero}>
-          <div style={greenEyebrow}>How This Works</div>
+          <div style={greenEyebrow}>Market Windows</div>
           <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-            These are not simple state cards.
+            Core launch-market intelligence windows.
           </h2>
           <p style={{ ...muted, fontSize: 19 }}>
-            Each window represents a live intelligence thesis: market pressure, buyer demand,
-            capital gaps, contractor/operator need, pain signals, and strategy fit. Members see
-            safe matched signals. Owner/admin sees system-wide controls and network health.
+            These windows now show live signal counts from the read-only feed. Quiet does not mean broken;
+            it means there are not enough matching records in that category yet.
           </p>
         </section>
 
         <section style={grid}>
-          {MARKETS.map((window) => (
-            <MarketWindowCard key={window.code} window={window} owner={owner} />
+          {STATIC_WINDOWS.map((window) => (
+            <MarketWindowCard
+              key={window.code}
+              base={window}
+              live={liveWindowByState.get(window.state.toLowerCase())}
+            />
           ))}
         </section>
+
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={greenEyebrow}>Generated Intelligence Feed</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            Read-only smart signals.
+          </h2>
+          <p style={{ ...muted, fontSize: 19 }}>
+            These are generated from existing data only. No database writes. No automatic member actions.
+            This is the safe first step before real stored alerts and automation.
+          </p>
+        </section>
+
+        {alerts.length === 0 ? (
+          <section style={hero}>
+            <strong>No generated signals yet.</strong>
+            <p style={muted}>
+              Add or complete more profile buy-box fields, create deal rooms with routing needs, or submit pain signals.
+              The feed will begin showing matches once there is enough overlap.
+            </p>
+          </section>
+        ) : (
+          <section style={grid}>
+            {alerts.map((alert) => (
+              <AlertCard key={alert.id} alert={alert} />
+            ))}
+          </section>
+        )}
 
         <section style={{ ...hero, marginTop: 22 }}>
           <div style={greenEyebrow}>Security Model</div>
@@ -598,21 +629,20 @@ export default function IntelligencePage() {
               <div style={greenEyebrow}>Members Can</div>
               <p style={muted}>
                 View safe intelligence windows, submit deals, submit pain signals, save deals, message,
-                review their own alerts, and train their profile/buy box.
+                review their own generated signals, and train their profile/buy box.
               </p>
             </div>
             <div style={card}>
               <div style={greenEyebrow}>Owner/Admin Can</div>
               <p style={muted}>
-                Generate global scans, tune routing, moderate members, activate/lock accounts,
-                review system-wide signals, and override high-value routing.
+                View global signals, tune routing, moderate members, activate/lock accounts,
+                review system-wide signals, and later approve stored automation.
               </p>
             </div>
             <div style={card}>
-              <div style={greenEyebrow}>Automation Direction</div>
+              <div style={greenEyebrow}>Current Build Mode</div>
               <p style={muted}>
-                Admin should supervise intelligence, not manually match everything. Smart Alerts
-                should detect, score, route, and prioritize automatically as the data layer stabilizes.
+                Read-only generation only. This keeps the intelligence layer safe while the data model stabilizes.
               </p>
             </div>
           </div>
