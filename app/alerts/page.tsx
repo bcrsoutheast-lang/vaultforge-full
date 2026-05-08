@@ -3,81 +3,129 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type AlertRow = Record<string, any>;
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
+type Access = {
+  email?: string;
+  owner?: boolean;
+  profile_complete?: boolean;
+  payment_status?: string;
+  access_status?: string;
+  paid?: boolean;
+  unlocked?: boolean;
+  next_step?: string;
+};
+
+type FeedAlert = {
+  id: string;
+  source: string;
+  alert_type: string;
+  priority: string;
+  score: number;
+  title: string;
+  message: string;
+  member_email?: string;
+  member_name?: string;
+  item_id?: string;
+  item_title?: string;
+  state?: string;
+  market?: string;
+  source_table?: string;
+  safe_href?: string;
+  created_at?: string;
+};
+
+type MarketWindow = {
+  state: string;
+  total_signals: number;
+  pain_signals: number;
+  capital_needed: number;
+  buyer_needed: number;
+  operator_needed: number;
+  status: string;
+};
+
+type Feed = {
+  ok?: boolean;
+  mode?: string;
+  owner?: boolean;
+  alerts?: FeedAlert[];
+  counts?: {
+    profiles?: number;
+    target_profiles?: number;
+    deals?: number;
+    pain?: number;
+    generated_alerts?: number;
+  };
+  market_windows?: MarketWindow[];
+  note?: string;
+  error?: string;
+};
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), radial-gradient(circle at bottom right, rgba(181,92,255,.18), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
   color: "white",
   padding: "28px 18px 100px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1120,
-  margin: "0 auto",
-};
+const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
-  border: "1px solid rgba(157,243,191,.22)",
+  border: "1px solid rgba(232,196,107,.34)",
   background:
-    "linear-gradient(145deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
+    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
   borderRadius: 34,
   padding: 26,
   marginBottom: 22,
+  boxShadow: "0 30px 90px rgba(0,0,0,.34)",
 };
 
-const engine: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.30)",
-  background:
-    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.03))",
-  borderRadius: 30,
-  padding: 24,
-  marginBottom: 22,
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(157,243,191,.26)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.16), rgba(157,243,191,.08), rgba(255,255,255,.03))",
-  borderRadius: 30,
-  padding: 24,
-  marginBottom: 22,
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+  gap: 18,
 };
 
 const statGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
   gap: 14,
   marginBottom: 22,
 };
 
-const statCard: React.CSSProperties = {
+const card: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
-  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
-  borderRadius: 24,
-  padding: 20,
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
+  borderRadius: 28,
+  padding: 22,
+  boxShadow: "0 26px 80px rgba(0,0,0,.34)",
+};
+
+const terminal: React.CSSProperties = {
+  ...card,
+  background:
+    "linear-gradient(145deg, rgba(0,0,0,.38), rgba(255,255,255,.045))",
+  border: "1px solid rgba(157,243,191,.24)",
 };
 
 const btn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "linear-gradient(135deg,#9df3bf,#b55cff)",
-  color: "#061120",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
+  color: "#06100a",
   border: "none",
   borderRadius: 999,
   padding: "13px 18px",
   fontWeight: 950,
   textDecoration: "none",
   cursor: "pointer",
-  margin: "7px 7px 0 0",
-};
-
-const goldBtn: React.CSSProperties = {
-  ...btn,
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
+  margin: "6px 6px 0 0",
+  minHeight: 46,
 };
 
 const ghost: React.CSSProperties = {
@@ -86,13 +134,14 @@ const ghost: React.CSSProperties = {
   justifyContent: "center",
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
-  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
+  background: "rgba(255,255,255,.055)",
   borderRadius: 999,
   padding: "13px 18px",
   fontWeight: 900,
   textDecoration: "none",
   cursor: "pointer",
-  margin: "7px 7px 0 0",
+  margin: "6px 6px 0 0",
+  minHeight: 46,
 };
 
 const danger: React.CSSProperties = {
@@ -110,10 +159,7 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-const greenEyebrow: React.CSSProperties = {
-  ...eyebrow,
-  color: "#9df3bf",
-};
+const greenEyebrow: React.CSSProperties = { ...eyebrow, color: "#9df3bf" };
 
 const muted: React.CSSProperties = {
   color: "rgba(255,255,255,.70)",
@@ -124,13 +170,45 @@ const chip: React.CSSProperties = {
   display: "inline-flex",
   border: "1px solid rgba(157,243,191,.25)",
   color: "#9df3bf",
-  background: "linear-gradient(145deg, rgba(157,243,191,.14), rgba(181,92,255,.08))",
+  background: "rgba(157,243,191,.07)",
   borderRadius: 999,
   padding: "8px 11px",
-  fontWeight: 800,
+  fontWeight: 850,
   fontSize: 13,
   margin: "0 7px 7px 0",
 };
+
+const select: React.CSSProperties = {
+  width: "100%",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.075)",
+  color: "white",
+  padding: 14,
+  fontSize: 16,
+  boxSizing: "border-box",
+};
+
+function cleanEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
 
 function getEmail() {
   if (typeof window === "undefined") return "";
@@ -138,132 +216,16 @@ function getEmail() {
   return (
     localStorage.getItem("vf_email") ||
     sessionStorage.getItem("vf_email") ||
+    readCookie("vf_email") ||
+    readCookie("vf_admin_email") ||
     ""
   )
     .trim()
     .toLowerCase();
 }
 
-function asText(value: unknown) {
-  return String(value || "").trim();
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const cleaned = asText(value);
-    if (cleaned) return cleaned;
-  }
-  return "";
-}
-
-function lower(value: unknown) {
-  return asText(value).toLowerCase();
-}
-
-function asNumber(value: unknown) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function alertId(item: AlertRow) {
-  return first(item.id, item.alert_id, item.match_alert_id);
-}
-
-function dealId(item: AlertRow) {
-  return first(
-    item.deal_id,
-    item.project_id,
-    item.property_id,
-    item.target_deal_id,
-    item.deal?.id,
-    item.project?.id
-  );
-}
-
-function memberEmail(item: AlertRow) {
-  return first(
-    item.member_email,
-    item.buyer_email,
-    item.recipient_email,
-    item.matched_member_email,
-    item.email
-  );
-}
-
-function alertTitle(item: AlertRow) {
-  return first(
-    item.alert_title,
-    item.title,
-    item.match_title,
-    item.deal_title,
-    item.project_title,
-    item.deal?.title,
-    item.project?.title,
-    "VaultForge Match Alert"
-  );
-}
-
-function alertBody(item: AlertRow) {
-  return first(
-    item.alert_body,
-    item.body,
-    item.message,
-    item.description,
-    item.summary,
-    item.ai_summary,
-    item.reason,
-    item.why_matched,
-    "VaultForge found a member/deal routing signal."
-  );
-}
-
-function alertType(item: AlertRow) {
-  return first(item.alert_type, item.type, item.category, "smart_match");
-}
-
-function confidence(item: AlertRow) {
-  return asNumber(first(item.confidence_score, item.score, item.match_score, item.ai_score));
-}
-
-function isRead(item: AlertRow) {
-  return (
-    item.read === true ||
-    item.is_read === true ||
-    lower(item.status) === "read" ||
-    lower(item.alert_status) === "read"
-  );
-}
-
-function isDismissed(item: AlertRow) {
-  return (
-    item.dismissed === true ||
-    item.is_dismissed === true ||
-    lower(item.status) === "dismissed" ||
-    lower(item.alert_status) === "dismissed"
-  );
-}
-
-function reasonList(item: AlertRow) {
-  const raw = first(item.why_matched, item.reasons, item.match_reasons, item.reason);
-
-  if (!raw) return [];
-
-  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-  } catch {
-    // fall through
-  }
-
-  return raw
-    .split("·")
-    .join(",")
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 8);
+function isOwner(email: string, access: Access | null) {
+  return cleanEmail(email) === OWNER_EMAIL || access?.owner === true;
 }
 
 async function safeJson(res: Response) {
@@ -274,188 +236,219 @@ async function safeJson(res: Response) {
   }
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function priorityTone(priority: string) {
+  const p = String(priority || "").toLowerCase();
+  if (p === "urgent") return "#ff9f9f";
+  if (p === "high") return "#f5d978";
+  if (p === "medium") return "#9df3bf";
+  return "#d8b5ff";
+}
+
+function priorityRank(priority: string) {
+  const p = String(priority || "").toLowerCase();
+  if (p === "urgent") return 4;
+  if (p === "high") return 3;
+  if (p === "medium") return 2;
+  return 1;
+}
+
+function typeLabel(type: string) {
+  const t = String(type || "opportunity").replace(/_/g, " ");
+  return t.slice(0, 1).toUpperCase() + t.slice(1);
+}
+
+function StatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number | string;
+  detail: string;
+}) {
   return (
-    <div style={statCard}>
+    <div style={card}>
       <div style={greenEyebrow}>{label}</div>
-      <div style={{ fontSize: 50, fontWeight: 950, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 46, fontWeight: 950, lineHeight: 1 }}>{value}</div>
+      <p style={{ ...muted, marginBottom: 0 }}>{detail}</p>
     </div>
   );
 }
 
-export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<AlertRow[]>([]);
-  const [status, setStatus] = useState("Loading alerts...");
-  const [toast, setToast] = useState("");
-  const [engineResult, setEngineResult] = useState<Record<string, any> | null>(null);
-  const [busy, setBusy] = useState(false);
+function AlertCard({ alert, owner }: { alert: FeedAlert; owner: boolean }) {
+  const tone = priorityTone(alert.priority);
 
-  async function loadAlerts() {
-    setStatus("Loading alerts...");
-    setToast("");
+  return (
+    <article style={{ ...terminal, borderColor: `${tone}66` }}>
+      <div style={{ ...greenEyebrow, color: tone }}>
+        {alert.priority || "signal"} · {typeLabel(alert.alert_type)} · score {alert.score || 0}
+      </div>
+
+      <h2 style={{ fontSize: 32, lineHeight: 1.05, margin: "0 0 10px" }}>
+        {alert.title || "Intelligence Signal"}
+      </h2>
+
+      <p style={{ ...muted, fontSize: 17 }}>{alert.message}</p>
+
+      <div style={{ margin: "14px 0" }}>
+        {alert.state && <span style={chip}>{alert.state}</span>}
+        {alert.market && <span style={chip}>{alert.market}</span>}
+        {alert.source && <span style={chip}>{alert.source}</span>}
+        {alert.source_table && <span style={chip}>{alert.source_table}</span>}
+        {owner && alert.member_name && <span style={chip}>{alert.member_name}</span>}
+        {owner && alert.member_email && <span style={chip}>{alert.member_email}</span>}
+      </div>
+
+      <Link href={alert.safe_href || "/projects"} style={btn}>
+        Open Work Area
+      </Link>
+    </article>
+  );
+}
+
+function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "loading" }) {
+  return (
+    <main style={page}>
+      <div style={wrap}>
+        <section style={hero}>
+          <div style={greenEyebrow}>VaultForge Smart Alerts</div>
+
+          <h1 style={{ fontSize: "clamp(54px,12vw,100px)", lineHeight: 0.88, margin: "0 0 18px" }}>
+            {reason === "loading"
+              ? "Checking alert access..."
+              : reason === "login"
+              ? "Login required."
+              : reason === "profile"
+              ? "Complete your profile first."
+              : "Activate access first."}
+          </h1>
+
+          <p style={{ ...muted, fontSize: 21 }}>
+            Smart Alerts use your profile, buy box, role, deals, and pain signals to surface relevant opportunities.
+          </p>
+
+          {reason === "login" && <Link href="/login" style={btn}>Login / Create Access</Link>}
+          {reason === "profile" && <Link href="/profile" style={btn}>Complete Profile</Link>}
+          {reason === "payment" && <Link href="/payment" style={btn}>Activate Access</Link>}
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+export default function AlertsPage() {
+  const [email, setEmail] = useState("");
+  const [access, setAccess] = useState<Access | null>(null);
+  const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
+  const [feed, setFeed] = useState<Feed>({});
+  const [status, setStatus] = useState("Loading smart alerts...");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+
+  async function load() {
+    setStatus("Loading smart alerts...");
 
     try {
-      const email = getEmail();
+      const currentEmail = getEmail();
+      setEmail(currentEmail);
 
-      const res = await fetch(`/api/alerts/list?email=${encodeURIComponent(email)}`, {
+      if (!currentEmail) {
+        setLockReason("login");
+        setStatus("");
+        return;
+      }
+
+      const accessRes = await fetch(`/api/member/access?email=${encodeURIComponent(currentEmail)}`, {
+        cache: "no-store",
+        headers: { "x-vf-email": currentEmail },
+      });
+
+      const accessData = await safeJson(accessRes);
+      setAccess(accessData);
+
+      if (!accessData?.owner && !accessData?.profile_complete) {
+        setLockReason("profile");
+        setStatus("");
+        return;
+      }
+
+      if (!accessData?.owner && !accessData?.paid && !accessData?.unlocked) {
+        setLockReason("payment");
+        setStatus("");
+        return;
+      }
+
+      const owner = isOwner(currentEmail, accessData);
+
+      const feedRes = await fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
         cache: "no-store",
         headers: {
-          "x-vf-email": email,
+          "x-vf-email": currentEmail,
+          "x-vf-admin": owner ? "1" : "0",
         },
       });
 
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not load alerts.");
-      }
-
-      const list = Array.isArray(data?.alerts)
-        ? data.alerts
-        : Array.isArray(data?.items)
-        ? data.items
-        : Array.isArray(data)
-        ? data
-        : [];
-
-      setAlerts(list);
+      const feedData = await safeJson(feedRes);
+      setFeed(feedData || {});
+      setLockReason("open");
       setStatus("");
     } catch (error: any) {
-      setStatus(error?.message || "Could not load alerts.");
+      setLockReason("login");
+      setStatus(error?.message || "");
     }
   }
 
   useEffect(() => {
-    loadAlerts();
+    load();
   }, []);
 
-  async function generateSmartAlerts() {
-    if (busy) return;
+  const owner = useMemo(() => isOwner(email, access), [email, access]);
 
-    setBusy(true);
-    setToast("Generating smart alerts...");
-    setEngineResult(null);
+  const alerts = useMemo(() => {
+    const list = feed.alerts || [];
 
-    try {
-      const email = getEmail();
+    return list
+      .filter((alert) => {
+        if (priorityFilter !== "all" && String(alert.priority || "").toLowerCase() !== priorityFilter) {
+          return false;
+        }
 
-      const res = await fetch("/api/alerts/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-        },
-        body: JSON.stringify({ email }),
-      });
+        if (typeFilter !== "all" && String(alert.alert_type || "").toLowerCase() !== typeFilter) {
+          return false;
+        }
 
-      const data = await safeJson(res);
+        return true;
+      })
+      .sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority) || Number(b.score || 0) - Number(a.score || 0));
+  }, [feed.alerts, priorityFilter, typeFilter]);
 
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Generation failed.");
-      }
-
-      setEngineResult(data);
-      setToast(data?.message || "Smart alerts generated.");
-      await loadAlerts();
-    } catch (error: any) {
-      setToast(error?.message || "Could not generate alerts.");
-    } finally {
-      setBusy(false);
+  const allTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const alert of feed.alerts || []) {
+      if (alert.alert_type) types.add(String(alert.alert_type).toLowerCase());
     }
+    return Array.from(types).sort();
+  }, [feed.alerts]);
+
+  const counts = useMemo(() => {
+    const all = feed.alerts || [];
+
+    return {
+      total: all.length,
+      urgent: all.filter((a) => String(a.priority).toLowerCase() === "urgent").length,
+      high: all.filter((a) => String(a.priority).toLowerCase() === "high").length,
+      medium: all.filter((a) => String(a.priority).toLowerCase() === "medium").length,
+      capital: all.filter((a) => String(a.alert_type).toLowerCase() === "capital_needed").length,
+      buyer: all.filter((a) => String(a.alert_type).toLowerCase() === "buyer_match").length,
+      operator: all.filter((a) => String(a.alert_type).toLowerCase() === "operator_needed").length,
+      distress: all.filter((a) => String(a.alert_type).toLowerCase() === "distress_signal").length,
+    };
+  }, [feed.alerts]);
+
+  if (lockReason !== "open") {
+    return <LockedScreen reason={lockReason} />;
   }
-
-  async function saveToBucket(item: AlertRow) {
-    const id = dealId(item);
-    const email = getEmail();
-
-    if (!id) {
-      setToast("Cannot save: this alert does not include a deal id.");
-      return;
-    }
-
-    if (!email) {
-      setToast("Cannot save: log in again so VaultForge knows your email.");
-      return;
-    }
-
-    setToast("Saving to Buy Bucket...");
-
-    try {
-      const res = await fetch("/api/deal/save-to-bucket", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-        },
-        body: JSON.stringify({
-          deal_id: id,
-          id,
-          buyer_email: email,
-          member_email: email,
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not save to Buy Bucket.");
-      }
-
-      setToast(data?.message || "Saved to Buy Bucket.");
-    } catch (error: any) {
-      setToast(error?.message || "Could not save to Buy Bucket.");
-    }
-  }
-
-  async function alertAction(item: AlertRow, action: "read" | "dismissed") {
-    const id = alertId(item);
-    const email = getEmail();
-
-    if (!id) {
-      setToast(`Cannot ${action === "read" ? "mark read" : "dismiss"}: this alert does not include an alert id.`);
-      return;
-    }
-
-    setToast(action === "read" ? "Marking alert read..." : "Dismissing alert...");
-
-    try {
-      const res = await fetch("/api/alerts/action", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-        },
-        body: JSON.stringify({
-          id,
-          alert_id: id,
-          action,
-          email,
-          member_email: email,
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not update alert.");
-      }
-
-      setToast(data?.message || "Alert updated.");
-      await loadAlerts();
-    } catch (error: any) {
-      setToast(error?.message || "Could not update alert.");
-    }
-  }
-
-  const visibleAlerts = useMemo(
-    () => alerts.filter((item) => !isDismissed(item)),
-    [alerts]
-  );
-
-  const unreadCount = visibleAlerts.filter((item) => !isRead(item)).length;
-  const readCount = visibleAlerts.filter(isRead).length;
-  const capitalCount = visibleAlerts.filter((item) => lower(alertType(item)).includes("capital") || lower(alertBody(item)).includes("lender")).length;
-  const buyerCount = visibleAlerts.filter((item) => lower(alertType(item)).includes("buyer") || lower(alertBody(item)).includes("buyer")).length;
 
   return (
     <main style={page}>
@@ -467,14 +460,6 @@ export default function AlertsPage() {
           filter: brightness(1.06);
         }
 
-        @media (max-width: 760px) {
-          a,
-          button {
-            box-sizing: border-box;
-          }
-        }
-      `}</style>
-      <style>{`
         @media (max-width: 760px) {
           .vf-alert-actions {
             display: grid !important;
@@ -492,230 +477,95 @@ export default function AlertsPage() {
 
       <div style={wrap}>
         <section style={hero}>
-          <div style={greenEyebrow}>VaultForge Alerts</div>
+          <div style={greenEyebrow}>VaultForge Smart Alerts · {owner ? "Owner Global Feed" : "Member Feed"}</div>
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginBottom: 16,
-            }}
-          >
-            <span
-              style={{
-                border: "1px solid rgba(181,92,255,.36)",
-                color: "#dcb8ff",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(181,92,255,.12)",
-              }}
-            >
-              Routing Intelligence
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(157,243,191,.36)",
-                color: "#9df3bf",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(157,243,191,.10)",
-              }}
-            >
-              Match Signal Feed
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(245,217,120,.36)",
-                color: "#f5d978",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(245,217,120,.10)",
-              }}
-            >
-              Bloomberg-Style Alerts
-            </span>
-          </div>
-
-          <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            Routing Signal Feed
+          <h1 style={{ fontSize: "clamp(58px,12vw,108px)", lineHeight: 0.86, margin: "0 0 18px" }}>
+            Read-only intelligence alerts.
           </h1>
 
-          <p style={{ ...muted, fontSize: 21 }}>
-            Match alerts, network signals, buy-side opportunities, routing notices, and member activity inside your VaultForge command center.
+          <p style={{ ...muted, fontSize: 22 }}>
+            These signals are generated from existing profiles, deals, projects, property cards, and pain submissions.
+            This page does not write alerts yet — it proves the intelligence logic safely first.
           </p>
 
           <div className="vf-alert-actions" style={{ marginTop: 18 }}>
-            <button type="button" style={btn} onClick={loadAlerts}>Refresh Alerts</button>
+            <button type="button" onClick={load} style={btn}>Refresh Alerts</button>
+            <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
+            {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
-            <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
             <Link href="/submit" style={ghost}>Create Deal</Link>
+            <Link href="/pain-submit" style={ghost}>Pain Button</Link>
+            <Link href="/projects" style={ghost}>Deal Rooms</Link>
+            <Link href="/network" style={ghost}>Network</Link>
+            <Link href="/logout" style={danger}>Logout</Link>
+          </div>
+
+          {status && <p style={{ ...muted, marginTop: 16 }}>{status}</p>}
+          {feed.error && <p style={{ color: "#ffd0d0", fontWeight: 900 }}>{feed.error}</p>}
+        </section>
+
+        <section style={statGrid}>
+          <StatCard label="Total Signals" value={counts.total} detail="Generated from current data." />
+          <StatCard label="Urgent" value={counts.urgent} detail="Highest priority review." />
+          <StatCard label="High" value={counts.high} detail="Strong opportunity signals." />
+          <StatCard label="Capital Needed" value={counts.capital} detail="Potential lender/private money fit." />
+          <StatCard label="Buyer Match" value={counts.buyer} detail="Potential buyer-demand fit." />
+          <StatCard label="Operator Needed" value={counts.operator} detail="Contractor/operator/JV need." />
+          <StatCard label="Distress" value={counts.distress} detail="Pain and friction signals." />
+          <StatCard label="Profiles Scanned" value={feed.counts?.target_profiles || 0} detail={owner ? "Global owner scan." : "Your profile."} />
+        </section>
+
+        <section style={hero}>
+          <div style={greenEyebrow}>Filters</div>
+          <div style={grid}>
+            <div>
+              <label style={{ display: "block", fontWeight: 900, marginBottom: 8 }}>Priority</label>
+              <select style={select} value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}>
+                <option value="all" style={{ color: "#111" }}>All Priorities</option>
+                <option value="urgent" style={{ color: "#111" }}>Urgent</option>
+                <option value="high" style={{ color: "#111" }}>High</option>
+                <option value="medium" style={{ color: "#111" }}>Medium</option>
+                <option value="low" style={{ color: "#111" }}>Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontWeight: 900, marginBottom: 8 }}>Signal Type</label>
+              <select style={select} value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                <option value="all" style={{ color: "#111" }}>All Types</option>
+                {allTypes.map((type) => (
+                  <option key={type} value={type} style={{ color: "#111" }}>
+                    {typeLabel(type)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </section>
 
-        <section style={engine}>
-          <div style={eyebrow}>Owner Smart Engine</div>
-          <h2 style={{ fontSize: 38, margin: "0 0 10px" }}>Generate intelligent routing alerts</h2>
-          <p style={{ ...muted, fontSize: 19 }}>
-            Scans live deals and active members, scores market fit, role fit, buy-box fit, asset fit, strategy fit, deal needs, photos, AI summaries, and margin signals.
-          </p>
-          <button type="button" onClick={generateSmartAlerts} style={goldBtn} disabled={busy}>
-            {busy ? "Generating..." : "Generate Smart Alerts"}
-          </button>
-        </section>
-
-        {engineResult && (
+        {alerts.length === 0 ? (
           <section style={hero}>
-            <div style={greenEyebrow}>Smart Engine Complete</div>
-            <h2 style={{ fontSize: 36, margin: "0 0 10px" }}>
-              {asNumber(engineResult.created || engineResult.created_count || engineResult.alerts_created)} alerts created
-            </h2>
-            <p style={{ ...muted, fontSize: 19 }}>
-              Done. VaultForge scanned live deals and active member profiles.
+            <strong>No matching alert signals yet.</strong>
+            <p style={muted}>
+              Complete profile chips, submit routed deals, or submit Pain Button records. The feed will populate once
+              there is enough overlap between member profiles and opportunities.
             </p>
           </section>
-        )}
-
-        {toast && (
-          <section
-            style={{
-              ...hero,
-              color:
-                toast.toLowerCase().includes("could not") ||
-                toast.toLowerCase().includes("cannot") ||
-                toast.toLowerCase().includes("failed") ||
-                toast.toLowerCase().includes("error")
-                  ? "#ffd0d0"
-                  : "#9df3bf",
-            }}
-          >
-            <strong>{toast}</strong>
+        ) : (
+          <section style={grid}>
+            {alerts.map((alert) => (
+              <AlertCard key={alert.id} alert={alert} owner={owner} />
+            ))}
           </section>
         )}
 
-        <section style={statGrid}>
-          <StatCard label="Total Alerts" value={visibleAlerts.length} />
-          <StatCard label="Unread" value={unreadCount} />
-          <StatCard label="Read/Dismissed" value={readCount} />
-          <StatCard label="Capital Match" value={capitalCount} />
-          <StatCard label="Buyer Match" value={buyerCount} />
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={greenEyebrow}>Current Safety Mode</div>
+          <p style={{ ...muted, fontSize: 19 }}>
+            This is read-only generation. It does not store alerts, notify members, change access, or auto-route private details.
+            Next phase can store approved signals after the read-only layer proves accurate.
+          </p>
         </section>
-
-        {status && (
-          <section style={hero}>
-            <strong>{status}</strong>
-          </section>
-        )}
-
-        {!status && visibleAlerts.length === 0 && (
-          <section style={hero}>
-            <strong>No alerts yet.</strong>
-          </section>
-        )}
-
-        {visibleAlerts.map((item, index) => {
-          const id = alertId(item);
-          const dId = dealId(item);
-          const score = confidence(item);
-          const type = alertType(item);
-          const read = isRead(item);
-          const reasons = reasonList(item);
-          const dealHref = dId ? `/deal/${encodeURIComponent(dId)}` : "/projects";
-
-          return (
-            <section key={`${id || index}-${dId || "alert"}`} style={card}>
-              <div style={chip}>
-                {type} · {score >= 100 ? "High-Confidence Match" : "Smart Match"} · {score || 0}
-              </div>
-
-              <div style={{ ...eyebrow, marginTop: 14 }}>{type}</div>
-
-              <h2 style={{ fontSize: "clamp(32px,7vw,52px)", lineHeight: 1, margin: "0 0 16px" }}>
-                {alertTitle(item)}
-              </h2>
-
-              <p style={{ ...muted, fontSize: 21 }}>
-                {alertBody(item)}
-              </p>
-
-              {score > 0 && (
-                <div
-                  style={{
-                    border: "1px solid rgba(255,255,255,.12)",
-                    borderRadius: 18,
-                    background: "linear-gradient(145deg, rgba(0,0,0,.28), rgba(181,92,255,.08))",
-                    padding: 16,
-                    marginTop: 18,
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-                    <strong style={{ color: "#9df3bf", letterSpacing: 4 }}>CONFIDENCE</strong>
-                    <strong style={{ color: "#f5d978" }}>{score >= 100 ? "High" : "Active"} · {score}</strong>
-                  </div>
-                  <div style={{ height: 13, borderRadius: 999, background: "rgba(255,255,255,.10)", overflow: "hidden" }}>
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${Math.min(100, Math.max(5, score))}%`,
-                        background: "linear-gradient(90deg,#9df3bf,#f5d978)",
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {reasons.length > 0 && (
-                <div
-                  style={{
-                    border: "1px solid rgba(232,196,107,.25)",
-                    borderRadius: 20,
-                    background: "linear-gradient(145deg, rgba(232,196,107,.14), rgba(181,92,255,.08))",
-                    padding: 16,
-                    marginTop: 18,
-                  }}
-                >
-                  <div style={eyebrow}>Why This Matched</div>
-                  {reasons.map((reason) => (
-                    <span key={reason} style={chip}>{reason}</span>
-                  ))}
-                </div>
-              )}
-
-              <p style={{ ...muted, marginTop: 18 }}>
-                {first(item.created_at, item.inserted_at) ? new Date(first(item.created_at, item.inserted_at)).toLocaleString() : ""}
-              </p>
-
-              <div className="vf-alert-actions" style={{ marginTop: 16 }}>
-                <Link href={dealHref} style={btn}>Open Deal Room</Link>
-
-                <button type="button" style={goldBtn} onClick={() => saveToBucket(item)}>
-                  Save to Buy Bucket
-                </button>
-
-                {memberEmail(item) && (
-                  <a href={`mailto:${memberEmail(item)}`} style={ghost}>
-                    Message Member
-                  </a>
-                )}
-
-                {!read && (
-                  <button type="button" style={ghost} onClick={() => alertAction(item, "read")}>
-                    Mark Read
-                  </button>
-                )}
-
-                <button type="button" style={danger} onClick={() => alertAction(item, "dismissed")}>
-                  Dismiss
-                </button>
-              </div>
-            </section>
-          );
-        })}
       </div>
     </main>
   );
