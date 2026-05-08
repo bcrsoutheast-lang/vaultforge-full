@@ -327,7 +327,11 @@ function AlertCard({
         {owner && alert.member_email && <span style={chip}>{alert.member_email}</span>}
       </div>
 
-      <Link href={alert.safe_href || "/projects"} style={btn}>
+      <Link href={`/signals/${encodeURIComponent(alert.id)}`} style={btn}>
+        Open Exact Signal
+      </Link>
+
+      <Link href={alert.safe_href || "/projects"} style={ghost}>
         Open Work Area
       </Link>
 
