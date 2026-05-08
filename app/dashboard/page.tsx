@@ -23,7 +23,6 @@ type Stats = {
     paymentRequiredMembers: number;
     activeMembers: number;
   };
-  sources?: Record<string, string>;
 };
 
 type Access = {
@@ -65,7 +64,7 @@ const grid: React.CSSProperties = {
 
 const toolGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(270px,1fr))",
   gap: 18,
 };
 
@@ -80,7 +79,7 @@ const pane: React.CSSProperties = {
 
 const commandPane: React.CSSProperties = {
   ...pane,
-  border: "1px solid rgba(157,243,191,.22)",
+  border: "1px solid rgba(157,243,191,.28)",
   background:
     "linear-gradient(145deg, rgba(157,243,191,.12), rgba(181,92,255,.12), rgba(255,255,255,.03))",
 };
@@ -176,60 +175,15 @@ function isOwnerEmail(email: string) {
   return email.trim().toLowerCase() === OWNER_EMAIL;
 }
 
-function FounderCountdown() {
-  const launchDate = new Date("2026-05-15T23:59:59-04:00").getTime();
-  const [remaining, setRemaining] = useState(launchDate - Date.now());
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setRemaining(launchDate - Date.now());
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
-  if (remaining <= 0) return null;
-
-  const days = Math.floor(remaining / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((remaining / (1000 * 60 * 60)) % 24);
-  const minutes = Math.floor((remaining / (1000 * 60)) % 60);
-  const seconds = Math.floor((remaining / 1000) % 60);
-
-  return (
-    <section style={{ ...hero, borderColor: "rgba(157,243,191,.35)" }}>
-      <div style={greenEyebrow}>Founding Member Window</div>
-      <h2 style={{ fontSize: "clamp(36px,8vw,70px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-        {days}d {hours}h {minutes}m {seconds}s
-      </h2>
-      <p style={{ ...muted, fontSize: 18 }}>
-        First 50 founders or May 15 — whichever comes first. Founding access is $49 for the first month,
-        then $199/month. After founder access closes, standard access is $99 to join, then $199/month.
-      </p>
-    </section>
-  );
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
 }
 
-function StatPane({ label, value, detail }: { label: string; value: number; detail: string }) {
-  return (
-    <div style={pane}>
-      <div style={eyebrow}>{label}</div>
-      <div style={{ fontSize: 54, fontWeight: 950, lineHeight: 1 }}>{value}</div>
-      <p style={muted}>{detail}</p>
-    </div>
-  );
-}
-
-function ClickableStatPane({
-  label,
-  value,
-  detail,
-  href,
-}: {
-  label: string;
-  value: number;
-  detail: string;
-  href: string;
-}) {
+function StatPane({ label, value, detail, href }: { label: string; value: number; detail: string; href: string }) {
   return (
     <Link
       href={href}
@@ -275,7 +229,9 @@ function ToolCard({
       {tags.length > 0 && (
         <div style={{ margin: "14px 0 8px" }}>
           {tags.map((item) => (
-            <span key={item} style={chip}>{item}</span>
+            <span key={item} style={chip}>
+              {item}
+            </span>
           ))}
         </div>
       )}
@@ -284,689 +240,6 @@ function ToolCard({
         {button}
       </Link>
     </article>
-  );
-}
-
-function PainButtonPanel({ owner, stats }: { owner: boolean; stats: Stats }) {
-  const cases = [
-    {
-      code: "DISTRESS",
-      title: "Distressed Seller",
-      text: "Behind payments, inherited property, tax pressure, vacancy, or urgent liquidation.",
-      tone: "#ff8b8b",
-    },
-    {
-      code: "STALLED",
-      title: "Stalled Project",
-      text: "Construction stopped, contractor issues, funding gaps, permit delays, or execution problems.",
-      tone: "#f5d978",
-    },
-    {
-      code: "CAPITAL",
-      title: "Capital Needed",
-      text: "Bridge lender, JV partner, equity injection, hard money, or refinance needed.",
-      tone: "#9df3bf",
-    },
-    {
-      code: "ROUTE",
-      title: "Need Operator Match",
-      text: "Buyer, contractor, developer, operator, or specialist needed to solve the situation.",
-      tone: "#b55cff",
-    },
-  ];
-
-  return (
-    <section
-      style={{
-        ...hero,
-        marginTop: 22,
-        border: "1px solid rgba(255,120,120,.32)",
-        background:
-          "linear-gradient(145deg, rgba(120,0,0,.14), rgba(181,92,255,.08), rgba(255,255,255,.03))",
-      }}
-    >
-      <div style={{ ...greenEyebrow, color: "#ff8b8b" }}>
-        Pain Button™ Command Layer
-      </div>
-
-      <h2
-        style={{
-          fontSize: "clamp(40px,8vw,80px)",
-          lineHeight: 0.92,
-          margin: "0 0 14px",
-        }}
-      >
-        Route problems before they become losses.
-      </h2>
-
-      <p style={{ ...muted, fontSize: 20 }}>
-        VaultForge is now tracking {stats.pain || 0} distress signals and {stats.routing || 0} routing records.
-        The Pain Button™ is the operational layer for distressed situations, stalled projects, funding gaps,
-        and execution problems.
-      </p>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
-        <span style={{ ...chip, borderColor: "rgba(255,120,120,.35)", color: "#ff9f9f" }}>
-          Emergency Routing
-        </span>
-        <span style={chip}>Capital Match</span>
-        <span style={chip}>Operator Match</span>
-        <span style={chip}>Distress Signals</span>
-      </div>
-
-      <section style={{ ...grid, marginTop: 18 }}>
-        {cases.map((item) => (
-          <div
-            key={item.code}
-            style={{
-              ...pane,
-              border: `1px solid ${item.tone}`,
-              background:
-                "linear-gradient(145deg, rgba(0,0,0,.28), rgba(255,255,255,.045))",
-            }}
-          >
-            <div style={{ ...eyebrow, color: item.tone }}>{item.code}</div>
-
-            <h3 style={{ fontSize: 28, lineHeight: 1.05, margin: "0 0 10px" }}>
-              {item.title}
-            </h3>
-
-            <p style={muted}>{item.text}</p>
-
-            <div style={{ marginTop: 14 }}>
-              <Link href="/pain-submit" style={ghost}>
-                Route Through VaultForge
-              </Link>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section
-        style={{
-          ...pane,
-          marginTop: 18,
-          borderColor: "rgba(255,120,120,.26)",
-          background:
-            "linear-gradient(145deg, rgba(255,120,120,.08), rgba(255,255,255,.03))",
-        }}
-      >
-        <div style={{ ...eyebrow, color: "#ff9f9f" }}>
-          Live Intelligence Expansion
-        </div>
-
-        <p style={{ ...muted, fontSize: 18 }}>
-          This dashboard now reads the real intelligence backbone:
-          distress signals, routing signals, and activity events.
-          {owner
-            ? " Owner controls can later prioritize and route high-value distress opportunities."
-            : " Member profiles and buy boxes can later drive automated match scoring."}
-        </p>
-      </section>
-    </section>
-  );
-}
-
-function DealPipelinePanel({ stats }: { stats: Stats }) {
-  const totalDeals = Number(stats.deals || 0);
-
-  const pipeline = [
-    {
-      stage: "NEW",
-      title: "New Intake",
-      count: totalDeals,
-      text: "Fresh deal rooms submitted into VaultForge.",
-      tone: "#9df3bf",
-    },
-    {
-      stage: "REVIEW",
-      title: "Under Review",
-      count: Math.max(0, Math.min(totalDeals, Number(stats.admin?.pendingDeals || 0))),
-      text: "Deals needing number, photo, owner, or routing review.",
-      tone: "#f5d978",
-    },
-    {
-      stage: "MATCH",
-      title: "Matched / Routed",
-      count: Number(stats.alerts || 0),
-      text: "Real match alerts from vf_match_alerts.",
-      tone: "#b55cff",
-    },
-    {
-      stage: "WATCH",
-      title: "Saved / Watched",
-      count: Number(stats.bucket || 0),
-      text: "Deals saved into Buy Buckets as demand signals.",
-      tone: "#9df3bf",
-    },
-    {
-      stage: "COMMS",
-      title: "Conversation",
-      count: Number(stats.messages || 0),
-      text: "Deals with message activity or member follow-up.",
-      tone: "#f5d978",
-    },
-    {
-      stage: "ROUTE",
-      title: "Routing Intelligence",
-      count: Number(stats.routing || 0),
-      text: "Machine-readable routing signals for AI matching.",
-      tone: "#b55cff",
-    },
-  ];
-
-  return (
-    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(181,92,255,.38)" }}>
-      <div style={greenEyebrow}>Deal Status Pipeline</div>
-      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-        From intake to routing to execution.
-      </h2>
-      <p style={{ ...muted, fontSize: 19 }}>
-        The pipeline now reflects real dashboard counts from the canonical VaultForge tables.
-      </p>
-
-      <section style={grid}>
-        {pipeline.map((item) => (
-          <div
-            key={item.stage}
-            style={{
-              ...pane,
-              border: `1px solid ${item.tone}`,
-              background: "linear-gradient(145deg, rgba(0,0,0,.28), rgba(255,255,255,.045))",
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                top: -26,
-                right: -22,
-                width: 90,
-                height: 90,
-                borderRadius: 999,
-                background: item.tone,
-                opacity: 0.12,
-              }}
-            />
-
-            <div style={{ ...eyebrow, color: item.tone }}>{item.stage}</div>
-            <h3 style={{ fontSize: 28, lineHeight: 1.05, margin: "0 0 8px" }}>{item.title}</h3>
-            <div style={{ fontSize: 54, fontWeight: 950, lineHeight: 1, color: item.tone }}>
-              {item.count}
-            </div>
-            <p style={muted}>{item.text}</p>
-          </div>
-        ))}
-      </section>
-    </section>
-  );
-}
-
-function NotificationCenter({
-  owner,
-  stats,
-  access,
-}: {
-  owner: boolean;
-  stats: Stats;
-  access: Access | null;
-}) {
-  const notices = [
-    {
-      level: "HIGH",
-      title: stats.deals > 0 ? "Review active deal rooms" : "Deal pipeline ready",
-      text: stats.deals > 0
-        ? `${stats.deals} active deal rooms are available for review, routing, or save-to-bucket actions.`
-        : "Create the first live opportunity to start routing demand through the network.",
-      href: stats.deals > 0 ? "/projects" : "/submit",
-      action: stats.deals > 0 ? "Open Projects" : "Create Deal",
-      tone: "#f5d978",
-    },
-    {
-      level: "MATCH",
-      title: `${stats.alerts || 0} real match alerts`,
-      text: access?.profile_complete
-        ? "Profile data is active and can support future match scoring, alerts, and routing intelligence."
-        : "Complete profile fields to improve future saved-search and smart-alert accuracy.",
-      href: "/alerts",
-      action: "Open Alerts",
-      tone: "#9df3bf",
-    },
-    {
-      level: "PAIN",
-      title: `${stats.pain || 0} distress signals`,
-      text: "Pain Button submissions become routing input for capital needs, stalled projects, seller pressure, and urgent deal rescue.",
-      href: "/submit",
-      action: "Route Signal",
-      tone: "#ff8b8b",
-    },
-    {
-      level: "WATCH",
-      title: `${stats.bucket || 0} saved target signals`,
-      text: "Buy Bucket activity can become a demand map showing what members are watching, pursuing, and underwriting.",
-      href: "/buy-bucket",
-      action: "Open Buy Bucket",
-      tone: "#b55cff",
-    },
-    {
-      level: "COMMS",
-      title: `${stats.messages || 0} deal communication records`,
-      text: "Message volume should become part of deal heat, urgency, and engagement scoring later.",
-      href: "/messages",
-      action: "Open Messages",
-      tone: "#9df3bf",
-    },
-    {
-      level: owner ? "ADMIN" : "ACCESS",
-      title: owner ? "Admin launch review needed" : "Membership status check",
-      text: owner
-        ? "Before public launch, audit admin actions, API protection, member locks, Stripe, and RLS."
-        : "Membership access and payment status control what tools unlock inside the command center.",
-      href: owner ? "/admin" : "/payment",
-      action: owner ? "Open Admin" : "Open Payment",
-      tone: owner ? "#b55cff" : "#f5d978",
-    },
-  ];
-
-  return (
-    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(157,243,191,.34)" }}>
-      <div style={greenEyebrow}>Notifications Center</div>
-      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-        Priority signals, actions, and command alerts.
-      </h2>
-      <p style={{ ...muted, fontSize: 19 }}>
-        A read-only alert panel for fast scanning. These values now come from the canonical VaultForge intelligence tables.
-      </p>
-
-      <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
-        {notices.map((notice) => (
-          <div
-            key={`${notice.level}-${notice.title}`}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "92px 1fr auto",
-              gap: 14,
-              alignItems: "center",
-              border: "1px solid rgba(255,255,255,.13)",
-              background: "linear-gradient(135deg, rgba(0,0,0,.26), rgba(255,255,255,.04))",
-              borderRadius: 22,
-              padding: 14,
-              boxShadow: "0 18px 55px rgba(0,0,0,.24)",
-            }}
-          >
-            <div
-              style={{
-                border: `1px solid ${notice.tone}`,
-                color: notice.tone,
-                borderRadius: 16,
-                padding: "10px 8px",
-                textAlign: "center",
-                fontWeight: 950,
-                letterSpacing: 1.5,
-                background: "rgba(0,0,0,.24)",
-              }}
-            >
-              {notice.level}
-            </div>
-
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 950, marginBottom: 4 }}>{notice.title}</div>
-              <p style={{ ...muted, margin: 0 }}>{notice.text}</p>
-            </div>
-
-            <Link href={notice.href} style={ghost}>
-              {notice.action}
-            </Link>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function BuyBoxPanel({ owner }: { owner: boolean }) {
-  const buyBoxes = [
-    {
-      code: "ATL-FLIP",
-      title: "Atlanta Metro Flip Box",
-      market: "Georgia",
-      target: "Residential · Fix & Flip",
-      range: "$150k - $425k",
-      signal: "High demand",
-      tone: "#9df3bf",
-    },
-    {
-      code: "TN-LAND",
-      title: "Tennessee Land Watch",
-      market: "Tennessee",
-      target: "Land · Builder Lots · Entitlement",
-      range: "2 - 50 acres",
-      signal: "Builder-ready preferred",
-      tone: "#b55cff",
-    },
-    {
-      code: "SE-MF",
-      title: "Southeast Multifamily Value Add",
-      market: "GA / TN / Carolinas",
-      target: "Commercial · Value Add",
-      range: "5+ units",
-      signal: "Capital fit pending",
-      tone: "#f5d978",
-    },
-    {
-      code: "DISTRESS",
-      title: "Stuck Project / Pain Watch",
-      market: "Regional",
-      target: "Needs lender, operator, contractor, buyer",
-      range: "Any size",
-      signal: owner ? "Admin routing candidate" : "Profile match candidate",
-      tone: "#9df3bf",
-    },
-  ];
-
-  return (
-    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(245,217,120,.34)" }}>
-      <div style={greenEyebrow}>Buy Boxes / Saved Searches</div>
-      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-        Watchlists that turn demand into routing intelligence.
-      </h2>
-      <p style={{ ...muted, fontSize: 19 }}>
-        Bloomberg-style workflows rely on monitors, watchlists, and customizable panels so users can scan what matters fast. This first version is read-only and safe; later it can connect to saved searches and real alert rules.
-      </p>
-
-      <section style={grid}>
-        {buyBoxes.map((box) => (
-          <div
-            key={box.code}
-            style={{
-              ...pane,
-              border: `1px solid ${box.tone}`,
-              background: "linear-gradient(145deg, rgba(0,0,0,.26), rgba(255,255,255,.045))",
-            }}
-          >
-            <div style={{ ...eyebrow, color: box.tone }}>{box.code}</div>
-            <h3 style={{ fontSize: 27, lineHeight: 1.05, margin: "0 0 10px" }}>{box.title}</h3>
-            <div style={{ display: "grid", gap: 8 }}>
-              <span style={{ ...chip, borderColor: box.tone, color: box.tone }}>{box.market}</span>
-              <span style={chip}>{box.target}</span>
-              <span style={chip}>{box.range}</span>
-              <span style={{ ...chip, borderColor: "rgba(255,255,255,.26)", color: "white" }}>{box.signal}</span>
-            </div>
-          </div>
-        ))}
-      </section>
-    </section>
-  );
-}
-
-function MemberBadgePanel({
-  email,
-  owner,
-  access,
-}: {
-  email: string;
-  owner: boolean;
-  access: Access | null;
-}) {
-  const paid = Boolean(access?.paid || access?.unlocked || owner);
-  const profileComplete = Boolean(access?.profile_complete || owner);
-
-  const badges = [
-    {
-      label: owner ? "OWNER" : "MEMBER",
-      title: owner ? "VaultForge Owner" : "Private Member",
-      text: owner
-        ? "Full command access for admin review, deal routing, network controls, and launch monitoring."
-        : "Member workspace for deal rooms, buy boxes, saved targets, messages, and routing intelligence.",
-      tone: owner ? "#b55cff" : "#9df3bf",
-    },
-    {
-      label: profileComplete ? "PROFILE" : "TRAIN",
-      title: profileComplete ? "Profile Trained" : "Profile Needs Training",
-      text: profileComplete
-        ? "Your profile can feed markets, roles, strategies, needs, and routing preferences into the intelligence layer."
-        : "Complete your profile to improve future routing, alerts, matching, and member visibility.",
-      tone: profileComplete ? "#9df3bf" : "#f5d978",
-    },
-    {
-      label: paid ? "ACCESS" : "LOCKED",
-      title: paid ? "Command Access Active" : "Payment Step Pending",
-      text: paid
-        ? "Member command tools are available from this dashboard."
-        : "Payment activation unlocks the full member command center when billing is active.",
-      tone: paid ? "#9df3bf" : "#f5d978",
-    },
-    {
-      label: "FOUNDER",
-      title: owner ? "Founder Seat: Owner" : "Founder Window Candidate",
-      text: "Founder positioning is part of the private network identity layer and can later connect to actual founder numbers.",
-      tone: "#b55cff",
-    },
-  ];
-
-  return (
-    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(157,243,191,.34)" }}>
-      <div style={greenEyebrow}>Member Identity Layer</div>
-      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-        Badges, access status, and network role.
-      </h2>
-      <p style={{ ...muted, fontSize: 19 }}>
-        This creates the professional member identity layer without changing the database yet. Later, these badges can connect to verified roles, founder numbers, lender status, operator status, and admin approvals.
-      </p>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "16px 0" }}>
-        <span style={{ ...chip, borderColor: "rgba(181,92,255,.45)", color: "#d9b8ff", background: "rgba(181,92,255,.12)" }}>
-          {email || "member"}
-        </span>
-        <span style={chip}>{owner ? "Owner/Admin" : "Member"}</span>
-        <span style={chip}>{profileComplete ? "Profile Complete" : "Profile Pending"}</span>
-        <span style={chip}>{paid ? "Access Active" : "Payment Pending"}</span>
-      </div>
-
-      <section style={grid}>
-        {badges.map((badge) => (
-          <div
-            key={badge.label}
-            style={{
-              ...pane,
-              border: `1px solid ${badge.tone}`,
-              background: "linear-gradient(145deg, rgba(0,0,0,.24), rgba(255,255,255,.045))",
-            }}
-          >
-            <div
-              style={{
-                display: "inline-flex",
-                color: badge.tone,
-                border: `1px solid ${badge.tone}`,
-                borderRadius: 999,
-                padding: "7px 11px",
-                fontWeight: 950,
-                letterSpacing: 2,
-                fontSize: 12,
-                marginBottom: 12,
-                background: "rgba(0,0,0,.20)",
-              }}
-            >
-              {badge.label}
-            </div>
-            <h3 style={{ fontSize: 26, lineHeight: 1.05, margin: "0 0 10px" }}>{badge.title}</h3>
-            <p style={muted}>{badge.text}</p>
-          </div>
-        ))}
-      </section>
-    </section>
-  );
-}
-
-function ActivityFeed({ owner, stats }: { owner: boolean; stats: Stats }) {
-  const feed = [
-    {
-      code: "LIVE",
-      label: "Network Pulse",
-      title: "Member intelligence engine active",
-      text: "VaultForge is watching deals, profiles, buy buckets, messages, alerts, routing signals, pain submissions, and activity events from one command center.",
-      tone: "#9df3bf",
-    },
-    {
-      code: "DEAL",
-      label: "Deal Flow",
-      title: `${stats.deals || 0} active deal rooms tracked`,
-      text: "Submitted Residential, Commercial, and Land opportunities can be opened from Projects and Deal Rooms.",
-      tone: "#f5d978",
-    },
-    {
-      code: "BUCKET",
-      label: "Demand Signal",
-      title: `${stats.bucket || 0} saved acquisition targets`,
-      text: "Buy Bucket activity helps show what members are watching, underwriting, or preparing to pursue.",
-      tone: "#b55cff",
-    },
-    {
-      code: "MSG",
-      label: "Communication",
-      title: `${stats.messages || 0} deal-tied messages`,
-      text: "Messages keep opportunity conversations attached to the platform instead of scattered across texts and calls.",
-      tone: "#9df3bf",
-    },
-    {
-      code: "ALERT",
-      label: "Smart Routing",
-      title: `${stats.alerts || 0} real match alerts`,
-      text: "Smart Alerts are the private intelligence feed for match scores, buyer fit, lender fit, and operator fit.",
-      tone: "#f5d978",
-    },
-    {
-      code: "PAIN",
-      label: "Distress Intake",
-      title: `${stats.pain || 0} distress signals tracked`,
-      text: "Pain submissions become routing input for capital, execution, title, contractor, seller, and project problems.",
-      tone: "#ff8b8b",
-    },
-    {
-      code: "ROUTE",
-      label: "Routing Brain",
-      title: `${stats.routing || 0} routing signals available`,
-      text: "Routing signals are the machine-readable layer for explainable matching and AI recommendations.",
-      tone: "#b55cff",
-    },
-    {
-      code: "EVENT",
-      label: "Activity Events",
-      title: `${stats.activity || 0} activity records logged`,
-      text: "Activity events power telemetry, engagement scoring, command feeds, and later notifications.",
-      tone: "#9df3bf",
-    },
-    {
-      code: owner ? "ADMIN" : "MEMBER",
-      label: owner ? "Owner Desk" : "Member Desk",
-      title: owner ? "Owner command controls online" : "Member command center online",
-      text: owner
-        ? "Admin controls should stay concentrated here while core auth and API security are hardened."
-        : "Complete profile and buy-box data improves future routing accuracy and alert quality.",
-      tone: owner ? "#b55cff" : "#9df3bf",
-    },
-  ];
-
-  return (
-    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(181,92,255,.36)" }}>
-      <div style={greenEyebrow}>Live Intelligence Feed</div>
-      <h2 style={{ fontSize: "clamp(38px,8vw,76px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-        Network activity, deal signals, and command alerts.
-      </h2>
-      <p style={{ ...muted, fontSize: 19 }}>
-        A Bloomberg-style readout for what matters now. These cards now display real counts from the canonical intelligence layer.
-      </p>
-
-      <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
-        {feed.map((item) => (
-          <div
-            key={`${item.code}-${item.title}`}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "88px 1fr",
-              gap: 14,
-              alignItems: "start",
-              border: "1px solid rgba(255,255,255,.13)",
-              background: "linear-gradient(135deg, rgba(0,0,0,.24), rgba(255,255,255,.035))",
-              borderRadius: 22,
-              padding: 14,
-              boxShadow: "0 18px 55px rgba(0,0,0,.24)",
-            }}
-          >
-            <div
-              style={{
-                border: `1px solid ${item.tone}`,
-                color: item.tone,
-                borderRadius: 16,
-                padding: "10px 8px",
-                textAlign: "center",
-                fontWeight: 950,
-                letterSpacing: 1.5,
-                background: "rgba(0,0,0,.24)",
-              }}
-            >
-              {item.code}
-            </div>
-
-            <div>
-              <div style={{ ...eyebrow, color: item.tone, marginBottom: 6 }}>{item.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 950, marginBottom: 4 }}>{item.title}</div>
-              <p style={{ ...muted, margin: 0 }}>{item.text}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function OwnerAdminPanel({ stats }: { stats: Stats }) {
-  const admin = stats.admin || {
-    owner: false,
-    pendingDeals: 0,
-    archivedDeals: 0,
-    lockedMembers: 0,
-    paymentRequiredMembers: 0,
-    activeMembers: 0,
-  };
-
-  return (
-    <section style={{ ...hero, borderColor: "rgba(232,196,107,.42)" }}>
-      <div style={eyebrow}>Owner / Soft Admin Controls</div>
-      <h2 style={{ fontSize: 40, lineHeight: 1, margin: "0 0 12px" }}>
-        Owner Control Center
-      </h2>
-      <p style={muted}>
-        These controls are for you only. Normal members should not see delete, archive, approval, member status,
-        or global review tools.
-      </p>
-
-      <section style={grid}>
-        <StatPane label="Pending Deals" value={admin.pendingDeals} detail="Deals that may need review." />
-        <StatPane label="Archived Deals" value={admin.archivedDeals} detail="Deals hidden from active flow." />
-        <StatPane label="Active Members" value={admin.activeMembers} detail="Members currently marked active." />
-        <StatPane label="Locked Members" value={admin.lockedMembers} detail="Members locked or incomplete." />
-        <StatPane label="Payment Required" value={admin.paymentRequiredMembers} detail="Members waiting on payment." />
-      </section>
-
-      <div style={{ marginTop: 16 }}>
-        <div style={{ ...eyebrow, marginBottom: 6 }}>Admin Navigation</div>
-        <Link href="/admin" style={btn}>Admin Home</Link>
-        <Link href="/projects" style={ghost}>Review Deals</Link>
-        <Link href="/network" style={ghost}>Manage Members</Link>
-        <Link href="/messages" style={ghost}>All Messages</Link>
-        <Link href="/buy-bucket" style={ghost}>Buy Buckets</Link>
-        <Link href="/alerts" style={ghost}>Alerts Control</Link>
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <div style={{ ...eyebrow, marginBottom: 6 }}>Soft Admin Actions</div>
-        <Link href="/projects" style={danger}>Delete / Archive Deals</Link>
-        <Link href="/network" style={danger}>Lock / Activate Members</Link>
-        <Link href="/payment" style={ghost}>Payment Status Control</Link>
-      </div>
-    </section>
   );
 }
 
@@ -1010,6 +283,372 @@ function LockedScreen({ reason }: { reason: "profile" | "payment" | "login" | "l
   );
 }
 
+function OwnerAdminPanel({ stats }: { stats: Stats }) {
+  const admin = stats.admin || {
+    owner: false,
+    pendingDeals: 0,
+    archivedDeals: 0,
+    lockedMembers: 0,
+    paymentRequiredMembers: 0,
+    activeMembers: 0,
+  };
+
+  return (
+    <section style={{ ...hero, borderColor: "rgba(232,196,107,.42)" }}>
+      <div style={eyebrow}>Owner / Admin Controls</div>
+      <h2 style={{ fontSize: 40, lineHeight: 1, margin: "0 0 12px" }}>Owner Control Center</h2>
+      <p style={muted}>
+        Admin controls stay separated from member tools. Use these buttons for member activation, deal review, messages, alerts, and buy-bucket oversight.
+      </p>
+
+      <section style={grid}>
+        <StatPane label="Pending Deals" value={admin.pendingDeals} detail="Deals that may need review." href="/projects" />
+        <StatPane label="Archived Deals" value={admin.archivedDeals} detail="Deals hidden from active flow." href="/projects" />
+        <StatPane label="Active Members" value={admin.activeMembers} detail="Members currently marked active." href="/network" />
+        <StatPane label="Locked Members" value={admin.lockedMembers} detail="Members locked or incomplete." href="/network" />
+        <StatPane label="Payment Required" value={admin.paymentRequiredMembers} detail="Members waiting on payment." href="/network" />
+      </section>
+
+      <div style={{ marginTop: 16 }}>
+        <Link href="/admin" style={btn}>Admin Home</Link>
+        <Link href="/network" style={ghost}>Manage Members</Link>
+        <Link href="/projects" style={ghost}>Review Deals</Link>
+        <Link href="/alerts" style={ghost}>Generate Alerts</Link>
+        <Link href="/messages" style={ghost}>Messages</Link>
+      </div>
+    </section>
+  );
+}
+
+function MemberBadgePanel({ email, owner, access }: { email: string; owner: boolean; access: Access | null }) {
+  const paid = Boolean(access?.paid || access?.unlocked || owner);
+  const profileComplete = Boolean(access?.profile_complete || owner);
+
+  const badges = [
+    {
+      href: "/profile",
+      label: owner ? "OWNER" : "MEMBER",
+      title: owner ? "VaultForge Owner" : "Private Member",
+      text: owner
+        ? "Full command access for admin review, deal routing, network controls, and launch monitoring."
+        : "Member workspace for deal rooms, buy boxes, saved targets, messages, and routing intelligence.",
+      tone: owner ? "#b55cff" : "#9df3bf",
+      action: "Edit Profile",
+    },
+    {
+      href: "/profile",
+      label: profileComplete ? "PROFILE" : "TRAIN",
+      title: profileComplete ? "Profile Trained" : "Profile Needs Training",
+      text: profileComplete
+        ? "Your profile can feed markets, roles, strategies, needs, and routing preferences into the intelligence layer."
+        : "Complete your profile to improve future routing, alerts, matching, and member visibility.",
+      tone: profileComplete ? "#9df3bf" : "#f5d978",
+      action: "Open Profile",
+    },
+    {
+      href: paid ? "/dashboard" : "/payment",
+      label: paid ? "ACCESS" : "LOCKED",
+      title: paid ? "Command Access Active" : "Payment Step Pending",
+      text: paid
+        ? "Member command tools are available from this dashboard."
+        : "Payment activation unlocks the full member command center when billing is active.",
+      tone: paid ? "#9df3bf" : "#f5d978",
+      action: paid ? "Command Active" : "Open Payment",
+    },
+    {
+      href: "/network",
+      label: "FOUNDER",
+      title: owner ? "Founder Seat: Owner" : "Founder Window Candidate",
+      text: "Founder positioning is part of the private network identity layer and can later connect to actual founder numbers.",
+      tone: "#b55cff",
+      action: "Open Network",
+    },
+  ];
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(157,243,191,.34)" }}>
+      <div style={greenEyebrow}>Member Identity Layer</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        Badges, access status, and network role.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>
+        These badges now open the correct areas instead of sitting as read-only cards.
+      </p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "16px 0" }}>
+        <span style={{ ...chip, borderColor: "rgba(181,92,255,.45)", color: "#d9b8ff", background: "rgba(181,92,255,.12)" }}>
+          {email || "member"}
+        </span>
+        <span style={chip}>{owner ? "Owner/Admin" : "Member"}</span>
+        <span style={chip}>{profileComplete ? "Profile Complete" : "Profile Pending"}</span>
+        <span style={chip}>{paid ? "Access Active" : "Payment Pending"}</span>
+      </div>
+
+      <section style={grid}>
+        {badges.map((badge) => (
+          <Link
+            key={badge.label}
+            href={badge.href}
+            style={{
+              ...pane,
+              display: "block",
+              color: "white",
+              textDecoration: "none",
+              border: `1px solid ${badge.tone}`,
+              background: "linear-gradient(145deg, rgba(0,0,0,.24), rgba(255,255,255,.045))",
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                color: badge.tone,
+                border: `1px solid ${badge.tone}`,
+                borderRadius: 999,
+                padding: "7px 11px",
+                fontWeight: 950,
+                letterSpacing: 2,
+                fontSize: 12,
+                marginBottom: 12,
+                background: "rgba(0,0,0,.20)",
+              }}
+            >
+              {badge.label}
+            </div>
+            <h3 style={{ fontSize: 26, lineHeight: 1.05, margin: "0 0 10px" }}>{badge.title}</h3>
+            <p style={muted}>{badge.text}</p>
+            <div style={{ ...chip, marginTop: 8 }}>{badge.action}</div>
+          </Link>
+        ))}
+      </section>
+    </section>
+  );
+}
+
+function BuyBoxPanel() {
+  const buyBoxes = [
+    {
+      href: "/alerts",
+      code: "ATL-FLIP",
+      title: "Atlanta Metro Flip Box",
+      market: "Georgia",
+      target: "Residential · Fix & Flip",
+      range: "$150k - $425k",
+      signal: "Open matching alerts",
+      tone: "#9df3bf",
+    },
+    {
+      href: "/alerts",
+      code: "TN-LAND",
+      title: "Tennessee Land Watch",
+      market: "Tennessee",
+      target: "Land · Builder Lots · Entitlement",
+      range: "2 - 50 acres",
+      signal: "Open land alerts",
+      tone: "#b55cff",
+    },
+    {
+      href: "/buy-bucket",
+      code: "SE-MF",
+      title: "Southeast Multifamily Value Add",
+      market: "GA / TN / Carolinas",
+      target: "Commercial · Value Add",
+      range: "5+ units",
+      signal: "Open saved targets",
+      tone: "#f5d978",
+    },
+    {
+      href: "/pain-submit",
+      code: "DISTRESS",
+      title: "Stuck Project / Pain Watch",
+      market: "Regional",
+      target: "Needs lender, operator, contractor, buyer",
+      range: "Any size",
+      signal: "Route a pain signal",
+      tone: "#9df3bf",
+    },
+  ];
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(245,217,120,.34)" }}>
+      <div style={greenEyebrow}>Buy Boxes / Saved Searches</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        Watchlists that turn demand into routing intelligence.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>
+        These cards now act as launch points into alerts, saved targets, and pain routing.
+      </p>
+
+      <section style={grid}>
+        {buyBoxes.map((box) => (
+          <Link
+            key={box.code}
+            href={box.href}
+            style={{
+              ...pane,
+              display: "block",
+              color: "white",
+              textDecoration: "none",
+              border: `1px solid ${box.tone}`,
+              background: "linear-gradient(145deg, rgba(0,0,0,.26), rgba(255,255,255,.045))",
+            }}
+          >
+            <div style={{ ...eyebrow, color: box.tone }}>{box.code}</div>
+            <h3 style={{ fontSize: 27, lineHeight: 1.05, margin: "0 0 10px" }}>{box.title}</h3>
+            <div style={{ display: "grid", gap: 8 }}>
+              <span style={{ ...chip, borderColor: box.tone, color: box.tone }}>{box.market}</span>
+              <span style={chip}>{box.target}</span>
+              <span style={chip}>{box.range}</span>
+              <span style={{ ...chip, borderColor: "rgba(255,255,255,.26)", color: "white" }}>{box.signal}</span>
+            </div>
+          </Link>
+        ))}
+      </section>
+    </section>
+  );
+}
+
+function NotificationCenter({ owner, stats, access }: { owner: boolean; stats: Stats; access: Access | null }) {
+  const notices = [
+    {
+      level: "DEAL",
+      title: stats.deals > 0 ? "Review active deal rooms" : "Create the first live opportunity",
+      text: stats.deals > 0
+        ? `${stats.deals} active deal rooms are available for review, routing, or save-to-bucket actions.`
+        : "Create the first live opportunity to start routing demand through the network.",
+      href: stats.deals > 0 ? "/projects" : "/submit",
+      action: stats.deals > 0 ? "Open Projects" : "Create Deal",
+      tone: "#f5d978",
+    },
+    {
+      level: "ALERT",
+      title: `${stats.alerts || 0} smart alerts`,
+      text: access?.profile_complete
+        ? "Open Smart Alerts to generate or review routing matches."
+        : "Complete profile fields to improve future saved-search and smart-alert accuracy.",
+      href: "/alerts",
+      action: "Open Alerts",
+      tone: "#9df3bf",
+    },
+    {
+      level: "PAIN",
+      title: `${stats.pain || 0} distress signals`,
+      text: "Pain Button submissions become routing input for capital needs, stalled projects, seller pressure, and urgent deal rescue.",
+      href: "/pain-submit",
+      action: "Route Pain Signal",
+      tone: "#ff8b8b",
+    },
+    {
+      level: "BUCKET",
+      title: `${stats.bucket || 0} saved target signals`,
+      text: "Buy Bucket activity can become a demand map showing what members are watching, pursuing, and underwriting.",
+      href: "/buy-bucket",
+      action: "Open Buy Bucket",
+      tone: "#b55cff",
+    },
+    {
+      level: "COMMS",
+      title: `${stats.messages || 0} deal communication records`,
+      text: "Message volume should become part of deal heat, urgency, and engagement scoring later.",
+      href: "/messages",
+      action: "Open Messages",
+      tone: "#9df3bf",
+    },
+    {
+      level: owner ? "ADMIN" : "ACCESS",
+      title: owner ? "Admin launch review" : "Membership status check",
+      text: owner
+        ? "Audit admin actions, API protection, member locks, Stripe, and RLS before public launch."
+        : "Membership access and payment status control what tools unlock inside the command center.",
+      href: owner ? "/admin" : "/payment",
+      action: owner ? "Open Admin" : "Open Payment",
+      tone: owner ? "#b55cff" : "#f5d978",
+    },
+  ];
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(157,243,191,.34)" }}>
+      <div style={greenEyebrow}>Notifications Center</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        Priority signals, actions, and command alerts.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>
+        These rows now open the correct action pages instead of sitting as read-only notices.
+      </p>
+
+      <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+        {notices.map((notice) => (
+          <Link
+            key={`${notice.level}-${notice.title}`}
+            href={notice.href}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "92px 1fr auto",
+              gap: 14,
+              alignItems: "center",
+              border: "1px solid rgba(255,255,255,.13)",
+              background: "linear-gradient(135deg, rgba(0,0,0,.26), rgba(255,255,255,.04))",
+              borderRadius: 22,
+              padding: 14,
+              boxShadow: "0 18px 55px rgba(0,0,0,.24)",
+              color: "white",
+              textDecoration: "none",
+            }}
+          >
+            <div
+              style={{
+                border: `1px solid ${notice.tone}`,
+                color: notice.tone,
+                borderRadius: 16,
+                padding: "10px 8px",
+                textAlign: "center",
+                fontWeight: 950,
+                letterSpacing: 1.5,
+                background: "rgba(0,0,0,.24)",
+              }}
+            >
+              {notice.level}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 950, marginBottom: 4 }}>{notice.title}</div>
+              <p style={{ ...muted, margin: 0 }}>{notice.text}</p>
+            </div>
+
+            <span style={ghost}>{notice.action}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PipelinePanel({ stats }: { stats: Stats }) {
+  const pipeline = [
+    ["New Intake", stats.deals, "/projects", "Fresh deal rooms submitted into VaultForge."],
+    ["Matched / Routed", stats.alerts, "/alerts", "Real match alerts and routing intelligence."],
+    ["Saved / Watched", stats.bucket, "/buy-bucket", "Deals saved into Buy Buckets as demand signals."],
+    ["Conversation", stats.messages, "/messages", "Deal messages and member follow-up."],
+    ["Distress", stats.pain, "/pain-submit", "Pain Button and problem-routing submissions."],
+    ["Routing Activity", stats.routing, "/alerts", "Machine-readable routing signals for AI matching."],
+  ] as const;
+
+  return (
+    <section style={{ ...hero, marginTop: 22, borderColor: "rgba(181,92,255,.38)" }}>
+      <div style={greenEyebrow}>Deal Status Pipeline</div>
+      <h2 style={{ fontSize: "clamp(38px,8vw,74px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+        From intake to routing to execution.
+      </h2>
+      <p style={{ ...muted, fontSize: 19 }}>Each pipeline card now opens the right work area.</p>
+
+      <section style={grid}>
+        {pipeline.map(([label, value, href, text]) => (
+          <StatPane key={label} label={label} value={Number(value || 0)} detail={text} href={href} />
+        ))}
+      </section>
+    </section>
+  );
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({
     deals: 0,
@@ -1030,21 +669,21 @@ export default function DashboardPage() {
     setStatus("Checking access...");
 
     try {
-      const email = getEmail();
-      setEmail(email);
+      const currentEmail = getEmail();
+      setEmail(currentEmail);
 
-      if (!email) {
+      if (!currentEmail) {
         setLockReason("login");
         setStatus("");
         return;
       }
 
-      const accessRes = await fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
+      const accessRes = await fetch(`/api/member/access?email=${encodeURIComponent(currentEmail)}`, {
         cache: "no-store",
-        headers: { "x-vf-email": email },
+        headers: { "x-vf-email": currentEmail },
       });
 
-      const accessData = await accessRes.json();
+      const accessData = await safeJson(accessRes);
       setAccess(accessData);
 
       if (!accessData?.owner && !accessData?.profile_complete) {
@@ -1061,17 +700,17 @@ export default function DashboardPage() {
 
       setLockReason("open");
 
-      const owner = isOwnerEmail(email) || Boolean(accessData?.owner);
+      const owner = isOwnerEmail(currentEmail) || Boolean(accessData?.owner);
 
-      const statsRes = await fetch(`/api/dashboard/stats?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`, {
+      const statsRes = await fetch(`/api/dashboard/stats?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
         cache: "no-store",
         headers: {
-          "x-vf-email": email,
+          "x-vf-email": currentEmail,
           "x-vf-admin": owner ? "1" : "0",
         },
       });
 
-      const statsData = await statsRes.json();
+      const statsData = await safeJson(statsRes);
       const statsPayload = statsData?.stats || statsData || {};
 
       setStats({
@@ -1085,7 +724,6 @@ export default function DashboardPage() {
         activity: Number(statsPayload?.activity || 0),
         warning: statsPayload?.warning || statsData?.warning || "",
         admin: statsPayload?.admin || statsData?.admin,
-        sources: statsPayload?.sources || statsData?.sources,
       });
 
       setStatus("");
@@ -1122,9 +760,11 @@ export default function DashboardPage() {
           }
         }
 
-        a:hover {
+        a:hover,
+        button:hover {
           transform: translateY(-1px);
           transition: all .18s ease;
+          filter: brightness(1.06);
         }
       `}</style>
 
@@ -1134,7 +774,7 @@ export default function DashboardPage() {
           <div>
             <Link href="/profile" style={ghost}>Profile</Link>
             <Link href="/payment" style={ghost}>Payment</Link>
-            <Link href="/logout" style={ghost}>Logout</Link>
+            <Link href="/logout" style={danger}>Logout</Link>
           </div>
         </div>
 
@@ -1144,8 +784,7 @@ export default function DashboardPage() {
             {owner ? "Owner command center." : "Your real estate intelligence desk."}
           </h1>
           <p style={{ ...muted, fontSize: 21 }}>
-            VaultForge now reads deals, members, buy buckets, match alerts, messages, distress signals,
-            routing signals, and activity events from one operating system.
+            Use this as the operating map. The command cards now route into the right live work areas.
           </p>
 
           <div className="vf-command-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
@@ -1154,11 +793,13 @@ export default function DashboardPage() {
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/projects" style={ghost}>Deal Rooms</Link>
             <Link href="/network" style={ghost}>Member Network</Link>
+            <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+            <Link href="/messages" style={ghost}>Messages</Link>
+            {owner && <Link href="/admin" style={btn}>Admin Home</Link>}
           </div>
         </section>
 
         {owner && <OwnerAdminPanel stats={stats} />}
-        <FounderCountdown />
 
         {status && <section style={hero}>{status}</section>}
 
@@ -1169,67 +810,23 @@ export default function DashboardPage() {
         )}
 
         <section style={grid}>
-          <ClickableStatPane
-            label="Active Deals"
-            value={stats.deals}
-            detail="Total active deal rooms in the system."
-            href="/projects"
-          />
-          <ClickableStatPane
-            label="Members"
-            value={stats.members}
-            detail="Canonical member records tracked."
-            href="/network"
-          />
-          <ClickableStatPane
-            label="Buy Bucket"
-            value={stats.bucket}
-            detail="Saved acquisition targets."
-            href="/buy-bucket"
-          />
-          <ClickableStatPane
-            label="Messages"
-            value={stats.messages}
-            detail="Deal-tied conversations."
-            href="/messages"
-          />
-          <ClickableStatPane
-            label="Alerts"
-            value={stats.alerts}
-            detail="Real match alerts from vf_match_alerts."
-            href="/alerts"
-          />
-          <ClickableStatPane
-            label="Distress Signals"
-            value={stats.pain}
-            detail="Pain Button and problem-routing submissions."
-            href="/pain"
-          />
-          <ClickableStatPane
-            label="Routing Activity"
-            value={stats.routing}
-            detail="AI routing signals and match logic records."
-            href="/alerts"
-          />
-          <ClickableStatPane
-            label="Activity Events"
-            value={stats.activity}
-            detail="Telemetry records for network activity and engagement."
-            href="/dashboard"
-          />
+          <StatPane label="Active Deals" value={stats.deals} detail="Total active deal rooms in the system." href="/projects" />
+          <StatPane label="Members" value={stats.members} detail="Canonical member records tracked." href="/network" />
+          <StatPane label="Buy Bucket" value={stats.bucket} detail="Saved acquisition targets." href="/buy-bucket" />
+          <StatPane label="Messages" value={stats.messages} detail="Deal-tied conversations." href="/messages" />
+          <StatPane label="Alerts" value={stats.alerts} detail="Smart routing alerts." href="/alerts" />
+          <StatPane label="Distress Signals" value={stats.pain} detail="Pain Button submissions." href="/pain-submit" />
+          <StatPane label="Routing Activity" value={stats.routing} detail="AI routing signals and match logic records." href="/alerts" />
+          <StatPane label="Activity Events" value={stats.activity} detail="Telemetry and engagement records." href="/dashboard" />
         </section>
 
         <MemberBadgePanel email={email} owner={owner} access={access} />
 
-        <BuyBoxPanel owner={owner} />
+        <BuyBoxPanel />
 
         <NotificationCenter owner={owner} stats={stats} access={access} />
 
-        <DealPipelinePanel stats={stats} />
-
-        <PainButtonPanel owner={owner} stats={stats} />
-
-        <ActivityFeed owner={owner} stats={stats} />
+        <PipelinePanel stats={stats} />
 
         <section style={{ ...hero, marginTop: 22 }}>
           <div style={greenEyebrow}>Command Tools</div>
@@ -1237,8 +834,7 @@ export default function DashboardPage() {
             What each section does.
           </h2>
           <p style={{ ...muted, fontSize: 19 }}>
-            Use this as your operating map. The more complete your profile and deal data are,
-            the smarter the routing engine gets.
+            Use this as your operating map. Each tool opens the live page where the work happens.
           </p>
         </section>
 
@@ -1247,7 +843,7 @@ export default function DashboardPage() {
             primary
             label="Create"
             title="Create Deal"
-            text="Submit residential, commercial, or land opportunities with structured numbers, photos, strategy, seller situation, access notes, repair estimates, and routing fields."
+            text="Submit residential, commercial, or land opportunities with routing fields, photos, strategy, seller situation, access notes, and AI summary."
             href="/submit"
             button="Create Opportunity"
             tags={["Residential", "Commercial", "Land", "Photos", "AI Summary"]}
@@ -1257,16 +853,16 @@ export default function DashboardPage() {
             primary
             label="Intelligence"
             title="Smart Alerts"
-            text="Your routing feed. VaultForge scores deals against member profiles, markets, roles, buy boxes, strategies, needs, and provider abilities, then explains why each match surfaced."
+            text="Open routing alerts and generate matches against active members, markets, roles, buy boxes, strategies, needs, and provider abilities."
             href="/alerts"
             button="Open Smart Alerts"
-            tags={["Match Score", "Why Matched", "Deal Routing", "Buyer/Lender Fit"]}
+            tags={["Capital Match", "Buyer Match", "Operator Match", "Pain Signal"]}
           />
 
           <ToolCard
             label="Deal Rooms"
             title="Projects"
-            text="Your live deal room list. Review active opportunities, open deal details, move deals into folders, archive stale opportunities, delete trash, and save strong targets."
+            text="Review active opportunities, open deal details, archive stale deals, delete trash, and save strong targets."
             href="/projects"
             button="Review Deal Rooms"
             tags={["Deal Room", "Archive", "Folders", "Delete", "Save"]}
@@ -1275,7 +871,7 @@ export default function DashboardPage() {
           <ToolCard
             label="Acquisition"
             title="Buy Bucket"
-            text="Your saved acquisition targets. This is where members collect opportunities they want to watch, revisit, underwrite, or pursue."
+            text="Saved acquisition targets and demand signals."
             href="/buy-bucket"
             button="Open Buy Bucket"
             tags={["Saved Targets", "Demand Signal", "Watchlist"]}
@@ -1284,7 +880,7 @@ export default function DashboardPage() {
           <ToolCard
             label="Network"
             title="Member Network"
-            text="The private member directory. See buyers, lenders, contractors, sellers, operators, developers, wholesalers, and partners by role, state, strategy, and what they can provide."
+            text="Private member network with buyers, lenders, contractors, sellers, operators, developers, wholesalers, and partners."
             href="/network"
             button="Open Network"
             tags={["Buyers", "Lenders", "Operators", "Contractors", "Partners"]}
@@ -1293,59 +889,29 @@ export default function DashboardPage() {
           <ToolCard
             label="Communication"
             title="Messages"
-            text="Deal-tied conversations and member communications. Keep opportunity conversations organized instead of buried in texts, DMs, and random call notes."
+            text="Deal-tied conversations and member communications."
             href="/messages"
             button="Open Messages"
             tags={["Threads", "Deal Talk", "Member Contact"]}
           />
 
           <ToolCard
+            label="Pain"
+            title="Pain Button"
+            text="Route distressed sellers, stuck projects, funding gaps, contractor problems, and urgent execution issues."
+            href="/pain-submit"
+            button="Route Pain Signal"
+            tags={["Distress", "Funding Gap", "Operator", "Contractor"]}
+          />
+
+          <ToolCard
             label="Profile"
             title="Profile / Alert Preferences"
-            text="This trains the VaultForge engine. Set member roles, markets, project types, strategies, what you need, what you provide, alert types, and profile photo."
+            text="Train the VaultForge engine with roles, markets, project types, strategies, needs, what you provide, and alert types."
             href="/profile"
             button="Train Profile"
             tags={["Buy Box", "Markets", "Roles", "Needs", "Can Provide"]}
           />
-
-          <ToolCard
-            label="Access"
-            title="Payment / Membership"
-            text="Membership access status and future billing controls. Stripe goes last so the product stays stable before money flow is turned on."
-            href="/payment"
-            button="View Access"
-            tags={["Founder Access", "$49 First Month", "$199/mo", "Billing"]}
-          />
-        </section>
-
-        <section style={{ ...hero, marginTop: 22, borderColor: "rgba(157,243,191,.30)" }}>
-          <div style={greenEyebrow}>How The Engine Works</div>
-          <h2 style={{ fontSize: "clamp(38px,8vw,72px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-            Deal data + member profiles + pain signals = routing intelligence.
-          </h2>
-          <p style={{ ...muted, fontSize: 19 }}>
-            VaultForge compares opportunity data against member profiles. It also tracks distress signals,
-            routing signals, match alerts, messages, and activity events. That is the foundation for explainable
-            matching, AI recommendations, and command-center intelligence.
-          </p>
-
-          <div style={grid}>
-            <div style={pane}>
-              <div style={greenEyebrow}>Step 1</div>
-              <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>Members train the system.</h3>
-              <p style={muted}>Profiles define what each member wants, where they operate, and what they can provide.</p>
-            </div>
-            <div style={pane}>
-              <div style={greenEyebrow}>Step 2</div>
-              <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>Deals and pain signals enter the engine.</h3>
-              <p style={muted}>Structured deal rooms and distress submissions give the system enough data to route, score, and explain.</p>
-            </div>
-            <div style={pane}>
-              <div style={greenEyebrow}>Step 3</div>
-              <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>Alerts and routing signals surface matches.</h3>
-              <p style={muted}>The command center shows what matched, why it matched, and where to take action.</p>
-            </div>
-          </div>
         </section>
       </div>
     </main>
