@@ -90,10 +90,11 @@ const muted: React.CSSProperties = {
 
 function getEmail() {
   if (typeof window === "undefined") return "";
+
   try {
     return (
-      localStorage.getItem("vf_email") ||
-      sessionStorage.getItem("vf_email") ||
+      window.localStorage.getItem("vf_email") ||
+      window.sessionStorage.getItem("vf_email") ||
       ""
     )
       .trim()
@@ -106,6 +107,15 @@ function getEmail() {
 function asText(value: unknown, fallback = "") {
   const text = String(value || "").trim();
   return text || fallback;
+}
+
+function locationText(signal: PainSignal | null) {
+  if (!signal) return "";
+
+  return [signal.city, signal.state]
+    .map((value) => asText(value))
+    .filter(Boolean)
+    .join(", ");
 }
 
 export default function PainMessagePage({ params }: { params: { id: string } }) {
@@ -227,7 +237,8 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
             </h2>
             <p style={muted}>{asText(signal.description, "No description.")}</p>
             <p style={muted}>
-              {asText(signal.asset_type)} {asText(signal.city) || asText(signal.state) ? "·" : ""} {[signal.city, signal.state].map(asText).filter(Boolean).join(", ")}
+              {asText(signal.asset_type)}
+              {locationText(signal) ? ` · ${locationText(signal)}` : ""}
             </p>
           </section>
         )}
