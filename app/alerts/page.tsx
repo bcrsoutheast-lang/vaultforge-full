@@ -611,7 +611,9 @@ export default function AlertsPage() {
           <div className="vf-alert-actions" style={{ marginTop: 18 }}>
             <button type="button" onClick={load} style={btn}>Refresh Alerts</button>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
+            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
+            {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <Link href="/submit" style={ghost}>Create Deal</Link>
             <Link href="/pain-submit" style={ghost}>Pain Button</Link>
@@ -726,7 +728,7 @@ export default function AlertsPage() {
           <div style={greenEyebrow}>Current Safety Mode</div>
           <p style={{ ...muted, fontSize: 19 }}>
             This is read-only generation. It does not store alerts, notify members, change access, or auto-route private details.
-            Next phase can store approved signals after the read-only layer proves accurate.
+            Next phase can store approved signals after the read-only layer proves accurate. Routed items now flow toward the Routing Inbox once owner/admin logs routing decisions.
           </p>
         </section>
       </div>
