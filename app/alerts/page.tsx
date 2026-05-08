@@ -62,6 +62,22 @@ type Feed = {
   error?: string;
 };
 
+type StoredFeed = {
+  ok?: boolean;
+  owner?: boolean;
+  email?: string;
+  table?: string;
+  alerts?: FeedAlert[];
+  counts?: {
+    stored_alerts?: number;
+    urgent?: number;
+    high?: number;
+    medium?: number;
+  };
+  note?: string;
+  error?: string;
+};
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -391,6 +407,7 @@ export default function AlertsPage() {
   const [access, setAccess] = useState<Access | null>(null);
   const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
   const [feed, setFeed] = useState<Feed>({});
+  const [storedFeed, setStoredFeed] = useState<StoredFeed>({});
   const [status, setStatus] = useState("Loading smart alerts...");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -432,16 +449,27 @@ export default function AlertsPage() {
 
       const owner = isOwner(currentEmail, accessData);
 
-      const feedRes = await fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
-        cache: "no-store",
-        headers: {
-          "x-vf-email": currentEmail,
-          "x-vf-admin": owner ? "1" : "0",
-        },
-      });
+      const [feedRes, storedRes] = await Promise.all([
+        fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": currentEmail,
+            "x-vf-admin": owner ? "1" : "0",
+          },
+        }),
+        fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": currentEmail,
+            "x-vf-admin": owner ? "1" : "0",
+          },
+        }),
+      ]);
 
       const feedData = await safeJson(feedRes);
+      const storedData = await safeJson(storedRes);
       setFeed(feedData || {});
+      setStoredFeed(storedData || {});
       setLockReason("open");
       setStatus("");
     } catch (error: any) {
@@ -462,6 +490,16 @@ export default function AlertsPage() {
     try {
       const result = await storeSignal(alert, email);
       setStoreMessage(result?.message || "Signal stored safely.");
+
+      const storedRes = await fetch(`/api/intelligence/stored?email=${encodeURIComponent(email)}&owner=1`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": email,
+          "x-vf-admin": "1",
+        },
+      });
+      const storedData = await safeJson(storedRes);
+      setStoredFeed(storedData || {});
     } catch (error: any) {
       setStoreMessage(error?.message || "Could not store signal.");
     } finally {
@@ -576,7 +614,8 @@ export default function AlertsPage() {
         </section>
 
         <section style={statGrid}>
-          <StatCard label="Total Signals" value={counts.total} detail="Generated from current data." />
+          <StatCard label="Generated Signals" value={counts.total} detail="Live read-only matches." />
+          <StatCard label="Stored Approved" value={storedFeed.counts?.stored_alerts || 0} detail="Saved into vf_match_alerts." />
           <StatCard label="Urgent" value={counts.urgent} detail="Highest priority review." />
           <StatCard label="High" value={counts.high} detail="Strong opportunity signals." />
           <StatCard label="Capital Needed" value={counts.capital} detail="Potential lender/private money fit." />
@@ -627,6 +666,40 @@ export default function AlertsPage() {
             {alerts.map((alert) => (
               <AlertCard
                 key={alert.id}
+                alert={alert}
+                owner={owner}
+                email={email}
+                storingId={storingId}
+                onStore={handleStore}
+              />
+            ))}
+          </section>
+        )}
+
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={greenEyebrow}>Stored Approved Signals</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            Signals saved into the intelligence table.
+          </h2>
+          <p style={{ ...muted, fontSize: 19 }}>
+            These are approved signals already saved in <strong>vf_match_alerts</strong>. Owner sees global stored signals.
+            Members only see stored signals tied to their email.
+          </p>
+          {storedFeed.error && <p style={{ color: "#ffd0d0", fontWeight: 900 }}>{storedFeed.error}</p>}
+        </section>
+
+        {(storedFeed.alerts || []).length === 0 ? (
+          <section style={hero}>
+            <strong>No stored approved signals yet.</strong>
+            <p style={muted}>
+              Owner/admin can use “Store Approved Signal” on generated alerts to save them.
+            </p>
+          </section>
+        ) : (
+          <section style={grid}>
+            {(storedFeed.alerts || []).slice(0, 12).map((alert) => (
+              <AlertCard
+                key={`stored-${alert.id}`}
                 alert={alert}
                 owner={owner}
                 email={email}
