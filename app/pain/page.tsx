@@ -14,7 +14,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
+const wrap: React.CSSProperties = { maxWidth: 1200, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(255,120,120,.30)",
@@ -38,6 +38,12 @@ const card: React.CSSProperties = {
   borderRadius: 28,
   padding: 22,
   boxShadow: "0 26px 80px rgba(0,0,0,.34)",
+};
+
+const signalCard: React.CSSProperties = {
+  ...card,
+  overflow: "hidden",
+  position: "relative",
 };
 
 const btn: React.CSSProperties = {
@@ -103,6 +109,15 @@ const chip: React.CSSProperties = {
   margin: "0 7px 7px 0",
 };
 
+const image: React.CSSProperties = {
+  width: "100%",
+  height: 220,
+  objectFit: "cover",
+  borderRadius: 22,
+  border: "1px solid rgba(255,255,255,.14)",
+  boxShadow: "0 20px 60px rgba(0,0,0,.30)",
+};
+
 function getEmail() {
   if (typeof window === "undefined") return "";
   return (
@@ -165,6 +180,58 @@ function painLocation(row: PainRow) {
     .join(", ");
 }
 
+function normalizePhotos(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map(String).filter(Boolean);
+  }
+
+  const text = asText(value);
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed.map(String).filter(Boolean);
+    }
+  } catch {
+    // continue
+  }
+
+  return [text];
+}
+
+function normalizeTags(row: PainRow) {
+  const value = row.ai_tags || row.routing_tags || row.tags;
+
+  if (Array.isArray(value)) {
+    return value.map(String).filter(Boolean);
+  }
+
+  const text = asText(value);
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed.map(String).filter(Boolean);
+    }
+  } catch {
+    // continue
+  }
+
+  return text.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function urgencyTone(value: unknown) {
+  const text = asText(value).toLowerCase();
+
+  if (text.includes("emergency") || text.includes("urgent")) return "#ff6b6b";
+  if (text.includes("high")) return "#ff9f9f";
+  if (text.includes("medium")) return "#f5d978";
+
+  return "#9df3bf";
+}
+
 function NumberStatCard({
   label,
   value,
@@ -201,14 +268,29 @@ function DetailCard({
   );
 }
 
+function ActionButton({
+  href,
+  children,
+  primary = false,
+}: {
+  href: string;
+  children: React.ReactNode;
+  primary?: boolean;
+}) {
+  return (
+    <Link href={href} style={primary ? btn : ghost}>
+      {children}
+    </Link>
+  );
+}
+
 export default function PainPage() {
   const [rows, setRows] = useState<PainRow[]>([]);
   const [status, setStatus] = useState("Loading distress signals...");
-  const [toast, setToast] = useState("");
+  const [filter, setFilter] = useState("all");
 
   async function load() {
     setStatus("Loading distress signals...");
-    setToast("");
 
     try {
       const email = getEmail();
@@ -259,6 +341,15 @@ export default function PainPage() {
     [rows]
   );
 
+  const filteredRows = useMemo(() => {
+    if (filter === "open") return openRows;
+    if (filter === "urgent") return urgentRows;
+    if (filter === "capital") return capitalRows;
+    if (filter === "photos") return rows.filter((row) => normalizePhotos(row.photo_urls).length > 0);
+
+    return rows;
+  }, [capitalRows, filter, openRows, rows, urgentRows]);
+
   return (
     <main style={page}>
       <style>{`
@@ -289,6 +380,7 @@ export default function PainPage() {
             <span style={chip}>Capital Needs</span>
             <span style={chip}>Operator Routing</span>
             <span style={chip}>Deal Rescue</span>
+            <span style={chip}>Photo-Aware Intake</span>
           </div>
 
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
@@ -296,22 +388,17 @@ export default function PainPage() {
           </h1>
 
           <p style={{ ...muted, fontSize: 21 }}>
-            This feed reads from <strong>vf_pain_submissions</strong>. It is the first real VaultForge intelligence layer
-            for seller pressure, stalled projects, funding gaps, contractor problems, title issues, zoning problems,
-            and emergency deal rescue.
+            This is the command-center feed for seller pressure, stalled projects, funding gaps, contractor problems,
+            title issues, zoning problems, and emergency deal rescue. Each signal can now carry photos, asset class,
+            routing tags, urgency, and requested help.
           </p>
 
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <Link href="/pain-submit" style={btn}>Submit Signal</Link>
+          <Link href="/pain-submit" style={btn}>Pain Button</Link>
+          <Link href="/routing" style={ghost}>Routing Brain</Link>
           <Link href="/alerts" style={ghost}>Smart Alerts</Link>
           <button type="button" onClick={load} style={btn}>Refresh</button>
         </section>
-
-        {toast && (
-          <section style={{ ...hero, color: toast.toLowerCase().includes("error") ? "#ffd0d0" : "#9df3bf" }}>
-            {toast}
-          </section>
-        )}
 
         <section style={{ ...grid, marginBottom: 22 }}>
           <NumberStatCard label="Total Signals" value={rows.length} detail="All distress and pain submissions loaded." />
@@ -320,36 +407,84 @@ export default function PainPage() {
           <NumberStatCard label="Capital Need" value={capitalRows.length} detail="Funding, lender, or capital-related requests." />
         </section>
 
+        <section style={{ ...hero, borderColor: "rgba(157,243,191,.28)" }}>
+          <div style={greenEyebrow}>Feed Filters</div>
+          <button type="button" onClick={() => setFilter("all")} style={filter === "all" ? btn : ghost}>All</button>
+          <button type="button" onClick={() => setFilter("open")} style={filter === "open" ? btn : ghost}>Open</button>
+          <button type="button" onClick={() => setFilter("urgent")} style={filter === "urgent" ? btn : ghost}>Urgent</button>
+          <button type="button" onClick={() => setFilter("capital")} style={filter === "capital" ? btn : ghost}>Capital</button>
+          <button type="button" onClick={() => setFilter("photos")} style={filter === "photos" ? btn : ghost}>With Photos</button>
+        </section>
+
         {status && <section style={hero}>{status}</section>}
 
         {!status && rows.length === 0 && (
           <section style={hero}>
             <strong>No distress signals yet.</strong>
             <p style={muted}>
-              Use Submit Signal to start routing seller pain, stalled deals, funding needs, or execution problems into VaultForge.
+              Use the Pain Button to start routing seller pain, stalled deals, funding needs, or execution problems into VaultForge.
             </p>
           </section>
         )}
 
-        <section style={{ display: "grid", gap: 16 }}>
-          {rows.map((row, index) => {
+        {!status && rows.length > 0 && filteredRows.length === 0 && (
+          <section style={hero}>
+            <strong>No signals match this filter.</strong>
+            <p style={muted}>Try another filter or submit a new signal.</p>
+          </section>
+        )}
+
+        <section style={{ display: "grid", gap: 18 }}>
+          {filteredRows.map((row, index) => {
             const id = asText(row.id) || String(index);
             const type = first(row.pain_type, "Signal");
+            const assetType = first(row.asset_type, "Unknown Asset");
             const urgency = first(row.urgency_level, "Normal");
             const statusLabel = first(row.routing_status, row.resolved ? "Resolved" : "Pending");
             const location = painLocation(row);
             const capital = money(row.capital_needed);
             const value = money(row.estimated_value);
             const repairs = money(row.estimated_repairs);
+            const tags = normalizeTags(row);
+            const photos = normalizePhotos(row.photo_urls);
+            const tone = urgencyTone(urgency);
 
             return (
-              <article key={id} style={card}>
+              <article key={id} style={{ ...signalCard, borderColor: `${tone}66` }}>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: -32,
+                    right: -28,
+                    width: 120,
+                    height: 120,
+                    borderRadius: 999,
+                    background: tone,
+                    opacity: 0.12,
+                  }}
+                />
+
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                  <span style={{ ...chip, borderColor: `${tone}aa`, color: tone }}>{urgency}</span>
+                  <span style={chip}>{assetType}</span>
                   <span style={{ ...chip, borderColor: "rgba(255,120,120,.38)", color: "#ff9f9f" }}>{type}</span>
-                  <span style={chip}>{urgency}</span>
                   <span style={chip}>{statusLabel}</span>
                   {location && <span style={chip}>{location}</span>}
+                  {photos.length > 0 && <span style={chip}>{photos.length} Photo{photos.length === 1 ? "" : "s"}</span>}
                 </div>
+
+                {photos.length > 0 && (
+                  <section style={{ ...grid, marginBottom: 16 }}>
+                    {photos.slice(0, 3).map((src, photoIndex) => (
+                      <img
+                        key={`${src.slice(0, 30)}-${photoIndex}`}
+                        src={src}
+                        alt={`Pain signal photo ${photoIndex + 1}`}
+                        style={image}
+                      />
+                    ))}
+                  </section>
+                )}
 
                 <div style={eyebrow}>Routing Input</div>
                 <h2 style={{ fontSize: "clamp(32px,7vw,56px)", lineHeight: 1, margin: "0 0 12px" }}>
@@ -360,6 +495,13 @@ export default function PainPage() {
                   {painBody(row)}
                 </p>
 
+                {row.requested_help && (
+                  <section style={{ ...card, margin: "16px 0", borderColor: "rgba(157,243,191,.25)" }}>
+                    <div style={greenEyebrow}>Requested Help</div>
+                    <p style={{ ...muted, fontSize: 18, margin: 0 }}>{asText(row.requested_help)}</p>
+                  </section>
+                )}
+
                 {(capital || value || repairs) && (
                   <section style={grid}>
                     {capital && <DetailCard label="Capital Needed" value={capital} detail="Requested capital or funding gap." />}
@@ -368,14 +510,40 @@ export default function PainPage() {
                   </section>
                 )}
 
+                {tags.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={greenEyebrow}>Routing Tags</div>
+                    {tags.map((tag) => (
+                      <span key={`${id}-${tag}`} style={chip}>{tag}</span>
+                    ))}
+                  </div>
+                )}
+
+                {row.ai_summary && (
+                  <section style={{ ...card, marginTop: 16, borderColor: "rgba(181,92,255,.28)" }}>
+                    <div style={eyebrow}>AI Summary</div>
+                    <p style={{ ...muted, fontSize: 18, margin: 0 }}>{asText(row.ai_summary)}</p>
+                  </section>
+                )}
+
                 <div style={{ marginTop: 14 }}>
                   {row.deal_id && (
-                    <Link href={`/deal/${encodeURIComponent(String(row.deal_id))}`} style={btn}>
+                    <ActionButton href={`/deal/${encodeURIComponent(String(row.deal_id))}`} primary>
                       Open Deal Room
-                    </Link>
+                    </ActionButton>
                   )}
-                  <Link href="/alerts" style={ghost}>View Match Alerts</Link>
-                  <Link href="/pain-submit" style={ghost}>Create Related Signal</Link>
+                  <ActionButton href="/routing" primary>
+                    Route
+                  </ActionButton>
+                  <ActionButton href="/messages">
+                    Message
+                  </ActionButton>
+                  <ActionButton href="/alerts">
+                    Alerts
+                  </ActionButton>
+                  <ActionButton href="/pain-submit">
+                    Related Signal
+                  </ActionButton>
                 </div>
 
                 <p style={{ ...muted, marginTop: 14 }}>
