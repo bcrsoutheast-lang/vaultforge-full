@@ -279,6 +279,12 @@ function dealRoomHref(alert: FeedAlert) {
   return `/deal-room/${encodeURIComponent(itemId)}`;
 }
 
+function routingRoomHref(alert: FeedAlert) {
+  const signalId = String(alert.id || "").trim();
+  if (!signalId) return "";
+  return `/routing-room/${encodeURIComponent(signalId)}`;
+}
+
 function StatCard({
   label,
   value,
