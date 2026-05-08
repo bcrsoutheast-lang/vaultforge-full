@@ -398,7 +398,7 @@ export default function PainPage() {
                     Archive
                   </button>
 
-                  <Link href="/messages" style={ghost}>
+                  <Link href={`/pain-message/${encodeURIComponent(id)}`} style={ghost}>
                     Message
                   </Link>
                 </div>
