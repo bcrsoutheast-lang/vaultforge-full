@@ -307,6 +307,91 @@ function getEmail() {
     .toLowerCase();
 }
 
+
+function localProfileKey(email: string) {
+  return `vf_profile_backup_${email.trim().toLowerCase()}`;
+}
+
+function loadLocalProfile(email: string) {
+  if (typeof window === "undefined" || !email) return null;
+
+  try {
+    const raw =
+      localStorage.getItem(localProfileKey(email)) ||
+      sessionStorage.getItem(localProfileKey(email));
+
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") return null;
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalProfile(email: string, profile: Record<string, any>) {
+  if (typeof window === "undefined" || !email) return;
+
+  try {
+    const payload = JSON.stringify({
+      ...profile,
+      email,
+      _local_saved_at: new Date().toISOString(),
+    });
+
+    localStorage.setItem(localProfileKey(email), payload);
+    sessionStorage.setItem(localProfileKey(email), payload);
+  } catch {
+    // Local backup is best effort only.
+  }
+}
+
+function fieldIsBlank(value: any) {
+  if (Array.isArray(value)) return value.length === 0;
+  return !String(value || "").trim();
+}
+
+function mergeNoBlankOverwrite(remote: Record<string, any>, local: Record<string, any>) {
+  const next = { ...remote };
+
+  const keysToProtect = [
+    "email",
+    "full_name",
+    "phone",
+    "company",
+    "role",
+    "city",
+    "state",
+    "markets",
+    "buy_box",
+    "funding_capacity",
+    "strategy",
+    "profile_photo_url",
+    "member_types",
+    "buy_box_states",
+    "buy_box_types",
+    "buy_box_strategies",
+    "needs",
+    "can_provide",
+    "distress_signals",
+    "alert_types",
+    "alert_frequency",
+    "max_alerts_per_day",
+  ];
+
+  for (const key of keysToProtect) {
+    if (fieldIsBlank(next[key]) && !fieldIsBlank(local[key])) {
+      next[key] = local[key];
+    }
+  }
+
+  return next;
+}
+
+
 function normalizeChip(value: unknown) {
   return String(value || "")
     .trim()
@@ -665,6 +750,11 @@ export default function ProfilePage() {
 
     try {
       const email = getEmail();
+      const localBackup = loadLocalProfile(email);
+
+      if (localBackup) {
+        setForm((current) => profileToForm(localBackup, email, current));
+      }
 
       const res = await fetch(`/api/profile/me?email=${encodeURIComponent(email)}`, {
         cache: "no-store",
@@ -672,10 +762,13 @@ export default function ProfilePage() {
       });
 
       const data = await res.json();
-      const profile = data?.profile || {};
+      const remoteProfile = data?.profile || {};
+      const safeProfile = localBackup
+        ? mergeNoBlankOverwrite(remoteProfile, localBackup)
+        : remoteProfile;
 
-      setForm((current) => profileToForm(profile, email, current));
-      setComplete(Boolean(profile.profile_complete));
+      setForm((current) => profileToForm(safeProfile, email, current));
+      setComplete(Boolean(safeProfile.profile_complete || data?.profile_complete));
       setStatus("");
     } catch (error: any) {
       setStatus(error?.message || "Could not load profile.");
@@ -730,6 +823,12 @@ export default function ProfilePage() {
       if (!res.ok || data?.error) {
         throw new Error(data?.error || data?.details || "Profile save failed.");
       }
+
+      saveLocalProfile(email, {
+        ...payload,
+        profile_complete: Boolean(data?.profile_complete),
+        profile_photo_url: form.profile_photo_url,
+      });
 
       setComplete(Boolean(data?.profile_complete));
       setStatus(
