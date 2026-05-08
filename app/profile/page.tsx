@@ -84,6 +84,7 @@ const STRATEGY_OPTIONS = [
 
 const NEED_OPTIONS = [
   "Funding",
+  "Funding needed",
   "Buyer Needed",
   "Lender Needed",
   "Private Capital Needed",
@@ -315,6 +316,30 @@ function normalizeChip(value: unknown) {
     .replace(/\s*-\s*/g, "-");
 }
 
+function aliasesFor(value: string) {
+  const normalized = normalizeChip(value);
+
+  const aliases: Record<string, string[]> = {
+    "fix & flip": ["flips", "flip", "fix and flip"],
+    flips: ["fix & flip", "flip", "fix and flip"],
+    funding: ["funding needed", "lender needed", "private capital needed", "capital match"],
+    "funding needed": ["funding", "lender needed", "private capital needed"],
+    lending: ["lender", "private lending", "hard money", "funding"],
+    lender: ["lending", "private lending", "hard money", "funding"],
+    "title/closing help": ["title / attorney needed", "title / attorney help"],
+    "title / attorney needed": ["title/closing help", "title / attorney help"],
+    "contractor/operator match": ["contractor needed", "operator needed"],
+  };
+
+  return [normalized, ...(aliases[normalized] || []).map(normalizeChip)];
+}
+
+function chipsMatch(a: string, b: string) {
+  const aAliases = aliasesFor(a);
+  const bAliases = aliasesFor(b);
+  return aAliases.some((item) => bAliases.includes(item));
+}
+
 function asArray(value: any): string[] {
   if (Array.isArray(value)) return value.map(String).map((x) => x.trim()).filter(Boolean);
 
@@ -347,6 +372,29 @@ function uniqueList(values: string[]) {
   return Array.from(map.values());
 }
 
+function firstNonEmpty(...values: any[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      if (value.length) return value;
+      continue;
+    }
+
+    const text = String(value || "").trim();
+    if (text) return value;
+  }
+
+  return "";
+}
+
+function arrayFirstNonEmpty(...values: any[]) {
+  for (const value of values) {
+    const list = asArray(value);
+    if (list.length) return list;
+  }
+
+  return [];
+}
+
 function joinList(value: any) {
   return asArray(value).join(", ");
 }
@@ -356,12 +404,12 @@ function completionScore(form: Record<string, any>) {
   const requiredDone = required.filter((key) => String(form[key] || "").trim()).length;
 
   const intelligenceFields = [
-    form.member_types?.length,
-    form.buy_box_states?.length,
-    form.buy_box_types?.length,
-    form.buy_box_strategies?.length,
-    form.needs?.length,
-    form.can_provide?.length,
+    asArray(form.member_types).length,
+    asArray(form.buy_box_states).length,
+    asArray(form.buy_box_types).length,
+    asArray(form.buy_box_strategies).length,
+    asArray(form.needs).length,
+    asArray(form.can_provide).length,
   ];
 
   const intelligenceDone = intelligenceFields.filter(Boolean).length;
@@ -411,10 +459,9 @@ function supabaseBrowserClient() {
 }
 
 function toggleInList(list: string[], value: string) {
-  const normalizedValue = normalizeChip(value);
-  const exists = list.some((item) => normalizeChip(item) === normalizedValue);
+  const exists = list.some((item) => chipsMatch(item, value));
 
-  if (exists) return list.filter((item) => normalizeChip(item) !== normalizedValue);
+  if (exists) return list.filter((item) => !chipsMatch(item, value));
   return uniqueList([...list, value]);
 }
 
@@ -422,32 +469,121 @@ function mergeOptions(base: string[], selected: string[]) {
   return uniqueList([...base, ...selected]);
 }
 
-export default function ProfilePage() {
-  const [form, setForm] = useState<Record<string, any>>({
-    email: "",
-    full_name: "",
-    phone: "",
-    company: "",
-    role: "",
-    city: "",
-    state: "Georgia",
-    markets: "",
-    buy_box: "",
-    funding_capacity: "",
-    strategy: "",
-    profile_photo_url: "",
-    alert_frequency: "daily_digest",
-    max_alerts_per_day: "10",
-    alert_types: ["Deal matches my buy box", "Someone messages me", "Funding match"],
-    member_types: ["Buyer"],
-    buy_box_states: ["Georgia"],
-    buy_box_types: [],
-    buy_box_strategies: [],
-    needs: [],
-    can_provide: [],
-    distress_signals: [],
-  });
+const EMPTY_FORM = {
+  email: "",
+  full_name: "",
+  phone: "",
+  company: "",
+  role: "",
+  city: "",
+  state: "Georgia",
+  markets: "",
+  buy_box: "",
+  funding_capacity: "",
+  strategy: "",
+  profile_photo_url: "",
+  alert_frequency: "daily_digest",
+  max_alerts_per_day: "10",
+  alert_types: ["Deal matches my buy box", "Someone messages me", "Funding match"],
+  member_types: ["Buyer"],
+  buy_box_states: ["Georgia"],
+  buy_box_types: [],
+  buy_box_strategies: [],
+  needs: [],
+  can_provide: [],
+  distress_signals: [],
+};
 
+function profileToForm(profile: Record<string, any>, email: string, current: Record<string, any>) {
+  const loadedMemberTypes = arrayFirstNonEmpty(
+    profile.member_types,
+    profile.memberTypes,
+    profile.role,
+    profile.member_role
+  );
+
+  const loadedStates = arrayFirstNonEmpty(
+    profile.buy_box_states,
+    profile.market_states,
+    profile.markets,
+    profile.state
+  );
+
+  const loadedTypes = arrayFirstNonEmpty(
+    profile.buy_box_types,
+    profile.property_types,
+    profile.asset_types,
+    current.buy_box_types
+  );
+
+  const loadedStrategies = arrayFirstNonEmpty(
+    profile.buy_box_strategies,
+    profile.strategies,
+    profile.strategy,
+    current.buy_box_strategies
+  );
+
+  const loadedNeeds = arrayFirstNonEmpty(
+    profile.needs,
+    profile.deal_needs,
+    profile.what_i_need,
+    current.needs
+  );
+
+  const loadedProvide = arrayFirstNonEmpty(
+    profile.can_provide,
+    profile.what_i_provide,
+    current.can_provide
+  );
+
+  const loadedDistress = arrayFirstNonEmpty(
+    profile.distress_signals,
+    profile.pain_signals,
+    profile.problem_signals,
+    current.distress_signals
+  );
+
+  const loadedAlerts = arrayFirstNonEmpty(
+    profile.alert_types,
+    current.alert_types
+  );
+
+  const profilePhoto = firstNonEmpty(
+    profile.profile_photo_url,
+    profile.profilePhotoUrl,
+    profile.avatar_url,
+    profile.photo_url,
+    current.profile_photo_url
+  ) as string;
+
+  return {
+    email: firstNonEmpty(profile.email, email, current.email) as string,
+    full_name: firstNonEmpty(profile.full_name, profile.fullName, profile.name, current.full_name) as string,
+    phone: firstNonEmpty(profile.phone, current.phone) as string,
+    company: firstNonEmpty(profile.company, current.company) as string,
+    role: firstNonEmpty(profile.role, profile.member_role, loadedMemberTypes[0], current.role) as string,
+    city: firstNonEmpty(profile.city, current.city) as string,
+    state: firstNonEmpty(profile.state, loadedStates[0], current.state, "Georgia") as string,
+    markets: firstNonEmpty(profile.markets, joinList(loadedStates), current.markets) as string,
+    member_types: loadedMemberTypes.length ? loadedMemberTypes : asArray(current.member_types).length ? asArray(current.member_types) : ["Buyer"],
+    buy_box: firstNonEmpty(profile.buy_box, profile.buyBox, current.buy_box) as string,
+    funding_capacity: firstNonEmpty(profile.funding_capacity, profile.fundingCapacity, current.funding_capacity) as string,
+    strategy: firstNonEmpty(profile.strategy, current.strategy) as string,
+    profile_photo_url: profilePhoto || "",
+    alert_frequency: firstNonEmpty(profile.alert_frequency, current.alert_frequency, "daily_digest") as string,
+    max_alerts_per_day: String(firstNonEmpty(profile.max_alerts_per_day, current.max_alerts_per_day, "10")),
+    alert_types: loadedAlerts.length ? loadedAlerts : ["Deal matches my buy box", "Someone messages me", "Funding match"],
+    buy_box_states: loadedStates.length ? loadedStates : asArray(current.buy_box_states).length ? asArray(current.buy_box_states) : ["Georgia"],
+    buy_box_types: loadedTypes,
+    buy_box_strategies: loadedStrategies,
+    needs: loadedNeeds,
+    can_provide: loadedProvide,
+    distress_signals: loadedDistress,
+  };
+}
+
+export default function ProfilePage() {
+  const [form, setForm] = useState<Record<string, any>>(EMPTY_FORM);
   const [status, setStatus] = useState("Loading profile...");
   const [saving, setSaving] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -529,6 +665,7 @@ export default function ProfilePage() {
 
     try {
       const email = getEmail();
+
       const res = await fetch(`/api/profile/me?email=${encodeURIComponent(email)}`, {
         cache: "no-store",
         headers: { "x-vf-email": email },
@@ -537,42 +674,7 @@ export default function ProfilePage() {
       const data = await res.json();
       const profile = data?.profile || {};
 
-      const loadedMemberTypes = asArray(profile.member_types || profile.memberTypes || profile.role || profile.member_role);
-      const loadedStates = asArray(profile.buy_box_states || profile.market_states || profile.markets || profile.state);
-      const loadedTypes = asArray(profile.buy_box_types || profile.property_types || profile.asset_types);
-      const loadedStrategies = asArray(profile.buy_box_strategies || profile.strategies || profile.strategy);
-      const loadedNeeds = asArray(profile.needs || profile.deal_needs || profile.what_i_need);
-      const loadedProvide = asArray(profile.can_provide || profile.what_i_provide);
-      const loadedDistress = asArray(profile.distress_signals || profile.pain_signals || profile.problem_signals);
-      const loadedAlerts = asArray(profile.alert_types);
-
-      setForm({
-        email: profile.email || email,
-        full_name: profile.full_name || profile.fullName || profile.name || "",
-        phone: profile.phone || "",
-        company: profile.company || "",
-        role: profile.role || profile.member_role || loadedMemberTypes[0] || "",
-        city: profile.city || "",
-        state: profile.state || loadedStates[0] || "Georgia",
-        markets: profile.markets || joinList(loadedStates),
-        member_types: loadedMemberTypes.length ? loadedMemberTypes : ["Buyer"],
-        buy_box: profile.buy_box || profile.buyBox || "",
-        funding_capacity: profile.funding_capacity || profile.fundingCapacity || "",
-        strategy: profile.strategy || "",
-        profile_photo_url: profile.profile_photo_url || profile.profilePhotoUrl || "",
-        alert_frequency: profile.alert_frequency || "daily_digest",
-        max_alerts_per_day: String(profile.max_alerts_per_day || 10),
-        alert_types: loadedAlerts.length
-          ? loadedAlerts
-          : ["Deal matches my buy box", "Someone messages me", "Funding match"],
-        buy_box_states: loadedStates.length ? loadedStates : [profile.state || "Georgia"],
-        buy_box_types: loadedTypes,
-        buy_box_strategies: loadedStrategies,
-        needs: loadedNeeds,
-        can_provide: loadedProvide,
-        distress_signals: loadedDistress,
-      });
-
+      setForm((current) => profileToForm(profile, email, current));
       setComplete(Boolean(profile.profile_complete));
       setStatus("");
     } catch (error: any) {
@@ -966,12 +1068,11 @@ function ChipGroup({
   onToggle: (value: string) => void;
 }) {
   const selected = asArray(values);
-  const selectedSet = new Set(selected.map(normalizeChip));
 
   return (
     <div style={chipWrap}>
       {options.map((option) => {
-        const active = selectedSet.has(normalizeChip(option));
+        const active = selected.some((item) => chipsMatch(item, option));
 
         return (
           <button
