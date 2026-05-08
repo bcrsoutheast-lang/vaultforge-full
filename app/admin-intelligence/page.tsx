@@ -422,7 +422,8 @@ function AlertCard({
         {alert.source_table && <span style={chip}>{alert.source_table}</span>}
       </div>
 
-      <Link href={alert.safe_href || "/projects"} style={btn}>Open Work Area</Link>
+      <Link href={`/signals/${encodeURIComponent(alert.id)}`} style={btn}>Open Exact Signal</Link>
+      <Link href={alert.safe_href || "/projects"} style={ghost}>Open Work Area</Link>
 
       <button
         type="button"
