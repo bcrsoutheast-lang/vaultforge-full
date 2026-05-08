@@ -296,6 +296,12 @@ function statusTone(status: string) {
   return "#d8b5ff";
 }
 
+function dealRoomHref(alert: FeedAlert) {
+  const itemId = String(alert.item_id || "").trim();
+  if (!itemId) return "";
+  return `/deal-room/${encodeURIComponent(itemId)}`;
+}
+
 function StatCard({ label, value, detail, href }: { label: string; value: number | string; detail: string; href: string }) {
   return (
     <Link href={href} style={{ ...card, color: "white", textDecoration: "none", display: "block" }}>
@@ -358,7 +364,13 @@ function AlertCard({ alert }: { alert: FeedAlert }) {
         {alert.member_name && <span style={chip}>{alert.member_name}</span>}
       </div>
 
-      <Link href={alert.safe_href || "/projects"} style={btn}>Open Work Area</Link>
+      <Link href={`/signals/${encodeURIComponent(alert.id)}`} style={btn}>Open Exact Signal</Link>
+
+      {dealRoomHref(alert) && (
+        <Link href={dealRoomHref(alert)} style={ghost}>Open Exact Deal Room</Link>
+      )}
+
+      <Link href={alert.safe_href || "/projects"} style={ghost}>Open Work Area</Link>
     </article>
   );
 }
