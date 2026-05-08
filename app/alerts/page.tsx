@@ -470,7 +470,7 @@ export default function AlertsPage() {
           .vf-alert-actions > * {
             width: 100%;
             margin: 0 !important;
-            box-sizing: border-box;
+            box-sizing:border-box;
           }
         }
       `}</style>
@@ -480,12 +480,12 @@ export default function AlertsPage() {
           <div style={greenEyebrow}>VaultForge Smart Alerts · {owner ? "Owner Global Feed" : "Member Feed"}</div>
 
           <h1 style={{ fontSize: "clamp(58px,12vw,108px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            Read-only intelligence alerts.
+            Live intelligence alerts.
           </h1>
 
           <p style={{ ...muted, fontSize: 22 }}>
             These signals are generated from existing profiles, deals, projects, property cards, and pain submissions.
-            This page does not write alerts yet — it proves the intelligence logic safely first.
+            The engine is read-only right now so it can prove the routing logic before storing or sending alerts.
           </p>
 
           <div className="vf-alert-actions" style={{ marginTop: 18 }}>
