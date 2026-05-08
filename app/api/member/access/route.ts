@@ -8,6 +8,13 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 type AnyRecord = Record<string, any>;
 
+const MEMBER_TABLES = [
+  "vf_profiles",
+  "vf_members",
+  "profiles",
+  "member_profiles",
+];
+
 function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
@@ -96,13 +103,24 @@ async function findByEmail(
         .eq(column, email)
         .maybeSingle();
 
-      if (!error && data) return data;
+      if (!error && data) {
+        return {
+          ...data,
+          _source_table: table,
+        };
+      }
     } catch {
       // Try next possible canonical email column.
     }
   }
 
   return null;
+}
+
+function mergeRecords(records: AnyRecord[]) {
+  return records.reduce((acc, record) => {
+    return { ...acc, ...record };
+  }, {});
 }
 
 function memberPaymentStatus(member: AnyRecord | null) {
@@ -156,7 +174,8 @@ function isProfileComplete(profile: AnyRecord | null) {
     truthy(profile?.profile_complete) ||
     truthy(profile?.is_complete) ||
     truthy(profile?.completed) ||
-    truthy(profile?.onboarding_complete)
+    truthy(profile?.onboarding_complete) ||
+    loweredFirst(profile?.profile_status) === "complete"
   );
 }
 
@@ -186,10 +205,7 @@ export async function GET(request: Request) {
           owner: true,
           profile_complete: true,
         },
-        sources: {
-          member: "owner_email",
-          profile: "owner_email",
-        },
+        sources_checked: ["owner_email"],
       });
     }
 
@@ -207,10 +223,7 @@ export async function GET(request: Request) {
         member: null,
         profile: null,
         warning: "No VaultForge email was found in the request.",
-        sources: {
-          member: "vf_members",
-          profile: "vf_profiles",
-        },
+        sources_checked: MEMBER_TABLES,
       });
     }
 
@@ -228,28 +241,41 @@ export async function GET(request: Request) {
         member: null,
         profile: null,
         warning: "Supabase environment values are missing.",
-        sources: {
-          member: "vf_members",
-          profile: "vf_profiles",
-        },
+        sources_checked: MEMBER_TABLES,
       });
     }
 
-    const [member, profile] = await Promise.all([
-      findByEmail(supabase, "vf_members", email, ["email", "member_email", "user_email"]),
-      findByEmail(supabase, "vf_profiles", email, ["email", "member_email", "user_email"]),
-    ]);
+    const results = await Promise.all(
+      MEMBER_TABLES.map((table) =>
+        findByEmail(
+          supabase,
+          table,
+          email,
+          ["email", "member_email", "user_email", "owner_email"]
+        )
+      )
+    );
 
-    const profileComplete = isProfileComplete(profile);
-    const blocked = isMemberBlocked(member);
+    const found = results.filter(Boolean) as AnyRecord[];
 
-    const paymentStatus = memberPaymentStatus(member) || "unpaid";
+    const combined = found.length ? mergeRecords(found) : null;
+
+    const profileComplete = isProfileComplete(combined);
+    const blocked = isMemberBlocked(combined);
+
+    const paymentStatus = memberPaymentStatus(combined) || "unpaid";
+
     const accessStatus = blocked
       ? "locked"
-      : memberAccessStatus(member) || "locked";
+      : memberAccessStatus(combined) || "locked";
 
-    const paid = !blocked && isMemberPaid(member);
-    const unlocked = Boolean(profileComplete && paid && !blocked);
+    const paid = !blocked && isMemberPaid(combined);
+
+    const unlocked = Boolean(
+      profileComplete &&
+        paid &&
+        !blocked
+    );
 
     return NextResponse.json({
       ok: true,
@@ -265,12 +291,10 @@ export async function GET(request: Request) {
         : !paid
         ? "payment"
         : "unlocked",
-      member: member || null,
-      profile: profile || null,
-      sources: {
-        member: "vf_members",
-        profile: "vf_profiles",
-      },
+      member: combined || null,
+      profile: combined || null,
+      matched_records: found.length,
+      sources_checked: MEMBER_TABLES,
     });
   } catch (error: any) {
     return NextResponse.json({
@@ -286,10 +310,7 @@ export async function GET(request: Request) {
       member: null,
       profile: null,
       warning: error?.message || String(error),
-      sources: {
-        member: "vf_members",
-        profile: "vf_profiles",
-      },
+      sources_checked: MEMBER_TABLES,
     });
   }
 }
