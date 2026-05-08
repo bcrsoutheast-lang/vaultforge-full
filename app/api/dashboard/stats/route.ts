@@ -91,11 +91,85 @@ async function countRows(supabase: any, table: string, filter?: (query: any) => 
   }
 }
 
-function alertFilterForEmail(email: string) {
-  return (query: any) =>
-    query
-      .or(`member_email.eq.${email},recipient_email.eq.${email}`)
-      .or("dismissed.is.null,dismissed.eq.false,is_dismissed.is.null,is_dismissed.eq.false");
+function activeDealsFilter(query: any) {
+  return query
+    .or("archived.is.null,archived.eq.false")
+    .or("deleted.is.null,deleted.eq.false")
+    .not("status", "eq", "archived")
+    .not("status", "eq", "deleted");
+}
+
+function activeBucketFilter(query: any, email: string) {
+  let next = query
+    .or("deleted.is.null,deleted.eq.false")
+    .or("archived.is.null,archived.eq.false");
+
+  if (email) {
+    next = next.or(`member_email.eq.${email},buyer_email.eq.${email}`);
+  }
+
+  return next;
+}
+
+function activeMessagesFilter(query: any, email: string) {
+  let next = query.or("archived.is.null,archived.eq.false");
+
+  if (email) {
+    next = next.or(`sender_email.eq.${email},recipient_email.eq.${email}`);
+  }
+
+  return next;
+}
+
+function activeAlertsFilter(query: any, email: string, owner: boolean) {
+  let next = query
+    .or("dismissed.is.null,dismissed.eq.false,is_dismissed.is.null,is_dismissed.eq.false")
+    .or("read.is.null,read.eq.false,is_read.is.null,is_read.eq.false");
+
+  if (email && !owner) {
+    next = next.or(`member_email.eq.${email},recipient_email.eq.${email}`);
+  }
+
+  return next;
+}
+
+function activePainFilter(query: any, email: string, owner: boolean) {
+  let next = query
+    .or("archived.is.null,archived.eq.false")
+    .or("resolved.is.null,resolved.eq.false")
+    .not("routing_status", "eq", "archived")
+    .not("routing_status", "eq", "resolved");
+
+  if (email && !owner) {
+    next = next.eq("member_email", email);
+  }
+
+  return next;
+}
+
+function activeRoutingFilter(query: any, email: string, owner: boolean) {
+  let next = query
+    .or("routing_status.is.null,routing_status.eq.pending,routing_status.eq.interested,routing_status.eq.active")
+    .not("routing_status", "eq", "archived")
+    .not("routing_status", "eq", "resolved");
+
+  if (email && !owner) {
+    next = next.eq("member_email", email);
+  }
+
+  return next;
+}
+
+function recentActivityFilter(query: any, email: string, owner: boolean) {
+  const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString();
+
+  let next = query.gte("created_at", since);
+
+  if (email && !owner) {
+    next = next.eq("member_email", email);
+  }
+
+  return next;
 }
 
 export async function GET(request: Request) {
@@ -135,70 +209,22 @@ export async function GET(request: Request) {
       unpaidMembers,
       activeMembers,
     ] = await Promise.all([
-      countRows(supabase, "vf_deals"),
+      countRows(supabase, "vf_deals", activeDealsFilter),
       countRows(supabase, "vf_members"),
-      countRows(
-        supabase,
-        "vf_buy_bucket",
-        email
-          ? (query) =>
-              query
-                .or(`member_email.eq.${email},buyer_email.eq.${email}`)
-                .or("deleted.is.null,deleted.eq.false")
-                .or("archived.is.null,archived.eq.false")
-          : undefined
-      ),
-      countRows(
-        supabase,
-        "vf_messages",
-        email
-          ? (query) =>
-              query
-                .or(`sender_email.eq.${email},recipient_email.eq.${email}`)
-                .or("archived.is.null,archived.eq.false")
-          : undefined
-      ),
-      countRows(
-        supabase,
-        "vf_match_alerts",
-        owner
-          ? (query) =>
-              query.or("dismissed.is.null,dismissed.eq.false,is_dismissed.is.null,is_dismissed.eq.false")
-          : email
-          ? alertFilterForEmail(email)
-          : undefined
-      ),
-      countRows(
-        supabase,
-        "vf_pain_submissions",
-        owner
-          ? undefined
-          : email
-          ? (query) => query.eq("member_email", email)
-          : undefined
-      ),
-      countRows(
-        supabase,
-        "vf_routing_signals",
-        owner
-          ? undefined
-          : email
-          ? (query) => query.eq("member_email", email)
-          : undefined
-      ),
-      countRows(
-        supabase,
-        "vf_activity_events",
-        owner
-          ? undefined
-          : email
-          ? (query) => query.eq("member_email", email)
-          : undefined
-      ),
+      countRows(supabase, "vf_buy_bucket", (query) => activeBucketFilter(query, email)),
+      countRows(supabase, "vf_messages", (query) => activeMessagesFilter(query, email)),
+      countRows(supabase, "vf_match_alerts", (query) => activeAlertsFilter(query, email, owner)),
+      countRows(supabase, "vf_pain_submissions", (query) => activePainFilter(query, email, owner)),
+      countRows(supabase, "vf_routing_signals", (query) => activeRoutingFilter(query, email, owner)),
+      countRows(supabase, "vf_activity_events", (query) => recentActivityFilter(query, email, owner)),
       countRows(
         supabase,
         "vf_deals",
-        (query) => query.or("status.eq.pending,status.eq.review,status.eq.submitted")
+        (query) =>
+          query
+            .or("status.eq.pending,status.eq.review,status.eq.submitted")
+            .or("archived.is.null,archived.eq.false")
+            .or("deleted.is.null,deleted.eq.false")
       ),
       countRows(
         supabase,
@@ -241,6 +267,15 @@ export async function GET(request: Request) {
         lockedMembers,
         paymentRequiredMembers: unpaidMembers,
         activeMembers,
+      },
+      definitions: {
+        deals: "active, not archived, not deleted",
+        bucket: "saved, not archived, not deleted",
+        messages: "not archived",
+        alerts: "unread/undismissed match alerts",
+        pain: "open, unresolved, unarchived pain signals",
+        routing: "pending/interested/active routing signals",
+        activity: "last 30 days of activity events",
       },
       sources: {
         deals: "vf_deals",
