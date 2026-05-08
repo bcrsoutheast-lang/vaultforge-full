@@ -788,7 +788,8 @@ export default function DashboardPage() {
           </p>
 
           <div className="vf-command-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
-            <Link href="/submit" style={btn}>Create Deal</Link>
+            <Link href="/intelligence" style={btn}>Intelligence Map</Link>
+            <Link href="/submit" style={ghost}>Create Deal</Link>
             <Link href="/pain-submit" style={ghost}>Pain Button</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/projects" style={ghost}>Deal Rooms</Link>
@@ -839,6 +840,16 @@ export default function DashboardPage() {
         </section>
 
         <section style={toolGrid}>
+          <ToolCard
+            primary
+            label="Bloomberg Layer"
+            title="Intelligence Map"
+            text="Open the market-signal terminal for Georgia, Tennessee, Alabama, Florida, Carolinas, and Texas intelligence windows."
+            href="/intelligence"
+            button="Open Intelligence Map"
+            tags={["Market Signals", "Pain", "Capital", "Buyer Demand", "Routing"]}
+          />
+
           <ToolCard
             primary
             label="Create"
