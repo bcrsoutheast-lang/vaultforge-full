@@ -25,12 +25,6 @@ const hero: React.CSSProperties = {
   marginBottom: 22,
 };
 
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-  gap: 16,
-};
-
 const card: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
   background:
@@ -38,12 +32,6 @@ const card: React.CSSProperties = {
   borderRadius: 28,
   padding: 22,
   boxShadow: "0 26px 80px rgba(0,0,0,.34)",
-};
-
-const signalCard: React.CSSProperties = {
-  ...card,
-  overflow: "hidden",
-  position: "relative",
 };
 
 const btn: React.CSSProperties = {
@@ -84,25 +72,6 @@ const danger: React.CSSProperties = {
   color: "#ffd0d0",
 };
 
-const eyebrow: React.CSSProperties = {
-  color: "#ff9f9f",
-  letterSpacing: 5,
-  fontWeight: 950,
-  fontSize: 12,
-  marginBottom: 12,
-  textTransform: "uppercase",
-};
-
-const greenEyebrow: React.CSSProperties = {
-  ...eyebrow,
-  color: "#9df3bf",
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.70)",
-  lineHeight: 1.55,
-};
-
 const chip: React.CSSProperties = {
   display: "inline-flex",
   border: "1px solid rgba(157,243,191,.25)",
@@ -113,15 +82,6 @@ const chip: React.CSSProperties = {
   fontWeight: 850,
   fontSize: 13,
   margin: "0 7px 7px 0",
-};
-
-const image: React.CSSProperties = {
-  width: "100%",
-  height: 220,
-  objectFit: "cover",
-  borderRadius: 22,
-  border: "1px solid rgba(255,255,255,.14)",
-  boxShadow: "0 20px 60px rgba(0,0,0,.30)",
 };
 
 function getEmail() {
@@ -144,93 +104,8 @@ function asText(value: unknown, fallback = "") {
   return text || fallback;
 }
 
-function money(value: unknown) {
-  const n = Number(value || 0);
-  if (!Number.isFinite(n) || n <= 0) return "";
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = asText(value);
-    if (text) return text;
-  }
-  return "";
-}
-
-function formatDate(value: unknown) {
-  const text = asText(value);
-  if (!text) return "";
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text;
-  return date.toLocaleString();
-}
-
-function painTitle(row: PainRow) {
-  return first(row.title, row.pain_type, row.requested_help, "Distress Signal");
-}
-
-function painBody(row: PainRow) {
-  return first(row.description, row.requested_help, "No description yet.");
-}
-
-function painLocation(row: PainRow) {
-  return [row.city, row.state]
-    .map((value) => asText(value))
-    .filter(Boolean)
-    .join(", ");
-}
-
-function normalizePhotos(value: unknown, row?: PainRow) {
-  const candidates = [
-    value,
-    row?.photos,
-    row?.image_urls,
-    row?.images,
-    row?.uploaded_photos,
-    row?.photo_url,
-    row?.main_photo_url,
-  ];
-
-  const out: string[] = [];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      out.push(...candidate.map(String).filter(Boolean));
-      continue;
-    }
-
-    const text = asText(candidate);
-    if (!text) continue;
-
-    try {
-      const parsed = JSON.parse(text);
-      if (Array.isArray(parsed)) {
-        out.push(...parsed.map(String).filter(Boolean));
-        continue;
-      }
-    } catch {
-      // Continue.
-    }
-
-    out.push(text);
-  }
-
-  return Array.from(new Set(out)).filter(
-    (src) => src.startsWith("data:image") || src.startsWith("http")
-  );
-}
-
-function normalizeTags(row: PainRow) {
-  const value = row.ai_tags || row.routing_tags || row.tags;
-
-  if (Array.isArray(value)) {
-    return value.map(String).filter(Boolean);
-  }
+function normalizePhotos(value: unknown) {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
 
   const text = asText(value);
   if (!text) return [];
@@ -244,7 +119,7 @@ function normalizeTags(row: PainRow) {
     // Continue.
   }
 
-  return text.split(",").map((item) => item.trim()).filter(Boolean);
+  return [text];
 }
 
 function normalizeArray(value: unknown) {
@@ -267,91 +142,16 @@ function normalizeArray(value: unknown) {
   return text.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
 }
 
-function urgencyTone(value: unknown) {
-  const text = asText(value).toLowerCase();
-
-  if (text.includes("emergency") || text.includes("urgent")) return "#ff6b6b";
-  if (text.includes("high")) return "#ff9f9f";
-  if (text.includes("medium")) return "#f5d978";
-
-  return "#9df3bf";
-}
-
-function splitAnalysis(value: unknown) {
-  const text = asText(value);
-  if (!text) return [];
-
-  return text
-    .split(/\n\n|\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function NumberStatCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: number;
-  detail: string;
-}) {
-  return (
-    <div style={card}>
-      <div style={greenEyebrow}>{label}</div>
-      <div style={{ fontSize: 54, fontWeight: 950, lineHeight: 1 }}>{value}</div>
-      <p style={muted}>{detail}</p>
-    </div>
-  );
-}
-
-function DetailCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div style={card}>
-      <div style={greenEyebrow}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 950, lineHeight: 1.05 }}>{value}</div>
-      <p style={muted}>{detail}</p>
-    </div>
-  );
-}
-
-function ActionButton({
-  href,
-  children,
-  primary = false,
-}: {
-  href: string;
-  children: React.ReactNode;
-  primary?: boolean;
-}) {
-  return (
-    <Link href={href} style={primary ? btn : ghost}>
-      {children}
-    </Link>
-  );
-}
-
 export default function PainPage() {
   const [rows, setRows] = useState<PainRow[]>([]);
-  const [status, setStatus] = useState("Loading distress signals...");
-  const [filter, setFilter] = useState("all");
-  const [busyId, setBusyId] = useState("");
+  const [status, setStatus] = useState("Loading pain feed...");
   const [toast, setToast] = useState("");
+  const [busyId, setBusyId] = useState("");
 
   async function load() {
-    setStatus("Loading distress signals...");
-    setToast("");
-
     try {
       const email = getEmail();
+
       const res = await fetch(`/api/pain/list?email=${encodeURIComponent(email)}`, {
         cache: "no-store",
         headers: {
@@ -362,25 +162,24 @@ export default function PainPage() {
       const data = await res.json();
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not load distress signals.");
+        throw new Error(data?.error || "Could not load pain feed.");
       }
 
       setRows(Array.isArray(data?.pain) ? data.pain : []);
       setStatus("");
     } catch (error: any) {
-      setStatus(error?.message || "Could not load distress signals.");
+      setStatus(error?.message || "Could not load pain feed.");
     }
   }
 
-  async function painAction(id: string, action: string) {
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function action(id: string, type: string) {
     const email = getEmail();
 
-    if (!email) {
-      setToast("Log in again so VaultForge can attach this action to your member account.");
-      return;
-    }
-
-    setBusyId(`${id}-${action}`);
+    setBusyId(`${id}-${type}`);
     setToast("");
 
     try {
@@ -392,19 +191,59 @@ export default function PainPage() {
         },
         body: JSON.stringify({
           id,
-          action,
+          action: type,
           email,
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Pain action failed.");
+        throw new Error(data?.error || "Pain action failed.");
       }
 
-      setToast(data?.message || `Pain signal ${action} saved.`);
-      await load();
+      if (type === "dismiss" || type === "archive") {
+        setRows((current) => current.filter((row) => String(row.id) !== id));
+      } else if (type === "save") {
+        setRows((current) =>
+          current.map((row) => {
+            if (String(row.id) !== id) return row;
+
+            const existing = normalizeArray(row.saved_by);
+
+            return {
+              ...row,
+              saved_by: Array.from(new Set([...existing, email])),
+            };
+          })
+        );
+      } else if (type === "unsave") {
+        setRows((current) =>
+          current.map((row) => {
+            if (String(row.id) !== id) return row;
+
+            return {
+              ...row,
+              saved_by: normalizeArray(row.saved_by).filter((v) => v !== email),
+            };
+          })
+        );
+      } else if (type === "interested") {
+        setRows((current) =>
+          current.map((row) => {
+            if (String(row.id) !== id) return row;
+
+            const existing = normalizeArray(row.interested_by);
+
+            return {
+              ...row,
+              interested_by: Array.from(new Set([...existing, email])),
+            };
+          })
+        );
+      }
+
+      setToast(data?.message || `${type} completed.`);
     } catch (error: any) {
       setToast(error?.message || "Pain action failed.");
     } finally {
@@ -412,282 +251,139 @@ export default function PainPage() {
     }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  const openRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          row.archived !== true &&
-          row.resolved !== true &&
-          asText(row.routing_status).toLowerCase() !== "resolved"
-      ),
-    [rows]
-  );
-
-  const urgentRows = useMemo(
-    () =>
-      rows.filter((row) => {
-        const text = `${row.urgency_level || ""} ${row.pain_type || ""} ${row.description || ""}`.toLowerCase();
-        return text.includes("urgent") || text.includes("emergency") || text.includes("high");
-      }),
-    [rows]
-  );
-
-  const capitalRows = useMemo(
-    () =>
-      rows.filter((row) => {
-        const text = `${row.pain_type || ""} ${row.requested_help || ""} ${row.description || ""}`.toLowerCase();
-        return text.includes("capital") || text.includes("fund") || text.includes("lender") || text.includes("loan");
-      }),
-    [rows]
-  );
-
   const email = getEmail();
 
-  const savedRows = useMemo(
-    () => rows.filter((row) => normalizeArray(row.saved_by).includes(email)),
+  const visibleRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (row.archived === true) return false;
+
+        const dismissed = normalizeArray(row.dismissed_by);
+        if (dismissed.includes(email)) return false;
+
+        return true;
+      }),
     [email, rows]
   );
-
-  const interestedRows = useMemo(
-    () => rows.filter((row) => normalizeArray(row.interested_by).includes(email)),
-    [email, rows]
-  );
-
-  const filteredRows = useMemo(() => {
-    if (filter === "open") return openRows;
-    if (filter === "urgent") return urgentRows;
-    if (filter === "capital") return capitalRows;
-    if (filter === "saved") return savedRows;
-    if (filter === "interested") return interestedRows;
-    if (filter === "photos") return rows.filter((row) => normalizePhotos(row.photo_urls, row).length > 0);
-
-    return rows.filter((row) => row.archived !== true);
-  }, [capitalRows, filter, interestedRows, openRows, rows, savedRows, urgentRows]);
 
   return (
     <main style={page}>
-      <style>{`
-        a:hover,
-        button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
-        @media (max-width: 760px) {
-          a,
-          button {
-            width: 100%;
-            box-sizing: border-box;
-          }
-        }
-      `}</style>
-
       <div style={wrap}>
         <section style={hero}>
-          <div style={eyebrow}>Pain Button™ Intelligence Feed</div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-            <span style={{ ...chip, borderColor: "rgba(255,120,120,.38)", color: "#ff9f9f" }}>
-              Distress Signals
-            </span>
-            <span style={chip}>Member Actions</span>
-            <span style={chip}>AI Analysis</span>
-            <span style={chip}>Save / Interested / Dismiss</span>
+          <div style={{ color: "#9df3bf", fontWeight: 900, letterSpacing: 4, marginBottom: 12 }}>
+            LIVE PAIN WORKFLOW
           </div>
 
-          <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            Distress becomes routing intelligence.
+          <h1 style={{ fontSize: "clamp(56px,11vw,98px)", lineHeight: .9, margin: "0 0 18px" }}>
+            Routing intelligence.
           </h1>
 
-          <p style={{ ...muted, fontSize: 21 }}>
-            Members can now save signals, mark interest, dismiss noise, open routing, and move conversations into messages.
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 20 }}>
+            Distress signals now support live save, interested, dismiss, and archive workflows.
           </p>
 
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/pain-submit" style={btn}>Pain Button</Link>
-          <Link href="/routing" style={ghost}>Routing Brain</Link>
-          <Link href="/alerts" style={ghost}>Smart Alerts</Link>
-          <button type="button" onClick={load} style={btn}>Refresh</button>
+          <Link href="/messages" style={ghost}>Messages</Link>
+          <button type="button" style={btn} onClick={load}>Refresh</button>
         </section>
 
         {toast && (
-          <section style={{ ...hero, color: toast.toLowerCase().includes("failed") || toast.toLowerCase().includes("error") ? "#ffd0d0" : "#9df3bf" }}>
+          <section style={{ ...hero, color: "#9df3bf" }}>
             {toast}
           </section>
         )}
 
-        <section style={{ ...grid, marginBottom: 22 }}>
-          <NumberStatCard label="Total Signals" value={rows.length} detail="All distress and pain submissions loaded." />
-          <NumberStatCard label="Open Signals" value={openRows.length} detail="Unresolved routing opportunities." />
-          <NumberStatCard label="Saved" value={savedRows.length} detail="Signals saved by this member." />
-          <NumberStatCard label="Interested" value={interestedRows.length} detail="Signals this member marked interested." />
-        </section>
-
-        <section style={{ ...hero, borderColor: "rgba(157,243,191,.28)" }}>
-          <div style={greenEyebrow}>Feed Filters</div>
-          <button type="button" onClick={() => setFilter("all")} style={filter === "all" ? btn : ghost}>All</button>
-          <button type="button" onClick={() => setFilter("open")} style={filter === "open" ? btn : ghost}>Open</button>
-          <button type="button" onClick={() => setFilter("urgent")} style={filter === "urgent" ? btn : ghost}>Urgent</button>
-          <button type="button" onClick={() => setFilter("capital")} style={filter === "capital" ? btn : ghost}>Capital</button>
-          <button type="button" onClick={() => setFilter("saved")} style={filter === "saved" ? btn : ghost}>Saved</button>
-          <button type="button" onClick={() => setFilter("interested")} style={filter === "interested" ? btn : ghost}>Interested</button>
-          <button type="button" onClick={() => setFilter("photos")} style={filter === "photos" ? btn : ghost}>With Photos</button>
-        </section>
-
-        {status && <section style={hero}>{status}</section>}
-
-        {!status && rows.length === 0 && (
+        {status && (
           <section style={hero}>
-            <strong>No distress signals yet.</strong>
-            <p style={muted}>
-              Use the Pain Button to start routing seller pain, stalled deals, funding needs, or execution problems into VaultForge.
-            </p>
+            {status}
           </section>
         )}
 
-        {!status && rows.length > 0 && filteredRows.length === 0 && (
+        {!status && visibleRows.length === 0 && (
           <section style={hero}>
-            <strong>No signals match this filter.</strong>
-            <p style={muted}>Try another filter or submit a new signal.</p>
+            No active distress signals.
           </section>
         )}
 
         <section style={{ display: "grid", gap: 18 }}>
-          {filteredRows.map((row, index) => {
-            const id = asText(row.id) || String(index);
-            const type = first(row.pain_type, "Signal");
-            const assetType = first(row.asset_type, "Unknown Asset");
-            const urgency = first(row.urgency_level, "Normal");
-            const statusLabel = first(row.routing_status, row.resolved ? "Resolved" : "Pending");
-            const location = painLocation(row);
-            const capital = money(row.capital_needed);
-            const value = money(row.estimated_value);
-            const repairs = money(row.estimated_repairs);
-            const tags = normalizeTags(row);
-            const photos = normalizePhotos(row.photo_urls, row);
-            const tone = urgencyTone(urgency);
-            const analysisLines = splitAnalysis(row.ai_summary);
-            const savedBy = normalizeArray(row.saved_by);
-            const interestedBy = normalizeArray(row.interested_by);
-            const dismissedBy = normalizeArray(row.dismissed_by);
-            const isSaved = savedBy.includes(email);
-            const isInterested = interestedBy.includes(email);
-            const isDismissed = dismissedBy.includes(email);
+          {visibleRows.map((row) => {
+            const id = String(row.id || "");
+            const photos = normalizePhotos(row.photo_urls);
+            const saved = normalizeArray(row.saved_by).includes(email);
+            const interested = normalizeArray(row.interested_by).includes(email);
 
             return (
-              <article key={id} style={{ ...signalCard, borderColor: `${tone}66`, opacity: isDismissed ? 0.58 : 1 }}>
-                <div
-                  style={{
-                    position: "absolute",
-                    top: -32,
-                    right: -28,
-                    width: 120,
-                    height: 120,
-                    borderRadius: 999,
-                    background: tone,
-                    opacity: 0.12,
-                  }}
-                />
-
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-                  <span style={{ ...chip, borderColor: `${tone}aa`, color: tone }}>{urgency}</span>
-                  <span style={chip}>{assetType}</span>
-                  <span style={{ ...chip, borderColor: "rgba(255,120,120,.38)", color: "#ff9f9f" }}>{type}</span>
-                  <span style={chip}>{statusLabel}</span>
-                  {location && <span style={chip}>{location}</span>}
-                  {photos.length > 0 && <span style={chip}>{photos.length} Photo{photos.length === 1 ? "" : "s"}</span>}
-                  {isSaved && <span style={chip}>Saved</span>}
-                  {isInterested && <span style={chip}>Interested</span>}
-                  {isDismissed && <span style={chip}>Dismissed</span>}
+              <article
+                key={id}
+                style={{
+                  ...card,
+                  borderColor: "rgba(157,243,191,.22)",
+                }}
+              >
+                <div style={{ marginBottom: 10 }}>
+                  <span style={chip}>{asText(row.asset_type, "Signal")}</span>
+                  <span style={chip}>{asText(row.pain_type, "Pain")}</span>
+                  <span style={chip}>{asText(row.urgency_level, "Normal")}</span>
                 </div>
 
+                <h2 style={{ fontSize: 36, margin: "0 0 12px" }}>
+                  {asText(row.title, "Distress Signal")}
+                </h2>
+
+                <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.6 }}>
+                  {asText(row.description, "No description.")}
+                </p>
+
                 {photos.length > 0 && (
-                  <section style={{ ...grid, marginBottom: 16 }}>
-                    {photos.slice(0, 3).map((src, photoIndex) => (
+                  <section
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+                      gap: 14,
+                      marginTop: 16,
+                    }}
+                  >
+                    {photos.slice(0, 4).map((src, index) => (
                       <img
-                        key={`${src.slice(0, 30)}-${photoIndex}`}
+                        key={`${src}-${index}`}
                         src={src}
-                        alt={`Pain signal photo ${photoIndex + 1}`}
-                        style={image}
+                        alt="Pain upload"
+                        style={{
+                          width: "100%",
+                          height: 220,
+                          objectFit: "cover",
+                          borderRadius: 18,
+                          border: "1px solid rgba(255,255,255,.12)",
+                        }}
                       />
                     ))}
                   </section>
                 )}
 
-                <div style={eyebrow}>Routing Input</div>
-                <h2 style={{ fontSize: "clamp(32px,7vw,56px)", lineHeight: 1, margin: "0 0 12px" }}>
-                  {painTitle(row)}
-                </h2>
-
-                <p style={{ ...muted, fontSize: 20 }}>
-                  {painBody(row)}
-                </p>
-
-                {analysisLines.length > 0 && (
-                  <section style={{ ...card, margin: "16px 0", borderColor: "rgba(157,243,191,.35)" }}>
-                    <div style={greenEyebrow}>VaultForge Analysis</div>
-                    <div style={{ display: "grid", gap: 10 }}>
-                      {analysisLines.map((line, lineIndex) => (
-                        <p key={`${id}-analysis-${lineIndex}`} style={{ ...muted, fontSize: 17, margin: 0 }}>
-                          {line}
-                        </p>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {row.requested_help && (
-                  <section style={{ ...card, margin: "16px 0", borderColor: "rgba(157,243,191,.25)" }}>
-                    <div style={greenEyebrow}>Requested Help</div>
-                    <p style={{ ...muted, fontSize: 18, margin: 0 }}>{asText(row.requested_help)}</p>
-                  </section>
-                )}
-
-                {(capital || value || repairs) && (
-                  <section style={grid}>
-                    {capital && <DetailCard label="Capital Needed" value={capital} detail="Requested capital or funding gap." />}
-                    {value && <DetailCard label="Estimated Value" value={value} detail="Estimated property or project value." />}
-                    {repairs && <DetailCard label="Repairs" value={repairs} detail="Estimated repairs or execution cost." />}
-                  </section>
-                )}
-
-                {tags.length > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <div style={greenEyebrow}>Routing Tags</div>
-                    {tags.map((tag) => (
-                      <span key={`${id}-${tag}`} style={chip}>{tag}</span>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ marginTop: 14 }}>
+                <div style={{ marginTop: 18 }}>
                   <button
                     type="button"
-                    onClick={() => painAction(id, isSaved ? "unsave" : "save")}
-                    disabled={busyId === `${id}-save` || busyId === `${id}-unsave`}
-                    style={isSaved ? ghost : btn}
+                    disabled={busyId === `${id}-save`}
+                    onClick={() => action(id, saved ? "unsave" : "save")}
+                    style={saved ? ghost : btn}
                   >
-                    {isSaved ? "Unsave" : "Save"}
+                    {saved ? "Saved ✓" : "Save"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => painAction(id, "interested")}
                     disabled={busyId === `${id}-interested`}
-                    style={isInterested ? ghost : btn}
+                    onClick={() => action(id, "interested")}
+                    style={interested ? ghost : btn}
                   >
-                    {isInterested ? "Interested ✓" : "Interested"}
+                    {interested ? "Interested ✓" : "Interested"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => painAction(id, "dismiss")}
                     disabled={busyId === `${id}-dismiss`}
+                    onClick={() => action(id, "dismiss")}
                     style={danger}
                   >
                     Dismiss
@@ -695,37 +391,17 @@ export default function PainPage() {
 
                   <button
                     type="button"
-                    onClick={() => painAction(id, "archive")}
                     disabled={busyId === `${id}-archive`}
+                    onClick={() => action(id, "archive")}
                     style={danger}
                   >
                     Archive
                   </button>
-                </div>
 
-                <div style={{ marginTop: 8 }}>
-                  {row.deal_id && (
-                    <ActionButton href={`/deal/${encodeURIComponent(String(row.deal_id))}`} primary>
-                      Open Deal Room
-                    </ActionButton>
-                  )}
-                  <ActionButton href="/routing" primary>
-                    Route
-                  </ActionButton>
-                  <ActionButton href="/messages">
+                  <Link href="/messages" style={ghost}>
                     Message
-                  </ActionButton>
-                  <ActionButton href="/alerts">
-                    Alerts
-                  </ActionButton>
-                  <ActionButton href="/pain-submit">
-                    Related Signal
-                  </ActionButton>
+                  </Link>
                 </div>
-
-                <p style={{ ...muted, marginTop: 14 }}>
-                  {formatDate(row.created_at)}
-                </p>
               </article>
             );
           })}
