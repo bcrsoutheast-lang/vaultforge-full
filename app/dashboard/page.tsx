@@ -792,6 +792,7 @@ export default function DashboardPage() {
             <Link href="/submit" style={ghost}>Create Deal</Link>
             <Link href="/pain-submit" style={ghost}>Pain Button</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
+            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/projects" style={ghost}>Deal Rooms</Link>
             <Link href="/network" style={ghost}>Member Network</Link>
             <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
