@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type PainSignal = Record<string, any>;
+type MessageRow = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -14,7 +15,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 920, margin: "0 auto" };
+const wrap: React.CSSProperties = { maxWidth: 960, margin: "0 auto" };
 
 const panel: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.14)",
@@ -118,8 +119,29 @@ function locationText(signal: PainSignal | null) {
     .join(", ");
 }
 
+function messageBody(row: MessageRow) {
+  return asText(row.body_text || row.body || row.message || row.content || row.text || row.note, "No message body.");
+}
+
+function sender(row: MessageRow) {
+  return asText(row.sender_email || row.from_email || row.member_email, "Unknown sender");
+}
+
+function recipient(row: MessageRow) {
+  return asText(row.recipient_email || row.to_email, "Unknown recipient");
+}
+
+function formatDate(value: unknown) {
+  const text = asText(value);
+  if (!text) return "";
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleString();
+}
+
 export default function PainMessagePage({ params }: { params: { id: string } }) {
   const [signal, setSignal] = useState<PainSignal | null>(null);
+  const [messages, setMessages] = useState<MessageRow[]>([]);
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("Loading pain signal...");
   const [saving, setSaving] = useState(false);
@@ -128,8 +150,13 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
     setStatus("Loading pain signal...");
 
     try {
-      const res = await fetch(`/api/pain/message?id=${encodeURIComponent(params.id)}`, {
+      const email = getEmail();
+
+      const res = await fetch(`/api/pain/message?id=${encodeURIComponent(params.id)}&email=${encodeURIComponent(email)}`, {
         cache: "no-store",
+        headers: {
+          "x-vf-email": email,
+        },
       });
 
       const data = await res.json();
@@ -139,6 +166,7 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
       }
 
       setSignal(data.signal || null);
+      setMessages(Array.isArray(data.messages) ? data.messages : []);
       setStatus("");
     } catch (error: any) {
       setStatus(error?.message || "Could not load pain signal.");
@@ -177,8 +205,9 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
         throw new Error(data?.error || data?.details || "Could not send message.");
       }
 
-      setStatus("Message sent about this pain signal. Open Pain Messages to view the thread.");
+      setStatus("Message sent.");
       setMessage("");
+      setMessages(Array.isArray(data.messages) ? data.messages : []);
     } catch (error: any) {
       setStatus(error?.message || "Could not send message.");
     } finally {
@@ -215,18 +244,19 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
 
       <div style={wrap}>
         <section style={hero}>
-          <div style={eyebrow}>Message About Pain Signal</div>
+          <div style={eyebrow}>Pain Thread</div>
           <h1 style={{ fontSize: "clamp(48px,10vw,88px)", lineHeight: 0.9, margin: "0 0 18px" }}>
-            Start the execution conversation.
+            Message tied to the signal.
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
-            This sends a message tied to the selected Pain Button signal so the conversation is connected to the problem.
+            This page keeps the conversation connected to the exact Pain Button signal.
           </p>
 
           <Link href="/pain" style={ghost}>Pain Feed</Link>
           <Link href="/routing" style={ghost}>Routing</Link>
           <Link href="/pain-messages" style={ghost}>Pain Messages</Link>
           <Link href="/messages" style={ghost}>All Messages</Link>
+          <button type="button" onClick={load} style={btn}>Refresh</button>
         </section>
 
         {signal && (
@@ -244,7 +274,34 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
         )}
 
         <section style={panel}>
-          <div style={eyebrow}>Message</div>
+          <div style={eyebrow}>Thread</div>
+
+          {messages.length === 0 && (
+            <p style={muted}>No messages yet. Send the first note below.</p>
+          )}
+
+          {messages.map((row, index) => (
+            <article
+              key={String(row.id || index)}
+              style={{
+                border: "1px solid rgba(255,255,255,.12)",
+                background: "rgba(255,255,255,.045)",
+                borderRadius: 20,
+                padding: 16,
+                marginBottom: 12,
+              }}
+            >
+              <p style={{ ...muted, margin: "0 0 8px" }}>
+                <strong style={{ color: "#9df3bf" }}>{sender(row)}</strong> → {recipient(row)}
+              </p>
+              <p style={{ color: "white", lineHeight: 1.55, fontSize: 17 }}>{messageBody(row)}</p>
+              <p style={{ ...muted, margin: 0 }}>{formatDate(row.created_at)}</p>
+            </article>
+          ))}
+        </section>
+
+        <section style={panel}>
+          <div style={eyebrow}>Reply</div>
           <textarea
             value={message}
             onChange={(event) => setMessage(event.target.value)}
