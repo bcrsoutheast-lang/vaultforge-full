@@ -275,7 +275,19 @@ function StatCard({
   );
 }
 
-function AlertCard({ alert, owner }: { alert: FeedAlert; owner: boolean }) {
+function AlertCard({
+  alert,
+  owner,
+  email,
+  storingId,
+  onStore,
+}: {
+  alert: FeedAlert;
+  owner: boolean;
+  email: string;
+  storingId: string;
+  onStore: (alert: FeedAlert) => void;
+}) {
   const tone = priorityTone(alert.priority);
 
   return (
@@ -302,6 +314,17 @@ function AlertCard({ alert, owner }: { alert: FeedAlert; owner: boolean }) {
       <Link href={alert.safe_href || "/projects"} style={btn}>
         Open Work Area
       </Link>
+
+      {owner && (
+        <button
+          type="button"
+          style={ghost}
+          disabled={storingId === alert.id}
+          onClick={() => onStore(alert)}
+        >
+          {storingId === alert.id ? "Storing..." : "Store Approved Signal"}
+        </button>
+      )}
     </article>
   );
 }
@@ -337,6 +360,32 @@ function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "l
   );
 }
 
+
+async function storeSignal(alert: FeedAlert, email: string) {
+  const res = await fetch("/api/intelligence/store", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-vf-email": email,
+      "x-vf-admin": "1",
+    },
+    body: JSON.stringify({
+      email,
+      owner: "1",
+      admin_email: email,
+      alert,
+    }),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || data?.details || "Could not store signal.");
+  }
+
+  return data;
+}
+
 export default function AlertsPage() {
   const [email, setEmail] = useState("");
   const [access, setAccess] = useState<Access | null>(null);
@@ -345,6 +394,8 @@ export default function AlertsPage() {
   const [status, setStatus] = useState("Loading smart alerts...");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [storingId, setStoringId] = useState("");
+  const [storeMessage, setStoreMessage] = useState("");
 
   async function load() {
     setStatus("Loading smart alerts...");
@@ -396,6 +447,25 @@ export default function AlertsPage() {
     } catch (error: any) {
       setLockReason("login");
       setStatus(error?.message || "");
+    }
+  }
+
+  async function handleStore(alert: FeedAlert) {
+    if (!owner) {
+      setStoreMessage("Only owner/admin can store approved signals.");
+      return;
+    }
+
+    setStoringId(alert.id);
+    setStoreMessage("Storing approved signal...");
+
+    try {
+      const result = await storeSignal(alert, email);
+      setStoreMessage(result?.message || "Signal stored safely.");
+    } catch (error: any) {
+      setStoreMessage(error?.message || "Could not store signal.");
+    } finally {
+      setStoringId("");
     }
   }
 
@@ -502,6 +572,7 @@ export default function AlertsPage() {
 
           {status && <p style={{ ...muted, marginTop: 16 }}>{status}</p>}
           {feed.error && <p style={{ color: "#ffd0d0", fontWeight: 900 }}>{feed.error}</p>}
+          {storeMessage && <p style={{ color: storeMessage.toLowerCase().includes("could not") || storeMessage.toLowerCase().includes("only") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>{storeMessage}</p>}
         </section>
 
         <section style={statGrid}>
@@ -554,7 +625,14 @@ export default function AlertsPage() {
         ) : (
           <section style={grid}>
             {alerts.map((alert) => (
-              <AlertCard key={alert.id} alert={alert} owner={owner} />
+              <AlertCard
+                key={alert.id}
+                alert={alert}
+                owner={owner}
+                email={email}
+                storingId={storingId}
+                onStore={handleStore}
+              />
             ))}
           </section>
         )}
