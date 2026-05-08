@@ -63,34 +63,42 @@ function requestEmail(request: Request, body: any) {
   );
 }
 
-function pickMessageColumn(columns: Set<string>) {
+function hasColumn(columns: string[], column: string) {
+  return columns.includes(column);
+}
+
+function pickMessageColumn(columns: string[]) {
   const candidates = ["body", "message", "content", "message_body", "text", "note"];
 
   for (const column of candidates) {
-    if (columns.has(column)) return column;
+    if (hasColumn(columns, column)) return column;
   }
 
   return "";
 }
 
-function setIfColumn(payload: Record<string, any>, columns: Set<string>, column: string, value: any) {
-  if (columns.has(column)) {
+function setIfColumn(payload: Record<string, any>, columns: string[], column: string, value: any) {
+  if (hasColumn(columns, column)) {
     payload[column] = value;
   }
 }
 
-async function getColumns(supabase: any, table: string) {
-  const { data, error } = await supabase
-    .from("information_schema.columns")
-    .select("column_name")
-    .eq("table_schema", "public")
-    .eq("table_name", table);
+async function getColumns(supabase: any, table: string): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from("information_schema.columns")
+      .select("column_name")
+      .eq("table_schema", "public")
+      .eq("table_name", table);
 
-  if (error || !data) {
-    return new Set<string>();
+    if (error || !data) return [];
+
+    return data
+      .map((row: any) => String(row?.column_name || "").trim())
+      .filter(Boolean);
+  } catch {
+    return [];
   }
-
-  return new Set(data.map((row: any) => String(row.column_name || "")));
 }
 
 async function logActivity(supabase: any, payload: Record<string, any>) {
