@@ -302,6 +302,12 @@ function dealRoomHref(alert: FeedAlert) {
   return `/deal-room/${encodeURIComponent(itemId)}`;
 }
 
+function routingRoomHref(alert: FeedAlert) {
+  const signalId = String(alert.id || "").trim();
+  if (!signalId) return "";
+  return `/routing-room/${encodeURIComponent(signalId)}`;
+}
+
 function StatCard({ label, value, detail, href }: { label: string; value: number | string; detail: string; href: string }) {
   return (
     <Link href={href} style={{ ...card, color: "white", textDecoration: "none", display: "block" }}>
@@ -368,6 +374,10 @@ function AlertCard({ alert }: { alert: FeedAlert }) {
 
       {dealRoomHref(alert) && (
         <Link href={dealRoomHref(alert)} style={ghost}>Open Exact Deal Room</Link>
+      )}
+
+      {routingRoomHref(alert) && (
+        <Link href={routingRoomHref(alert)} style={ghost}>Open Routing Room</Link>
       )}
 
       <Link href={alert.safe_href || "/projects"} style={ghost}>Open Work Area</Link>
