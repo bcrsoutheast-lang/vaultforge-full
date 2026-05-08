@@ -350,6 +350,12 @@ function dealRoomHref(alert: FeedAlert) {
   return `/deal-room/${encodeURIComponent(itemId)}`;
 }
 
+function routingRoomHref(alert: FeedAlert) {
+  const signalId = String(alert.id || "").trim();
+  if (!signalId) return "";
+  return `/routing-room/${encodeURIComponent(signalId)}`;
+}
+
 function statusTone(status: string) {
   const s = String(status || "").toLowerCase();
   if (s === "active") return "#9df3bf";
