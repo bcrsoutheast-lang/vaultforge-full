@@ -70,6 +70,22 @@ type Feed = {
   error?: string;
 };
 
+type StoredFeed = {
+  ok?: boolean;
+  owner?: boolean;
+  email?: string;
+  table?: string;
+  alerts?: FeedAlert[];
+  counts?: {
+    stored_alerts?: number;
+    urgent?: number;
+    high?: number;
+    medium?: number;
+  };
+  note?: string;
+  error?: string;
+};
+
 type ControlWindow = {
   code: string;
   title: string;
@@ -500,6 +516,7 @@ export default function AdminIntelligencePage() {
     activity: 0,
   });
   const [feed, setFeed] = useState<Feed>({});
+  const [storedFeed, setStoredFeed] = useState<StoredFeed>({});
   const [storingId, setStoringId] = useState("");
   const [storeMessage, setStoreMessage] = useState("");
 
@@ -517,7 +534,7 @@ export default function AdminIntelligencePage() {
         return;
       }
 
-      const [statsRes, feedRes] = await Promise.all([
+      const [statsRes, feedRes, storedRes] = await Promise.all([
         fetch(`/api/dashboard/stats?email=${encodeURIComponent(currentEmail)}&owner=1`, {
           cache: "no-store",
           headers: {
@@ -526,6 +543,13 @@ export default function AdminIntelligencePage() {
           },
         }),
         fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=1`, {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": currentEmail,
+            "x-vf-admin": "1",
+          },
+        }),
+        fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=1`, {
           cache: "no-store",
           headers: {
             "x-vf-email": currentEmail,
@@ -550,7 +574,9 @@ export default function AdminIntelligencePage() {
       });
 
       const feedData = await safeJson(feedRes);
+      const storedData = await safeJson(storedRes);
       setFeed(feedData || {});
+      setStoredFeed(storedData || {});
     } finally {
       setLoading(false);
     }
@@ -568,6 +594,16 @@ export default function AdminIntelligencePage() {
     try {
       const result = await storeSignal(alert, email);
       setStoreMessage(result?.message || "Signal stored safely.");
+
+      const storedRes = await fetch(`/api/intelligence/stored?email=${encodeURIComponent(email)}&owner=1`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": email,
+          "x-vf-admin": "1",
+        },
+      });
+      const storedData = await safeJson(storedRes);
+      setStoredFeed(storedData || {});
     } catch (error: any) {
       setStoreMessage(error?.message || "Could not store signal.");
     } finally {
@@ -665,6 +701,7 @@ export default function AdminIntelligencePage() {
           <StatCard label="Deals" value={stats.deals} detail="Active deal rooms to score and route." href="/projects" />
           <StatCard label="Members" value={stats.members} detail="Network nodes and routing targets." href="/network" />
           <StatCard label="Generated Signals" value={feed.counts?.generated_alerts || 0} detail="Read-only global intelligence feed." href="/admin-intelligence" />
+          <StatCard label="Stored Approved" value={storedFeed.counts?.stored_alerts || 0} detail="Saved into vf_match_alerts." href="/admin-intelligence" />
           <StatCard label="Urgent Signals" value={urgentAlerts.length} detail="Highest priority review candidates." href="/admin-intelligence" />
           <StatCard label="High Signals" value={highAlerts.length} detail="Strong opportunity or capital signals." href="/admin-intelligence" />
           <StatCard label="Pain Inputs" value={feed.counts?.pain || stats.pain} detail="Distress/friction opportunity source." href="/pain-submit" />
@@ -722,6 +759,37 @@ export default function AdminIntelligencePage() {
             {alerts.slice(0, 24).map((alert) => (
               <AlertCard
                 key={alert.id}
+                alert={alert}
+                email={email}
+                storingId={storingId}
+                onStore={handleStore}
+              />
+            ))}
+          </section>
+        )}
+
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={greenEyebrow}>Stored Approved Signals</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            Approved intelligence saved to vf_match_alerts.
+          </h2>
+          <p style={{ ...muted, fontSize: 19 }}>
+            This confirms the store pipeline is working. These are no longer temporary generated signals;
+            they are saved approved signals.
+          </p>
+          {storedFeed.error && <p style={{ color: "#ffd0d0", fontWeight: 900 }}>{storedFeed.error}</p>}
+        </section>
+
+        {(storedFeed.alerts || []).length === 0 ? (
+          <section style={hero}>
+            <strong>No stored approved signals yet.</strong>
+            <p style={muted}>Use “Store Approved Signal” on a generated signal to save it here.</p>
+          </section>
+        ) : (
+          <section style={grid}>
+            {(storedFeed.alerts || []).slice(0, 24).map((alert) => (
+              <AlertCard
+                key={`stored-${alert.id}`}
                 alert={alert}
                 email={email}
                 storingId={storingId}
