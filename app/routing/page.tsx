@@ -69,6 +69,13 @@ const ghost: React.CSSProperties = {
   background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
   margin: "7px 7px 0 0",
   minHeight: 46,
+  cursor: "pointer",
+};
+
+const danger: React.CSSProperties = {
+  ...ghost,
+  border: "1px solid rgba(255,120,120,.36)",
+  color: "#ffd0d0",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -104,13 +111,17 @@ const chip: React.CSSProperties = {
 
 function getEmail() {
   if (typeof window === "undefined") return "";
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    ""
-  )
-    .trim()
-    .toLowerCase();
+  try {
+    return (
+      localStorage.getItem("vf_email") ||
+      sessionStorage.getItem("vf_email") ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 function asText(value: unknown, fallback = "") {
@@ -186,9 +197,12 @@ function ScoreBar({ score }: { score: number }) {
 export default function RoutingPage() {
   const [rows, setRows] = useState<RoutingRow[]>([]);
   const [status, setStatus] = useState("Loading routing signals...");
+  const [toast, setToast] = useState("");
+  const [busyId, setBusyId] = useState("");
 
   async function load() {
     setStatus("Loading routing signals...");
+    setToast("");
 
     try {
       const email = getEmail();
@@ -209,6 +223,49 @@ export default function RoutingPage() {
       setStatus("");
     } catch (error: any) {
       setStatus(error?.message || "Could not load routing signals.");
+    }
+  }
+
+  async function painAction(sourceId: string, action: string) {
+    const email = getEmail();
+
+    if (!sourceId) {
+      setToast("This routing signal is not connected to a pain signal yet.");
+      return;
+    }
+
+    setBusyId(`${sourceId}-${action}`);
+    setToast("");
+
+    try {
+      const res = await fetch("/api/pain/action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+        },
+        body: JSON.stringify({
+          id: sourceId,
+          action,
+          email,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Pain action failed.");
+      }
+
+      if (action === "dismiss" || action === "archive") {
+        setRows((current) => current.filter((row) => String(row.source_id || "") !== sourceId));
+      }
+
+      setToast(data?.message || `Pain signal ${action} saved.`);
+    } catch (error: any) {
+      setToast(error?.message || "Pain action failed.");
+    } finally {
+      setBusyId("");
     }
   }
 
@@ -258,7 +315,7 @@ export default function RoutingPage() {
             <span style={chip}>AI Routing</span>
             <span style={chip}>Match Logic</span>
             <span style={chip}>Urgency Score</span>
-            <span style={chip}>Fit Detection</span>
+            <span style={chip}>Member Actions</span>
           </div>
 
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
@@ -266,8 +323,8 @@ export default function RoutingPage() {
           </h1>
 
           <p style={{ ...muted, fontSize: 21 }}>
-            This feed reads from <strong>vf_routing_signals</strong>. It shows why VaultForge believes a deal,
-            pain signal, member, lender, operator, investor, or contractor should be routed.
+            Routing cards now connect back to Pain workflow actions. Members can save, mark interest, message, dismiss,
+            or jump back to the original Pain signal.
           </p>
 
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
@@ -276,6 +333,12 @@ export default function RoutingPage() {
           <Link href="/alerts" style={ghost}>Smart Alerts</Link>
           <button type="button" onClick={load} style={btn}>Refresh</button>
         </section>
+
+        {toast && (
+          <section style={{ ...hero, color: toast.toLowerCase().includes("failed") || toast.toLowerCase().includes("error") ? "#ffd0d0" : "#9df3bf" }}>
+            {toast}
+          </section>
+        )}
 
         <section style={{ ...grid, marginBottom: 22 }}>
           <StatCard label="Total Signals" value={rows.length} detail="All routing records loaded." />
@@ -298,6 +361,7 @@ export default function RoutingPage() {
         <section style={{ display: "grid", gap: 16 }}>
           {rows.map((row, index) => {
             const id = asText(row.id) || String(index);
+            const sourceId = asText(row.source_id);
             const tags = tagsList(row);
             const score = asNumber(row.match_score);
             const urgencyScore = asNumber(row.urgency_score);
@@ -323,7 +387,7 @@ export default function RoutingPage() {
                   {asText(row.routing_reason, "VaultForge routing signal")}
                 </h2>
 
-                <p style={{ ...muted, fontSize: 20 }}>
+                <p style={{ ...muted, fontSize: 20, whiteSpace: "pre-wrap" }}>
                   {asText(row.ai_explanation, "No AI explanation saved yet.")}
                 </p>
 
@@ -345,13 +409,54 @@ export default function RoutingPage() {
                 )}
 
                 <div style={{ marginTop: 14 }}>
+                  {sourceId && sourceType === "pain_submission" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => painAction(sourceId, "save")}
+                        disabled={busyId === `${sourceId}-save`}
+                        style={btn}
+                      >
+                        Save Pain Signal
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => painAction(sourceId, "interested")}
+                        disabled={busyId === `${sourceId}-interested`}
+                        style={btn}
+                      >
+                        Interested
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => painAction(sourceId, "dismiss")}
+                        disabled={busyId === `${sourceId}-dismiss`}
+                        style={danger}
+                      >
+                        Dismiss
+                      </button>
+                    </>
+                  )}
+
                   {row.deal_id && (
                     <Link href={`/deal/${encodeURIComponent(String(row.deal_id))}`} style={btn}>
                       Open Deal Room
                     </Link>
                   )}
-                  <Link href="/pain" style={ghost}>Pain Feed</Link>
-                  <Link href="/alerts" style={ghost}>Smart Alerts</Link>
+
+                  <Link href="/pain" style={ghost}>
+                    Open Pain Feed
+                  </Link>
+
+                  <Link href="/messages" style={ghost}>
+                    Message
+                  </Link>
+
+                  <Link href="/alerts" style={ghost}>
+                    Alerts
+                  </Link>
                 </div>
 
                 <p style={{ ...muted, marginTop: 14 }}>
