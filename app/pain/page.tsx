@@ -167,7 +167,6 @@ function painTitle(row: PainRow) {
 function painBody(row: PainRow) {
   return first(
     row.description,
-    row.ai_summary,
     row.requested_help,
     "No description yet."
   );
@@ -180,24 +179,42 @@ function painLocation(row: PainRow) {
     .join(", ");
 }
 
-function normalizePhotos(value: unknown) {
-  if (Array.isArray(value)) {
-    return value.map(String).filter(Boolean);
-  }
+function normalizePhotos(value: unknown, row?: PainRow) {
+  const candidates = [
+    value,
+    row?.photos,
+    row?.image_urls,
+    row?.images,
+    row?.uploaded_photos,
+    row?.photo_url,
+    row?.main_photo_url,
+  ];
 
-  const text = asText(value);
-  if (!text) return [];
+  const out: string[] = [];
 
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) {
-      return parsed.map(String).filter(Boolean);
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      out.push(...candidate.map(String).filter(Boolean));
+      continue;
     }
-  } catch {
-    // continue
+
+    const text = asText(candidate);
+    if (!text) continue;
+
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        out.push(...parsed.map(String).filter(Boolean));
+        continue;
+      }
+    } catch {
+      // continue
+    }
+
+    out.push(text);
   }
 
-  return [text];
+  return Array.from(new Set(out)).filter((src) => src.startsWith("data:image") || src.startsWith("http"));
 }
 
 function normalizeTags(row: PainRow) {
@@ -230,6 +247,16 @@ function urgencyTone(value: unknown) {
   if (text.includes("medium")) return "#f5d978";
 
   return "#9df3bf";
+}
+
+function splitAnalysis(value: unknown) {
+  const text = asText(value);
+  if (!text) return [];
+
+  return text
+    .split(/\n\n|\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function NumberStatCard({
@@ -345,7 +372,7 @@ export default function PainPage() {
     if (filter === "open") return openRows;
     if (filter === "urgent") return urgentRows;
     if (filter === "capital") return capitalRows;
-    if (filter === "photos") return rows.filter((row) => normalizePhotos(row.photo_urls).length > 0);
+    if (filter === "photos") return rows.filter((row) => normalizePhotos(row.photo_urls, row).length > 0);
 
     return rows;
   }, [capitalRows, filter, openRows, rows, urgentRows]);
@@ -377,9 +404,9 @@ export default function PainPage() {
             <span style={{ ...chip, borderColor: "rgba(255,120,120,.38)", color: "#ff9f9f" }}>
               Distress Signals
             </span>
+            <span style={chip}>AI Analysis</span>
             <span style={chip}>Capital Needs</span>
             <span style={chip}>Operator Routing</span>
-            <span style={chip}>Deal Rescue</span>
             <span style={chip}>Photo-Aware Intake</span>
           </div>
 
@@ -388,9 +415,8 @@ export default function PainPage() {
           </h1>
 
           <p style={{ ...muted, fontSize: 21 }}>
-            This is the command-center feed for seller pressure, stalled projects, funding gaps, contractor problems,
-            title issues, zoning problems, and emergency deal rescue. Each signal can now carry photos, asset class,
-            routing tags, urgency, and requested help.
+            Each signal is now analyzed for best route, risk flags, next action, capital fit, operator fit,
+            and execution path. Photos are detected from multiple possible fields.
           </p>
 
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
@@ -446,8 +472,9 @@ export default function PainPage() {
             const value = money(row.estimated_value);
             const repairs = money(row.estimated_repairs);
             const tags = normalizeTags(row);
-            const photos = normalizePhotos(row.photo_urls);
+            const photos = normalizePhotos(row.photo_urls, row);
             const tone = urgencyTone(urgency);
+            const analysisLines = splitAnalysis(row.ai_summary);
 
             return (
               <article key={id} style={{ ...signalCard, borderColor: `${tone}66` }}>
@@ -495,6 +522,19 @@ export default function PainPage() {
                   {painBody(row)}
                 </p>
 
+                {analysisLines.length > 0 && (
+                  <section style={{ ...card, margin: "16px 0", borderColor: "rgba(157,243,191,.35)" }}>
+                    <div style={greenEyebrow}>VaultForge Analysis</div>
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {analysisLines.map((line, lineIndex) => (
+                        <p key={`${id}-analysis-${lineIndex}`} style={{ ...muted, fontSize: 17, margin: 0 }}>
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
                 {row.requested_help && (
                   <section style={{ ...card, margin: "16px 0", borderColor: "rgba(157,243,191,.25)" }}>
                     <div style={greenEyebrow}>Requested Help</div>
@@ -517,13 +557,6 @@ export default function PainPage() {
                       <span key={`${id}-${tag}`} style={chip}>{tag}</span>
                     ))}
                   </div>
-                )}
-
-                {row.ai_summary && (
-                  <section style={{ ...card, marginTop: 16, borderColor: "rgba(181,92,255,.28)" }}>
-                    <div style={eyebrow}>AI Summary</div>
-                    <p style={{ ...muted, fontSize: 18, margin: 0 }}>{asText(row.ai_summary)}</p>
-                  </section>
                 )}
 
                 <div style={{ marginTop: 14 }}>
