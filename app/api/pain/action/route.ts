@@ -94,7 +94,7 @@ async function logActivity(supabase: any, payload: Record<string, any>) {
   try {
     await supabase.from("vf_activity_events").insert(payload);
   } catch {
-    // Activity logging is best-effort and must never break the main pain action.
+    // Activity logging is best-effort.
   }
 }
 
@@ -134,9 +134,7 @@ export async function POST(request: Request) {
     const interestedBy = normalizeArray(current.interested_by);
     const dismissedBy = normalizeArray(current.dismissed_by);
 
-    const patch: Record<string, any> = {
-      last_action_at: new Date().toISOString(),
-    };
+    const patch: Record<string, any> = {};
 
     if (note) {
       patch.member_notes = note;
