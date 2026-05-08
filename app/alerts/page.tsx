@@ -273,6 +273,12 @@ function typeLabel(type: string) {
   return t.slice(0, 1).toUpperCase() + t.slice(1);
 }
 
+function dealRoomHref(alert: FeedAlert) {
+  const itemId = String(alert.item_id || "").trim();
+  if (!itemId) return "";
+  return `/deal-room/${encodeURIComponent(itemId)}`;
+}
+
 function StatCard({
   label,
   value,
@@ -327,11 +333,7 @@ function AlertCard({
         {owner && alert.member_email && <span style={chip}>{alert.member_email}</span>}
       </div>
 
-      <Link href={`/signals/${encodeURIComponent(alert.id)}`} style={btn}>
-        Open Exact Signal
-      </Link>
-
-      <Link href={alert.safe_href || "/projects"} style={ghost}>
+      <Link href={alert.safe_href || "/projects"} style={btn}>
         Open Work Area
       </Link>
 
