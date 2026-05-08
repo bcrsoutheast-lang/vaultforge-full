@@ -208,37 +208,23 @@ export default function PainPage() {
         setRows((current) =>
           current.map((row) => {
             if (String(row.id) !== id) return row;
-
             const existing = normalizeArray(row.saved_by);
-
-            return {
-              ...row,
-              saved_by: Array.from(new Set([...existing, email])),
-            };
+            return { ...row, saved_by: Array.from(new Set([...existing, email])) };
           })
         );
       } else if (type === "unsave") {
         setRows((current) =>
           current.map((row) => {
             if (String(row.id) !== id) return row;
-
-            return {
-              ...row,
-              saved_by: normalizeArray(row.saved_by).filter((v) => v !== email),
-            };
+            return { ...row, saved_by: normalizeArray(row.saved_by).filter((v) => v !== email) };
           })
         );
       } else if (type === "interested") {
         setRows((current) =>
           current.map((row) => {
             if (String(row.id) !== id) return row;
-
             const existing = normalizeArray(row.interested_by);
-
-            return {
-              ...row,
-              interested_by: Array.from(new Set([...existing, email])),
-            };
+            return { ...row, interested_by: Array.from(new Set([...existing, email])) };
           })
         );
       }
@@ -257,10 +243,8 @@ export default function PainPage() {
     () =>
       rows.filter((row) => {
         if (row.archived === true) return false;
-
         const dismissed = normalizeArray(row.dismissed_by);
         if (dismissed.includes(email)) return false;
-
         return true;
       }),
     [email, rows]
@@ -279,30 +263,23 @@ export default function PainPage() {
           </h1>
 
           <p style={{ color: "rgba(255,255,255,.72)", fontSize: 20 }}>
-            Distress signals now support live save, interested, dismiss, and archive workflows.
+            Distress signals support save, interest, messaging, dismiss, and archive workflows.
           </p>
 
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/pain-submit" style={btn}>Pain Button</Link>
-          <Link href="/messages" style={ghost}>Messages</Link>
+          <Link href="/pain-messages" style={ghost}>Pain Messages</Link>
+          <Link href="/messages" style={ghost}>All Messages</Link>
           <button type="button" style={btn} onClick={load}>Refresh</button>
         </section>
 
-        {toast && (
-          <section style={{ ...hero, color: "#9df3bf" }}>
-            {toast}
-          </section>
-        )}
+        {toast && <section style={{ ...hero, color: "#9df3bf" }}>{toast}</section>}
 
-        {status && (
-          <section style={hero}>
-            {status}
-          </section>
-        )}
+        {status && <section style={hero}>{status}</section>}
 
         {!status && visibleRows.length === 0 && (
           <section style={hero}>
-            No active distress signals.
+            No active distress signals. Open Pain Messages to view conversations, or submit a new Pain Button signal.
           </section>
         )}
 
@@ -314,13 +291,7 @@ export default function PainPage() {
             const interested = normalizeArray(row.interested_by).includes(email);
 
             return (
-              <article
-                key={id}
-                style={{
-                  ...card,
-                  borderColor: "rgba(157,243,191,.22)",
-                }}
-              >
+              <article key={id} style={{ ...card, borderColor: "rgba(157,243,191,.22)" }}>
                 <div style={{ marginBottom: 10 }}>
                   <span style={chip}>{asText(row.asset_type, "Signal")}</span>
                   <span style={chip}>{asText(row.pain_type, "Pain")}</span>
@@ -380,6 +351,10 @@ export default function PainPage() {
                     {interested ? "Interested ✓" : "Interested"}
                   </button>
 
+                  <Link href={`/pain-message/${encodeURIComponent(id)}`} style={ghost}>
+                    Message
+                  </Link>
+
                   <button
                     type="button"
                     disabled={busyId === `${id}-dismiss`}
@@ -397,10 +372,6 @@ export default function PainPage() {
                   >
                     Archive
                   </button>
-
-                  <Link href={`/pain-message/${encodeURIComponent(id)}`} style={ghost}>
-                    Message
-                  </Link>
                 </div>
               </article>
             );
