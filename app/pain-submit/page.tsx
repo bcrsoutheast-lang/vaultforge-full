@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 
+type AssetType = "Residential" | "Commercial" | "Land";
+
 type PainForm = {
+  asset_type: AssetType;
   pain_type: string;
   urgency_level: string;
   title: string;
   description: string;
   requested_help: string;
-  asset_type: string;
   property_address: string;
   city: string;
   state: string;
@@ -17,15 +19,24 @@ type PainForm = {
   capital_needed: string;
   estimated_value: string;
   estimated_repairs: string;
+  bedrooms: string;
+  bathrooms: string;
+  sqft: string;
+  units: string;
+  noi: string;
+  cap_rate: string;
+  acres: string;
+  zoning: string;
+  road_access: string;
 };
 
 const initialForm: PainForm = {
+  asset_type: "Residential",
   pain_type: "Distressed Seller",
   urgency_level: "High",
   title: "",
   description: "",
   requested_help: "",
-  asset_type: "",
   property_address: "",
   city: "",
   state: "",
@@ -33,6 +44,15 @@ const initialForm: PainForm = {
   capital_needed: "",
   estimated_value: "",
   estimated_repairs: "",
+  bedrooms: "",
+  bathrooms: "",
+  sqft: "",
+  units: "",
+  noi: "",
+  cap_rate: "",
+  acres: "",
+  zoning: "",
+  road_access: "",
 };
 
 const page: React.CSSProperties = {
@@ -45,7 +65,7 @@ const page: React.CSSProperties = {
 };
 
 const wrap: React.CSSProperties = {
-  maxWidth: 980,
+  maxWidth: 1020,
   margin: "0 auto",
 };
 
@@ -121,6 +141,19 @@ const ghost: React.CSSProperties = {
   background: "rgba(255,255,255,.06)",
   margin: "7px 7px 0 0",
   minHeight: 46,
+  cursor: "pointer",
+};
+
+const activeChoice: React.CSSProperties = {
+  ...btn,
+  width: "100%",
+  margin: 0,
+};
+
+const inactiveChoice: React.CSSProperties = {
+  ...ghost,
+  width: "100%",
+  margin: 0,
 };
 
 const eyebrow: React.CSSProperties = {
@@ -135,6 +168,14 @@ const eyebrow: React.CSSProperties = {
 const muted: React.CSSProperties = {
   color: "rgba(255,255,255,.72)",
   lineHeight: 1.55,
+};
+
+const thumb: React.CSSProperties = {
+  width: "100%",
+  height: 150,
+  objectFit: "cover",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.14)",
 };
 
 function getEmail() {
@@ -152,13 +193,71 @@ function getEmail() {
   }
 }
 
+function toDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function choiceDefaults(assetType: AssetType): Partial<PainForm> {
+  if (assetType === "Commercial") {
+    return {
+      asset_type: assetType,
+      pain_type: "Capital Needed",
+      requested_help: "Need lender, operator, buyer, tenant solution, or JV partner.",
+    };
+  }
+
+  if (assetType === "Land") {
+    return {
+      asset_type: assetType,
+      pain_type: "Zoning / Permit Issue",
+      requested_help: "Need builder, developer, entitlement help, zoning support, or land buyer.",
+    };
+  }
+
+  return {
+    asset_type: assetType,
+    pain_type: "Distressed Seller",
+    requested_help: "Need buyer, lender, contractor, title help, or emergency exit.",
+  };
+}
+
 export default function PainSubmitPage() {
   const [form, setForm] = useState<PainForm>(initialForm);
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [choiceOpen, setChoiceOpen] = useState(true);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   function update(field: keyof PainForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function chooseAsset(assetType: AssetType) {
+    setForm((current) => ({
+      ...current,
+      ...choiceDefaults(assetType),
+    }));
+    setChoiceOpen(false);
+  }
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+
+    const next = Array.from(files).slice(0, Math.max(0, 6 - photos.length));
+
+    try {
+      const urls = await Promise.all(next.map(toDataUrl));
+      setPhotos((current) => [...current, ...urls].slice(0, 6));
+    } catch (error: any) {
+      setStatus(error?.message || "Could not upload image preview.");
+    }
   }
 
   async function submitSignal() {
@@ -183,6 +282,17 @@ export default function PainSubmitPage() {
         body: JSON.stringify({
           ...form,
           member_email: email,
+          photo_urls: photos,
+          ai_summary: [
+            `${form.asset_type} pain signal.`,
+            form.bedrooms ? `${form.bedrooms} bedrooms.` : "",
+            form.bathrooms ? `${form.bathrooms} bathrooms.` : "",
+            form.sqft ? `${form.sqft} sqft.` : "",
+            form.units ? `${form.units} units.` : "",
+            form.acres ? `${form.acres} acres.` : "",
+            form.zoning ? `Zoning: ${form.zoning}.` : "",
+            form.road_access ? `Road access: ${form.road_access}.` : "",
+          ].filter(Boolean).join(" "),
         }),
       });
 
@@ -194,6 +304,8 @@ export default function PainSubmitPage() {
 
       setStatus("Distress signal routed into VaultForge.");
       setForm(initialForm);
+      setPhotos([]);
+      setChoiceOpen(true);
     } catch (error: any) {
       setStatus(error?.message || "Could not route distress signal.");
     } finally {
@@ -226,8 +338,32 @@ export default function PainSubmitPage() {
       `}</style>
 
       <div style={wrap}>
+        {choiceOpen && (
+          <section style={{ ...hero, borderColor: "rgba(157,243,191,.45)" }}>
+            <div style={eyebrow}>Choose Signal Type</div>
+            <h1 style={{ fontSize: "clamp(44px,10vw,78px)", lineHeight: 0.92, margin: "0 0 16px" }}>
+              What kind of problem are we routing?
+            </h1>
+            <p style={muted}>
+              Pick Residential, Commercial, or Land. The Pain Button will open the right fields for that asset class.
+            </p>
+
+            <section style={grid}>
+              <button type="button" onClick={() => chooseAsset("Residential")} style={activeChoice}>
+                Residential
+              </button>
+              <button type="button" onClick={() => chooseAsset("Commercial")} style={inactiveChoice}>
+                Commercial
+              </button>
+              <button type="button" onClick={() => chooseAsset("Land")} style={inactiveChoice}>
+                Land
+              </button>
+            </section>
+          </section>
+        )}
+
         <section style={hero}>
-          <div style={eyebrow}>Pain Button</div>
+          <div style={eyebrow}>Pain Button · {form.asset_type}</div>
           <h1 style={{ fontSize: "clamp(52px,12vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
             Route the problem.
           </h1>
@@ -236,6 +372,9 @@ export default function PainSubmitPage() {
             stalled projects, or emergency liquidation signals into VaultForge.
           </p>
 
+          <button type="button" style={ghost} onClick={() => setChoiceOpen(true)}>
+            Change Type
+          </button>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/pain" style={ghost}>Pain Feed</Link>
           <Link href="/routing" style={ghost}>Routing</Link>
@@ -315,18 +454,65 @@ export default function PainSubmitPage() {
         </section>
 
         <section style={panel}>
+          <div style={eyebrow}>{form.asset_type} Fields</div>
+
+          <div style={grid}>
+            {form.asset_type === "Residential" && (
+              <>
+                <div>
+                  <label style={label}>Bedrooms</label>
+                  <input value={form.bedrooms} onChange={(event) => update("bedrooms", event.target.value)} style={input} />
+                </div>
+                <div>
+                  <label style={label}>Bathrooms</label>
+                  <input value={form.bathrooms} onChange={(event) => update("bathrooms", event.target.value)} style={input} />
+                </div>
+                <div>
+                  <label style={label}>Sqft</label>
+                  <input value={form.sqft} onChange={(event) => update("sqft", event.target.value)} style={input} />
+                </div>
+              </>
+            )}
+
+            {form.asset_type === "Commercial" && (
+              <>
+                <div>
+                  <label style={label}>Units / Suites</label>
+                  <input value={form.units} onChange={(event) => update("units", event.target.value)} style={input} />
+                </div>
+                <div>
+                  <label style={label}>NOI</label>
+                  <input value={form.noi} onChange={(event) => update("noi", event.target.value)} style={input} />
+                </div>
+                <div>
+                  <label style={label}>Cap Rate</label>
+                  <input value={form.cap_rate} onChange={(event) => update("cap_rate", event.target.value)} style={input} />
+                </div>
+              </>
+            )}
+
+            {form.asset_type === "Land" && (
+              <>
+                <div>
+                  <label style={label}>Acres</label>
+                  <input value={form.acres} onChange={(event) => update("acres", event.target.value)} style={input} />
+                </div>
+                <div>
+                  <label style={label}>Zoning</label>
+                  <input value={form.zoning} onChange={(event) => update("zoning", event.target.value)} style={input} />
+                </div>
+                <div>
+                  <label style={label}>Road Access</label>
+                  <input value={form.road_access} onChange={(event) => update("road_access", event.target.value)} style={input} />
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section style={panel}>
           <div style={eyebrow}>Property / Market Context</div>
           <div style={grid}>
-            <div>
-              <label style={label}>Asset Type</label>
-              <input
-                value={form.asset_type}
-                onChange={(event) => update("asset_type", event.target.value)}
-                placeholder="Residential, Commercial, Land, Multifamily"
-                style={input}
-              />
-            </div>
-
             <div>
               <label style={label}>Address / Area</label>
               <input
@@ -339,32 +525,17 @@ export default function PainSubmitPage() {
 
             <div>
               <label style={label}>City</label>
-              <input
-                value={form.city}
-                onChange={(event) => update("city", event.target.value)}
-                placeholder="City"
-                style={input}
-              />
+              <input value={form.city} onChange={(event) => update("city", event.target.value)} placeholder="City" style={input} />
             </div>
 
             <div>
               <label style={label}>State</label>
-              <input
-                value={form.state}
-                onChange={(event) => update("state", event.target.value)}
-                placeholder="State"
-                style={input}
-              />
+              <input value={form.state} onChange={(event) => update("state", event.target.value)} placeholder="State" style={input} />
             </div>
 
             <div>
               <label style={label}>Zip Code</label>
-              <input
-                value={form.zip_code}
-                onChange={(event) => update("zip_code", event.target.value)}
-                placeholder="Zip"
-                style={input}
-              />
+              <input value={form.zip_code} onChange={(event) => update("zip_code", event.target.value)} placeholder="Zip" style={input} />
             </div>
           </div>
         </section>
@@ -374,37 +545,56 @@ export default function PainSubmitPage() {
           <div style={grid}>
             <div>
               <label style={label}>Capital Needed</label>
-              <input
-                value={form.capital_needed}
-                onChange={(event) => update("capital_needed", event.target.value)}
-                placeholder="50000"
-                inputMode="numeric"
-                style={input}
-              />
+              <input value={form.capital_needed} onChange={(event) => update("capital_needed", event.target.value)} placeholder="50000" inputMode="numeric" style={input} />
             </div>
 
             <div>
               <label style={label}>Estimated Value</label>
-              <input
-                value={form.estimated_value}
-                onChange={(event) => update("estimated_value", event.target.value)}
-                placeholder="250000"
-                inputMode="numeric"
-                style={input}
-              />
+              <input value={form.estimated_value} onChange={(event) => update("estimated_value", event.target.value)} placeholder="250000" inputMode="numeric" style={input} />
             </div>
 
             <div>
               <label style={label}>Estimated Repairs</label>
-              <input
-                value={form.estimated_repairs}
-                onChange={(event) => update("estimated_repairs", event.target.value)}
-                placeholder="35000"
-                inputMode="numeric"
-                style={input}
-              />
+              <input value={form.estimated_repairs} onChange={(event) => update("estimated_repairs", event.target.value)} placeholder="35000" inputMode="numeric" style={input} />
             </div>
           </div>
+        </section>
+
+        <section style={panel}>
+          <div style={eyebrow}>Photo Upload</div>
+          <p style={muted}>
+            Add up to 6 photos. This uses browser upload previews and stores them with the distress signal.
+          </p>
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(event) => handleFiles(event.target.files)}
+            style={{ display: "none" }}
+          />
+
+          <button type="button" onClick={() => fileRef.current?.click()} style={btn}>
+            Upload Photos
+          </button>
+
+          {photos.length > 0 && (
+            <section style={{ ...grid, marginTop: 14 }}>
+              {photos.map((src, index) => (
+                <div key={`${src.slice(0, 20)}-${index}`}>
+                  <img src={src} alt={`Pain upload ${index + 1}`} style={thumb} />
+                  <button
+                    type="button"
+                    onClick={() => setPhotos((current) => current.filter((_, i) => i !== index))}
+                    style={ghost}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </section>
+          )}
         </section>
 
         <section style={panel}>
