@@ -485,7 +485,10 @@ export default function SignalDetailPage() {
           <div className="vf-signal-actions">
             <Link href="/alerts" style={ghost}>Back to Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
+            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
+            {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
+            {signal && <Link href={`/routing-room/${encodeURIComponent(signal.id)}`} style={btn}>Open Routing Room</Link>}
             {signal && dealRoomHref(signal) && <Link href={dealRoomHref(signal)} style={btn}>Open Exact Deal Room</Link>}
             {signal && <Link href={detailHref(signal)} style={ghost}>Open Related Work Area</Link>}
             {signal?.deal_id && <Link href={`/projects?focus=${encodeURIComponent(signal.deal_id)}`} style={ghost}>Open Deal Focus</Link>}
@@ -586,9 +589,9 @@ export default function SignalDetailPage() {
                 This is the exact signal object.
               </h2>
               <p style={{ ...muted, fontSize: 19 }}>
-                This signal can now open its exact Deal Room when the signal includes a real item id.
+                This signal can now open its exact Deal Room and Routing Room when it includes real ids.
                 Next layers can add capital rooms, buyer match rooms, operator-needed rooms, pain threads,
-                comments, and notification history.
+                comments, member delivery, and notification history.
               </p>
             </section>
 
