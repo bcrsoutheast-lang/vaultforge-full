@@ -10,32 +10,25 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(157,243,191,.12), transparent 30%), radial-gradient(circle at top right, rgba(232,196,107,.12), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 28%), radial-gradient(circle at bottom right, rgba(181,92,255,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
   color: "white",
   padding: "28px 18px 100px",
   fontFamily: "Arial, sans-serif",
 };
 
 const wrap: React.CSSProperties = {
-  maxWidth: 1180,
+  maxWidth: 1220,
   margin: "0 auto",
 };
 
 const hero: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.14)",
+  border: "1px solid rgba(232,196,107,.34)",
   background:
-    "linear-gradient(145deg, rgba(255,255,255,.07), rgba(255,255,255,.025))",
+    "linear-gradient(145deg, rgba(232,196,107,.11), rgba(181,92,255,.09), rgba(255,255,255,.035))",
   borderRadius: 34,
   padding: 26,
   marginBottom: 22,
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.13)",
-  background:
-    "linear-gradient(145deg, rgba(255,255,255,.06), rgba(255,255,255,.025))",
-  borderRadius: 28,
-  padding: 22,
+  boxShadow: "0 30px 90px rgba(0,0,0,.30)",
 };
 
 const grid: React.CSSProperties = {
@@ -46,17 +39,26 @@ const grid: React.CSSProperties = {
 
 const statGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
   gap: 14,
   marginBottom: 22,
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.13)",
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
+  borderRadius: 28,
+  padding: 22,
+  boxShadow: "0 26px 80px rgba(0,0,0,.34)",
 };
 
 const btn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#9df3bf",
-  color: "#061120",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
+  color: "#06100a",
   border: "none",
   borderRadius: 999,
   padding: "13px 18px",
@@ -64,11 +66,7 @@ const btn: React.CSSProperties = {
   textDecoration: "none",
   cursor: "pointer",
   margin: "6px 6px 0 0",
-};
-
-const goldBtn: React.CSSProperties = {
-  ...btn,
-  background: "#f5d978",
+  minHeight: 46,
 };
 
 const ghost: React.CSSProperties = {
@@ -77,13 +75,14 @@ const ghost: React.CSSProperties = {
   justifyContent: "center",
   color: "white",
   border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.04)",
+  background: "rgba(255,255,255,.055)",
   borderRadius: 999,
   padding: "13px 18px",
   fontWeight: 900,
   textDecoration: "none",
   cursor: "pointer",
   margin: "6px 6px 0 0",
+  minHeight: 46,
 };
 
 const danger: React.CSSProperties = {
@@ -107,8 +106,8 @@ const greenEyebrow: React.CSSProperties = {
 };
 
 const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.68)",
-  lineHeight: 1.5,
+  color: "rgba(255,255,255,.70)",
+  lineHeight: 1.55,
 };
 
 const chip: React.CSSProperties = {
@@ -118,12 +117,12 @@ const chip: React.CSSProperties = {
   background: "rgba(157,243,191,.07)",
   borderRadius: 999,
   padding: "8px 11px",
-  fontWeight: 800,
+  fontWeight: 850,
   fontSize: 13,
   margin: "0 7px 7px 0",
 };
 
-const select: React.CSSProperties = {
+const field: React.CSSProperties = {
   width: "100%",
   borderRadius: 18,
   border: "1px solid rgba(255,255,255,.18)",
@@ -131,6 +130,7 @@ const select: React.CSSProperties = {
   color: "white",
   padding: 14,
   fontSize: 16,
+  boxSizing: "border-box",
 };
 
 const states = [
@@ -160,19 +160,13 @@ const roleOptions = [
   "Broker",
 ];
 
-function getEmail() {
-  if (typeof window === "undefined") return "";
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    ""
-  )
-    .trim()
-    .toLowerCase();
+function cleanEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
 }
 
-function asText(value: unknown) {
-  return String(value || "").trim();
+function asText(value: unknown, fallback = "") {
+  const text = String(value || "").trim();
+  return text || fallback;
 }
 
 function lower(value: unknown) {
@@ -197,7 +191,7 @@ function asArray(value: unknown): string[] {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed.map((item) => asText(item)).filter(Boolean);
   } catch {
-    // fall through
+    // Keep going and split the raw value below.
   }
 
   return raw
@@ -206,14 +200,40 @@ function asArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function getEmail() {
+  if (typeof window === "undefined") return OWNER_EMAIL;
+
+  try {
+    return (
+      localStorage.getItem("vf_email") ||
+      sessionStorage.getItem("vf_email") ||
+      OWNER_EMAIL
+    )
+      .trim()
+      .toLowerCase();
+  } catch {
+    return OWNER_EMAIL;
+  }
+}
+
+function isOwnerEmail(email: string) {
+  return cleanEmail(email) === OWNER_EMAIL;
+}
+
+function hasRealEmail(member: Member) {
+  const email = cleanEmail(member.email || member.member_email || member.owner_email);
+  return email.includes("@") && !email.endsWith("@example.com");
+}
+
 function memberName(member: Member) {
   return first(
     member.full_name,
     member.name,
     member.display_name,
     member.company,
+    member.member_name,
     member.email,
-    "Member"
+    "Unnamed Member"
   );
 }
 
@@ -227,6 +247,7 @@ function memberRole(member: Member) {
     member.primary_role,
     member.member_type,
     asArray(member.member_types)[0],
+    asArray(member.roles)[0],
     "Member"
   );
 }
@@ -247,83 +268,13 @@ function memberBio(member: Member) {
     member.description,
     member.strategy_summary,
     member.needs,
+    member.what_you_do,
     "VaultForge member profile."
   );
 }
 
-function isOwner() {
-  return getEmail() === OWNER_EMAIL;
-}
-
-function memberStatus(member: Member) {
-  return lower(
-    first(
-      member.member_status,
-      member.access_status,
-      member.status,
-      member.payment_status,
-      member.profile_status,
-      member.account_status
-    )
-  );
-}
-
-function isSuspended(member: Member) {
-  const status = memberStatus(member);
-
-  return (
-    status === "suspended" ||
-    status === "locked" ||
-    status === "disabled" ||
-    member.suspended === true ||
-    lower(member.suspended) === "true"
-  );
-}
-
-function isRemoved(member: Member) {
-  const status = memberStatus(member);
-
-  return (
-    status === "removed" ||
-    status === "deleted" ||
-    status === "trash" ||
-    status === "inactive_removed" ||
-    lower(member.removed) === "true" ||
-    member.removed === true
-  );
-}
-
-function isActive(member: Member) {
-  if (isRemoved(member) || isSuspended(member)) return false;
-
-  const status = memberStatus(member);
-
-  return (
-    status === "active" ||
-    lower(member.payment_status) === "active" ||
-    lower(member.access_status) === "active" ||
-    lower(member.member_status) === "active" ||
-    member.is_active === true
-  );
-}
-
-function isProfileRequired(member: Member) {
-  const status = memberStatus(member);
-  return status === "profile_required" || status === "incomplete" || lower(member.profile_complete) === "false";
-}
-
-function isPaymentRequired(member: Member) {
-  const status = memberStatus(member);
-  return (
-    status === "payment_required" ||
-    status === "unpaid" ||
-    lower(member.payment_status) === "unpaid" ||
-    lower(member.payment_status) === "past_due"
-  );
-}
-
 function memberId(member: Member) {
-  return first(member.id, member.profile_id, member.member_id, member.email);
+  return first(member.id, member.profile_id, member.member_id, member._source_id, member.auth_user_id, member.email);
 }
 
 function memberTypes(member: Member) {
@@ -349,6 +300,55 @@ function memberStrategies(member: Member) {
   return asArray(member.strategies || member.buy_box_strategies || member.strategy);
 }
 
+function profileComplete(member: Member) {
+  return (
+    member.profile_complete === true ||
+    lower(member.profile_complete) === "true" ||
+    lower(member.profile_status) === "complete"
+  );
+}
+
+function bucket(member: Member) {
+  const explicit = lower(member.admin_bucket);
+  if (explicit) return explicit;
+
+  if (lower(member.is_suspended) === "true" || member.is_suspended === true) return "suspended";
+  if (lower(member.member_status) === "suspended") return "suspended";
+  if (lower(member.member_status) === "deleted") return "deleted";
+  if (lower(member.access_status) === "active" || lower(member.member_status) === "active" || member.is_active === true) return "active";
+  if (lower(member.payment_status) === "paid" || lower(member.payment_status) === "active") return "active";
+  if (!profileComplete(member)) return "pending";
+  return "locked";
+}
+
+function isActive(member: Member) {
+  return bucket(member) === "active";
+}
+
+function isPending(member: Member) {
+  return bucket(member) === "pending";
+}
+
+function isSuspended(member: Member) {
+  return bucket(member) === "suspended";
+}
+
+function isDeleted(member: Member) {
+  return bucket(member) === "deleted";
+}
+
+function isLocked(member: Member) {
+  return bucket(member) === "locked";
+}
+
+function bucketTone(value: string) {
+  const b = value.toLowerCase();
+  if (b === "active") return "#9df3bf";
+  if (b === "pending") return "#f5d978";
+  if (b === "suspended" || b === "deleted") return "#ff9f9f";
+  return "#dcb8ff";
+}
+
 async function safeJson(res: Response) {
   try {
     return await res.json();
@@ -357,17 +357,12 @@ async function safeJson(res: Response) {
   }
 }
 
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
+function StatCard({ label, value, detail }: { label: string; value: number | string; detail: string }) {
   return (
     <div style={card}>
       <div style={greenEyebrow}>{label}</div>
       <div style={{ fontSize: 48, fontWeight: 950, lineHeight: 1 }}>{value}</div>
+      <p style={{ ...muted, marginBottom: 0 }}>{detail}</p>
     </div>
   );
 }
@@ -386,38 +381,56 @@ function Chips({ items }: { items: string[] }) {
   );
 }
 
+function StatusChip({ value }: { value: string }) {
+  const tone = bucketTone(value);
+
+  return (
+    <span
+      style={{
+        ...chip,
+        color: tone,
+        borderColor: `${tone}88`,
+        background: "rgba(0,0,0,.18)",
+        textTransform: "capitalize",
+      }}
+    >
+      {value || "locked"}
+    </span>
+  );
+}
+
 export default function NetworkPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [stateFilter, setStateFilter] = useState("All");
   const [roleFilter, setRoleFilter] = useState("All");
-  const [loading, setLoading] = useState("Loading member network...");
+  const [loading, setLoading] = useState("Loading real member network...");
   const [toast, setToast] = useState("");
-  const [showRemoved, setShowRemoved] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [busyKey, setBusyKey] = useState("");
+  const [rawSource, setRawSource] = useState("");
+  const [rawCount, setRawCount] = useState(0);
+  const [fakeHiddenCount, setFakeHiddenCount] = useState(0);
 
   async function loadMembers() {
-    setLoading("Loading member network...");
+    setLoading("Loading real member network...");
     setToast("");
 
     try {
-      const params = new URLSearchParams();
-
-      if (stateFilter && stateFilter !== "All") params.set("state", stateFilter);
-      if (roleFilter && roleFilter !== "All") params.set("role", roleFilter);
-
       const email = getEmail();
+      const owner = isOwnerEmail(email);
 
-      const res = await fetch(`/api/network/list?${params.toString()}`, {
+      const res = await fetch(`/api/admin/members?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`, {
         cache: "no-store",
         headers: {
           "x-vf-email": email,
-          "x-vf-admin": isOwner() ? "1" : "0",
+          "x-vf-admin": owner ? "1" : "0",
         },
       });
 
       const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not load member network.");
+        throw new Error(data?.error || data?.details || "Could not load real members from /api/admin/members.");
       }
 
       const list = Array.isArray(data?.members)
@@ -426,98 +439,76 @@ export default function NetworkPage() {
         ? data
         : [];
 
-      setMembers(list);
+      const realOnly = list.filter(hasRealEmail);
+      const fakeOnly = list.filter((member: Member) => !hasRealEmail(member));
+
+      setRawCount(list.length);
+      setFakeHiddenCount(fakeOnly.length);
+      setMembers(realOnly);
+      setRawSource(data.source || data.sources_checked?.join(", ") || "/api/admin/members");
       setLoading("");
     } catch (error: any) {
-      setLoading(error?.message || "Could not load member network.");
+      setMembers([]);
+      setRawCount(0);
+      setFakeHiddenCount(0);
+      setRawSource("");
+      setLoading(error?.message || "Could not load real member network.");
     }
   }
 
   useEffect(() => {
     loadMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateFilter, roleFilter]);
+  }, []);
 
-  async function updateStatus(member: Member, action: "active" | "suspended" | "payment_required" | "profile_required") {
-    setToast("Saving member status...");
+  async function memberAction(member: Member, action: "activate" | "mark_paid" | "mark_unpaid" | "lock" | "suspend" | "restore" | "delete") {
+    const email = cleanEmail(memberEmail(member));
+    const id = memberId(member);
+    const key = `${email || id}-${action}`;
+
+    if (!email && !id) {
+      setToast("Cannot update this record because it has no email or id.");
+      return;
+    }
+
+    setBusyKey(key);
+    setToast("Saving member action...");
 
     try {
-      const email = getEmail();
+      const adminEmail = getEmail();
 
-      const res = await fetch("/api/member/status", {
+      const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-admin": isOwner() ? "1" : "0",
+          "x-vf-email": adminEmail,
+          "x-vf-admin": isOwnerEmail(adminEmail) ? "1" : "0",
         },
         body: JSON.stringify({
-          id: memberId(member),
-          member_id: memberId(member),
-          email: memberEmail(member),
-          member_email: memberEmail(member),
+          email,
+          id,
           action,
-          admin_email: email,
+          admin_email: adminEmail,
         }),
       });
 
       const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not update member.");
+        throw new Error(data?.error || data?.details || "Member action failed.");
       }
 
-      setToast(data?.message || "Member updated.");
+      setToast(data?.message || `Member ${action} complete.`);
       await loadMembers();
     } catch (error: any) {
-      setToast(error?.message || "Could not update member.");
+      setToast(error?.message || "Member action failed.");
+    } finally {
+      setBusyKey("");
     }
   }
-
-  async function removeMember(member: Member) {
-    const ok = window.confirm(`Remove ${memberName(member)} from active network?`);
-
-    if (!ok) return;
-
-    setToast("Removing member...");
-
-    try {
-      const email = getEmail();
-
-      const res = await fetch("/api/member/delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-admin": isOwner() ? "1" : "0",
-        },
-        body: JSON.stringify({
-          id: memberId(member),
-          member_id: memberId(member),
-          email: memberEmail(member),
-          member_email: memberEmail(member),
-          admin_email: email,
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not remove member.");
-      }
-
-      setToast(data?.message || "Member removed.");
-      await loadMembers();
-    } catch (error: any) {
-      setToast(error?.message || "Could not remove member.");
-    }
-  }
-
-  const rawMembers = members;
 
   const visibleMembers = useMemo(() => {
-    return rawMembers.filter((member) => {
-      if (!showRemoved && isRemoved(member)) return false;
+    return members.filter((member) => {
+      if (!showDeleted && isDeleted(member)) return false;
 
       if (stateFilter !== "All") {
         const markets = memberMarkets(member).map((item) => item.toLowerCase());
@@ -539,17 +530,33 @@ export default function NetworkPage() {
 
       return true;
     });
-  }, [rawMembers, showRemoved, stateFilter, roleFilter]);
+  }, [members, showDeleted, stateFilter, roleFilter]);
 
-  const activeCount = rawMembers.filter(isActive).length;
-  const suspendedCount = rawMembers.filter(isSuspended).length;
-  const removedCount = rawMembers.filter(isRemoved).length;
-  const profileRequiredCount = rawMembers.filter(isProfileRequired).length;
-  const paymentRequiredCount = rawMembers.filter(isPaymentRequired).length;
+  const counts = useMemo(() => {
+    return {
+      total: members.length,
+      displayed: visibleMembers.length,
+      active: members.filter(isActive).length,
+      pending: members.filter(isPending).length,
+      suspended: members.filter(isSuspended).length,
+      locked: members.filter(isLocked).length,
+      deleted: members.filter(isDeleted).length,
+    };
+  }, [members, visibleMembers]);
+
+  const email = getEmail();
+  const owner = isOwnerEmail(email);
 
   return (
     <main style={page}>
       <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
         @media (max-width: 760px) {
           .vf-network-actions {
             display: grid !important;
@@ -567,17 +574,29 @@ export default function NetworkPage() {
 
       <div style={wrap}>
         <section style={hero}>
-          <div style={greenEyebrow}>VaultForge Network</div>
+          <div style={greenEyebrow}>VaultForge Network · Real Members</div>
 
           <h1 style={{ fontSize: "clamp(54px,12vw,100px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            Member Command Directory
+            Real member network.
           </h1>
 
           <p style={{ ...muted, fontSize: 21 }}>
-            Buyers, lenders, contractors, developers, operators, and partners across your target states and deal-flow network.
+            This page now reads from <strong>/api/admin/members</strong> and hides fake/example records.
+            Admin and member workspaces stay separate: admin controls belong in owner mode, while members use this page as the private network view.
           </p>
 
-          {isOwner() && (
+          <div className="vf-network-actions" style={{ marginTop: 18 }}>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/admin" style={owner ? btn : ghost}>Admin Home</Link>
+            <Link href="/members" style={ghost}>Members Admin View</Link>
+            <Link href="/profile" style={ghost}>Edit Profile</Link>
+            <Link href="/messages" style={ghost}>Messages</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
+            <Link href="/logout" style={danger}>Logout</Link>
+            <button type="button" onClick={loadMembers} style={btn}>Refresh Real Members</button>
+          </div>
+
+          {owner && (
             <div
               style={{
                 border: "1px solid rgba(232,196,107,.35)",
@@ -589,25 +608,21 @@ export default function NetworkPage() {
                 marginTop: 18,
               }}
             >
-              Owner controls are active on this browser. This is still soft-admin mode, not hard auth.
+              Owner controls are active for {OWNER_EMAIL}. This page is using the admin members API, not the old network/demo source.
             </div>
           )}
-
-          <div className="vf-network-actions" style={{ marginTop: 18 }}>
-            <Link href="/dashboard" style={ghost}>Dashboard</Link>
-            <Link href="/profile" style={goldBtn}>Edit Profile / Alerts</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            <button type="button" onClick={loadMembers} style={btn}>Refresh Members</button>
-          </div>
         </section>
 
         {toast && (
           <section
             style={{
               ...hero,
-              color: toast.toLowerCase().includes("could not") || toast.toLowerCase().includes("error")
-                ? "#ffd0d0"
-                : "#9df3bf",
+              color:
+                toast.toLowerCase().includes("failed") ||
+                toast.toLowerCase().includes("cannot") ||
+                toast.toLowerCase().includes("could not")
+                  ? "#ffd0d0"
+                  : "#9df3bf",
             }}
           >
             <strong>{toast}</strong>
@@ -615,19 +630,31 @@ export default function NetworkPage() {
         )}
 
         <section style={statGrid}>
-          <StatCard label="Displayed" value={visibleMembers.length} />
-          <StatCard label="Raw Members" value={rawMembers.length} />
-          <StatCard label="Active" value={activeCount} />
-          <StatCard label="Suspended" value={suspendedCount} />
-          <StatCard label="Removed" value={removedCount} />
-          <StatCard label="Profile Required" value={profileRequiredCount} />
-          <StatCard label="Payment Required" value={paymentRequiredCount} />
+          <StatCard label="Displayed" value={counts.displayed} detail="Visible after filters." />
+          <StatCard label="Real Members" value={counts.total} detail="Real emails only." />
+          <StatCard label="Active" value={counts.active} detail="Approved or active access." />
+          <StatCard label="Pending" value={counts.pending} detail="Profile/payment/admin review." />
+          <StatCard label="Locked" value={counts.locked} detail="Access not active yet." />
+          <StatCard label="Suspended" value={counts.suspended} detail="Temporarily disabled." />
+          <StatCard label="Deleted" value={counts.deleted} detail="Soft-deleted records." />
+        </section>
+
+        <section style={{ ...hero, borderColor: "rgba(157,243,191,.22)" }}>
+          <div style={greenEyebrow}>API Source Check</div>
+          <p style={muted}>
+            Source: {rawSource || "not loaded yet"}
+            <br />
+            Raw records returned: {rawCount}
+            <br />
+            Fake/example records hidden: {fakeHiddenCount}
+          </p>
         </section>
 
         <section style={hero}>
-          <h2 style={{ fontSize: 36, margin: "0 0 16px" }}>Target States</h2>
+          <h2 style={{ fontSize: 34, margin: "0 0 16px" }}>Filters</h2>
 
           <div style={{ marginBottom: 22 }}>
+            <div style={greenEyebrow}>Target States</div>
             {states.map((state) => (
               <button
                 key={state}
@@ -640,28 +667,29 @@ export default function NetworkPage() {
             ))}
           </div>
 
-          <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>Filter By Role</h2>
+          <div>
+            <div style={greenEyebrow}>Role</div>
+            <select
+              style={field}
+              value={roleFilter}
+              onChange={(event) => setRoleFilter(event.target.value)}
+            >
+              {roleOptions.map((role) => (
+                <option key={role} value={role} style={{ color: "#111" }}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <select
-            style={select}
-            value={roleFilter}
-            onChange={(event) => setRoleFilter(event.target.value)}
-          >
-            {roleOptions.map((role) => (
-              <option key={role} value={role} style={{ color: "#111" }}>
-                {role}
-              </option>
-            ))}
-          </select>
-
-          {isOwner() && (
+          {owner && (
             <div style={{ marginTop: 18 }}>
               <button
                 type="button"
-                onClick={() => setShowRemoved((value) => !value)}
-                style={showRemoved ? goldBtn : ghost}
+                onClick={() => setShowDeleted((value) => !value)}
+                style={showDeleted ? btn : ghost}
               >
-                {showRemoved ? "Hide Removed" : "Show Removed"}
+                {showDeleted ? "Hide Deleted" : "Show Deleted"}
               </button>
             </div>
           )}
@@ -673,35 +701,41 @@ export default function NetworkPage() {
           </section>
         )}
 
-        {!loading && visibleMembers.length === 0 && (
+        {!loading && members.length === 0 && (
           <section style={hero}>
-            <strong>No members found for this filter.</strong>
+            <strong>No real members found.</strong>
+            <p style={muted}>
+              If you already created a login and completed profile, the next file to inspect is
+              <strong> app/api/profile/route.ts</strong>. The profile route may not be writing into the canonical profile/member table that
+              <strong> /api/admin/members</strong> reads.
+            </p>
+          </section>
+        )}
+
+        {!loading && members.length > 0 && visibleMembers.length === 0 && (
+          <section style={hero}>
+            <strong>No members match this filter.</strong>
           </section>
         )}
 
         <section style={grid}>
           {visibleMembers.map((member, index) => {
             const name = memberName(member);
-            const email = memberEmail(member);
+            const memberEmailValue = memberEmail(member);
             const role = memberRole(member);
             const state = memberState(member);
-            const suspended = isSuspended(member);
-            const removed = isRemoved(member);
-            const active = isActive(member);
-            const status = memberStatus(member) || (active ? "active" : suspended ? "suspended" : "profile_required");
+            const status = bucket(member);
+            const tone = bucketTone(status);
             const photo = first(member.profile_photo_url, member.photo_url, member.avatar_url);
+            const id = memberId(member);
 
             return (
               <article
-                key={`${memberId(member)}-${index}`}
+                key={`${id}-${index}`}
                 style={{
                   ...card,
-                  opacity: removed ? 0.58 : 1,
-                  borderColor: suspended
-                    ? "rgba(255,120,120,.38)"
-                    : active
-                    ? "rgba(157,243,191,.28)"
-                    : "rgba(255,255,255,.13)",
+                  opacity: isDeleted(member) ? 0.58 : 1,
+                  borderColor: `${tone}66`,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18 }}>
@@ -730,6 +764,7 @@ export default function NetworkPage() {
                         color: "#9df3bf",
                         fontSize: 34,
                         fontWeight: 950,
+                        flexShrink: 0,
                       }}
                     >
                       {name.slice(0, 1).toUpperCase()}
@@ -741,8 +776,16 @@ export default function NetworkPage() {
                     <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 8px" }}>
                       {name}
                     </h2>
-                    <p style={{ ...muted, margin: 0 }}>{email}</p>
+                    <p style={{ ...muted, margin: 0 }}>{memberEmailValue}</p>
                   </div>
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <StatusChip value={status} />
+                  <span style={chip}>Profile: {profileComplete(member) ? "Complete" : "Incomplete"}</span>
+                  <span style={chip}>Payment: {first(member.payment_status, "unpaid")}</span>
+                  <span style={chip}>Access: {first(member.access_status, "locked")}</span>
+                  <span style={chip}>{first(member._source_table, "unknown table")}</span>
                 </div>
 
                 <p style={{ ...muted, fontSize: 18 }}>{memberBio(member)}</p>
@@ -776,33 +819,83 @@ export default function NetworkPage() {
                     marginTop: 18,
                   }}
                 >
-                  <strong>Status:</strong> {status || "unknown"} ·{" "}
-                  <strong>Payment:</strong> {first(member.payment_status, "unpaid")}
+                  <strong>ID:</strong> {id || "—"}
+                  <br />
+                  <strong>Created:</strong> {first(member.created_at, "—")}
+                  <br />
+                  <strong>Updated:</strong> {first(member.updated_at, "—")}
                 </div>
 
                 <div className="vf-network-actions" style={{ marginTop: 18 }}>
-                  {email && (
-                    <a href={`mailto:${email}`} style={btn}>
+                  {memberEmailValue && (
+                    <a href={`mailto:${memberEmailValue}`} style={btn}>
                       Email Member
                     </a>
                   )}
 
-                  {isOwner() && (
+                  {owner && (
                     <>
-                      <button type="button" style={goldBtn} onClick={() => updateStatus(member, "active")}>
+                      <button
+                        type="button"
+                        style={btn}
+                        disabled={busyKey === `${cleanEmail(memberEmailValue) || id}-activate`}
+                        onClick={() => memberAction(member, "activate")}
+                      >
                         Activate
                       </button>
 
-                      <button type="button" style={danger} onClick={() => updateStatus(member, "suspended")}>
+                      <button
+                        type="button"
+                        style={btn}
+                        disabled={busyKey === `${cleanEmail(memberEmailValue) || id}-mark_paid`}
+                        onClick={() => memberAction(member, "mark_paid")}
+                      >
+                        Mark Paid
+                      </button>
+
+                      <button
+                        type="button"
+                        style={ghost}
+                        disabled={busyKey === `${cleanEmail(memberEmailValue) || id}-mark_unpaid`}
+                        onClick={() => memberAction(member, "mark_unpaid")}
+                      >
+                        Mark Unpaid
+                      </button>
+
+                      <button
+                        type="button"
+                        style={ghost}
+                        disabled={busyKey === `${cleanEmail(memberEmailValue) || id}-lock`}
+                        onClick={() => memberAction(member, "lock")}
+                      >
+                        Lock
+                      </button>
+
+                      <button
+                        type="button"
+                        style={danger}
+                        disabled={busyKey === `${cleanEmail(memberEmailValue) || id}-suspend`}
+                        onClick={() => memberAction(member, "suspend")}
+                      >
                         Suspend
                       </button>
 
-                      <button type="button" style={ghost} onClick={() => updateStatus(member, "payment_required")}>
-                        Payment Required
+                      <button
+                        type="button"
+                        style={ghost}
+                        disabled={busyKey === `${cleanEmail(memberEmailValue) || id}-restore`}
+                        onClick={() => memberAction(member, "restore")}
+                      >
+                        Restore
                       </button>
 
-                      <button type="button" style={danger} onClick={() => removeMember(member)}>
-                        Remove
+                      <button
+                        type="button"
+                        style={danger}
+                        disabled={busyKey === `${cleanEmail(memberEmailValue) || id}-delete`}
+                        onClick={() => memberAction(member, "delete")}
+                      >
+                        Delete
                       </button>
                     </>
                   )}
