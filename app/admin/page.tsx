@@ -115,13 +115,18 @@ function cleanEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
+function asText(value: unknown, fallback = "") {
+  const text = String(value || "").trim();
+  return text || fallback;
+}
+
 function getEmail() {
   if (typeof window === "undefined") return OWNER_EMAIL;
 
   try {
     return (
-      localStorage.getItem("vf_email") ||
-      sessionStorage.getItem("vf_email") ||
+      window.localStorage.getItem("vf_email") ||
+      window.sessionStorage.getItem("vf_email") ||
       OWNER_EMAIL
     )
       .trim()
@@ -131,28 +136,61 @@ function getEmail() {
   }
 }
 
-function asText(value: unknown, fallback = "") {
-  const text = String(value || "").trim();
-  return text || fallback;
-}
-
 function formatDate(value: unknown) {
   const text = asText(value);
   if (!text) return "—";
+
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return text;
+
   return date.toLocaleString();
 }
 
 function bucketTone(bucket: string) {
   const b = bucket.toLowerCase();
+
   if (b === "active") return "#9df3bf";
   if (b === "pending") return "#f5d978";
   if (b === "suspended" || b === "deleted") return "#ff9f9f";
   return "#dcb8ff";
 }
 
-function StatCard({ label, value, detail }: { label: string; value: number; detail: string }) {
+function statNumber(value: unknown) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function hasRealEmail(member: Member) {
+  const email = cleanEmail(member.email || member.member_email);
+  return email.includes("@") && !email.endsWith("@example.com");
+}
+
+function memberName(member: Member) {
+  return asText(
+    member.full_name ||
+      member.name ||
+      member.member_name ||
+      member.display_name,
+    "Unnamed Member"
+  );
+}
+
+function memberKey(member: Member) {
+  return (
+    cleanEmail(member.email || member.member_email) ||
+    asText(member.id || member._source_id || member.auth_user_id)
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+}) {
   return (
     <div style={card}>
       <div style={greenEyebrow}>{label}</div>
@@ -165,12 +203,13 @@ function StatCard({ label, value, detail }: { label: string; value: number; deta
 export default function AdminPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [status, setStatus] = useState("Loading admin members...");
+  const [status, setStatus] = useState("Loading real admin members...");
   const [toast, setToast] = useState("");
   const [busyKey, setBusyKey] = useState("");
+  const [rawSource, setRawSource] = useState("");
 
   async function load() {
-    setStatus("Loading admin members...");
+    setStatus("Loading real admin members...");
     setToast("");
 
     try {
@@ -184,24 +223,33 @@ export default function AdminPage() {
         },
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok || data?.ok === false) {
         throw new Error(data?.error || data?.details || "Could not load admin members.");
       }
 
-      setMembers(Array.isArray(data.members) ? data.members : []);
+      const loaded = Array.isArray(data.members) ? data.members : [];
+      setMembers(loaded);
       setCounts(data.counts || {});
+      setRawSource(data.source || data.sources_checked?.join(", ") || "api/admin/members");
       setStatus("");
     } catch (error: any) {
-      setStatus(error?.message || "Could not load admin members.");
+      setMembers([]);
+      setCounts({});
+      setStatus(error?.message || "Could not load real admin members.");
     }
   }
 
   async function memberAction(member: Member, action: string) {
-    const email = cleanEmail(member.email);
-    const id = asText(member.id || member._source_id);
+    const email = cleanEmail(member.email || member.member_email);
+    const id = asText(member.id || member._source_id || member.auth_user_id);
     const key = `${email || id}-${action}`;
+
+    if (!email && !id) {
+      setToast("Cannot update this record because it has no email or id.");
+      return;
+    }
 
     setBusyKey(key);
     setToast("");
@@ -243,9 +291,24 @@ export default function AdminPage() {
     load();
   }, []);
 
-  const visibleMembers = useMemo(() => {
-    return members.filter((member) => cleanEmail(member.email));
+  const realMembers = useMemo(() => {
+    return members.filter(hasRealEmail);
   }, [members]);
+
+  const demoMembers = useMemo(() => {
+    return members.filter((member) => !hasRealEmail(member));
+  }, [members]);
+
+  const derivedCounts = useMemo(() => {
+    return {
+      total: realMembers.length,
+      pending: realMembers.filter((member) => asText(member.admin_bucket).toLowerCase() === "pending").length,
+      active: realMembers.filter((member) => asText(member.admin_bucket).toLowerCase() === "active").length,
+      suspended: realMembers.filter((member) => asText(member.admin_bucket).toLowerCase() === "suspended").length,
+      deleted: realMembers.filter((member) => asText(member.admin_bucket).toLowerCase() === "deleted").length,
+      locked: realMembers.filter((member) => asText(member.admin_bucket).toLowerCase() === "locked").length,
+    };
+  }, [realMembers]);
 
   return (
     <main style={page}>
@@ -268,55 +331,75 @@ export default function AdminPage() {
 
       <div style={wrap}>
         <section style={hero}>
-          <div style={eyebrow}>VaultForge Admin Control Center</div>
+          <div style={eyebrow}>VaultForge Admin · Real Members Only</div>
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
             Member activation console.
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
-            This admin screen reads from the unified member API and shows new signups/profile records for activation,
-            suspension, payment status, lock, restore, and deletion.
+            Demo members are hidden. This page only displays real records returned by <strong>/api/admin/members</strong>.
           </p>
 
           <Link href="/member-preview" style={btn}>Preview Members Area</Link>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <Link href="/pain" style={ghost}>Pain</Link>
-          <Link href="/routing" style={ghost}>Routing</Link>
-          <Link href="/messages" style={ghost}>Messages</Link>
+          <Link href="/profile" style={ghost}>Edit Profile / Alerts</Link>
+          <Link href="/alerts" style={ghost}>Alerts</Link>
           <Link href="/logout" style={danger}>Logout</Link>
-          <button type="button" onClick={load} style={btn}>Refresh Members</button>
+          <button type="button" onClick={load} style={btn}>Refresh Real Members</button>
         </section>
 
         {toast && (
-          <section style={{ ...hero, color: toast.toLowerCase().includes("failed") || toast.toLowerCase().includes("error") ? "#ffd0d0" : "#9df3bf" }}>
+          <section
+            style={{
+              ...hero,
+              color: toast.toLowerCase().includes("failed") || toast.toLowerCase().includes("cannot")
+                ? "#ffd0d0"
+                : "#9df3bf",
+            }}
+          >
             {toast}
           </section>
         )}
 
         <section style={{ ...grid, marginBottom: 22 }}>
-          <StatCard label="Total" value={Number(counts.total || visibleMembers.length || 0)} detail="All member/profile records found." />
-          <StatCard label="Pending" value={Number(counts.pending || 0)} detail="Profile created or waiting activation." />
-          <StatCard label="Active" value={Number(counts.active || 0)} detail="Approved/paid/active members." />
-          <StatCard label="Suspended" value={Number(counts.suspended || 0)} detail="Disabled or suspended members." />
-          <StatCard label="Deleted" value={Number(counts.deleted || 0)} detail="Soft-deleted member records." />
+          <StatCard label="Real Members" value={derivedCounts.total || statNumber(counts.total)} detail="Real emails only. Demo @example.com hidden." />
+          <StatCard label="Pending" value={derivedCounts.pending || statNumber(counts.pending)} detail="Waiting activation or payment." />
+          <StatCard label="Active" value={derivedCounts.active || statNumber(counts.active)} detail="Approved/active members." />
+          <StatCard label="Suspended" value={derivedCounts.suspended || statNumber(counts.suspended)} detail="Disabled records." />
+          <StatCard label="Deleted" value={derivedCounts.deleted || statNumber(counts.deleted)} detail="Soft-deleted records." />
+        </section>
+
+        <section style={{ ...hero, borderColor: "rgba(157,243,191,.22)" }}>
+          <div style={greenEyebrow}>API Source</div>
+          <p style={muted}>
+            Source: {rawSource || "not loaded yet"}
+            <br />
+            Raw records returned: {members.length}
+            <br />
+            Demo/fake records hidden: {demoMembers.length}
+          </p>
         </section>
 
         {status && <section style={hero}>{status}</section>}
 
-        {!status && visibleMembers.length === 0 && (
+        {!status && realMembers.length === 0 && (
           <section style={hero}>
-            <strong>No members found.</strong>
+            <strong>No real members found.</strong>
             <p style={muted}>
-              If a signup was just created, click Refresh Members. If still empty, the profile route is saving to a table not yet connected.
+              If you created a new login and filled a profile, then the profile page is saving somewhere this API is not checking,
+              or signup/profile completion is not writing email into a profile/member table.
+            </p>
+            <p style={muted}>
+              Next file to fix is <strong>app/api/profile/route.ts</strong> so profile completion writes into the same source table admin reads.
             </p>
           </section>
         )}
 
         <section style={{ display: "grid", gap: 18 }}>
-          {visibleMembers.map((member) => {
-            const email = cleanEmail(member.email);
+          {realMembers.map((member) => {
+            const email = cleanEmail(member.email || member.member_email);
             const bucket = asText(member.admin_bucket, "locked");
             const tone = bucketTone(bucket);
-            const key = email || asText(member.id);
+            const key = memberKey(member);
 
             return (
               <article key={key} style={{ ...card, borderColor: `${tone}66` }}>
@@ -329,11 +412,13 @@ export default function AdminPage() {
                 </div>
 
                 <h2 style={{ fontSize: "clamp(30px,7vw,52px)", lineHeight: 1, margin: "0 0 10px" }}>
-                  {asText(member.full_name, "Unnamed Member")}
+                  {memberName(member)}
                 </h2>
 
                 <p style={{ ...muted, fontSize: 18 }}>
                   <strong style={{ color: "#9df3bf" }}>{email}</strong>
+                  <br />
+                  ID: {asText(member.id || member._source_id || member.auth_user_id, "—")}
                   <br />
                   Created: {formatDate(member.created_at)}
                   <br />
