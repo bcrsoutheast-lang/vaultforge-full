@@ -344,6 +344,12 @@ function priorityTone(priority: string) {
   return "#d8b5ff";
 }
 
+function dealRoomHref(alert: FeedAlert) {
+  const itemId = String(alert.item_id || "").trim();
+  if (!itemId) return "";
+  return `/deal-room/${encodeURIComponent(itemId)}`;
+}
+
 function statusTone(status: string) {
   const s = String(status || "").toLowerCase();
   if (s === "active") return "#9df3bf";
@@ -422,8 +428,7 @@ function AlertCard({
         {alert.source_table && <span style={chip}>{alert.source_table}</span>}
       </div>
 
-      <Link href={`/signals/${encodeURIComponent(alert.id)}`} style={btn}>Open Exact Signal</Link>
-      <Link href={alert.safe_href || "/projects"} style={ghost}>Open Work Area</Link>
+      <Link href={alert.safe_href || "/projects"} style={btn}>Open Work Area</Link>
 
       <button
         type="button"
