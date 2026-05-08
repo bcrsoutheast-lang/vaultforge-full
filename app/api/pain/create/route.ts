@@ -41,6 +41,26 @@ function asNumberOrNull(value: unknown) {
   return Number.isFinite(n) ? n : null;
 }
 
+function asStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => clean(item)).filter(Boolean).slice(0, 8);
+  }
+
+  const text = clean(value);
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => clean(item)).filter(Boolean).slice(0, 8);
+    }
+  } catch {
+    // Continue.
+  }
+
+  return [text].filter(Boolean);
+}
+
 function createTags(body: any) {
   const tags = new Set<string>();
 
@@ -50,6 +70,8 @@ function createTags(body: any) {
     body?.description,
     body?.urgency_level,
     body?.asset_type,
+    body?.property_type,
+    body?.strategy,
   ]
     .map((v) => clean(v).toLowerCase())
     .join(" ");
@@ -109,17 +131,20 @@ function routingFits(tags: string[]) {
 
 function buildRoutingReason({
   painType,
+  assetType,
   urgencyLevel,
   requestedHelp,
   tags,
 }: {
   painType: string;
+  assetType: string;
   urgencyLevel: string;
   requestedHelp: string;
   tags: string[];
 }) {
   const parts = [
     `Pain type: ${painType}.`,
+    assetType ? `Asset type: ${assetType}.` : "",
     `Urgency: ${urgencyLevel}.`,
     requestedHelp ? `Requested help: ${requestedHelp}.` : "",
     tags.length ? `Routing tags: ${tags.join(", ")}.` : "",
@@ -133,6 +158,7 @@ async function insertRoutingSignal(supabase: any, signal: any, tags: string[]) {
   const fits = routingFits(tags);
   const reason = buildRoutingReason({
     painType: signal.pain_type,
+    assetType: signal.asset_type || "",
     urgencyLevel: signal.urgency_level,
     requestedHelp: signal.requested_help || "",
     tags,
@@ -194,8 +220,10 @@ async function insertActivityEvent(supabase: any, signal: any, tags: string[]) {
       metadata: {
         pain_id: signal.id,
         pain_type: signal.pain_type,
+        asset_type: signal.asset_type,
         urgency_level: signal.urgency_level,
         routing_status: signal.routing_status,
+        photo_count: Array.isArray(signal.photo_urls) ? signal.photo_urls.length : 0,
         tags,
       },
     });
@@ -215,11 +243,13 @@ export async function POST(request: Request) {
       cleanEmail(body?.member_email) ||
       cleanEmail(body?.email);
 
+    const assetType = clean(body?.asset_type || "Residential");
     const painType = clean(body?.pain_type || body?.type || "General Distress");
-    const title = clean(body?.title || painType);
+    const title = clean(body?.title || `${assetType} ${painType}`);
     const description = clean(body?.description);
     const requestedHelp = clean(body?.requested_help);
     const urgencyLevel = clean(body?.urgency_level || "Normal");
+    const photoUrls = asStringArray(body?.photo_urls);
 
     if (!description) {
       return NextResponse.json(
@@ -231,13 +261,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const aiTags = createTags(body);
+    const aiTags = createTags({
+      ...body,
+      asset_type: assetType,
+    });
 
     const aiSummary = clean(body?.ai_summary) ||
       [
         `Pain signal: ${painType}.`,
+        `Asset type: ${assetType}.`,
         requestedHelp ? `Requested help: ${requestedHelp}.` : "",
         urgencyLevel ? `Urgency: ${urgencyLevel}.` : "",
+        photoUrls.length ? `${photoUrls.length} photo(s) attached.` : "",
         aiTags.length ? `Routing tags: ${aiTags.join(", ")}.` : "",
       ].filter(Boolean).join(" ");
 
@@ -251,7 +286,7 @@ export async function POST(request: Request) {
       title,
       description,
 
-      asset_type: clean(body?.asset_type) || null,
+      asset_type: assetType || null,
       property_address: clean(body?.property_address) || null,
       city: clean(body?.city) || null,
       state: clean(body?.state) || null,
@@ -268,6 +303,8 @@ export async function POST(request: Request) {
 
       ai_summary: aiSummary,
       ai_tags: aiTags,
+
+      photo_urls: photoUrls,
 
       assigned_to: null,
       resolved: false,
