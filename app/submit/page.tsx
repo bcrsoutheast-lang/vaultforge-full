@@ -17,8 +17,18 @@ type Access = {
 type DealType = "Residential" | "Commercial" | "Land";
 
 const STATES = [
-  "Georgia","Tennessee","Florida","North Carolina","South Carolina","Texas",
-  "Alabama","California","New York","Ohio","Pennsylvania","Other"
+  "Georgia",
+  "Tennessee",
+  "Florida",
+  "North Carolina",
+  "South Carolina",
+  "Texas",
+  "Alabama",
+  "California",
+  "New York",
+  "Ohio",
+  "Pennsylvania",
+  "Other",
 ];
 
 const RESIDENTIAL_STRATEGIES = [
@@ -27,7 +37,7 @@ const RESIDENTIAL_STRATEGIES = [
   "BRRRR",
   "Wholesale",
   "Short-Term Rental",
-  "Subto / Seller Finance"
+  "Subto / Seller Finance",
 ];
 
 const COMMERCIAL_STRATEGIES = [
@@ -36,7 +46,7 @@ const COMMERCIAL_STRATEGIES = [
   "Mixed Use",
   "Office Conversion",
   "Retail Redevelopment",
-  "Industrial"
+  "Industrial",
 ];
 
 const LAND_STRATEGIES = [
@@ -45,7 +55,57 @@ const LAND_STRATEGIES = [
   "Builder Lot",
   "Mobile Home Park",
   "RV Park",
-  "Raw Land Hold"
+  "Raw Land Hold",
+];
+
+const ROUTING_NEEDS = [
+  "Buyer Needed",
+  "Lender Needed",
+  "Private Capital Needed",
+  "Contractor Needed",
+  "Operator Needed",
+  "JV Partner Needed",
+  "Wholesaler Needed",
+  "Realtor Needed",
+  "Title / Attorney Needed",
+  "Property Manager Needed",
+  "Insurance Help Needed",
+  "Permit Help Needed",
+];
+
+const DISTRESS_SIGNALS = [
+  "Behind Payments",
+  "Inherited Property",
+  "Vacant Property",
+  "Tired Landlord",
+  "Code Violations",
+  "Tax Pressure",
+  "Divorce / Probate",
+  "Stalled Construction",
+  "Contractor Problem",
+  "Funding Gap",
+  "Permit Delay",
+  "Needs Fast Close",
+];
+
+const URGENCY_LEVELS = [
+  "Normal",
+  "Needs Review This Week",
+  "Urgent",
+  "Emergency / Pain Button",
+];
+
+const EXIT_OPTIONS = [
+  "Flip",
+  "Wholesale",
+  "Rental",
+  "BRRRR",
+  "Seller Finance",
+  "Subto",
+  "Develop",
+  "Entitle",
+  "Hold",
+  "Partner / JV",
 ];
 
 const page: React.CSSProperties = {
@@ -54,12 +114,12 @@ const page: React.CSSProperties = {
     "radial-gradient(circle at top left, rgba(181,92,255,.20), transparent 26%), radial-gradient(circle at top right, rgba(157,243,191,.16), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 26%), linear-gradient(180deg,#02040a 0%,#07180f 40%,#031008 100%)",
   color: "white",
   padding: "28px 18px 90px",
-  fontFamily: "Arial, sans-serif"
+  fontFamily: "Arial, sans-serif",
 };
 
 const wrap: React.CSSProperties = {
   maxWidth: 1180,
-  margin: "0 auto"
+  margin: "0 auto",
 };
 
 const card: React.CSSProperties = {
@@ -69,13 +129,13 @@ const card: React.CSSProperties = {
   borderRadius: 32,
   padding: 24,
   marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.42)"
+  boxShadow: "0 30px 90px rgba(0,0,0,.42)",
 };
 
 const grid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: 16
+  gap: 16,
 };
 
 const btn: React.CSSProperties = {
@@ -90,7 +150,7 @@ const btn: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   margin: "6px 6px 0 0",
-  cursor: "pointer"
+  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -105,7 +165,7 @@ const ghost: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   margin: "6px 6px 0 0",
-  cursor: "pointer"
+  cursor: "pointer",
 };
 
 const input: React.CSSProperties = {
@@ -116,13 +176,13 @@ const input: React.CSSProperties = {
   background: "linear-gradient(135deg, rgba(181,92,255,.16), rgba(255,255,255,.07))",
   color: "white",
   padding: 15,
-  fontSize: 16
+  fontSize: 16,
 };
 
 const label: React.CSSProperties = {
   display: "block",
   fontWeight: 900,
-  margin: "0 0 8px"
+  margin: "0 0 8px",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -130,12 +190,58 @@ const eyebrow: React.CSSProperties = {
   letterSpacing: 5,
   fontWeight: 900,
   fontSize: 12,
-  marginBottom: 12
+  marginBottom: 12,
 };
 
 const greenEyebrow: React.CSSProperties = {
   ...eyebrow,
-  color: "#9df3bf"
+  color: "#9df3bf",
+};
+
+const chipBase: React.CSSProperties = {
+  borderRadius: 999,
+  padding: "11px 14px",
+  fontWeight: 900,
+  cursor: "pointer",
+  margin: "6px 6px 0 0",
+  border: "1px solid rgba(255,255,255,.18)",
+};
+
+const empty = {
+  title: "",
+  property_type: "Residential" as DealType,
+  strategy: "Fix & Flip",
+  city: "",
+  state: "Georgia",
+  address: "",
+  asking_price: "",
+  arv: "",
+  repair_estimate: "",
+  beds: "",
+  baths: "",
+  square_feet: "",
+  year_built: "",
+  zoning: "",
+  acres: "",
+  occupancy: "",
+  noi: "",
+  cap_rate: "",
+  description: "",
+  seller_situation: "",
+  access_notes: "",
+  deal_needs: "",
+  routing_needs: "",
+  distress_signals: "",
+  urgency_level: "Normal",
+  exit_strategy: "Flip",
+  target_buyer: "",
+  capital_needed: "",
+  ideal_lender: "",
+  contractor_scope: "",
+  operator_scope: "",
+  jv_structure: "",
+  title_issue: "",
+  ai_route_summary: "",
 };
 
 function getEmail() {
@@ -164,9 +270,9 @@ async function upload(file: File, email: string) {
   const res = await fetch("/api/deal/upload-photo", {
     method: "POST",
     headers: {
-      "x-vf-email": email
+      "x-vf-email": email,
     },
-    body: formData
+    body: formData,
   });
 
   const data = await safeJson(res);
@@ -178,97 +284,44 @@ async function upload(file: File, email: string) {
   return String(data.url);
 }
 
-const empty = {
-  title:"",
-  property_type:"Residential" as DealType,
-  strategy:"Fix & Flip",
-  city:"",
-  state:"Georgia",
-  address:"",
-  asking_price:"",
-  arv:"",
-  repair_estimate:"",
-  beds:"",
-  baths:"",
-  square_feet:"",
-  year_built:"",
-  zoning:"",
-  acres:"",
-  occupancy:"",
-  noi:"",
-  cap_rate:"",
-  description:"",
-  seller_situation:"",
-  access_notes:"",
-  deal_needs:""
-};
-
 function strategyOptions(type: DealType) {
   if (type === "Commercial") return COMMERCIAL_STRATEGIES;
   if (type === "Land") return LAND_STRATEGIES;
   return RESIDENTIAL_STRATEGIES;
 }
 
-function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "loading"; }) {
+function splitList(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function toggleCsv(value: string, item: string) {
+  const list = splitList(value);
+  const exists = list.includes(item);
+  const next = exists ? list.filter((x) => x !== item) : [...list, item];
+  return next.join(", ");
+}
+
+function hasCsv(value: string, item: string) {
+  return splitList(value).includes(item);
+}
+
+function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "loading" }) {
   return (
     <main style={page}>
       <div style={wrap}>
         <section style={card}>
           <div style={greenEyebrow}>VAULTFORGE CREATE</div>
 
-          <div
+          <h1
             style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginBottom: 16,
+              fontSize: "clamp(52px,12vw,94px)",
+              lineHeight: 0.9,
+              margin: "0 0 14px",
             }}
           >
-            <span
-              style={{
-                border: "1px solid rgba(181,92,255,.36)",
-                color: "#dcb8ff",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(181,92,255,.12)",
-              }}
-            >
-              Deal Intake Engine
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(157,243,191,.36)",
-                color: "#9df3bf",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(157,243,191,.10)",
-              }}
-            >
-              AI Routing Source
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(245,217,120,.36)",
-                color: "#f5d978",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(245,217,120,.10)",
-              }}
-            >
-              Bloomberg-Style Intake
-            </span>
-          </div>
-
-          <h1 style={{
-            fontSize: "clamp(52px,12vw,94px)",
-            lineHeight: .9,
-            margin: "0 0 14px"
-          }}>
             {reason === "loading"
               ? "Checking access..."
               : reason === "login"
@@ -278,11 +331,13 @@ function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "l
               : "Activate access first."}
           </h1>
 
-          <p style={{
-            color: "rgba(255,255,255,.72)",
-            fontSize: 20,
-            lineHeight: 1.5
-          }}>
+          <p
+            style={{
+              color: "rgba(255,255,255,.72)",
+              fontSize: 20,
+              lineHeight: 1.5,
+            }}
+          >
             VaultForge gates live deal creation behind member access, profile completion, and activation.
           </p>
 
@@ -300,10 +355,7 @@ function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "l
 export default function SubmitPage() {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const [lockReason, setLockReason] = useState<
-    "loading" | "login" | "profile" | "payment" | "open"
-  >("loading");
-
+  const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
   const [form, setForm] = useState<Record<string, string>>(empty as any);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -320,15 +372,12 @@ export default function SubmitPage() {
           return;
         }
 
-        const res = await fetch(
-          `/api/member/access?email=${encodeURIComponent(email)}`,
-          {
-            cache: "no-store",
-            headers: {
-              "x-vf-email": email
-            }
-          }
-        );
+        const res = await fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": email,
+          },
+        });
 
         const data: Access = await res.json();
 
@@ -359,7 +408,13 @@ export default function SubmitPage() {
     setForm((x) => ({
       ...x,
       property_type: type,
-      strategy: strategyOptions(type)[0]
+      strategy: strategyOptions(type)[0],
+      exit_strategy:
+        type === "Land"
+          ? "Entitle"
+          : type === "Commercial"
+          ? "Hold"
+          : "Flip",
     }));
   }
 
@@ -372,6 +427,23 @@ export default function SubmitPage() {
 
     setFiles(chosen);
     setPreviews(chosen.map((f) => URL.createObjectURL(f)));
+  }
+
+  function buildRouteSummary(nextForm = form) {
+    const parts = [
+      `Type: ${nextForm.property_type}`,
+      `Strategy: ${nextForm.strategy}`,
+      `Exit: ${nextForm.exit_strategy}`,
+      `Market: ${nextForm.city}, ${nextForm.state}`,
+      nextForm.routing_needs ? `Needs: ${nextForm.routing_needs}` : "",
+      nextForm.distress_signals ? `Signals: ${nextForm.distress_signals}` : "",
+      nextForm.urgency_level ? `Urgency: ${nextForm.urgency_level}` : "",
+      nextForm.capital_needed ? `Capital: ${nextForm.capital_needed}` : "",
+      nextForm.contractor_scope ? `Contractor Scope: ${nextForm.contractor_scope}` : "",
+      nextForm.operator_scope ? `Operator Scope: ${nextForm.operator_scope}` : "",
+    ];
+
+    return parts.filter(Boolean).join(" | ");
   }
 
   async function submit() {
@@ -405,19 +477,30 @@ export default function SubmitPage() {
 
       setMsg("Saving deal room...");
 
+      const aiRouteSummary = buildRouteSummary();
+
       const res = await fetch("/api/deal/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-vf-email": email
+          "x-vf-email": email,
         },
         body: JSON.stringify({
           ...form,
+          ai_route_summary: aiRouteSummary,
+          route_summary: aiRouteSummary,
+          routing_needs: form.routing_needs,
+          deal_needs: form.routing_needs || form.deal_needs,
+          needs: form.routing_needs || form.deal_needs,
+          distress_signals: form.distress_signals,
+          seller_situation: [form.seller_situation, form.distress_signals].filter(Boolean).join(" | "),
+          urgency_level: form.urgency_level,
+          exit_strategy: form.exit_strategy,
           owner_email: email,
           member_email: email,
           photo_urls: urls,
-          main_photo_url: urls[0] || ""
-        })
+          main_photo_url: urls[0] || "",
+        }),
       });
 
       const data = await safeJson(res);
@@ -426,7 +509,7 @@ export default function SubmitPage() {
         throw new Error(data?.error || data?.details || "Deal save failed.");
       }
 
-      setMsg("Deal room saved successfully.");
+      setMsg("Deal room saved successfully. Routing fields are ready for Smart Alerts.");
 
       setForm(empty as any);
       setFiles([]);
@@ -463,13 +546,15 @@ export default function SubmitPage() {
         }
 
         @media (max-width: 760px) {
-          .vf-submit-actions {
+          .vf-submit-actions,
+          .vf-chip-grid {
             display:grid !important;
             grid-template-columns:1fr !important;
             gap:10px !important;
           }
 
-          .vf-submit-actions > * {
+          .vf-submit-actions > *,
+          .vf-chip-grid > * {
             width:100%;
             margin:0 !important;
             box-sizing:border-box;
@@ -481,26 +566,32 @@ export default function SubmitPage() {
         <section style={card}>
           <div style={greenEyebrow}>VAULTFORGE CREATE</div>
 
-          <h1 style={{
-            fontSize: "clamp(58px,12vw,108px)",
-            lineHeight: .88,
-            margin: "0 0 14px"
-          }}>
-            Submit a real deal room.
+          <h1
+            style={{
+              fontSize: "clamp(58px,12vw,108px)",
+              lineHeight: 0.88,
+              margin: "0 0 14px",
+            }}
+          >
+            Submit a routed deal room.
           </h1>
 
-          <p style={{
-            color: "rgba(255,255,255,.72)",
-            fontSize: 22,
-            lineHeight: 1.45
-          }}>
-            Residential, commercial, and land opportunities routed through the member intelligence network.
+          <p
+            style={{
+              color: "rgba(255,255,255,.72)",
+              fontSize: 22,
+              lineHeight: 1.45,
+            }}
+          >
+            Use guided routing chips so VaultForge knows whether to send this to buyers, lenders,
+            contractors, operators, JV partners, title help, or distress/pain workflows.
           </p>
 
           <div className="vf-submit-actions">
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <Link href="/projects" style={btn}>Projects</Link>
             <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
           </div>
         </section>
 
@@ -513,22 +604,12 @@ export default function SubmitPage() {
         <section style={card}>
           <div style={greenEyebrow}>DEAL TYPE</div>
 
-          <p style={{
-            color:"rgba(255,255,255,.72)",
-            fontSize:18,
-            lineHeight:1.5,
-            marginBottom:18
-          }}>
-            Choose the type of opportunity you are routing through the VaultForge network.
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.5, marginBottom: 18 }}>
+            Choose the opportunity type. The selected type changes the strategy menu and routing context.
           </p>
 
-          {(["Residential","Commercial","Land"] as DealType[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              style={form.property_type === t ? btn : ghost}
-              onClick={() => switchType(t)}
-            >
+          {(["Residential", "Commercial", "Land"] as DealType[]).map((t) => (
+            <button key={t} type="button" style={form.property_type === t ? btn : ghost} onClick={() => switchType(t)}>
               {t}
             </button>
           ))}
@@ -543,11 +624,7 @@ export default function SubmitPage() {
 
             <div>
               <label style={label}>State</label>
-              <select
-                style={input}
-                value={form.state}
-                onChange={(e) => set("state", e.target.value)}
-              >
+              <select style={input} value={form.state} onChange={(e) => set("state", e.target.value)}>
                 {STATES.map((s) => (
                   <option key={s} value={s} style={{ color: "#111" }}>
                     {s}
@@ -560,12 +637,19 @@ export default function SubmitPage() {
 
             <div>
               <label style={label}>Strategy</label>
-              <select
-                style={input}
-                value={form.strategy}
-                onChange={(e) => set("strategy", e.target.value)}
-              >
+              <select style={input} value={form.strategy} onChange={(e) => set("strategy", e.target.value)}>
                 {currentStrategies.map((s) => (
+                  <option key={s} value={s} style={{ color: "#111" }}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={label}>Exit Strategy</label>
+              <select style={input} value={form.exit_strategy} onChange={(e) => set("exit_strategy", e.target.value)}>
+                {EXIT_OPTIONS.map((s) => (
                   <option key={s} value={s} style={{ color: "#111" }}>
                     {s}
                   </option>
@@ -579,6 +663,79 @@ export default function SubmitPage() {
           </div>
         </section>
 
+        <section style={card}>
+          <div style={greenEyebrow}>ROUTING NEEDS</div>
+          <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 10px" }}>
+            Who should VaultForge route this to?
+          </h2>
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.5 }}>
+            Tap every role needed. These values feed the Smart Alerts engine and determine the right alert cards.
+          </p>
+
+          <div className="vf-chip-grid" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {ROUTING_NEEDS.map((need) => (
+              <button
+                key={need}
+                type="button"
+                style={hasCsv(form.routing_needs, need) ? btn : { ...ghost, ...chipBase }}
+                onClick={() => set("routing_needs", toggleCsv(form.routing_needs, need))}
+              >
+                {need}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <strong>Selected:</strong>{" "}
+            <span style={{ color: "#9df3bf" }}>{form.routing_needs || "None selected yet"}</span>
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={greenEyebrow}>PAIN / DISTRESS SIGNALS</div>
+          <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 10px" }}>
+            What problem is creating the opportunity?
+          </h2>
+
+          <div className="vf-chip-grid" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {DISTRESS_SIGNALS.map((signal) => (
+              <button
+                key={signal}
+                type="button"
+                style={hasCsv(form.distress_signals, signal) ? btn : { ...ghost, ...chipBase }}
+                onClick={() => set("distress_signals", toggleCsv(form.distress_signals, signal))}
+              >
+                {signal}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <label style={label}>Urgency Level</label>
+            <select style={input} value={form.urgency_level} onChange={(e) => set("urgency_level", e.target.value)}>
+              {URGENCY_LEVELS.map((level) => (
+                <option key={level} value={level} style={{ color: "#111" }}>
+                  {level}
+                </option>
+              ))}
+            </select>
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>ROLE-SPECIFIC ROUTING FIELDS</div>
+
+          <div style={grid}>
+            <Field label="Target Buyer Type" value={form.target_buyer} onChange={(v) => set("target_buyer", v)} placeholder="Cash buyer, landlord, developer, builder, multifamily buyer..." />
+            <Field label="Capital Needed" value={form.capital_needed} onChange={(v) => set("capital_needed", v)} placeholder="Bridge loan, hard money, private capital, JV equity..." />
+            <Field label="Ideal Lender Fit" value={form.ideal_lender} onChange={(v) => set("ideal_lender", v)} placeholder="Fast close, construction draws, land loan, DSCR..." />
+            <Field label="Contractor Scope" value={form.contractor_scope} onChange={(v) => set("contractor_scope", v)} placeholder="Roof, full rehab, foundation, site work, permits..." />
+            <Field label="Operator Scope" value={form.operator_scope} onChange={(v) => set("operator_scope", v)} placeholder="Project manager, boots on ground, property manager..." />
+            <Field label="JV Structure" value={form.jv_structure} onChange={(v) => set("jv_structure", v)} placeholder="Equity partner, profit split, capital + operator..." />
+            <Field label="Title / Attorney Issue" value={form.title_issue} onChange={(v) => set("title_issue", v)} placeholder="Probate, liens, title cloud, closing help..." />
+          </div>
+        </section>
+
         {form.property_type === "Residential" && (
           <section style={card}>
             <div style={eyebrow}>RESIDENTIAL DETAILS</div>
@@ -588,7 +745,7 @@ export default function SubmitPage() {
               <Field label="Bathrooms" value={form.baths} onChange={(v) => set("baths", v)} />
               <Field label="Square Feet" value={form.square_feet} onChange={(v) => set("square_feet", v)} />
               <Field label="Year Built" value={form.year_built} onChange={(v) => set("year_built", v)} />
-              <Field label="Occupancy" value={form.occupancy} onChange={(v) => set("occupancy", v)} />
+              <Field label="Occupancy" value={form.occupancy} onChange={(v) => set("occupancy", v)} placeholder="Vacant, tenant occupied, owner occupied..." />
             </div>
           </section>
         )}
@@ -623,25 +780,14 @@ export default function SubmitPage() {
         <section style={card}>
           <div style={eyebrow}>PHOTOS</div>
 
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            style={{ display: "none" }}
-            onChange={(e) => pick(e.target.files)}
-          />
+          <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => pick(e.target.files)} />
 
-          <button
-            type="button"
-            style={btn}
-            onClick={() => fileRef.current?.click()}
-          >
+          <button type="button" style={btn} onClick={() => fileRef.current?.click()}>
             Choose Photos ({files.length}/10)
           </button>
 
           <p style={{ color: "rgba(255,255,255,.66)", lineHeight: 1.5 }}>
-            Upload actual property photos. VaultForge will save them through the server so mobile browsers do not block the upload.
+            Upload actual property photos. VaultForge saves them through the server so mobile browsers do not block upload.
           </p>
 
           <div style={{ ...grid, marginTop: 16 }}>
@@ -655,7 +801,7 @@ export default function SubmitPage() {
                   height: 220,
                   objectFit: "cover",
                   borderRadius: 20,
-                  border: "1px solid rgba(255,255,255,.15)"
+                  border: "1px solid rgba(255,255,255,.15)",
                 }}
               />
             ))}
@@ -666,35 +812,41 @@ export default function SubmitPage() {
           <div style={eyebrow}>DEAL INTELLIGENCE</div>
 
           <div style={grid}>
-            <Field label="Seller Situation" value={form.seller_situation} onChange={(v) => set("seller_situation", v)} />
-            <Field label="Deal Needs" value={form.deal_needs} onChange={(v) => set("deal_needs", v)} />
+            <Field label="Seller Situation" value={form.seller_situation} onChange={(v) => set("seller_situation", v)} placeholder="Why is this available? Motivation, pressure, timeline..." />
+            <Field label="Manual Deal Notes" value={form.deal_needs} onChange={(v) => set("deal_needs", v)} placeholder="Optional extra needs not covered above..." />
           </div>
 
           <div style={{ marginTop: 18 }}>
             <label style={label}>Access / Private Notes</label>
 
-            <textarea
-              style={{
-                ...input,
-                minHeight: 120
-              }}
-              value={form.access_notes}
-              onChange={(e) => set("access_notes", e.target.value)}
-            />
+            <textarea style={{ ...input, minHeight: 120 }} value={form.access_notes} onChange={(e) => set("access_notes", e.target.value)} />
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={greenEyebrow}>AI ROUTE SUMMARY</div>
+          <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
+            This is the machine-readable routing summary that goes into the deal record.
+          </p>
+          <div
+            style={{
+              border: "1px solid rgba(157,243,191,.25)",
+              background: "rgba(157,243,191,.07)",
+              borderRadius: 22,
+              padding: 16,
+              color: "#9df3bf",
+              fontWeight: 850,
+              lineHeight: 1.5,
+            }}
+          >
+            {buildRouteSummary() || "Start selecting routing fields above."}
           </div>
         </section>
 
         <section style={card}>
           <div style={eyebrow}>DESCRIPTION</div>
 
-          <textarea
-            style={{
-              ...input,
-              minHeight: 180
-            }}
-            value={form.description}
-            onChange={(e) => set("description", e.target.value)}
-          />
+          <textarea style={{ ...input, minHeight: 180 }} value={form.description} onChange={(e) => set("description", e.target.value)} />
         </section>
 
         <button
@@ -706,7 +858,7 @@ export default function SubmitPage() {
             width: "100%",
             fontSize: 24,
             padding: 20,
-            opacity: busy ? .65 : 1
+            opacity: busy ? 0.65 : 1,
           }}
         >
           {busy ? "Saving..." : "Submit Deal"}
@@ -719,21 +871,19 @@ export default function SubmitPage() {
 function Field({
   label: l,
   value,
-  onChange
+  onChange,
+  placeholder = "",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
 }) {
   return (
     <div>
       <label style={label}>{l}</label>
 
-      <input
-        style={input}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <input style={input} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
