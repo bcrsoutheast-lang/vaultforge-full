@@ -6,7 +6,7 @@ export const revalidate = 0;
 
 const TABLES = ["vf_profiles", "profiles", "member_profiles"];
 
-type Row = Record<string, any>;
+type Payload = Record<string, any>;
 
 function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -16,10 +16,16 @@ function supabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) return null;
+  if (!url || !key) {
+    throw new Error("Missing Supabase environment values.");
+  }
 
   return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
   });
 }
 
@@ -31,25 +37,9 @@ function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function emailFromCookie(cookieHeader: string) {
-  const parts = cookieHeader.split(";").map((part) => part.trim());
-
-  for (const part of parts) {
-    if (part.startsWith("vf_email=")) {
-      try {
-        return decodeURIComponent(part.replace("vf_email=", "")).toLowerCase();
-      } catch {
-        return part.replace("vf_email=", "").toLowerCase();
-      }
-    }
-  }
-
-  return "";
-}
-
-function asArray(value: unknown): string[] {
+function arr(value: unknown) {
   if (Array.isArray(value)) {
-    return value.map((item) => clean(item)).filter(Boolean);
+    return value.map((v) => String(v || "").trim()).filter(Boolean);
   }
 
   if (typeof value === "string" && value.trim()) {
@@ -57,7 +47,7 @@ function asArray(value: unknown): string[] {
       const parsed = JSON.parse(value);
 
       if (Array.isArray(parsed)) {
-        return parsed.map((item) => clean(item)).filter(Boolean);
+        return parsed.map((v) => String(v || "").trim()).filter(Boolean);
       }
     } catch {
       // Continue to comma split.
@@ -65,314 +55,339 @@ function asArray(value: unknown): string[] {
 
     return value
       .split(",")
-      .map((item) => item.trim())
+      .map((v) => v.trim())
       .filter(Boolean);
   }
 
   return [];
 }
 
-function unique(values: string[]) {
-  const map = new Map<string, string>();
-
-  for (const value of values) {
-    const text = clean(value);
-
-    if (!text) continue;
-
-    map.set(text.toLowerCase(), text);
-  }
-
-  return Array.from(map.values());
+function join(value: unknown) {
+  return arr(value).join(", ");
 }
 
-function mergeArrays(...values: unknown[]) {
-  return unique(values.flatMap((value) => asArray(value)));
+function intValue(value: unknown, fallback: number) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function firstText(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
+function compactPayload(payload: Payload, allowed: string[]) {
+  const next: Payload = {};
 
-    if (text) return text;
-  }
-
-  return "";
-}
-
-function timestamp(row: Row) {
-  return new Date(
-    row?.updated_at ||
-      row?.modified_at ||
-      row?.created_at ||
-      row?.inserted_at ||
-      0
-  ).getTime();
-}
-
-function tableScore(row: Row) {
-  if (row._source_table === "vf_profiles") return 100;
-  if (row._source_table === "profiles") return 80;
-  if (row._source_table === "member_profiles") return 60;
-  return 0;
-}
-
-function score(row: Row) {
-  return tableScore(row) + (row.profile_complete ? 10 : 0) + timestamp(row) / 10000000000000;
-}
-
-function newestNonEmpty(rows: Row[], key: string) {
-  const sorted = [...rows].sort((a, b) => score(b) - score(a));
-
-  for (const row of sorted) {
-    const value = clean(row?.[key]);
-
-    if (value) return value;
-  }
-
-  return "";
-}
-
-function bestRow(rows: Row[]) {
-  return [...rows].sort((a, b) => score(b) - score(a))[0] || {};
-}
-
-function mergeProfiles(rows: Row[]) {
-  if (!rows.length) return null;
-
-  const best = bestRow(rows);
-
-  const memberTypes = mergeArrays(
-    ...rows.map((row) => row.member_types),
-    ...rows.map((row) => row.memberTypes),
-    ...rows.map((row) => row.role),
-    ...rows.map((row) => row.member_role)
-  );
-
-  const buyBoxStates = mergeArrays(
-    ...rows.map((row) => row.buy_box_states),
-    ...rows.map((row) => row.market_states),
-    ...rows.map((row) => row.markets),
-    ...rows.map((row) => row.state)
-  );
-
-  const buyBoxTypes = mergeArrays(
-    ...rows.map((row) => row.buy_box_types),
-    ...rows.map((row) => row.property_types),
-    ...rows.map((row) => row.asset_types)
-  );
-
-  const buyBoxStrategies = mergeArrays(
-    ...rows.map((row) => row.buy_box_strategies),
-    ...rows.map((row) => row.strategies),
-    ...rows.map((row) => row.strategy)
-  );
-
-  const needs = mergeArrays(
-    ...rows.map((row) => row.needs),
-    ...rows.map((row) => row.deal_needs),
-    ...rows.map((row) => row.what_i_need)
-  );
-
-  const canProvide = mergeArrays(
-    ...rows.map((row) => row.can_provide),
-    ...rows.map((row) => row.what_i_provide)
-  );
-
-  const alertTypes = mergeArrays(
-    ...rows.map((row) => row.alert_types)
-  );
-
-  const distressSignals = mergeArrays(
-    ...rows.map((row) => row.distress_signals),
-    ...rows.map((row) => row.pain_signals),
-    ...rows.map((row) => row.problem_signals)
-  );
-
-  const email = cleanEmail(
-    newestNonEmpty(rows, "email") ||
-      newestNonEmpty(rows, "member_email") ||
-      newestNonEmpty(rows, "user_email")
-  );
-
-  const fullName = firstText(
-    newestNonEmpty(rows, "full_name"),
-    newestNonEmpty(rows, "fullName"),
-    newestNonEmpty(rows, "name")
-  );
-
-  const memberRole = firstText(
-    newestNonEmpty(rows, "member_role"),
-    newestNonEmpty(rows, "role"),
-    memberTypes[0]
-  );
-
-  const state = firstText(
-    newestNonEmpty(rows, "state"),
-    buyBoxStates[0],
-    "Georgia"
-  );
-
-  const profilePhotoUrl = firstText(
-    newestNonEmpty(rows, "profile_photo_url"),
-    newestNonEmpty(rows, "profilePhotoUrl"),
-    newestNonEmpty(rows, "avatar_url"),
-    newestNonEmpty(rows, "photo_url")
-  );
-
-  const profileComplete =
-    rows.some((row) => row.profile_complete === true || String(row.profile_complete).toLowerCase() === "true") ||
-    Boolean(fullName && firstText(newestNonEmpty(rows, "phone")) && memberRole && newestNonEmpty(rows, "city") && state);
-
-  return {
-    ...best,
-
-    email,
-    full_name: fullName,
-    phone: newestNonEmpty(rows, "phone"),
-    company: newestNonEmpty(rows, "company"),
-    role: memberRole,
-    member_role: memberRole,
-    city: newestNonEmpty(rows, "city"),
-    state,
-    markets: newestNonEmpty(rows, "markets") || buyBoxStates.join(", "),
-    buy_box: newestNonEmpty(rows, "buy_box") || newestNonEmpty(rows, "buyBox"),
-    funding_capacity:
-      newestNonEmpty(rows, "funding_capacity") ||
-      newestNonEmpty(rows, "fundingCapacity"),
-    strategy: newestNonEmpty(rows, "strategy"),
-    profile_photo_url: profilePhotoUrl,
-
-    member_types: memberTypes,
-    buy_box_states: buyBoxStates,
-    buy_box_types: buyBoxTypes,
-    buy_box_strategies: buyBoxStrategies,
-    property_types: buyBoxTypes,
-    asset_types: buyBoxTypes,
-    strategies: buyBoxStrategies,
-    needs,
-    deal_needs: needs,
-    what_i_need: needs,
-    can_provide: canProvide,
-    what_i_provide: canProvide,
-    alert_types: alertTypes,
-    distress_signals: distressSignals,
-    pain_signals: distressSignals,
-
-    alert_frequency: newestNonEmpty(rows, "alert_frequency") || "daily_digest",
-    max_alerts_per_day: newestNonEmpty(rows, "max_alerts_per_day") || "10",
-
-    payment_status: newestNonEmpty(rows, "payment_status") || "unpaid",
-    access_status: newestNonEmpty(rows, "access_status") || "locked",
-    profile_complete: profileComplete,
-
-    _source_table: best._source_table,
-    _sources_checked: rows.map((row) => row._source_table),
-  };
-}
-
-async function findRows(supabase: any, table: string, email: string) {
-  const rows: Row[] = [];
-
-  for (const column of ["email", "member_email", "user_email", "owner_email"]) {
-    try {
-      const { data, error } = await supabase
-        .from(table)
-        .select("*")
-        .eq(column, email)
-        .limit(10);
-
-      if (!error && Array.isArray(data)) {
-        rows.push(
-          ...data.map((row) => ({
-            ...row,
-            _source_table: table,
-          }))
-        );
-      }
-    } catch {
-      // Try next column.
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(payload, key)) {
+      next[key] = payload[key];
     }
   }
 
-  const seen = new Set<string>();
-
-  return rows.filter((row) => {
-    const key = clean(
-      row.id ||
-        row.profile_id ||
-        row.auth_user_id ||
-        `${table}-${row.email}-${row.updated_at}`
-    );
-
-    if (!key) return true;
-
-    if (seen.has(key)) return false;
-
-    seen.add(key);
-
-    return true;
-  });
+  return next;
 }
 
-export async function GET(request: Request) {
+function stringifyArrayFields(payload: Payload) {
+  const arrayFields = [
+    "member_types",
+    "buy_box_states",
+    "buy_box_types",
+    "buy_box_strategies",
+    "market_states",
+    "property_types",
+    "asset_types",
+    "strategies",
+    "needs",
+    "deal_needs",
+    "what_i_need",
+    "can_provide",
+    "what_i_provide",
+    "alert_types",
+    "distress_signals",
+    "pain_signals",
+  ];
+
+  const next = { ...payload };
+
+  for (const field of arrayFields) {
+    if (Array.isArray(next[field])) {
+      next[field] = next[field].join(", ");
+    }
+  }
+
+  return next;
+}
+
+async function getExisting(supabase: any, table: string, email: string) {
   try {
-    const url = new URL(request.url);
+    const { data, error } = await supabase
+      .from(table)
+      .select("*")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (!error && data) return data;
+  } catch {
+    // Ignore and return null.
+  }
+
+  return null;
+}
+
+async function saveToTable(supabase: any, table: string, payload: Payload) {
+  const fullAllowed = [
+    "email",
+    "full_name",
+    "phone",
+    "company",
+    "role",
+    "member_role",
+    "city",
+    "state",
+    "markets",
+    "market_states",
+    "member_types",
+    "buy_box",
+    "funding_capacity",
+    "strategy",
+    "profile_photo_url",
+    "profile_complete",
+    "payment_status",
+    "access_status",
+    "alert_frequency",
+    "max_alerts_per_day",
+    "alert_types",
+    "buy_box_states",
+    "buy_box_types",
+    "buy_box_strategies",
+    "property_types",
+    "asset_types",
+    "strategies",
+    "needs",
+    "deal_needs",
+    "what_i_need",
+    "can_provide",
+    "what_i_provide",
+    "distress_signals",
+    "pain_signals",
+    "updated_at",
+  ];
+
+  const legacyAllowed = [
+    "email",
+    "full_name",
+    "phone",
+    "company",
+    "role",
+    "member_role",
+    "city",
+    "state",
+    "markets",
+    "member_types",
+    "buy_box",
+    "funding_capacity",
+    "strategy",
+    "profile_photo_url",
+    "profile_complete",
+    "payment_status",
+    "access_status",
+    "alert_frequency",
+    "max_alerts_per_day",
+    "alert_types",
+    "updated_at",
+  ];
+
+  const minimalAllowed = [
+    "email",
+    "full_name",
+    "phone",
+    "company",
+    "role",
+    "city",
+    "state",
+    "markets",
+    "profile_photo_url",
+    "profile_complete",
+    "payment_status",
+    "access_status",
+    "updated_at",
+  ];
+
+  const variants = [
+    compactPayload(payload, fullAllowed),
+    stringifyArrayFields(compactPayload(payload, fullAllowed)),
+    compactPayload(payload, legacyAllowed),
+    stringifyArrayFields(compactPayload(payload, legacyAllowed)),
+    compactPayload(payload, minimalAllowed),
+  ];
+
+  const errors: string[] = [];
+
+  for (const variant of variants) {
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .upsert(variant, { onConflict: "email" })
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        return {
+          ok: true,
+          data,
+          table,
+          keys: Object.keys(variant),
+        };
+      }
+
+      if (error?.message) errors.push(error.message);
+    } catch (error: any) {
+      if (error?.message) errors.push(error.message);
+    }
+  }
+
+  return {
+    ok: false,
+    data: null,
+    table,
+    error: errors[0] || `Profile save failed for ${table}.`,
+  };
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
 
     const email =
       cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(url.searchParams.get("email")) ||
-      emailFromCookie(request.headers.get("cookie") || "");
+      cleanEmail(body.email);
 
-    if (!email) {
-      return NextResponse.json({
-        ok: true,
-        profile: null,
-        email: "",
-      });
+    if (!email || !email.includes("@")) {
+      return NextResponse.json({ error: "Missing member email." }, { status: 400 });
     }
 
     const supabase = supabaseClient();
 
-    if (!supabase) {
-      return NextResponse.json({
-        ok: true,
-        profile: null,
-        email,
-        warning: "Supabase env missing.",
-      });
-    }
-
-    const allRowsNested = await Promise.all(
-      TABLES.map((table) => findRows(supabase, table, email))
+    const existingRows = await Promise.all(
+      TABLES.map(async (table) => ({
+        table,
+        row: await getExisting(supabase, table, email),
+      }))
     );
 
-    const rows = allRowsNested.flat();
-    const profile = mergeProfiles(rows);
+    const existingPhoto =
+      clean(body.profile_photo_url || body.profilePhotoUrl) ||
+      clean(existingRows.find((item) => item.row?.profile_photo_url)?.row?.profile_photo_url) ||
+      clean(existingRows.find((item) => item.row?.profilePhotoUrl)?.row?.profilePhotoUrl);
 
-    if (profile) {
-      return NextResponse.json({
-        ok: true,
-        profile,
-        email,
-        table: (profile as any)._source_table || "merged",
-        sources_checked: TABLES,
-        rows_found: rows.length,
-      });
+    const memberTypes = arr(body.member_types || body.memberTypes);
+    const buyBoxStates = arr(body.buy_box_states || body.market_states || body.markets || body.state);
+    const buyBoxTypes = arr(body.buy_box_types || body.property_types || body.asset_types);
+    const buyBoxStrategies = arr(body.buy_box_strategies || body.strategies || body.strategy);
+    const needs = arr(body.needs || body.deal_needs || body.what_i_need);
+    const canProvide = arr(body.can_provide || body.what_i_provide);
+    const alertTypes = arr(body.alert_types);
+    const distressSignals = arr(body.distress_signals || body.pain_signals);
+
+    const fullName = clean(body.full_name || body.fullName || body.name);
+    const phone = clean(body.phone);
+    const company = clean(body.company);
+    const primaryRole = clean(body.role || body.member_role || memberTypes[0]);
+    const city = clean(body.city);
+    const state = clean(body.state || buyBoxStates[0] || "Georgia");
+
+    const profileComplete = Boolean(fullName && phone && primaryRole && city && state);
+
+    const currentPayment = clean(body.payment_status);
+    const currentAccess = clean(body.access_status);
+
+    const payload: Payload = {
+      email,
+      full_name: fullName,
+      phone,
+      company,
+      role: primaryRole,
+      member_role: primaryRole,
+      city,
+      state,
+
+      markets: join(buyBoxStates),
+      market_states: buyBoxStates,
+
+      member_types: memberTypes.length ? memberTypes : primaryRole ? [primaryRole] : [],
+
+      buy_box: clean(body.buy_box || body.buyBox),
+      funding_capacity: clean(body.funding_capacity || body.fundingCapacity),
+      strategy: clean(body.strategy),
+      profile_photo_url: existingPhoto,
+
+      buy_box_states: buyBoxStates,
+      buy_box_types: buyBoxTypes,
+      buy_box_strategies: buyBoxStrategies,
+
+      property_types: buyBoxTypes,
+      asset_types: buyBoxTypes,
+      strategies: buyBoxStrategies,
+
+      needs,
+      deal_needs: needs,
+      what_i_need: needs,
+
+      can_provide: canProvide,
+      what_i_provide: canProvide,
+
+      distress_signals: distressSignals,
+      pain_signals: distressSignals,
+
+      profile_complete: profileComplete,
+
+      payment_status: currentPayment || "unpaid",
+      access_status: currentAccess || (profileComplete ? "payment_required" : "locked"),
+
+      alert_frequency: clean(body.alert_frequency) || "daily_digest",
+      max_alerts_per_day: intValue(body.max_alerts_per_day, 10),
+      alert_types: alertTypes,
+
+      updated_at: new Date().toISOString(),
+    };
+
+    let lastError = "";
+    let saved: any = null;
+    let savedTable = "";
+    let savedKeys: string[] = [];
+
+    for (const table of TABLES) {
+      const result = await saveToTable(supabase, table, payload);
+
+      if (result.ok) {
+        saved = result.data;
+        savedTable = result.table;
+        savedKeys = result.keys || [];
+        lastError = "";
+        break;
+      }
+
+      lastError = result.error || `Could not save to ${table}.`;
+    }
+
+    if (lastError || !saved) {
+      return NextResponse.json(
+        { error: lastError || "Profile save failed." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       ok: true,
-      profile: null,
-      email,
-      sources_checked: TABLES,
-      rows_found: 0,
+      profile: saved,
+      profile_complete: profileComplete,
+      next_step: profileComplete ? "payment" : "profile",
+      saved_table: savedTable,
+      saved_keys: savedKeys,
+      message: profileComplete
+        ? "Profile complete. Smart routing fields saved."
+        : "Profile saved. Complete required fields to unlock payment step.",
     });
   } catch (error: any) {
     return NextResponse.json(
       {
-        ok: false,
-        error: "Could not load profile.",
+        error: "Could not save profile.",
         details: error?.message || String(error),
       },
       { status: 500 }
