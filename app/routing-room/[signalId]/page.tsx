@@ -57,6 +57,22 @@ type RelatedItem = {
   private_notes?: string;
 };
 
+type RoutingAction = {
+  id?: string;
+  signal_id?: string;
+  item_id?: string;
+  action?: string;
+  status?: string;
+  title?: string;
+  note?: string;
+  target_role?: string;
+  target_email?: string;
+  priority?: string;
+  source?: string;
+  created_by?: string;
+  created_at?: string;
+};
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -222,6 +238,15 @@ function typeLabel(type: string) {
   return t.slice(0, 1).toUpperCase() + t.slice(1);
 }
 
+function actionLabel(action: string) {
+  const text = String(action || "manual_note").replace(/_/g, " ");
+  return text.slice(0, 1).toUpperCase() + text.slice(1);
+}
+
+function itemIdFor(signal: Signal | null, item: RelatedItem | null) {
+  return clean(item?.id || signal?.item_id || signal?.deal_id);
+}
+
 function normalizeSignal(value: any): Signal {
   return {
     id: clean(value.id),
@@ -268,6 +293,85 @@ function RoutingPanel({
   );
 }
 
+
+async function logRoutingAction({
+  email,
+  signal,
+  item,
+  action,
+  note,
+  targetRole,
+}: {
+  email: string;
+  signal: Signal | null;
+  item: RelatedItem | null;
+  action: string;
+  note: string;
+  targetRole: string;
+}) {
+  const res = await fetch("/api/routing/actions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-vf-email": email,
+      "x-vf-admin": "1",
+    },
+    body: JSON.stringify({
+      email,
+      admin_email: email,
+      owner: "1",
+      signal_id: signal?.id,
+      item_id: itemIdFor(signal, item),
+      deal_id: item?.item_kind === "deal_or_project" ? itemIdFor(signal, item) : "",
+      pain_id: item?.item_kind === "pain_signal" ? itemIdFor(signal, item) : "",
+      action,
+      target_role: targetRole,
+      note,
+      title: signal?.title || item?.title || "VaultForge routing action",
+      signal_title: signal?.title,
+      item_title: item?.title,
+      priority: signal?.priority || "medium",
+      source: "routing_room",
+      source_table: item?.source_table || signal?.source_table,
+    }),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || data?.details || "Could not log routing action.");
+  }
+
+  return data;
+}
+
+async function loadRoutingActions(email: string, owner: boolean, signal: Signal | null, item: RelatedItem | null) {
+  const params = new URLSearchParams();
+  params.set("email", email);
+  params.set("owner", owner ? "1" : "0");
+
+  if (signal?.id) params.set("signal_id", signal.id);
+
+  const itemId = itemIdFor(signal, item);
+  if (itemId) params.set("item_id", itemId);
+
+  const res = await fetch(`/api/routing/actions?${params.toString()}`, {
+    cache: "no-store",
+    headers: {
+      "x-vf-email": email,
+      "x-vf-admin": owner ? "1" : "0",
+    },
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok || data?.ok === false) {
+    return [];
+  }
+
+  return Array.isArray(data?.actions) ? data.actions : [];
+}
+
 function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "loading" }) {
   return (
     <main style={page}>
@@ -302,6 +406,10 @@ export default function RoutingRoomPage() {
   const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
   const [signal, setSignal] = useState<Signal | null>(null);
   const [item, setItem] = useState<RelatedItem | null>(null);
+  const [actions, setActions] = useState<RoutingAction[]>([]);
+  const [actionNote, setActionNote] = useState("");
+  const [actionBusy, setActionBusy] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
   const [status, setStatus] = useState("Loading routing room...");
 
   async function load() {
@@ -367,26 +475,62 @@ export default function RoutingRoomPage() {
 
       const itemId = clean(found?.item_id || found?.deal_id);
 
-      if (itemId) {
-        const itemRes = await fetch(`/api/intelligence/item/${encodeURIComponent(itemId)}?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": owner ? "1" : "0",
-          },
-        });
+      const relatedItem = itemId
+        ? await (async () => {
+            const itemRes = await fetch(`/api/intelligence/item/${encodeURIComponent(itemId)}?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
+              cache: "no-store",
+              headers: {
+                "x-vf-email": currentEmail,
+                "x-vf-admin": owner ? "1" : "0",
+              },
+            });
 
-        const itemData = await safeJson(itemRes);
-        setItem(itemData?.item || null);
-      } else {
-        setItem(null);
-      }
+            const itemData = await safeJson(itemRes);
+            return itemData?.item || null;
+          })()
+        : null;
+
+      setItem(relatedItem);
+
+      const loadedActions = await loadRoutingActions(currentEmail, owner, found, relatedItem);
+      setActions(loadedActions);
 
       setLockReason("open");
       setStatus(found ? "" : "Routing signal was not found in current stored or generated feed.");
     } catch (error: any) {
       setLockReason("open");
       setStatus(error?.message || "Could not load routing room.");
+    }
+  }
+
+  async function handleRoutingAction(action: string, targetRole: string) {
+    if (!owner) {
+      setActionMessage("Owner/admin access required to log routing actions.");
+      return;
+    }
+
+    setActionBusy(action);
+    setActionMessage("Logging routing action...");
+
+    try {
+      const result = await logRoutingAction({
+        email,
+        signal,
+        item,
+        action,
+        targetRole,
+        note: actionNote,
+      });
+
+      setActionMessage(result?.message || "Routing action logged safely.");
+      setActionNote("");
+
+      const loadedActions = await loadRoutingActions(email, owner, signal, item);
+      setActions(loadedActions);
+    } catch (error: any) {
+      setActionMessage(error?.message || "Could not log routing action.");
+    } finally {
+      setActionBusy("");
     }
   }
 
@@ -500,6 +644,106 @@ export default function RoutingRoomPage() {
                 status={distressStatus}
                 text="Escalate stalled projects, seller pain, contractor issues, permit delays, or urgent distress signals."
               />
+            </section>
+
+            {owner && (
+              <section style={{ ...hero, marginTop: 22 }}>
+                <div style={greenEyebrow}>Owner Routing Actions</div>
+                <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+                  Log routing decisions without auto-dispatch.
+                </h2>
+                <p style={{ ...muted, fontSize: 19 }}>
+                  These actions create a safe audit trail. They do not notify members, change records,
+                  or auto-route private details yet.
+                </p>
+
+                <textarea
+                  value={actionNote}
+                  onChange={(event) => setActionNote(event.target.value)}
+                  placeholder="Optional admin note: why this signal should route, who should review it, or what needs to happen next..."
+                  style={{
+                    width: "100%",
+                    minHeight: 130,
+                    borderRadius: 20,
+                    border: "1px solid rgba(255,255,255,.18)",
+                    background: "rgba(255,255,255,.075)",
+                    color: "white",
+                    padding: 16,
+                    fontSize: 16,
+                    boxSizing: "border-box",
+                    marginBottom: 14,
+                  }}
+                />
+
+                <div className="vf-routing-actions">
+                  <button type="button" style={btn} disabled={!!actionBusy} onClick={() => handleRoutingAction("route_to_buyer", "Buyer")}>
+                    {actionBusy === "route_to_buyer" ? "Logging..." : "Route to Buyer"}
+                  </button>
+                  <button type="button" style={btn} disabled={!!actionBusy} onClick={() => handleRoutingAction("route_to_lender", "Lender")}>
+                    {actionBusy === "route_to_lender" ? "Logging..." : "Route to Lender"}
+                  </button>
+                  <button type="button" style={btn} disabled={!!actionBusy} onClick={() => handleRoutingAction("route_to_operator", "Operator")}>
+                    {actionBusy === "route_to_operator" ? "Logging..." : "Route to Operator"}
+                  </button>
+                  <button type="button" style={ghost} disabled={!!actionBusy} onClick={() => handleRoutingAction("route_to_contractor", "Contractor")}>
+                    {actionBusy === "route_to_contractor" ? "Logging..." : "Route to Contractor"}
+                  </button>
+                  <button type="button" style={ghost} disabled={!!actionBusy} onClick={() => handleRoutingAction("needs_review", "Admin")}>
+                    {actionBusy === "needs_review" ? "Logging..." : "Needs Review"}
+                  </button>
+                  <button type="button" style={ghost} disabled={!!actionBusy} onClick={() => handleRoutingAction("watch", "Watch")}>
+                    {actionBusy === "watch" ? "Logging..." : "Watch"}
+                  </button>
+                </div>
+
+                {actionMessage && (
+                  <p
+                    style={{
+                      color:
+                        actionMessage.toLowerCase().includes("could not") ||
+                        actionMessage.toLowerCase().includes("required")
+                          ? "#ffd0d0"
+                          : "#9df3bf",
+                      fontWeight: 900,
+                    }}
+                  >
+                    {actionMessage}
+                  </p>
+                )}
+              </section>
+            )}
+
+            <section style={{ ...hero, marginTop: 22 }}>
+              <div style={greenEyebrow}>Routing Action History</div>
+              <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+                Logged decisions.
+              </h2>
+
+              {actions.length === 0 ? (
+                <p style={{ ...muted, fontSize: 19 }}>
+                  No routing actions have been logged for this signal yet.
+                </p>
+              ) : (
+                <section style={grid}>
+                  {actions.map((action, index) => (
+                    <div key={action.id || `${action.action}-${index}`} style={card}>
+                      <div style={greenEyebrow}>{actionLabel(action.action || "manual_note")}</div>
+                      <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>
+                        {action.title || "Routing action"}
+                      </h3>
+                      <p style={muted}>
+                        {action.note || "No note recorded."}
+                      </p>
+                      <div>
+                        {action.target_role && <span style={chip}>{action.target_role}</span>}
+                        {action.status && <span style={chip}>{action.status}</span>}
+                        {action.priority && <span style={chip}>{action.priority}</span>}
+                        {action.created_at && <span style={chip}>{action.created_at}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              )}
             </section>
 
             {item && (
