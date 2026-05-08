@@ -450,9 +450,15 @@ export default function RoutingPage() {
                     Open Pain Feed
                   </Link>
 
-                  <Link href="/messages" style={ghost}>
-                    Message
-                  </Link>
+                  {sourceId && sourceType === "pain_submission" ? (
+                    <Link href={`/pain-message/${encodeURIComponent(sourceId)}`} style={ghost}>
+                      Message
+                    </Link>
+                  ) : (
+                    <Link href="/messages" style={ghost}>
+                      Message
+                    </Link>
+                  )}
 
                   <Link href="/alerts" style={ghost}>
                     Alerts
