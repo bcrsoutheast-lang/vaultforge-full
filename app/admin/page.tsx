@@ -139,25 +139,17 @@ function getEmail() {
 function formatDate(value: unknown) {
   const text = asText(value);
   if (!text) return "—";
-
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return text;
-
   return date.toLocaleString();
 }
 
 function bucketTone(bucket: string) {
   const b = bucket.toLowerCase();
-
   if (b === "active") return "#9df3bf";
   if (b === "pending") return "#f5d978";
   if (b === "suspended" || b === "deleted") return "#ff9f9f";
   return "#dcb8ff";
-}
-
-function statNumber(value: unknown) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? n : 0;
 }
 
 function hasRealEmail(member: Member) {
@@ -167,30 +159,16 @@ function hasRealEmail(member: Member) {
 
 function memberName(member: Member) {
   return asText(
-    member.full_name ||
-      member.name ||
-      member.member_name ||
-      member.display_name,
+    member.full_name || member.name || member.member_name || member.display_name,
     "Unnamed Member"
   );
 }
 
 function memberKey(member: Member) {
-  return (
-    cleanEmail(member.email || member.member_email) ||
-    asText(member.id || member._source_id || member.auth_user_id)
-  );
+  return cleanEmail(member.email || member.member_email) || asText(member.id || member._source_id || member.auth_user_id);
 }
 
-function StatCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: number;
-  detail: string;
-}) {
+function StatCard({ label, value, detail }: { label: string; value: number; detail: string }) {
   return (
     <div style={card}>
       <div style={greenEyebrow}>{label}</div>
@@ -229,8 +207,7 @@ export default function AdminPage() {
         throw new Error(data?.error || data?.details || "Could not load admin members.");
       }
 
-      const loaded = Array.isArray(data.members) ? data.members : [];
-      setMembers(loaded);
+      setMembers(Array.isArray(data.members) ? data.members : []);
       setCounts(data.counts || {});
       setRawSource(data.source || data.sources_checked?.join(", ") || "api/admin/members");
       setStatus("");
@@ -264,12 +241,7 @@ export default function AdminPage() {
           "x-vf-email": adminEmail,
           "x-vf-admin": "1",
         },
-        body: JSON.stringify({
-          email,
-          id,
-          action,
-          admin_email: adminEmail,
-        }),
+        body: JSON.stringify({ email, id, action, admin_email: adminEmail }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -291,13 +263,8 @@ export default function AdminPage() {
     load();
   }, []);
 
-  const realMembers = useMemo(() => {
-    return members.filter(hasRealEmail);
-  }, [members]);
-
-  const demoMembers = useMemo(() => {
-    return members.filter((member) => !hasRealEmail(member));
-  }, [members]);
+  const realMembers = useMemo(() => members.filter(hasRealEmail), [members]);
+  const demoMembers = useMemo(() => members.filter((member) => !hasRealEmail(member)), [members]);
 
   const derivedCounts = useMemo(() => {
     return {
@@ -351,9 +318,10 @@ export default function AdminPage() {
           <section
             style={{
               ...hero,
-              color: toast.toLowerCase().includes("failed") || toast.toLowerCase().includes("cannot")
-                ? "#ffd0d0"
-                : "#9df3bf",
+              color:
+                toast.toLowerCase().includes("failed") || toast.toLowerCase().includes("cannot")
+                  ? "#ffd0d0"
+                  : "#9df3bf",
             }}
           >
             {toast}
@@ -361,11 +329,11 @@ export default function AdminPage() {
         )}
 
         <section style={{ ...grid, marginBottom: 22 }}>
-          <StatCard label="Real Members" value={derivedCounts.total || statNumber(counts.total)} detail="Real emails only. Demo @example.com hidden." />
-          <StatCard label="Pending" value={derivedCounts.pending || statNumber(counts.pending)} detail="Waiting activation or payment." />
-          <StatCard label="Active" value={derivedCounts.active || statNumber(counts.active)} detail="Approved/active members." />
-          <StatCard label="Suspended" value={derivedCounts.suspended || statNumber(counts.suspended)} detail="Disabled records." />
-          <StatCard label="Deleted" value={derivedCounts.deleted || statNumber(counts.deleted)} detail="Soft-deleted records." />
+          <StatCard label="Real Members" value={derivedCounts.total || Number(counts.total || 0)} detail="Real emails only. Demo @example.com hidden." />
+          <StatCard label="Pending" value={derivedCounts.pending || Number(counts.pending || 0)} detail="Waiting activation or payment." />
+          <StatCard label="Active" value={derivedCounts.active || Number(counts.active || 0)} detail="Approved/active members." />
+          <StatCard label="Suspended" value={derivedCounts.suspended || Number(counts.suspended || 0)} detail="Disabled records." />
+          <StatCard label="Deleted" value={derivedCounts.deleted || Number(counts.deleted || 0)} detail="Soft-deleted records." />
         </section>
 
         <section style={{ ...hero, borderColor: "rgba(157,243,191,.22)" }}>
