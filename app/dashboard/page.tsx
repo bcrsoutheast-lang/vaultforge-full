@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -7,6 +6,7 @@ import {
   VaultForgePulseStrip,
   VaultForgeSignalBar,
   VaultForgeCommandFooter,
+  VaultForgeLiveTicker,
 } from "../components/VaultForgeVisualLayer";
 
 export default function DashboardPage() {
@@ -28,6 +28,17 @@ export default function DashboardPage() {
         />
 
         <VaultForgePulseStrip />
+
+        <VaultForgeLiveTicker
+          items={[
+            "ATLANTA DISTRESS ROUTE ACTIVE",
+            "BUYER MATCH DETECTED",
+            "LENDER RESPONSE TRACKED",
+            "OFF-MARKET SIGNAL PRESSURE RISING",
+            "CONTROLLED INTRODUCTION ACCEPTED",
+            "OPERATOR NETWORK MOVEMENT ACTIVE",
+          ]}
+        />
 
         <VaultForgeSignalBar
           urgent={7}
