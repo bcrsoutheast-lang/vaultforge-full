@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import ProjectsClient from "./ProjectsClient";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Access = {
   email: string;
@@ -116,6 +117,11 @@ function LockedScreen({
         }
       `}</style>
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Projects"
+          subtitle="Deal rooms, saved targets, and project review tools"
+        />
+
         <section style={hero}>
           <div style={eyebrow}>VAULTFORGE DEAL ROOMS</div>
 
@@ -275,5 +281,17 @@ export default function ProjectsPage() {
     return <LockedScreen reason={lockReason} />;
   }
 
-  return <ProjectsClient />;
+  return (
+    <>
+      <main style={page}>
+        <div style={wrap}>
+          <VaultForgeMemberNav
+            title="Projects"
+            subtitle="Deal rooms, saved targets, and project review tools"
+          />
+        </div>
+      </main>
+      <ProjectsClient />
+    </>
+  );
 }
