@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Member = Record<string, any>;
 
@@ -294,6 +295,11 @@ export default function MembersPage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Members"
+          subtitle="Real member management and network intelligence"
+        />
+
         <section style={hero}>
           <div style={eyebrow}>VaultForge Members · Real Admin Bridge</div>
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
