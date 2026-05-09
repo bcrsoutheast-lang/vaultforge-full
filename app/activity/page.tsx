@@ -323,6 +323,73 @@ export default function ActivityStreamPage() {
     return list;
   }, [feed, filter, priorityFilter, search]);
 
+  const latestRouting = useMemo(() => {
+    return feed.find((item) => item.type.includes("routing")) || null;
+  }, [feed]);
+
+  const latestIntro = useMemo(() => {
+    return feed.find((item) => item.type.includes("introduction") && !item.type.includes("response")) || null;
+  }, [feed]);
+
+  const latestResponse = useMemo(() => {
+    return feed.find((item) => item.type.includes("response")) || null;
+  }, [feed]);
+
+  function TapeCard({
+    labelText,
+    item,
+    emptyText,
+  }: {
+    labelText: string;
+    item: ActivityItem | null;
+    emptyText: string;
+  }) {
+    const itemTone = tone(item?.type || "");
+
+    return (
+      <div
+        style={{
+          border: `1px solid ${item ? `${itemTone}66` : "rgba(255,255,255,.12)"}`,
+          background: "rgba(255,255,255,.055)",
+          borderRadius: 22,
+          padding: 18,
+        }}
+      >
+        <div
+          style={{
+            color: item ? itemTone : "#9df3bf",
+            letterSpacing: 4,
+            fontWeight: 900,
+            fontSize: 11,
+            marginBottom: 10,
+            textTransform: "uppercase",
+          }}
+        >
+          {labelText}
+        </div>
+
+        <strong style={{ fontSize: 20, lineHeight: 1.1 }}>
+          {item?.title || emptyText}
+        </strong>
+
+        <p
+          style={{
+            color: "rgba(255,255,255,.66)",
+            lineHeight: 1.45,
+            marginBottom: 0,
+          }}
+        >
+          {item?.note || "No recent event recorded."}
+        </p>
+
+        <div style={{ marginTop: 10 }}>
+          {item?.priority && <span style={chip}>{item.priority}</span>}
+          {item?.created_at && <span style={chip}>{item.created_at}</span>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main style={page}>
       <style>{`
@@ -390,6 +457,45 @@ export default function ActivityStreamPage() {
                 Owner Intelligence
               </Link>
             )}
+          </div>
+        </section>
+
+        <section style={hero}>
+          <div style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:12,
+            textTransform:"uppercase"
+          }}>
+            Market Tape
+          </div>
+
+          <h2 style={{
+            fontSize:42,
+            lineHeight:1,
+            margin:"0 0 14px"
+          }}>
+            Latest platform movement.
+          </h2>
+
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            fontSize:18,
+            lineHeight:1.55
+          }}>
+            Fast snapshot of the newest routing, introduction, and member-response events.
+          </p>
+
+          <div style={{
+            display:"grid",
+            gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",
+            gap:14
+          }}>
+            <TapeCard labelText="Latest Routing" item={latestRouting} emptyText="No routing activity yet" />
+            <TapeCard labelText="Latest Introduction" item={latestIntro} emptyText="No introductions yet" />
+            <TapeCard labelText="Latest Response" item={latestResponse} emptyText="No member responses yet" />
           </div>
         </section>
 
