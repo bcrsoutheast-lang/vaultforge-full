@@ -362,7 +362,7 @@ export default function DealRoomPage() {
             <Link href="/alerts" style={ghost}>Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            <Link href="/introductions" style={ghost}>Introductions</Link>
+            <Link href="/introductions" style={btn}>Introductions</Link>
             <Link href="/messages" style={ghost}>Messages</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
             {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
@@ -454,8 +454,23 @@ export default function DealRoomPage() {
               <p style={{ ...muted, fontSize: 19 }}>
                 Next layers can add signal threads, buyer/lender/operator routing, comments, status updates,
                 saved pursuit actions, and notification history. Routing decisions now flow through Routing Rooms,
-                Admin Routing, the member Routing Inbox, and controlled Introductions.
+                Admin Routing, the member Routing Inbox, controlled Introductions, and the future dispatch layer.
               </p>
+            </section>
+
+            <section style={{ ...hero, marginTop: 22 }}>
+              <div style={greenEyebrow}>Controlled Introductions</div>
+              <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+                Intro workflow connected.
+              </h2>
+              <p style={{ ...muted, fontSize: 19 }}>
+                If this deal becomes part of a routed opportunity, owner/admin can stage controlled introductions.
+                Members can review staged introductions from the Introductions page.
+              </p>
+              <Link href="/introductions" style={btn}>Open Introductions</Link>
+              <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+              {owner && <Link href="/admin-introductions" style={ghost}>Admin Introductions</Link>}
+              {owner && <Link href="/admin-dispatch-queue" style={ghost}>Dispatch Queue</Link>}
             </section>
 
             {owner && item.raw && (
