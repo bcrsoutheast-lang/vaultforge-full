@@ -23,7 +23,7 @@ export default function DashboardPage() {
         />
 
         <section style={hero}>
-          <div style={grid}></div>
+          <div style={gridBg}></div>
 
           <div
             style={{
@@ -59,10 +59,9 @@ export default function DashboardPage() {
                   maxWidth: 760,
                 }}
               >
-                Your command center tracks active opportunities,
-                strategic introductions, routing activity,
-                intelligence pressure, and network movement
-                across the VaultForge ecosystem.
+                Your command center tracks active opportunities, strategic introductions,
+                routing activity, intelligence pressure, and network movement across
+                the VaultForge ecosystem.
               </p>
 
               <div
@@ -92,25 +91,10 @@ export default function DashboardPage() {
                 <div style={pill}>ACTIVE</div>
               </div>
 
-              <Signal
-                title="ATLANTA • DISTRESS SIGNAL"
-                text="Multifamily acquisition route requested by operator network."
-              />
-
-              <Signal
-                title="TAMPA • CAPITAL ROUTE OPENED"
-                text="Land development matched with lender and JV capital profile."
-              />
-
-              <Signal
-                title="NASHVILLE • BUYER PRESSURE"
-                text="Value-add residential inventory demand increasing."
-              />
-
-              <Signal
-                title="CHARLOTTE • INTRO RESPONSE"
-                text="Execution operator accepted controlled introduction."
-              />
+              <Signal title="ATLANTA • DISTRESS SIGNAL" text="Multifamily acquisition route requested by operator network." />
+              <Signal title="TAMPA • CAPITAL ROUTE OPENED" text="Land development matched with lender and JV capital profile." />
+              <Signal title="NASHVILLE • BUYER PRESSURE" text="Value-add residential inventory demand increasing." />
+              <Signal title="CHARLOTTE • INTRO RESPONSE" text="Execution operator accepted controlled introduction." />
             </div>
           </div>
         </section>
@@ -133,41 +117,12 @@ export default function DashboardPage() {
               marginTop: 26,
             }}
           >
-            <Panel
-              title="Alerts"
-              desc="Track live opportunity signals, urgency, routing activity, and market movement."
-              href="/alerts"
-            />
-
-            <Panel
-              title="Routing Inbox"
-              desc="See opportunities routed to your profile based on strategy, geography, and execution fit."
-              href="/routing-inbox"
-            />
-
-            <Panel
-              title="Introductions"
-              desc="Manage controlled strategic introductions between buyers, lenders, operators, and partners."
-              href="/introductions"
-            />
-
-            <Panel
-              title="Activity"
-              desc="Monitor network movement, intro responses, route creation, and pressure changes."
-              href="/activity"
-            />
-
-            <Panel
-              title="Intelligence"
-              desc="View intelligence signals, routing confidence, opportunity heat, and execution pressure."
-              href="/intelligence"
-            />
-
-            <Panel
-              title="Member Network"
-              desc="Identify who buys, funds, operates, sources, or solves specific opportunity categories."
-              href="/members"
-            />
+            <Panel title="Alerts" desc="Track live opportunity signals, urgency, routing activity, and market movement." href="/alerts" />
+            <Panel title="Routing Inbox" desc="See opportunities routed to your profile based on strategy, geography, and execution fit." href="/routing-inbox" />
+            <Panel title="Introductions" desc="Manage controlled strategic introductions between buyers, lenders, operators, and partners." href="/introductions" />
+            <Panel title="Activity" desc="Monitor network movement, intro responses, route creation, and pressure changes." href="/activity" />
+            <Panel title="Intelligence" desc="View intelligence signals, routing confidence, opportunity heat, and execution pressure." href="/intelligence" />
+            <Panel title="Member Network" desc="Identify who buys, funds, operates, sources, or solves specific opportunity categories." href="/members" />
           </div>
         </section>
       </div>
@@ -175,23 +130,9 @@ export default function DashboardPage() {
   );
 }
 
-function Panel({
-  title,
-  desc,
-  href,
-}: {
-  title: string;
-  desc: string;
-  href: string;
-}) {
+function Panel({ title, desc, href }: { title: string; desc: string; href: string }) {
   return (
-    <Link
-      href={href}
-      style={{
-        textDecoration: "none",
-        color: "white",
-      }}
-    >
+    <Link href={href} style={{ textDecoration: "none", color: "white" }}>
       <div
         style={{
           border: "1px solid rgba(232,196,107,.14)",
@@ -200,7 +141,6 @@ function Panel({
           background:
             "linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015))",
           minHeight: 220,
-          transition: "all .2s ease",
         }}
       >
         <div
@@ -227,13 +167,7 @@ function Panel({
           {desc}
         </p>
 
-        <div
-          style={{
-            marginTop: 18,
-            color: "#e8c46b",
-            fontWeight: 900,
-          }}
-        >
+        <div style={{ marginTop: 18, color: "#e8c46b", fontWeight: 900 }}>
           Open →
         </div>
       </div>
@@ -241,13 +175,7 @@ function Panel({
   );
 }
 
-function Signal({
-  title,
-  text,
-}: {
-  title: string;
-  text: string;
-}) {
+function Signal({ title, text }: { title: string; text: string }) {
   return (
     <div
       style={{
@@ -259,35 +187,17 @@ function Signal({
         marginTop: 12,
       }}
     >
-      <div
-        style={{
-          color: "#e8c46b",
-          fontWeight: 900,
-          marginBottom: 8,
-        }}
-      >
+      <div style={{ color: "#e8c46b", fontWeight: 900, marginBottom: 8 }}>
         {title}
       </div>
-
-      <div
-        style={{
-          color: "rgba(255,255,255,.70)",
-          lineHeight: 1.5,
-        }}
-      >
+      <div style={{ color: "rgba(255,255,255,.70)", lineHeight: 1.5 }}>
         {text}
       </div>
     </div>
   );
 }
 
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div
       style={{
@@ -309,15 +219,7 @@ function StatCard({
       >
         {label}
       </div>
-
-      <div
-        style={{
-          fontSize: 42,
-          fontWeight: 950,
-        }}
-      >
-        {value}
-      </div>
+      <div style={{ fontSize: 42, fontWeight: 950 }}>{value}</div>
     </div>
   );
 }
@@ -333,7 +235,7 @@ const hero: React.CSSProperties = {
   boxShadow: "0 35px 120px rgba(0,0,0,.7)",
 };
 
-const grid: React.CSSProperties = {
+const gridBg: React.CSSProperties = {
   position: "absolute",
   inset: 0,
   opacity: .12,
