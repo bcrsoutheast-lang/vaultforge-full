@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -457,6 +458,11 @@ export default function AlertsPage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Smart Alerts"
+          subtitle="Exact routing intelligence and opportunity signals"
+        />
+
         <section style={hero}>
           <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Smart Alerts
