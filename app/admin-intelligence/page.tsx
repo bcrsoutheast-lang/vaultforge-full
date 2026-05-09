@@ -149,6 +149,16 @@ const WINDOWS: ControlWindow[] = [
     tone: "purple",
   },
   {
+    code: "INTRO RESP",
+    title: "Introduction Response Monitor",
+    purpose: "Shows how members respond to exact controlled introductions after they are staged.",
+    automatedJob: "No automatic follow-up yet. This is response intelligence only.",
+    adminJob: "Review interest, need-details, request-call, and pass responses before any manual outreach.",
+    risk: "Must remain read-only until controlled follow-up workflow is built.",
+    href: "/admin-introduction-responses",
+    tone: "green",
+  },
+  {
     code: "MEMBERS",
     title: "Member Intelligence Graph",
     purpose: "Tracks buyers, lenders, sellers, contractors, operators, developers, and deal sources.",
@@ -708,6 +718,7 @@ export default function AdminIntelligencePage() {
             <Link href="/admin-routing" style={btn}>Admin Routing</Link>
             <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
             <Link href="/admin-introductions" style={btn}>Admin Introductions</Link>
+            <Link href="/admin-introduction-responses" style={btn}>Intro Responses</Link>
             <Link href="/admin-dispatch-queue" style={btn}>Dispatch Queue</Link>
             <Link href="/intelligence" style={ghost}>Member Intelligence Map</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
