@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -401,6 +402,11 @@ export default function IntroductionsPage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Introductions"
+          subtitle="Controlled member introductions and response tracking"
+        />
+
         <section style={hero}>
           <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Introductions · {owner ? "Owner View" : "Member View"}
