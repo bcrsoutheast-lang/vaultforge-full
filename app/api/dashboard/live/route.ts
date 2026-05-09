@@ -5,22 +5,6 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type CountResult = {
-  table: string;
-  count: number;
-  ok: boolean;
-  error?: string;
-};
-
-type RecentItem = {
-  source: string;
-  title: string;
-  note: string;
-  priority: string;
-  created_at: string;
-  href: string;
-};
-
 type SupabaseAny = any;
 
 function clean(value: unknown) {
@@ -91,30 +75,22 @@ function isOwnerRequest(request: Request, email: string) {
   );
 }
 
-async function safeCount(
+async function countTable(
   supabase: SupabaseAny,
   table: string,
-  options?: {
-    owner?: boolean;
-    email?: string;
-    emailColumns?: string[];
-    priorityColumn?: string;
-    priorityValue?: string;
-  }
-): Promise<CountResult> {
+  email: string,
+  owner: boolean,
+  emailColumns: string[]
+) {
   try {
     let query = supabase.from(table).select("*", {
       count: "exact",
       head: true,
     });
 
-    if (options?.priorityColumn && options?.priorityValue) {
-      query = query.eq(options.priorityColumn, options.priorityValue);
-    }
-
-    if (!options?.owner && options?.email && options?.emailColumns?.length) {
-      const orFilter = options.emailColumns
-        .map((column) => `${column}.eq.${options.email}`)
+    if (!owner && email && emailColumns.length) {
+      const orFilter = emailColumns
+        .map((column) => `${column}.eq.${email}`)
         .join(",");
 
       query = query.or(orFilter);
@@ -122,51 +98,38 @@ async function safeCount(
 
     const { count, error } = await query;
 
-    if (error) {
-      return {
-        table,
-        count: 0,
-        ok: false,
-        error: error.message,
-      };
-    }
-
     return {
-      table,
+      ok: !error,
       count: count || 0,
-      ok: true,
+      error: error?.message || null,
     };
   } catch (error: any) {
     return {
-      table,
-      count: 0,
       ok: false,
+      count: 0,
       error: error?.message || "Count failed.",
     };
   }
 }
 
-async function safeRecent(
+async function recentTable(
   supabase: SupabaseAny,
   table: string,
   source: string,
-  options?: {
-    owner?: boolean;
-    email?: string;
-    emailColumns?: string[];
-    limit?: number;
-  }
-): Promise<RecentItem[]> {
+  email: string,
+  owner: boolean,
+  emailColumns: string[]
+) {
   try {
     let query = supabase
       .from(table)
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(options?.limit || 5);
+      .limit(6);
 
-    if (!options?.owner && options?.email && options?.emailColumns?.length) {
-      const orFilter = options.emailColumns
-        .map((column) => `${column}.eq.${options.email}`)
+    if (!owner && email && emailColumns.length) {
+      const orFilter = emailColumns
+        .map((column) => `${column}.eq.${email}`)
         .join(",");
 
       query = query.or(orFilter);
@@ -176,52 +139,39 @@ async function safeRecent(
 
     if (error || !Array.isArray(data)) return [];
 
-    return data.map((row: Record<string, any>) => {
-      const id = clean(row.id || row.signal_id || row.item_id || row.introduction_id);
-      const title = clean(
-        row.title ||
-          row.name ||
-          row.headline ||
-          row.signal_title ||
-          row.alert_title ||
-          `${source} activity`
-      );
-
-      const note = clean(
-        row.note ||
-          row.message ||
+    return data.map((row: Record<string, any>) => ({
+      source,
+      title:
+        clean(
+          row.title ||
+            row.event_title ||
+            row.signal_type ||
+            row.pain_type ||
+            row.name
+        ) || `${source} activity`,
+      note:
+        clean(
           row.description ||
-          row.summary ||
-          row.reason ||
-          row.ai_route_summary ||
-          "Live VaultForge activity recorded."
-      );
-
-      const priority = clean(row.priority || row.urgency || row.urgency_level || row.status || "normal");
-
-      let href = "/activity";
-
-      if (source === "routing" && clean(row.signal_id)) {
-        href = `/routing-room/${encodeURIComponent(clean(row.signal_id))}`;
-      } else if (source === "introduction" && id) {
-        href = `/introduction/${encodeURIComponent(id)}`;
-      } else if (source === "response" && clean(row.introduction_id)) {
-        href = `/introduction/${encodeURIComponent(clean(row.introduction_id))}`;
-      } else if (source === "pain" && id) {
-        href = `/pain-message/${encodeURIComponent(id)}`;
-      } else if ((source === "project" || source === "deal") && id) {
-        href = `/deal-room/${encodeURIComponent(id)}`;
-      }
-
-      return {
-        source,
-        title,
-        note,
-        priority,
-        created_at: clean(row.created_at || row.updated_at || ""),
-        href,
-      };
-    });
+            row.event_description ||
+            row.routing_reason ||
+            row.ai_explanation ||
+            row.ai_summary
+        ) || "Live VaultForge activity.",
+      priority:
+        clean(
+          row.priority ||
+            row.urgency_level ||
+            row.routing_status ||
+            row.status
+        ) || "normal",
+      created_at: clean(row.created_at || row.updated_at),
+      href:
+        source === "pain"
+          ? "/pain"
+          : source === "routing"
+          ? "/routing"
+          : "/activity",
+    }));
   } catch {
     return [];
   }
@@ -234,13 +184,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Supabase environment variables are missing.",
-        counts: {},
-        recent: [],
-        health: {
-          live_data_ready: false,
-          fake_data_allowed: false,
-        },
+        error: "Missing Supabase configuration.",
       },
       { status: 500 }
     );
@@ -249,73 +193,113 @@ export async function GET(request: Request) {
   const email = getRequestEmail(request);
   const owner = isOwnerRequest(request, email);
 
-  const routingEmailColumns = ["member_email", "target_email", "visible_to_email", "owner_email", "email"];
-  const introEmailColumns = [
-    "visible_to_email",
+  const painEmailColumns = [
     "member_email",
-    "recipient_email",
-    "intro_to_email",
-    "responding_member_email",
-    "counterparty_email",
+    "email",
+    "owner_email",
+    "created_by_email",
+  ];
+
+  const routingEmailColumns = [
+    "member_email",
+    "email",
     "owner_email",
   ];
-  const responseEmailColumns = ["member_email", "responding_member_email", "email", "visible_to_email"];
-  const projectEmailColumns = ["owner_email", "member_email", "email", "created_by_email"];
-  const painEmailColumns = ["member_email", "owner_email", "email", "created_by_email"];
-  const memberEmailColumns = ["email", "member_email"];
 
-  const [
-    routingCount,
-    urgentRoutingCount,
-    highRoutingCount,
-    introCount,
-    responseCount,
-    projectCount,
-    painCount,
-    memberCount,
-  ] = await Promise.all([
-    safeCount(supabase, "routing_actions", { owner, email, emailColumns: routingEmailColumns }),
-    safeCount(supabase, "routing_actions", {
-      owner,
-      email,
-      emailColumns: routingEmailColumns,
-      priorityColumn: "priority",
-      priorityValue: "urgent",
-    }),
-    safeCount(supabase, "routing_actions", {
-      owner,
-      email,
-      emailColumns: routingEmailColumns,
-      priorityColumn: "priority",
-      priorityValue: "high",
-    }),
-    safeCount(supabase, "routing_introductions", { owner, email, emailColumns: introEmailColumns }),
-    safeCount(supabase, "routing_introduction_responses", { owner, email, emailColumns: responseEmailColumns }),
-    safeCount(supabase, "projects", { owner, email, emailColumns: projectEmailColumns }),
-    safeCount(supabase, "vf_pain_submissions", { owner, email, emailColumns: painEmailColumns }),
-    safeCount(supabase, "vf_profiles", { owner, email, emailColumns: memberEmailColumns }),
-  ]);
-
-  const countResults = [
-    routingCount,
-    urgentRoutingCount,
-    highRoutingCount,
-    introCount,
-    responseCount,
-    projectCount,
-    painCount,
-    memberCount,
+  const activityEmailColumns = [
+    "member_email",
+    "email",
+    "owner_email",
   ];
 
-  const [routingRecent, introRecent, responseRecent, painRecent, projectRecent] = await Promise.all([
-    safeRecent(supabase, "routing_actions", "routing", { owner, email, emailColumns: routingEmailColumns }),
-    safeRecent(supabase, "routing_introductions", "introduction", { owner, email, emailColumns: introEmailColumns }),
-    safeRecent(supabase, "routing_introduction_responses", "response", { owner, email, emailColumns: responseEmailColumns }),
-    safeRecent(supabase, "vf_pain_submissions", "pain", { owner, email, emailColumns: painEmailColumns }),
-    safeRecent(supabase, "projects", "project", { owner, email, emailColumns: projectEmailColumns }),
+  const profileEmailColumns = [
+    "email",
+    "member_email",
+  ];
+
+  const projectEmailColumns = [
+    "member_email",
+    "email",
+    "owner_email",
+    "created_by_email",
+  ];
+
+  const [
+    painCount,
+    routingCount,
+    activityCount,
+    memberCount,
+    projectCount,
+  ] = await Promise.all([
+    countTable(
+      supabase,
+      "vf_pain_submissions",
+      email,
+      owner,
+      painEmailColumns
+    ),
+    countTable(
+      supabase,
+      "vf_routing_signals",
+      email,
+      owner,
+      routingEmailColumns
+    ),
+    countTable(
+      supabase,
+      "vf_activity_events",
+      email,
+      owner,
+      activityEmailColumns
+    ),
+    countTable(
+      supabase,
+      "vf_profiles",
+      email,
+      owner,
+      profileEmailColumns
+    ),
+    countTable(
+      supabase,
+      "projects",
+      email,
+      owner,
+      projectEmailColumns
+    ),
   ]);
 
-  const recent = [...routingRecent, ...introRecent, ...responseRecent, ...painRecent, ...projectRecent]
+  const [painRecent, routingRecent, activityRecent] = await Promise.all([
+    recentTable(
+      supabase,
+      "vf_pain_submissions",
+      "pain",
+      email,
+      owner,
+      painEmailColumns
+    ),
+    recentTable(
+      supabase,
+      "vf_routing_signals",
+      "routing",
+      email,
+      owner,
+      routingEmailColumns
+    ),
+    recentTable(
+      supabase,
+      "vf_activity_events",
+      "activity",
+      email,
+      owner,
+      activityEmailColumns
+    ),
+  ]);
+
+  const recent = [
+    ...painRecent,
+    ...routingRecent,
+    ...activityRecent,
+  ]
     .sort((a, b) => {
       const aTime = new Date(a.created_at || 0).getTime();
       const bTime = new Date(b.created_at || 0).getTime();
@@ -324,42 +308,28 @@ export async function GET(request: Request) {
     .slice(0, 12);
 
   const counts = {
-    routing_actions: routingCount.count,
-    urgent_routing: urgentRoutingCount.count,
-    high_routing: highRoutingCount.count,
-    introductions: introCount.count,
-    responses: responseCount.count,
-    projects: projectCount.count,
     pain_signals: painCount.count,
+    routing_actions: routingCount.count,
+    total_activity: activityCount.count,
     members: memberCount.count,
-    total_activity:
-      routingCount.count +
-      introCount.count +
-      responseCount.count +
-      painCount.count +
-      projectCount.count,
+    projects: projectCount.count,
+    introductions: 0,
+    responses: 0,
+    urgent_routing: 0,
+    high_routing: 0,
   };
 
   const ticker = recent.length
-    ? recent.map((item) => `${item.source.toUpperCase()}: ${item.title.slice(0, 80)}`)
+    ? recent.map(
+        (item) =>
+          `${String(item.source || "LIVE").toUpperCase()}: ${String(
+            item.title || "Activity"
+          ).slice(0, 80)}`
+      )
     : [
         "LIVE DATA CONNECTED — WAITING FOR MEMBER ACTIVITY",
         "NO FAKE DASHBOARD ACTIVITY ACTIVE",
-        "ROUTING ENGINE READY FOR REAL SIGNALS",
       ];
-
-  const health = {
-    live_data_ready: true,
-    fake_data_allowed: false,
-    tables_checked: countResults.length,
-    tables_ok: countResults.filter((item) => item.ok).length,
-    tables_missing_or_blocked: countResults
-      .filter((item) => !item.ok)
-      .map((item) => ({
-        table: item.table,
-        error: item.error,
-      })),
-  };
 
   return NextResponse.json({
     ok: true,
@@ -370,7 +340,22 @@ export async function GET(request: Request) {
     counts,
     recent,
     ticker,
-    health,
+    health: {
+      live_data_ready: true,
+      fake_data_allowed: false,
+      canonical_tables: [
+        "vf_pain_submissions",
+        "vf_routing_signals",
+        "vf_activity_events",
+      ],
+      tables_ok: [
+        painCount.ok,
+        routingCount.ok,
+        activityCount.ok,
+        memberCount.ok,
+        projectCount.ok,
+      ].filter(Boolean).length,
+    },
     generated_at: new Date().toISOString(),
   });
 }
