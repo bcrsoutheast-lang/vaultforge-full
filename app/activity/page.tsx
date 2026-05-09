@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -5,19 +6,7 @@ import Link from "next/link";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-type ActivityItem = {
-  id: string;
-  type: string;
-  title: string;
-  note?: string;
-  priority?: string;
-  created_at?: string;
-  signal_id?: string;
-  item_id?: string;
-  introduction_id?: string;
-  response?: string;
-  member_email?: string;
-};
+type AnyRow = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -28,7 +17,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto" };
+const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.34)",
@@ -40,14 +29,38 @@ const hero: React.CSSProperties = {
   boxShadow: "0 30px 90px rgba(0,0,0,.34)",
 };
 
-const feedCard: React.CSSProperties = {
+const card: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
   background:
     "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-  borderRadius: 24,
+  borderRadius: 28,
   padding: 22,
-  marginBottom: 18,
-  boxShadow: "0 26px 80px rgba(0,0,0,.30)",
+  boxShadow: "0 26px 80px rgba(0,0,0,.34)",
+};
+
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+  gap: 18,
+};
+
+const statGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
+  gap: 14,
+  marginBottom: 22,
+};
+
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.25)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 850,
+  fontSize: 13,
+  margin: "0 7px 7px 0",
 };
 
 const btn: React.CSSProperties = {
@@ -82,16 +95,21 @@ const ghost: React.CSSProperties = {
   minHeight: 46,
 };
 
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
+const danger: React.CSSProperties = {
+  ...ghost,
+  color: "#ffd0d0",
+  border: "1px solid rgba(255,120,120,.38)",
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.075)",
+  color: "white",
+  padding: 14,
+  fontSize: 15,
 };
 
 function clean(value: unknown) {
@@ -100,7 +118,6 @@ function clean(value: unknown) {
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
-
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -124,17 +141,11 @@ function getEmail() {
     readCookie("vf_email") ||
     readCookie("vf_admin_email") ||
     ""
-  )
-    .trim()
-    .toLowerCase();
+  ).trim().toLowerCase();
 }
 
 function isOwner(email: string) {
-  return (
-    email === OWNER_EMAIL ||
-    readCookie("vf_admin") === "1" ||
-    readCookie("isAdmin") === "true"
-  );
+  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
 async function safeJson(res: Response) {
@@ -146,71 +157,116 @@ async function safeJson(res: Response) {
 }
 
 function label(value: string) {
-  const text = clean(value || "activity").replace(/_/g, " ");
+  const text = clean(value || "item").replace(/_/g, " ");
   return text.slice(0, 1).toUpperCase() + text.slice(1);
 }
 
-function tone(type: string) {
-  const value = clean(type).toLowerCase();
-
-  if (value.includes("response")) return "#9df3bf";
-  if (value.includes("intro")) return "#f5d978";
-  if (value.includes("routing")) return "#d8b5ff";
-
-  return "#9df3bf";
-}
-
-function heatLabel(item: ActivityItem) {
-  const priority = clean(item.priority).toLowerCase();
-  const response = clean(item.response).toLowerCase();
-  const type = clean(item.type).toLowerCase();
-
-  if (
-    priority === "urgent" ||
-    response === "interested" ||
-    response === "request_call" ||
-    response === "request_intro"
-  ) {
-    return "Hot";
+function first(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value);
+    if (text) return text;
   }
-
-  if (
-    priority === "high" ||
-    response === "need_details" ||
-    type.includes("controlled_introduction")
-  ) {
-    return "Warm";
-  }
-
-  return "Normal";
-}
-
-function heatTone(labelValue: string) {
-  if (labelValue === "Hot") return "#ffb3b3";
-  if (labelValue === "Warm") return "#f5d978";
-  return "#9df3bf";
-}
-
-function eventDetailHref(item: ActivityItem) {
-  const id = String(item.id || "");
-  if (id.startsWith("routing-")) return `/activity/routing/${encodeURIComponent(id.replace("routing-", ""))}`;
-  if (id.startsWith("intro-")) return `/activity/introduction/${encodeURIComponent(id.replace("intro-", ""))}`;
-  if (id.startsWith("response-")) return `/activity/response/${encodeURIComponent(id.replace("response-", ""))}`;
   return "";
 }
 
-export default function ActivityStreamPage() {
+function exactSignalId(item: AnyRow) {
+  return first(item.signal_id, item.signalId, item.alert_id, item.alertId, item.id);
+}
+
+function exactItemId(item: AnyRow) {
+  return first(item.item_id, item.itemId, item.deal_id, item.dealId, item.project_id, item.projectId, item.property_id, item.propertyId, item.pain_id, item.painId);
+}
+
+function exactIntroId(item: AnyRow) {
+  return first(item.introduction_id, item.intro_id, item.introId, item.id);
+}
+
+function exactSignalHref(item: AnyRow) {
+  const signalId = exactSignalId(item);
+  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/intelligence";
+}
+
+function exactWorkHref(item: AnyRow) {
+  const itemId = exactItemId(item);
+  if (itemId) return `/deal-room/${encodeURIComponent(itemId)}`;
+  return exactSignalHref(item);
+}
+
+function exactRoutingHref(item: AnyRow) {
+  const signalId = exactSignalId(item);
+  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
+}
+
+function exactIntroHref(item: AnyRow) {
+  const introId = exactIntroId(item);
+  return introId ? `/introduction/${encodeURIComponent(introId)}` : "/introductions";
+}
+
+function exactActivityHref(item: AnyRow) {
+  const rawId = clean(item.raw_id || item.id).replace(/^routing-/, "").replace(/^intro-/, "").replace(/^response-/, "");
+  const type = clean(item.type || item.event_type || item.kind).toLowerCase();
+
+  if (!rawId) return "/activity";
+  if (type.includes("routing") || clean(item.id).startsWith("routing-")) return `/activity/routing/${encodeURIComponent(rawId)}`;
+  if (type.includes("response") || clean(item.id).startsWith("response-")) return `/activity/response/${encodeURIComponent(rawId)}`;
+  if (type.includes("intro") || clean(item.id).startsWith("intro-")) return `/activity/introduction/${encodeURIComponent(rawId)}`;
+  return "/activity";
+}
+
+function priorityOf(item: AnyRow) {
+  return first(item.priority, item.severity, item.alert_priority, item.urgency, "medium").toLowerCase();
+}
+
+function priorityTone(item: AnyRow) {
+  const priority = priorityOf(item);
+  if (priority === "urgent") return "#ffb3b3";
+  if (priority === "high") return "#f5d978";
+  return "#9df3bf";
+}
+
+function titleOf(item: AnyRow) {
+  return first(item.title, item.name, item.headline, item.signal_title, item.alert_title, "VaultForge Item");
+}
+
+function messageOf(item: AnyRow) {
+  return first(item.note, item.message, item.description, item.summary, item.reason, item.urgency_reason, "Exact operational context ready.");
+}
+
+function actionOf(item: AnyRow) {
+  return first(item.action, item.routing_action, item.response, item.status, item.type, "activity");
+}
+
+function scoreOf(item: AnyRow) {
+  const raw = Number(item.confidence_score || item.match_score || item.score || 0);
+  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
+  const priority = priorityOf(item);
+  if (priority === "urgent") return 84;
+  if (priority === "high") return 72;
+  return 58;
+}
+
+function StatCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
+  return (
+    <div style={card}>
+      <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
+      <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>{detail}</p>
+    </div>
+  );
+}
+
+export default function ActivityPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [feed, setFeed] = useState<ActivityItem[]>([]);
-  const [filter, setFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [heatFilter, setHeatFilter] = useState("all");
+  const [events, setEvents] = useState<AnyRow[]>([]);
+  const [status, setStatus] = useState("Loading activity stream...");
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
 
   async function load() {
-    setLoading(true);
+    setStatus("Loading activity stream...");
 
     try {
       const currentEmail = getEmail();
@@ -219,12 +275,17 @@ export default function ActivityStreamPage() {
       setEmail(currentEmail);
       setOwner(currentOwner);
 
+      if (!currentEmail) {
+        setStatus("Login email not found. Please log in again.");
+        return;
+      }
+
       const headers = {
         "x-vf-email": currentEmail,
         "x-vf-admin": currentOwner ? "1" : "0",
       };
 
-      const [routingRes, introRes, introResponseRes] = await Promise.all([
+      const [routingRes, introRes, responseRes] = await Promise.all([
         fetch(`/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
           cache: "no-store",
           headers,
@@ -241,64 +302,47 @@ export default function ActivityStreamPage() {
 
       const routingData = await safeJson(routingRes);
       const introData = await safeJson(introRes);
-      const responseData = await safeJson(introResponseRes);
+      const responseData = await safeJson(responseRes);
 
-      const routingItems = Array.isArray(routingData?.actions)
-        ? routingData.actions.map((item: any) => ({
-            id: `routing-${item.id || Math.random()}`,
+      const routing = Array.isArray(routingData?.actions)
+        ? routingData.actions.map((item: AnyRow) => ({
+            ...item,
+            id: `routing-${item.id}`,
+            raw_id: item.id,
             type: "routing_action",
-            title: item.title || "Routing action created",
-            note: item.note,
-            priority: item.priority,
-            created_at: item.created_at,
-            signal_id: item.signal_id,
-            item_id: item.item_id,
+            title: item.title || "Routing action",
           }))
         : [];
 
-      const introItems = Array.isArray(introData?.introductions)
-        ? introData.introductions.map((item: any) => ({
-            id: `intro-${item.id || Math.random()}`,
+      const introductions = Array.isArray(introData?.introductions)
+        ? introData.introductions.map((item: AnyRow) => ({
+            ...item,
+            id: `intro-${item.id}`,
+            raw_id: item.id,
             type: "controlled_introduction",
-            title: item.title || "Controlled introduction staged",
-            note: item.note,
-            priority: item.priority,
-            created_at: item.created_at,
-            signal_id: item.signal_id,
-            item_id: item.item_id,
+            title: item.title || "Controlled introduction",
             introduction_id: item.id,
           }))
         : [];
 
-      const responseItems = Array.isArray(responseData?.responses)
-        ? responseData.responses.map((item: any) => ({
-            id: `response-${item.id || Math.random()}`,
+      const responses = Array.isArray(responseData?.responses)
+        ? responseData.responses.map((item: AnyRow) => ({
+            ...item,
+            id: `response-${item.id}`,
+            raw_id: item.id,
             type: `introduction_response_${item.response || "activity"}`,
-            title: item.title || "Introduction response received",
-            note: item.note,
-            priority: item.priority,
-            created_at: item.created_at,
-            signal_id: item.signal_id,
-            item_id: item.item_id,
-            introduction_id: item.introduction_id,
-            response: item.response,
-            member_email: item.member_email,
+            title: item.title || "Introduction response",
           }))
         : [];
 
-      const merged = [...routingItems, ...introItems, ...responseItems]
-        .sort((a, b) => {
-          const aTime = new Date(a.created_at || 0).getTime();
-          const bTime = new Date(b.created_at || 0).getTime();
-          return bTime - aTime;
-        })
-        .slice(0, 120);
+      const merged = [...routing, ...introductions, ...responses].sort((a, b) => {
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      });
 
-      setFeed(merged);
-    } catch {
-      setFeed([]);
-    } finally {
-      setLoading(false);
+      setEvents(merged);
+      setStatus(merged.length ? "" : "No activity events yet.");
+    } catch (error: any) {
+      setStatus(error?.message || "Could not load activity stream.");
     }
   }
 
@@ -306,378 +350,40 @@ export default function ActivityStreamPage() {
     load();
   }, []);
 
-  const metrics = useMemo(() => {
-    return {
-      total: feed.length,
-      routing: feed.filter((item) => item.type.includes("routing")).length,
-      intros: feed.filter((item) => item.type.includes("introduction") && !item.type.includes("response")).length,
-      responses: feed.filter((item) => item.type.includes("response")).length,
-      urgent: feed.filter((item) => clean(item.priority).toLowerCase() === "urgent").length,
-      high: feed.filter((item) => clean(item.priority).toLowerCase() === "high").length,
-      medium: feed.filter((item) => clean(item.priority).toLowerCase() === "medium").length,
-      hot: feed.filter((item) => heatLabel(item) === "Hot").length,
-      warm: feed.filter((item) => heatLabel(item) === "Warm").length,
-      normal: feed.filter((item) => heatLabel(item) === "Normal").length,
-    };
-  }, [feed]);
-
-  const filteredFeed = useMemo(() => {
-    let list = feed;
-
-    if (filter === "routing") {
-      list = list.filter((item) => item.type.includes("routing"));
-    }
-
-    if (filter === "introductions") {
-      list = list.filter((item) => item.type.includes("introduction") && !item.type.includes("response"));
-    }
-
-    if (filter === "responses") {
-      list = list.filter((item) => item.type.includes("response"));
-    }
-
-    if (priorityFilter !== "all") {
-      list = list.filter((item) => clean(item.priority).toLowerCase() === priorityFilter);
-    }
-
-    if (heatFilter !== "all") {
-      list = list.filter((item) => heatLabel(item).toLowerCase() === heatFilter);
-    }
-
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    if (q) {
-      list = list.filter((item) => {
-        const searchable = [
-          item.type,
-          item.title,
-          item.note,
-          item.priority,
-          item.created_at,
-          item.signal_id,
-          item.item_id,
-          item.introduction_id,
-          item.response,
-          item.member_email,
-        ]
-          .map((value) => String(value || "").toLowerCase())
-          .join(" ");
-
-        return searchable.includes(q);
-      });
-    }
-
-    return list;
-  }, [feed, filter, priorityFilter, heatFilter, search]);
-
-  const latestRouting = useMemo(() => {
-    return feed.find((item) => item.type.includes("routing")) || null;
-  }, [feed]);
-
-  const latestIntro = useMemo(() => {
-    return feed.find((item) => item.type.includes("introduction") && !item.type.includes("response")) || null;
-  }, [feed]);
-
-  const latestResponse = useMemo(() => {
-    return feed.find((item) => item.type.includes("response")) || null;
-  }, [feed]);
-
-  function TapeCard({
-    labelText,
-    item,
-    emptyText,
-  }: {
-    labelText: string;
-    item: ActivityItem | null;
-    emptyText: string;
-  }) {
-    const itemTone = tone(item?.type || "");
-
-    return (
-      <div
-        style={{
-          border: `1px solid ${item ? `${itemTone}66` : "rgba(255,255,255,.12)"}`,
-          background: "rgba(255,255,255,.055)",
-          borderRadius: 22,
-          padding: 18,
-        }}
-      >
-        <div
-          style={{
-            color: item ? itemTone : "#9df3bf",
-            letterSpacing: 4,
-            fontWeight: 900,
-            fontSize: 11,
-            marginBottom: 10,
-            textTransform: "uppercase",
-          }}
-        >
-          {labelText}
-        </div>
-
-        <strong style={{ fontSize: 20, lineHeight: 1.1 }}>
-          {item?.title || emptyText}
-        </strong>
-
-        <p
-          style={{
-            color: "rgba(255,255,255,.66)",
-            lineHeight: 1.45,
-            marginBottom: 0,
-          }}
-        >
-          {item?.note || "No recent event recorded."}
-        </p>
-
-        <div style={{ marginTop: 10 }}>
-          {item && (
-            <span
-              style={{
-                ...chip,
-                color: heatTone(heatLabel(item)),
-                border: `1px solid ${heatTone(heatLabel(item))}66`,
-                background: "rgba(255,255,255,.055)",
-              }}
-            >
-              {heatLabel(item)}
-            </span>
-          )}
-          {item?.priority && <span style={chip}>{item.priority}</span>}
-          {item?.created_at && <span style={chip}>{item.created_at}</span>}
-        </div>
-      </div>
-    );
-  }
-
-
-  const groupedFeed = useMemo(() => {
-    const now = Date.now();
-
-    const groups = {
-      justNow: [] as ActivityItem[],
-      today: [] as ActivityItem[],
-      earlier: [] as ActivityItem[],
-    };
-
-    for (const item of filteredFeed) {
-      const created = new Date(item.created_at || 0).getTime();
-
-      if (!created || Number.isNaN(created)) {
-        groups.earlier.push(item);
-        continue;
+    return events.filter((item) => {
+      if (typeFilter !== "all") {
+        const type = clean(item.type).toLowerCase();
+        if (typeFilter === "routing" && !type.includes("routing")) return false;
+        if (typeFilter === "introduction" && (!type.includes("intro") || type.includes("response"))) return false;
+        if (typeFilter === "response" && !type.includes("response")) return false;
       }
 
-      const diff = now - created;
-      const oneHour = 1000 * 60 * 60;
-      const oneDay = oneHour * 24;
+      if (!q) return true;
 
-      if (diff <= oneHour) {
-        groups.justNow.push(item);
-      } else if (diff <= oneDay) {
-        groups.today.push(item);
-      } else {
-        groups.earlier.push(item);
-      }
-    }
+      return [
+        titleOf(item),
+        messageOf(item),
+        actionOf(item),
+        item.type,
+        item.member_email,
+        item.target_email,
+        exactSignalId(item),
+        exactItemId(item),
+        exactIntroId(item),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [events, search, typeFilter]);
 
-    return groups;
-  }, [filteredFeed]);
-
-  function FeedSection({
-    title,
-    items,
-  }: {
-    title: string;
-    items: ActivityItem[];
-  }) {
-    if (items.length === 0) return null;
-
-    return (
-      <section style={{ marginBottom: 26 }}>
-        <div
-          style={{
-            color:"#9df3bf",
-            letterSpacing:5,
-            fontWeight:950,
-            fontSize:12,
-            marginBottom:14,
-            textTransform:"uppercase"
-          }}
-        >
-          {title}
-        </div>
-
-        {items.map((item) => {
-          const itemTone = tone(item.type);
-          const heat = heatLabel(item);
-          const heatColor = heatTone(heat);
-
-          return (
-            <article
-              key={item.id}
-              style={{
-                ...feedCard,
-                borderColor:
-                  clean(item.priority).toLowerCase() === "urgent"
-                    ? "rgba(255,120,120,.72)"
-                    : clean(item.priority).toLowerCase() === "high"
-                    ? "rgba(245,217,120,.72)"
-                    : `${itemTone}66`,
-              }}
-            >
-              <div style={{
-                color:itemTone,
-                letterSpacing:4,
-                fontWeight:900,
-                fontSize:12,
-                marginBottom:10,
-                textTransform:"uppercase"
-              }}>
-                {label(item.type)}
-              </div>
-
-              <h2 style={{
-                fontSize:32,
-                lineHeight:1.05,
-                margin:"0 0 12px"
-              }}>
-                {item.title}
-              </h2>
-
-              <p style={{
-                color:"rgba(255,255,255,.72)",
-                lineHeight:1.6,
-                fontSize:18
-              }}>
-                {item.note || "Operational activity recorded in the VaultForge intelligence layer."}
-              </p>
-
-              <div style={{ margin:"12px 0" }}>
-                <span
-                  style={{
-                    ...chip,
-                    color: heatColor,
-                    border: `1px solid ${heatColor}66`,
-                    background: "rgba(255,255,255,.055)",
-                  }}
-                >
-                  {heat}
-                </span>
-
-                {item.priority && (
-                  <span style={chip}>{item.priority}</span>
-                )}
-
-                {item.response && (
-                  <span style={chip}>{label(item.response)}</span>
-                )}
-
-                {item.member_email && (
-                  <span style={chip}>{item.member_email}</span>
-                )}
-
-                {item.created_at && (
-                  <span style={chip}>{item.created_at}</span>
-                )}
-              </div>
-
-              <div>
-                {eventDetailHref(item) && (
-                  <Link
-                    href={eventDetailHref(item)}
-                    style={btn}
-                  >
-                    Open Event
-                  </Link>
-                )}
-
-                {item.introduction_id && (
-                  <Link
-                    href={`/introduction/${encodeURIComponent(item.introduction_id)}`}
-                    style={ghost}
-                  >
-                    Open Introduction
-                  </Link>
-                )}
-
-                {item.signal_id && (
-                  <Link
-                    href={`/routing-room/${encodeURIComponent(item.signal_id)}`}
-                    style={ghost}
-                  >
-                    Routing Room
-                  </Link>
-                )}
-
-                {item.item_id && (
-                  <Link
-                    href={`/deal-room/${encodeURIComponent(item.item_id)}`}
-                    style={ghost}
-                  >
-                    Deal Room
-                  </Link>
-                )}
-              </div>
-            </article>
-          );
-        })}
-      </section>
-    );
-  }
-
-
-  function MetricCard({
-    title,
-    value,
-    detail,
-    emphasis,
-  }: {
-    title: string;
-    value: number | string;
-    detail: string;
-    emphasis?: "urgent" | "high" | "normal";
-  }) {
-    const border =
-      emphasis === "urgent"
-        ? "rgba(255,120,120,.72)"
-        : emphasis === "high"
-        ? "rgba(245,217,120,.72)"
-        : "rgba(157,243,191,.34)";
-
-    return (
-      <div
-        style={{
-          border: `1px solid ${border}`,
-          background:
-            "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-          borderRadius: 24,
-          padding: 20,
-          boxShadow: "0 22px 70px rgba(0,0,0,.28)",
-        }}
-      >
-        <div
-          style={{
-            color: emphasis === "urgent" ? "#ffb3b3" : emphasis === "high" ? "#f5d978" : "#9df3bf",
-            letterSpacing: 4,
-            fontWeight: 900,
-            fontSize: 11,
-            marginBottom: 10,
-            textTransform: "uppercase",
-          }}
-        >
-          {title}
-        </div>
-
-        <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>
-          {value}
-        </div>
-
-        <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>
-          {detail}
-        </p>
-      </div>
-    );
-  }
+  const routingCount = events.filter((item) => clean(item.type).includes("routing")).length;
+  const introCount = events.filter((item) => clean(item.type).includes("intro") && !clean(item.type).includes("response")).length;
+  const responseCount = events.filter((item) => clean(item.type).includes("response")).length;
+  const urgent = events.filter((item) => priorityOf(item) === "urgent").length;
 
   return (
     <main style={page}>
@@ -686,314 +392,149 @@ export default function ActivityStreamPage() {
         button:hover {
           transform: translateY(-1px);
           transition: all .18s ease;
-          filter: brightness(1.05);
+          filter: brightness(1.06);
+        }
+
+        @media (max-width: 760px) {
+          .vf-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
         }
       `}</style>
 
       <div style={wrap}>
         <section style={hero}>
-          <div style={{
-            color:"#9df3bf",
-            letterSpacing:5,
-            fontWeight:950,
-            fontSize:12,
-            marginBottom:12,
-            textTransform:"uppercase"
-          }}>
-            VaultForge Global Activity Stream
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            VaultForge Activity Stream
           </div>
 
-          <h1 style={{
-            fontSize:"clamp(58px,12vw,108px)",
-            lineHeight:.86,
-            margin:"0 0 18px"
-          }}>
-            Live operational feed.
+          <h1 style={{ fontSize: "clamp(56px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
+            Exact activity.
           </h1>
 
-          <p style={{
-            color:"rgba(255,255,255,.72)",
-            fontSize:22,
-            lineHeight:1.5
-          }}>
-            Unified intelligence stream across routing, introductions, and member responses.
-            This is the beginning of the Bloomberg-style operational terminal layer.
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.55 }}>
+            Activity cards now open exact events, exact signals, exact introductions, and exact work areas.
           </p>
 
           <div>
-            <span style={chip}>Feed Events: {metrics.total}</span>
-            <span style={chip}>Routing: {metrics.routing}</span>
-            <span style={chip}>Introductions: {metrics.intros}</span>
-            <span style={chip}>Responses: {metrics.responses}</span>
-            <span style={chip}>Urgent: {metrics.urgent}</span>
-            <span style={chip}>High: {metrics.high}</span>
-            <span style={chip}>Medium: {metrics.medium}</span>
+            <span style={chip}>Events: {events.length}</span>
+            <span style={chip}>Routing: {routingCount}</span>
+            <span style={chip}>Introductions: {introCount}</span>
+            <span style={chip}>Responses: {responseCount}</span>
+            <span style={chip}>Urgent: {urgent}</span>
             <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
-          <div style={{ marginTop: 14 }}>
-            <button type="button" style={btn} onClick={load}>
-              Refresh Feed
-            </button>
-
-            <Link href="/dashboard" style={ghost}>Dashboard</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
+          <div className="vf-actions" style={{ marginTop: 14 }}>
+            <button type="button" style={btn} onClick={load}>Refresh Activity</button>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
+            <Link href="/intelligence" style={ghost}>Intelligence</Link>
             <Link href="/introductions" style={ghost}>Introductions</Link>
-
-            {owner && (
-              <Link href="/admin-intelligence" style={btn}>
-                Owner Intelligence
-              </Link>
-            )}
-
-            {owner && (
-              <Link href="/admin-routing-confidence" style={btn}>
-                Routing Confidence
-              </Link>
-            )}
-          </div>
-        </section>
-
-        <section style={hero}>
-          <div style={{
-            color:"#9df3bf",
-            letterSpacing:5,
-            fontWeight:950,
-            fontSize:12,
-            marginBottom:12,
-            textTransform:"uppercase"
-          }}>
-            Market Tape
+            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
+            {owner && <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>}
+            <Link href="/logout" style={danger}>Logout</Link>
           </div>
 
-          <h2 style={{
-            fontSize:42,
-            lineHeight:1,
-            margin:"0 0 14px"
-          }}>
-            Latest platform movement.
-          </h2>
-
-          <p style={{
-            color:"rgba(255,255,255,.72)",
-            fontSize:18,
-            lineHeight:1.55
-          }}>
-            Fast snapshot of the newest routing, introduction, and member-response events.
-          </p>
-
-          <div style={{
-            display:"grid",
-            gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",
-            gap:14
-          }}>
-            <TapeCard labelText="Latest Routing" item={latestRouting} emptyText="No routing activity yet" />
-            <TapeCard labelText="Latest Introduction" item={latestIntro} emptyText="No introductions yet" />
-            <TapeCard labelText="Latest Response" item={latestResponse} emptyText="No member responses yet" />
-          </div>
-        </section>
-
-        <section style={hero}>
-          <div style={{
-            color:"#9df3bf",
-            letterSpacing:5,
-            fontWeight:950,
-            fontSize:12,
-            marginBottom:12,
-            textTransform:"uppercase"
-          }}>
-            Command Metrics
-          </div>
-
-          <h2 style={{
-            fontSize:42,
-            lineHeight:1,
-            margin:"0 0 14px"
-          }}>
-            Platform pressure board.
-          </h2>
-
-          <p style={{
-            color:"rgba(255,255,255,.72)",
-            fontSize:18,
-            lineHeight:1.55
-          }}>
-            Read-only operational pressure snapshot across the current feed.
-          </p>
-
-          <div style={{
-            display:"grid",
-            gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",
-            gap:14
-          }}>
-            <MetricCard
-              title="Urgent Pressure"
-              value={metrics.urgent}
-              detail="Urgent events in the current activity window."
-              emphasis={metrics.urgent > 0 ? "urgent" : "normal"}
-            />
-            <MetricCard
-              title="High Priority"
-              value={metrics.high}
-              detail="High-priority opportunities and workflow events."
-              emphasis={metrics.high > 0 ? "high" : "normal"}
-            />
-            <MetricCard
-              title="Routing Volume"
-              value={metrics.routing}
-              detail="Routing actions captured in the operating stream."
-            />
-            <MetricCard
-              title="Intro Volume"
-              value={metrics.intros}
-              detail="Controlled introductions staged or visible."
-            />
-            <MetricCard
-              title="Response Volume"
-              value={metrics.responses}
-              detail="Member responses captured from intro/routing flow."
-            />
-            <MetricCard
-              title="Hot Events"
-              value={metrics.hot}
-              detail="Urgent, interested, call, or intro-request events."
-              emphasis={metrics.hot > 0 ? "urgent" : "normal"}
-            />
-            <MetricCard
-              title="Warm Events"
-              value={metrics.warm}
-              detail="High-priority, detail-needed, or intro-stage events."
-              emphasis={metrics.warm > 0 ? "high" : "normal"}
-            />
-          </div>
-        </section>
-
-        <section style={hero}>
-          <div style={{
-            color:"#9df3bf",
-            letterSpacing:5,
-            fontWeight:950,
-            fontSize:12,
-            marginBottom:12,
-            textTransform:"uppercase"
-          }}>
-            Terminal Filters
-          </div>
-
-          <button type="button" style={filter === "all" ? btn : ghost} onClick={() => setFilter("all")}>
-            All Activity
-          </button>
-          <button type="button" style={filter === "routing" ? btn : ghost} onClick={() => setFilter("routing")}>
-            Routing
-          </button>
-          <button type="button" style={filter === "introductions" ? btn : ghost} onClick={() => setFilter("introductions")}>
-            Introductions
-          </button>
-          <button type="button" style={filter === "responses" ? btn : ghost} onClick={() => setFilter("responses")}>
-            Responses
-          </button>
-
-          <div style={{ marginTop: 18 }}>
-            <button type="button" style={priorityFilter === "all" ? btn : ghost} onClick={() => setPriorityFilter("all")}>
-              All Priorities
-            </button>
-            <button type="button" style={priorityFilter === "urgent" ? btn : ghost} onClick={() => setPriorityFilter("urgent")}>
-              Urgent
-            </button>
-            <button type="button" style={priorityFilter === "high" ? btn : ghost} onClick={() => setPriorityFilter("high")}>
-              High
-            </button>
-            <button type="button" style={priorityFilter === "medium" ? btn : ghost} onClick={() => setPriorityFilter("medium")}>
-              Medium
-            </button>
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <button type="button" style={heatFilter === "all" ? btn : ghost} onClick={() => setHeatFilter("all")}>
-              All Heat
-            </button>
-            <button type="button" style={heatFilter === "hot" ? btn : ghost} onClick={() => setHeatFilter("hot")}>
-              Hot
-            </button>
-            <button type="button" style={heatFilter === "warm" ? btn : ghost} onClick={() => setHeatFilter("warm")}>
-              Warm
-            </button>
-            <button type="button" style={heatFilter === "normal" ? btn : ghost} onClick={() => setHeatFilter("normal")}>
-              Normal
-            </button>
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search activity by title, note, member email, type, priority, or ID..."
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                borderRadius: 20,
-                border: "1px solid rgba(255,255,255,.18)",
-                background: "rgba(255,255,255,.075)",
-                color: "white",
-                padding: 16,
-                fontSize: 16,
-                outline: "none",
-              }}
-            />
-          </div>
-
-          <p style={{
-            color:"rgba(255,255,255,.72)",
-            lineHeight:1.6,
-            marginBottom:0
-          }}>
-            Showing {filteredFeed.length} of {feed.length} events. Type filter: {label(filter)}. Priority filter: {label(priorityFilter)}. Heat filter: {label(heatFilter)}. Search: {search.trim() || "None"}.
-          </p>
-
-          {search.trim() && (
-            <button type="button" style={ghost} onClick={() => setSearch("")}>
-              Clear Search
-            </button>
+          {status && (
+            <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+              {status}
+            </p>
           )}
         </section>
 
-        {loading ? (
+        <section style={statGrid}>
+          <StatCard title="Events" value={events.length} detail="Total activity records visible." />
+          <StatCard title="Routing" value={routingCount} detail="Routing action events." />
+          <StatCard title="Intros" value={introCount} detail="Controlled introduction events." />
+          <StatCard title="Responses" value={responseCount} detail="Member response events." />
+          <StatCard title="Urgent" value={urgent} detail="Urgent operational pressure." />
+        </section>
+
+        <section style={hero}>
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Filters
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+            <input
+              style={input}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search activity, member email, signal id, item id..."
+            />
+            <select
+              style={input}
+              value={typeFilter}
+              onChange={(event) => setTypeFilter(event.target.value)}
+            >
+              <option value="all" style={{ color: "#111" }}>All Activity</option>
+              <option value="routing" style={{ color: "#111" }}>Routing</option>
+              <option value="introduction" style={{ color: "#111" }}>Introductions</option>
+              <option value="response" style={{ color: "#111" }}>Responses</option>
+            </select>
+          </div>
+        </section>
+
+        {filtered.length === 0 ? (
           <section style={hero}>
-            Loading activity stream...
-          </section>
-        ) : filteredFeed.length === 0 ? (
-          <section style={hero}>
-            No activity available yet.
+            <strong>No exact activity cards yet.</strong>
+            <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55 }}>
+              Activity will populate after routing actions, introductions, and member responses exist.
+            </p>
           </section>
         ) : (
-          <section>
-            <FeedSection title="Just Now" items={groupedFeed.justNow} />
-            <FeedSection title="Today" items={groupedFeed.today} />
-            <FeedSection title="Earlier" items={groupedFeed.earlier} />
+          <section style={grid}>
+            {filtered.map((item, index) => {
+              const tone = priorityTone(item);
+              return (
+                <article key={item.id || index} style={{ ...card, borderColor: `${tone}66` }}>
+                  <div style={{ color: tone, letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+                    {label(actionOf(item))}
+                  </div>
+
+                  <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>
+                    {titleOf(item)}
+                  </h2>
+
+                  <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55, fontSize: 18 }}>
+                    {messageOf(item)}
+                  </p>
+
+                  <div style={{ margin: "12px 0" }}>
+                    <span style={chip}>Score: {scoreOf(item)}</span>
+                    {item.member_email && <span style={chip}>{item.member_email}</span>}
+                    {exactSignalId(item) && <span style={chip}>Signal: {exactSignalId(item)}</span>}
+                    {exactItemId(item) && <span style={chip}>Item: {exactItemId(item)}</span>}
+                    {exactIntroId(item) && <span style={chip}>Intro: {exactIntroId(item)}</span>}
+                  </div>
+
+                  <div className="vf-actions">
+                    <Link href={exactActivityHref(item)} style={btn}>Open Exact Event</Link>
+                    {exactIntroId(item) && <Link href={exactIntroHref(item)} style={ghost}>Introduction</Link>}
+                    {exactSignalId(item) && <Link href={exactSignalHref(item)} style={ghost}>Signal</Link>}
+                    {exactSignalId(item) && <Link href={exactRoutingHref(item)} style={ghost}>Routing Room</Link>}
+                    {exactItemId(item) && <Link href={exactWorkHref(item)} style={ghost}>Work Area</Link>}
+                  </div>
+                </article>
+              );
+            })}
           </section>
         )}
 
         <section style={{ ...hero, marginTop: 22 }}>
-          <div style={{
-            color:"#9df3bf",
-            letterSpacing:5,
-            fontWeight:950,
-            fontSize:12,
-            marginBottom:12,
-            textTransform:"uppercase"
-          }}>
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             Current Safety Mode
           </div>
-
-          <p style={{
-            color:"rgba(255,255,255,.72)",
-            fontSize:19,
-            lineHeight:1.6
-          }}>
-            This stream is read-only. It does not send notifications, create automations,
-            mutate deals, or trigger autonomous AI behavior.
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.6 }}>
+            This page fixes exact activity navigation only. It does not create routes, send notifications, or mutate records.
           </p>
         </section>
       </div>
