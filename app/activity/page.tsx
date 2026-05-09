@@ -747,6 +747,12 @@ export default function ActivityStreamPage() {
                 Owner Intelligence
               </Link>
             )}
+
+            {owner && (
+              <Link href="/admin-routing-confidence" style={btn}>
+                Routing Confidence
+              </Link>
+            )}
           </div>
         </section>
 
