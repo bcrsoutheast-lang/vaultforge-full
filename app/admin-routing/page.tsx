@@ -342,6 +342,7 @@ export default function AdminRoutingPage() {
             <button type="button" style={btn} onClick={load}>Refresh Actions</button>
             <Link href="/admin-intelligence" style={btn}>Owner Intelligence</Link>
             <Link href="/activity" style={btn}>Activity Stream</Link>
+            <Link href="/admin-routing-confidence" style={btn}>Routing Confidence</Link>
             <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
             <Link href="/alerts" style={ghost}>Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
