@@ -360,8 +360,14 @@ export default function MemberIntroductionsPage() {
                   </div>
 
                   <div className="vf-intro-actions">
+                    {item.id && (
+                      <Link href={`/introduction/${encodeURIComponent(item.id)}`} style={btn}>
+                        Open Introduction
+                      </Link>
+                    )}
+
                     {item.signal_id && (
-                      <Link href={`/routing-room/${encodeURIComponent(item.signal_id)}`} style={btn}>
+                      <Link href={`/routing-room/${encodeURIComponent(item.signal_id)}`} style={ghost}>
                         Routing Room
                       </Link>
                     )}
