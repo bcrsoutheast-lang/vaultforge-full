@@ -413,6 +413,7 @@ export default function AdminRoutingResponsesPage() {
           <div className="vf-admin-response-actions">
             <button type="button" style={btn} onClick={load}>Refresh Responses</button>
             <Link href="/admin-routing" style={btn}>Admin Routing</Link>
+            <Link href="/activity" style={btn}>Activity Stream</Link>
             <Link href="/admin-introductions" style={btn}>Admin Introductions</Link>
             <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
