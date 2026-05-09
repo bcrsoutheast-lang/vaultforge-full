@@ -1,5 +1,7 @@
+
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 import {
@@ -9,7 +11,182 @@ import {
   VaultForgeLiveTicker,
 } from "../components/VaultForgeVisualLayer";
 
+type LiveCounts = {
+  routing_actions?: number;
+  urgent_routing?: number;
+  high_routing?: number;
+  introductions?: number;
+  responses?: number;
+  projects?: number;
+  pain_signals?: number;
+  members?: number;
+  total_activity?: number;
+};
+
+type RecentItem = {
+  source?: string;
+  title?: string;
+  note?: string;
+  priority?: string;
+  created_at?: string;
+  href?: string;
+};
+
+type LivePayload = {
+  ok?: boolean;
+  counts?: LiveCounts;
+  recent?: RecentItem[];
+  ticker?: string[];
+  health?: {
+    live_data_ready?: boolean;
+    fake_data_allowed?: boolean;
+    tables_checked?: number;
+    tables_ok?: number;
+    tables_missing_or_blocked?: unknown[];
+  };
+  generated_at?: string;
+  error?: string;
+};
+
+const EMPTY_COUNTS: LiveCounts = {
+  routing_actions: 0,
+  urgent_routing: 0,
+  high_routing: 0,
+  introductions: 0,
+  responses: 0,
+  projects: 0,
+  pain_signals: 0,
+  members: 0,
+  total_activity: 0,
+};
+
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
+
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
+function getEmail() {
+  if (typeof window === "undefined") return "";
+
+  return (
+    localStorage.getItem("vf_email") ||
+    sessionStorage.getItem("vf_email") ||
+    readCookie("vf_email") ||
+    readCookie("vf_admin_email") ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function shortSource(value: unknown) {
+  const text = clean(value || "activity").toUpperCase();
+  if (text === "INTRODUCTION") return "INTRO";
+  return text;
+}
+
+function formatDate(value: unknown) {
+  const text = clean(value);
+  if (!text) return "Live";
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleString();
+}
+
 export default function DashboardPage() {
+  const [live, setLive] = useState<LivePayload | null>(null);
+  const [status, setStatus] = useState("Loading live dashboard...");
+  const [loading, setLoading] = useState(true);
+
+  async function loadLiveDashboard() {
+    setLoading(true);
+    setStatus("Loading live dashboard...");
+
+    try {
+      const email = getEmail();
+
+      const response = await fetch(`/api/dashboard/live?email=${encodeURIComponent(email)}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": email,
+        },
+      });
+
+      const data = (await response.json().catch(() => ({}))) as LivePayload;
+
+      if (!response.ok || data?.ok === false) {
+        throw new Error(data?.error || "Could not load live dashboard.");
+      }
+
+      setLive(data);
+      setStatus("");
+    } catch (error: any) {
+      setLive(null);
+      setStatus(error?.message || "Could not load live dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadLiveDashboard();
+  }, []);
+
+  const counts = live?.counts || EMPTY_COUNTS;
+  const recent = Array.isArray(live?.recent) ? live.recent : [];
+  const ticker = Array.isArray(live?.ticker) && live.ticker.length
+    ? live.ticker
+    : ["LIVE DATA CONNECTED — WAITING FOR MEMBER ACTIVITY"];
+
+  const urgent = Number(counts.urgent_routing || 0);
+  const high = Number(counts.high_routing || 0);
+  const totalActivity = Number(counts.total_activity || 0);
+  const normal = Math.max(0, totalActivity - urgent - high);
+
+  const pulseItems = useMemo(
+    () => [
+      {
+        label: "LIVE DATA",
+        value: live?.health?.live_data_ready ? "CONNECTED" : loading ? "LOADING" : "CHECK",
+        tone: live?.health?.live_data_ready ? ("green" as const) : ("gold" as const),
+      },
+      {
+        label: "ACTIVITY",
+        value: String(totalActivity),
+        tone: "gold" as const,
+      },
+      {
+        label: "ROUTING",
+        value: String(counts.routing_actions || 0),
+        tone: "purple" as const,
+      },
+      {
+        label: "FAKE DATA",
+        value: live?.health?.fake_data_allowed === false ? "OFF" : "CHECK",
+        tone: live?.health?.fake_data_allowed === false ? ("green" as const) : ("red" as const),
+      },
+    ],
+    [counts.routing_actions, live?.health?.fake_data_allowed, live?.health?.live_data_ready, loading, totalActivity]
+  );
+
+  const recentPulse = recent.slice(0, 4);
+
   return (
     <main
       style={{
@@ -27,24 +204,21 @@ export default function DashboardPage() {
           subtitle="Private real estate intelligence network"
         />
 
-        <VaultForgePulseStrip />
+        <VaultForgePulseStrip items={pulseItems} />
 
-        <VaultForgeLiveTicker
-          items={[
-            "ATLANTA DISTRESS ROUTE ACTIVE",
-            "BUYER MATCH DETECTED",
-            "LENDER RESPONSE TRACKED",
-            "OFF-MARKET SIGNAL PRESSURE RISING",
-            "CONTROLLED INTRODUCTION ACCEPTED",
-            "OPERATOR NETWORK MOVEMENT ACTIVE",
-          ]}
-        />
+        <VaultForgeLiveTicker items={ticker} />
 
         <VaultForgeSignalBar
-          urgent={7}
-          high={14}
-          normal={8}
+          urgent={urgent}
+          high={high}
+          normal={normal}
         />
+
+        {status && (
+          <section style={notice}>
+            <strong>{status}</strong>
+          </section>
+        )}
 
         <section style={hero}>
           <div style={gridBg}></div>
@@ -83,9 +257,9 @@ export default function DashboardPage() {
                   maxWidth: 760,
                 }}
               >
-                Your command center tracks active opportunities, strategic introductions,
-                routing activity, intelligence pressure, and network movement across
-                the VaultForge ecosystem.
+                Your command center is now pulling live VaultForge operational data:
+                routing actions, introductions, responses, projects, pain signals,
+                members, and recent activity.
               </p>
 
               <div
@@ -96,10 +270,10 @@ export default function DashboardPage() {
                   marginTop: 26,
                 }}
               >
-                <StatCard label="ACTIVE SIGNALS" value="29" />
-                <StatCard label="LIVE ROUTES" value="14" />
-                <StatCard label="INTRODUCTIONS" value="6" />
-                <StatCard label="MARKET PRESSURE" value="HIGH" />
+                <StatCard label="TOTAL ACTIVITY" value={String(counts.total_activity || 0)} />
+                <StatCard label="LIVE ROUTES" value={String(counts.routing_actions || 0)} />
+                <StatCard label="INTRODUCTIONS" value={String(counts.introductions || 0)} />
+                <StatCard label="PAIN SIGNALS" value={String(counts.pain_signals || 0)} />
               </div>
             </div>
 
@@ -112,43 +286,82 @@ export default function DashboardPage() {
                   </h3>
                 </div>
 
-                <div style={pill}>ACTIVE</div>
+                <div style={pill}>{live?.health?.live_data_ready ? "LIVE" : "READY"}</div>
               </div>
 
-              <Signal title="ATLANTA • DISTRESS SIGNAL" text="Multifamily acquisition route requested by operator network." />
-              <Signal title="TAMPA • CAPITAL ROUTE OPENED" text="Land development matched with lender and JV capital profile." />
-              <Signal title="NASHVILLE • BUYER PRESSURE" text="Value-add residential inventory demand increasing." />
-              <Signal title="CHARLOTTE • INTRO RESPONSE" text="Execution operator accepted controlled introduction." />
+              {recentPulse.length > 0 ? (
+                recentPulse.map((item, index) => (
+                  <Signal
+                    key={`${item.source || "activity"}-${item.created_at || index}-${item.title || index}`}
+                    title={`${shortSource(item.source)} • ${clean(item.title || "Live activity")}`}
+                    text={`${clean(item.note || "Live VaultForge activity recorded.")} ${item.created_at ? `· ${formatDate(item.created_at)}` : ""}`}
+                    href={item.href || "/activity"}
+                  />
+                ))
+              ) : (
+                <Signal
+                  title="LIVE DATA CONNECTED"
+                  text="No member activity has been recorded yet. This dashboard will populate from real routing, pain, project, intro, and response records."
+                  href="/activity"
+                />
+              )}
             </div>
           </div>
         </section>
 
         <section style={section}>
-          <div style={eyebrow}>COMMAND PANELS</div>
+          <div style={eyebrow}>LIVE COMMAND METRICS</div>
 
           <h2 style={sectionTitle}>
-            Built around
+            Real data.
             <span style={{ color: "#e8c46b" }}>
-              {" "}actionable intelligence.
+              {" "}No demo activity.
             </span>
           </h2>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+              gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
               gap: 18,
               marginTop: 26,
             }}
           >
-            <Panel title="Alerts" desc="Track live opportunity signals, urgency, routing activity, and market movement." href="/alerts" />
-            <Panel title="Routing Inbox" desc="See opportunities routed to your profile based on strategy, geography, and execution fit." href="/routing-inbox" />
-            <Panel title="Introductions" desc="Manage controlled strategic introductions between buyers, lenders, operators, and partners." href="/introductions" />
-            <Panel title="Activity" desc="Monitor network movement, intro responses, route creation, and pressure changes." href="/activity" />
-            <Panel title="Intelligence" desc="View intelligence signals, routing confidence, opportunity heat, and execution pressure." href="/intelligence" />
-            <Panel title="Member Network" desc="Identify who buys, funds, operates, sources, or solves specific opportunity categories." href="/members" />
+            <Panel title="Alerts" desc={`${counts.pain_signals || 0} pain signals and live intelligence inputs ready for routing.`} href="/alerts" />
+            <Panel title="Routing Inbox" desc={`${counts.routing_actions || 0} routing actions currently visible from live records.`} href="/routing-inbox" />
+            <Panel title="Introductions" desc={`${counts.introductions || 0} controlled introductions loaded from the live network.`} href="/introductions" />
+            <Panel title="Activity" desc={`${counts.total_activity || 0} total live operational events across core systems.`} href="/activity" />
+            <Panel title="Projects" desc={`${counts.projects || 0} project/deal records available in live data.`} href="/projects" />
+            <Panel title="Members" desc={`${counts.members || 0} member profiles visible through live profile data.`} href="/members" />
           </div>
         </section>
+
+        <section style={section}>
+          <div style={eyebrow}>LIVE SYSTEM HEALTH</div>
+
+          <h2 style={sectionTitle}>
+            Operational readiness.
+          </h2>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+              gap: 14,
+              marginTop: 24,
+            }}
+          >
+            <StatCard label="TABLES CHECKED" value={String(live?.health?.tables_checked || 0)} />
+            <StatCard label="TABLES OK" value={String(live?.health?.tables_ok || 0)} />
+            <StatCard label="FAKE DATA" value={live?.health?.fake_data_allowed === false ? "OFF" : "CHECK"} />
+            <StatCard label="LAST UPDATE" value={live?.generated_at ? "LIVE" : "WAITING"} />
+          </div>
+
+          <button type="button" style={refreshBtn} onClick={loadLiveDashboard}>
+            Refresh Live Data
+          </button>
+        </section>
+
         <VaultForgeCommandFooter />
       </div>
     </main>
@@ -177,7 +390,7 @@ function Panel({ title, desc, href }: { title: string; desc: string; href: strin
             marginBottom: 12,
           }}
         >
-          COMMAND PANEL
+          LIVE PANEL
         </div>
 
         <h3 style={{ fontSize: 30, margin: "0 0 12px" }}>{title}</h3>
@@ -200,25 +413,27 @@ function Panel({ title, desc, href }: { title: string; desc: string; href: strin
   );
 }
 
-function Signal({ title, text }: { title: string; text: string }) {
+function Signal({ title, text, href }: { title: string; text: string; href: string }) {
   return (
-    <div
-      style={{
-        border: "1px solid rgba(255,255,255,.08)",
-        borderLeft: "3px solid #d33a2c",
-        borderRadius: 18,
-        padding: 16,
-        background: "rgba(255,255,255,.03)",
-        marginTop: 12,
-      }}
-    >
-      <div style={{ color: "#e8c46b", fontWeight: 900, marginBottom: 8 }}>
-        {title}
+    <Link href={href} style={{ textDecoration: "none", color: "white" }}>
+      <div
+        style={{
+          border: "1px solid rgba(255,255,255,.08)",
+          borderLeft: "3px solid #d33a2c",
+          borderRadius: 18,
+          padding: 16,
+          background: "rgba(255,255,255,.03)",
+          marginTop: 12,
+        }}
+      >
+        <div style={{ color: "#e8c46b", fontWeight: 900, marginBottom: 8 }}>
+          {title}
+        </div>
+        <div style={{ color: "rgba(255,255,255,.70)", lineHeight: 1.5 }}>
+          {text}
+        </div>
       </div>
-      <div style={{ color: "rgba(255,255,255,.70)", lineHeight: 1.5 }}>
-        {text}
-      </div>
-    </div>
+    </Link>
   );
 }
 
@@ -248,6 +463,15 @@ function StatCard({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+const notice: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.18)",
+  borderRadius: 22,
+  padding: 16,
+  background: "rgba(232,196,107,.07)",
+  marginBottom: 22,
+  color: "#e8c46b",
+};
 
 const hero: React.CSSProperties = {
   position: "relative",
@@ -318,4 +542,20 @@ const sectionTitle: React.CSSProperties = {
   lineHeight: .95,
   letterSpacing: -2,
   margin: 0,
+};
+
+const refreshBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
+  color: "#06100a",
+  border: "none",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 950,
+  textDecoration: "none",
+  cursor: "pointer",
+  marginTop: 18,
+  minHeight: 46,
 };
