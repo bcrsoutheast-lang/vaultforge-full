@@ -6,73 +6,9 @@ import { useParams } from "next/navigation";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-type Access = {
-  email?: string;
-  owner?: boolean;
-  profile_complete?: boolean;
-  payment_status?: string;
-  access_status?: string;
-  paid?: boolean;
-  unlocked?: boolean;
-  next_step?: string;
-};
-
-type Signal = {
-  id: string;
-  source?: string;
-  alert_type?: string;
-  priority?: string;
-  score?: number;
-  title?: string;
-  message?: string;
-  member_email?: string;
-  member_name?: string;
-  item_id?: string;
-  item_title?: string;
-  deal_id?: string;
-  deal_title?: string;
-  state?: string;
-  market?: string;
-  source_table?: string;
-  safe_href?: string;
-  created_at?: string;
-  status?: string;
-  review_status?: string;
-  stored_by?: string;
-  raw?: Record<string, any>;
-};
-
-type RelatedItem = {
-  id?: string;
-  title?: string;
-  source_table?: string;
-  item_kind?: string;
-  city?: string;
-  state?: string;
-  county?: string;
-  property_type?: string;
-  strategy?: string;
-  status?: string;
-  asking_price_display?: string;
-  arv_display?: string;
-  repair_estimate_display?: string;
-  beds?: string;
-  baths?: string;
-  square_feet?: string;
-  acres?: string;
-  occupancy?: string;
-  seller_situation?: string;
-  deal_needs?: string[];
-  description?: string;
-  photo_urls?: string[];
-  main_photo_url?: string;
-  safe_href?: string;
-  exact_address?: string;
-  contact_email?: string;
-  contact_phone?: string;
-  private_notes?: string;
-  raw?: Record<string, any>;
-};
+type Signal = Record<string, any>;
+type RoutingAction = Record<string, any>;
+type RelatedItem = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -83,7 +19,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
+const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.34)",
@@ -108,6 +44,25 @@ const grid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
   gap: 18,
+};
+
+const statGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
+  gap: 14,
+  marginBottom: 22,
+};
+
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.25)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 850,
+  fontSize: 13,
+  margin: "0 7px 7px 0",
 };
 
 const btn: React.CSSProperties = {
@@ -142,51 +97,12 @@ const ghost: React.CSSProperties = {
   minHeight: 46,
 };
 
-const danger: React.CSSProperties = {
-  ...ghost,
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.38)",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: 5,
-  fontWeight: 950,
-  fontSize: 12,
-  marginBottom: 12,
-  textTransform: "uppercase",
-};
-
-const greenEyebrow: React.CSSProperties = { ...eyebrow, color: "#9df3bf" };
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.70)",
-  lineHeight: 1.55,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
-};
-
 function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
-}
-
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
-
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -210,13 +126,135 @@ function getEmail() {
     readCookie("vf_email") ||
     readCookie("vf_admin_email") ||
     ""
-  )
-    .trim()
-    .toLowerCase();
+  ).trim().toLowerCase();
 }
 
-function isOwner(email: string, access: Access | null) {
-  return cleanEmail(email) === OWNER_EMAIL || access?.owner === true;
+function isOwner(email: string) {
+  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
+}
+
+function label(value: string) {
+  const text = clean(value || "signal").replace(/_/g, " ");
+  return text.slice(0, 1).toUpperCase() + text.slice(1);
+}
+
+function safeScore(value: unknown, fallback = 62) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(num)));
+}
+
+function priorityTone(value: string) {
+  const priority = clean(value).toLowerCase();
+  if (priority === "urgent") return "#ffb3b3";
+  if (priority === "high") return "#f5d978";
+  return "#9df3bf";
+}
+
+function signalPriority(signal: Signal | null) {
+  return clean(signal?.priority || signal?.severity || signal?.alert_priority || "medium").toLowerCase();
+}
+
+function signalScore(signal: Signal | null, actions: RoutingAction[]) {
+  if (signal?.score !== undefined) return safeScore(signal.score);
+  if (signal?.confidence_score !== undefined) return safeScore(signal.confidence_score);
+  if (signal?.match_score !== undefined) return safeScore(signal.match_score);
+
+  let score = 48;
+
+  const priority = signalPriority(signal);
+  if (priority === "urgent") score += 22;
+  if (priority === "high") score += 14;
+
+  if (actions.length > 0) score += 12;
+  if (actions.some((item) => clean(item.action).includes("route_to"))) score += 8;
+  if (actions.some((item) => clean(item.response).toLowerCase() === "interested")) score += 8;
+
+  return Math.min(98, score);
+}
+
+function market(signal: Signal | null, item: RelatedItem | null) {
+  return clean(
+    signal?.market ||
+      signal?.state ||
+      signal?.location ||
+      [item?.city, item?.state].filter(Boolean).join(", ")
+  ) || "Unassigned market";
+}
+
+function pressureReason(signal: Signal | null, item: RelatedItem | null, actions: RoutingAction[]) {
+  if (clean(signal?.pressure_reason)) return clean(signal.pressure_reason);
+  if (clean(signal?.urgency_reason)) return clean(signal.urgency_reason);
+  if (clean(signal?.reason)) return clean(signal.reason);
+
+  const priority = signalPriority(signal);
+  const hasCapital = actions.some((item) => clean(item.action).includes("lender"));
+  const hasBuyer = actions.some((item) => clean(item.action).includes("buyer"));
+  const hasOperator = actions.some((item) => clean(item.action).includes("operator") || clean(item.action).includes("contractor"));
+
+  if (priority === "urgent") {
+    return "Urgent signal pressure is present. This should be reviewed before it loses timing, leverage, or relationship momentum.";
+  }
+
+  if (hasCapital) {
+    return "Capital routing activity suggests this signal may need lender, private money, or funding alignment.";
+  }
+
+  if (hasBuyer) {
+    return "Buyer routing activity suggests this signal may fit active acquisition demand.";
+  }
+
+  if (hasOperator) {
+    return "Operator or contractor routing activity suggests this signal needs execution capacity.";
+  }
+
+  if (clean(item?.seller_situation)) {
+    return `Source object contains situation pressure: ${item.seller_situation}`;
+  }
+
+  return "Signal created from available opportunity, routing, pain, deal, or activity data. More context can be added through routing actions.";
+}
+
+function recommendedRoute(signal: Signal | null, actions: RoutingAction[]) {
+  if (clean(signal?.recommended_route)) return clean(signal.recommended_route);
+  if (clean(signal?.recommended_action)) return clean(signal.recommended_action);
+
+  if (actions.some((item) => clean(item.action) === "route_to_buyer")) return "Route toward qualified buyers and acquisition demand.";
+  if (actions.some((item) => clean(item.action) === "route_to_lender")) return "Route toward lender/private capital review.";
+  if (actions.some((item) => clean(item.action) === "route_to_operator")) return "Route toward operator/JV execution support.";
+  if (actions.some((item) => clean(item.action) === "route_to_contractor")) return "Route toward contractor/construction execution support.";
+  if (actions.some((item) => clean(item.action) === "needs_review")) return "Owner review should happen before member delivery.";
+
+  return "Open routing room and add owner routing context before delivery.";
+}
+
+function needTags(signal: Signal | null, actions: RoutingAction[]) {
+  const tags = new Set<string>();
+
+  const source = [
+    signal?.needs,
+    signal?.deal_needs,
+    signal?.alert_type,
+    signal?.category,
+    signal?.message,
+    signal?.title,
+    ...actions.map((item) => item.action),
+    ...actions.map((item) => item.target_role),
+  ]
+    .flat()
+    .join(" ")
+    .toLowerCase();
+
+  if (source.includes("buyer")) tags.add("Buyer Needed");
+  if (source.includes("lender") || source.includes("capital") || source.includes("fund")) tags.add("Capital Needed");
+  if (source.includes("operator") || source.includes("jv")) tags.add("Operator Needed");
+  if (source.includes("contractor") || source.includes("repair") || source.includes("construction")) tags.add("Execution Needed");
+  if (source.includes("review")) tags.add("Owner Review");
+  if (source.includes("urgent")) tags.add("Urgent");
+
+  if (tags.size === 0) tags.add("Routing Context Needed");
+
+  return Array.from(tags);
 }
 
 async function safeJson(res: Response) {
@@ -227,92 +265,26 @@ async function safeJson(res: Response) {
   }
 }
 
-function priorityTone(priority: string) {
-  const p = String(priority || "").toLowerCase();
-  if (p === "urgent") return "#ff9f9f";
-  if (p === "high") return "#f5d978";
-  if (p === "medium") return "#9df3bf";
-  return "#d8b5ff";
-}
-
-function typeLabel(type: string) {
-  const t = String(type || "opportunity").replace(/_/g, " ");
-  return t.slice(0, 1).toUpperCase() + t.slice(1);
-}
-
-function normalizeStoredToSignal(value: any): Signal {
-  return {
-    id: clean(value.id),
-    source: clean(value.source),
-    alert_type: clean(value.alert_type),
-    priority: clean(value.priority),
-    score: Number(value.score || 0),
-    title: clean(value.title || value.alert_title || value.match_title),
-    message: clean(value.message || value.alert_message || value.alert_body || value.body),
-    member_email: clean(value.member_email || value.recipient_email || value.matched_member_email),
-    member_name: clean(value.member_name),
-    item_id: clean(value.item_id || value.deal_id || value.project_id || value.property_id || value.pain_id),
-    item_title: clean(value.item_title || value.deal_title || value.project_title || value.property_title),
-    deal_id: clean(value.deal_id || value.project_id || value.property_id),
-    deal_title: clean(value.deal_title || value.project_title || value.item_title),
-    state: clean(value.state),
-    market: clean(value.market),
-    source_table: clean(value.source_table),
-    safe_href: clean(value.safe_href) || "/projects",
-    created_at: clean(value.created_at),
-    status: clean(value.status),
-    review_status: clean(value.review_status),
-    stored_by: clean(value.stored_by),
-    raw: value.raw || value,
-  };
-}
-
-function detailHref(signal: Signal) {
-  if (signal.safe_href && signal.safe_href !== "/projects") return signal.safe_href;
-
-  const itemId = clean(signal.item_id || signal.deal_id);
-  if (itemId) return `/projects?focus=${encodeURIComponent(itemId)}`;
-
-  return "/projects";
-}
-
-function dealRoomHref(signal: Signal) {
-  const itemId = clean(signal.item_id || signal.deal_id);
-  if (!itemId) return "";
-  return `/deal-room/${encodeURIComponent(itemId)}`;
-}
-
-function InfoBox({ label, value }: { label: string; value: string | number | undefined }) {
+function StatCard({ title, value, detail, tone }: { title: string; value: string | number; detail: string; tone?: string }) {
   return (
-    <div style={card}>
-      <div style={greenEyebrow}>{label}</div>
-      <p style={{ ...muted, fontSize: 18, margin: 0 }}>{value || "—"}</p>
+    <div style={{ ...card, borderColor: `${tone || "#9df3bf"}66` }}>
+      <div style={{ color: tone || "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
+      <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>{detail}</p>
     </div>
   );
 }
 
-function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "loading" }) {
+function InfoBox({ title, value }: { title: string; value?: string | number }) {
   return (
-    <main style={page}>
-      <div style={wrap}>
-        <section style={hero}>
-          <div style={greenEyebrow}>VaultForge Signal Detail</div>
-          <h1 style={{ fontSize: "clamp(54px,12vw,100px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            {reason === "loading"
-              ? "Checking signal access..."
-              : reason === "login"
-              ? "Login required."
-              : reason === "profile"
-              ? "Complete your profile first."
-              : "Activate access first."}
-          </h1>
-          {reason === "login" && <Link href="/login" style={btn}>Login / Create Access</Link>}
-          {reason === "profile" && <Link href="/profile" style={btn}>Complete Profile</Link>}
-          {reason === "payment" && <Link href="/payment" style={btn}>Activate Access</Link>}
-          <Link href="/alerts" style={ghost}>Back to Alerts</Link>
-        </section>
+    <div style={card}>
+      <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+        {title}
       </div>
-    </main>
+      <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55, fontSize: 18, margin: 0 }}>{value || "—"}</p>
+    </div>
   );
 }
 
@@ -321,104 +293,75 @@ export default function SignalDetailPage() {
   const signalId = decodeURIComponent(String(params?.signalId || ""));
 
   const [email, setEmail] = useState("");
-  const [access, setAccess] = useState<Access | null>(null);
-  const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
+  const [owner, setOwner] = useState(false);
   const [signal, setSignal] = useState<Signal | null>(null);
-  const [relatedItem, setRelatedItem] = useState<RelatedItem | null>(null);
-  const [source, setSource] = useState("");
-  const [status, setStatus] = useState("Loading signal...");
+  const [item, setItem] = useState<RelatedItem | null>(null);
+  const [actions, setActions] = useState<RoutingAction[]>([]);
+  const [status, setStatus] = useState("Loading signal intelligence...");
 
   async function load() {
-    setStatus("Loading signal...");
+    setStatus("Loading signal intelligence...");
 
     try {
       const currentEmail = getEmail();
+      const currentOwner = isOwner(currentEmail);
+
       setEmail(currentEmail);
+      setOwner(currentOwner);
 
-      if (!currentEmail) {
-        setLockReason("login");
-        setStatus("");
-        return;
-      }
+      const headers = {
+        "x-vf-email": currentEmail,
+        "x-vf-admin": currentOwner ? "1" : "0",
+      };
 
-      const accessRes = await fetch(`/api/member/access?email=${encodeURIComponent(currentEmail)}`, {
-        cache: "no-store",
-        headers: { "x-vf-email": currentEmail },
-      });
-
-      const accessData = await safeJson(accessRes);
-      setAccess(accessData);
-
-      if (!accessData?.owner && !accessData?.profile_complete) {
-        setLockReason("profile");
-        setStatus("");
-        return;
-      }
-
-      if (!accessData?.owner && !accessData?.paid && !accessData?.unlocked) {
-        setLockReason("payment");
-        setStatus("");
-        return;
-      }
-
-      const owner = isOwner(currentEmail, accessData);
-
-      const [storedRes, feedRes] = await Promise.all([
-        fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
+      const [storedRes, feedRes, actionRes] = await Promise.all([
+        fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
           cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": owner ? "1" : "0",
-          },
+          headers,
         }),
-        fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
+        fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
           cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": owner ? "1" : "0",
-          },
+          headers,
+        }),
+        fetch(`/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}&signal_id=${encodeURIComponent(signalId)}`, {
+          cache: "no-store",
+          headers,
         }),
       ]);
 
       const storedData = await safeJson(storedRes);
       const feedData = await safeJson(feedRes);
+      const actionData = await safeJson(actionRes);
 
-      const stored = Array.isArray(storedData?.alerts)
-        ? storedData.alerts.map(normalizeStoredToSignal)
-        : [];
+      const stored = Array.isArray(storedData?.alerts) ? storedData.alerts : [];
+      const generated = Array.isArray(feedData?.alerts) ? feedData.alerts : [];
+      const found =
+        stored.find((entry: Signal) => String(entry.id) === signalId) ||
+        generated.find((entry: Signal) => String(entry.id) === signalId) ||
+        null;
 
-      const generated = Array.isArray(feedData?.alerts)
-        ? feedData.alerts.map(normalizeStoredToSignal)
-        : [];
-
-      const foundStored = stored.find((item) => item.id === signalId);
-      const foundGenerated = generated.find((item) => item.id === signalId);
-
-      const found = foundStored || foundGenerated || null;
+      const actionRows = Array.isArray(actionData?.actions) ? actionData.actions : [];
 
       setSignal(found);
-      setSource(foundStored ? "stored approved signal" : foundGenerated ? "live generated signal" : "not found");
+      setActions(actionRows);
 
-      const itemId = clean(found?.item_id || found?.deal_id);
+      const itemId = clean(found?.item_id || found?.deal_id || found?.project_id || found?.pain_id || actionRows[0]?.item_id);
+
       if (itemId) {
-        const itemRes = await fetch(`/api/intelligence/item/${encodeURIComponent(itemId)}?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
+        const itemRes = await fetch(`/api/intelligence/item/${encodeURIComponent(itemId)}?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
           cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": owner ? "1" : "0",
-          },
+          headers,
         });
+
         const itemData = await safeJson(itemRes);
-        setRelatedItem(itemData?.item || null);
+        setItem(itemData?.item || null);
       } else {
-        setRelatedItem(null);
+        setItem(null);
       }
 
-      setLockReason("open");
-      setStatus(found ? "" : "Signal not found in current stored or generated feed.");
+      setStatus(found || actionRows.length ? "" : "Signal not found yet, but this room can still collect routing context.");
     } catch (error: any) {
-      setLockReason("open");
-      setStatus(error?.message || "Could not load signal.");
+      setStatus(error?.message || "Could not load signal intelligence.");
     }
   }
 
@@ -426,12 +369,12 @@ export default function SignalDetailPage() {
     load();
   }, [signalId]);
 
-  const owner = useMemo(() => isOwner(email, access), [email, access]);
-  const tone = priorityTone(signal?.priority || "medium");
-
-  if (lockReason !== "open") {
-    return <LockedScreen reason={lockReason} />;
-  }
+  const priority = signalPriority(signal);
+  const tone = priorityTone(priority);
+  const score = signalScore(signal, actions);
+  const tags = useMemo(() => needTags(signal, actions), [signal, actions]);
+  const route = recommendedRoute(signal, actions);
+  const pressure = pressureReason(signal, item, actions);
 
   return (
     <main style={page}>
@@ -460,162 +403,145 @@ export default function SignalDetailPage() {
 
       <div style={wrap}>
         <section style={{ ...hero, borderColor: `${tone}66` }}>
-          <div style={{ ...greenEyebrow, color: tone }}>
-            VaultForge Signal Detail · {source || "signal"} · {owner ? "Owner View" : "Member View"}
+          <div style={{ color: tone, letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            VaultForge Signal Intelligence · {owner ? "Owner View" : "Member View"}
           </div>
 
-          <h1 style={{ fontSize: "clamp(52px,10vw,92px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            {signal?.title || "Signal not found."}
+          <h1 style={{ fontSize: "clamp(54px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
+            {signal?.title || "Signal detail"}
           </h1>
 
-          <p style={{ ...muted, fontSize: 21 }}>
-            {signal?.message || status || "This signal may have changed or no longer matches your current access/feed."}
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.55 }}>
+            {signal?.message || signal?.description || "Signal intelligence context and routing explanation."}
           </p>
 
-          <div style={{ margin: "18px 0" }}>
-            {signal?.priority && <span style={{ ...chip, color: tone, borderColor: `${tone}88` }}>{signal.priority}</span>}
-            {signal?.alert_type && <span style={chip}>{typeLabel(signal.alert_type)}</span>}
-            {signal?.score !== undefined && <span style={chip}>Score {signal.score}</span>}
-            {signal?.state && <span style={chip}>{signal.state}</span>}
-            {signal?.market && <span style={chip}>{signal.market}</span>}
-            {signal?.source_table && <span style={chip}>{signal.source_table}</span>}
-            {owner && signal?.member_email && <span style={chip}>{signal.member_email}</span>}
+          <div>
+            <span style={chip}>Signal: {signalId}</span>
+            <span style={chip}>Priority: {label(priority)}</span>
+            <span style={chip}>Score: {score}</span>
+            <span style={chip}>Market: {market(signal, item)}</span>
+            <span style={chip}>Routing Actions: {actions.length}</span>
           </div>
 
-          <div className="vf-signal-actions">
-            <Link href="/alerts" style={ghost}>Back to Alerts</Link>
-            <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
+          <div className="vf-signal-actions" style={{ marginTop: 14 }}>
+            <button type="button" style={btn} onClick={load}>Refresh Signal</button>
+            <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={btn}>Routing Room</Link>
+            <Link href="/activity" style={ghost}>Activity Stream</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
+            <Link href="/intelligence" style={ghost}>Intelligence</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/introductions" style={ghost}>Introductions</Link>
-            {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
-            {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
-            {signal && <Link href={`/routing-room/${encodeURIComponent(signal.id)}`} style={btn}>Open Routing Room</Link>}
-            {signal && dealRoomHref(signal) && <Link href={dealRoomHref(signal)} style={btn}>Open Exact Deal Room</Link>}
-            {signal && <Link href={detailHref(signal)} style={ghost}>Open Related Work Area</Link>}
-            {signal?.deal_id && <Link href={`/projects?focus=${encodeURIComponent(signal.deal_id)}`} style={ghost}>Open Deal Focus</Link>}
-            <button type="button" onClick={load} style={ghost}>Refresh Signal</button>
-            <Link href="/logout" style={danger}>Logout</Link>
+            {owner && <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>}
+            {item?.id && <Link href={`/deal-room/${encodeURIComponent(item.id)}`} style={ghost}>Deal Room</Link>}
+          </div>
+
+          {status && (
+            <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+              {status}
+            </p>
+          )}
+        </section>
+
+        <section style={statGrid}>
+          <StatCard title="Signal Score" value={score} detail="Computed signal strength from priority, routing activity, and available confidence." tone={tone} />
+          <StatCard title="Routing Actions" value={actions.length} detail="Actions currently tied to this signal." />
+          <StatCard title="Need Tags" value={tags.length} detail="Detected needs from signal text and routing context." />
+          <StatCard title="Market" value={market(signal, item)} detail="Best available market/location context." />
+        </section>
+
+        <section style={hero}>
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Pressure Explanation
+          </div>
+
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            Why this signal matters.
+          </h2>
+
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.6 }}>
+            {pressure}
+          </p>
+
+          <div>
+            {tags.map((tag) => (
+              <span key={tag} style={chip}>{tag}</span>
+            ))}
           </div>
         </section>
 
-        {!signal && (
+        <section style={hero}>
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Recommended Route
+          </div>
+
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            Next best controlled move.
+          </h2>
+
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.6 }}>
+            {route}
+          </p>
+
+          <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={btn}>Open Routing Room</Link>
+          {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
+        </section>
+
+        {actions.length > 0 && (
           <section style={hero}>
-            <strong>{status || "Signal not found."}</strong>
-            <p style={muted}>
-              Generated signals are live and can change as profile/deal data changes. Stored approved signals remain available after they are saved.
-            </p>
+            <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+              Routing Context Attached
+            </div>
+
+            <section style={grid}>
+              {actions.slice(0, 6).map((action, index) => (
+                <article key={action.id || index} style={card}>
+                  <div style={{ color: priorityTone(action.priority), letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+                    {label(action.action || "routing")}
+                  </div>
+                  <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>{action.title || "Routing action"}</h3>
+                  <p style={{ color: "rgba(255,255,255,.70)", lineHeight: 1.55 }}>{action.urgency_reason || action.note || "No routing explanation recorded."}</p>
+                  {action.confidence_score && <span style={chip}>Confidence: {action.confidence_score}%</span>}
+                  {action.state_match && <span style={chip}>State: {action.state_match}</span>}
+                  {action.strategy_match && <span style={chip}>Strategy: {action.strategy_match}</span>}
+                  {action.role_match && <span style={chip}>Role: {action.role_match}</span>}
+                </article>
+              ))}
+            </section>
           </section>
         )}
 
-        {signal && (
-          <>
+        {item && (
+          <section style={hero}>
+            <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+              Source Object Context
+            </div>
+
+            <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>{item.title || "Related deal / pain / project"}</h2>
+            <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.6 }}>
+              {item.description || item.seller_situation || "No source description available."}
+            </p>
+
             <section style={grid}>
-              <InfoBox label="Signal Source" value={source} />
-              <InfoBox label="Priority" value={signal.priority} />
-              <InfoBox label="Score" value={signal.score} />
-              <InfoBox label="Type" value={typeLabel(signal.alert_type || "opportunity")} />
-              <InfoBox label="Market" value={[signal.market, signal.state].filter(Boolean).join(", ")} />
-              <InfoBox label="Item Title" value={signal.item_title || signal.deal_title} />
-              <InfoBox label="Item ID" value={signal.item_id || signal.deal_id} />
-              <InfoBox label="Safe Destination" value={signal.safe_href || "/projects"} />
-              {owner && <InfoBox label="Matched Member" value={signal.member_name || signal.member_email} />}
-              {owner && <InfoBox label="Stored By" value={signal.stored_by} />}
+              <InfoBox title="City / State" value={[item.city, item.state].filter(Boolean).join(", ")} />
+              <InfoBox title="Property Type" value={item.property_type} />
+              <InfoBox title="Strategy" value={item.strategy} />
+              <InfoBox title="Status" value={item.status} />
+              <InfoBox title="Asking Price" value={item.asking_price_display || item.asking_price} />
+              <InfoBox title="ARV / Value" value={item.arv_display || item.arv} />
             </section>
-
-            {relatedItem && (
-              <section style={{ ...hero, marginTop: 22 }}>
-                <div style={greenEyebrow}>Related Deal / Pain Object</div>
-                <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-                  {relatedItem.title || "Related item"}
-                </h2>
-
-                {relatedItem.main_photo_url && (
-                  <img
-                    src={relatedItem.main_photo_url}
-                    alt={relatedItem.title || "Related item"}
-                    style={{
-                      width: "100%",
-                      maxHeight: 360,
-                      objectFit: "cover",
-                      borderRadius: 24,
-                      border: "1px solid rgba(255,255,255,.16)",
-                      marginBottom: 18,
-                    }}
-                  />
-                )}
-
-                <p style={{ ...muted, fontSize: 19 }}>
-                  {relatedItem.description || "This is the real item behind the signal when VaultForge can match the item id."}
-                </p>
-
-                <div style={{ margin: "16px 0" }}>
-                  {relatedItem.source_table && <span style={chip}>{relatedItem.source_table}</span>}
-                  {relatedItem.item_kind && <span style={chip}>{relatedItem.item_kind}</span>}
-                  {relatedItem.state && <span style={chip}>{relatedItem.state}</span>}
-                  {relatedItem.city && <span style={chip}>{relatedItem.city}</span>}
-                  {relatedItem.property_type && <span style={chip}>{relatedItem.property_type}</span>}
-                  {relatedItem.strategy && <span style={chip}>{relatedItem.strategy}</span>}
-                  {relatedItem.status && <span style={chip}>{relatedItem.status}</span>}
-                </div>
-
-                <section style={grid}>
-                  <InfoBox label="Asking Price" value={relatedItem.asking_price_display} />
-                  <InfoBox label="ARV / Value" value={relatedItem.arv_display} />
-                  <InfoBox label="Repairs" value={relatedItem.repair_estimate_display} />
-                  <InfoBox label="Beds / Baths" value={[relatedItem.beds, relatedItem.baths].filter(Boolean).join(" / ")} />
-                  <InfoBox label="Square Feet" value={relatedItem.square_feet} />
-                  <InfoBox label="Acres" value={relatedItem.acres} />
-                  <InfoBox label="Occupancy" value={relatedItem.occupancy} />
-                  <InfoBox label="Seller Situation" value={relatedItem.seller_situation} />
-                  {owner && <InfoBox label="Exact Address" value={relatedItem.exact_address} />}
-                  {owner && <InfoBox label="Contact Email" value={relatedItem.contact_email} />}
-                  {owner && <InfoBox label="Contact Phone" value={relatedItem.contact_phone} />}
-                  {owner && <InfoBox label="Private Notes" value={relatedItem.private_notes} />}
-                </section>
-
-                {(relatedItem.deal_needs || []).length > 0 && (
-                  <div style={{ marginTop: 18 }}>
-                    <div style={greenEyebrow}>Deal Needs</div>
-                    {(relatedItem.deal_needs || []).map((need) => (
-                      <span key={need} style={chip}>{need}</span>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
-
-            <section style={{ ...hero, marginTop: 22 }}>
-              <div style={greenEyebrow}>Execution Layer</div>
-              <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-                This is the exact signal object.
-              </h2>
-              <p style={{ ...muted, fontSize: 19 }}>
-                This signal can now open its exact Deal Room and Routing Room when it includes real ids.
-                Next layers can add capital rooms, buyer match rooms, operator-needed rooms, pain threads,
-                comments, member delivery, controlled introductions, and notification history.
-              </p>
-            </section>
-
-            {owner && signal.raw && (
-              <section style={{ ...hero, marginTop: 22 }}>
-                <div style={greenEyebrow}>Owner Debug</div>
-                <pre
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    color: "rgba(255,255,255,.72)",
-                    background: "rgba(0,0,0,.26)",
-                    borderRadius: 20,
-                    padding: 16,
-                    overflow: "auto",
-                  }}
-                >
-                  {JSON.stringify(signal.raw, null, 2)}
-                </pre>
-              </section>
-            )}
-          </>
+          </section>
         )}
+
+        <section style={hero}>
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Current Safety Mode
+          </div>
+
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.6 }}>
+            This page is read-only intelligence context. It does not auto-route, contact members, send introductions,
+            mutate deals, or trigger autonomous AI behavior.
+          </p>
+        </section>
       </div>
     </main>
   );
