@@ -350,6 +350,7 @@ export default function AdminIntroductionsPage() {
           <div className="vf-intro-actions">
             <button type="button" style={btn} onClick={load}>Refresh Introductions</button>
             <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
+            <Link href="/admin-introduction-responses" style={btn}>Intro Responses</Link>
             <Link href="/admin-dispatch-queue" style={btn}>Dispatch Queue</Link>
             <Link href="/admin-routing" style={ghost}>Admin Routing</Link>
             <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>
@@ -369,6 +370,7 @@ export default function AdminIntroductionsPage() {
             <span style={chip}>Table: vf_routing_introductions</span>
             <span style={chip}>Mode: Read-only overview</span>
             <span style={chip}>Dispatch Queue: /admin-dispatch-queue</span>
+            <span style={chip}>Intro Responses: /admin-introduction-responses</span>
           </div>
         </section>
 
