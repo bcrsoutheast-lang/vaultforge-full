@@ -15,6 +15,20 @@ type RoutingAction = {
   created_at?: string;
 };
 
+type Introduction = {
+  id?: string;
+  signal_id?: string;
+  item_id?: string;
+  member_email?: string;
+  intro_to_email?: string;
+  intro_type?: string;
+  status?: string;
+  title?: string;
+  note?: string;
+  priority?: string;
+  created_at?: string;
+};
+
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 const page: React.CSSProperties = {
@@ -140,6 +154,11 @@ function actionLabel(action: string) {
   return text.slice(0, 1).toUpperCase() + text.slice(1);
 }
 
+function introLabel(value: string) {
+  const text = String(value || "introduction").replace(/_/g, " ");
+  return text.slice(0, 1).toUpperCase() + text.slice(1);
+}
+
 async function safeJson(res: Response) {
   try {
     return await res.json();
@@ -182,6 +201,7 @@ function ToolCard({
 
 export default function DashboardPage() {
   const [actions, setActions] = useState<RoutingAction[]>([]);
+  const [introductions, setIntroductions] = useState<Introduction[]>([]);
 
   async function loadRouting() {
     try {
@@ -210,8 +230,43 @@ export default function DashboardPage() {
     } catch {}
   }
 
+  async function loadIntroductions() {
+    try {
+      const email = getEmail();
+
+      const owner =
+        email === OWNER_EMAIL ||
+        readCookie("vf_admin") === "1";
+
+      const res = await fetch(
+        `/api/routing/introductions?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`,
+        {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": email,
+            "x-vf-admin": owner ? "1" : "0",
+          },
+        }
+      );
+
+      const data = await safeJson(res);
+
+      if (res.ok && data?.ok !== false) {
+        const list = Array.isArray(data?.introductions) ? data.introductions : [];
+        const visible = owner
+          ? list
+          : list.filter((item: Introduction) =>
+              ["approved", "ready", "sent"].includes(String(item.status || "").trim().toLowerCase())
+            );
+
+        setIntroductions(visible.slice(0, 4));
+      }
+    } catch {}
+  }
+
   useEffect(() => {
     loadRouting();
+    loadIntroductions();
   }, []);
 
   const metrics = useMemo(() => {
@@ -220,6 +275,14 @@ export default function DashboardPage() {
       urgent: actions.filter((a) => clean(a.priority).toLowerCase() === "urgent").length,
     };
   }, [actions]);
+
+  const introMetrics = useMemo(() => {
+    return {
+      visible: introductions.length,
+      ready: introductions.filter((item) => clean(item.status).toLowerCase() === "ready").length,
+      sent: introductions.filter((item) => clean(item.status).toLowerCase() === "sent").length,
+    };
+  }, [introductions]);
 
   return (
     <main style={page}>
@@ -348,6 +411,77 @@ export default function DashboardPage() {
               ))}
             </section>
           )}
+        </section>
+
+        <section style={{ ...hero, marginTop: 24 }}>
+          <div style={{ color: "#9df3bf", fontSize: 12, letterSpacing: 5, fontWeight: 900, marginBottom: 12 }}>
+            CONTROLLED INTRODUCTIONS
+          </div>
+
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+            Introduction activity.
+          </h2>
+
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.5 }}>
+            Quick view into introductions staged by the VaultForge control layer. This is read-only and does not send messages.
+          </p>
+
+          <div style={{ marginBottom: 18 }}>
+            <span style={chip}>Visible: {introMetrics.visible}</span>
+            <span style={chip}>Ready: {introMetrics.ready}</span>
+            <span style={chip}>Sent: {introMetrics.sent}</span>
+          </div>
+
+          {introductions.length === 0 ? (
+            <div style={card}>
+              <strong>No introductions visible yet.</strong>
+            </div>
+          ) : (
+            <section style={grid}>
+              {introductions.map((intro, index) => (
+                <article key={intro.id || `${intro.signal_id}-${index}`} style={card}>
+                  <div style={{ color: "#9df3bf", fontSize: 12, letterSpacing: 4, fontWeight: 900, marginBottom: 10 }}>
+                    {introLabel(intro.status || "introduction")}
+                  </div>
+
+                  <h3 style={{ fontSize: 28, lineHeight: 1.05, margin: "0 0 10px" }}>
+                    {intro.title || "Controlled Introduction"}
+                  </h3>
+
+                  <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55 }}>
+                    {intro.note || "No introduction note recorded."}
+                  </p>
+
+                  <div style={{ marginBottom: 14 }}>
+                    {intro.priority && <span style={chip}>{intro.priority}</span>}
+                    {intro.intro_type && <span style={chip}>{intro.intro_type}</span>}
+                  </div>
+
+                  {intro.id && (
+                    <Link
+                      href={`/introduction/${encodeURIComponent(intro.id)}`}
+                      style={btn}
+                    >
+                      Open Introduction
+                    </Link>
+                  )}
+
+                  {intro.signal_id && (
+                    <Link
+                      href={`/routing-room/${encodeURIComponent(intro.signal_id)}`}
+                      style={ghost}
+                    >
+                      Routing Room
+                    </Link>
+                  )}
+                </article>
+              ))}
+            </section>
+          )}
+
+          <Link href="/introductions" style={ghost}>
+            View All Introductions
+          </Link>
         </section>
       </div>
     </main>
