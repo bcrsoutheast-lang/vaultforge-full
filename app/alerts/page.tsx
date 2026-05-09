@@ -4,6 +4,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import {
+  VaultForgePulseStrip,
+  VaultForgeSignalBar,
+  VaultForgeCommandFooter,
+} from "../components/VaultForgeVisualLayer";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -463,6 +468,21 @@ export default function AlertsPage() {
           subtitle="Exact routing intelligence and opportunity signals"
         />
 
+        <VaultForgePulseStrip
+          items={[
+            { label: "ALERTS", value: "TRACKING", tone: "gold" },
+            { label: "URGENT", value: "MONITORING", tone: "red" },
+            { label: "ROUTES", value: "ACTIVE", tone: "green" },
+            { label: "NETWORK", value: "WATCHING", tone: "purple" },
+          ]}
+        />
+
+        <VaultForgeSignalBar
+          urgent={urgent}
+          high={high}
+          normal={Math.max(0, signals.length - urgent - high)}
+        />
+
         <section style={hero}>
           <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Smart Alerts
@@ -588,6 +608,7 @@ export default function AlertsPage() {
             This page only fixes exact navigation. It does not auto-route, notify, create introductions, or mutate records.
           </p>
         </section>
+        <VaultForgeCommandFooter />
       </div>
     </main>
   );
