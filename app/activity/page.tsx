@@ -167,6 +167,7 @@ export default function ActivityStreamPage() {
   const [feed, setFeed] = useState<ActivityItem[]>([]);
   const [filter, setFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
   async function load() {
     setLoading(true);
@@ -296,8 +297,31 @@ export default function ActivityStreamPage() {
       list = list.filter((item) => clean(item.priority).toLowerCase() === priorityFilter);
     }
 
+    const q = search.trim().toLowerCase();
+
+    if (q) {
+      list = list.filter((item) => {
+        const searchable = [
+          item.type,
+          item.title,
+          item.note,
+          item.priority,
+          item.created_at,
+          item.signal_id,
+          item.item_id,
+          item.introduction_id,
+          item.response,
+          item.member_email,
+        ]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ");
+
+        return searchable.includes(q);
+      });
+    }
+
     return list;
-  }, [feed, filter, priorityFilter]);
+  }, [feed, filter, priorityFilter, search]);
 
   return (
     <main style={page}>
@@ -409,13 +433,38 @@ export default function ActivityStreamPage() {
             </button>
           </div>
 
+          <div style={{ marginTop: 18 }}>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search activity by title, note, member email, type, priority, or ID..."
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                borderRadius: 20,
+                border: "1px solid rgba(255,255,255,.18)",
+                background: "rgba(255,255,255,.075)",
+                color: "white",
+                padding: 16,
+                fontSize: 16,
+                outline: "none",
+              }}
+            />
+          </div>
+
           <p style={{
             color:"rgba(255,255,255,.72)",
             lineHeight:1.6,
             marginBottom:0
           }}>
-            Showing {filteredFeed.length} of {feed.length} events. Type filter: {label(filter)}. Priority filter: {label(priorityFilter)}.
+            Showing {filteredFeed.length} of {feed.length} events. Type filter: {label(filter)}. Priority filter: {label(priorityFilter)}. Search: {search.trim() || "None"}.
           </p>
+
+          {search.trim() && (
+            <button type="button" style={ghost} onClick={() => setSearch("")}>
+              Clear Search
+            </button>
+          )}
         </section>
 
         {loading ? (
