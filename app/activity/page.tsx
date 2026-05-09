@@ -165,6 +165,7 @@ export default function ActivityStreamPage() {
   const [owner, setOwner] = useState(false);
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState<ActivityItem[]>([]);
+  const [filter, setFilter] = useState("all");
 
   async function load() {
     setLoading(true);
@@ -272,6 +273,24 @@ export default function ActivityStreamPage() {
     };
   }, [feed]);
 
+  const filteredFeed = useMemo(() => {
+    if (filter === "all") return feed;
+
+    if (filter === "routing") {
+      return feed.filter((item) => item.type.includes("routing"));
+    }
+
+    if (filter === "introductions") {
+      return feed.filter((item) => item.type.includes("introduction") && !item.type.includes("response"));
+    }
+
+    if (filter === "responses") {
+      return feed.filter((item) => item.type.includes("response"));
+    }
+
+    return feed;
+  }, [feed, filter]);
+
   return (
     <main style={page}>
       <style>{`
@@ -339,17 +358,51 @@ export default function ActivityStreamPage() {
           </div>
         </section>
 
+        <section style={hero}>
+          <div style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:12,
+            textTransform:"uppercase"
+          }}>
+            Terminal Filters
+          </div>
+
+          <button type="button" style={filter === "all" ? btn : ghost} onClick={() => setFilter("all")}>
+            All Activity
+          </button>
+          <button type="button" style={filter === "routing" ? btn : ghost} onClick={() => setFilter("routing")}>
+            Routing
+          </button>
+          <button type="button" style={filter === "introductions" ? btn : ghost} onClick={() => setFilter("introductions")}>
+            Introductions
+          </button>
+          <button type="button" style={filter === "responses" ? btn : ghost} onClick={() => setFilter("responses")}>
+            Responses
+          </button>
+
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            lineHeight:1.6,
+            marginBottom:0
+          }}>
+            Showing {filteredFeed.length} of {feed.length} events.
+          </p>
+        </section>
+
         {loading ? (
           <section style={hero}>
             Loading activity stream...
           </section>
-        ) : feed.length === 0 ? (
+        ) : filteredFeed.length === 0 ? (
           <section style={hero}>
             No activity available yet.
           </section>
         ) : (
           <section>
-            {feed.map((item) => {
+            {filteredFeed.map((item) => {
               const itemTone = tone(item.type);
 
               return (
