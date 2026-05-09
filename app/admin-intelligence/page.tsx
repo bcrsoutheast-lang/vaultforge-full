@@ -129,6 +129,16 @@ const WINDOWS: ControlWindow[] = [
     tone: "green",
   },
   {
+    code: "INTRO",
+    title: "Controlled Introductions",
+    purpose: "Shows drafted introductions created from member responses before anything is sent or exposed.",
+    automatedJob: "No automatic sending yet. This is the controlled intro staging area.",
+    adminJob: "Review drafted introductions and decide what should be approved, paused, or prepared for dispatch later.",
+    risk: "Introductions must stay owner-controlled until a safe approval and dispatch workflow exists.",
+    href: "/admin-introductions",
+    tone: "gold",
+  },
+  {
     code: "MEMBERS",
     title: "Member Intelligence Graph",
     purpose: "Tracks buyers, lenders, sellers, contractors, operators, developers, and deal sources.",
@@ -687,6 +697,7 @@ export default function AdminIntelligencePage() {
             <Link href="/admin" style={btn}>Admin Home</Link>
             <Link href="/admin-routing" style={btn}>Admin Routing</Link>
             <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
+            <Link href="/admin-introductions" style={btn}>Admin Introductions</Link>
             <Link href="/intelligence" style={ghost}>Member Intelligence Map</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/network" style={ghost}>Network</Link>
