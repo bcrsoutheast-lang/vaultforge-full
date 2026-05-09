@@ -1,64 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-type Introduction = {
-  id?: string;
-  response_id?: string;
-  signal_id?: string;
-  action_id?: string;
-  item_id?: string;
-  member_email?: string;
-  intro_to_email?: string;
-  intro_type?: string;
-  status?: string;
-  title?: string;
-  note?: string;
-  source?: string;
-  priority?: string;
-  created_by?: string;
-  sent_at?: string;
-  created_at?: string;
-  updated_at?: string;
-};
-
-type Signal = {
-  id?: string;
-  title?: string;
-  message?: string;
-  alert_type?: string;
-  priority?: string;
-  score?: number;
-  item_id?: string;
-  state?: string;
-  market?: string;
-};
-
-type RelatedItem = {
-  id?: string;
-  title?: string;
-  source_table?: string;
-  item_kind?: string;
-  city?: string;
-  state?: string;
-  property_type?: string;
-  strategy?: string;
-  status?: string;
-  asking_price_display?: string;
-  arv_display?: string;
-  repair_estimate_display?: string;
-  description?: string;
-  seller_situation?: string;
-  deal_needs?: string[];
-  exact_address?: string;
-  contact_email?: string;
-  contact_phone?: string;
-  private_notes?: string;
-};
+type Intro = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -96,6 +44,18 @@ const grid: React.CSSProperties = {
   gap: 18,
 };
 
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.25)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 850,
+  fontSize: 13,
+  margin: "0 7px 7px 0",
+};
+
 const btn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -128,44 +88,13 @@ const ghost: React.CSSProperties = {
   minHeight: 46,
 };
 
-const danger: React.CSSProperties = {
-  ...ghost,
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.38)",
-};
-
-const greenEyebrow: React.CSSProperties = {
-  color: "#9df3bf",
-  letterSpacing: 5,
-  fontWeight: 950,
-  fontSize: 12,
-  marginBottom: 12,
-  textTransform: "uppercase",
-};
-
 const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.70)",
+  color: "rgba(255,255,255,.72)",
   lineHeight: 1.55,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
 };
 
 function clean(value: unknown) {
   return String(value || "").trim();
-}
-
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
 }
 
 function readCookie(name: string) {
@@ -193,13 +122,11 @@ function getEmail() {
     readCookie("vf_email") ||
     readCookie("vf_admin_email") ||
     ""
-  )
-    .trim()
-    .toLowerCase();
+  ).trim().toLowerCase();
 }
 
-function isOwnerEmail(email: string) {
-  return email === OWNER_EMAIL || readCookie("vf_admin") === "1";
+function isOwner(email: string) {
+  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
 async function safeJson(res: Response) {
@@ -211,85 +138,120 @@ async function safeJson(res: Response) {
 }
 
 function label(value: string) {
-  const text = clean(value || "introduction").replace(/_/g, " ");
+  const text = clean(value || "intro").replace(/_/g, " ");
   return text.slice(0, 1).toUpperCase() + text.slice(1);
 }
 
-function tone(value: string) {
-  const status = clean(value).toLowerCase();
-  if (status === "sent" || status === "ready" || status === "approved") return "#9df3bf";
-  if (status === "draft" || status === "needs_review") return "#f5d978";
-  if (status === "paused" || status === "declined") return "#ffb3b3";
-  return "#d8b5ff";
+function first(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function exactIntroId(item: Intro) {
+  return first(item.introduction_id, item.intro_id, item.introId, item.id);
+}
+
+function exactSignalId(item: Intro) {
+  return first(item.signal_id, item.signalId, item.alert_id, item.alertId);
+}
+
+function exactItemId(item: Intro) {
+  return first(item.item_id, item.itemId, item.deal_id, item.dealId, item.project_id, item.projectId, item.property_id, item.propertyId, item.pain_id, item.painId);
+}
+
+function exactSignalHref(item: Intro) {
+  const signalId = exactSignalId(item);
+  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/intelligence";
+}
+
+function exactRoutingHref(item: Intro) {
+  const signalId = exactSignalId(item);
+  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
+}
+
+function exactWorkHref(item: Intro) {
+  const itemId = exactItemId(item);
+  if (itemId) return `/deal-room/${encodeURIComponent(itemId)}`;
+  return exactSignalHref(item);
+}
+
+function titleOf(item: Intro | null) {
+  return first(item?.title, item?.name, item?.subject, "Controlled introduction");
+}
+
+function noteOf(item: Intro | null) {
+  return first(item?.note, item?.notes, item?.message, item?.description, "Controlled introduction staged through VaultForge.");
+}
+
+function statusOf(item: Intro | null) {
+  return first(item?.intro_status, item?.status, item?.routing_status, "staged").toLowerCase();
+}
+
+function priorityOf(item: Intro | null) {
+  return first(item?.priority, item?.severity, "medium").toLowerCase();
+}
+
+function toneOf(item: Intro | null) {
+  const status = statusOf(item);
+  const priority = priorityOf(item);
+
+  if (status === "sent" || item?.sent === true) return "#9df3bf";
+  if (status === "paused" || item?.paused === true) return "#ffb3b3";
+  if (priority === "urgent") return "#ffb3b3";
+  if (priority === "high") return "#f5d978";
+  return "#9df3bf";
+}
+
+function visibleEmail(item: Intro | null) {
+  return first(
+    item?.visible_to_email,
+    item?.member_email,
+    item?.recipient_email,
+    item?.intro_to_email,
+    item?.responding_member_email,
+    item?.counterparty_email
+  );
+}
+
+function counterpartyEmail(item: Intro | null) {
+  return first(
+    item?.counterparty_email,
+    item?.sender_email,
+    item?.recipient_email,
+    item?.intro_to_email,
+    item?.responding_member_email
+  );
 }
 
 function InfoBox({ title, value }: { title: string; value?: string | number }) {
   return (
     <div style={card}>
-      <div style={greenEyebrow}>{title}</div>
+      <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+        {title}
+      </div>
       <p style={{ ...muted, fontSize: 18, margin: 0 }}>{value || "—"}</p>
     </div>
   );
 }
 
-async function saveIntroResponse({
-  email,
-  intro,
-  response,
-}: {
-  email: string;
-  intro: Introduction;
-  response: string;
-}) {
-  const res = await fetch("/api/routing/introduction-responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-vf-email": email,
-    },
-    body: JSON.stringify({
-      email,
-      member_email: email,
-      introduction_id: intro.id,
-      signal_id: intro.signal_id,
-      item_id: intro.item_id,
-      title: intro.title,
-      priority: intro.priority,
-      response,
-      note: intro.note,
-      source: "member_introduction_detail",
-    }),
-  });
-
-  const data = await safeJson(res);
-
-  if (!res.ok || data?.ok === false) {
-    throw new Error(data?.error || data?.details || "Could not save introduction response.");
-  }
-
-  return data;
-}
-
-
-export default function MemberIntroductionDetailPage() {
+export default function IntroductionDetailPage() {
   const params = useParams();
   const introId = decodeURIComponent(String(params?.introId || ""));
 
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
-  const [intro, setIntro] = useState<Introduction | null>(null);
-  const [signal, setSignal] = useState<Signal | null>(null);
-  const [item, setItem] = useState<RelatedItem | null>(null);
-  const [responseBusy, setResponseBusy] = useState("");
-  const [responseMessage, setResponseMessage] = useState("");
-  const [status, setStatus] = useState("Loading introduction...");
+  const [intro, setIntro] = useState<Intro | null>(null);
+  const [status, setStatus] = useState("Loading exact introduction...");
 
   async function load() {
-    setStatus("Loading introduction...");
+    setStatus("Loading exact introduction...");
 
     try {
       const currentEmail = getEmail();
-      const currentOwner = isOwnerEmail(currentEmail);
+      const currentOwner = isOwner(currentEmail);
 
       setEmail(currentEmail);
       setOwner(currentOwner);
@@ -299,7 +261,7 @@ export default function MemberIntroductionDetailPage() {
         return;
       }
 
-      const introRes = await fetch(`/api/routing/introductions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+      const res = await fetch(`/api/routing/introductions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
         cache: "no-store",
         headers: {
           "x-vf-email": currentEmail,
@@ -307,67 +269,19 @@ export default function MemberIntroductionDetailPage() {
         },
       });
 
-      const introData = await safeJson(introRes);
+      const data = await safeJson(res);
 
-      if (!introRes.ok || introData?.ok === false) {
-        throw new Error(introData?.error || introData?.details || "Could not load introductions.");
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not load introduction.");
       }
 
-      const foundIntro = Array.isArray(introData?.introductions)
-        ? introData.introductions.find((entry: Introduction) => String(entry.id) === introId)
-        : null;
+      const rows = Array.isArray(data?.introductions) ? data.introductions : [];
+      const found = rows.find((item: Intro) => exactIntroId(item) === introId) || null;
 
-      setIntro(foundIntro || null);
-
-      if (!foundIntro) {
-        setStatus("Introduction not found for this account.");
-        return;
-      }
-
-      if (!currentOwner && !["approved", "ready", "sent"].includes(clean(foundIntro.status).toLowerCase())) {
-        setStatus("This introduction is not visible to members yet.");
-        return;
-      }
-
-      if (foundIntro.signal_id) {
-        const [storedRes, feedRes] = await Promise.all([
-          fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-            cache: "no-store",
-            headers: { "x-vf-email": currentEmail, "x-vf-admin": currentOwner ? "1" : "0" },
-          }),
-          fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-            cache: "no-store",
-            headers: { "x-vf-email": currentEmail, "x-vf-admin": currentOwner ? "1" : "0" },
-          }),
-        ]);
-
-        const storedData = await safeJson(storedRes);
-        const feedData = await safeJson(feedRes);
-        const stored = Array.isArray(storedData?.alerts) ? storedData.alerts : [];
-        const generated = Array.isArray(feedData?.alerts) ? feedData.alerts : [];
-        const foundSignal =
-          stored.find((entry: Signal) => String(entry.id) === String(foundIntro.signal_id)) ||
-          generated.find((entry: Signal) => String(entry.id) === String(foundIntro.signal_id)) ||
-          null;
-
-        setSignal(foundSignal || null);
-      }
-
-      if (foundIntro.item_id) {
-        const itemRes = await fetch(`/api/intelligence/item/${encodeURIComponent(foundIntro.item_id)}?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": currentOwner ? "1" : "0",
-          },
-        });
-        const itemData = await safeJson(itemRes);
-        setItem(itemData?.item || null);
-      }
-
-      setStatus("");
+      setIntro(found);
+      setStatus(found ? "" : "Exact introduction not found for this account.");
     } catch (error: any) {
-      setStatus(error?.message || "Could not load introduction.");
+      setStatus(error?.message || "Could not load exact introduction.");
     }
   }
 
@@ -375,28 +289,7 @@ export default function MemberIntroductionDetailPage() {
     load();
   }, [introId]);
 
-  const statusColor = useMemo(() => tone(intro?.status || ""), [intro?.status]);
-
-  async function handleIntroResponse(response: string) {
-    if (!intro?.id) return;
-
-    setResponseBusy(response);
-    setResponseMessage("Saving introduction response...");
-
-    try {
-      const result = await saveIntroResponse({
-        email,
-        intro,
-        response,
-      });
-
-      setResponseMessage(result?.message || "Introduction response saved safely.");
-    } catch (error: any) {
-      setResponseMessage(error?.message || "Could not save introduction response.");
-    } finally {
-      setResponseBusy("");
-    }
-  }
+  const tone = toneOf(intro);
 
   return (
     <main style={page}>
@@ -409,13 +302,13 @@ export default function MemberIntroductionDetailPage() {
         }
 
         @media (max-width: 760px) {
-          .vf-intro-detail-actions {
+          .vf-actions {
             display: grid !important;
             grid-template-columns: 1fr !important;
             gap: 10px !important;
           }
 
-          .vf-intro-detail-actions > * {
+          .vf-actions > * {
             width: 100%;
             margin: 0 !important;
             box-sizing: border-box;
@@ -424,31 +317,36 @@ export default function MemberIntroductionDetailPage() {
       `}</style>
 
       <div style={wrap}>
-        <section style={{ ...hero, borderColor: `${statusColor}66` }}>
-          <div style={{ ...greenEyebrow, color: statusColor }}>
-            VaultForge Introduction Detail · {owner ? "Owner View" : "Member View"} · {label(intro?.status || "loading")}
+        <section style={{ ...hero, borderColor: `${tone}66` }}>
+          <div style={{ color: tone, letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Exact Introduction · {owner ? "Owner View" : "Member View"}
           </div>
 
-          <h1 style={{ fontSize: "clamp(52px,10vw,92px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            {intro?.title || "Controlled introduction"}
+          <h1 style={{ fontSize: "clamp(54px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
+            {titleOf(intro)}
           </h1>
 
-          <p style={{ ...muted, fontSize: 21 }}>
-            {intro?.note || status || "This is a controlled introduction staged through VaultForge."}
+          <p style={{ ...muted, fontSize: 22 }}>
+            {noteOf(intro)}
           </p>
 
-          <div className="vf-intro-detail-actions">
+          <div>
+            <span style={chip}>Intro: {introId}</span>
+            <span style={chip}>Status: {label(statusOf(intro))}</span>
+            <span style={chip}>Priority: {label(priorityOf(intro))}</span>
+            {visibleEmail(intro) && <span style={chip}>Visible: {visibleEmail(intro)}</span>}
+            {counterpartyEmail(intro) && <span style={chip}>Counterparty: {counterpartyEmail(intro)}</span>}
+          </div>
+
+          <div className="vf-actions" style={{ marginTop: 14 }}>
+            <button type="button" style={btn} onClick={load}>Refresh Introduction</button>
             <Link href="/introductions" style={ghost}>Back to Introductions</Link>
+            <Link href="/activity" style={ghost}>Activity</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
-            {owner && <Link href="/admin-introductions" style={btn}>Admin Introductions</Link>}
-            {owner && intro?.id && <Link href={`/admin-introduction-review/${encodeURIComponent(intro.id)}`} style={btn}>Owner Review</Link>}
-            {intro?.signal_id && <Link href={`/routing-room/${encodeURIComponent(intro.signal_id)}`} style={btn}>Routing Room</Link>}
-            {intro?.signal_id && <Link href={`/signals/${encodeURIComponent(intro.signal_id)}`} style={ghost}>Signal</Link>}
-            {intro?.item_id && <Link href={`/deal-room/${encodeURIComponent(intro.item_id)}`} style={ghost}>Deal Room</Link>}
-            <button type="button" onClick={load} style={ghost}>Refresh</button>
-            <Link href="/logout" style={danger}>Logout</Link>
+            {intro && exactSignalId(intro) && <Link href={exactSignalHref(intro)} style={ghost}>Signal</Link>}
+            {intro && exactSignalId(intro) && <Link href={exactRoutingHref(intro)} style={ghost}>Routing Room</Link>}
+            {intro && exactItemId(intro) && <Link href={exactWorkHref(intro)} style={ghost}>Work Area</Link>}
+            {owner && <Link href="/admin-introductions" style={ghost}>Admin Introductions</Link>}
           </div>
 
           {status && (
@@ -456,130 +354,41 @@ export default function MemberIntroductionDetailPage() {
               {status}
             </p>
           )}
-
-          {responseMessage && (
-            <p
-              style={{
-                color:
-                  responseMessage.toLowerCase().includes("could not")
-                    ? "#ffd0d0"
-                    : "#9df3bf",
-                fontWeight: 900,
-              }}
-            >
-              {responseMessage}
-            </p>
-          )}
         </section>
 
         {intro && (
           <>
             <section style={grid}>
-              <InfoBox title="Status" value={label(intro.status || "introduction")} />
-              <InfoBox title="Member Email" value={intro.member_email} />
-              <InfoBox title="Intro Type" value={intro.intro_type} />
-              <InfoBox title="Priority" value={intro.priority} />
+              <InfoBox title="Introduction ID" value={exactIntroId(intro)} />
+              <InfoBox title="Signal ID" value={exactSignalId(intro)} />
+              <InfoBox title="Item ID" value={exactItemId(intro)} />
+              <InfoBox title="Visible To" value={visibleEmail(intro)} />
+              <InfoBox title="Counterparty" value={counterpartyEmail(intro)} />
               <InfoBox title="Created" value={intro.created_at} />
-              <InfoBox title="Marked Sent" value={intro.sent_at || "Not sent"} />
-              {owner && <InfoBox title="Intro To Email" value={intro.intro_to_email || "Not set"} />}
-              {owner && <InfoBox title="Created By" value={intro.created_by} />}
+              <InfoBox title="Updated" value={intro.updated_at} />
+              <InfoBox title="Source" value={intro.source} />
             </section>
 
             <section style={{ ...hero, marginTop: 22 }}>
-              <div style={greenEyebrow}>Signal Context</div>
-              <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-                {signal?.title || "Signal context unavailable"}
-              </h2>
-              <p style={muted}>{signal?.message || "No signal message found."}</p>
-              {signal?.alert_type && <span style={chip}>{signal.alert_type}</span>}
-              {signal?.priority && <span style={chip}>{signal.priority}</span>}
-              {signal?.score !== undefined && <span style={chip}>Score {signal.score}</span>}
-              {signal?.state && <span style={chip}>{signal.state}</span>}
-              {signal?.market && <span style={chip}>{signal.market}</span>}
-            </section>
+              <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+                Connected Exact Work
+              </div>
 
-            {item && (
-              <section style={{ ...hero, marginTop: 22 }}>
-                <div style={greenEyebrow}>Related Deal / Pain Context</div>
-                <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-                  {item.title || "Related object"}
-                </h2>
-                <p style={muted}>{item.description || "No related item description found."}</p>
-
-                <section style={grid}>
-                  <InfoBox title="Market" value={[item.city, item.state].filter(Boolean).join(", ")} />
-                  <InfoBox title="Property Type" value={item.property_type} />
-                  <InfoBox title="Strategy" value={item.strategy} />
-                  <InfoBox title="Asking Price" value={item.asking_price_display} />
-                  <InfoBox title="ARV / Value" value={item.arv_display} />
-                  <InfoBox title="Repairs" value={item.repair_estimate_display} />
-                  {owner && <InfoBox title="Exact Address" value={item.exact_address} />}
-                  {owner && <InfoBox title="Contact Email" value={item.contact_email} />}
-                  {owner && <InfoBox title="Contact Phone" value={item.contact_phone} />}
-                  {owner && <InfoBox title="Private Notes" value={item.private_notes} />}
-                </section>
-              </section>
-            )}
-
-            {!owner && (
-              <section style={{ ...hero, marginTop: 22 }}>
-                <div style={greenEyebrow}>Respond to Introduction</div>
-                <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-                  What do you want to do next?
-                </h2>
-                <p style={{ ...muted, fontSize: 19 }}>
-                  This saves your response only. It does not message anyone or reveal private details.
-                </p>
-
-                <div className="vf-intro-detail-actions">
-                  <button
-                    type="button"
-                    style={btn}
-                    disabled={!!responseBusy}
-                    onClick={() => handleIntroResponse("interested")}
-                  >
-                    {responseBusy === "interested" ? "Saving..." : "Interested"}
-                  </button>
-
-                  <button
-                    type="button"
-                    style={ghost}
-                    disabled={!!responseBusy}
-                    onClick={() => handleIntroResponse("need_details")}
-                  >
-                    {responseBusy === "need_details" ? "Saving..." : "Need Details"}
-                  </button>
-
-                  <button
-                    type="button"
-                    style={ghost}
-                    disabled={!!responseBusy}
-                    onClick={() => handleIntroResponse("request_call")}
-                  >
-                    {responseBusy === "request_call" ? "Saving..." : "Request Call"}
-                  </button>
-
-                  <button
-                    type="button"
-                    style={ghost}
-                    disabled={!!responseBusy}
-                    onClick={() => handleIntroResponse("pass")}
-                  >
-                    {responseBusy === "pass" ? "Saving..." : "Pass"}
-                  </button>
-                </div>
-              </section>
-            )}
-
-            <section style={{ ...hero, marginTop: 22 }}>
-              <div style={greenEyebrow}>Current Safety Mode</div>
-              <p style={{ ...muted, fontSize: 19 }}>
-                This page is read-only. It does not send messages, expose owner-only private fields to members,
-                create introductions, or mutate deals/members.
-              </p>
+              {exactSignalId(intro) && <Link href={exactSignalHref(intro)} style={btn}>Open Exact Signal</Link>}
+              {exactSignalId(intro) && <Link href={exactRoutingHref(intro)} style={ghost}>Open Exact Routing Room</Link>}
+              {exactItemId(intro) && <Link href={exactWorkHref(intro)} style={ghost}>Open Exact Work Area</Link>}
             </section>
           </>
         )}
+
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Current Safety Mode
+          </div>
+          <p style={{ ...muted, fontSize: 19 }}>
+            This page reads one introduction record only. It does not send messages, reveal private unstaged contact data, or change records.
+          </p>
+        </section>
       </div>
     </main>
   );
