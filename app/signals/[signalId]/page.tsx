@@ -327,8 +327,11 @@ export default function SignalDetailPage() {
   const [status, setStatus] = useState("Loading exact signal...");
   const [matchStatus, setMatchStatus] = useState("");
   const [generateStatus, setGenerateStatus] = useState("");
+  const [introStatus, setIntroStatus] = useState("");
   const [scoreBusy, setScoreBusy] = useState(false);
   const [generateBusy, setGenerateBusy] = useState(false);
+  const [introBusyId, setIntroBusyId] = useState("");
+  const [introEmailByAction, setIntroEmailByAction] = useState<Record<string, string>>({});
 
   const [routeRole, setRouteRole] = useState("Buyer");
   const [routePriority, setRoutePriority] = useState("medium");
@@ -430,6 +433,66 @@ export default function SignalDetailPage() {
       setMatchStatus(error?.message || "Could not score member matches.");
     } finally {
       setScoreBusy(false);
+    }
+  }
+
+  async function stageIntroductionFromAction(action: Action) {
+    if (!owner) {
+      setIntroStatus("Owner/admin access required to stage introductions.");
+      return;
+    }
+
+    const actionId = clean(action.id);
+    const memberEmail = clean(introEmailByAction[actionId]).toLowerCase();
+
+    if (!memberEmail) {
+      setIntroStatus("Enter a member email before staging the introduction.");
+      return;
+    }
+
+    setIntroBusyId(actionId);
+    setIntroStatus("Staging controlled introduction...");
+
+    try {
+      const res = await fetch("/api/routing/introductions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+          "x-vf-admin": "1",
+        },
+        body: JSON.stringify({
+          email,
+          admin_email: email,
+          owner: "1",
+          routing_action_id: actionId,
+          signal_id: first(action.signal_id, signalId),
+          item_id: first(action.item_id, itemId),
+          title: `Intro: ${first(action.title, titleOf(signal, signalId))}`,
+          note: first(action.urgency_reason, action.note, action.routing_summary, noteOf(signal)),
+          member_email: memberEmail,
+          visible_to_email: memberEmail,
+          recipient_email: memberEmail,
+          counterparty_email: email,
+          priority: first(action.priority, routePriority),
+          status: "staged",
+          intro_status: "staged",
+          source: "signal_detail_stage_intro",
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not stage introduction.");
+      }
+
+      setIntroStatus(data?.message || "Controlled introduction staged.");
+      setIntroEmailByAction((prev) => ({ ...prev, [actionId]: "" }));
+    } catch (error: any) {
+      setIntroStatus(error?.message || "Could not stage introduction.");
+    } finally {
+      setIntroBusyId("");
     }
   }
 
@@ -578,6 +641,12 @@ export default function SignalDetailPage() {
               {generateStatus}
             </p>
           )}
+
+          {introStatus && (
+            <p style={{ color: introStatus.toLowerCase().includes("could not") || introStatus.toLowerCase().includes("required") || introStatus.toLowerCase().includes("enter") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+              {introStatus}
+            </p>
+          )}
         </section>
 
         <section style={statGrid}>
@@ -640,9 +709,35 @@ export default function SignalDetailPage() {
                   {action.role_match && <span style={chip}>Role: {action.role_match}</span>}
                   {action.state_match && <span style={chip}>State: {action.state_match}</span>}
                   {action.strategy_match && <span style={chip}>Strategy: {action.strategy_match}</span>}
+                  {owner && (
+                    <div style={{ marginTop: 14 }}>
+                      <input
+                        style={input}
+                        value={introEmailByAction[String(action.id || "")] || ""}
+                        onChange={(event) =>
+                          setIntroEmailByAction((prev) => ({
+                            ...prev,
+                            [String(action.id || "")]: event.target.value,
+                          }))
+                        }
+                        placeholder="Member email to stage intro..."
+                      />
+
+                      <button
+                        type="button"
+                        style={btn}
+                        disabled={introBusyId === String(action.id || "")}
+                        onClick={() => stageIntroductionFromAction(action)}
+                      >
+                        {introBusyId === String(action.id || "") ? "Staging..." : "Stage Controlled Intro"}
+                      </button>
+                    </div>
+                  )}
+
                   <div>
                     <Link href={`/routing-room/${encodeURIComponent(first(action.signal_id, signalId))}`} style={btn}>Routing Room</Link>
                     {first(action.item_id, itemId) && <Link href={`/deal-room/${encodeURIComponent(first(action.item_id, itemId))}`} style={ghost}>Work Area</Link>}
+                    <Link href="/introductions" style={ghost}>Introductions</Link>
                   </div>
                 </article>
               ))}
