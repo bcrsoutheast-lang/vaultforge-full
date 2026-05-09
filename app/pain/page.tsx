@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type PainRow = Record<string, any>;
 
@@ -253,6 +254,11 @@ export default function PainPage() {
   return (
     <main style={page}>
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Pain Feed"
+          subtitle="Distress routing, operational pressure, and active problem signals"
+        />
+
         <section style={hero}>
           <div style={{ color: "#9df3bf", fontWeight: 900, letterSpacing: 4, marginBottom: 12 }}>
             LIVE PAIN WORKFLOW
