@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import {
+  VaultForgePulseStrip,
+  VaultForgeSignalBar,
+  VaultForgeCommandFooter,
+} from "../components/VaultForgeVisualLayer";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -697,6 +702,21 @@ export default function ActivityStreamPage() {
           subtitle="Live operational stream and platform pressure board"
         />
 
+        <VaultForgePulseStrip
+          items={[
+            { label: "ACTIVITY", value: "LIVE", tone: "gold" },
+            { label: "RESPONSES", value: "TRACKING", tone: "green" },
+            { label: "ROUTING", value: "ACTIVE", tone: "purple" },
+            { label: "PRESSURE", value: "WATCHING", tone: "red" },
+          ]}
+        />
+
+        <VaultForgeSignalBar
+          urgent={metrics.urgent}
+          high={metrics.high + metrics.warm}
+          normal={Math.max(0, metrics.total - metrics.urgent - metrics.high - metrics.warm)}
+        />
+
         <section style={hero}>
           <div style={{
             color:"#9df3bf",
@@ -996,6 +1016,7 @@ export default function ActivityStreamPage() {
             mutate deals, or trigger autonomous AI behavior.
           </p>
         </section>
+        <VaultForgeCommandFooter />
       </div>
     </main>
   );
