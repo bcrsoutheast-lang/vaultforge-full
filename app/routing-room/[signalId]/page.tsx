@@ -251,8 +251,11 @@ export default function RoutingRoomPage() {
   const [actions, setActions] = useState<Action[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
+  const [matchResults, setMatchResults] = useState<Member[]>([]);
+  const [matchStatus, setMatchStatus] = useState("");
   const [status, setStatus] = useState("Loading routing intelligence...");
   const [busy, setBusy] = useState(false);
+  const [scoreBusy, setScoreBusy] = useState(false);
 
   const [action, setAction] = useState("route_to_buyer");
   const [priority, setPriority] = useState("medium");
@@ -361,6 +364,51 @@ export default function RoutingRoomPage() {
       setStatus(error?.message || "Could not log routing context.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runMatchScoring() {
+    if (!owner) {
+      setMatchStatus("Owner/admin access required to run match scoring.");
+      return;
+    }
+
+    setScoreBusy(true);
+    setMatchStatus("Scoring member fit...");
+
+    try {
+      const res = await fetch("/api/member/match-score", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+          "x-vf-admin": "1",
+        },
+        body: JSON.stringify({
+          signal_id: signalId,
+          state: stateMatch,
+          market: stateMatch,
+          strategy: strategyMatch,
+          role_needed: roleMatch,
+          priority,
+          title: title || `${label(action)} routing context`,
+          note,
+          urgency_reason: urgency,
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not score member matches.");
+      }
+
+      setMatchResults(Array.isArray(data?.top_matches) ? data.top_matches : []);
+      setMatchStatus(`Scored ${data?.counts?.members || 0} members. Strong matches: ${data?.counts?.strong || 0}.`);
+    } catch (error: any) {
+      setMatchStatus(error?.message || "Could not score member matches.");
+    } finally {
+      setScoreBusy(false);
     }
   }
 
@@ -572,6 +620,109 @@ export default function RoutingRoomPage() {
             <button type="button" style={{ ...btn, marginTop: 16 }} disabled={busy} onClick={logContextAction}>
               {busy ? "Logging..." : "Log Routing Context"}
             </button>
+
+            <button type="button" style={{ ...ghost, marginTop: 16 }} disabled={scoreBusy} onClick={runMatchScoring}>
+              {scoreBusy ? "Scoring..." : "Score Member Fits"}
+            </button>
+
+            {matchStatus && (
+              <p style={{ color: matchStatus.toLowerCase().includes("could not") || matchStatus.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+                {matchStatus}
+              </p>
+            )}
+          </section>
+        )}
+
+        {owner && matchResults.length > 0 && (
+          <section style={hero}>
+            <div style={{
+              color:"#9df3bf",
+              letterSpacing:5,
+              fontWeight:950,
+              fontSize:12,
+              marginBottom:12,
+              textTransform:"uppercase"
+            }}>
+              Member Match Scoring
+            </div>
+
+            <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+              Strongest routing fits.
+            </h2>
+
+            <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.55 }}>
+              Read-only match scoring compares this routing context against member specialization. Nothing is routed or sent automatically.
+            </p>
+
+            <section style={{ ...grid, marginTop: 18 }}>
+              {matchResults.map((match, index) => {
+                const fit = clean(match.fit_level).toLowerCase();
+                const border =
+                  fit === "strong"
+                    ? "rgba(157,243,191,.60)"
+                    : fit === "possible"
+                    ? "rgba(245,217,120,.60)"
+                    : "rgba(255,179,179,.50)";
+
+                return (
+                  <article key={match.member_id || match.email || index} style={{ ...card, borderColor: border }}>
+                    <div style={{
+                      color: fit === "strong" ? "#9df3bf" : fit === "possible" ? "#f5d978" : "#ffb3b3",
+                      letterSpacing:4,
+                      fontWeight:900,
+                      fontSize:11,
+                      marginBottom:10,
+                      textTransform:"uppercase"
+                    }}>
+                      {label(match.fit_level || "weak")} Fit · {match.fit_score || 0}
+                    </div>
+
+                    <h3 style={{ fontSize: 28, lineHeight: 1.05, margin: "0 0 10px" }}>
+                      {match.full_name || match.email || "Member"}
+                    </h3>
+
+                    <div style={{ margin: "12px 0" }}>
+                      {Array.isArray(match.roles) && match.roles.slice(0, 3).map((role: string) => (
+                        <span key={role} style={chip}>{role}</span>
+                      ))}
+                      {Array.isArray(match.markets) && match.markets.slice(0, 3).map((market: string) => (
+                        <span key={market} style={chip}>{market}</span>
+                      ))}
+                    </div>
+
+                    {Array.isArray(match.reasons) && match.reasons.length > 0 && (
+                      <section>
+                        <strong style={{ display: "block", marginBottom: 8 }}>Why matched</strong>
+                        {match.reasons.slice(0, 4).map((reason: string) => (
+                          <p key={reason} style={{ color:"rgba(255,255,255,.70)", lineHeight:1.45, margin: "0 0 8px" }}>
+                            {reason}
+                          </p>
+                        ))}
+                      </section>
+                    )}
+
+                    {Array.isArray(match.gaps) && match.gaps.length > 0 && (
+                      <section style={{ marginTop: 12 }}>
+                        <strong style={{ display: "block", marginBottom: 8, color: "#ffb3b3" }}>Gaps</strong>
+                        {match.gaps.slice(0, 3).map((gap: string) => (
+                          <span key={gap} style={{ ...chip, color: "#ffb3b3", border: "1px solid rgba(255,179,179,.35)", background: "rgba(255,179,179,.08)" }}>
+                            {gap}
+                          </span>
+                        ))}
+                      </section>
+                    )}
+
+                    <button type="button" style={btn} onClick={() => applyMemberHint(match)}>
+                      Use Match as Routing Hint
+                    </button>
+
+                    <Link href={`/member-intelligence/${encodeURIComponent(match.member_id || match.email || "")}`} style={ghost}>
+                      Member Detail
+                    </Link>
+                  </article>
+                );
+              })}
+            </section>
           </section>
         )}
 
