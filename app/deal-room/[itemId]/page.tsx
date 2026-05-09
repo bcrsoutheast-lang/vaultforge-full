@@ -8,6 +8,7 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 type DealItem = Record<string, any>;
 type Match = Record<string, any>;
+type RoutingAction = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -102,6 +103,17 @@ const danger: React.CSSProperties = {
   border: "1px solid rgba(255,120,120,.38)",
 };
 
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.075)",
+  color: "white",
+  padding: 14,
+  fontSize: 15,
+};
+
 const greenEyebrow: React.CSSProperties = {
   color: "#9df3bf",
   letterSpacing: 5,
@@ -122,7 +134,6 @@ function clean(value: unknown) {
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
-
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -146,9 +157,7 @@ function getEmail() {
     readCookie("vf_email") ||
     readCookie("vf_admin_email") ||
     ""
-  )
-    .trim()
-    .toLowerCase();
+  ).trim().toLowerCase();
 }
 
 function isOwnerEmail(email: string) {
@@ -163,17 +172,17 @@ async function safeJson(res: Response) {
   }
 }
 
-function label(value: string) {
-  const text = clean(value || "item").replace(/_/g, " ");
-  return text.slice(0, 1).toUpperCase() + text.slice(1);
-}
-
 function first(...values: unknown[]) {
   for (const value of values) {
     const text = clean(value);
     if (text) return text;
   }
   return "";
+}
+
+function label(value: string) {
+  const text = clean(value || "item").replace(/_/g, " ");
+  return text.slice(0, 1).toUpperCase() + text.slice(1);
 }
 
 function matchTone(level: string) {
@@ -187,16 +196,17 @@ function dealPriority(item: DealItem | null) {
   return first(item?.priority, item?.urgency, item?.deal_priority, "medium").toLowerCase();
 }
 
-function dealScore(item: DealItem | null, matches: Match[]) {
+function dealScore(item: DealItem | null, matches: Match[], actions: RoutingAction[]) {
   let score = 50;
   const priority = dealPriority(item);
 
   if (priority === "urgent") score += 18;
   if (priority === "high") score += 10;
-  if (clean(item?.asking_price_display) || clean(item?.asking_price)) score += 5;
-  if (clean(item?.arv_display) || clean(item?.arv)) score += 5;
-  if (clean(item?.description) || clean(item?.seller_situation)) score += 5;
+  if (first(item?.asking_price_display, item?.asking_price, item?.price)) score += 5;
+  if (first(item?.arv_display, item?.arv, item?.value)) score += 5;
+  if (first(item?.description, item?.seller_situation)) score += 5;
   if (matches.some((match) => clean(match.fit_level).toLowerCase() === "strong")) score += 12;
+  if (actions.length > 0) score += 8;
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -243,6 +253,18 @@ function valueText(item: DealItem | null) {
 
 function marketText(item: DealItem | null) {
   return first(item?.market, [item?.city, item?.state].filter(Boolean).join(", "), item?.state);
+}
+
+function itemTitle(item: DealItem | null, itemId: string) {
+  return first(item?.title, item?.deal_title, item?.project_title, item?.property_title, item?.name, `Deal room ${itemId}`);
+}
+
+function itemDescription(item: DealItem | null) {
+  return first(item?.description, item?.seller_situation, item?.summary, "Exact deal context, routing links, and member fit scoring.");
+}
+
+function exactSignalId(item: DealItem | null, itemId: string) {
+  return first(item?.signal_id, item?.alert_id, `deal-${itemId}`);
 }
 
 function StatCard({
@@ -309,9 +331,33 @@ export default function DealRoomPage() {
   const [owner, setOwner] = useState(false);
   const [item, setItem] = useState<DealItem | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [actions, setActions] = useState<RoutingAction[]>([]);
   const [status, setStatus] = useState("Loading deal room...");
   const [matchStatus, setMatchStatus] = useState("");
+  const [generateStatus, setGenerateStatus] = useState("");
   const [scoreBusy, setScoreBusy] = useState(false);
+  const [generateBusy, setGenerateBusy] = useState(false);
+
+  const [routeRole, setRouteRole] = useState("Buyer");
+  const [routePriority, setRoutePriority] = useState("medium");
+  const [routeNote, setRouteNote] = useState("");
+
+  async function loadRoutingActions(currentEmail: string, currentOwner: boolean, signalId: string) {
+    const res = await fetch(
+      `/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}&signal_id=${encodeURIComponent(signalId)}`,
+      {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": currentEmail,
+          "x-vf-admin": currentOwner ? "1" : "0",
+        },
+      }
+    );
+
+    const data = await safeJson(res);
+    const rows = Array.isArray(data?.actions) ? data.actions : [];
+    setActions(rows);
+  }
 
   async function load() {
     setStatus("Loading deal room...");
@@ -336,8 +382,11 @@ export default function DealRoomPage() {
 
       setItem(found);
 
+      const signalId = exactSignalId(found, itemId);
+      await loadRoutingActions(currentEmail, currentOwner, signalId);
+
       if (!found) {
-        setStatus("Deal room item not found yet. The ID may not exist in the intelligence item API.");
+        setStatus("Exact item lookup did not find a source record yet, but this room can still generate routing context from the item ID.");
         return;
       }
 
@@ -369,10 +418,10 @@ export default function DealRoomPage() {
           city: item?.city || "",
           strategy: first(item?.strategy, item?.asset_strategy),
           asset_type: first(item?.property_type, item?.asset_type, item?.item_kind),
-          role_needed: first(item?.role_needed, item?.deal_need),
+          role_needed: first(item?.role_needed, item?.deal_need, routeRole),
           priority: dealPriority(item),
-          title: item?.title || "VaultForge deal",
-          note: first(item?.description, item?.seller_situation, item?.private_notes),
+          title: itemTitle(item, itemId),
+          note: first(item?.description, item?.seller_situation, item?.private_notes, routeNote),
         }),
       });
 
@@ -391,14 +440,72 @@ export default function DealRoomPage() {
     }
   }
 
+  async function generateRoutingAction() {
+    if (!owner) {
+      setGenerateStatus("Owner/admin access required to generate routing actions.");
+      return;
+    }
+
+    setGenerateBusy(true);
+    setGenerateStatus("Generating routing action from this exact deal...");
+
+    try {
+      const currentEmail = email || getEmail();
+      const signalId = exactSignalId(item, itemId);
+
+      const res = await fetch("/api/routing/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": currentEmail,
+          "x-vf-admin": "1",
+        },
+        body: JSON.stringify({
+          email: currentEmail,
+          admin_email: currentEmail,
+          owner: "1",
+          signal_id: signalId,
+          item_id: itemId,
+          title: itemTitle(item, itemId),
+          note: routeNote || itemDescription(item),
+          state: first(item?.state, item?.market),
+          market: first(item?.market, item?.state),
+          city: item?.city || "",
+          strategy: first(item?.strategy, item?.asset_strategy),
+          asset_type: first(item?.property_type, item?.asset_type, item?.item_kind),
+          role_needed: routeRole,
+          priority: routePriority,
+          source: "deal_room_generate",
+          source_table: item?.source_table || "",
+          item_kind: item?.item_kind || "",
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not generate routing action.");
+      }
+
+      setGenerateStatus(data?.message || "Routing action generated.");
+      setRouteNote("");
+      await loadRoutingActions(currentEmail, true, signalId);
+    } catch (error: any) {
+      setGenerateStatus(error?.message || "Could not generate routing action.");
+    } finally {
+      setGenerateBusy(false);
+    }
+  }
+
   useEffect(() => {
     load();
   }, [itemId]);
 
-  const score = useMemo(() => dealScore(item, matches), [item, matches]);
+  const score = useMemo(() => dealScore(item, matches, actions), [item, matches, actions]);
   const needs = useMemo(() => inferNeedTags(item), [item]);
   const priority = dealPriority(item);
   const priorityColor = priority === "urgent" ? "#ffb3b3" : priority === "high" ? "#f5d978" : "#9df3bf";
+  const signalId = exactSignalId(item, itemId);
 
   return (
     <main style={page}>
@@ -432,18 +539,20 @@ export default function DealRoomPage() {
           </div>
 
           <h1 style={{ fontSize: "clamp(54px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            {item?.title || "Deal room"}
+            {itemTitle(item, itemId)}
           </h1>
 
           <p style={{ ...muted, fontSize: 22 }}>
-            {first(item?.description, item?.seller_situation, "Exact deal context, execution intelligence, routing links, and member fit scoring.")}
+            {itemDescription(item)}
           </p>
 
           <div>
             <span style={chip}>Item: {itemId}</span>
+            <span style={chip}>Signal: {signalId}</span>
             <span style={chip}>Priority: {label(priority)}</span>
             <span style={chip}>Score: {score}</span>
             <span style={chip}>Market: {marketText(item) || "Unassigned"}</span>
+            <span style={chip}>Routes: {actions.length}</span>
             <span style={chip}>Matches: {matches.length}</span>
           </div>
 
@@ -452,11 +561,12 @@ export default function DealRoomPage() {
             <button type="button" style={btn} disabled={scoreBusy} onClick={runDealMatchScoring}>
               {scoreBusy ? "Scoring..." : "Score Member Fits"}
             </button>
+            <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link>
+            <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Signal</Link>
             <Link href="/activity" style={ghost}>Activity</Link>
             <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/introductions" style={ghost}>Introductions</Link>
-            <Link href="/messages" style={ghost}>Messages</Link>
             {owner && <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>}
             <Link href="/logout" style={danger}>Logout</Link>
           </div>
@@ -472,14 +582,60 @@ export default function DealRoomPage() {
               {matchStatus}
             </p>
           )}
+
+          {generateStatus && (
+            <p style={{ color: generateStatus.toLowerCase().includes("could not") || generateStatus.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+              {generateStatus}
+            </p>
+          )}
         </section>
 
         <section style={statGrid}>
-          <StatCard title="Deal Score" value={score} detail="Computed from priority, available deal context, and member match strength." tone={priorityColor} />
+          <StatCard title="Deal Score" value={score} detail="Computed from priority, deal context, matches, and routing actions." tone={priorityColor} />
           <StatCard title="Need Tags" value={needs.length} detail="Detected needs from available deal context." />
           <StatCard title="Member Matches" value={matches.length} detail="Read-only fit results from specialization scoring." />
+          <StatCard title="Routing Actions" value={actions.length} detail="Generated routing actions tied to this exact item/signal." />
           <StatCard title="Value" value={valueText(item) || "—"} detail="Best available price/value indicator." />
         </section>
+
+        {owner && (
+          <section style={hero}>
+            <div style={greenEyebrow}>Owner Routing Generator</div>
+            <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+              Generate routing from this exact deal.
+            </h2>
+            <p style={{ ...muted, fontSize: 19 }}>
+              This creates a routing record only. It does not notify members, stage introductions, or auto-dispatch.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+              <select style={input} value={routeRole} onChange={(event) => setRouteRole(event.target.value)}>
+                <option value="Buyer" style={{ color: "#111" }}>Buyer</option>
+                <option value="Lender / Capital" style={{ color: "#111" }}>Lender / Capital</option>
+                <option value="Operator" style={{ color: "#111" }}>Operator</option>
+                <option value="Contractor" style={{ color: "#111" }}>Contractor</option>
+                <option value="Owner Review" style={{ color: "#111" }}>Owner Review</option>
+              </select>
+
+              <select style={input} value={routePriority} onChange={(event) => setRoutePriority(event.target.value)}>
+                <option value="medium" style={{ color: "#111" }}>Medium</option>
+                <option value="high" style={{ color: "#111" }}>High</option>
+                <option value="urgent" style={{ color: "#111" }}>Urgent</option>
+              </select>
+            </div>
+
+            <textarea
+              style={{ ...input, minHeight: 120, marginTop: 14 }}
+              value={routeNote}
+              onChange={(event) => setRouteNote(event.target.value)}
+              placeholder="Why should this deal be routed? What pressure, member fit, capital need, or buyer/operator need exists?"
+            />
+
+            <button type="button" style={btn} disabled={generateBusy} onClick={generateRoutingAction}>
+              {generateBusy ? "Generating..." : "Generate Routing Action"}
+            </button>
+          </section>
+        )}
 
         <section style={hero}>
           <div style={greenEyebrow}>Deal Need / Routing Context</div>
@@ -495,6 +651,29 @@ export default function DealRoomPage() {
             ))}
           </div>
         </section>
+
+        {actions.length > 0 && (
+          <section style={hero}>
+            <div style={greenEyebrow}>Generated Routing Actions</div>
+            <section style={grid}>
+              {actions.map((action, index) => (
+                <article key={action.id || index} style={card}>
+                  <div style={greenEyebrow}>{label(first(action.action, action.routing_action, "route"))}</div>
+                  <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>{first(action.title, "Routing action")}</h3>
+                  <p style={{ ...muted }}>{first(action.urgency_reason, action.note, action.routing_summary)}</p>
+                  <span style={chip}>Confidence: {first(action.confidence_score, action.match_score, 0)}</span>
+                  {action.role_match && <span style={chip}>Role: {action.role_match}</span>}
+                  {action.state_match && <span style={chip}>State: {action.state_match}</span>}
+                  {action.strategy_match && <span style={chip}>Strategy: {action.strategy_match}</span>}
+                  <div>
+                    <Link href={`/routing-room/${encodeURIComponent(first(action.signal_id, signalId))}`} style={btn}>Routing Room</Link>
+                    <Link href="/activity" style={ghost}>Activity</Link>
+                  </div>
+                </article>
+              ))}
+            </section>
+          </section>
+        )}
 
         {matches.length > 0 && (
           <section style={hero}>
@@ -535,30 +714,8 @@ export default function DealRoomPage() {
                       </p>
                     ))}
 
-                    {Array.isArray(match.gaps) && match.gaps.length > 0 && (
-                      <div style={{ marginTop: 10 }}>
-                        {match.gaps.slice(0, 3).map((gap: string) => (
-                          <span
-                            key={gap}
-                            style={{
-                              ...chip,
-                              color: "#ffb3b3",
-                              border: "1px solid rgba(255,179,179,.35)",
-                              background: "rgba(255,179,179,.08)",
-                            }}
-                          >
-                            {gap}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
                     <Link href={`/member-intelligence/${encodeURIComponent(match.member_id || match.email || "")}`} style={btn}>
                       Member Detail
-                    </Link>
-
-                    <Link href="/member-intelligence" style={ghost}>
-                      Member Intelligence
                     </Link>
                   </article>
                 );
@@ -574,6 +731,7 @@ export default function DealRoomPage() {
               <InfoBox title="Market" value={marketText(item)} />
               <InfoBox title="City" value={item.city} />
               <InfoBox title="State" value={item.state} />
+              <InfoBox title="Source Table" value={item.source_table} />
               <InfoBox title="Property Type" value={first(item.property_type, item.asset_type, item.item_kind)} />
               <InfoBox title="Strategy" value={item.strategy} />
               <InfoBox title="Status" value={item.status} />
@@ -589,24 +747,10 @@ export default function DealRoomPage() {
         )}
 
         <section style={{ ...hero, marginTop: 22 }}>
-          <div style={greenEyebrow}>Controlled Introductions</div>
-          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-            Intro workflow connected.
-          </h2>
-          <p style={{ ...muted, fontSize: 19 }}>
-            If this deal becomes part of a routed opportunity, owner/admin can stage controlled introductions.
-            Members can review staged introductions from the Introductions page.
-          </p>
-          <Link href="/introductions" style={btn}>Open Introductions</Link>
-          <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-          {owner && <Link href="/admin-introductions" style={ghost}>Admin Introductions</Link>}
-          {owner && <Link href="/admin-dispatch-queue" style={ghost}>Dispatch Queue</Link>}
-        </section>
-
-        <section style={{ ...hero, marginTop: 22 }}>
           <div style={greenEyebrow}>Current Safety Mode</div>
           <p style={{ ...muted, fontSize: 19 }}>
-            Deal Room match scoring is read-only. It does not auto-route, send notifications, expose extra member data, or mutate deals/members.
+            Deal Room routing generation creates a routing record only. It does not auto-route, send notifications,
+            create introductions, expose extra private data, or mutate members.
           </p>
         </section>
       </div>
