@@ -200,6 +200,49 @@ function responseTone(value: string) {
   return "#d8b5ff";
 }
 
+async function draftIntroduction({
+  email,
+  response,
+}: {
+  email: string;
+  response: RoutingResponse;
+}) {
+  const res = await fetch("/api/routing/introductions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-vf-email": email,
+      "x-vf-admin": "1",
+    },
+    body: JSON.stringify({
+      email,
+      admin_email: email,
+      owner: "1",
+      response_id: response.id,
+      signal_id: response.signal_id,
+      action_id: response.action_id,
+      item_id: response.item_id,
+      member_email: response.member_email,
+      intro_type: "controlled_intro",
+      status: "draft",
+      title: response.title || "VaultForge controlled introduction",
+      note:
+        response.note ||
+        "Controlled introduction drafted from member response. No notification sent.",
+      priority: response.priority || "medium",
+      source: "admin_routing_responses",
+    }),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || data?.details || "Could not draft introduction.");
+  }
+
+  return data;
+}
+
 function StatCard({ label, value, detail }: { label: string; value: number | string; detail: string }) {
   return (
     <div style={card}>
@@ -236,6 +279,8 @@ export default function AdminRoutingResponsesPage() {
   const [responses, setResponses] = useState<RoutingResponse[]>([]);
   const [status, setStatus] = useState("Loading member responses...");
   const [filter, setFilter] = useState("all");
+  const [introBusy, setIntroBusy] = useState("");
+  const [introMessage, setIntroMessage] = useState("");
 
   async function load() {
     setStatus("Loading member responses...");
@@ -302,6 +347,29 @@ export default function AdminRoutingResponsesPage() {
     };
   }, [responses]);
 
+  async function handleDraftIntro(response: RoutingResponse) {
+    if (!owner) {
+      setIntroMessage("Owner/admin access required to draft introductions.");
+      return;
+    }
+
+    setIntroBusy(response.id || response.signal_id || response.member_email || "intro");
+    setIntroMessage("Drafting controlled introduction...");
+
+    try {
+      const result = await draftIntroduction({
+        email,
+        response,
+      });
+
+      setIntroMessage(result?.message || "Controlled introduction drafted safely.");
+    } catch (error: any) {
+      setIntroMessage(error?.message || "Could not draft introduction.");
+    } finally {
+      setIntroBusy("");
+    }
+  }
+
   if (!owner && !status) {
     return <Locked />;
   }
@@ -355,6 +423,21 @@ export default function AdminRoutingResponsesPage() {
           {status && (
             <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
               {status}
+            </p>
+          )}
+
+          {introMessage && (
+            <p
+              style={{
+                color:
+                  introMessage.toLowerCase().includes("could not") ||
+                  introMessage.toLowerCase().includes("required")
+                    ? "#ffd0d0"
+                    : "#9df3bf",
+                fontWeight: 900,
+              }}
+            >
+              {introMessage}
             </p>
           )}
 
@@ -426,6 +509,22 @@ export default function AdminRoutingResponsesPage() {
                       <Link href={`/deal-room/${encodeURIComponent(item.item_id)}`} style={ghost}>
                         Open Deal Room
                       </Link>
+                    )}
+
+                    {(item.response === "interested" ||
+                      item.response === "request_intro" ||
+                      item.response === "request_call" ||
+                      item.response === "need_more_info") && (
+                      <button
+                        type="button"
+                        style={btn}
+                        disabled={!!introBusy}
+                        onClick={() => handleDraftIntro(item)}
+                      >
+                        {introBusy === (item.id || item.signal_id || item.member_email || "intro")
+                          ? "Drafting..."
+                          : "Draft Controlled Intro"}
+                      </button>
                     )}
                   </div>
                 </article>
