@@ -244,6 +244,11 @@ export default function IntroductionDetailPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
   const [intro, setIntro] = useState<Intro | null>(null);
+  const [responses, setResponses] = useState<Record<string, any>[]>([]);
+  const [responseChoice, setResponseChoice] = useState("interested");
+  const [responseNote, setResponseNote] = useState("");
+  const [responseStatus, setResponseStatus] = useState("");
+  const [responseBusy, setResponseBusy] = useState(false);
   const [status, setStatus] = useState("Loading exact introduction...");
 
   async function load() {
@@ -279,9 +284,73 @@ export default function IntroductionDetailPage() {
       const found = rows.find((item: Intro) => exactIntroId(item) === introId) || null;
 
       setIntro(found);
+
+      const responseRes = await fetch(`/api/routing/introduction-responses?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}&intro_id=${encodeURIComponent(introId)}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": currentEmail,
+          "x-vf-admin": currentOwner ? "1" : "0",
+        },
+      });
+
+      const responseData = await safeJson(responseRes);
+      setResponses(Array.isArray(responseData?.responses) ? responseData.responses : []);
+
       setStatus(found ? "" : "Exact introduction not found for this account.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load exact introduction.");
+    }
+  }
+
+  async function saveResponse() {
+    if (!intro) {
+      setResponseStatus("Introduction must load before you can respond.");
+      return;
+    }
+
+    setResponseBusy(true);
+    setResponseStatus("Saving introduction response...");
+
+    try {
+      const res = await fetch("/api/routing/introduction-responses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+          "x-vf-admin": owner ? "1" : "0",
+        },
+        body: JSON.stringify({
+          email,
+          introduction_id: exactIntroId(intro),
+          intro_id: exactIntroId(intro),
+          signal_id: exactSignalId(intro),
+          item_id: exactItemId(intro),
+          title: `Response to ${titleOf(intro)}`,
+          note: responseNote,
+          response: responseChoice,
+          member_email: email,
+          responder_email: email,
+          responding_member_email: email,
+          counterparty_email: counterpartyEmail(intro),
+          owner_email: intro.owner_email || OWNER_EMAIL,
+          priority: priorityOf(intro),
+          source: "introduction_detail_response",
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not save response.");
+      }
+
+      setResponseStatus(data?.message || "Introduction response saved.");
+      setResponseNote("");
+      await load();
+    } catch (error: any) {
+      setResponseStatus(error?.message || "Could not save response.");
+    } finally {
+      setResponseBusy(false);
     }
   }
 
@@ -354,6 +423,12 @@ export default function IntroductionDetailPage() {
               {status}
             </p>
           )}
+
+          {responseStatus && (
+            <p style={{ color: responseStatus.toLowerCase().includes("could not") || responseStatus.toLowerCase().includes("must") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+              {responseStatus}
+            </p>
+          )}
         </section>
 
         {intro && (
@@ -368,6 +443,87 @@ export default function IntroductionDetailPage() {
               <InfoBox title="Updated" value={intro.updated_at} />
               <InfoBox title="Source" value={intro.source} />
             </section>
+
+
+            <section style={{ ...hero, marginTop: 22 }}>
+              <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+                Controlled Response
+              </div>
+
+              <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+                Respond to this introduction.
+              </h2>
+
+              <p style={{ ...muted, fontSize: 19 }}>
+                This saves your response only. It does not send emails, notify anyone, or change the deal/member record.
+              </p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+                <select
+                  value={responseChoice}
+                  onChange={(event) => setResponseChoice(event.target.value)}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    borderRadius: 18,
+                    border: "1px solid rgba(255,255,255,.18)",
+                    background: "rgba(255,255,255,.075)",
+                    color: "white",
+                    padding: 14,
+                    fontSize: 15,
+                  }}
+                >
+                  <option value="interested" style={{ color: "#111" }}>Interested</option>
+                  <option value="need_more_info" style={{ color: "#111" }}>Need More Info</option>
+                  <option value="call_requested" style={{ color: "#111" }}>Request Call</option>
+                  <option value="reviewing" style={{ color: "#111" }}>Reviewing</option>
+                  <option value="not_interested" style={{ color: "#111" }}>Not Interested</option>
+                </select>
+              </div>
+
+              <textarea
+                value={responseNote}
+                onChange={(event) => setResponseNote(event.target.value)}
+                placeholder="Optional response note..."
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  borderRadius: 18,
+                  border: "1px solid rgba(255,255,255,.18)",
+                  background: "rgba(255,255,255,.075)",
+                  color: "white",
+                  padding: 14,
+                  fontSize: 15,
+                  minHeight: 120,
+                  marginTop: 14,
+                }}
+              />
+
+              <button type="button" style={btn} disabled={responseBusy} onClick={saveResponse}>
+                {responseBusy ? "Saving..." : "Save Response"}
+              </button>
+            </section>
+
+            {responses.length > 0 && (
+              <section style={{ ...hero, marginTop: 22 }}>
+                <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+                  Response History
+                </div>
+
+                <section style={grid}>
+                  {responses.map((row, index) => (
+                    <article key={row.id || index} style={card}>
+                      <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+                        {String(row.response || "response").replace(/_/g, " ")}
+                      </div>
+                      <p style={{ ...muted, fontSize: 18 }}>{row.note || row.notes || "No response note."}</p>
+                      {row.member_email && <span style={chip}>{row.member_email}</span>}
+                      {row.created_at && <span style={chip}>{row.created_at}</span>}
+                    </article>
+                  ))}
+                </section>
+              </section>
+            )}
 
             <section style={{ ...hero, marginTop: 22 }}>
               <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
