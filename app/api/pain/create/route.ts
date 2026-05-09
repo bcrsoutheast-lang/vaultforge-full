@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -31,6 +32,32 @@ function clean(value: unknown) {
 
 function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
+}
+
+function readCookie(request: Request, name: string) {
+  const cookie = request.headers.get("cookie") || "";
+  const match = cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
+function getRequestEmail(request: Request, body: any) {
+  return cleanEmail(
+    request.headers.get("x-vf-email") ||
+      body?.member_email ||
+      body?.email ||
+      readCookie(request, "vf_email") ||
+      readCookie(request, "vf_admin_email")
+  );
 }
 
 function asNumberOrNull(value: unknown) {
@@ -339,10 +366,18 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
 
-    const email =
-      cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(body?.member_email) ||
-      cleanEmail(body?.email);
+    const email = getRequestEmail(request, body);
+
+    if (!email) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Login email was not found. Please log out, log back in, and submit again.",
+          details: "Pain submissions must be tied to a member email so dashboard visibility, ticker, and activity counts stay live and secure.",
+        },
+        { status: 401 }
+      );
+    }
 
     const assetType = clean(body?.asset_type || "Residential");
     const painType = clean(body?.pain_type || body?.type || "General Distress");
@@ -382,7 +417,7 @@ export async function POST(request: Request) {
     );
 
     const payload = {
-      member_email: email || null,
+      member_email: email,
       member_name: clean(body?.member_name) || null,
 
       pain_type: painType,
@@ -445,6 +480,7 @@ export async function POST(request: Request) {
       analysis: analyzer,
       message: "Distress signal analyzed and routed into VaultForge.",
       source: "vf_pain_submissions",
+      member_email: email,
       routing: {
         created: routingInserted,
         source: "vf_routing_signals",
