@@ -3,6 +3,11 @@
 
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import {
+  VaultForgePulseStrip,
+  VaultForgeSignalBar,
+  VaultForgeCommandFooter,
+} from "../components/VaultForgeVisualLayer";
 
 export default function DashboardPage() {
   return (
@@ -20,6 +25,14 @@ export default function DashboardPage() {
         <VaultForgeMemberNav
           title="Member Command Center"
           subtitle="Private real estate intelligence network"
+        />
+
+        <VaultForgePulseStrip />
+
+        <VaultForgeSignalBar
+          urgent={7}
+          high={14}
+          normal={8}
         />
 
         <section style={hero}>
@@ -125,6 +138,7 @@ export default function DashboardPage() {
             <Panel title="Member Network" desc="Identify who buys, funds, operates, sources, or solves specific opportunity categories." href="/members" />
           </div>
         </section>
+        <VaultForgeCommandFooter />
       </div>
     </main>
   );
