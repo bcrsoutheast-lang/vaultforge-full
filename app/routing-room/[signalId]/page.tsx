@@ -604,6 +604,7 @@ export default function RoutingRoomPage() {
             {dealRoomHref(signal) && <Link href={dealRoomHref(signal)} style={btn}>Exact Deal Room</Link>}
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+            <Link href="/introductions" style={ghost}>Introductions</Link>
             {owner && <Link href="/admin-intelligence" style={ghost}>Owner Control</Link>}
             {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
             <button type="button" onClick={load} style={ghost}>Refresh Room</button>
@@ -805,7 +806,7 @@ export default function RoutingRoomPage() {
               </h2>
               <p style={{ ...muted, fontSize: 19 }}>
                 Next phase can add comments, route status, participant assignments, lender/buyer/operator introductions,
-                notification history, and controlled member delivery. No automatic dispatch happens yet.
+                notification history, controlled member delivery, and controlled introductions. No automatic dispatch happens yet.
               </p>
             </section>
           </>
