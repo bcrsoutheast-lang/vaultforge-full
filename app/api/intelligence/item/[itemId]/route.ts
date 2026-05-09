@@ -6,10 +6,7 @@ export const revalidate = 0;
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-const DEAL_TABLES = ["vf_deals", "projects", "property_cards"];
-const PAIN_TABLES = ["pain_requests", "vf_pain_requests", "pain_submissions"];
-
-type Row = Record<string, any>;
+type AnyRecord = Record<string, any>;
 
 function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -81,25 +78,6 @@ function isOwnerRequest(request: Request, email: string) {
   );
 }
 
-function asArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean);
-
-  const text = clean(value);
-  if (!text) return [];
-
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map((item) => clean(item)).filter(Boolean);
-  } catch {
-    // Continue to comma split.
-  }
-
-  return text
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function first(...values: unknown[]) {
   for (const value of values) {
     const text = clean(value);
@@ -109,124 +87,137 @@ function first(...values: unknown[]) {
   return "";
 }
 
-function money(value: unknown) {
-  const n = Number(value || 0);
-
-  if (!Number.isFinite(n) || n <= 0) return "";
-
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-}
-
-function rowId(row: Row) {
-  return first(row.id, row.deal_id, row.project_id, row.property_id, row.card_id, row.pain_id);
-}
-
-function rowTitle(row: Row) {
-  return first(
-    row.title,
-    row.deal_title,
-    row.project_title,
-    row.property_title,
-    row.name,
-    row.address,
-    row.full_address,
-    row.problem_title,
-    row.problem,
-    "VaultForge Item"
-  );
-}
-
-function normalize(row: Row, table: string, owner: boolean) {
-  const asking = first(row.asking_price, row.asking, row.price, row.purchase_price);
-  const arv = first(row.arv, row.after_repair_value, row.value);
-  const repairs = first(row.repair_estimate, row.repairs, row.estimated_repairs);
-
-  const privateFields = owner
-    ? {
-        exact_address: first(row.address, row.full_address, row.property_address),
-        contact_email: first(row.contact_email, row.owner_email, row.member_email, row.email),
-        contact_phone: first(row.contact_phone, row.phone, row.seller_phone),
-        private_notes: first(row.private_notes, row.access_notes, row.admin_notes, row.notes),
-      }
-    : {};
+function normalizeItem(row: AnyRecord, table: string) {
+  const id = first(row.id, row.item_id, row.deal_id, row.project_id, row.property_id, row.pain_id);
 
   return {
-    id: rowId(row),
-    title: rowTitle(row),
+    ...row,
+    id,
+    item_id: id,
     source_table: table,
-    item_kind: table.toLowerCase().includes("pain") ? "pain_signal" : "deal_or_project",
-    city: first(row.city, row.market, row.property_city, row.location),
-    state: first(row.state, row.property_state, row.market_state),
-    county: first(row.county),
-    property_type: first(row.property_type, row.deal_type, row.asset_type, row.project_type),
-    strategy: first(row.strategy, row.exit_strategy, row.deal_strategy),
-    status: first(row.status, row.deal_status, row.project_status, row.alert_status),
-    asking_price: asking,
-    asking_price_display: money(asking),
-    arv,
-    arv_display: money(arv),
-    repair_estimate: repairs,
-    repair_estimate_display: money(repairs),
-    beds: first(row.beds, row.bedrooms),
-    baths: first(row.baths, row.bathrooms),
-    square_feet: first(row.square_feet, row.sqft),
-    acres: first(row.acres),
-    occupancy: first(row.occupancy),
-    seller_situation: first(row.seller_situation, row.seller_motivation),
-    deal_needs: asArray(row.deal_needs || row.needs || row.routing_needs || row.help_needed || row.capital_needs),
-    description: first(row.description, row.summary, row.ai_summary, row.problem_description),
-    photo_urls: asArray(row.photo_urls || row.photos || row.image_urls || row.images),
-    main_photo_url: first(row.main_photo_url, row.photo_url, row.image_url, asArray(row.photo_urls)[0]),
+    item_kind: first(row.item_kind, row.kind, row.type, table),
+
+    title: first(
+      row.title,
+      row.project_title,
+      row.deal_title,
+      row.property_title,
+      row.name,
+      row.address,
+      row.headline,
+      `${table} ${id}`
+    ),
+
+    description: first(
+      row.description,
+      row.summary,
+      row.notes,
+      row.note,
+      row.seller_situation,
+      row.problem,
+      row.message
+    ),
+
+    city: first(row.city, row.market_city),
+    state: first(row.state, row.market_state, row.region),
+    market: first(row.market, [row.city, row.state].filter(Boolean).join(", "), row.state),
+    property_type: first(row.property_type, row.asset_type, row.type),
+    strategy: first(row.strategy, row.asset_strategy, row.exit_strategy),
+    status: first(row.status, row.project_status, row.deal_status),
+
+    asking_price: first(row.asking_price, row.price, row.purchase_price, row.list_price),
+    asking_price_display: first(row.asking_price_display, row.price_display),
+    arv: first(row.arv, row.after_repair_value, row.value),
+    arv_display: first(row.arv_display, row.value_display),
+    repairs: first(row.repairs, row.repair_estimate, row.rehab_budget),
+    repair_estimate_display: first(row.repair_estimate_display, row.repairs_display),
+
+    exact_address: first(row.exact_address, row.address, row.property_address),
+    contact_email: first(row.contact_email, row.email, row.seller_email, row.owner_email),
+    contact_phone: first(row.contact_phone, row.phone, row.seller_phone),
+    private_notes: first(row.private_notes, row.internal_notes, row.admin_notes),
+
     created_at: first(row.created_at),
     updated_at: first(row.updated_at),
-    safe_href: table.toLowerCase().includes("pain") ? "/pain-submit" : "/projects",
-    owner_private: owner,
-    ...privateFields,
-    raw: owner ? row : undefined,
   };
 }
 
-async function searchTable(supabase: any, table: string, itemId: string) {
-  const columns = [
+async function tryTableById(supabase: any, table: string, itemId: string) {
+  const idColumns = [
     "id",
+    "item_id",
     "deal_id",
     "project_id",
     "property_id",
-    "card_id",
     "pain_id",
+    "slug",
   ];
+
+  const errors: string[] = [];
+
+  for (const column of idColumns) {
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .eq(column, itemId)
+        .limit(1);
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return {
+          ok: true,
+          item: normalizeItem(data[0], table),
+          table,
+          column,
+        };
+      }
+
+      if (error?.message) errors.push(`${table}.${column}: ${error.message}`);
+    } catch (error: any) {
+      if (error?.message) errors.push(`${table}.${column}: ${error.message}`);
+    }
+  }
+
+  return {
+    ok: false,
+    errors,
+  };
+}
+
+async function tryTableTextSearch(supabase: any, table: string, itemId: string) {
+  const columns = ["title", "name", "address", "description", "notes"];
 
   for (const column of columns) {
     try {
       const { data, error } = await supabase
         .from(table)
         .select("*")
-        .eq(column, itemId)
-        .limit(1)
-        .maybeSingle();
+        .ilike(column, `%${itemId}%`)
+        .limit(1);
 
-      if (!error && data) {
-        return data;
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return {
+          ok: true,
+          item: normalizeItem(data[0], table),
+          table,
+          column,
+        };
       }
-    } catch {
-      // Try next column/table.
-    }
+    } catch {}
   }
 
-  return null;
+  return {
+    ok: false,
+  };
 }
 
 export async function GET(
   request: Request,
-  context: { params: Promise<{ itemId: string }> }
+  context: { params: Promise<{ itemId: string }> | { itemId: string } }
 ) {
   try {
     const params = await context.params;
-    const itemId = decodeURIComponent(clean(params.itemId));
+    const itemId = clean(params.itemId);
 
     if (!itemId) {
       return NextResponse.json(
@@ -253,40 +244,71 @@ export async function GET(
     const owner = isOwnerRequest(request, email);
     const supabase = supabaseClient();
 
-    const tables = [...DEAL_TABLES, ...PAIN_TABLES];
+    const tables = [
+      "vf_deals",
+      "vf_projects",
+      "projects",
+      "property_cards",
+      "vf_property_cards",
+      "pain_requests",
+      "vf_pain_requests",
+      "vf_signals",
+      "vf_alerts",
+      "vf_routing_actions",
+      "vf_routing_introductions",
+    ];
+
+    const errors: string[] = [];
 
     for (const table of tables) {
-      const found = await searchTable(supabase, table, itemId);
+      const result = await tryTableById(supabase, table, itemId);
 
-      if (found) {
+      if (result.ok) {
         return NextResponse.json({
           ok: true,
-          email,
           owner,
-          item: normalize(found, table, owner),
-          table,
-          item_id: itemId,
-          note: owner
-            ? "Owner view includes private fields when present."
-            : "Member-safe view hides private fields.",
+          email,
+          item: result.item,
+          source_table: result.table,
+          matched_column: result.column,
+          note: "Exact item resolved by id.",
+        });
+      }
+
+      if (Array.isArray(result.errors)) errors.push(...result.errors.slice(0, 2));
+    }
+
+    for (const table of tables) {
+      const result = await tryTableTextSearch(supabase, table, itemId);
+
+      if (result.ok) {
+        return NextResponse.json({
+          ok: true,
+          owner,
+          email,
+          item: result.item,
+          source_table: result.table,
+          matched_column: result.column,
+          note: "Exact item resolved by fallback text search.",
         });
       }
     }
 
-    return NextResponse.json({
-      ok: true,
-      email,
-      owner,
-      item: null,
-      item_id: itemId,
-      tables_checked: tables,
-      note: "Item not found in known deal/project/pain tables.",
-    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Exact item not found.",
+        item_id: itemId,
+        checked_tables: tables,
+        sample_errors: errors.slice(0, 8),
+      },
+      { status: 404 }
+    );
   } catch (error: any) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Could not load related intelligence item.",
+        error: "Could not load exact item.",
         details: error?.message || String(error),
       },
       { status: 500 }
