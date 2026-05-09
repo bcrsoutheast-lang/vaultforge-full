@@ -672,7 +672,11 @@ export default function MemberIntelligencePage() {
                   )}
 
                 <div style={{ marginTop: 16 }}>
-                  <Link href="/routing-inbox" style={btn}>
+                  <Link href={`/member-intelligence/${encodeURIComponent(member.id || member.email || "")}`} style={btn}>
+                    Open Intelligence Detail
+                  </Link>
+
+                  <Link href="/routing-inbox" style={ghost}>
                     Routing Context
                   </Link>
 
