@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 import { createClient } from "@supabase/supabase-js";
 
 const PROFILE_BUCKET = "profile-photo";
@@ -862,6 +863,11 @@ export default function ProfilePage() {
   return (
     <main style={page}>
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Smart Profile"
+          subtitle="Train your VaultForge routing, alerts, and member intelligence engine"
+        />
+
         <section style={hero}>
           <div style={eyebrow}>Member Intelligence Profile</div>
           <h1
