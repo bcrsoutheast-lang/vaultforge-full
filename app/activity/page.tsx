@@ -1,12 +1,12 @@
-
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-type AnyRow = Record<string, any>;
+type EventRow = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -17,7 +17,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
+const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.34)",
@@ -40,15 +40,8 @@ const card: React.CSSProperties = {
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
   gap: 18,
-};
-
-const statGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 14,
-  marginBottom: 22,
 };
 
 const chip: React.CSSProperties = {
@@ -95,21 +88,9 @@ const ghost: React.CSSProperties = {
   minHeight: 46,
 };
 
-const danger: React.CSSProperties = {
-  ...ghost,
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.38)",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
-  color: "white",
-  padding: 14,
-  fontSize: 15,
+const muted: React.CSSProperties = {
+  color: "rgba(255,255,255,.72)",
+  lineHeight: 1.55,
 };
 
 function clean(value: unknown) {
@@ -157,7 +138,7 @@ async function safeJson(res: Response) {
 }
 
 function label(value: string) {
-  const text = clean(value || "item").replace(/_/g, " ");
+  const text = clean(value || "event").replace(/_/g, " ");
   return text.slice(0, 1).toUpperCase() + text.slice(1);
 }
 
@@ -169,104 +150,143 @@ function first(...values: unknown[]) {
   return "";
 }
 
-function exactSignalId(item: AnyRow) {
-  return first(item.signal_id, item.signalId, item.alert_id, item.alertId, item.id);
+function exactSignalId(item: EventRow | null) {
+  return first(item?.signal_id, item?.signalId, item?.alert_id, item?.alertId);
 }
 
-function exactItemId(item: AnyRow) {
-  return first(item.item_id, item.itemId, item.deal_id, item.dealId, item.project_id, item.projectId, item.property_id, item.propertyId, item.pain_id, item.painId);
+function exactItemId(item: EventRow | null) {
+  return first(item?.item_id, item?.itemId, item?.deal_id, item?.dealId, item?.project_id, item?.projectId, item?.property_id, item?.propertyId, item?.pain_id, item?.painId);
 }
 
-function exactIntroId(item: AnyRow) {
-  return first(item.introduction_id, item.intro_id, item.introId, item.id);
+function exactIntroId(item: EventRow | null) {
+  return first(item?.introduction_id, item?.intro_id, item?.introId, item?.id);
 }
 
-function exactSignalHref(item: AnyRow) {
+function exactSignalHref(item: EventRow | null) {
   const signalId = exactSignalId(item);
   return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/intelligence";
 }
 
-function exactWorkHref(item: AnyRow) {
-  const itemId = exactItemId(item);
-  if (itemId) return `/deal-room/${encodeURIComponent(itemId)}`;
-  return exactSignalHref(item);
-}
-
-function exactRoutingHref(item: AnyRow) {
+function exactRoutingHref(item: EventRow | null) {
   const signalId = exactSignalId(item);
   return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
 }
 
-function exactIntroHref(item: AnyRow) {
+function exactWorkHref(item: EventRow | null) {
+  const itemId = exactItemId(item);
+  return itemId ? `/deal-room/${encodeURIComponent(itemId)}` : "";
+}
+
+function exactIntroHref(item: EventRow | null) {
   const introId = exactIntroId(item);
-  return introId ? `/introduction/${encodeURIComponent(introId)}` : "/introductions";
+  return introId ? `/introduction/${encodeURIComponent(introId)}` : "";
 }
 
-function exactActivityHref(item: AnyRow) {
-  const rawId = clean(item.raw_id || item.id).replace(/^routing-/, "").replace(/^intro-/, "").replace(/^response-/, "");
-  const type = clean(item.type || item.event_type || item.kind).toLowerCase();
-
-  if (!rawId) return "/activity";
-  if (type.includes("routing") || clean(item.id).startsWith("routing-")) return `/activity/routing/${encodeURIComponent(rawId)}`;
-  if (type.includes("response") || clean(item.id).startsWith("response-")) return `/activity/response/${encodeURIComponent(rawId)}`;
-  if (type.includes("intro") || clean(item.id).startsWith("intro-")) return `/activity/introduction/${encodeURIComponent(rawId)}`;
-  return "/activity";
+function titleOf(item: EventRow | null) {
+  return first(item?.title, item?.name, item?.subject, item?.headline, "Activity event");
 }
 
-function priorityOf(item: AnyRow) {
-  return first(item.priority, item.severity, item.alert_priority, item.urgency, "medium").toLowerCase();
+function noteOf(item: EventRow | null) {
+  return first(item?.urgency_reason, item?.routing_reason, item?.note, item?.notes, item?.message, item?.description, item?.reason, "Exact activity event context.");
 }
 
-function priorityTone(item: AnyRow) {
+function priorityOf(item: EventRow | null) {
+  return first(item?.priority, item?.severity, "medium").toLowerCase();
+}
+
+function actionOf(item: EventRow | null) {
+  return first(item?.action, item?.routing_action, item?.response, item?.status, item?.type, "activity");
+}
+
+function toneOf(item: EventRow | null) {
   const priority = priorityOf(item);
   if (priority === "urgent") return "#ffb3b3";
   if (priority === "high") return "#f5d978";
   return "#9df3bf";
 }
 
-function titleOf(item: AnyRow) {
-  return first(item.title, item.name, item.headline, item.signal_title, item.alert_title, "VaultForge Item");
+function visibleEmail(item: EventRow | null) {
+  return first(
+    item?.member_email,
+    item?.target_email,
+    item?.target_member_email,
+    item?.visible_to_email,
+    item?.recipient_email,
+    item?.responder_email,
+    item?.responding_member_email,
+    item?.counterparty_email
+  );
 }
 
-function messageOf(item: AnyRow) {
-  return first(item.note, item.message, item.description, item.summary, item.reason, item.urgency_reason, "Exact operational context ready.");
-}
-
-function actionOf(item: AnyRow) {
-  return first(item.action, item.routing_action, item.response, item.status, item.type, "activity");
-}
-
-function scoreOf(item: AnyRow) {
-  const raw = Number(item.confidence_score || item.match_score || item.score || 0);
-  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
-  const priority = priorityOf(item);
-  if (priority === "urgent") return 84;
-  if (priority === "high") return 72;
-  return 58;
-}
-
-function StatCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
+function InfoBox({ title, value }: { title: string; value?: string | number }) {
   return (
     <div style={card}>
       <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
         {title}
       </div>
-      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
-      <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>{detail}</p>
+      <p style={{ ...muted, fontSize: 18, margin: 0 }}>{value || "—"}</p>
     </div>
   );
 }
 
-export default function ActivityPage() {
+async function readRoutingAction(email: string, owner: boolean, eventId: string) {
+  const res = await fetch(`/api/routing/actions?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`, {
+    cache: "no-store",
+    headers: {
+      "x-vf-email": email,
+      "x-vf-admin": owner ? "1" : "0",
+    },
+  });
+
+  const data = await safeJson(res);
+  const rows = Array.isArray(data?.actions) ? data.actions : [];
+
+  return rows.find((item: EventRow) => clean(item.id) === eventId) || null;
+}
+
+async function readIntroduction(email: string, owner: boolean, eventId: string) {
+  const res = await fetch(`/api/routing/introductions?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`, {
+    cache: "no-store",
+    headers: {
+      "x-vf-email": email,
+      "x-vf-admin": owner ? "1" : "0",
+    },
+  });
+
+  const data = await safeJson(res);
+  const rows = Array.isArray(data?.introductions) ? data.introductions : [];
+
+  return rows.find((item: EventRow) => clean(item.id) === eventId || exactIntroId(item) === eventId) || null;
+}
+
+async function readResponse(email: string, owner: boolean, eventId: string) {
+  const res = await fetch(`/api/routing/introduction-responses?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`, {
+    cache: "no-store",
+    headers: {
+      "x-vf-email": email,
+      "x-vf-admin": owner ? "1" : "0",
+    },
+  });
+
+  const data = await safeJson(res);
+  const rows = Array.isArray(data?.responses) ? data.responses : [];
+
+  return rows.find((item: EventRow) => clean(item.id) === eventId || clean(item.response_id) === eventId) || null;
+}
+
+export default function ActivityEventDetailPage() {
+  const params = useParams();
+
+  const eventType = decodeURIComponent(String(params?.eventType || ""));
+  const eventId = decodeURIComponent(String(params?.eventId || ""));
+
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
-  const [events, setEvents] = useState<AnyRow[]>([]);
-  const [status, setStatus] = useState("Loading activity stream...");
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [event, setEvent] = useState<EventRow | null>(null);
+  const [status, setStatus] = useState("Loading exact activity event...");
 
   async function load() {
-    setStatus("Loading activity stream...");
+    setStatus("Loading exact activity event...");
 
     try {
       const currentEmail = getEmail();
@@ -280,110 +300,29 @@ export default function ActivityPage() {
         return;
       }
 
-      const headers = {
-        "x-vf-email": currentEmail,
-        "x-vf-admin": currentOwner ? "1" : "0",
-      };
+      let found: EventRow | null = null;
+      const type = eventType.toLowerCase();
 
-      const [routingRes, introRes, responseRes] = await Promise.all([
-        fetch(`/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers,
-        }),
-        fetch(`/api/routing/introductions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers,
-        }),
-        fetch(`/api/routing/introduction-responses?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers,
-        }),
-      ]);
+      if (type.includes("routing")) {
+        found = await readRoutingAction(currentEmail, currentOwner, eventId);
+      } else if (type.includes("intro")) {
+        found = await readIntroduction(currentEmail, currentOwner, eventId);
+      } else if (type.includes("response")) {
+        found = await readResponse(currentEmail, currentOwner, eventId);
+      }
 
-      const routingData = await safeJson(routingRes);
-      const introData = await safeJson(introRes);
-      const responseData = await safeJson(responseRes);
-
-      const routing = Array.isArray(routingData?.actions)
-        ? routingData.actions.map((item: AnyRow) => ({
-            ...item,
-            id: `routing-${item.id}`,
-            raw_id: item.id,
-            type: "routing_action",
-            title: item.title || "Routing action",
-          }))
-        : [];
-
-      const introductions = Array.isArray(introData?.introductions)
-        ? introData.introductions.map((item: AnyRow) => ({
-            ...item,
-            id: `intro-${item.id}`,
-            raw_id: item.id,
-            type: "controlled_introduction",
-            title: item.title || "Controlled introduction",
-            introduction_id: item.id,
-          }))
-        : [];
-
-      const responses = Array.isArray(responseData?.responses)
-        ? responseData.responses.map((item: AnyRow) => ({
-            ...item,
-            id: `response-${item.id}`,
-            raw_id: item.id,
-            type: `introduction_response_${item.response || "activity"}`,
-            title: item.title || "Introduction response",
-          }))
-        : [];
-
-      const merged = [...routing, ...introductions, ...responses].sort((a, b) => {
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-      });
-
-      setEvents(merged);
-      setStatus(merged.length ? "" : "No activity events yet.");
+      setEvent(found);
+      setStatus(found ? "" : "Exact activity event not found for this account.");
     } catch (error: any) {
-      setStatus(error?.message || "Could not load activity stream.");
+      setStatus(error?.message || "Could not load exact activity event.");
     }
   }
 
   useEffect(() => {
     load();
-  }, []);
+  }, [eventType, eventId]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    return events.filter((item) => {
-      if (typeFilter !== "all") {
-        const type = clean(item.type).toLowerCase();
-        if (typeFilter === "routing" && !type.includes("routing")) return false;
-        if (typeFilter === "introduction" && (!type.includes("intro") || type.includes("response"))) return false;
-        if (typeFilter === "response" && !type.includes("response")) return false;
-      }
-
-      if (!q) return true;
-
-      return [
-        titleOf(item),
-        messageOf(item),
-        actionOf(item),
-        item.type,
-        item.member_email,
-        item.target_email,
-        exactSignalId(item),
-        exactItemId(item),
-        exactIntroId(item),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
-    });
-  }, [events, search, typeFilter]);
-
-  const routingCount = events.filter((item) => clean(item.type).includes("routing")).length;
-  const introCount = events.filter((item) => clean(item.type).includes("intro") && !clean(item.type).includes("response")).length;
-  const responseCount = events.filter((item) => clean(item.type).includes("response")).length;
-  const urgent = events.filter((item) => priorityOf(item) === "urgent").length;
+  const tone = toneOf(event);
 
   return (
     <main style={page}>
@@ -411,130 +350,81 @@ export default function ActivityPage() {
       `}</style>
 
       <div style={wrap}>
-        <section style={hero}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            VaultForge Activity Stream
+        <section style={{ ...hero, borderColor: `${tone}66` }}>
+          <div style={{ color: tone, letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Exact Activity Event · {owner ? "Owner View" : "Member View"}
           </div>
 
-          <h1 style={{ fontSize: "clamp(56px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            Exact activity.
+          <h1 style={{ fontSize: "clamp(54px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
+            {titleOf(event)}
           </h1>
 
-          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.55 }}>
-            Activity cards now open exact events, exact signals, exact introductions, and exact work areas.
+          <p style={{ ...muted, fontSize: 22 }}>
+            {noteOf(event)}
           </p>
 
           <div>
-            <span style={chip}>Events: {events.length}</span>
-            <span style={chip}>Routing: {routingCount}</span>
-            <span style={chip}>Introductions: {introCount}</span>
-            <span style={chip}>Responses: {responseCount}</span>
-            <span style={chip}>Urgent: {urgent}</span>
-            <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
+            <span style={chip}>Type: {label(eventType)}</span>
+            <span style={chip}>Event: {eventId}</span>
+            <span style={chip}>Priority: {label(priorityOf(event))}</span>
+            <span style={chip}>Action: {label(actionOf(event))}</span>
+            {visibleEmail(event) && <span style={chip}>Email: {visibleEmail(event)}</span>}
           </div>
 
           <div className="vf-actions" style={{ marginTop: 14 }}>
-            <button type="button" style={btn} onClick={load}>Refresh Activity</button>
+            <button type="button" style={btn} onClick={load}>Refresh Event</button>
+            <Link href="/activity" style={ghost}>Back to Activity</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            <Link href="/intelligence" style={ghost}>Intelligence</Link>
             <Link href="/introductions" style={ghost}>Introductions</Link>
-            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
-            {owner && <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>}
-            <Link href="/logout" style={danger}>Logout</Link>
+            {event && exactIntroHref(event) && <Link href={exactIntroHref(event)} style={ghost}>Introduction</Link>}
+            {event && exactSignalId(event) && <Link href={exactSignalHref(event)} style={ghost}>Signal</Link>}
+            {event && exactSignalId(event) && <Link href={exactRoutingHref(event)} style={ghost}>Routing Room</Link>}
+            {event && exactWorkHref(event) && <Link href={exactWorkHref(event)} style={ghost}>Work Area</Link>}
           </div>
 
           {status && (
-            <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+            <p style={{ color: status.toLowerCase().includes("could not") || status.toLowerCase().includes("not found") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
               {status}
             </p>
           )}
         </section>
 
-        <section style={statGrid}>
-          <StatCard title="Events" value={events.length} detail="Total activity records visible." />
-          <StatCard title="Routing" value={routingCount} detail="Routing action events." />
-          <StatCard title="Intros" value={introCount} detail="Controlled introduction events." />
-          <StatCard title="Responses" value={responseCount} detail="Member response events." />
-          <StatCard title="Urgent" value={urgent} detail="Urgent operational pressure." />
-        </section>
+        {event && (
+          <>
+            <section style={grid}>
+              <InfoBox title="Event Type" value={eventType} />
+              <InfoBox title="Event ID" value={eventId} />
+              <InfoBox title="Signal ID" value={exactSignalId(event)} />
+              <InfoBox title="Item ID" value={exactItemId(event)} />
+              <InfoBox title="Intro ID" value={exactIntroId(event)} />
+              <InfoBox title="Status" value={first(event.status, event.routing_status, event.intro_status)} />
+              <InfoBox title="Created" value={event.created_at} />
+              <InfoBox title="Updated" value={event.updated_at} />
+              <InfoBox title="Source" value={event.source} />
+              <InfoBox title="State Match" value={event.state_match} />
+              <InfoBox title="Strategy Match" value={event.strategy_match} />
+              <InfoBox title="Role Match" value={event.role_match} />
+            </section>
 
-        <section style={hero}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            Filters
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
-            <input
-              style={input}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search activity, member email, signal id, item id..."
-            />
-            <select
-              style={input}
-              value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value)}
-            >
-              <option value="all" style={{ color: "#111" }}>All Activity</option>
-              <option value="routing" style={{ color: "#111" }}>Routing</option>
-              <option value="introduction" style={{ color: "#111" }}>Introductions</option>
-              <option value="response" style={{ color: "#111" }}>Responses</option>
-            </select>
-          </div>
-        </section>
+            <section style={{ ...hero, marginTop: 22 }}>
+              <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+                Connected Exact Work
+              </div>
 
-        {filtered.length === 0 ? (
-          <section style={hero}>
-            <strong>No exact activity cards yet.</strong>
-            <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55 }}>
-              Activity will populate after routing actions, introductions, and member responses exist.
-            </p>
-          </section>
-        ) : (
-          <section style={grid}>
-            {filtered.map((item, index) => {
-              const tone = priorityTone(item);
-              return (
-                <article key={item.id || index} style={{ ...card, borderColor: `${tone}66` }}>
-                  <div style={{ color: tone, letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
-                    {label(actionOf(item))}
-                  </div>
-
-                  <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>
-                    {titleOf(item)}
-                  </h2>
-
-                  <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55, fontSize: 18 }}>
-                    {messageOf(item)}
-                  </p>
-
-                  <div style={{ margin: "12px 0" }}>
-                    <span style={chip}>Score: {scoreOf(item)}</span>
-                    {item.member_email && <span style={chip}>{item.member_email}</span>}
-                    {exactSignalId(item) && <span style={chip}>Signal: {exactSignalId(item)}</span>}
-                    {exactItemId(item) && <span style={chip}>Item: {exactItemId(item)}</span>}
-                    {exactIntroId(item) && <span style={chip}>Intro: {exactIntroId(item)}</span>}
-                  </div>
-
-                  <div className="vf-actions">
-                    <Link href={exactActivityHref(item)} style={btn}>Open Exact Event</Link>
-                    {exactIntroId(item) && <Link href={exactIntroHref(item)} style={ghost}>Introduction</Link>}
-                    {exactSignalId(item) && <Link href={exactSignalHref(item)} style={ghost}>Signal</Link>}
-                    {exactSignalId(item) && <Link href={exactRoutingHref(item)} style={ghost}>Routing Room</Link>}
-                    {exactItemId(item) && <Link href={exactWorkHref(item)} style={ghost}>Work Area</Link>}
-                  </div>
-                </article>
-              );
-            })}
-          </section>
+              {exactIntroHref(event) && <Link href={exactIntroHref(event)} style={btn}>Open Introduction</Link>}
+              {exactSignalId(event) && <Link href={exactSignalHref(event)} style={ghost}>Open Signal</Link>}
+              {exactSignalId(event) && <Link href={exactRoutingHref(event)} style={ghost}>Open Routing Room</Link>}
+              {exactWorkHref(event) && <Link href={exactWorkHref(event)} style={ghost}>Open Work Area</Link>}
+            </section>
+          </>
         )}
 
         <section style={{ ...hero, marginTop: 22 }}>
           <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             Current Safety Mode
           </div>
-          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.6 }}>
-            This page fixes exact activity navigation only. It does not create routes, send notifications, or mutate records.
+          <p style={{ ...muted, fontSize: 19 }}>
+            This page reads one exact activity record only. It does not send messages, create routing, stage introductions, or mutate records.
           </p>
         </section>
       </div>
