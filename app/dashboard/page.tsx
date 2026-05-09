@@ -240,6 +240,7 @@ export default function DashboardPage() {
           <Link href="/intelligence" style={btn}>Intelligence Map</Link>
           <Link href="/alerts" style={ghost}>Smart Alerts</Link>
           <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+          <Link href="/introductions" style={ghost}>Introductions</Link>
           <Link href="/submit" style={ghost}>Create Deal</Link>
           <Link href="/pain-submit" style={ghost}>Pain Button</Link>
           <Link href="/projects" style={ghost}>Deal Rooms</Link>
@@ -252,6 +253,13 @@ export default function DashboardPage() {
             text="Review routed opportunities connected to your role, geography, and strategy."
             href="/routing-inbox"
             button="Open Routing Inbox"
+          />
+
+          <ToolCard
+            title="Introductions"
+            text="Review controlled introductions staged through the VaultForge routing system."
+            href="/introductions"
+            button="Open Introductions"
           />
 
           <ToolCard
