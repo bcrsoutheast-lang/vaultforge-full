@@ -22,11 +22,15 @@ const navItems: NavItem[] = [
   { label: "Projects", href: "/projects", section: "Deal Flow" },
   { label: "Buy Bucket", href: "/buy-bucket", section: "Deal Flow" },
   { label: "Messages", href: "/messages", section: "Deal Flow" },
+  { label: "Pain Feed", href: "/pain", section: "Deal Flow" },
+  { label: "Pain Button", href: "/pain-submit", section: "Deal Flow" },
+  { label: "Pain Messages", href: "/pain-messages", section: "Deal Flow" },
 
   { label: "Members", href: "/members", section: "Network" },
   { label: "Member Intelligence", href: "/member-intelligence", section: "Network" },
 
   { label: "Profile", href: "/profile", section: "Account" },
+  { label: "Payment", href: "/payment", section: "Account" },
   { label: "Logout", href: "/logout", section: "Account" },
 ];
 
@@ -284,4 +288,4 @@ const activeLink: React.CSSProperties = {
   color: "#050505",
   background: "linear-gradient(135deg,#f4d47b,#a96d02)",
   border: "1px solid rgba(232,196,107,.36)",
-};
+}
