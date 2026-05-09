@@ -166,6 +166,7 @@ export default function ActivityStreamPage() {
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState<ActivityItem[]>([]);
   const [filter, setFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
 
   async function load() {
     setLoading(true);
@@ -270,26 +271,33 @@ export default function ActivityStreamPage() {
       routing: feed.filter((item) => item.type.includes("routing")).length,
       intros: feed.filter((item) => item.type.includes("introduction") && !item.type.includes("response")).length,
       responses: feed.filter((item) => item.type.includes("response")).length,
+      urgent: feed.filter((item) => clean(item.priority).toLowerCase() === "urgent").length,
+      high: feed.filter((item) => clean(item.priority).toLowerCase() === "high").length,
+      medium: feed.filter((item) => clean(item.priority).toLowerCase() === "medium").length,
     };
   }, [feed]);
 
   const filteredFeed = useMemo(() => {
-    if (filter === "all") return feed;
+    let list = feed;
 
     if (filter === "routing") {
-      return feed.filter((item) => item.type.includes("routing"));
+      list = list.filter((item) => item.type.includes("routing"));
     }
 
     if (filter === "introductions") {
-      return feed.filter((item) => item.type.includes("introduction") && !item.type.includes("response"));
+      list = list.filter((item) => item.type.includes("introduction") && !item.type.includes("response"));
     }
 
     if (filter === "responses") {
-      return feed.filter((item) => item.type.includes("response"));
+      list = list.filter((item) => item.type.includes("response"));
     }
 
-    return feed;
-  }, [feed, filter]);
+    if (priorityFilter !== "all") {
+      list = list.filter((item) => clean(item.priority).toLowerCase() === priorityFilter);
+    }
+
+    return list;
+  }, [feed, filter, priorityFilter]);
 
   return (
     <main style={page}>
@@ -337,6 +345,9 @@ export default function ActivityStreamPage() {
             <span style={chip}>Routing: {metrics.routing}</span>
             <span style={chip}>Introductions: {metrics.intros}</span>
             <span style={chip}>Responses: {metrics.responses}</span>
+            <span style={chip}>Urgent: {metrics.urgent}</span>
+            <span style={chip}>High: {metrics.high}</span>
+            <span style={chip}>Medium: {metrics.medium}</span>
             <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
@@ -383,12 +394,27 @@ export default function ActivityStreamPage() {
             Responses
           </button>
 
+          <div style={{ marginTop: 18 }}>
+            <button type="button" style={priorityFilter === "all" ? btn : ghost} onClick={() => setPriorityFilter("all")}>
+              All Priorities
+            </button>
+            <button type="button" style={priorityFilter === "urgent" ? btn : ghost} onClick={() => setPriorityFilter("urgent")}>
+              Urgent
+            </button>
+            <button type="button" style={priorityFilter === "high" ? btn : ghost} onClick={() => setPriorityFilter("high")}>
+              High
+            </button>
+            <button type="button" style={priorityFilter === "medium" ? btn : ghost} onClick={() => setPriorityFilter("medium")}>
+              Medium
+            </button>
+          </div>
+
           <p style={{
             color:"rgba(255,255,255,.72)",
             lineHeight:1.6,
             marginBottom:0
           }}>
-            Showing {filteredFeed.length} of {feed.length} events.
+            Showing {filteredFeed.length} of {feed.length} events. Type filter: {label(filter)}. Priority filter: {label(priorityFilter)}.
           </p>
         </section>
 
@@ -410,7 +436,12 @@ export default function ActivityStreamPage() {
                   key={item.id}
                   style={{
                     ...feedCard,
-                    borderColor: `${itemTone}66`,
+                    borderColor:
+                      clean(item.priority).toLowerCase() === "urgent"
+                        ? "rgba(255,120,120,.72)"
+                        : clean(item.priority).toLowerCase() === "high"
+                        ? "rgba(245,217,120,.72)"
+                        : `${itemTone}66`,
                   }}
                 >
                   <div style={{
