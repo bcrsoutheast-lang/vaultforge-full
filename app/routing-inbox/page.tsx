@@ -1,9 +1,13 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import {
+  VaultForgePulseStrip,
+  VaultForgeSignalBar,
+  VaultForgeCommandFooter,
+} from "../components/VaultForgeVisualLayer";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -431,6 +435,21 @@ export default function RoutingInboxPage() {
           subtitle="Exact routed opportunities and operational matching"
         />
 
+        <VaultForgePulseStrip
+          items={[
+            { label: "ROUTING", value: "LIVE", tone: "gold" },
+            { label: "MATCHES", value: "TRACKING", tone: "green" },
+            { label: "INTROS", value: "ACTIVE", tone: "purple" },
+            { label: "PRESSURE", value: "WATCHING", tone: "red" },
+          ]}
+        />
+
+        <VaultForgeSignalBar
+          urgent={urgent}
+          high={buyer + lender}
+          normal={Math.max(0, actions.length - urgent - buyer - lender)}
+        />
+
         <section style={hero}>
           <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Routed Opportunities
@@ -572,6 +591,7 @@ export default function RoutingInboxPage() {
             This page fixes exact routing links only. It does not create routes, send notifications, or mutate records.
           </p>
         </section>
+        <VaultForgeCommandFooter />
       </div>
     </main>
   );
