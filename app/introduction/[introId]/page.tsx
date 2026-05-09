@@ -232,6 +232,45 @@ function InfoBox({ title, value }: { title: string; value?: string | number }) {
   );
 }
 
+async function saveIntroResponse({
+  email,
+  intro,
+  response,
+}: {
+  email: string;
+  intro: Introduction;
+  response: string;
+}) {
+  const res = await fetch("/api/routing/introduction-responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-vf-email": email,
+    },
+    body: JSON.stringify({
+      email,
+      member_email: email,
+      introduction_id: intro.id,
+      signal_id: intro.signal_id,
+      item_id: intro.item_id,
+      title: intro.title,
+      priority: intro.priority,
+      response,
+      note: intro.note,
+      source: "member_introduction_detail",
+    }),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || data?.details || "Could not save introduction response.");
+  }
+
+  return data;
+}
+
+
 export default function MemberIntroductionDetailPage() {
   const params = useParams();
   const introId = decodeURIComponent(String(params?.introId || ""));
@@ -241,6 +280,8 @@ export default function MemberIntroductionDetailPage() {
   const [intro, setIntro] = useState<Introduction | null>(null);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [item, setItem] = useState<RelatedItem | null>(null);
+  const [responseBusy, setResponseBusy] = useState("");
+  const [responseMessage, setResponseMessage] = useState("");
   const [status, setStatus] = useState("Loading introduction...");
 
   async function load() {
@@ -336,6 +377,27 @@ export default function MemberIntroductionDetailPage() {
 
   const statusColor = useMemo(() => tone(intro?.status || ""), [intro?.status]);
 
+  async function handleIntroResponse(response: string) {
+    if (!intro?.id) return;
+
+    setResponseBusy(response);
+    setResponseMessage("Saving introduction response...");
+
+    try {
+      const result = await saveIntroResponse({
+        email,
+        intro,
+        response,
+      });
+
+      setResponseMessage(result?.message || "Introduction response saved safely.");
+    } catch (error: any) {
+      setResponseMessage(error?.message || "Could not save introduction response.");
+    } finally {
+      setResponseBusy("");
+    }
+  }
+
   return (
     <main style={page}>
       <style>{`
@@ -394,6 +456,20 @@ export default function MemberIntroductionDetailPage() {
               {status}
             </p>
           )}
+
+          {responseMessage && (
+            <p
+              style={{
+                color:
+                  responseMessage.toLowerCase().includes("could not")
+                    ? "#ffd0d0"
+                    : "#9df3bf",
+                fontWeight: 900,
+              }}
+            >
+              {responseMessage}
+            </p>
+          )}
         </section>
 
         {intro && (
@@ -442,6 +518,56 @@ export default function MemberIntroductionDetailPage() {
                   {owner && <InfoBox title="Contact Phone" value={item.contact_phone} />}
                   {owner && <InfoBox title="Private Notes" value={item.private_notes} />}
                 </section>
+              </section>
+            )}
+
+            {!owner && (
+              <section style={{ ...hero, marginTop: 22 }}>
+                <div style={greenEyebrow}>Respond to Introduction</div>
+                <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+                  What do you want to do next?
+                </h2>
+                <p style={{ ...muted, fontSize: 19 }}>
+                  This saves your response only. It does not message anyone or reveal private details.
+                </p>
+
+                <div className="vf-intro-detail-actions">
+                  <button
+                    type="button"
+                    style={btn}
+                    disabled={!!responseBusy}
+                    onClick={() => handleIntroResponse("interested")}
+                  >
+                    {responseBusy === "interested" ? "Saving..." : "Interested"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!responseBusy}
+                    onClick={() => handleIntroResponse("need_details")}
+                  >
+                    {responseBusy === "need_details" ? "Saving..." : "Need Details"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!responseBusy}
+                    onClick={() => handleIntroResponse("request_call")}
+                  >
+                    {responseBusy === "request_call" ? "Saving..." : "Request Call"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!responseBusy}
+                    onClick={() => handleIntroResponse("pass")}
+                  >
+                    {responseBusy === "pass" ? "Saving..." : "Pass"}
+                  </button>
+                </div>
               </section>
             )}
 
