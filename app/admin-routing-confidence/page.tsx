@@ -290,7 +290,11 @@ export default function AdminRoutingConfidencePage() {
     load();
   }, []);
 
-  const enriched = useMemo(() => {
+  const enriched = useMemo<(Action & {
+    _score: number;
+    _level: string;
+    _gaps: string[];
+  })[]>(() => {
     return actions.map((action) => {
       const score = actionScore(action);
       const level = confidenceLevel(score);
@@ -304,7 +308,11 @@ export default function AdminRoutingConfidencePage() {
     });
   }, [actions]);
 
-  const filtered = useMemo(() => {
+  const filtered = useMemo<(Action & {
+    _score: number;
+    _level: string;
+    _gaps: string[];
+  })[]>(() => {
     let list = [...enriched];
 
     if (levelFilter !== "all") {
