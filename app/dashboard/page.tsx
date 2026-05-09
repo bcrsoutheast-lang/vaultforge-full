@@ -121,12 +121,20 @@ export default function DashboardPage() {
     try {
       const email = getEmail();
 
-      const response = await fetch(`/api/dashboard/live?email=${encodeURIComponent(email)}`, {
-        cache: "no-store",
-        headers: {
-          "x-vf-email": email,
-        },
-      });
+      const isOwner =
+        email === "bcrsoutheast@gmail.com" ||
+        readCookie("vf_admin") === "1";
+
+      const response = await fetch(
+        `/api/dashboard/live?email=${encodeURIComponent(email)}${isOwner ? "&owner=1" : ""}`,
+        {
+          cache: "no-store",
+          headers: {
+            "x-vf-email": email,
+            ...(isOwner ? { "x-vf-admin": "1" } : {}),
+          },
+        }
+      );
 
       const data = (await response.json().catch(() => ({}))) as LivePayload;
 
