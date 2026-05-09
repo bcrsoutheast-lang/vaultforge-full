@@ -159,6 +159,16 @@ const WINDOWS: ControlWindow[] = [
     tone: "green",
   },
   {
+    code: "ACTIVITY",
+    title: "Global Activity Stream",
+    purpose: "Unifies routing actions, controlled introductions, and member responses into one Bloomberg-style operational feed.",
+    automatedJob: "Read-only stream only. No automation or notifications are triggered.",
+    adminJob: "Monitor platform movement and open the exact deal, signal, intro, or routing room from one place.",
+    risk: "Must remain read-only until automation permissions are hardened.",
+    href: "/activity",
+    tone: "purple",
+  },
+  {
     code: "MEMBERS",
     title: "Member Intelligence Graph",
     purpose: "Tracks buyers, lenders, sellers, contractors, operators, developers, and deal sources.",
@@ -715,6 +725,7 @@ export default function AdminIntelligencePage() {
           <div className="vf-admin-intel-actions" style={{ marginTop: 18 }}>
             <button type="button" onClick={load} style={btn}>Refresh Owner Signals</button>
             <Link href="/admin" style={btn}>Admin Home</Link>
+            <Link href="/activity" style={btn}>Activity Stream</Link>
             <Link href="/admin-routing" style={btn}>Admin Routing</Link>
             <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
             <Link href="/admin-introductions" style={btn}>Admin Introductions</Link>
