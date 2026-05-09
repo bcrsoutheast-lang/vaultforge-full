@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Access = {
   email: string;
@@ -312,6 +313,11 @@ function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "l
   return (
     <main style={page}>
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Create Deal Room"
+          subtitle="Submit routed opportunities into the VaultForge intelligence network"
+        />
+
         <section style={card}>
           <div style={greenEyebrow}>VAULTFORGE CREATE</div>
 
@@ -563,6 +569,11 @@ export default function SubmitPage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Create Deal Room"
+          subtitle="Submit routed opportunities into the VaultForge intelligence network"
+        />
+
         <section style={card}>
           <div style={greenEyebrow}>VAULTFORGE CREATE</div>
 
