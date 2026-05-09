@@ -307,10 +307,11 @@ export default function RoutingInboxPage() {
           </h1>
 
           <p style={{ color: "rgba(255,255,255,.72)", fontSize: 21, lineHeight: 1.5 }}>
-            Buyer, lender, operator, contractor, and review actions routed through the VaultForge intelligence layer.
+            Buyer, lender, operator, contractor, and review actions routed through the VaultForge intelligence layer. When owner stages a controlled intro, it appears under Introductions.
           </p>
 
           <Link href="/alerts" style={ghost}>Alerts</Link>
+          <Link href="/introductions" style={ghost}>Introductions</Link>
           <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
           <Link href="/projects" style={ghost}>Deal Rooms</Link>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
