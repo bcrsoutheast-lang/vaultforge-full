@@ -139,6 +139,16 @@ const WINDOWS: ControlWindow[] = [
     tone: "gold",
   },
   {
+    code: "DISPATCH",
+    title: "Controlled Dispatch Queue",
+    purpose: "Shows approved/ready introductions staged for future controlled dispatch.",
+    automatedJob: "No sending yet. This queue only shows what is ready for future dispatch.",
+    adminJob: "Review ready introductions before any notification or intro send layer is built.",
+    risk: "Must remain read-only until safe notification and send controls are added.",
+    href: "/admin-dispatch-queue",
+    tone: "purple",
+  },
+  {
     code: "MEMBERS",
     title: "Member Intelligence Graph",
     purpose: "Tracks buyers, lenders, sellers, contractors, operators, developers, and deal sources.",
@@ -698,6 +708,7 @@ export default function AdminIntelligencePage() {
             <Link href="/admin-routing" style={btn}>Admin Routing</Link>
             <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
             <Link href="/admin-introductions" style={btn}>Admin Introductions</Link>
+            <Link href="/admin-dispatch-queue" style={btn}>Dispatch Queue</Link>
             <Link href="/intelligence" style={ghost}>Member Intelligence Map</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/network" style={ghost}>Network</Link>
