@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../../components/VaultForgeMemberNav";
 
 type PainSignal = Record<string, any>;
 type MessageRow = Record<string, any>;
@@ -243,6 +244,11 @@ export default function PainMessagePage({ params }: { params: { id: string } }) 
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Pain Thread"
+          subtitle="Signal-specific operational messaging and routed conversations"
+        />
+
         <section style={hero}>
           <div style={eyebrow}>Pain Thread</div>
           <h1 style={{ fontSize: "clamp(48px,10vw,88px)", lineHeight: 0.9, margin: "0 0 18px" }}>
