@@ -320,6 +320,8 @@ export default function IntelligencePage() {
   const [status, setStatus] = useState("Loading intelligence map...");
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [generateStatus, setGenerateStatus] = useState("");
+  const [generatingId, setGeneratingId] = useState("");
 
   async function load() {
     setStatus("Loading intelligence map...");
@@ -341,6 +343,62 @@ export default function IntelligencePage() {
       setStatus(rows.length ? "" : "No intelligence signals available yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load intelligence.");
+    }
+  }
+
+  async function generateRoutingFromCard(item: SignalCard) {
+    if (!owner) {
+      setGenerateStatus("Owner/admin access required to generate routing actions.");
+      return;
+    }
+
+    const signalId = exactSignalId(item);
+    const itemId = exactItemId(item);
+    const activeId = signalId || itemId || titleOf(item);
+
+    setGeneratingId(activeId);
+    setGenerateStatus("Generating routing action from exact card...");
+
+    try {
+      const res = await fetch("/api/routing/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+          "x-vf-admin": "1",
+        },
+        body: JSON.stringify({
+          email,
+          admin_email: email,
+          owner: "1",
+          signal_id: signalId,
+          item_id: itemId,
+          title: titleOf(item),
+          note: messageOf(item),
+          state: item?.state || item?.market || item?.location || "",
+          market: item?.market || item?.state || item?.location || "",
+          city: item?.city || "",
+          strategy: item?.strategy || item?.asset_strategy || item?.exit_strategy || "",
+          asset_type: item?.property_type || item?.asset_type || item?.item_kind || "",
+          role_needed: item?.role_needed || item?.target_role || item?.deal_need || "",
+          priority: priorityOf(item),
+          source: "exact_card_generate",
+          source_table: item?.source_table || "",
+          item_kind: item?.item_kind || typeOf(item),
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not generate routing action.");
+      }
+
+      setGenerateStatus(data?.message || "Routing action generated from exact card.");
+    } catch (error: any) {
+      setGenerateStatus(error?.message || "Could not generate routing action.");
+    } finally {
+      setGeneratingId("");
     }
   }
 
@@ -440,6 +498,12 @@ export default function IntelligencePage() {
               {status}
             </p>
           )}
+
+          {generateStatus && (
+            <p style={{ color: generateStatus.toLowerCase().includes("could not") || generateStatus.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+              {generateStatus}
+            </p>
+          )}
         </section>
 
         <section style={statGrid}>
@@ -510,6 +574,16 @@ export default function IntelligencePage() {
                   <div className="vf-actions">
                     <Link href={exactSignalHref(item)} style={btn}>Open Exact Signal</Link>
                     <Link href={exactRoutingHref(item)} style={ghost}>Routing Room</Link>
+                    {owner && (
+                      <button
+                        type="button"
+                        style={ghost}
+                        disabled={generatingId === (signalId || itemId || titleOf(item))}
+                        onClick={() => generateRoutingFromCard(item)}
+                      >
+                        {generatingId === (signalId || itemId || titleOf(item)) ? "Generating..." : "Generate Routing"}
+                      </button>
+                    )}
                     <Link href={exactWorkHref(item)} style={ghost}>Open Exact Work Area</Link>
                   </div>
                 </article>
