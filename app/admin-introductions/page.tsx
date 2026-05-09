@@ -350,6 +350,7 @@ export default function AdminIntroductionsPage() {
           <div className="vf-intro-actions">
             <button type="button" style={btn} onClick={load}>Refresh Introductions</button>
             <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
+            <Link href="/activity" style={btn}>Activity Stream</Link>
             <Link href="/admin-introduction-responses" style={btn}>Intro Responses</Link>
             <Link href="/admin-dispatch-queue" style={btn}>Dispatch Queue</Link>
             <Link href="/admin-routing" style={ghost}>Admin Routing</Link>
