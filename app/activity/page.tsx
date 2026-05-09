@@ -739,6 +739,7 @@ export default function ActivityStreamPage() {
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <Link href="/alerts" style={ghost}>Alerts</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
             <Link href="/introductions" style={ghost}>Introductions</Link>
 
             {owner && (
