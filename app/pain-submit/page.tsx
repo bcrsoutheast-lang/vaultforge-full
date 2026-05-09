@@ -167,12 +167,32 @@ const thumb: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.14)",
 };
 
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
 function getEmail() {
   if (typeof window === "undefined") return "";
+
   try {
     return (
       window.localStorage.getItem("vf_email") ||
       window.sessionStorage.getItem("vf_email") ||
+      readCookie("vf_email") ||
+      readCookie("vf_admin_email") ||
       ""
     )
       .trim()
