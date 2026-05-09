@@ -368,6 +368,7 @@ export default function AdminDispatchQueuePage() {
           <div className="vf-dispatch-actions">
             <button type="button" style={btn} onClick={load}>Refresh Queue</button>
             <Link href="/admin-introductions" style={btn}>All Introductions</Link>
+            <Link href="/admin-introduction-responses" style={btn}>Intro Responses</Link>
             <Link href="/admin-routing-responses" style={ghost}>Response Monitor</Link>
             <Link href="/admin-routing" style={ghost}>Admin Routing</Link>
             <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>
@@ -399,6 +400,7 @@ export default function AdminDispatchQueuePage() {
             <span style={chip}>Owner: {email || OWNER_EMAIL}</span>
             <span style={chip}>Mode: Read-only dispatch queue</span>
             <span style={chip}>No emails sent</span>
+            <span style={chip}>Intro Responses: /admin-introduction-responses</span>
           </div>
         </section>
 
