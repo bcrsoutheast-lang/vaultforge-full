@@ -473,6 +473,7 @@ export default function AdminIntroductionReviewPage() {
 
           <div className="vf-review-actions">
             <Link href="/admin-introductions" style={ghost}>Back to Introductions</Link>
+            <Link href="/admin-dispatch-queue" style={btn}>Dispatch Queue</Link>
             <Link href="/admin-routing-responses" style={ghost}>Response Monitor</Link>
             <Link href="/admin-routing" style={ghost}>Admin Routing</Link>
             <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>
@@ -586,6 +587,7 @@ export default function AdminIntroductionReviewPage() {
               <p style={{ ...muted, fontSize: 19 }}>
                 This page only updates introduction status and review note. It does not send emails,
                 create notifications, expose private details to members, or mutate deals/members.
+                Mark introductions Approved or Ready to make them appear in the Dispatch Queue.
               </p>
             </section>
           </>
