@@ -1,33 +1,12 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type Access = {
-  email?: string;
-  owner?: boolean;
-  profile_complete?: boolean;
-  paid?: boolean;
-  unlocked?: boolean;
-};
-
-type RoutingAction = {
-  id?: string;
-  signal_id?: string;
-  item_id?: string;
-  action?: string;
-  status?: string;
-  title?: string;
-  note?: string;
-  target_role?: string;
-  target_email?: string;
-  priority?: string;
-  source?: string;
-  created_by?: string;
-  created_at?: string;
-};
-
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
+type AnyRow = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -38,7 +17,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto" };
+const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.34)",
@@ -61,15 +40,27 @@ const card: React.CSSProperties = {
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
   gap: 18,
 };
 
-const stats: React.CSSProperties = {
+const statGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
   gap: 14,
   marginBottom: 22,
+};
+
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.25)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 850,
+  fontSize: 13,
+  margin: "0 7px 7px 0",
 };
 
 const btn: React.CSSProperties = {
@@ -104,17 +95,26 @@ const ghost: React.CSSProperties = {
   minHeight: 46,
 };
 
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
+const danger: React.CSSProperties = {
+  ...ghost,
+  color: "#ffd0d0",
+  border: "1px solid rgba(255,120,120,.38)",
 };
+
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.075)",
+  color: "white",
+  padding: 14,
+  fontSize: 15,
+};
+
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
@@ -141,18 +141,11 @@ function getEmail() {
     readCookie("vf_email") ||
     readCookie("vf_admin_email") ||
     ""
-  )
-    .trim()
-    .toLowerCase();
+  ).trim().toLowerCase();
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
-
-function actionLabel(action: string) {
-  const text = String(action || "routing_action").replace(/_/g, " ");
-  return text.slice(0, 1).toUpperCase() + text.slice(1);
+function isOwner(email: string) {
+  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
 async function safeJson(res: Response) {
@@ -163,98 +156,148 @@ async function safeJson(res: Response) {
   }
 }
 
-async function saveResponse({
-  email,
-  action,
-  response,
-}: {
-  email: string;
-  action: RoutingAction;
-  response: string;
-}) {
-  const res = await fetch("/api/routing/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-vf-email": email,
-    },
-    body: JSON.stringify({
-      email,
-      signal_id: action.signal_id,
-      action_id: action.id,
-      item_id: action.item_id,
-      title: action.title,
-      priority: action.priority,
-      source: "routing_inbox",
-      response,
-      note: action.note,
-    }),
-  });
-
-  const data = await safeJson(res);
-
-  if (!res.ok || data?.ok === false) {
-    throw new Error(data?.error || data?.details || "Could not save routing response.");
-  }
-
-  return data;
+function label(value: string) {
+  const text = clean(value || "item").replace(/_/g, " ");
+  return text.slice(0, 1).toUpperCase() + text.slice(1);
 }
 
-function Stat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
+function first(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function exactSignalId(item: AnyRow) {
+  return first(item.signal_id, item.signalId, item.alert_id, item.alertId, item.id);
+}
+
+function exactItemId(item: AnyRow) {
+  return first(item.item_id, item.itemId, item.deal_id, item.dealId, item.project_id, item.projectId, item.property_id, item.propertyId, item.pain_id, item.painId);
+}
+
+function exactIntroId(item: AnyRow) {
+  return first(item.introduction_id, item.intro_id, item.introId, item.id);
+}
+
+function exactSignalHref(item: AnyRow) {
+  const signalId = exactSignalId(item);
+  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/intelligence";
+}
+
+function exactWorkHref(item: AnyRow) {
+  const itemId = exactItemId(item);
+  if (itemId) return `/deal-room/${encodeURIComponent(itemId)}`;
+  return exactSignalHref(item);
+}
+
+function exactRoutingHref(item: AnyRow) {
+  const signalId = exactSignalId(item);
+  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
+}
+
+function exactIntroHref(item: AnyRow) {
+  const introId = exactIntroId(item);
+  return introId ? `/introduction/${encodeURIComponent(introId)}` : "/introductions";
+}
+
+function exactActivityHref(item: AnyRow) {
+  const rawId = clean(item.raw_id || item.id).replace(/^routing-/, "").replace(/^intro-/, "").replace(/^response-/, "");
+  const type = clean(item.type || item.event_type || item.kind).toLowerCase();
+
+  if (!rawId) return "/activity";
+  if (type.includes("routing") || clean(item.id).startsWith("routing-")) return `/activity/routing/${encodeURIComponent(rawId)}`;
+  if (type.includes("response") || clean(item.id).startsWith("response-")) return `/activity/response/${encodeURIComponent(rawId)}`;
+  if (type.includes("intro") || clean(item.id).startsWith("intro-")) return `/activity/introduction/${encodeURIComponent(rawId)}`;
+  return "/activity";
+}
+
+function priorityOf(item: AnyRow) {
+  return first(item.priority, item.severity, item.alert_priority, item.urgency, "medium").toLowerCase();
+}
+
+function priorityTone(item: AnyRow) {
+  const priority = priorityOf(item);
+  if (priority === "urgent") return "#ffb3b3";
+  if (priority === "high") return "#f5d978";
+  return "#9df3bf";
+}
+
+function titleOf(item: AnyRow) {
+  return first(item.title, item.name, item.headline, item.signal_title, item.alert_title, "VaultForge Item");
+}
+
+function messageOf(item: AnyRow) {
+  return first(item.note, item.message, item.description, item.summary, item.reason, item.urgency_reason, "Exact operational context ready.");
+}
+
+function actionOf(item: AnyRow) {
+  return first(item.action, item.routing_action, item.response, item.status, item.type, "activity");
+}
+
+function scoreOf(item: AnyRow) {
+  const raw = Number(item.confidence_score || item.match_score || item.score || 0);
+  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
+  const priority = priorityOf(item);
+  if (priority === "urgent") return 84;
+  if (priority === "high") return 72;
+  return 58;
+}
+
+function StatCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
   return (
     <div style={card}>
-      <div style={{ color: "#9df3bf", fontSize: 12, letterSpacing: 4, fontWeight: 900, marginBottom: 10 }}>
-        ROUTING
+      <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+        {title}
       </div>
-      <div style={{ fontSize: 42, fontWeight: 900 }}>{value}</div>
-      <div style={{ color: "rgba(255,255,255,.72)" }}>{label}</div>
+      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
+      <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>{detail}</p>
     </div>
   );
 }
 
 export default function RoutingInboxPage() {
   const [email, setEmail] = useState("");
-  const [actions, setActions] = useState<RoutingAction[]>([]);
-  const [status, setStatus] = useState("Loading routing inbox...");
-  const [responseBusy, setResponseBusy] = useState("");
-  const [responseMessage, setResponseMessage] = useState("");
+  const [owner, setOwner] = useState(false);
+  const [actions, setActions] = useState<AnyRow[]>([]);
+  const [status, setStatus] = useState("Loading routed opportunities...");
+  const [search, setSearch] = useState("");
 
   async function load() {
+    setStatus("Loading routed opportunities...");
+
     try {
       const currentEmail = getEmail();
+      const currentOwner = isOwner(currentEmail);
+
       setEmail(currentEmail);
+      setOwner(currentOwner);
 
-      const owner =
-        currentEmail === OWNER_EMAIL ||
-        readCookie("vf_admin") === "1";
+      if (!currentEmail) {
+        setStatus("Login email not found. Please log in again.");
+        return;
+      }
 
-      const res = await fetch(
-        `/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`,
-        {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": owner ? "1" : "0",
-          },
-        }
-      );
+      const res = await fetch(`/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": currentEmail,
+          "x-vf-admin": currentOwner ? "1" : "0",
+        },
+      });
 
       const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || "Could not load routing inbox.");
+        throw new Error(data?.error || data?.details || "Could not load routed opportunities.");
       }
 
-      setActions(Array.isArray(data?.actions) ? data.actions : []);
-      setStatus("");
+      const rows = Array.isArray(data?.actions) ? data.actions : [];
+      setActions(rows);
+      setStatus(rows.length ? "" : "No routed opportunities yet.");
     } catch (error: any) {
-      setStatus(error?.message || "Could not load routing inbox.");
+      setStatus(error?.message || "Could not load routed opportunities.");
     }
   }
 
@@ -262,204 +305,175 @@ export default function RoutingInboxPage() {
     load();
   }, []);
 
-  const metrics = useMemo(() => {
-    return {
-      total: actions.length,
-      urgent: actions.filter((a) => clean(a.priority).toLowerCase() === "urgent").length,
-      buyers: actions.filter((a) => clean(a.action) === "route_to_buyer").length,
-      lenders: actions.filter((a) => clean(a.action) === "route_to_lender").length,
-      operators: actions.filter((a) => clean(a.action) === "route_to_operator").length,
-      review: actions.filter((a) => clean(a.action) === "needs_review").length,
-    };
-  }, [actions]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
 
-  async function handleResponse(action: RoutingAction, response: string) {
-    try {
-      const email = getEmail();
+    return actions
+      .filter((item) => {
+        if (!q) return true;
+        return [
+          titleOf(item),
+          messageOf(item),
+          actionOf(item),
+          item.target_role,
+          item.target_email,
+          item.state_match,
+          item.strategy_match,
+          item.role_match,
+          exactSignalId(item),
+          exactItemId(item),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q);
+      })
+      .sort((a, b) => scoreOf(b) - scoreOf(a));
+  }, [actions, search]);
 
-      setResponseBusy(`${action.id}-${response}`);
-      setResponseMessage("Saving routing response...");
-
-      const result = await saveResponse({
-        email,
-        action,
-        response,
-      });
-
-      setResponseMessage(result?.message || "Routing response saved safely.");
-    } catch (error: any) {
-      setResponseMessage(error?.message || "Could not save routing response.");
-    } finally {
-      setResponseBusy("");
-    }
-  }
+  const urgent = actions.filter((item) => priorityOf(item) === "urgent").length;
+  const buyer = actions.filter((item) => actionOf(item).includes("buyer")).length;
+  const lender = actions.filter((item) => actionOf(item).includes("lender")).length;
+  const operator = actions.filter((item) => actionOf(item).includes("operator")).length;
 
   return (
     <main style={page}>
+      <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        @media (max-width: 760px) {
+          .vf-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
+        }
+      `}</style>
+
       <div style={wrap}>
         <section style={hero}>
-          <div style={{ color: "#9df3bf", fontSize: 12, letterSpacing: 5, fontWeight: 900, marginBottom: 12 }}>
-            VAULTFORGE ROUTING INBOX
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            VaultForge Routed Opportunities
           </div>
 
-          <h1 style={{ fontSize: "clamp(54px,10vw,102px)", lineHeight: .88, margin: "0 0 18px" }}>
-            Routed opportunities.
+          <h1 style={{ fontSize: "clamp(56px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
+            Exact routing inbox.
           </h1>
 
-          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 21, lineHeight: 1.5 }}>
-            Buyer, lender, operator, contractor, and review actions routed through the VaultForge intelligence layer. When owner stages a controlled intro, it appears under Introductions.
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 22, lineHeight: 1.55 }}>
+            Routed cards now open their exact signal, routing room, or work area instead of a generic page.
           </p>
 
-          <Link href="/alerts" style={ghost}>Alerts</Link>
-          <Link href="/introductions" style={ghost}>Introductions</Link>
-          <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
-          <Link href="/projects" style={ghost}>Deal Rooms</Link>
-          <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <button type="button" onClick={load} style={btn}>Refresh Inbox</button>
+          <div>
+            <span style={chip}>Total Routed: {actions.length}</span>
+            <span style={chip}>Urgent: {urgent}</span>
+            <span style={chip}>Buyer Routes: {buyer}</span>
+            <span style={chip}>Lender Routes: {lender}</span>
+            <span style={chip}>Operator Routes: {operator}</span>
+            <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
+          </div>
+
+          <div className="vf-actions" style={{ marginTop: 14 }}>
+            <button type="button" style={btn} onClick={load}>Refresh Routing</button>
+            <Link href="/activity" style={ghost}>Activity</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
+            <Link href="/intelligence" style={ghost}>Intelligence</Link>
+            <Link href="/introductions" style={ghost}>Introductions</Link>
+            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
+            {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
+            <Link href="/logout" style={danger}>Logout</Link>
+          </div>
 
           {status && (
-            <p style={{ color: "#f5d978", fontWeight: 900 }}>
+            <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
               {status}
             </p>
           )}
-
-          {responseMessage && (
-            <p
-              style={{
-                color:
-                  responseMessage.toLowerCase().includes("could not")
-                    ? "#ffd0d0"
-                    : "#9df3bf",
-                fontWeight: 900,
-              }}
-            >
-              {responseMessage}
-            </p>
-          )}
         </section>
 
-        <section style={stats}>
-          <Stat label="Total Routed" value={metrics.total} />
-          <Stat label="Urgent" value={metrics.urgent} />
-          <Stat label="Buyer Routes" value={metrics.buyers} />
-          <Stat label="Lender Routes" value={metrics.lenders} />
-          <Stat label="Operator Routes" value={metrics.operators} />
-          <Stat label="Needs Review" value={metrics.review} />
+        <section style={statGrid}>
+          <StatCard title="Total Routed" value={actions.length} detail="Routing actions currently visible to this account." />
+          <StatCard title="Urgent" value={urgent} detail="Urgent routing pressure." />
+          <StatCard title="Buyer" value={buyer} detail="Buyer-directed routing actions." />
+          <StatCard title="Lender" value={lender} detail="Capital/lender-directed routing actions." />
+          <StatCard title="Operator" value={operator} detail="Operator-directed routing actions." />
         </section>
 
-        {actions.length === 0 ? (
+        <section style={hero}>
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Search
+          </div>
+          <input
+            style={input}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search routed opportunity, role, market, strategy, signal id..."
+          />
+        </section>
+
+        {filtered.length === 0 ? (
           <section style={hero}>
-            <strong>No routing actions yet.</strong>
+            <strong>No exact routed cards yet.</strong>
+            <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55 }}>
+              Routing records will appear after owner/admin logs routing actions.
+            </p>
           </section>
         ) : (
           <section style={grid}>
-            {actions.map((action, index) => (
-              <article key={action.id || `${action.action}-${index}`} style={card}>
-                <div style={{ color: "#9df3bf", fontSize: 12, letterSpacing: 4, fontWeight: 900, marginBottom: 10 }}>
-                  {actionLabel(action.action || "routing_action")}
-                </div>
+            {filtered.map((item, index) => {
+              const tone = priorityTone(item);
+              return (
+                <article key={item.id || exactSignalId(item) || exactItemId(item) || index} style={{ ...card, borderColor: `${tone}66` }}>
+                  <div style={{ color: tone, letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+                    {label(priorityOf(item))} · {label(actionOf(item))}
+                  </div>
 
-                <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>
-                  {action.title || "Routing Action"}
-                </h2>
+                  <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>
+                    {titleOf(item)}
+                  </h2>
 
-                <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55 }}>
-                  {action.note || "No routing note recorded."}
-                </p>
+                  <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.55, fontSize: 18 }}>
+                    {messageOf(item)}
+                  </p>
 
-                <div style={{ marginBottom: 14 }}>
-                  {action.priority && <span style={chip}>{action.priority}</span>}
-                  {action.target_role && <span style={chip}>{action.target_role}</span>}
-                  {action.created_at && <span style={chip}>{action.created_at}</span>}
-                </div>
+                  <div style={{ margin: "12px 0" }}>
+                    <span style={chip}>Score: {scoreOf(item)}</span>
+                    {item.state_match && <span style={chip}>State: {item.state_match}</span>}
+                    {item.strategy_match && <span style={chip}>Strategy: {item.strategy_match}</span>}
+                    {item.role_match && <span style={chip}>Role: {item.role_match}</span>}
+                    {exactSignalId(item) && <span style={chip}>Signal: {exactSignalId(item)}</span>}
+                    {exactItemId(item) && <span style={chip}>Item: {exactItemId(item)}</span>}
+                  </div>
 
-                {action.signal_id && (
-                  <Link
-                    href={`/routing-room/${encodeURIComponent(action.signal_id)}`}
-                    style={btn}
-                  >
-                    Open Routing Room
-                  </Link>
-                )}
-
-                {action.signal_id && (
-                  <Link
-                    href={`/signals/${encodeURIComponent(action.signal_id)}`}
-                    style={ghost}
-                  >
-                    Open Signal
-                  </Link>
-                )}
-
-                {action.item_id && (
-                  <Link
-                    href={`/deal-room/${encodeURIComponent(action.item_id)}`}
-                    style={ghost}
-                  >
-                    Open Deal Room
-                  </Link>
-                )}
-
-                <div style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
-                    style={btn}
-                    disabled={!!responseBusy}
-                    onClick={() => handleResponse(action, "interested")}
-                  >
-                    {responseBusy === `${action.id}-interested`
-                      ? "Saving..."
-                      : "Interested"}
-                  </button>
-
-                  <button
-                    type="button"
-                    style={ghost}
-                    disabled={!!responseBusy}
-                    onClick={() => handleResponse(action, "need_more_info")}
-                  >
-                    {responseBusy === `${action.id}-need_more_info`
-                      ? "Saving..."
-                      : "Need More Info"}
-                  </button>
-
-                  <button
-                    type="button"
-                    style={ghost}
-                    disabled={!!responseBusy}
-                    onClick={() => handleResponse(action, "request_call")}
-                  >
-                    {responseBusy === `${action.id}-request_call`
-                      ? "Saving..."
-                      : "Request Call"}
-                  </button>
-
-                  <button
-                    type="button"
-                    style={ghost}
-                    disabled={!!responseBusy}
-                    onClick={() => handleResponse(action, "request_intro")}
-                  >
-                    {responseBusy === `${action.id}-request_intro`
-                      ? "Saving..."
-                      : "Request Intro"}
-                  </button>
-
-                  <button
-                    type="button"
-                    style={ghost}
-                    disabled={!!responseBusy}
-                    onClick={() => handleResponse(action, "pass")}
-                  >
-                    {responseBusy === `${action.id}-pass`
-                      ? "Saving..."
-                      : "Pass"}
-                  </button>
-                </div>
-              </article>
-            ))}
+                  <div className="vf-actions">
+                    <Link href={exactRoutingHref(item)} style={btn}>Open Exact Routing Room</Link>
+                    <Link href={exactSignalHref(item)} style={ghost}>Open Exact Signal</Link>
+                    <Link href={exactWorkHref(item)} style={ghost}>Open Exact Work Area</Link>
+                  </div>
+                </article>
+              );
+            })}
           </section>
         )}
+
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+            Current Safety Mode
+          </div>
+          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.6 }}>
+            This page fixes exact routing links only. It does not create routes, send notifications, or mutate records.
+          </p>
+        </section>
       </div>
     </main>
   );
