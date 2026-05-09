@@ -245,6 +245,47 @@ function scoreOf(item: AnyRow) {
   return 58;
 }
 
+function introsForAction(action: AnyRow, introductions: AnyRow[]) {
+  const signalId = exactSignalId(action);
+  const itemId = exactItemId(action);
+  const actionId = clean(action.id);
+
+  return introductions.filter((intro) => {
+    const introSignal = exactSignalId(intro);
+    const introItem = exactItemId(intro);
+    const introRoute = clean(intro.routing_action_id);
+
+    return (
+      (actionId && introRoute && introRoute === actionId) ||
+      (signalId && introSignal && introSignal === signalId) ||
+      (itemId && introItem && introItem === itemId)
+    );
+  });
+}
+
+function responsesForIntros(intros: AnyRow[], responses: AnyRow[]) {
+  const introIds = intros.map((intro) => exactIntroId(intro)).filter(Boolean);
+
+  return responses.filter((response) => {
+    const responseIntro = first(response.introduction_id, response.intro_id);
+    return responseIntro && introIds.includes(responseIntro);
+  });
+}
+
+function latestResponse(rows: AnyRow[]) {
+  return rows[0] || null;
+}
+
+function responseText(row: AnyRow | null) {
+  if (!row) return "No response yet";
+  return label(first(row.response, "response"));
+}
+
+function introStatusText(row: AnyRow | null) {
+  if (!row) return "No intro staged";
+  return label(first(row.intro_status, row.status, "staged"));
+}
+
 function StatCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
   return (
     <div style={card}>
@@ -261,6 +302,8 @@ export default function RoutingInboxPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
   const [actions, setActions] = useState<AnyRow[]>([]);
+  const [introductions, setIntroductions] = useState<AnyRow[]>([]);
+  const [responses, setResponses] = useState<AnyRow[]>([]);
   const [status, setStatus] = useState("Loading routed opportunities...");
   const [search, setSearch] = useState("");
 
@@ -279,22 +322,41 @@ export default function RoutingInboxPage() {
         return;
       }
 
-      const res = await fetch(`/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-        cache: "no-store",
-        headers: {
-          "x-vf-email": currentEmail,
-          "x-vf-admin": currentOwner ? "1" : "0",
-        },
-      });
+      const headers = {
+        "x-vf-email": currentEmail,
+        "x-vf-admin": currentOwner ? "1" : "0",
+      };
+
+      const [res, introRes, responseRes] = await Promise.all([
+        fetch(`/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers,
+        }),
+        fetch(`/api/routing/introductions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers,
+        }),
+        fetch(`/api/routing/introduction-responses?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers,
+        }),
+      ]);
 
       const data = await safeJson(res);
+      const introData = await safeJson(introRes);
+      const responseData = await safeJson(responseRes);
 
       if (!res.ok || data?.ok === false) {
         throw new Error(data?.error || data?.details || "Could not load routed opportunities.");
       }
 
       const rows = Array.isArray(data?.actions) ? data.actions : [];
+      const introRows = Array.isArray(introData?.introductions) ? introData.introductions : [];
+      const responseRows = Array.isArray(responseData?.responses) ? responseData.responses : [];
+
       setActions(rows);
+      setIntroductions(introRows);
+      setResponses(responseRows);
       setStatus(rows.length ? "" : "No routed opportunities yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load routed opportunities.");
@@ -334,6 +396,8 @@ export default function RoutingInboxPage() {
   const buyer = actions.filter((item) => actionOf(item).includes("buyer")).length;
   const lender = actions.filter((item) => actionOf(item).includes("lender")).length;
   const operator = actions.filter((item) => actionOf(item).includes("operator")).length;
+  const withIntro = actions.filter((item) => introsForAction(item, introductions).length > 0).length;
+  const withResponse = actions.filter((item) => responsesForIntros(introsForAction(item, introductions), responses).length > 0).length;
 
   return (
     <main style={page}>
@@ -380,6 +444,8 @@ export default function RoutingInboxPage() {
             <span style={chip}>Buyer Routes: {buyer}</span>
             <span style={chip}>Lender Routes: {lender}</span>
             <span style={chip}>Operator Routes: {operator}</span>
+            <span style={chip}>With Intro: {withIntro}</span>
+            <span style={chip}>With Response: {withResponse}</span>
             <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
@@ -407,6 +473,8 @@ export default function RoutingInboxPage() {
           <StatCard title="Buyer" value={buyer} detail="Buyer-directed routing actions." />
           <StatCard title="Lender" value={lender} detail="Capital/lender-directed routing actions." />
           <StatCard title="Operator" value={operator} detail="Operator-directed routing actions." />
+          <StatCard title="With Intro" value={withIntro} detail="Routing cards connected to staged introductions." />
+          <StatCard title="With Response" value={withResponse} detail="Routing cards connected to member responses." />
         </section>
 
         <section style={hero}>
@@ -432,6 +500,11 @@ export default function RoutingInboxPage() {
           <section style={grid}>
             {filtered.map((item, index) => {
               const tone = priorityTone(item);
+              const linkedIntros = introsForAction(item, introductions);
+              const linkedResponses = responsesForIntros(linkedIntros, responses);
+              const firstIntro = linkedIntros[0] || null;
+              const lastResponse = latestResponse(linkedResponses);
+
               return (
                 <article key={item.id || exactSignalId(item) || exactItemId(item) || index} style={{ ...card, borderColor: `${tone}66` }}>
                   <div style={{ color: tone, letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
@@ -453,10 +526,29 @@ export default function RoutingInboxPage() {
                     {item.role_match && <span style={chip}>Role: {item.role_match}</span>}
                     {exactSignalId(item) && <span style={chip}>Signal: {exactSignalId(item)}</span>}
                     {exactItemId(item) && <span style={chip}>Item: {exactItemId(item)}</span>}
+                    <span style={chip}>Intro: {introStatusText(firstIntro)}</span>
+                    <span style={chip}>Response: {responseText(lastResponse)}</span>
                   </div>
+
+                  {(firstIntro || lastResponse) && (
+                    <section style={{ marginTop: 12, border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: 14, background: "rgba(255,255,255,.035)" }}>
+                      {firstIntro && (
+                        <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.45, margin: "0 0 8px" }}>
+                          Intro staged: {first(firstIntro.title, "Controlled introduction")}
+                        </p>
+                      )}
+
+                      {lastResponse && (
+                        <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.45, margin: 0 }}>
+                          Latest response: {responseText(lastResponse)}{first(lastResponse.note, lastResponse.notes) ? ` — ${first(lastResponse.note, lastResponse.notes)}` : ""}
+                        </p>
+                      )}
+                    </section>
+                  )}
 
                   <div className="vf-actions">
                     <Link href={exactRoutingHref(item)} style={btn}>Open Exact Routing Room</Link>
+                    {firstIntro && <Link href={exactIntroHref(firstIntro)} style={ghost}>Open Intro</Link>}
                     <Link href={exactSignalHref(item)} style={ghost}>Open Exact Signal</Link>
                     <Link href={exactWorkHref(item)} style={ghost}>Open Exact Work Area</Link>
                   </div>
