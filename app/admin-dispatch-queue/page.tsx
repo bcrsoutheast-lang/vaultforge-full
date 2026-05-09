@@ -229,6 +229,8 @@ export default function AdminDispatchQueuePage() {
   const [owner, setOwner] = useState(false);
   const [introductions, setIntroductions] = useState<Introduction[]>([]);
   const [status, setStatus] = useState("Loading dispatch queue...");
+  const [busyId, setBusyId] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
 
   async function load() {
     setStatus("Loading dispatch queue...");
@@ -263,6 +265,45 @@ export default function AdminDispatchQueuePage() {
       setStatus("");
     } catch (error: any) {
       setStatus(error?.message || "Could not load dispatch queue.");
+    }
+  }
+
+  async function updateIntroStatus(intro: Introduction, nextStatus: string) {
+    if (!intro.id) return;
+
+    setBusyId(`${intro.id}-${nextStatus}`);
+    setActionMessage(`Marking introduction ${label(nextStatus)}...`);
+
+    try {
+      const res = await fetch("/api/routing/introductions/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+          "x-vf-admin": "1",
+        },
+        body: JSON.stringify({
+          email,
+          admin_email: email,
+          owner: "1",
+          id: intro.id,
+          status: nextStatus,
+          note: intro.note || "",
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not update introduction status.");
+      }
+
+      setActionMessage(data?.message || `Introduction marked ${label(nextStatus)}. No notification was sent.`);
+      await load();
+    } catch (error: any) {
+      setActionMessage(error?.message || "Could not update introduction status.");
+    } finally {
+      setBusyId("");
     }
   }
 
@@ -340,6 +381,20 @@ export default function AdminDispatchQueuePage() {
             </p>
           )}
 
+          {actionMessage && (
+            <p
+              style={{
+                color:
+                  actionMessage.toLowerCase().includes("could not")
+                    ? "#ffd0d0"
+                    : "#9df3bf",
+                fontWeight: 900,
+              }}
+            >
+              {actionMessage}
+            </p>
+          )}
+
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Owner: {email || OWNER_EMAIL}</span>
             <span style={chip}>Mode: Read-only dispatch queue</span>
@@ -396,6 +451,33 @@ export default function AdminDispatchQueuePage() {
                       Deal Room
                     </Link>
                   )}
+
+                  <button
+                    type="button"
+                    style={btn}
+                    disabled={!!busyId}
+                    onClick={() => updateIntroStatus(item, "sent")}
+                  >
+                    {busyId === `${item.id}-sent` ? "Saving..." : "Mark Sent — No Email"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!busyId}
+                    onClick={() => updateIntroStatus(item, "paused")}
+                  >
+                    {busyId === `${item.id}-paused` ? "Saving..." : "Pause"}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={ghost}
+                    disabled={!!busyId}
+                    onClick={() => updateIntroStatus(item, "needs_review")}
+                  >
+                    {busyId === `${item.id}-needs_review` ? "Saving..." : "Needs Review"}
+                  </button>
                 </div>
               </article>
             ))}
@@ -406,7 +488,8 @@ export default function AdminDispatchQueuePage() {
           <div style={greenEyebrow}>Current Safety Mode</div>
           <p style={{ ...muted, fontSize: 19 }}>
             This is a read-only queue. It does not send emails, text messages, or member notifications.
-            The next phase can add a controlled send/mark-sent workflow after review.
+            The queue can now mark items Sent, Paused, or Needs Review as a manual status update only.
+            It still does not send email, text messages, or member notifications.
           </p>
         </section>
       </div>
