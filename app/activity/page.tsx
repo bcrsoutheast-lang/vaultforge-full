@@ -191,6 +191,14 @@ function heatTone(labelValue: string) {
   return "#9df3bf";
 }
 
+function eventDetailHref(item: ActivityItem) {
+  const id = String(item.id || "");
+  if (id.startsWith("routing-")) return `/activity/routing/${encodeURIComponent(id.replace("routing-", ""))}`;
+  if (id.startsWith("intro-")) return `/activity/introduction/${encodeURIComponent(id.replace("intro-", ""))}`;
+  if (id.startsWith("response-")) return `/activity/response/${encodeURIComponent(id.replace("response-", ""))}`;
+  return "";
+}
+
 export default function ActivityStreamPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
@@ -574,10 +582,19 @@ export default function ActivityStreamPage() {
               </div>
 
               <div>
+                {eventDetailHref(item) && (
+                  <Link
+                    href={eventDetailHref(item)}
+                    style={btn}
+                  >
+                    Open Event
+                  </Link>
+                )}
+
                 {item.introduction_id && (
                   <Link
                     href={`/introduction/${encodeURIComponent(item.introduction_id)}`}
-                    style={btn}
+                    style={ghost}
                   >
                     Open Introduction
                   </Link>
