@@ -343,8 +343,8 @@ export default function AdminIntroductionsPage() {
             Drafted introductions.
           </h1>
           <p style={{ ...muted, fontSize: 22 }}>
-            Review controlled introductions drafted from member responses. This page does not send emails,
-            expose private info, or mutate deals/members.
+            Review controlled introductions drafted from member responses. Dispatch status can be managed from review/queue pages.
+            This page does not send emails, expose private info, or mutate deals/members.
           </p>
 
           <div className="vf-intro-actions">
@@ -397,7 +397,7 @@ export default function AdminIntroductionsPage() {
           <section style={hero}>
             <strong>No controlled introductions yet.</strong>
             <p style={muted}>
-              Draft introductions from the Admin Routing Responses page when members show interest.
+              Draft introductions from the Admin Routing Responses page when members show interest. Mark Approved or Ready from the review page to move them into the Dispatch Queue.
             </p>
           </section>
         ) : (
@@ -440,6 +440,12 @@ export default function AdminIntroductionsPage() {
                     {item.item_id && (
                       <Link href={`/deal-room/${encodeURIComponent(item.item_id)}`} style={ghost}>
                         Deal Room
+                      </Link>
+                    )}
+
+                    {(item.status === "approved" || item.status === "ready") && (
+                      <Link href="/admin-dispatch-queue" style={btn}>
+                        Open Dispatch Queue
                       </Link>
                     )}
                   </div>
