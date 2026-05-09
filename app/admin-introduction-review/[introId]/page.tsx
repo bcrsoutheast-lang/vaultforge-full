@@ -473,6 +473,7 @@ export default function AdminIntroductionReviewPage() {
 
           <div className="vf-review-actions">
             <Link href="/admin-introductions" style={ghost}>Back to Introductions</Link>
+            <Link href="/activity" style={btn}>Activity Stream</Link>
             <Link href="/admin-dispatch-queue" style={btn}>Dispatch Queue</Link>
             <Link href="/admin-routing-responses" style={ghost}>Response Monitor</Link>
             <Link href="/admin-routing" style={ghost}>Admin Routing</Link>
