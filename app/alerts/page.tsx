@@ -112,6 +112,11 @@ const input: React.CSSProperties = {
   fontSize: 15,
 };
 
+const muted: React.CSSProperties = {
+  color: "rgba(255,255,255,.72)",
+  lineHeight: 1.55,
+};
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
