@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type AssetType = "Residential" | "Commercial" | "Land";
 
@@ -358,6 +359,11 @@ export default function PainSubmitPage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Pain Button"
+          subtitle="Route operational pressure, distress, and emergency opportunity signals"
+        />
+
         {choiceOpen && (
           <section style={{ ...hero, borderColor: "rgba(157,243,191,.45)" }}>
             <div style={eyebrow}>Choose Signal Type</div>
