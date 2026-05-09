@@ -1,8 +1,45 @@
 
-import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const groups = [
+  {
+    title: "Core Intelligence",
+    links: [
+      ["Dashboard", "/dashboard"],
+      ["Alerts", "/alerts"],
+      ["Intelligence", "/intelligence"],
+      ["Routing Inbox", "/routing-inbox"],
+      ["Introductions", "/introductions"],
+      ["Activity", "/activity"],
+    ],
+  },
+  {
+    title: "Deal Flow",
+    links: [
+      ["Create", "/submit"],
+      ["Projects", "/projects"],
+      ["Buy Bucket", "/buy-bucket"],
+      ["Messages", "/messages"],
+    ],
+  },
+  {
+    title: "Network",
+    links: [
+      ["Members", "/members"],
+      ["Member Intelligence", "/member-intelligence"],
+    ],
+  },
+  {
+    title: "Account",
+    links: [
+      ["Profile", "/profile"],
+      ["Logout", "/logout"],
+    ],
+  },
+];
 
 export default function CommandNavigationPage() {
   return (
@@ -13,22 +50,18 @@ export default function CommandNavigationPage() {
           "radial-gradient(circle at top left, rgba(178,24,24,.22), transparent 28%), radial-gradient(circle at 85% 10%, rgba(232,196,107,.16), transparent 24%), linear-gradient(180deg,#020202 0%,#070707 55%,#020202 100%)",
         color: "white",
         fontFamily: "Arial, sans-serif",
-        padding: "24px 18px 90px",
+        padding: "28px 18px 90px",
       }}
     >
-      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-        <VaultForgeMemberNav
-          title="All Member Pages"
-          subtitle="Use this page when you need to move around the member area fast"
-        />
-
+      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <section
           style={{
-            border: "1px solid rgba(232,196,107,.14)",
-            borderRadius: 30,
-            padding: 24,
+            border: "1px solid rgba(232,196,107,.18)",
+            borderRadius: 34,
+            padding: 28,
             background:
-              "linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015))",
+              "radial-gradient(circle at top left, rgba(211,58,44,.12), transparent 34%), linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015))",
+            boxShadow: "0 24px 70px rgba(0,0,0,.38)",
           }}
         >
           <div
@@ -40,18 +73,18 @@ export default function CommandNavigationPage() {
               marginBottom: 12,
             }}
           >
-            NAVIGATION CONTROL
+            COMMAND NAVIGATION
           </div>
 
           <h1
             style={{
-              margin: "0 0 14px",
-              fontSize: "clamp(36px,7vw,72px)",
-              lineHeight: .95,
-              letterSpacing: -2,
+              margin: "0 0 12px",
+              fontSize: "clamp(42px,8vw,82px)",
+              lineHeight: .9,
+              letterSpacing: -3,
             }}
           >
-            One place to jump anywhere inside VaultForge.
+            One place to move through the member area.
           </h1>
 
           <p
@@ -62,9 +95,67 @@ export default function CommandNavigationPage() {
               maxWidth: 900,
             }}
           >
-            This page exists so the member area is never hard to navigate while
-            we finish wiring the same navigation into every active member page.
+            Use this page when you need to jump between VaultForge command sections fast.
+            The sticky navigation bar now appears across the main member pages.
           </p>
+        </section>
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+            gap: 16,
+            marginTop: 24,
+          }}
+        >
+          {groups.map((group) => (
+            <div
+              key={group.title}
+              style={{
+                border: "1px solid rgba(232,196,107,.14)",
+                borderRadius: 26,
+                padding: 20,
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015))",
+              }}
+            >
+              <div
+                style={{
+                  color: "#e8c46b",
+                  letterSpacing: 3,
+                  fontWeight: 950,
+                  fontSize: 12,
+                  marginBottom: 14,
+                  textTransform: "uppercase",
+                }}
+              >
+                {group.title}
+              </div>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                {group.links.map(([label, href]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    style={{
+                      color: "white",
+                      textDecoration: "none",
+                      border: "1px solid rgba(255,255,255,.10)",
+                      background: "rgba(255,255,255,.035)",
+                      borderRadius: 999,
+                      padding: "13px 14px",
+                      fontWeight: 850,
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span>{label}</span>
+                    <span style={{ color: "#e8c46b" }}>→</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
         </section>
       </div>
     </main>
