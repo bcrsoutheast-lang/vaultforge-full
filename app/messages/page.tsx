@@ -1,5 +1,7 @@
+
 import Link from "next/link";
 import MessagesClient from "./MessagesClient";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -90,6 +92,11 @@ export default function MessagesPage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Messages"
+          subtitle="Execution conversations, pain messages, and member communication"
+        />
+
         <section style={hero}>
           <div style={eyebrow}>VaultForge Message Center</div>
           <h1 style={{ fontSize: "clamp(52px,11vw,98px)", lineHeight: 0.9, margin: "0 0 18px" }}>
