@@ -254,6 +254,26 @@ function counterpartyEmail(item: Intro) {
   );
 }
 
+function responsesForIntro(intro: Intro, responses: Record<string, any>[]) {
+  const introId = exactIntroId(intro);
+
+  return responses.filter((row) => {
+    const rowIntro = first(row.introduction_id, row.intro_id);
+    return rowIntro && introId && rowIntro === introId;
+  });
+}
+
+function latestResponseForIntro(intro: Intro, responses: Record<string, any>[]) {
+  const rows = responsesForIntro(intro, responses);
+
+  return rows[0] || null;
+}
+
+function responseLabel(row: Record<string, any> | null) {
+  if (!row) return "No response yet";
+  return label(first(row.response, "response"));
+}
+
 function StatCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
   return (
     <div style={card}>
@@ -270,6 +290,7 @@ export default function IntroductionsPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
   const [introductions, setIntroductions] = useState<Intro[]>([]);
+  const [responses, setResponses] = useState<Record<string, any>[]>([]);
   const [status, setStatus] = useState("Loading controlled introductions...");
   const [search, setSearch] = useState("");
 
@@ -288,22 +309,33 @@ export default function IntroductionsPage() {
         return;
       }
 
-      const res = await fetch(`/api/routing/introductions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-        cache: "no-store",
-        headers: {
-          "x-vf-email": currentEmail,
-          "x-vf-admin": currentOwner ? "1" : "0",
-        },
-      });
+      const headers = {
+        "x-vf-email": currentEmail,
+        "x-vf-admin": currentOwner ? "1" : "0",
+      };
+
+      const [res, responseRes] = await Promise.all([
+        fetch(`/api/routing/introductions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers,
+        }),
+        fetch(`/api/routing/introduction-responses?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers,
+        }),
+      ]);
 
       const data = await safeJson(res);
+      const responseData = await safeJson(responseRes);
 
       if (!res.ok || data?.ok === false) {
         throw new Error(data?.error || data?.details || "Could not load introductions.");
       }
 
       const rows = Array.isArray(data?.introductions) ? data.introductions : [];
+      const responseRows = Array.isArray(responseData?.responses) ? responseData.responses : [];
       setIntroductions(rows);
+      setResponses(responseRows);
       setStatus(rows.length ? "" : "No controlled introductions visible yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load introductions.");
@@ -341,6 +373,7 @@ export default function IntroductionsPage() {
   const ready = introductions.filter((item) => statusOf(item) === "ready" || statusOf(item) === "staged").length;
   const approved = introductions.filter((item) => item.approved === true || statusOf(item) === "approved").length;
   const paused = introductions.filter((item) => item.paused === true || statusOf(item) === "paused").length;
+  const responded = introductions.filter((item) => responsesForIntro(item, responses).length > 0).length;
 
   return (
     <main style={page}>
@@ -387,6 +420,7 @@ export default function IntroductionsPage() {
             <span style={chip}>Ready: {ready}</span>
             <span style={chip}>Approved: {approved}</span>
             <span style={chip}>Paused: {paused}</span>
+            <span style={chip}>Responded: {responded}</span>
             <span style={chip}>Email: {email || "unknown"}</span>
           </div>
 
@@ -414,6 +448,7 @@ export default function IntroductionsPage() {
           <StatCard title="Ready" value={ready} detail="Ready or staged introductions." />
           <StatCard title="Approved" value={approved} detail="Approved introductions." />
           <StatCard title="Paused" value={paused} detail="Paused introductions." />
+          <StatCard title="Responded" value={responded} detail="Introductions with saved member responses." />
         </section>
 
         <section style={hero}>
@@ -439,6 +474,8 @@ export default function IntroductionsPage() {
           <section style={grid}>
             {filtered.map((item, index) => {
               const tone = toneOf(item);
+              const latestResponse = latestResponseForIntro(item, responses);
+              const responseCount = responsesForIntro(item, responses).length;
 
               return (
                 <article key={exactIntroId(item) || index} style={{ ...card, borderColor: `${tone}66` }}>
@@ -460,7 +497,18 @@ export default function IntroductionsPage() {
                     {exactIntroId(item) && <span style={chip}>Intro: {exactIntroId(item)}</span>}
                     {exactSignalId(item) && <span style={chip}>Signal: {exactSignalId(item)}</span>}
                     {exactItemId(item) && <span style={chip}>Item: {exactItemId(item)}</span>}
+                    <span style={chip}>Response: {responseLabel(latestResponse)}</span>
+                    {responseCount > 0 && <span style={chip}>Responses: {responseCount}</span>}
                   </div>
+
+                  {latestResponse && (
+                    <section style={{ marginTop: 12, border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: 14, background: "rgba(255,255,255,.035)" }}>
+                      <strong style={{ color: "#9df3bf", display: "block", marginBottom: 8 }}>Latest response</strong>
+                      <p style={{ ...muted, margin: 0 }}>
+                        {latestResponse.note || latestResponse.notes || "No response note."}
+                      </p>
+                    </section>
+                  )}
 
                   <div className="vf-actions">
                     <Link href={exactIntroHref(item)} style={btn}>Open Exact Introduction</Link>
