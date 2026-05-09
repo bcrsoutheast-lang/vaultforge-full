@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Thread = Record<string, any>;
 
@@ -227,6 +228,11 @@ export default function PainMessagesPage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Pain Messages"
+          subtitle="Operational conversations tied directly to distress signals and routing activity"
+        />
+
         <section style={hero}>
           <div style={eyebrow}>Pain Signal Messages</div>
           <h1 style={{ fontSize: "clamp(52px,11vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
