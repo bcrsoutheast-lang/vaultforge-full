@@ -362,6 +362,7 @@ export default function DealRoomPage() {
             <Link href="/alerts" style={ghost}>Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+            <Link href="/introductions" style={ghost}>Introductions</Link>
             <Link href="/messages" style={ghost}>Messages</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
             {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
@@ -453,7 +454,7 @@ export default function DealRoomPage() {
               <p style={{ ...muted, fontSize: 19 }}>
                 Next layers can add signal threads, buyer/lender/operator routing, comments, status updates,
                 saved pursuit actions, and notification history. Routing decisions now flow through Routing Rooms,
-                Admin Routing, and the member Routing Inbox.
+                Admin Routing, the member Routing Inbox, and controlled Introductions.
               </p>
             </section>
 
