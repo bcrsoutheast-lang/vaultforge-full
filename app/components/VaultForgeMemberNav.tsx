@@ -56,6 +56,8 @@ export default function VaultForgeMemberNav({
 
           .vf-nav-actions {
             width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
           }
 
           .vf-nav-actions a {
@@ -68,6 +70,12 @@ export default function VaultForgeMemberNav({
             width: 100% !important;
             justify-content: space-between !important;
             box-sizing: border-box !important;
+          }
+        }
+
+        @media (max-width: 460px) {
+          .vf-nav-actions {
+            grid-template-columns: 1fr !important;
           }
         }
       `}</style>
