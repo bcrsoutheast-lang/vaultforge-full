@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -20,6 +21,8 @@ type RecentItem = {
   href: string;
 };
 
+type SupabaseAny = any;
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -28,7 +31,7 @@ function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function makeSupabase() {
+function makeSupabase(): SupabaseAny | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -89,7 +92,7 @@ function isOwnerRequest(request: Request, email: string) {
 }
 
 async function safeCount(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAny,
   table: string,
   options?: {
     owner?: boolean;
@@ -144,7 +147,7 @@ async function safeCount(
 }
 
 async function safeRecent(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseAny,
   table: string,
   source: string,
   options?: {
@@ -155,9 +158,11 @@ async function safeRecent(
   }
 ): Promise<RecentItem[]> {
   try {
-    let query = supabase.from(table).select("*").order("created_at", {
-      ascending: false,
-    }).limit(options?.limit || 5);
+    let query = supabase
+      .from(table)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(options?.limit || 5);
 
     if (!options?.owner && options?.email && options?.emailColumns?.length) {
       const orFilter = options.emailColumns
@@ -244,19 +249,7 @@ export async function GET(request: Request) {
   const email = getRequestEmail(request);
   const owner = isOwnerRequest(request, email);
 
-  const visibility = {
-    owner,
-    email,
-  };
-
-  const routingEmailColumns = [
-    "member_email",
-    "target_email",
-    "visible_to_email",
-    "owner_email",
-    "email",
-  ];
-
+  const routingEmailColumns = ["member_email", "target_email", "visible_to_email", "owner_email", "email"];
   const introEmailColumns = [
     "visible_to_email",
     "member_email",
@@ -266,32 +259,10 @@ export async function GET(request: Request) {
     "counterparty_email",
     "owner_email",
   ];
-
-  const responseEmailColumns = [
-    "member_email",
-    "responding_member_email",
-    "email",
-    "visible_to_email",
-  ];
-
-  const projectEmailColumns = [
-    "owner_email",
-    "member_email",
-    "email",
-    "created_by_email",
-  ];
-
-  const painEmailColumns = [
-    "member_email",
-    "owner_email",
-    "email",
-    "created_by_email",
-  ];
-
-  const memberEmailColumns = [
-    "email",
-    "member_email",
-  ];
+  const responseEmailColumns = ["member_email", "responding_member_email", "email", "visible_to_email"];
+  const projectEmailColumns = ["owner_email", "member_email", "email", "created_by_email"];
+  const painEmailColumns = ["member_email", "owner_email", "email", "created_by_email"];
+  const memberEmailColumns = ["email", "member_email"];
 
   const [
     routingCount,
@@ -303,11 +274,7 @@ export async function GET(request: Request) {
     painCount,
     memberCount,
   ] = await Promise.all([
-    safeCount(supabase, "routing_actions", {
-      owner,
-      email,
-      emailColumns: routingEmailColumns,
-    }),
+    safeCount(supabase, "routing_actions", { owner, email, emailColumns: routingEmailColumns }),
     safeCount(supabase, "routing_actions", {
       owner,
       email,
@@ -322,31 +289,11 @@ export async function GET(request: Request) {
       priorityColumn: "priority",
       priorityValue: "high",
     }),
-    safeCount(supabase, "routing_introductions", {
-      owner,
-      email,
-      emailColumns: introEmailColumns,
-    }),
-    safeCount(supabase, "routing_introduction_responses", {
-      owner,
-      email,
-      emailColumns: responseEmailColumns,
-    }),
-    safeCount(supabase, "projects", {
-      owner,
-      email,
-      emailColumns: projectEmailColumns,
-    }),
-    safeCount(supabase, "vf_pain_submissions", {
-      owner,
-      email,
-      emailColumns: painEmailColumns,
-    }),
-    safeCount(supabase, "vf_profiles", {
-      owner,
-      email,
-      emailColumns: memberEmailColumns,
-    }),
+    safeCount(supabase, "routing_introductions", { owner, email, emailColumns: introEmailColumns }),
+    safeCount(supabase, "routing_introduction_responses", { owner, email, emailColumns: responseEmailColumns }),
+    safeCount(supabase, "projects", { owner, email, emailColumns: projectEmailColumns }),
+    safeCount(supabase, "vf_pain_submissions", { owner, email, emailColumns: painEmailColumns }),
+    safeCount(supabase, "vf_profiles", { owner, email, emailColumns: memberEmailColumns }),
   ]);
 
   const countResults = [
@@ -360,42 +307,15 @@ export async function GET(request: Request) {
     memberCount,
   ];
 
-  const [routingRecent, introRecent, responseRecent, painRecent, projectRecent] =
-    await Promise.all([
-      safeRecent(supabase, "routing_actions", "routing", {
-        owner,
-        email,
-        emailColumns: routingEmailColumns,
-      }),
-      safeRecent(supabase, "routing_introductions", "introduction", {
-        owner,
-        email,
-        emailColumns: introEmailColumns,
-      }),
-      safeRecent(supabase, "routing_introduction_responses", "response", {
-        owner,
-        email,
-        emailColumns: responseEmailColumns,
-      }),
-      safeRecent(supabase, "vf_pain_submissions", "pain", {
-        owner,
-        email,
-        emailColumns: painEmailColumns,
-      }),
-      safeRecent(supabase, "projects", "project", {
-        owner,
-        email,
-        emailColumns: projectEmailColumns,
-      }),
-    ]);
+  const [routingRecent, introRecent, responseRecent, painRecent, projectRecent] = await Promise.all([
+    safeRecent(supabase, "routing_actions", "routing", { owner, email, emailColumns: routingEmailColumns }),
+    safeRecent(supabase, "routing_introductions", "introduction", { owner, email, emailColumns: introEmailColumns }),
+    safeRecent(supabase, "routing_introduction_responses", "response", { owner, email, emailColumns: responseEmailColumns }),
+    safeRecent(supabase, "vf_pain_submissions", "pain", { owner, email, emailColumns: painEmailColumns }),
+    safeRecent(supabase, "projects", "project", { owner, email, emailColumns: projectEmailColumns }),
+  ]);
 
-  const recent = [
-    ...routingRecent,
-    ...introRecent,
-    ...responseRecent,
-    ...painRecent,
-    ...projectRecent,
-  ]
+  const recent = [...routingRecent, ...introRecent, ...responseRecent, ...painRecent, ...projectRecent]
     .sort((a, b) => {
       const aTime = new Date(a.created_at || 0).getTime();
       const bTime = new Date(b.created_at || 0).getTime();
@@ -421,11 +341,7 @@ export async function GET(request: Request) {
   };
 
   const ticker = recent.length
-    ? recent.map((item) => {
-        const source = item.source.toUpperCase();
-        const title = item.title.slice(0, 80);
-        return `${source}: ${title}`;
-      })
+    ? recent.map((item) => `${item.source.toUpperCase()}: ${item.title.slice(0, 80)}`)
     : [
         "LIVE DATA CONNECTED — WAITING FOR MEMBER ACTIVITY",
         "NO FAKE DASHBOARD ACTIVITY ACTIVE",
@@ -447,7 +363,10 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    visibility,
+    visibility: {
+      owner,
+      email,
+    },
     counts,
     recent,
     ticker,
