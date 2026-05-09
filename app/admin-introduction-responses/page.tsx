@@ -339,6 +339,7 @@ export default function AdminIntroductionResponsesPage() {
           <div className="vf-intro-response-actions">
             <button type="button" style={btn} onClick={load}>Refresh Responses</button>
             <Link href="/admin-introductions" style={btn}>Admin Introductions</Link>
+            <Link href="/activity" style={btn}>Activity Stream</Link>
             <Link href="/admin-dispatch-queue" style={ghost}>Dispatch Queue</Link>
             <Link href="/admin-routing-responses" style={ghost}>Routing Responses</Link>
             <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>
