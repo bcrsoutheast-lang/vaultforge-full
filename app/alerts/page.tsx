@@ -611,6 +611,7 @@ export default function AlertsPage() {
           <div className="vf-alert-actions" style={{ marginTop: 18 }}>
             <button type="button" onClick={load} style={btn}>Refresh Alerts</button>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
+            <Link href="/activity" style={ghost}>Activity Stream</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/introductions" style={ghost}>Introductions</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
