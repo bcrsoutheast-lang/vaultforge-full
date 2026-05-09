@@ -1,5 +1,6 @@
 
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,6 +24,9 @@ const groups = [
       ["Projects", "/projects"],
       ["Buy Bucket", "/buy-bucket"],
       ["Messages", "/messages"],
+      ["Pain Feed", "/pain"],
+      ["Pain Button", "/pain-submit"],
+      ["Pain Messages", "/pain-messages"],
     ],
   },
   {
@@ -36,6 +40,7 @@ const groups = [
     title: "Account",
     links: [
       ["Profile", "/profile"],
+      ["Payment", "/payment"],
       ["Logout", "/logout"],
     ],
   },
@@ -54,6 +59,11 @@ export default function CommandNavigationPage() {
       }}
     >
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+        <VaultForgeMemberNav
+          title="All Pages"
+          subtitle="Central command navigation for the member operating system"
+        />
+
         <section
           style={{
             border: "1px solid rgba(232,196,107,.18)",
@@ -96,7 +106,7 @@ export default function CommandNavigationPage() {
             }}
           >
             Use this page when you need to jump between VaultForge command sections fast.
-            The sticky navigation bar now appears across the main member pages.
+            This is the central map for the member operating system.
           </p>
         </section>
 
