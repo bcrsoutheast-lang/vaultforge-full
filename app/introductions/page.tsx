@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import {
+  VaultForgePulseStrip,
+  VaultForgeSignalBar,
+  VaultForgeCommandFooter,
+} from "../components/VaultForgeVisualLayer";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -407,6 +412,21 @@ export default function IntroductionsPage() {
           subtitle="Controlled member introductions and response tracking"
         />
 
+        <VaultForgePulseStrip
+          items={[
+            { label: "INTROS", value: "LIVE", tone: "gold" },
+            { label: "RESPONSES", value: "TRACKING", tone: "green" },
+            { label: "NETWORK", value: "ACTIVE", tone: "purple" },
+            { label: "PRESSURE", value: "WATCHING", tone: "red" },
+          ]}
+        />
+
+        <VaultForgeSignalBar
+          urgent={paused}
+          high={ready + approved}
+          normal={Math.max(0, introductions.length - paused - ready - approved)}
+        />
+
         <section style={hero}>
           <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Introductions · {owner ? "Owner View" : "Member View"}
@@ -536,6 +556,7 @@ export default function IntroductionsPage() {
             This page reads introduction records only. It does not create introductions, send messages, reveal private data, or change deal/member records.
           </p>
         </section>
+        <VaultForgeCommandFooter />
       </div>
     </main>
   );
