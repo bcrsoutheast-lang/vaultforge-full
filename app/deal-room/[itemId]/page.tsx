@@ -200,6 +200,18 @@ async function safeJson(res: Response) {
   }
 }
 
+function getDealPriority(item: any) {
+  return String(item?.priority || item?.urgency || item?.status || "medium").trim().toLowerCase();
+}
+
+function matchTone(level: string) {
+  const fit = String(level || "").trim().toLowerCase();
+  if (fit === "strong") return "#9df3bf";
+  if (fit === "possible") return "#f5d978";
+  return "#ffb3b3";
+}
+
+
 function InfoBox({ label, value }: { label: string; value: string | number | undefined }) {
   return (
     <div style={card}>
@@ -210,6 +222,50 @@ function InfoBox({ label, value }: { label: string; value: string | number | und
 }
 
 function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "loading" }) {
+  async function runDealMatchScoring() {
+    setScoreBusy(true);
+    setMatchStatus("Scoring member fit for this deal...");
+
+    try {
+      const currentEmail = email || getEmail();
+      const currentOwner = owner || isOwner(currentEmail);
+
+      const res = await fetch("/api/member/match-score", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": currentEmail,
+          "x-vf-admin": currentOwner ? "1" : "0",
+        },
+        body: JSON.stringify({
+          item_id: itemId,
+          state: item?.state || "",
+          market: item?.state || item?.market || "",
+          city: item?.city || "",
+          strategy: item?.strategy || item?.asset_strategy || "",
+          asset_type: item?.property_type || item?.asset_type || "",
+          role_needed: item?.role_needed || item?.deal_need || "",
+          priority: getDealPriority(item),
+          title: item?.title || "VaultForge deal",
+          note: item?.description || item?.seller_situation || item?.private_notes || "",
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not score member matches.");
+      }
+
+      setMatches(Array.isArray(data?.top_matches) ? data.top_matches : []);
+      setMatchStatus(`Scored ${data?.counts?.members || 0} members. Strong matches: ${data?.counts?.strong || 0}.`);
+    } catch (error: any) {
+      setMatchStatus(error?.message || "Could not score member matches.");
+    } finally {
+      setScoreBusy(false);
+    }
+  }
+
   return (
     <main style={page}>
       <div style={wrap}>
@@ -242,6 +298,9 @@ export default function DealRoomPage() {
   const [access, setAccess] = useState<Access | null>(null);
   const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
   const [item, setItem] = useState<RelatedItem | null>(null);
+  const [matches, setMatches] = useState<Record<string, any>[]>([]);
+  const [matchStatus, setMatchStatus] = useState("");
+  const [scoreBusy, setScoreBusy] = useState(false);
   const [status, setStatus] = useState("Loading deal room...");
 
   async function load() {
@@ -309,6 +368,50 @@ export default function DealRoomPage() {
     return <LockedScreen reason={lockReason} />;
   }
 
+  async function runDealMatchScoring() {
+    setScoreBusy(true);
+    setMatchStatus("Scoring member fit for this deal...");
+
+    try {
+      const currentEmail = email || getEmail();
+      const currentOwner = owner || isOwner(currentEmail);
+
+      const res = await fetch("/api/member/match-score", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": currentEmail,
+          "x-vf-admin": currentOwner ? "1" : "0",
+        },
+        body: JSON.stringify({
+          item_id: itemId,
+          state: item?.state || "",
+          market: item?.state || item?.market || "",
+          city: item?.city || "",
+          strategy: item?.strategy || item?.asset_strategy || "",
+          asset_type: item?.property_type || item?.asset_type || "",
+          role_needed: item?.role_needed || item?.deal_need || "",
+          priority: getDealPriority(item),
+          title: item?.title || "VaultForge deal",
+          note: item?.description || item?.seller_situation || item?.private_notes || "",
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not score member matches.");
+      }
+
+      setMatches(Array.isArray(data?.top_matches) ? data.top_matches : []);
+      setMatchStatus(`Scored ${data?.counts?.members || 0} members. Strong matches: ${data?.counts?.strong || 0}.`);
+    } catch (error: any) {
+      setMatchStatus(error?.message || "Could not score member matches.");
+    } finally {
+      setScoreBusy(false);
+    }
+  }
+
   return (
     <main style={page}>
       <style>{`
@@ -363,6 +466,9 @@ export default function DealRoomPage() {
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/introductions" style={btn}>Introductions</Link>
+            <button type="button" style={btn} disabled={scoreBusy} onClick={runDealMatchScoring}>
+              {scoreBusy ? "Scoring..." : "Score Member Fits"}
+            </button>
             <Link href="/messages" style={ghost}>Messages</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
             {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
@@ -457,6 +563,59 @@ export default function DealRoomPage() {
                 Admin Routing, the member Routing Inbox, controlled Introductions, and the future dispatch layer.
               </p>
             </section>
+
+            {matches.length > 0 && (
+              <section style={{ ...hero, marginTop: 22 }}>
+                <div style={greenEyebrow}>Member Match Scoring</div>
+                <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+                  Strongest member fits.
+                </h2>
+                <p style={{ ...muted, fontSize: 19 }}>
+                  Read-only scoring compares this deal context against member specialization. Nothing is routed or sent automatically.
+                </p>
+
+                <section style={grid}>
+                  {matches.map((match, index) => {
+                    const fitTone = matchTone(match.fit_level);
+
+                    return (
+                      <article key={match.member_id || match.email || index} style={{ ...card, borderColor: `${fitTone}66` }}>
+                        <div style={{ ...greenEyebrow, color: fitTone }}>
+                          {String(match.fit_level || "weak").replace(/_/g, " ")} Fit · {match.fit_score || 0}
+                        </div>
+
+                        <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>
+                          {match.full_name || match.email || "Member"}
+                        </h3>
+
+                        <div style={{ marginBottom: 12 }}>
+                          {Array.isArray(match.roles) && match.roles.slice(0, 3).map((role: string) => (
+                            <span key={role} style={chip}>{role}</span>
+                          ))}
+                          {Array.isArray(match.markets) && match.markets.slice(0, 3).map((market: string) => (
+                            <span key={market} style={chip}>{market}</span>
+                          ))}
+                        </div>
+
+                        {Array.isArray(match.reasons) && match.reasons.slice(0, 4).map((reason: string) => (
+                          <p key={reason} style={{ ...muted, lineHeight: 1.45 }}>
+                            {reason}
+                          </p>
+                        ))}
+
+                        <Link href={`/member-intelligence/${encodeURIComponent(match.member_id || match.email || "")}`} style={btn}>
+                          Member Detail
+                        </Link>
+
+                        <Link href="/member-intelligence" style={ghost}>
+                          Member Intelligence
+                        </Link>
+                      </article>
+                    );
+                  })}
+                </section>
+              </section>
+            )}
 
             <section style={{ ...hero, marginTop: 22 }}>
               <div style={greenEyebrow}>Controlled Introductions</div>
