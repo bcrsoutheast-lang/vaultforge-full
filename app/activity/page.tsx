@@ -198,6 +198,7 @@ export default function ActivityStreamPage() {
   const [feed, setFeed] = useState<ActivityItem[]>([]);
   const [filter, setFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [heatFilter, setHeatFilter] = useState("all");
   const [search, setSearch] = useState("");
 
   async function load() {
@@ -331,6 +332,10 @@ export default function ActivityStreamPage() {
       list = list.filter((item) => clean(item.priority).toLowerCase() === priorityFilter);
     }
 
+    if (heatFilter !== "all") {
+      list = list.filter((item) => heatLabel(item).toLowerCase() === heatFilter);
+    }
+
     const q = search.trim().toLowerCase();
 
     if (q) {
@@ -355,7 +360,7 @@ export default function ActivityStreamPage() {
     }
 
     return list;
-  }, [feed, filter, priorityFilter, search]);
+  }, [feed, filter, priorityFilter, heatFilter, search]);
 
   const latestRouting = useMemo(() => {
     return feed.find((item) => item.type.includes("routing")) || null;
@@ -882,6 +887,21 @@ export default function ActivityStreamPage() {
           </div>
 
           <div style={{ marginTop: 18 }}>
+            <button type="button" style={heatFilter === "all" ? btn : ghost} onClick={() => setHeatFilter("all")}>
+              All Heat
+            </button>
+            <button type="button" style={heatFilter === "hot" ? btn : ghost} onClick={() => setHeatFilter("hot")}>
+              Hot
+            </button>
+            <button type="button" style={heatFilter === "warm" ? btn : ghost} onClick={() => setHeatFilter("warm")}>
+              Warm
+            </button>
+            <button type="button" style={heatFilter === "normal" ? btn : ghost} onClick={() => setHeatFilter("normal")}>
+              Normal
+            </button>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -905,7 +925,7 @@ export default function ActivityStreamPage() {
             lineHeight:1.6,
             marginBottom:0
           }}>
-            Showing {filteredFeed.length} of {feed.length} events. Type filter: {label(filter)}. Priority filter: {label(priorityFilter)}. Search: {search.trim() || "None"}.
+            Showing {filteredFeed.length} of {feed.length} events. Type filter: {label(filter)}. Priority filter: {label(priorityFilter)}. Heat filter: {label(heatFilter)}. Search: {search.trim() || "None"}.
           </p>
 
           {search.trim() && (
