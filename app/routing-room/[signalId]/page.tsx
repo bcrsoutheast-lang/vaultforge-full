@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 type Action = Record<string, any>;
+type Member = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -248,6 +249,8 @@ export default function RoutingRoomPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
   const [actions, setActions] = useState<Action[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [memberSearch, setMemberSearch] = useState("");
   const [status, setStatus] = useState("Loading routing intelligence...");
   const [busy, setBusy] = useState(false);
 
@@ -272,22 +275,35 @@ export default function RoutingRoomPage() {
       setEmail(currentEmail);
       setOwner(currentOwner);
 
-      const res = await fetch(
-        `/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}&signal_id=${encodeURIComponent(signalId)}`,
-        {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": currentOwner ? "1" : "0",
-          },
-        }
-      );
+      const headers = {
+        "x-vf-email": currentEmail,
+        "x-vf-admin": currentOwner ? "1" : "0",
+      };
 
-      const data = await safeJson(res);
+      const [actionRes, memberRes] = await Promise.all([
+        fetch(
+          `/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}&signal_id=${encodeURIComponent(signalId)}`,
+          {
+            cache: "no-store",
+            headers,
+          }
+        ),
+        currentOwner
+          ? fetch(`/api/member/specialization?email=${encodeURIComponent(currentEmail)}&owner=1`, {
+              cache: "no-store",
+              headers,
+            })
+          : Promise.resolve(null),
+      ]);
+
+      const data = await safeJson(actionRes);
+      const memberData = memberRes ? await safeJson(memberRes as Response) : {};
 
       const rows = Array.isArray(data?.actions) ? data.actions : [];
+      const memberRows = Array.isArray(memberData?.members) ? memberData.members : [];
 
       setActions(rows);
+      setMembers(memberRows);
       setStatus(rows.length ? "" : "No routing actions found for this signal yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load routing intelligence.");
@@ -355,6 +371,48 @@ export default function RoutingRoomPage() {
   const routingPressure = useMemo(() => {
     return actions.filter((item) => clean(item.priority).toLowerCase() === "urgent").length;
   }, [actions]);
+
+  const filteredMembers = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+
+    let list = members.slice(0, 20);
+
+    if (q) {
+      list = members.filter((member) =>
+        [
+          member.full_name,
+          member.email,
+          member.company,
+          member.buy_box,
+          ...(member.roles || []),
+          ...(member.markets || []),
+          ...(member.strategies || []),
+          ...(member.asset_types || []),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
+      );
+    }
+
+    return list.slice(0, 12);
+  }, [members, memberSearch]);
+
+  function applyMemberHint(member: Member) {
+    const roles = Array.isArray(member.roles) ? member.roles.join(", ") : "";
+    const markets = Array.isArray(member.markets) ? member.markets.join(", ") : "";
+    const strategies = Array.isArray(member.strategies) ? member.strategies.join(", ") : "";
+
+    setRoleMatch(roles || roleMatch);
+    setStateMatch(markets || stateMatch);
+    setStrategyMatch(strategies || strategyMatch);
+
+    if (member.email) {
+      setNote(
+        `${note ? `${note}\n\n` : ""}Member fit: ${member.full_name || member.email}. ${member.routing_summary || ""}`.trim()
+      );
+    }
+  }
 
   return (
     <main style={page}>
@@ -514,6 +572,79 @@ export default function RoutingRoomPage() {
             <button type="button" style={{ ...btn, marginTop: 16 }} disabled={busy} onClick={logContextAction}>
               {busy ? "Logging..." : "Log Routing Context"}
             </button>
+          </section>
+        )}
+
+        {owner && (
+          <section style={hero}>
+            <div style={{
+              color:"#9df3bf",
+              letterSpacing:5,
+              fontWeight:950,
+              fontSize:12,
+              marginBottom:12,
+              textTransform:"uppercase"
+            }}>
+              Member Specialization Hints
+            </div>
+
+            <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+              Use member intelligence while routing.
+            </h2>
+
+            <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.55 }}>
+              These hints do not route automatically. They help owner/admin fill state, strategy, role, and context fields more accurately.
+            </p>
+
+            <input
+              style={input}
+              value={memberSearch}
+              onChange={(event) => setMemberSearch(event.target.value)}
+              placeholder="Search members by role, market, strategy, email, buy box..."
+            />
+
+            <section style={{ ...grid, marginTop: 18 }}>
+              {filteredMembers.map((member, index) => (
+                <article key={member.id || member.email || index} style={card}>
+                  <div style={{
+                    color:"#9df3bf",
+                    letterSpacing:4,
+                    fontWeight:900,
+                    fontSize:11,
+                    marginBottom:10,
+                    textTransform:"uppercase"
+                  }}>
+                    {label(member.routing_readiness || "low")} Readiness
+                  </div>
+
+                  <h3 style={{ fontSize: 28, lineHeight: 1.05, margin: "0 0 10px" }}>
+                    {member.full_name || member.email || "Member"}
+                  </h3>
+
+                  <p style={{ color:"rgba(255,255,255,.70)", lineHeight:1.55 }}>
+                    {member.routing_summary || "Specialization data incomplete."}
+                  </p>
+
+                  <div style={{ margin: "12px 0" }}>
+                    <span style={chip}>Score: {member.completeness_score || 0}</span>
+                    {Array.isArray(member.roles) && member.roles.slice(0, 3).map((role: string) => (
+                      <span key={role} style={chip}>{role}</span>
+                    ))}
+                    {Array.isArray(member.markets) && member.markets.slice(0, 3).map((market: string) => (
+                      <span key={market} style={chip}>{market}</span>
+                    ))}
+                  </div>
+
+                  <button type="button" style={btn} onClick={() => applyMemberHint(member)}>
+                    Use As Routing Hint
+                  </button>
+
+                  <Link href={`/member-intelligence/${encodeURIComponent(member.id || member.email || "")}`} style={ghost}>
+                    Member Detail
+                  </Link>
+                </article>
+              ))}
+            </section>
           </section>
         )}
 
