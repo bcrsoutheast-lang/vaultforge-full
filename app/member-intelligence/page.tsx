@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -318,6 +319,11 @@ export default function MemberIntelligencePage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Member Intelligence"
+          subtitle="Operational specialization, routing readiness, and network depth"
+        />
+
         <section style={hero}>
           <div
             style={{
