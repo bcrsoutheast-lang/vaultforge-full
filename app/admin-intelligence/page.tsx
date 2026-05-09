@@ -119,6 +119,16 @@ const WINDOWS: ControlWindow[] = [
     tone: "gold",
   },
   {
+    code: "RESPONSES",
+    title: "Member Response Monitor",
+    purpose: "Shows how members responded to routed opportunities: Interested, Need More Info, Request Call, Request Intro, or Pass.",
+    automatedJob: "No automatic introductions yet. This safely captures member intent before dispatch.",
+    adminJob: "Review who is interested and decide when to move to controlled introductions.",
+    risk: "Do not expose private contact details or auto-introduce members until controlled intro workflow is built.",
+    href: "/admin-routing-responses",
+    tone: "green",
+  },
+  {
     code: "MEMBERS",
     title: "Member Intelligence Graph",
     purpose: "Tracks buyers, lenders, sellers, contractors, operators, developers, and deal sources.",
@@ -676,6 +686,7 @@ export default function AdminIntelligencePage() {
             <button type="button" onClick={load} style={btn}>Refresh Owner Signals</button>
             <Link href="/admin" style={btn}>Admin Home</Link>
             <Link href="/admin-routing" style={btn}>Admin Routing</Link>
+            <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
             <Link href="/intelligence" style={ghost}>Member Intelligence Map</Link>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/network" style={ghost}>Network</Link>
