@@ -419,8 +419,14 @@ export default function AdminIntroductionsPage() {
                   </div>
 
                   <div className="vf-intro-actions">
+                    {item.id && (
+                      <Link href={`/admin-introduction-review/${encodeURIComponent(item.id)}`} style={btn}>
+                        Review Introduction
+                      </Link>
+                    )}
+
                     {item.signal_id && (
-                      <Link href={`/routing-room/${encodeURIComponent(item.signal_id)}`} style={btn}>
+                      <Link href={`/routing-room/${encodeURIComponent(item.signal_id)}`} style={ghost}>
                         Routing Room
                       </Link>
                     )}
