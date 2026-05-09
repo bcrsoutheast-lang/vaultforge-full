@@ -533,6 +533,7 @@ export default function RoutingRoomPage() {
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/intelligence" style={ghost}>Intelligence</Link>
             {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
+            {owner && <Link href="/admin-routing-confidence" style={ghost}>Routing Confidence</Link>}
           </div>
 
           {status && (
