@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -425,6 +426,11 @@ export default function RoutingInboxPage() {
       `}</style>
 
       <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Routing Inbox"
+          subtitle="Exact routed opportunities and operational matching"
+        />
+
         <section style={hero}>
           <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Routed Opportunities
