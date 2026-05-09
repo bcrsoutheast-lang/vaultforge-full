@@ -233,7 +233,10 @@ export default function RoutingRoomPage() {
   const [actions, setActions] = useState<Action[]>([]);
   const [status, setStatus] = useState("Loading routing room...");
   const [generateStatus, setGenerateStatus] = useState("");
+  const [introStatus, setIntroStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [introBusyId, setIntroBusyId] = useState("");
+  const [introEmailByAction, setIntroEmailByAction] = useState<Record<string, string>>({});
 
   const [title, setTitle] = useState("");
   const [itemId, setItemId] = useState("");
@@ -333,6 +336,66 @@ export default function RoutingRoomPage() {
     }
   }
 
+  async function stageIntroductionFromAction(action: Action) {
+    if (!owner) {
+      setIntroStatus("Owner/admin access required to stage introductions.");
+      return;
+    }
+
+    const actionId = clean(action.id);
+    const memberEmail = clean(introEmailByAction[actionId]).toLowerCase();
+
+    if (!memberEmail) {
+      setIntroStatus("Enter a member email before staging the introduction.");
+      return;
+    }
+
+    setIntroBusyId(actionId);
+    setIntroStatus("Staging controlled introduction...");
+
+    try {
+      const res = await fetch("/api/routing/introductions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+          "x-vf-admin": "1",
+        },
+        body: JSON.stringify({
+          email,
+          admin_email: email,
+          owner: "1",
+          routing_action_id: actionId,
+          signal_id: first(action.signal_id, signalId),
+          item_id: exactItemId(action),
+          title: `Intro: ${titleOf(action)}`,
+          note: noteOf(action),
+          member_email: memberEmail,
+          visible_to_email: memberEmail,
+          recipient_email: memberEmail,
+          counterparty_email: email,
+          priority: priorityOf(action),
+          status: "staged",
+          intro_status: "staged",
+          source: "routing_room_stage_intro",
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not stage introduction.");
+      }
+
+      setIntroStatus(data?.message || "Controlled introduction staged.");
+      setIntroEmailByAction((prev) => ({ ...prev, [actionId]: "" }));
+    } catch (error: any) {
+      setIntroStatus(error?.message || "Could not stage introduction.");
+    } finally {
+      setIntroBusyId("");
+    }
+  }
+
   useEffect(() => {
     load();
   }, [signalId]);
@@ -403,6 +466,12 @@ export default function RoutingRoomPage() {
           {status && (
             <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
               {status}
+            </p>
+          )}
+
+          {introStatus && (
+            <p style={{ color: introStatus.toLowerCase().includes("could not") || introStatus.toLowerCase().includes("required") || introStatus.toLowerCase().includes("enter") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+              {introStatus}
             </p>
           )}
         </section>
@@ -498,10 +567,36 @@ export default function RoutingRoomPage() {
                     {exactItemId(item) && <span style={chip}>Item: {exactItemId(item)}</span>}
                   </div>
 
+                  {owner && (
+                    <div style={{ marginTop: 14 }}>
+                      <input
+                        style={input}
+                        value={introEmailByAction[String(item.id || "")] || ""}
+                        onChange={(event) =>
+                          setIntroEmailByAction((prev) => ({
+                            ...prev,
+                            [String(item.id || "")]: event.target.value,
+                          }))
+                        }
+                        placeholder="Member email to stage intro..."
+                      />
+
+                      <button
+                        type="button"
+                        style={btn}
+                        disabled={introBusyId === String(item.id || "")}
+                        onClick={() => stageIntroductionFromAction(item)}
+                      >
+                        {introBusyId === String(item.id || "") ? "Staging..." : "Stage Controlled Intro"}
+                      </button>
+                    </div>
+                  )}
+
                   <div className="vf-actions">
                     <Link href={`/signals/${encodeURIComponent(signalId)}`} style={btn}>Signal Detail</Link>
                     {workHref && <Link href={workHref} style={ghost}>Exact Work Area</Link>}
                     <Link href="/activity" style={ghost}>Activity</Link>
+                    <Link href="/introductions" style={ghost}>Introductions</Link>
                   </div>
                 </article>
               );
