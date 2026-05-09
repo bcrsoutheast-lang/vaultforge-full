@@ -341,6 +341,7 @@ export default function AdminRoutingPage() {
           <div className="vf-admin-routing-actions">
             <button type="button" style={btn} onClick={load}>Refresh Actions</button>
             <Link href="/admin-intelligence" style={btn}>Owner Intelligence</Link>
+            <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
             <Link href="/alerts" style={ghost}>Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
             <Link href="/admin" style={ghost}>Admin Home</Link>
@@ -352,6 +353,7 @@ export default function AdminRoutingPage() {
             <span style={chip}>Owner: {email || OWNER_EMAIL}</span>
             <span style={chip}>Table: vf_routing_actions</span>
             <span style={chip}>Mode: Read-only overview</span>
+            <span style={chip}>Responses: /admin-routing-responses</span>
           </div>
         </section>
 
