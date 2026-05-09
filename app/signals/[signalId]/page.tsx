@@ -486,6 +486,7 @@ export default function SignalDetailPage() {
             <Link href="/alerts" style={ghost}>Back to Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence Map</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+            <Link href="/introductions" style={ghost}>Introductions</Link>
             {owner && <Link href="/admin-intelligence" style={btn}>Owner Control</Link>}
             {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
             {signal && <Link href={`/routing-room/${encodeURIComponent(signal.id)}`} style={btn}>Open Routing Room</Link>}
@@ -591,7 +592,7 @@ export default function SignalDetailPage() {
               <p style={{ ...muted, fontSize: 19 }}>
                 This signal can now open its exact Deal Room and Routing Room when it includes real ids.
                 Next layers can add capital rooms, buyer match rooms, operator-needed rooms, pain threads,
-                comments, member delivery, and notification history.
+                comments, member delivery, controlled introductions, and notification history.
               </p>
             </section>
 
