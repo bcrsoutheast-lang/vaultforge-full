@@ -562,6 +562,7 @@ export default function IntelligencePage() {
             <button type="button" onClick={load} style={btn}>Refresh Intelligence</button>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/activity" style={ghost}>Activity Stream</Link>
+            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
             <Link href="/introductions" style={ghost}>Introductions</Link>
             <Link href="/submit" style={ghost}>Create Deal</Link>
