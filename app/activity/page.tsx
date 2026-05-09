@@ -390,6 +390,160 @@ export default function ActivityStreamPage() {
     );
   }
 
+
+  const groupedFeed = useMemo(() => {
+    const now = Date.now();
+
+    const groups = {
+      justNow: [] as ActivityItem[],
+      today: [] as ActivityItem[],
+      earlier: [] as ActivityItem[],
+    };
+
+    for (const item of filteredFeed) {
+      const created = new Date(item.created_at || 0).getTime();
+
+      if (!created || Number.isNaN(created)) {
+        groups.earlier.push(item);
+        continue;
+      }
+
+      const diff = now - created;
+      const oneHour = 1000 * 60 * 60;
+      const oneDay = oneHour * 24;
+
+      if (diff <= oneHour) {
+        groups.justNow.push(item);
+      } else if (diff <= oneDay) {
+        groups.today.push(item);
+      } else {
+        groups.earlier.push(item);
+      }
+    }
+
+    return groups;
+  }, [filteredFeed]);
+
+  function FeedSection({
+    title,
+    items,
+  }: {
+    title: string;
+    items: ActivityItem[];
+  }) {
+    if (items.length === 0) return null;
+
+    return (
+      <section style={{ marginBottom: 26 }}>
+        <div
+          style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:14,
+            textTransform:"uppercase"
+          }}
+        >
+          {title}
+        </div>
+
+        {items.map((item) => {
+          const itemTone = tone(item.type);
+
+          return (
+            <article
+              key={item.id}
+              style={{
+                ...feedCard,
+                borderColor:
+                  clean(item.priority).toLowerCase() === "urgent"
+                    ? "rgba(255,120,120,.72)"
+                    : clean(item.priority).toLowerCase() === "high"
+                    ? "rgba(245,217,120,.72)"
+                    : `${itemTone}66`,
+              }}
+            >
+              <div style={{
+                color:itemTone,
+                letterSpacing:4,
+                fontWeight:900,
+                fontSize:12,
+                marginBottom:10,
+                textTransform:"uppercase"
+              }}>
+                {label(item.type)}
+              </div>
+
+              <h2 style={{
+                fontSize:32,
+                lineHeight:1.05,
+                margin:"0 0 12px"
+              }}>
+                {item.title}
+              </h2>
+
+              <p style={{
+                color:"rgba(255,255,255,.72)",
+                lineHeight:1.6,
+                fontSize:18
+              }}>
+                {item.note || "Operational activity recorded in the VaultForge intelligence layer."}
+              </p>
+
+              <div style={{ margin:"12px 0" }}>
+                {item.priority && (
+                  <span style={chip}>{item.priority}</span>
+                )}
+
+                {item.response && (
+                  <span style={chip}>{label(item.response)}</span>
+                )}
+
+                {item.member_email && (
+                  <span style={chip}>{item.member_email}</span>
+                )}
+
+                {item.created_at && (
+                  <span style={chip}>{item.created_at}</span>
+                )}
+              </div>
+
+              <div>
+                {item.introduction_id && (
+                  <Link
+                    href={`/introduction/${encodeURIComponent(item.introduction_id)}`}
+                    style={btn}
+                  >
+                    Open Introduction
+                  </Link>
+                )}
+
+                {item.signal_id && (
+                  <Link
+                    href={`/routing-room/${encodeURIComponent(item.signal_id)}`}
+                    style={ghost}
+                  >
+                    Routing Room
+                  </Link>
+                )}
+
+                {item.item_id && (
+                  <Link
+                    href={`/deal-room/${encodeURIComponent(item.item_id)}`}
+                    style={ghost}
+                  >
+                    Deal Room
+                  </Link>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </section>
+    );
+  }
+
   return (
     <main style={page}>
       <style>{`
@@ -583,98 +737,9 @@ export default function ActivityStreamPage() {
           </section>
         ) : (
           <section>
-            {filteredFeed.map((item) => {
-              const itemTone = tone(item.type);
-
-              return (
-                <article
-                  key={item.id}
-                  style={{
-                    ...feedCard,
-                    borderColor:
-                      clean(item.priority).toLowerCase() === "urgent"
-                        ? "rgba(255,120,120,.72)"
-                        : clean(item.priority).toLowerCase() === "high"
-                        ? "rgba(245,217,120,.72)"
-                        : `${itemTone}66`,
-                  }}
-                >
-                  <div style={{
-                    color:itemTone,
-                    letterSpacing:4,
-                    fontWeight:900,
-                    fontSize:12,
-                    marginBottom:10,
-                    textTransform:"uppercase"
-                  }}>
-                    {label(item.type)}
-                  </div>
-
-                  <h2 style={{
-                    fontSize:32,
-                    lineHeight:1.05,
-                    margin:"0 0 12px"
-                  }}>
-                    {item.title}
-                  </h2>
-
-                  <p style={{
-                    color:"rgba(255,255,255,.72)",
-                    lineHeight:1.6,
-                    fontSize:18
-                  }}>
-                    {item.note || "Operational activity recorded in the VaultForge intelligence layer."}
-                  </p>
-
-                  <div style={{ margin:"12px 0" }}>
-                    {item.priority && (
-                      <span style={chip}>{item.priority}</span>
-                    )}
-
-                    {item.response && (
-                      <span style={chip}>{label(item.response)}</span>
-                    )}
-
-                    {item.member_email && (
-                      <span style={chip}>{item.member_email}</span>
-                    )}
-
-                    {item.created_at && (
-                      <span style={chip}>{item.created_at}</span>
-                    )}
-                  </div>
-
-                  <div>
-                    {item.introduction_id && (
-                      <Link
-                        href={`/introduction/${encodeURIComponent(item.introduction_id)}`}
-                        style={btn}
-                      >
-                        Open Introduction
-                      </Link>
-                    )}
-
-                    {item.signal_id && (
-                      <Link
-                        href={`/routing-room/${encodeURIComponent(item.signal_id)}`}
-                        style={ghost}
-                      >
-                        Routing Room
-                      </Link>
-                    )}
-
-                    {item.item_id && (
-                      <Link
-                        href={`/deal-room/${encodeURIComponent(item.item_id)}`}
-                        style={ghost}
-                      >
-                        Deal Room
-                      </Link>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+            <FeedSection title="Just Now" items={groupedFeed.justNow} />
+            <FeedSection title="Today" items={groupedFeed.today} />
+            <FeedSection title="Earlier" items={groupedFeed.earlier} />
           </section>
         )}
 
