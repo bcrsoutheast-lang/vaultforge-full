@@ -160,6 +160,37 @@ function tone(type: string) {
   return "#9df3bf";
 }
 
+function heatLabel(item: ActivityItem) {
+  const priority = clean(item.priority).toLowerCase();
+  const response = clean(item.response).toLowerCase();
+  const type = clean(item.type).toLowerCase();
+
+  if (
+    priority === "urgent" ||
+    response === "interested" ||
+    response === "request_call" ||
+    response === "request_intro"
+  ) {
+    return "Hot";
+  }
+
+  if (
+    priority === "high" ||
+    response === "need_details" ||
+    type.includes("controlled_introduction")
+  ) {
+    return "Warm";
+  }
+
+  return "Normal";
+}
+
+function heatTone(labelValue: string) {
+  if (labelValue === "Hot") return "#ffb3b3";
+  if (labelValue === "Warm") return "#f5d978";
+  return "#9df3bf";
+}
+
 export default function ActivityStreamPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
@@ -275,6 +306,9 @@ export default function ActivityStreamPage() {
       urgent: feed.filter((item) => clean(item.priority).toLowerCase() === "urgent").length,
       high: feed.filter((item) => clean(item.priority).toLowerCase() === "high").length,
       medium: feed.filter((item) => clean(item.priority).toLowerCase() === "medium").length,
+      hot: feed.filter((item) => heatLabel(item) === "Hot").length,
+      warm: feed.filter((item) => heatLabel(item) === "Warm").length,
+      normal: feed.filter((item) => heatLabel(item) === "Normal").length,
     };
   }, [feed]);
 
@@ -383,6 +417,18 @@ export default function ActivityStreamPage() {
         </p>
 
         <div style={{ marginTop: 10 }}>
+          {item && (
+            <span
+              style={{
+                ...chip,
+                color: heatTone(heatLabel(item)),
+                border: `1px solid ${heatTone(heatLabel(item))}66`,
+                background: "rgba(255,255,255,.055)",
+              }}
+            >
+              {heatLabel(item)}
+            </span>
+          )}
           {item?.priority && <span style={chip}>{item.priority}</span>}
           {item?.created_at && <span style={chip}>{item.created_at}</span>}
         </div>
@@ -450,6 +496,8 @@ export default function ActivityStreamPage() {
 
         {items.map((item) => {
           const itemTone = tone(item.type);
+          const heat = heatLabel(item);
+          const heatColor = heatTone(heat);
 
           return (
             <article
@@ -492,6 +540,17 @@ export default function ActivityStreamPage() {
               </p>
 
               <div style={{ margin:"12px 0" }}>
+                <span
+                  style={{
+                    ...chip,
+                    color: heatColor,
+                    border: `1px solid ${heatColor}66`,
+                    background: "rgba(255,255,255,.055)",
+                  }}
+                >
+                  {heat}
+                </span>
+
                 {item.priority && (
                   <span style={chip}>{item.priority}</span>
                 )}
@@ -766,6 +825,18 @@ export default function ActivityStreamPage() {
               title="Response Volume"
               value={metrics.responses}
               detail="Member responses captured from intro/routing flow."
+            />
+            <MetricCard
+              title="Hot Events"
+              value={metrics.hot}
+              detail="Urgent, interested, call, or intro-request events."
+              emphasis={metrics.hot > 0 ? "urgent" : "normal"}
+            />
+            <MetricCard
+              title="Warm Events"
+              value={metrics.warm}
+              detail="High-priority, detail-needed, or intro-stage events."
+              emphasis={metrics.warm > 0 ? "high" : "normal"}
             />
           </div>
         </section>
