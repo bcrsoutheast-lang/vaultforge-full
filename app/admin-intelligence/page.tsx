@@ -727,6 +727,7 @@ export default function AdminIntelligencePage() {
             <Link href="/admin" style={btn}>Admin Home</Link>
             <Link href="/activity" style={btn}>Activity Stream</Link>
             <Link href="/member-intelligence" style={btn}>Member Intelligence</Link>
+            <Link href="/admin-routing-confidence" style={btn}>Routing Confidence</Link>
             <Link href="/admin-routing" style={btn}>Admin Routing</Link>
             <Link href="/admin-routing-responses" style={btn}>Response Monitor</Link>
             <Link href="/admin-introductions" style={btn}>Admin Introductions</Link>
