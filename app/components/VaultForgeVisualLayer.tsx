@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -93,6 +92,50 @@ export function VaultForgeSectionHeader({
       <div style={sectionEyebrow}>{eyebrow}</div>
       <h2 style={sectionTitle}>{title}</h2>
       {text && <p style={sectionText}>{text}</p>}
+    </section>
+  );
+}
+
+
+
+export function VaultForgeLiveTicker({
+  items = [
+    "URGENT DISTRESS SIGNAL DETECTED",
+    "BUYER MATCH ROUTED",
+    "LENDER RESPONSE TRACKED",
+    "OFF-MARKET OPPORTUNITY ACTIVE",
+    "INTRODUCTION REQUEST MONITORING",
+    "NETWORK PRESSURE ELEVATED",
+  ],
+}: {
+  items?: string[];
+}) {
+  const repeated = [...items, ...items, ...items];
+
+  return (
+    <section style={tickerWrap}>
+      <style>{`
+        @keyframes vfTickerMove {
+          0% {
+            transform: translateX(0%);
+          }
+
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+      `}</style>
+
+      <div style={tickerViewport}>
+        <div style={tickerTrack}>
+          {repeated.map((item, index) => (
+            <div key={`${item}-${index}`} style={tickerItem}>
+              <span style={tickerDot} />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -342,4 +385,50 @@ const signalLegend: React.CSSProperties = {
   color: "rgba(255,255,255,.70)",
   fontWeight: 850,
   fontSize: 13,
+};
+
+const tickerWrap: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.14)",
+  borderRadius: 22,
+  marginBottom: 22,
+  overflow: "hidden",
+  background:
+    "linear-gradient(90deg, rgba(232,196,107,.08), rgba(181,92,255,.08), rgba(157,243,191,.07))",
+  boxShadow: "0 18px 55px rgba(0,0,0,.28)",
+};
+
+const tickerViewport: React.CSSProperties = {
+  overflow: "hidden",
+  width: "100%",
+};
+
+const tickerTrack: React.CSSProperties = {
+  display: "flex",
+  gap: 14,
+  width: "max-content",
+  padding: "14px 0",
+  animation: "vfTickerMove 36s linear infinite",
+};
+
+const tickerItem: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  border: "1px solid rgba(255,255,255,.08)",
+  borderRadius: 999,
+  padding: "10px 16px",
+  background: "rgba(0,0,0,.24)",
+  color: "white",
+  fontWeight: 900,
+  letterSpacing: 1,
+  whiteSpace: "nowrap",
+  fontSize: 13,
+};
+
+const tickerDot: React.CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  background: "#e8c46b",
+  boxShadow: "0 0 14px #e8c46b",
 };
