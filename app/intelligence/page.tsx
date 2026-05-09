@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import {
+  VaultForgePulseStrip,
+  VaultForgeSignalBar,
+  VaultForgeCommandFooter,
+} from "../components/VaultForgeVisualLayer";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -466,6 +471,21 @@ export default function IntelligencePage() {
           subtitle="Exact routing intelligence and signal infrastructure"
         />
 
+        <VaultForgePulseStrip
+          items={[
+            { label: "INTELLIGENCE", value: "LIVE", tone: "gold" },
+            { label: "SIGNALS", value: "TRACKING", tone: "green" },
+            { label: "ROUTING", value: "ACTIVE", tone: "purple" },
+            { label: "PRESSURE", value: "WATCHING", tone: "red" },
+          ]}
+        />
+
+        <VaultForgeSignalBar
+          urgent={urgent}
+          high={signals.filter((item) => priorityOf(item) === "high").length}
+          normal={Math.max(0, signals.length - urgent - signals.filter((item) => priorityOf(item) === "high").length)}
+        />
+
         <section style={hero}>
           <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Intelligence Map
@@ -605,6 +625,7 @@ export default function IntelligencePage() {
             This page only fixes exact navigation. It does not auto-route, notify, create introductions, or mutate records.
           </p>
         </section>
+        <VaultForgeCommandFooter />
       </div>
     </main>
   );
