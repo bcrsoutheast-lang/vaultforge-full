@@ -544,6 +544,60 @@ export default function ActivityStreamPage() {
     );
   }
 
+
+  function MetricCard({
+    title,
+    value,
+    detail,
+    emphasis,
+  }: {
+    title: string;
+    value: number | string;
+    detail: string;
+    emphasis?: "urgent" | "high" | "normal";
+  }) {
+    const border =
+      emphasis === "urgent"
+        ? "rgba(255,120,120,.72)"
+        : emphasis === "high"
+        ? "rgba(245,217,120,.72)"
+        : "rgba(157,243,191,.34)";
+
+    return (
+      <div
+        style={{
+          border: `1px solid ${border}`,
+          background:
+            "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
+          borderRadius: 24,
+          padding: 20,
+          boxShadow: "0 22px 70px rgba(0,0,0,.28)",
+        }}
+      >
+        <div
+          style={{
+            color: emphasis === "urgent" ? "#ffb3b3" : emphasis === "high" ? "#f5d978" : "#9df3bf",
+            letterSpacing: 4,
+            fontWeight: 900,
+            fontSize: 11,
+            marginBottom: 10,
+            textTransform: "uppercase",
+          }}
+        >
+          {title}
+        </div>
+
+        <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>
+          {value}
+        </div>
+
+        <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>
+          {detail}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <main style={page}>
       <style>{`
@@ -650,6 +704,69 @@ export default function ActivityStreamPage() {
             <TapeCard labelText="Latest Routing" item={latestRouting} emptyText="No routing activity yet" />
             <TapeCard labelText="Latest Introduction" item={latestIntro} emptyText="No introductions yet" />
             <TapeCard labelText="Latest Response" item={latestResponse} emptyText="No member responses yet" />
+          </div>
+        </section>
+
+        <section style={hero}>
+          <div style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:12,
+            textTransform:"uppercase"
+          }}>
+            Command Metrics
+          </div>
+
+          <h2 style={{
+            fontSize:42,
+            lineHeight:1,
+            margin:"0 0 14px"
+          }}>
+            Platform pressure board.
+          </h2>
+
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            fontSize:18,
+            lineHeight:1.55
+          }}>
+            Read-only operational pressure snapshot across the current feed.
+          </p>
+
+          <div style={{
+            display:"grid",
+            gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",
+            gap:14
+          }}>
+            <MetricCard
+              title="Urgent Pressure"
+              value={metrics.urgent}
+              detail="Urgent events in the current activity window."
+              emphasis={metrics.urgent > 0 ? "urgent" : "normal"}
+            />
+            <MetricCard
+              title="High Priority"
+              value={metrics.high}
+              detail="High-priority opportunities and workflow events."
+              emphasis={metrics.high > 0 ? "high" : "normal"}
+            />
+            <MetricCard
+              title="Routing Volume"
+              value={metrics.routing}
+              detail="Routing actions captured in the operating stream."
+            />
+            <MetricCard
+              title="Intro Volume"
+              value={metrics.intros}
+              detail="Controlled introductions staged or visible."
+            />
+            <MetricCard
+              title="Response Volume"
+              value={metrics.responses}
+              detail="Member responses captured from intro/routing flow."
+            />
           </div>
         </section>
 
