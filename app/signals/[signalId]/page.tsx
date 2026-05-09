@@ -297,6 +297,9 @@ export default function SignalDetailPage() {
   const [signal, setSignal] = useState<Signal | null>(null);
   const [item, setItem] = useState<RelatedItem | null>(null);
   const [actions, setActions] = useState<RoutingAction[]>([]);
+  const [matches, setMatches] = useState<Record<string, any>[]>([]);
+  const [matchStatus, setMatchStatus] = useState("");
+  const [scoreBusy, setScoreBusy] = useState(false);
   const [status, setStatus] = useState("Loading signal intelligence...");
 
   async function load() {
@@ -365,6 +368,51 @@ export default function SignalDetailPage() {
     }
   }
 
+  async function runMatchScoring() {
+    setScoreBusy(true);
+    setMatchStatus("Scoring member fit for this signal...");
+
+    try {
+      const currentEmail = email || getEmail();
+      const currentOwner = owner || isOwner(currentEmail);
+
+      const res = await fetch("/api/member/match-score", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": currentEmail,
+          "x-vf-admin": currentOwner ? "1" : "0",
+        },
+        body: JSON.stringify({
+          signal_id: signalId,
+          state: signal?.state || signal?.market || item?.state || actions[0]?.state_match || "",
+          market: signal?.market || signal?.state || item?.state || actions[0]?.state_match || "",
+          city: item?.city || "",
+          strategy: signal?.strategy || item?.strategy || actions[0]?.strategy_match || "",
+          asset_type: signal?.asset_type || item?.property_type || actions[0]?.asset_type || "",
+          role_needed: signal?.role_needed || actions[0]?.role_match || actions[0]?.target_role || "",
+          priority,
+          title: signal?.title || item?.title || "VaultForge signal",
+          note: signal?.message || signal?.description || pressure,
+          urgency_reason: pressure,
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not score member matches.");
+      }
+
+      setMatches(Array.isArray(data?.top_matches) ? data.top_matches : []);
+      setMatchStatus(`Scored ${data?.counts?.members || 0} members. Strong matches: ${data?.counts?.strong || 0}.`);
+    } catch (error: any) {
+      setMatchStatus(error?.message || "Could not score member matches.");
+    } finally {
+      setScoreBusy(false);
+    }
+  }
+
   useEffect(() => {
     load();
   }, [signalId]);
@@ -426,6 +474,9 @@ export default function SignalDetailPage() {
           <div className="vf-signal-actions" style={{ marginTop: 14 }}>
             <button type="button" style={btn} onClick={load}>Refresh Signal</button>
             <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={btn}>Routing Room</Link>
+            <button type="button" style={btn} disabled={scoreBusy} onClick={runMatchScoring}>
+              {scoreBusy ? "Scoring..." : "Score Member Fits"}
+            </button>
             <Link href="/activity" style={ghost}>Activity Stream</Link>
             <Link href="/alerts" style={ghost}>Alerts</Link>
             <Link href="/intelligence" style={ghost}>Intelligence</Link>
@@ -438,6 +489,12 @@ export default function SignalDetailPage() {
           {status && (
             <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
               {status}
+            </p>
+          )}
+
+          {matchStatus && (
+            <p style={{ color: matchStatus.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
+              {matchStatus}
             </p>
           )}
         </section>
@@ -485,6 +542,69 @@ export default function SignalDetailPage() {
           <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={btn}>Open Routing Room</Link>
           {owner && <Link href="/admin-routing" style={ghost}>Admin Routing</Link>}
         </section>
+
+        {matches.length > 0 && (
+          <section style={hero}>
+            <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
+              Member Match Scoring
+            </div>
+
+            <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
+              Strongest member fits.
+            </h2>
+
+            <p style={{ color: "rgba(255,255,255,.72)", fontSize: 19, lineHeight: 1.6 }}>
+              Read-only scoring compares this signal against member specialization. Nothing is routed or sent automatically.
+            </p>
+
+            <section style={grid}>
+              {matches.map((match, index) => {
+                const fit = clean(match.fit_level).toLowerCase();
+                const fitTone =
+                  fit === "strong"
+                    ? "#9df3bf"
+                    : fit === "possible"
+                    ? "#f5d978"
+                    : "#ffb3b3";
+
+                return (
+                  <article key={match.member_id || match.email || index} style={{ ...card, borderColor: `${fitTone}66` }}>
+                    <div style={{ color: fitTone, letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
+                      {label(match.fit_level || "weak")} Fit · {match.fit_score || 0}
+                    </div>
+
+                    <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>
+                      {match.full_name || match.email || "Member"}
+                    </h3>
+
+                    <div style={{ marginBottom: 12 }}>
+                      {Array.isArray(match.roles) && match.roles.slice(0, 3).map((role: string) => (
+                        <span key={role} style={chip}>{role}</span>
+                      ))}
+                      {Array.isArray(match.markets) && match.markets.slice(0, 3).map((market: string) => (
+                        <span key={market} style={chip}>{market}</span>
+                      ))}
+                    </div>
+
+                    {Array.isArray(match.reasons) && match.reasons.slice(0, 4).map((reason: string) => (
+                      <p key={reason} style={{ color: "rgba(255,255,255,.70)", lineHeight: 1.45 }}>
+                        {reason}
+                      </p>
+                    ))}
+
+                    <Link href={`/member-intelligence/${encodeURIComponent(match.member_id || match.email || "")}`} style={btn}>
+                      Member Detail
+                    </Link>
+
+                    <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>
+                      Use in Routing Room
+                    </Link>
+                  </article>
+                );
+              })}
+            </section>
+          </section>
+        )}
 
         {actions.length > 0 && (
           <section style={hero}>
