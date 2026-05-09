@@ -301,7 +301,6 @@ export default function DashboardPage() {
           </p>
 
           <Link href="/intelligence" style={btn}>Intelligence Map</Link>
-          <Link href="/activity" style={btn}>Activity Stream</Link>
           <Link href="/alerts" style={ghost}>Smart Alerts</Link>
           <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
           <Link href="/introductions" style={ghost}>Introductions</Link>
@@ -312,13 +311,6 @@ export default function DashboardPage() {
         </section>
 
         <section style={grid}>
-          <ToolCard
-            title="Activity Stream"
-            text="View the live operational feed across routing, introductions, responses, and deal activity."
-            href="/activity"
-            button="Open Activity Stream"
-          />
-
           <ToolCard
             title="Routing Inbox"
             text="Review routed opportunities connected to your role, geography, and strategy."
