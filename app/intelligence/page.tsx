@@ -562,6 +562,7 @@ export default function IntelligencePage() {
             <button type="button" onClick={load} style={btn}>Refresh Intelligence</button>
             <Link href="/alerts" style={ghost}>Smart Alerts</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+            <Link href="/introductions" style={ghost}>Introductions</Link>
             <Link href="/submit" style={ghost}>Create Deal</Link>
             <Link href="/pain-submit" style={ghost}>Pain Button</Link>
             <Link href="/projects" style={ghost}>Deal Rooms</Link>
@@ -658,6 +659,14 @@ export default function IntelligencePage() {
                 Members can review routed opportunities that admin has logged toward their role/email.
               </p>
               <Link href="/routing-inbox" style={btn}>Open Routing Inbox</Link>
+            </div>
+
+            <div style={card}>
+              <div style={greenEyebrow}>Introductions</div>
+              <p style={muted}>
+                Members can review controlled introductions staged by owner/admin after response review.
+              </p>
+              <Link href="/introductions" style={btn}>Open Introductions</Link>
             </div>
 
             <div style={card}>
