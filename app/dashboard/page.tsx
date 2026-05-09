@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 export default function DashboardPage() {
   return (
@@ -16,62 +17,10 @@ export default function DashboardPage() {
       }}
     >
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-        <header
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 18,
-            alignItems: "center",
-            marginBottom: 28,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                color: "#e8c46b",
-                letterSpacing: 5,
-                fontWeight: 950,
-                fontSize: 14,
-              }}
-            >
-              VAULTFORGE
-            </div>
-
-            <h1
-              style={{
-                margin: "10px 0 0",
-                fontSize: "clamp(40px,7vw,72px)",
-                lineHeight: .92,
-                letterSpacing: -2,
-              }}
-            >
-              Member Command Center
-            </h1>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link href="/alerts" style={navBtn}>
-              Alerts
-            </Link>
-
-            <Link href="/intelligence" style={navBtn}>
-              Intelligence
-            </Link>
-
-            <Link href="/routing-inbox" style={navBtn}>
-              Routing Inbox
-            </Link>
-
-            <Link href="/introductions" style={navBtn}>
-              Introductions
-            </Link>
-
-            <Link href="/activity" style={navBtn}>
-              Activity
-            </Link>
-          </div>
-        </header>
+        <VaultForgeMemberNav
+          title="Member Command Center"
+          subtitle="Private real estate intelligence network"
+        />
 
         <section style={hero}>
           <div style={grid}></div>
@@ -79,7 +28,7 @@ export default function DashboardPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1.2fr .9fr",
+              gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
               gap: 24,
               position: "relative",
               zIndex: 1,
@@ -372,16 +321,6 @@ function StatCard({
     </div>
   );
 }
-
-const navBtn: React.CSSProperties = {
-  color: "white",
-  textDecoration: "none",
-  border: "1px solid rgba(232,196,107,.18)",
-  background: "rgba(255,255,255,.03)",
-  borderRadius: 999,
-  padding: "11px 15px",
-  fontWeight: 800,
-};
 
 const hero: React.CSSProperties = {
   position: "relative",
