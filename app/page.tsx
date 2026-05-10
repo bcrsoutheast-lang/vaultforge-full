@@ -1,798 +1,670 @@
-
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-const FOUNDER_DEADLINE = new Date("2026-05-15T23:59:59-04:00").getTime();
-const FOUNDER_LIMIT = 50;
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
+type PainType = {
+  key: string;
+  label: string;
+  description: string;
+  route: string;
+  defaultHelp: string;
+  fields: string[];
+};
+
+const PAIN_TYPES: PainType[] = [
+  {
+    key: "distressed_seller",
+    label: "Distressed Seller",
+    description: "Seller pressure, pre-foreclosure, inherited property, urgent disposition, or owner needs a path out.",
+    route: "buyer / operator / capital",
+    defaultHelp: "Need buyer, operator, private capital, or structured exit.",
+    fields: ["sellerSituation", "timeline", "propertyCondition", "askingPrice", "mortgageBalance"],
+  },
+  {
+    key: "funding_gap",
+    label: "Funding Gap",
+    description: "Deal works but needs bridge capital, gap funding, transactional funding, private lender, or JV capital.",
+    route: "lender / private capital / JV partner",
+    defaultHelp: "Need lender, private capital, gap funding, or JV capital partner.",
+    fields: ["capitalNeeded", "capitalUse", "timeline", "exitPlan", "collateral"],
+  },
+  {
+    key: "buyer_needed",
+    label: "Buyer Needed",
+    description: "You have a deal, assignment, listing, off-market asset, or disposition need.",
+    route: "buyer / acquisition partner",
+    defaultHelp: "Need cash buyer, acquisition partner, or disposition route.",
+    fields: ["askingPrice", "arv", "repairEstimate", "timeline", "accessNotes"],
+  },
+  {
+    key: "operator_needed",
+    label: "Operator Needed",
+    description: "Need boots on ground, GC/operator, project manager, disposition help, or local execution.",
+    route: "operator / contractor / local partner",
+    defaultHelp: "Need operator, contractor, project manager, or execution partner.",
+    fields: ["operatorNeed", "timeline", "budget", "siteStatus", "accessNotes"],
+  },
+  {
+    key: "stalled_construction",
+    label: "Stalled Construction",
+    description: "Project is stuck because of funding, contractor, permit, scope, inspection, or execution problem.",
+    route: "operator / capital / contractor / permit support",
+    defaultHelp: "Need capital, operator, contractor, permit help, or project rescue.",
+    fields: ["stage", "capitalNeeded", "remainingWork", "permitStatus", "timeline"],
+  },
+  {
+    key: "off_market_opportunity",
+    label: "Off-Market Opportunity",
+    description: "Potential deal or private opportunity that needs routing before it becomes public.",
+    route: "buyer / capital / operator",
+    defaultHelp: "Need the right buyer, operator, or capital route.",
+    fields: ["askingPrice", "arv", "repairEstimate", "timeline", "sellerSituation"],
+  },
+  {
+    key: "wholesale_assignment",
+    label: "Wholesale Assignment",
+    description: "Assignment opportunity needing buyer route, diligence help, or fast disposition.",
+    route: "buyer / disposition",
+    defaultHelp: "Need buyer, dispo help, or transaction path.",
+    fields: ["askingPrice", "arv", "repairEstimate", "contractDeadline", "accessNotes"],
+  },
+  {
+    key: "permit_city_issue",
+    label: "Permit / City Issue",
+    description: "Inspection, zoning, permit, municipality, code, or city issue blocking progress.",
+    route: "operator / permit specialist / local partner",
+    defaultHelp: "Need city/permit guidance, local operator, or compliance path.",
+    fields: ["permitStatus", "cityIssue", "timeline", "siteStatus", "neededDecision"],
+  },
+  {
+    key: "tenant_occupancy",
+    label: "Tenant / Occupancy Problem",
+    description: "Tenant, squatter, access, occupancy, relocation, or operational issue affecting execution.",
+    route: "operator / attorney / buyer",
+    defaultHelp: "Need operator, legal path, buyer, or occupancy strategy.",
+    fields: ["occupancyStatus", "timeline", "risk", "accessNotes", "neededDecision"],
+  },
+  {
+    key: "emergency_exit",
+    label: "Emergency Exit",
+    description: "Urgent situation where owner/member needs speed, discretion, and a route immediately.",
+    route: "buyer / capital / owner review",
+    defaultHelp: "Need urgent buyer, funding, or owner-reviewed execution route.",
+    fields: ["deadline", "capitalNeeded", "askingPrice", "risk", "neededDecision"],
+  },
+  {
+    key: "land_opportunity",
+    label: "Land Opportunity",
+    description: "Land, entitlement, development, builder, rezoning, or site opportunity.",
+    route: "developer / builder / land buyer / capital",
+    defaultHelp: "Need developer, builder, land buyer, entitlement help, or capital.",
+    fields: ["acreage", "zoning", "utilities", "askingPrice", "timeline"],
+  },
+  {
+    key: "commercial_opportunity",
+    label: "Commercial Opportunity",
+    description: "Commercial, multifamily, mixed-use, retail, office, industrial, or income asset opportunity.",
+    route: "commercial buyer / capital / operator",
+    defaultHelp: "Need commercial buyer, capital partner, operator, or diligence support.",
+    fields: ["assetClass", "noi", "askingPrice", "capitalNeeded", "timeline"],
+  },
+];
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(178,24,24,.26), transparent 26%), radial-gradient(circle at 80% 8%, rgba(232,196,107,.20), transparent 25%), radial-gradient(circle at 50% 55%, rgba(232,196,107,.08), transparent 34%), linear-gradient(180deg,#020202 0%,#070707 48%,#020202 100%)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(181,92,255,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(157,243,191,.13), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
   color: "white",
+  padding: "28px 18px 100px",
   fontFamily: "Arial, sans-serif",
-  padding: "28px 18px 90px",
 };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1240,
-  margin: "0 auto",
-};
-
-const topBar: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 14,
-  marginBottom: 34,
-};
-
-const brandMark: React.CSSProperties = {
-  color: "#e8c46b",
-  fontWeight: 950,
-  letterSpacing: 5,
-  fontSize: 16,
-  textShadow: "0 0 24px rgba(232,196,107,.22)",
-};
-
-const navBtn: React.CSSProperties = {
-  color: "white",
-  textDecoration: "none",
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 999,
-  padding: "11px 16px",
-  fontSize: 14,
-  background: "rgba(255,255,255,.035)",
-  fontWeight: 800,
-};
+const wrap: React.CSSProperties = { maxWidth: 1220, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
-  textAlign: "center",
-  border: "1px solid rgba(232,196,107,.20)",
-  borderRadius: 38,
-  padding: "34px 18px 44px",
+  border: "1px solid rgba(232,196,107,.34)",
   background:
-    "radial-gradient(circle at top, rgba(232,196,107,.13), transparent 38%), linear-gradient(135deg, rgba(255,255,255,.07), rgba(255,255,255,.018))",
-  boxShadow: "0 35px 120px rgba(0,0,0,.72), inset 0 0 80px rgba(232,196,107,.035)",
-  overflow: "hidden",
-  position: "relative",
+    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
+  borderRadius: 34,
+  padding: 26,
+  marginBottom: 22,
+  boxShadow: "0 30px 90px rgba(0,0,0,.34)",
 };
 
-const signalRail: React.CSSProperties = {
-  position: "absolute",
-  inset: 0,
-  opacity: .16,
-  backgroundImage:
-    "linear-gradient(rgba(232,196,107,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(232,196,107,.14) 1px, transparent 1px)",
-  backgroundSize: "44px 44px",
-  pointerEvents: "none",
-};
-
-const logo: React.CSSProperties = {
-  width: "100%",
-  maxWidth: 620,
-  borderRadius: 30,
-  boxShadow:
-    "0 30px 95px rgba(0,0,0,.70), 0 0 80px rgba(232,196,107,.20), 0 0 60px rgba(178,24,24,.12)",
-  marginBottom: 30,
-  position: "relative",
-  zIndex: 1,
-  border: "1px solid rgba(232,196,107,.20)",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: 5,
-  fontWeight: 950,
-  fontSize: 13,
-  marginBottom: 14,
-  textTransform: "uppercase",
-};
-
-const redEyebrow: React.CSSProperties = {
-  ...eyebrow,
-  color: "#d33a2c",
-};
-
-const title: React.CSSProperties = {
-  fontSize: "clamp(48px, 10vw, 102px)",
-  lineHeight: 0.88,
-  letterSpacing: -3,
-  margin: "0 auto 22px",
-  maxWidth: 1060,
-  position: "relative",
-  zIndex: 1,
-};
-
-const subtitle: React.CSSProperties = {
-  color: "rgba(255,255,255,.78)",
-  fontSize: "clamp(20px, 4vw, 29px)",
-  lineHeight: 1.35,
-  maxWidth: 930,
-  margin: "0 auto 28px",
-  position: "relative",
-  zIndex: 1,
-};
-
-const primary: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg, #f4d47b, #a96d02)",
-  color: "#050505",
-  textDecoration: "none",
-  borderRadius: 999,
-  padding: "16px 24px",
-  fontWeight: 950,
-  fontSize: 17,
-  margin: "8px",
-  minHeight: 50,
-  boxShadow: "0 12px 34px rgba(232,196,107,.22)",
-};
-
-const secondary: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  textDecoration: "none",
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 999,
-  padding: "16px 24px",
-  fontWeight: 850,
-  fontSize: 17,
-  margin: "8px",
-  background: "rgba(255,255,255,.035)",
-  minHeight: 50,
-};
-
-const statRow: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-  gap: 14,
-  marginTop: 30,
-  position: "relative",
-  zIndex: 1,
-};
-
-const stat: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.16)",
+const card: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.13)",
   background:
-    "linear-gradient(180deg, rgba(255,255,255,.055), rgba(0,0,0,.20))",
-  borderRadius: 22,
-  padding: 18,
+    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
+  borderRadius: 28,
+  padding: 22,
+  marginBottom: 18,
+  boxShadow: "0 26px 80px rgba(0,0,0,.30)",
 };
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(245px, 1fr))",
-  gap: 18,
-  marginTop: 22,
+  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+  gap: 16,
 };
 
-const section: React.CSSProperties = {
-  marginTop: 26,
-  border: "1px solid rgba(232,196,107,.14)",
-  background:
-    "linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015))",
-  borderRadius: 30,
-  padding: 24,
-  boxShadow: "0 24px 70px rgba(0,0,0,.34)",
+const btn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
+  color: "#06100a",
+  border: "none",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 950,
+  textDecoration: "none",
+  cursor: "pointer",
+  margin: "6px 6px 0 0",
+  minHeight: 46,
 };
 
-const commandSection: React.CSSProperties = {
-  ...section,
-  border: "1px solid rgba(211,58,44,.22)",
-  background:
-    "radial-gradient(circle at top left, rgba(211,58,44,.13), transparent 32%), linear-gradient(145deg, rgba(232,196,107,.07), rgba(255,255,255,.025))",
+const ghost: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "white",
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.055)",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 900,
+  textDecoration: "none",
+  cursor: "pointer",
+  margin: "6px 6px 0 0",
+  minHeight: 46,
 };
 
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.13)",
-  background:
-    "linear-gradient(180deg, rgba(255,255,255,.052), rgba(255,255,255,.018))",
-  borderRadius: 24,
-  padding: 22,
-};
-
-const cardTitle: React.CSSProperties = {
-  fontSize: 24,
-  margin: "0 0 10px",
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.70)",
-  lineHeight: 1.55,
-  fontSize: 16,
-};
-
-const bigLine: React.CSSProperties = {
-  fontSize: "clamp(36px, 8vw, 76px)",
-  lineHeight: 0.95,
-  letterSpacing: -2,
-  margin: "0 0 14px",
-};
-
-const gold: React.CSSProperties = {
-  color: "#e8c46b",
-};
-
-const red: React.CSSProperties = {
-  color: "#d33a2c",
-};
-
-const listItem: React.CSSProperties = {
-  borderBottom: "1px solid rgba(232,196,107,.12)",
-  padding: "14px 0",
-  color: "rgba(255,255,255,.78)",
-  fontSize: 17,
-  lineHeight: 1.45,
-};
-
-const countdownBox: React.CSSProperties = {
-  marginTop: 26,
-  border: "1px solid rgba(232,196,107,.35)",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 34%), radial-gradient(circle at 90% 10%, rgba(211,58,44,.16), transparent 30%), linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.018))",
-  borderRadius: 30,
-  padding: 24,
-  textAlign: "left",
-};
-
-const countdownGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(68px, 1fr))",
-  gap: 12,
-  marginTop: 18,
-};
-
-const timeCard: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.16)",
-  background: "rgba(0,0,0,.30)",
-  borderRadius: 20,
-  padding: "16px 10px",
-  textAlign: "center",
+const danger: React.CSSProperties = {
+  ...ghost,
+  border: "1px solid rgba(255,120,120,.38)",
+  color: "#ffd0d0",
 };
 
 const chip: React.CSSProperties = {
   display: "inline-flex",
-  border: "1px solid rgba(232,196,107,.24)",
-  color: "#e8c46b",
-  background: "rgba(232,196,107,.07)",
+  border: "1px solid rgba(157,243,191,.25)",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
   borderRadius: 999,
   padding: "8px 11px",
-  fontWeight: 800,
+  fontWeight: 850,
   fontSize: 13,
   margin: "0 7px 7px 0",
 };
 
-const terminalPanel: React.CSSProperties = {
-  marginTop: 24,
-  border: "1px solid rgba(211,58,44,.22)",
-  borderRadius: 26,
-  background:
-    "linear-gradient(180deg, rgba(0,0,0,.54), rgba(0,0,0,.28))",
-  padding: 20,
-};
-
-const signalCard: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.09)",
-  borderLeft: "3px solid #d33a2c",
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
   borderRadius: 18,
-  padding: 16,
-  background: "rgba(255,255,255,.028)",
-  marginTop: 12,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.075)",
+  color: "white",
+  padding: 15,
+  fontSize: 16,
 };
 
-function formatNumber(value: number) {
-  return Number(value || 0).toLocaleString("en-US");
+const label: React.CSSProperties = {
+  display: "block",
+  fontWeight: 950,
+  margin: "0 0 8px",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#9df3bf",
+  letterSpacing: 5,
+  fontWeight: 950,
+  fontSize: 12,
+  marginBottom: 12,
+  textTransform: "uppercase",
+};
+
+const muted: React.CSSProperties = {
+  color: "rgba(255,255,255,.72)",
+  lineHeight: 1.55,
+};
+
+function clean(value: unknown) {
+  return String(value || "").trim();
 }
 
-function getTimeLeft() {
-  const diff = FOUNDER_DEADLINE - Date.now();
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
 
-  if (diff <= 0) {
-    return {
-      expired: true,
-      days: 0,
-      hours: 0,
-      minutes: 0,
-      seconds: 0,
-    };
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+  if (!match) return "";
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
   }
-
-  return {
-    expired: false,
-    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-    minutes: Math.floor((diff / (1000 * 60)) % 60),
-    seconds: Math.floor((diff / 1000) % 60),
-  };
 }
 
-function FeatureCard({
-  label,
-  title,
-  text,
-  tags = [],
-}: {
-  label: string;
-  title: string;
-  text: string;
-  tags?: string[];
-}) {
-  return (
-    <div style={card}>
-      <div style={redEyebrow}>{label}</div>
-      <h3 style={cardTitle}>{title}</h3>
-      <p style={muted}>{text}</p>
-      {tags.length > 0 && (
-        <div style={{ marginTop: 14 }}>
-          {tags.map((tag) => (
-            <span key={tag} style={chip}>
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
+function getEmail() {
+  if (typeof window === "undefined") return "";
+  return cleanEmail(
+    localStorage.getItem("vf_email") ||
+      sessionStorage.getItem("vf_email") ||
+      readCookie("vf_email") ||
+      readCookie("vf_admin_email") ||
+      ""
   );
 }
 
-function FlowCard({
-  step,
-  title,
-  text,
-}: {
-  step: string;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div style={card}>
-      <div style={redEyebrow}>{step}</div>
-      <h3 style={cardTitle}>{title}</h3>
-      <p style={muted}>{text}</p>
-    </div>
-  );
+function isOwner(email: string) {
+  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
-export default function HomePage() {
-  const [stats, setStats] = useState({
-    members: 0,
-    deals: 0,
-    saved: 0,
-    alerts: 0,
-    markets: 6,
-    founders: 0,
+function money(value: string) {
+  const cleanValue = clean(value).replace(/[^\d.]/g, "");
+  if (!cleanValue) return "";
+  const num = Number(cleanValue);
+  if (!Number.isFinite(num)) return value;
+  return num.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+
+function scoreUrgency(urgency: string, deadline: string, capitalNeeded: string) {
+  let score = 30;
+  if (urgency === "emergency") score += 45;
+  if (urgency === "high") score += 30;
+  if (urgency === "medium") score += 15;
+  if (deadline) score += 10;
+  if (clean(capitalNeeded)) score += 10;
+  return Math.min(100, score);
+}
+
+export default function PainPage() {
+  const [email, setEmail] = useState("");
+  const [owner, setOwner] = useState(false);
+  const [selectedKey, setSelectedKey] = useState(PAIN_TYPES[0].key);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const [form, setForm] = useState<Record<string, string>>({
+    title: "",
+    state: "",
+    city: "",
+    county: "",
+    assetType: "Residential",
+    address: "",
+    confidentiality: "Members only",
+    urgency: "high",
+    timeline: "",
+    capitalNeeded: "",
+    askingPrice: "",
+    arv: "",
+    repairEstimate: "",
+    sellerSituation: "",
+    mortgageBalance: "",
+    propertyCondition: "",
+    capitalUse: "",
+    exitPlan: "",
+    collateral: "",
+    operatorNeed: "",
+    budget: "",
+    siteStatus: "",
+    stage: "",
+    remainingWork: "",
+    permitStatus: "",
+    cityIssue: "",
+    neededDecision: "",
+    contractDeadline: "",
+    accessNotes: "",
+    occupancyStatus: "",
+    risk: "",
+    deadline: "",
+    acreage: "",
+    zoning: "",
+    utilities: "",
+    assetClass: "",
+    noi: "",
+    helpRequested: "",
+    notes: "",
+    photoUrls: "",
   });
 
-  const [timeLeft, setTimeLeft] = useState(getTimeLeft());
+  function update(key: string, value: string) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
 
-  useEffect(() => {
-    let mounted = true;
+  function init() {
+    const currentEmail = getEmail();
+    setEmail(currentEmail);
+    setOwner(isOwner(currentEmail));
+  }
 
-    async function loadStats() {
-      try {
-        const [statsRes, founderRes] = await Promise.all([
-          fetch("/api/public/stats", { cache: "no-store" }),
-          fetch("/api/founder/status", { cache: "no-store" }),
-        ]);
+  useState(() => {
+    init();
+  });
 
-        const data = await statsRes.json();
-        const founderData = await founderRes.json();
+  const selected = useMemo(() => PAIN_TYPES.find((item) => item.key === selectedKey) || PAIN_TYPES[0], [selectedKey]);
 
-        if (!mounted) return;
+  const urgencyScore = useMemo(() => {
+    return scoreUrgency(form.urgency, form.deadline || form.timeline || form.contractDeadline, form.capitalNeeded);
+  }, [form.urgency, form.deadline, form.timeline, form.contractDeadline, form.capitalNeeded]);
 
-        setStats({
-          members: Number(data?.members || 0),
-          deals: Number(data?.deals || 0),
-          saved: Number(data?.saved || 0),
-          alerts: Number(data?.alerts || 0),
-          markets: Number(data?.markets || 6),
-          founders: Number(founderData?.founder?.count || 0),
-        });
-      } catch {
-        // Keep homepage live even if stats are temporarily unavailable.
+  const routeSummary = useMemo(() => {
+    const market = [form.city, form.state].filter(Boolean).join(", ") || "Unassigned market";
+    const capital = form.capitalNeeded ? ` Capital needed: ${money(form.capitalNeeded)}.` : "";
+    const price = form.askingPrice ? ` Asking: ${money(form.askingPrice)}.` : "";
+    const arv = form.arv ? ` ARV: ${money(form.arv)}.` : "";
+    const help = form.helpRequested || selected.defaultHelp;
+
+    return `${selected.label} signal. Market: ${market}. Asset: ${form.assetType || "Unknown"}. Urgency: ${form.urgency}. Help requested: ${help}.${price}${arv}${capital} Best route: ${selected.route}.`;
+  }, [form, selected]);
+
+  const canSubmit = useMemo(() => {
+    return email.includes("@") && clean(form.title).length > 1 && clean(form.state).length > 0 && clean(form.helpRequested || selected.defaultHelp).length > 0;
+  }, [email, form.title, form.state, form.helpRequested, selected.defaultHelp]);
+
+  async function submitPain() {
+    if (busy) return;
+    setBusy(true);
+    setStatus("");
+
+    try {
+      const currentEmail = email || getEmail();
+      if (!currentEmail.includes("@")) throw new Error("Login email missing. Please log in again.");
+      if (!clean(form.title)) throw new Error("Add a short pain/opportunity title.");
+      if (!clean(form.state)) throw new Error("Select or enter a state/market.");
+
+      const photoUrls = form.photoUrls
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      const payload = {
+        email: currentEmail,
+        member_email: currentEmail,
+        owner_email: OWNER_EMAIL,
+        pain_type: selected.key,
+        pain_label: selected.label,
+        title: form.title,
+        state: form.state,
+        city: form.city,
+        county: form.county,
+        asset_type: form.assetType,
+        address: form.address,
+        confidentiality: form.confidentiality,
+        urgency: form.urgency,
+        urgency_score: urgencyScore,
+        timeline: form.timeline || form.deadline || form.contractDeadline,
+        capital_needed: form.capitalNeeded,
+        asking_price: form.askingPrice,
+        arv: form.arv,
+        repair_estimate: form.repairEstimate,
+        help_requested: form.helpRequested || selected.defaultHelp,
+        route_summary: routeSummary,
+        best_route: selected.route,
+        notes: form.notes,
+        photo_urls: photoUrls,
+        raw_fields: form,
+        source: "adaptive_pain_button",
+      };
+
+      const res = await fetch("/api/pain/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": currentEmail,
+          "x-vf-admin": owner ? "1" : "0",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Pain submit failed.");
       }
+
+      setStatus(data?.message || "Pain signal submitted and routed into VaultForge intelligence.");
+    } catch (error: any) {
+      setStatus(error?.message || "Could not submit pain signal.");
+    } finally {
+      setBusy(false);
     }
-
-    loadStats();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setTimeLeft(getTimeLeft());
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const founderActive = !timeLeft.expired && stats.founders < FOUNDER_LIMIT;
-  const founderSlotsLeft = Math.max(0, FOUNDER_LIMIT - stats.founders);
-
-  const liveStats = useMemo(
-    () => [
-      {
-        label: "MEMBERS",
-        value: stats.members > 0 ? formatNumber(stats.members) : "Opening",
-        text: "Qualified operators, investors, lenders, buyers, and deal sources entering the private network.",
-      },
-      {
-        label: "DEALS",
-        value: stats.deals > 0 ? formatNumber(stats.deals) : "Building",
-        text: "Structured residential, commercial, and land opportunities routed through the intelligence engine.",
-      },
-      {
-        label: "SMART ALERTS",
-        value: formatNumber(stats.alerts),
-        text: "Routing signals generated from deal data, profiles, markets, buy boxes, and member needs.",
-      },
-      {
-        label: "MARKETS",
-        value: `${formatNumber(stats.markets)}+`,
-        text: "Initial Southeast and high-activity real estate markets targeted for member routing.",
-      },
-    ],
-    [stats]
-  );
+  }
 
   return (
     <main style={page}>
       <style>{`
-        @media (max-width: 860px) {
-          .vf-home-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 10px !important;
-          }
-
-          .vf-home-actions > * {
-            width: 100%;
-            margin: 0 !important;
-            box-sizing: border-box;
-          }
-
-          .vf-topbar {
-            align-items: flex-start !important;
-            flex-direction: column !important;
-          }
-        }
+        a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
+        textarea::placeholder, input::placeholder { color: rgba(255,255,255,.48); }
+        select { appearance: none; }
+        @media (max-width: 760px) { a, button { width: 100%; box-sizing: border-box; } }
       `}</style>
 
       <div style={wrap}>
-        <header style={topBar} className="vf-topbar">
-          <div style={brandMark}>VAULTFORGE</div>
-          <div>
-            <Link href="/terms" style={navBtn}>
-              Terms
-            </Link>{" "}
-            <Link href="/login" style={navBtn}>
-              Member Login
-            </Link>
-          </div>
-        </header>
+        <VaultForgeMemberNav title="Pain Button" subtitle="Adaptive real estate intelligence intake" />
 
         <section style={hero}>
-          <div style={signalRail}></div>
-
-          <img src="/vaultforge-logo.png" alt="VaultForge" style={logo} />
-
-          <div style={redEyebrow}>PRIVATE REAL ESTATE INTELLIGENCE NETWORK</div>
-
-          <h1 style={title}>
-            The <span style={gold}>Bloomberg Sidekick</span> for real estate operators.
+          <div style={eyebrow}>VaultForge Pain Intelligence</div>
+          <h1 style={{ fontSize: "clamp(56px,12vw,108px)", lineHeight: 0.86, margin: "0 0 18px" }}>
+            Turn pressure into routed opportunity.
           </h1>
-
-          <p style={subtitle}>
-            VaultForge is a private intelligence-driven operating system for deals, capital,
-            operators, lenders, buyers, contractors, developers, sellers, and strategic real estate
-            players. It is built to turn market signals into routed opportunity.
+          <p style={{ ...muted, fontSize: 22 }}>
+            Submit a real estate problem, stalled deal, funding gap, buyer need, city issue, or execution problem. VaultForge turns it into a signal, activity event, and routing candidate.
           </p>
 
-          <div className="vf-home-actions" style={{ position: "relative", zIndex: 1 }}>
-            <Link href="/apply" style={primary}>
-              {founderActive ? "Create Founder Access" : "Request Member Access"}
-            </Link>
-            <Link href="/login" style={secondary}>
-              Member Login
-            </Link>
-            <Link href="/terms" style={secondary}>
-              Read Member Rules
-            </Link>
+          <div>
+            <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>Urgency Score: {urgencyScore}</span>
+            <span style={chip}>Route: {selected.route}</span>
+            <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
-          <div style={statRow}>
-            {liveStats.map((item) => (
-              <div key={item.label} style={stat}>
-                <div style={{ ...redEyebrow, marginBottom: 8 }}>{item.label}</div>
-                <div style={{ fontSize: 34, fontWeight: 950 }}>{item.value}</div>
-                <p style={muted}>{item.text}</p>
-              </div>
-            ))}
-          </div>
-
-          <div style={terminalPanel}>
-            <div style={eyebrow}>LIVE INTELLIGENCE PREVIEW</div>
-            <div style={grid}>
-              <div style={signalCard}>
-                <strong style={gold}>ATLANTA • DISTRESS SIGNAL ↑</strong>
-                <p style={muted}>Operator and bridge capital route needed for value-add acquisition pressure.</p>
-              </div>
-              <div style={signalCard}>
-                <strong style={gold}>TAMPA • CAPITAL GAP DETECTED</strong>
-                <p style={muted}>Lender and investor profiles aligned with a land development signal.</p>
-              </div>
-              <div style={signalCard}>
-                <strong style={gold}>NASHVILLE • BUYER ROUTE ACTIVE</strong>
-                <p style={muted}>Strategic acquisition members matched to off-market value-add opportunity.</p>
-              </div>
-            </div>
-          </div>
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <Link href="/alerts" style={ghost}>Alerts</Link>
+          <Link href="/activity" style={ghost}>Activity</Link>
+          <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+          <Link href="/members" style={ghost}>Members</Link>
+          <Link href="/logout" style={danger}>Logout</Link>
         </section>
 
-        {founderActive ? (
-          <section style={countdownBox}>
-            <div style={eyebrow}>FOUNDING MEMBER WINDOW</div>
-            <h2 style={bigLine}>
-              First <span style={red}>50 founders</span> or{" "}
-              <span style={gold}>May 15</span> — whichever comes first.
-            </h2>
-            <p style={{ ...muted, fontSize: 20 }}>
-              Founding members get access for <strong style={gold}>$49 for the first month</strong>,
-              then <strong style={gold}> $199/month</strong> unless canceled before renewal.
-              When the first 50 founder slots are claimed or May 15 hits, standard access becomes
-              <strong style={gold}> $99 to join</strong>, then{" "}
-              <strong style={gold}>$199/month</strong>.
-            </p>
-
-            <div style={countdownGrid}>
-              <div style={timeCard}>
-                <div style={{ fontSize: 34, fontWeight: 950 }}>{timeLeft.days}</div>
-                <div style={{ ...muted, fontSize: 13 }}>DAYS</div>
-              </div>
-              <div style={timeCard}>
-                <div style={{ fontSize: 34, fontWeight: 950 }}>{timeLeft.hours}</div>
-                <div style={{ ...muted, fontSize: 13 }}>HOURS</div>
-              </div>
-              <div style={timeCard}>
-                <div style={{ fontSize: 34, fontWeight: 950 }}>{timeLeft.minutes}</div>
-                <div style={{ ...muted, fontSize: 13 }}>MINUTES</div>
-              </div>
-              <div style={timeCard}>
-                <div style={{ fontSize: 34, fontWeight: 950 }}>{timeLeft.seconds}</div>
-                <div style={{ ...muted, fontSize: 13 }}>SECONDS</div>
-              </div>
-            </div>
-
-            <div style={statRow}>
-              <div style={stat}>
-                <div style={{ ...redEyebrow, marginBottom: 8 }}>FOUNDER SLOTS LEFT</div>
-                <div style={{ fontSize: 38, fontWeight: 950 }}>{founderSlotsLeft}</div>
-                <p style={muted}>Founder access closes automatically at 50 members or May 15.</p>
-              </div>
-              <div style={stat}>
-                <div style={{ ...redEyebrow, marginBottom: 8 }}>FOUNDERS CLAIMED</div>
-                <div style={{ fontSize: 38, fontWeight: 950 }}>
-                  {stats.founders}/{FOUNDER_LIMIT}
-                </div>
-                <p style={muted}>Early members get priority position inside the private network.</p>
-              </div>
-            </div>
-
-            <div className="vf-home-actions" style={{ marginTop: 20 }}>
-              <Link href="/apply" style={primary}>
-                Create Founder Access — $49 First Month
-              </Link>
-              <Link href="/login" style={secondary}>
-                Member Login
-              </Link>
-            </div>
-          </section>
-        ) : (
-          <section style={countdownBox}>
-            <div style={eyebrow}>STANDARD MEMBER ACCESS</div>
-            <h2 style={bigLine}>Founder access has closed.</h2>
-            <p style={{ ...muted, fontSize: 20 }}>
-              Standard access is now <strong style={gold}>$99 to join</strong>,
-              then <strong style={gold}> $199/month</strong> unless canceled before renewal.
-            </p>
-            <Link href="/apply" style={primary}>
-              Apply for Member Access
-            </Link>
+        {status && (
+          <section
+            style={{
+              ...hero,
+              color: status.toLowerCase().includes("failed") || status.toLowerCase().includes("missing") || status.toLowerCase().includes("could")
+                ? "#ffd0d0"
+                : "#9df3bf",
+            }}
+          >
+            <strong>{status}</strong>
           </section>
         )}
 
-        <section style={commandSection}>
-          <div style={redEyebrow}>HOW ACCESS WORKS</div>
-          <h2 style={bigLine}>
-            Create access. Train your profile. <span style={gold}>Unlock the network.</span>
-          </h2>
-          <p style={{ ...muted, fontSize: 20 }}>
-            Public visitors create a member access account first. After login, they train their
-            intelligence profile with markets, strategies, roles, needs, and what they can provide.
-            Payment unlocks full command center access when Stripe goes live.
-          </p>
-
+        <section style={hero}>
+          <div style={eyebrow}>Select Pain Type</div>
           <div style={grid}>
-            <FlowCard
-              step="STEP 1"
-              title="Create Member Access"
-              text="Start at the access page, then create your login. Public visitors should not fill out the intelligence profile before account creation."
-            />
-            <FlowCard
-              step="STEP 2"
-              title="Train Your Intelligence Profile"
-              text="Define your markets, buy box, strategy, roles, project types, needs, provider ability, and alert preferences."
-            />
-            <FlowCard
-              step="STEP 3"
-              title="Unlock Full Access"
-              text="Founding members unlock the Member Command Center, smart alerts, network routing, deal rooms, and messaging."
-            />
-          </div>
-
-          <Link href="/apply" style={primary}>
-            Start Access Flow
-          </Link>
-        </section>
-
-        <section style={commandSection}>
-          <div style={redEyebrow}>WHAT VAULTFORGE IS</div>
-          <h2 style={bigLine}>
-            Not a listing site. <span style={gold}>A private real estate operating system.</span>
-          </h2>
-          <p style={{ ...muted, fontSize: 20 }}>
-            VaultForge is built for people who need speed, access, intelligence, and execution.
-            Members do not just browse. They create deal rooms, train profiles, save targets,
-            receive smart routing alerts, and connect with buyers, lenders, operators, contractors,
-            developers, sellers, and partners.
-          </p>
-
-          <div style={grid}>
-            <FeatureCard
-              label="AI Routing"
-              title="Smart Match Engine"
-              text="The system compares deals against member profiles, markets, project types, strategies, needs, capital, and provider abilities."
-              tags={["Score", "Why Matched", "Routing"]}
-            />
-            <FeatureCard
-              label="Command Center"
-              title="Member Command Center"
-              text="One place for deals, alerts, buy buckets, messages, member network intelligence, and profile-driven routing."
-              tags={["Deals", "Alerts", "Network"]}
-            />
-            <FeatureCard
-              label="Private Network"
-              title="Execution-Focused Members"
-              text="The platform is for serious buyers, lenders, operators, contractors, wholesalers, sellers, developers, and real estate problem solvers."
-              tags={["Private", "Vetted", "Action"]}
-            />
+            {PAIN_TYPES.map((type) => (
+              <button
+                key={type.key}
+                type="button"
+                onClick={() => {
+                  setSelectedKey(type.key);
+                  update("helpRequested", type.defaultHelp);
+                }}
+                style={{
+                  ...card,
+                  textAlign: "left",
+                  cursor: "pointer",
+                  borderColor: selected.key === type.key ? "rgba(245,217,120,.78)" : "rgba(255,255,255,.13)",
+                }}
+              >
+                <div style={eyebrow}>{type.route}</div>
+                <h3 style={{ fontSize: 26, lineHeight: 1.05, margin: "0 0 10px" }}>{type.label}</h3>
+                <p style={muted}>{type.description}</p>
+              </button>
+            ))}
           </div>
         </section>
 
-        <section style={section}>
-          <div style={eyebrow}>WHAT MEMBERS GET INSIDE</div>
-          <h2 style={bigLine}>
-            Every section exists to help members{" "}
-            <span style={gold}>find, route, and execute opportunity.</span>
-          </h2>
+        <section style={grid}>
+          <section style={card}>
+            <div style={eyebrow}>Core Signal</div>
+            <label style={label}>Title / What is happening?</label>
+            <input value={form.title} onChange={(e) => update("title", e.target.value)} style={input} placeholder="Example: Stalled flip needs gap funding" />
 
-          <div style={grid}>
-            <FeatureCard
-              label="Create"
-              title="Deal Rooms"
-              text="Submit residential, commercial, and land opportunities with photos, pricing, strategy, seller situation, repair estimates, notes, and routing fields."
-              tags={["Photos", "Numbers", "Strategy"]}
-            />
-            <FeatureCard
-              label="Alerts"
-              title="Smart Alerts"
-              text="See why the system matched a deal to a member, buyer, lender, operator, strategy, or market."
-              tags={["Match Score", "Why Matched", "Confidence"]}
-            />
-            <FeatureCard
-              label="Buy Side"
-              title="Buy Bucket"
-              text="Save opportunities, track targets, and create demand signals that help the platform understand what members actually want."
-              tags={["Watchlist", "Demand", "Targets"]}
-            />
-            <FeatureCard
-              label="Network"
-              title="Member Directory"
-              text="Find members by role, state, project type, strategy, needs, and what they can provide."
-              tags={["Buyers", "Lenders", "Operators"]}
-            />
-            <FeatureCard
-              label="Messaging"
-              title="Deal Communication"
-              text="Keep opportunity conversations and member communications tied to the system instead of scattered across random messages."
-              tags={["Threads", "Contact", "Follow Up"]}
-            />
-            <FeatureCard
-              label="Profile"
-              title="AI Training Profile"
-              text="Members train the engine after login with markets, roles, buy boxes, project types, strategies, needs, provider abilities, and alert preferences."
-              tags={["Buy Box", "Needs", "Can Provide"]}
-            />
-          </div>
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>Help Requested</label>
+              <textarea value={form.helpRequested || selected.defaultHelp} onChange={(e) => update("helpRequested", e.target.value)} style={{ ...input, minHeight: 120 }} />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>Notes / Situation</label>
+              <textarea value={form.notes} onChange={(e) => update("notes", e.target.value)} style={{ ...input, minHeight: 160 }} placeholder="Explain the pressure, opportunity, obstacle, and what needs to happen next." />
+            </div>
+          </section>
+
+          <section style={card}>
+            <div style={eyebrow}>Market / Asset</div>
+            <label style={label}>State</label>
+            <input value={form.state} onChange={(e) => update("state", e.target.value)} style={input} placeholder="GA, FL, TN, AL, TX, NC, SC..." />
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>City</label>
+              <input value={form.city} onChange={(e) => update("city", e.target.value)} style={input} placeholder="City / market" />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>County</label>
+              <input value={form.county} onChange={(e) => update("county", e.target.value)} style={input} placeholder="County" />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>Asset Type</label>
+              <select value={form.assetType} onChange={(e) => update("assetType", e.target.value)} style={input}>
+                <option>Residential</option>
+                <option>Commercial</option>
+                <option>Land</option>
+                <option>Multifamily</option>
+                <option>Mixed-use</option>
+                <option>Portfolio</option>
+              </select>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>Address / Area</label>
+              <input value={form.address} onChange={(e) => update("address", e.target.value)} style={input} placeholder="Exact address or general area if confidential" />
+            </div>
+          </section>
         </section>
 
-        <section style={section}>
-          <div style={eyebrow}>WHO WE ARE LOOKING FOR</div>
-          <h2 style={bigLine}>
-            Built for serious real estate players. <span style={red}>Not spectators.</span>
-          </h2>
+        <section style={grid}>
+          <section style={card}>
+            <div style={eyebrow}>Pressure / Timeline</div>
+            <label style={label}>Urgency</label>
+            <select value={form.urgency} onChange={(e) => update("urgency", e.target.value)} style={input}>
+              <option value="emergency">Emergency</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="normal">Normal</option>
+            </select>
 
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>Timeline / Deadline</label>
+              <input value={form.timeline} onChange={(e) => update("timeline", e.target.value)} style={input} placeholder="Example: 7 days, 30 days, closing Friday..." />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>Confidentiality</label>
+              <select value={form.confidentiality} onChange={(e) => update("confidentiality", e.target.value)} style={input}>
+                <option>Members only</option>
+                <option>Owner review first</option>
+                <option>Private / sensitive</option>
+                <option>Can route to matched members</option>
+              </select>
+            </div>
+          </section>
+
+          <section style={card}>
+            <div style={eyebrow}>Numbers</div>
+            <label style={label}>Capital Needed</label>
+            <input value={form.capitalNeeded} onChange={(e) => update("capitalNeeded", e.target.value)} style={input} placeholder="$125,000" />
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>Asking Price</label>
+              <input value={form.askingPrice} onChange={(e) => update("askingPrice", e.target.value)} style={input} placeholder="$210,000" />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>ARV / Value</label>
+              <input value={form.arv} onChange={(e) => update("arv", e.target.value)} style={input} placeholder="$300,000" />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <label style={label}>Repairs / Remaining Work</label>
+              <input value={form.repairEstimate || form.remainingWork} onChange={(e) => { update("repairEstimate", e.target.value); update("remainingWork", e.target.value); }} style={input} placeholder="$45,000 or scope summary" />
+            </div>
+          </section>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Adaptive Detail Fields · {selected.label}</div>
           <div style={grid}>
-            {[
-              "Buyers looking for targeted acquisition flow.",
-              "Private lenders and capital sources looking for opportunities.",
-              "Wholesalers and deal sources with real inventory.",
-              "Contractors and operators who can execute projects.",
-              "Developers looking for land, commercial, and value-add plays.",
-              "Sellers and problem-solvers who need routing, capital, or operators.",
-              "Realtors and brokers with access to deal flow and relationships.",
-              "JV partners who can bring money, skill, execution, or access.",
-            ].map((item) => (
-              <div key={item} style={card}>
-                <p style={{ ...muted, fontSize: 18, margin: 0 }}>{item}</p>
+            {selected.fields.map((field) => (
+              <div key={field}>
+                <label style={label}>{field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}</label>
+                <input value={form[field] || ""} onChange={(e) => update(field, e.target.value)} style={input} />
               </div>
             ))}
           </div>
         </section>
 
-        <section style={section}>
-          <div style={eyebrow}>THE INTELLIGENCE ADVANTAGE</div>
-          <h2 style={bigLine}>
-            The system does not just store deals. <span style={gold}>It routes opportunity.</span>
-          </h2>
-          <div style={listItem}>Scans live deals against member markets, roles, buy boxes, and strategies.</div>
-          <div style={listItem}>Scores member/deal fit and surfaces confidence signals.</div>
-          <div style={listItem}>
-            Explains why a match appeared, including market fit, asset fit, strategy fit, capital fit,
-            and margin signals.
-          </div>
-          <div style={listItem}>Turns member profiles into a routing engine instead of a static directory.</div>
-          <div style={listItem}>
-            Creates a private intelligence feed that becomes stronger as more members and deals enter the system.
-          </div>
+        <section style={card}>
+          <div style={eyebrow}>Photos / Documents</div>
+          <p style={muted}>
+            Paste photo/document URLs one per line for now. Direct upload can be added next after the Pain save flow is stable.
+          </p>
+          <textarea value={form.photoUrls} onChange={(e) => update("photoUrls", e.target.value)} style={{ ...input, minHeight: 150 }} placeholder="https://..." />
         </section>
 
-        <section style={section}>
-          <div style={eyebrow}>WHY $199/MONTH MAKES SENSE</div>
-          <h2 style={bigLine}>One useful relationship or routed opportunity can pay for the year.</h2>
-          <p style={{ ...muted, fontSize: 20 }}>
-            VaultForge is not priced like a generic software tool because it is not trying to be one.
-            The value is access, signal, routing, private network density, organized deal intelligence,
-            and speed to the right person. Members are paying for leverage.
-          </p>
+        <section style={hero}>
+          <div style={eyebrow}>Route Preview</div>
+          <h2 style={{ fontSize: "clamp(34px,7vw,62px)", lineHeight: 0.95, margin: "0 0 14px" }}>
+            {selected.label}
+          </h2>
+          <p style={{ ...muted, fontSize: 20 }}>{routeSummary}</p>
+          <div>
+            <span style={chip}>Best Route: {selected.route}</span>
+            <span style={chip}>Urgency Score: {urgencyScore}</span>
+            <span style={chip}>Feeds: Activity / Alerts / Routing</span>
+          </div>
+
+          <button type="button" onClick={submitPain} disabled={!canSubmit || busy} style={{ ...btn, width: "100%", marginTop: 18, opacity: !canSubmit || busy ? 0.58 : 1 }}>
+            {busy ? "Submitting Pain Signal..." : "Submit Pain Signal"}
+          </button>
         </section>
 
-        <section style={{ ...hero, marginTop: 26 }}>
-          <div style={signalRail}></div>
-          <div style={redEyebrow}>PRIVATE ACCESS</div>
-          <h2 style={bigLine}>
-            If you need access, speed, capital, operators, or smarter deal flow — this is where you belong.
-          </h2>
-          <p style={subtitle}>
-            VaultForge is being built as a private intelligence-powered real estate network.
-            Members create opportunities, define needs, route signals, and connect with people who can move deals forward.
+        <section style={{ ...hero, borderColor: "rgba(157,243,191,.22)" }}>
+          <div style={eyebrow}>Current Safety Mode</div>
+          <p style={muted}>
+            Pain submissions create controlled platform records. Private contact details remain gated. No autonomous notifications or contact release occur from this page.
           </p>
-          <div className="vf-home-actions" style={{ position: "relative", zIndex: 1 }}>
-            <Link href="/apply" style={primary}>
-              {founderActive ? "Create Founder Access — $49 First Month" : "Apply for Member Access"}
-            </Link>
-            <Link href="/login" style={secondary}>
-              Member Login
-            </Link>
-          </div>
         </section>
       </div>
     </main>
