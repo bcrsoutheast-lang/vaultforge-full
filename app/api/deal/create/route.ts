@@ -270,6 +270,362 @@ async function adaptiveInsert(supabase: any, firstRow: Record<string, any>, fall
   };
 }
 
+
+async function findAssignedMemberEmail(supabase: any, ownerEmail: string) {
+  const tables = ["vf_profiles", "profiles", "member_profiles"];
+
+  for (const table of tables) {
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .limit(50);
+
+      if (error || !Array.isArray(data)) continue;
+
+      const liveMembers = data
+        .map((row: Record<string, any>) => ({
+          email: cleanEmail(row.email || row.member_email || row.user_email),
+          row,
+        }))
+        .filter((item) => {
+          if (!item.email || !item.email.includes("@")) return false;
+          if (item.email === ownerEmail) return false;
+          if (item.email === "bcrsoutheast@gmail.com") return false;
+          if (item.email.endsWith("@example.com")) return false;
+          if (item.email === "test@test.com") return false;
+
+          const status = cleanString(
+            item.row.access_status ||
+              item.row.member_status ||
+              item.row.status
+          ).toLowerCase();
+
+          return !["deleted", "removed", "suspended", "disabled"].includes(status);
+        });
+
+      if (liveMembers.length > 0) {
+        return liveMembers[0].email;
+      }
+    } catch {
+      // Try next profile table.
+    }
+  }
+
+  return "";
+}
+
+function inferPrimaryRole(body: Record<string, any>) {
+  const text = [
+    body.routing_needs,
+    body.deal_needs,
+    body.needs,
+    body.ai_route_summary,
+    body.route_summary,
+    body.description,
+    body.seller_situation,
+  ]
+    .map(cleanString)
+    .join(" ")
+    .toLowerCase();
+
+  if (text.includes("lender") || text.includes("capital") || text.includes("fund")) {
+    return "Lender / Capital";
+  }
+
+  if (text.includes("operator") || text.includes("jv") || text.includes("partner")) {
+    return "Operator";
+  }
+
+  if (text.includes("contractor") || text.includes("repair") || text.includes("construction")) {
+    return "Contractor";
+  }
+
+  if (text.includes("buyer") || text.includes("acquisition")) {
+    return "Buyer";
+  }
+
+  return "Owner Review";
+}
+
+function inferRoutingAction(role: string) {
+  const lower = role.toLowerCase();
+
+  if (lower.includes("lender") || lower.includes("capital")) return "route_to_lender";
+  if (lower.includes("operator")) return "route_to_operator";
+  if (lower.includes("contractor")) return "route_to_contractor";
+  if (lower.includes("buyer")) return "route_to_buyer";
+
+  return "needs_review";
+}
+
+function inferPriority(body: Record<string, any>) {
+  const text = [
+    body.urgency_level,
+    body.distress_signals,
+    body.description,
+    body.seller_situation,
+    body.ai_route_summary,
+    body.route_summary,
+  ]
+    .map(cleanString)
+    .join(" ")
+    .toLowerCase();
+
+  if (
+    text.includes("emergency") ||
+    text.includes("urgent") ||
+    text.includes("foreclosure") ||
+    text.includes("deadline") ||
+    text.includes("fast close")
+  ) {
+    return "urgent";
+  }
+
+  if (
+    text.includes("needs review this week") ||
+    text.includes("funding gap") ||
+    text.includes("stalled") ||
+    text.includes("behind")
+  ) {
+    return "high";
+  }
+
+  return "medium";
+}
+
+async function createRoutingActionForDeal(
+  supabase: any,
+  deal: Record<string, any>,
+  body: Record<string, any>,
+  ownerEmail: string
+) {
+  const assignedMemberEmail = await findAssignedMemberEmail(supabase, ownerEmail);
+  const dealId = cleanString(deal.id || deal.deal_id || deal.project_id || deal.property_id);
+  const role = inferPrimaryRole(body);
+  const action = inferRoutingAction(role);
+  const priority = inferPriority(body);
+  const now = new Date().toISOString();
+
+  const payload = {
+    signal_id: `deal-${dealId || crypto.randomUUID()}`,
+    alert_id: `deal-${dealId || crypto.randomUUID()}`,
+    item_id: dealId || null,
+    deal_id: dealId || null,
+
+    title: cleanString(deal.title || body.title || "New VaultForge Deal"),
+    note:
+      cleanString(body.ai_route_summary || body.route_summary || body.description || body.seller_situation) ||
+      "New deal created and routed for member review.",
+    notes:
+      cleanString(body.ai_route_summary || body.route_summary || body.description || body.seller_situation) ||
+      "New deal created and routed for member review.",
+    reason:
+      cleanString(body.ai_route_summary || body.route_summary || body.description || body.seller_situation) ||
+      "New deal created and routed for member review.",
+
+    action,
+    routing_action: action,
+    priority,
+    status: "generated",
+    routing_status: "generated",
+
+    state_match: cleanString(body.state || deal.state) || null,
+    market_match: cleanString(body.state || deal.state || body.city || deal.city) || null,
+    strategy_match: cleanString(body.strategy || body.exit_strategy || deal.strategy) || null,
+    role_match: role,
+    target_role: role,
+
+    urgency_reason:
+      cleanString(body.ai_route_summary || body.route_summary) ||
+      `Deal created with routing need: ${role}.`,
+    routing_reason:
+      cleanString(body.ai_route_summary || body.route_summary) ||
+      `Deal created with routing need: ${role}.`,
+    routing_summary:
+      cleanString(body.ai_route_summary || body.route_summary) ||
+      `Market: ${cleanString(body.city || deal.city)}, ${cleanString(body.state || deal.state)} · Role: ${role}`,
+
+    confidence_score: 72,
+    match_score: 72,
+
+    target_email: assignedMemberEmail || null,
+    target_member_email: assignedMemberEmail || null,
+    member_email: assignedMemberEmail || null,
+
+    source: "deal_create_pipeline",
+    source_table: DEAL_TABLE,
+    metadata: {
+      generated_by: "deal_create_pipeline",
+      owner_email: ownerEmail,
+      created_from: "api_deal_create",
+      assigned_member_email: assignedMemberEmail || null,
+      routing_needs: body.routing_needs || null,
+      distress_signals: body.distress_signals || null,
+    },
+
+    created_by: ownerEmail,
+    routed_by_email: ownerEmail,
+    owner_email: ownerEmail,
+    admin_email: ownerEmail,
+
+    created_at: now,
+    updated_at: now,
+  };
+
+  const variants = [
+    payload,
+    {
+      signal_id: payload.signal_id,
+      item_id: payload.item_id,
+      deal_id: payload.deal_id,
+      title: payload.title,
+      note: payload.note,
+      action: payload.action,
+      priority: payload.priority,
+      state_match: payload.state_match,
+      strategy_match: payload.strategy_match,
+      role_match: payload.role_match,
+      target_role: payload.target_role,
+      target_email: payload.target_email,
+      target_member_email: payload.target_member_email,
+      member_email: payload.member_email,
+      routing_status: payload.routing_status,
+      source: payload.source,
+      source_table: payload.source_table,
+      created_by: payload.created_by,
+      routed_by_email: payload.routed_by_email,
+      owner_email: payload.owner_email,
+      admin_email: payload.admin_email,
+      created_at: payload.created_at,
+      updated_at: payload.updated_at,
+      metadata: payload.metadata,
+    },
+    {
+      signal_id: payload.signal_id,
+      item_id: payload.item_id,
+      title: payload.title,
+      note: payload.note,
+      action: payload.action,
+      priority: payload.priority,
+      member_email: payload.member_email,
+      target_email: payload.target_email,
+      routing_status: payload.routing_status,
+      created_by: payload.created_by,
+      created_at: payload.created_at,
+      updated_at: payload.updated_at,
+    },
+  ];
+
+  const errors: string[] = [];
+
+  for (const variant of variants) {
+    try {
+      const { data, error } = await supabase
+        .from("vf_routing_actions")
+        .insert(variant)
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        return {
+          ok: true,
+          action: data,
+          assigned_member_email: assignedMemberEmail || null,
+          signal_id: payload.signal_id,
+        };
+      }
+
+      if (error?.message) errors.push(error.message);
+    } catch (error: any) {
+      if (error?.message) errors.push(error.message);
+    }
+  }
+
+  return {
+    ok: false,
+    error: errors[0] || "Routing action insert failed.",
+    assigned_member_email: assignedMemberEmail || null,
+    signal_id: payload.signal_id,
+  };
+}
+
+async function createActivityForDeal(
+  supabase: any,
+  deal: Record<string, any>,
+  body: Record<string, any>,
+  ownerEmail: string,
+  assignedMemberEmail: string | null
+) {
+  const dealId = cleanString(deal.id || deal.deal_id || deal.project_id || deal.property_id);
+  const title = cleanString(deal.title || body.title || "New deal created");
+
+  const payload = {
+    event_type: "deal_created",
+    event_title: title,
+    event_description:
+      cleanString(body.ai_route_summary || body.route_summary || body.description) ||
+      "A new VaultForge deal was created and moved into routing review.",
+    member_email: assignedMemberEmail || ownerEmail,
+    owner_email: ownerEmail,
+    related_deal_id: dealId || null,
+    visibility: assignedMemberEmail ? "member" : "owner",
+    metadata: {
+      deal_id: dealId || null,
+      source_table: DEAL_TABLE,
+      assigned_member_email: assignedMemberEmail || null,
+      created_from: "api_deal_create",
+    },
+  };
+
+  const variants = [
+    payload,
+    {
+      event_type: payload.event_type,
+      event_title: payload.event_title,
+      event_description: payload.event_description,
+      member_email: payload.member_email,
+      related_deal_id: payload.related_deal_id,
+      visibility: payload.visibility,
+      metadata: payload.metadata,
+    },
+    {
+      event_type: payload.event_type,
+      event_title: payload.event_title,
+      event_description: payload.event_description,
+      member_email: payload.member_email,
+    },
+  ];
+
+  const errors: string[] = [];
+
+  for (const variant of variants) {
+    try {
+      const { data, error } = await supabase
+        .from("vf_activity_events")
+        .insert(variant)
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        return {
+          ok: true,
+          activity: data,
+        };
+      }
+
+      if (error?.message) errors.push(error.message);
+    } catch (error: any) {
+      if (error?.message) errors.push(error.message);
+    }
+  }
+
+  return {
+    ok: false,
+    error: errors[0] || "Activity insert failed.",
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -321,11 +677,30 @@ export async function POST(request: Request) {
       );
     }
 
+    const routingResult = await createRoutingActionForDeal(
+      supabase,
+      result.data,
+      body,
+      email
+    );
+
+    const activityResult = await createActivityForDeal(
+      supabase,
+      result.data,
+      body,
+      email,
+      routingResult.assigned_member_email || null
+    );
+
     return NextResponse.json({
       ok: true,
       deal: result.data,
       removed_schema_columns: result.removedColumns,
-      message: "Deal room created.",
+      routing: routingResult,
+      activity: activityResult,
+      message: routingResult.ok
+        ? "Deal room created and routed into VaultForge."
+        : "Deal room created. Routing action still needs review.",
     });
   } catch (error: any) {
     return NextResponse.json(
