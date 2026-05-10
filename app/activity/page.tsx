@@ -2,23 +2,39 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import VaultForgeMemberNav from "../../../components/VaultForgeMemberNav";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import {
+  VaultForgePulseStrip,
+  VaultForgeSignalBar,
+  VaultForgeCommandFooter,
+} from "../components/VaultForgeVisualLayer";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-type EventRecord = Record<string, any>;
-type ReplyRecord = Record<string, any>;
+type ActivityItem = {
+  id: string;
+  type: string;
+  title: string;
+  note?: string;
+  priority?: string;
+  created_at?: string;
+  signal_id?: string;
+  item_id?: string;
+  introduction_id?: string;
+  response?: string;
+  member_email?: string;
+};
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(181,92,255,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(157,243,191,.13), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), radial-gradient(circle at bottom right, rgba(181,92,255,.18), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
   color: "white",
   padding: "28px 18px 100px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1120, margin: "0 auto" };
+const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto" };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.34)",
@@ -30,20 +46,14 @@ const hero: React.CSSProperties = {
   boxShadow: "0 30px 90px rgba(0,0,0,.34)",
 };
 
-const card: React.CSSProperties = {
+const feedCard: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.13)",
   background:
     "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-  borderRadius: 28,
+  borderRadius: 24,
   padding: 22,
   marginBottom: 18,
   boxShadow: "0 26px 80px rgba(0,0,0,.30)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-  gap: 16,
 };
 
 const btn: React.CSSProperties = {
@@ -78,12 +88,6 @@ const ghost: React.CSSProperties = {
   minHeight: 46,
 };
 
-const danger: React.CSSProperties = {
-  ...ghost,
-  border: "1px solid rgba(255,120,120,.38)",
-  color: "#ffd0d0",
-};
-
 const chip: React.CSSProperties = {
   display: "inline-flex",
   border: "1px solid rgba(157,243,191,.25)",
@@ -96,43 +100,8 @@ const chip: React.CSSProperties = {
   margin: "0 7px 7px 0",
 };
 
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
-  color: "white",
-  padding: 15,
-  fontSize: 16,
-};
-
-const label: React.CSSProperties = {
-  display: "block",
-  fontWeight: 950,
-  margin: "0 0 8px",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#9df3bf",
-  letterSpacing: 5,
-  fontWeight: 950,
-  fontSize: 12,
-  marginBottom: 12,
-  textTransform: "uppercase",
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.72)",
-  lineHeight: 1.55,
-};
-
 function clean(value: unknown) {
   return String(value || "").trim();
-}
-
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
 }
 
 function readCookie(name: string) {
@@ -155,131 +124,22 @@ function readCookie(name: string) {
 function getEmail() {
   if (typeof window === "undefined") return "";
 
-  return cleanEmail(
+  return (
     localStorage.getItem("vf_email") ||
-      sessionStorage.getItem("vf_email") ||
-      readCookie("vf_email") ||
-      readCookie("vf_admin_email") ||
-      ""
-  );
+    sessionStorage.getItem("vf_email") ||
+    readCookie("vf_email") ||
+    readCookie("vf_admin_email") ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
 }
 
 function isOwner(email: string) {
-  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
-}
-
-function labelText(value: unknown) {
-  const text = clean(value || "event").replace(/_/g, " ");
-  return text.slice(0, 1).toUpperCase() + text.slice(1);
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text) return text;
-  }
-  return "";
-}
-
-function dateText(value: unknown) {
-  const text = clean(value);
-  if (!text) return "—";
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text;
-  return date.toLocaleString();
-}
-
-function extractSignalId(event: EventRecord) {
-  return first(
-    event.signal_id,
-    event.signalId,
-    event.related_alert_id,
-    event.alert_id,
-    event.metadata?.signal_id,
-    event.metadata?.alert_id
-  );
-}
-
-function extractItemId(event: EventRecord) {
-  return first(
-    event.item_id,
-    event.itemId,
-    event.deal_id,
-    event.project_id,
-    event.pain_id,
-    event.related_deal_id,
-    event.metadata?.item_id,
-    event.metadata?.deal_id,
-    event.metadata?.project_id,
-    event.metadata?.pain_id
-  );
-}
-
-function eventTitle(event: EventRecord, fallbackId: string) {
-  return first(
-    event.title,
-    event.event_title,
-    event.name,
-    event.headline,
-    event.metadata?.title,
-    `VaultForge Event ${fallbackId}`
-  );
-}
-
-function eventNote(event: EventRecord) {
-  return first(
-    event.note,
-    event.event_description,
-    event.description,
-    event.message,
-    event.body,
-    event.metadata?.message,
-    event.metadata?.note,
-    "Operational activity recorded in the VaultForge intelligence layer."
-  );
-}
-
-function eventType(event: EventRecord, fallbackType: string) {
-  return first(event.type, event.event_type, event.source, event.metadata?.event_type, fallbackType);
-}
-
-function eventPriority(event: EventRecord) {
-  return first(event.priority, event.metadata?.priority, "medium");
-}
-
-function eventMemberEmail(event: EventRecord) {
-  return cleanEmail(
-    event.member_email ||
-      event.email ||
-      event.sender_email ||
-      event.from_email ||
-      event.metadata?.member_email ||
-      event.metadata?.email
-  );
-}
-
-function eventRecipientEmail(event: EventRecord) {
-  return cleanEmail(
-    event.recipient_email ||
-      event.to_email ||
-      event.target_email ||
-      event.owner_email ||
-      event.metadata?.recipient_email ||
-      event.metadata?.to_email ||
-      OWNER_EMAIL
-  );
-}
-
-function imageFrom(event: EventRecord) {
-  return first(
-    event.image_url,
-    event.photo_url,
-    event.primary_photo_url,
-    event.cover_image,
-    event.thumbnail_url,
-    event.metadata?.image_url,
-    event.metadata?.photo_url,
-    event.metadata?.primary_photo_url
+  return (
+    email === OWNER_EMAIL ||
+    readCookie("vf_admin") === "1" ||
+    readCookie("isAdmin") === "true"
   );
 }
 
@@ -291,222 +151,538 @@ async function safeJson(res: Response) {
   }
 }
 
-async function fetchFirst(urls: string[], headers: Record<string, string>) {
-  const errors: string[] = [];
+function label(value: string) {
+  const text = clean(value || "activity").replace(/_/g, " ");
+  return text.slice(0, 1).toUpperCase() + text.slice(1);
+}
 
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, { cache: "no-store", headers });
-      const data = await safeJson(res);
+function tone(type: string) {
+  const value = clean(type).toLowerCase();
 
-      if (res.ok && data?.ok !== false) {
-        return { ok: true, url, data };
-      }
+  if (value.includes("response")) return "#9df3bf";
+  if (value.includes("intro")) return "#f5d978";
+  if (value.includes("routing")) return "#d8b5ff";
 
-      errors.push(`${url}: ${data?.error || data?.details || res.status}`);
-    } catch (error: any) {
-      errors.push(`${url}: ${error?.message || "failed"}`);
-    }
+  return "#9df3bf";
+}
+
+function heatLabel(item: ActivityItem) {
+  const priority = clean(item.priority).toLowerCase();
+  const response = clean(item.response).toLowerCase();
+  const type = clean(item.type).toLowerCase();
+
+  if (
+    priority === "urgent" ||
+    response === "interested" ||
+    response === "request_call" ||
+    response === "request_intro"
+  ) {
+    return "Hot";
   }
 
-  return { ok: false, errors };
+  if (
+    priority === "high" ||
+    response === "need_details" ||
+    type.includes("controlled_introduction")
+  ) {
+    return "Warm";
+  }
+
+  return "Normal";
 }
 
-function Stat({ title, value, detail }: { title: string; value: string; detail: string }) {
-  return (
-    <section style={card}>
-      <div style={eyebrow}>{title}</div>
-      <div style={{ fontSize: 30, fontWeight: 950, lineHeight: 1.1 }}>{value}</div>
-      <p style={muted}>{detail}</p>
-    </section>
-  );
+function heatTone(labelValue: string) {
+  if (labelValue === "Hot") return "#ffb3b3";
+  if (labelValue === "Warm") return "#f5d978";
+  return "#9df3bf";
 }
 
-export default function ActivityEventRoom({
-  params,
-}: {
-  params: { eventType: string; eventId: string };
-}) {
-  const eventTypeParam = clean(params.eventType);
-  const eventId = clean(params.eventId);
+function eventDetailHref(item: ActivityItem) {
+  const id = String(item.id || "");
+  if (id.startsWith("routing-")) return `/activity/routing/${encodeURIComponent(id.replace("routing-", ""))}`;
+  if (id.startsWith("intro-")) return `/activity/introduction/${encodeURIComponent(id.replace("intro-", ""))}`;
+  if (id.startsWith("response-")) return `/activity/response/${encodeURIComponent(id.replace("response-", ""))}`;
+  return "";
+}
 
+export default function ActivityStreamPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
-  const [event, setEvent] = useState<EventRecord | null>(null);
-  const [replies, setReplies] = useState<ReplyRecord[]>([]);
-  const [reply, setReply] = useState("");
-  const [status, setStatus] = useState("Loading event room...");
-  const [replyStatus, setReplyStatus] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [feed, setFeed] = useState<ActivityItem[]>([]);
+  const [filter, setFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [heatFilter, setHeatFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
   async function load() {
-    setStatus("Loading event room...");
-    setReplyStatus("");
+    setLoading(true);
 
     try {
       const currentEmail = getEmail();
       const currentOwner = isOwner(currentEmail);
+
       setEmail(currentEmail);
       setOwner(currentOwner);
-
-      if (!currentEmail) {
-        setStatus("Login email not found. Please log in again.");
-        return;
-      }
 
       const headers = {
         "x-vf-email": currentEmail,
         "x-vf-admin": currentOwner ? "1" : "0",
       };
 
-      const lookup = await fetchFirst(
-        [
-          `/api/activity/event?event_type=${encodeURIComponent(eventTypeParam)}&event_id=${encodeURIComponent(eventId)}&email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`,
-          `/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`,
-          `/api/routing/introductions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`,
-          `/api/routing/introduction-responses?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`,
-        ],
-        headers
-      );
+      const [routingRes, introRes, introResponseRes] = await Promise.all([
+        fetch(`/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers,
+        }),
+        fetch(`/api/routing/introductions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers,
+        }),
+        fetch(`/api/routing/introduction-responses?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+          cache: "no-store",
+          headers,
+        }),
+      ]);
 
-      let found: EventRecord | null = null;
-      let sourceReplies: ReplyRecord[] = [];
+      const routingData = await safeJson(routingRes);
+      const introData = await safeJson(introRes);
+      const responseData = await safeJson(introResponseRes);
 
-      if (lookup.ok) {
-        const data: any = lookup.data;
+      const routingItems = Array.isArray(routingData?.actions)
+        ? routingData.actions.map((item: any) => ({
+            id: `routing-${item.id || Math.random()}`,
+            type: "routing_action",
+            title: item.title || "Routing action created",
+            note: item.note,
+            priority: item.priority,
+            created_at: item.created_at,
+            signal_id: item.signal_id,
+            item_id: item.item_id,
+          }))
+        : [];
 
-        if (data.event) {
-          found = data.event;
-        }
+      const introItems = Array.isArray(introData?.introductions)
+        ? introData.introductions.map((item: any) => ({
+            id: `intro-${item.id || Math.random()}`,
+            type: "controlled_introduction",
+            title: item.title || "Controlled introduction staged",
+            note: item.note,
+            priority: item.priority,
+            created_at: item.created_at,
+            signal_id: item.signal_id,
+            item_id: item.item_id,
+            introduction_id: item.id,
+          }))
+        : [];
 
-        const lists = [
-          data.actions,
-          data.introductions,
-          data.responses,
-          data.events,
-          data.items,
-          data.feed,
-        ].filter(Array.isArray);
+      const responseItems = Array.isArray(responseData?.responses)
+        ? responseData.responses.map((item: any) => ({
+            id: `response-${item.id || Math.random()}`,
+            type: `introduction_response_${item.response || "activity"}`,
+            title: item.title || "Introduction response received",
+            note: item.note,
+            priority: item.priority,
+            created_at: item.created_at,
+            signal_id: item.signal_id,
+            item_id: item.item_id,
+            introduction_id: item.introduction_id,
+            response: item.response,
+            member_email: item.member_email,
+          }))
+        : [];
 
-        for (const list of lists) {
-          for (const row of list) {
-            const rowId = clean(row.id || row.event_id || row.introduction_id);
-            if (rowId === eventId || clean(row.id) === eventId) {
-              found = row;
-            }
-          }
-        }
+      const merged = [...routingItems, ...introItems, ...responseItems]
+        .sort((a, b) => {
+          const aTime = new Date(a.created_at || 0).getTime();
+          const bTime = new Date(b.created_at || 0).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, 120);
 
-        sourceReplies = Array.isArray(data.replies)
-          ? data.replies
-          : Array.isArray(data.messages)
-          ? data.messages
-          : [];
-      }
-
-      if (!found) {
-        found = {
-          id: eventId,
-          type: eventTypeParam,
-          title: `${labelText(eventTypeParam)} event`,
-          note: "Exact event source row was not found yet, but this room can still hold replies and operational follow-up.",
-          priority: "medium",
-          created_at: new Date().toISOString(),
-        };
-      }
-
-      setEvent(found);
-      setReplies(sourceReplies);
-      setStatus("");
-    } catch (error: any) {
-      setEvent({
-        id: eventId,
-        type: eventTypeParam,
-        title: `${labelText(eventTypeParam)} event`,
-        note: "Event lookup failed, but this room can still hold follow-up after the API is connected.",
-        priority: "medium",
-        created_at: new Date().toISOString(),
-      });
-      setStatus(error?.message || "Could not load event room.");
+      setFeed(merged);
+    } catch {
+      setFeed([]);
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
-  }, [eventTypeParam, eventId]);
+  }, []);
 
-  const title = event ? eventTitle(event, eventId) : "VaultForge Event";
-  const note = event ? eventNote(event) : "";
-  const signalId = event ? extractSignalId(event) : "";
-  const itemId = event ? extractItemId(event) : "";
-  const priority = event ? eventPriority(event) : "medium";
-  const memberEmail = event ? eventMemberEmail(event) : "";
-  const recipientEmail = event ? eventRecipientEmail(event) : OWNER_EMAIL;
-  const image = event ? imageFrom(event) : "";
-  const type = event ? eventType(event, eventTypeParam) : eventTypeParam;
+  const metrics = useMemo(() => {
+    return {
+      total: feed.length,
+      routing: feed.filter((item) => item.type.includes("routing")).length,
+      intros: feed.filter((item) => item.type.includes("introduction") && !item.type.includes("response")).length,
+      responses: feed.filter((item) => item.type.includes("response")).length,
+      urgent: feed.filter((item) => clean(item.priority).toLowerCase() === "urgent").length,
+      high: feed.filter((item) => clean(item.priority).toLowerCase() === "high").length,
+      medium: feed.filter((item) => clean(item.priority).toLowerCase() === "medium").length,
+      hot: feed.filter((item) => heatLabel(item) === "Hot").length,
+      warm: feed.filter((item) => heatLabel(item) === "Warm").length,
+      normal: feed.filter((item) => heatLabel(item) === "Normal").length,
+    };
+  }, [feed]);
 
-  const canReply = useMemo(() => {
-    return email.includes("@") && reply.trim().length > 1;
-  }, [email, reply]);
+  const filteredFeed = useMemo(() => {
+    let list = feed;
 
-  async function sendReply() {
-    if (busy) return;
-    setBusy(true);
-    setReplyStatus("");
+    if (filter === "routing") {
+      list = list.filter((item) => item.type.includes("routing"));
+    }
 
-    try {
-      if (!email.includes("@")) throw new Error("Login email missing. Please log in again.");
-      if (!reply.trim()) throw new Error("Write a reply before sending.");
+    if (filter === "introductions") {
+      list = list.filter((item) => item.type.includes("introduction") && !item.type.includes("response"));
+    }
 
-      const res = await fetch("/api/messages/new", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-recipient-email": recipientEmail || OWNER_EMAIL,
-        },
-        body: JSON.stringify({
-          from_email: email,
-          sender_email: email,
-          to_email: recipientEmail || OWNER_EMAIL,
-          recipient_email: recipientEmail || OWNER_EMAIL,
-          target_email: recipientEmail || OWNER_EMAIL,
-          subject: `Reply: ${title}`,
-          message: reply,
-          body: reply,
-          message_type: "activity_event_reply",
-          source: "activity_event_room",
-          event_type: eventTypeParam,
-          event_id: eventId,
-          item_id: itemId || null,
-          signal_id: signalId || null,
-        }),
+    if (filter === "responses") {
+      list = list.filter((item) => item.type.includes("response"));
+    }
+
+    if (priorityFilter !== "all") {
+      list = list.filter((item) => clean(item.priority).toLowerCase() === priorityFilter);
+    }
+
+    if (heatFilter !== "all") {
+      list = list.filter((item) => heatLabel(item).toLowerCase() === heatFilter);
+    }
+
+    const q = search.trim().toLowerCase();
+
+    if (q) {
+      list = list.filter((item) => {
+        const searchable = [
+          item.type,
+          item.title,
+          item.note,
+          item.priority,
+          item.created_at,
+          item.signal_id,
+          item.item_id,
+          item.introduction_id,
+          item.response,
+          item.member_email,
+        ]
+          .map((value) => String(value || "").toLowerCase())
+          .join(" ");
+
+        return searchable.includes(q);
       });
+    }
 
-      const data = await safeJson(res);
+    return list;
+  }, [feed, filter, priorityFilter, heatFilter, search]);
 
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not save reply.");
+  const latestRouting = useMemo(() => {
+    return feed.find((item) => item.type.includes("routing")) || null;
+  }, [feed]);
+
+  const latestIntro = useMemo(() => {
+    return feed.find((item) => item.type.includes("introduction") && !item.type.includes("response")) || null;
+  }, [feed]);
+
+  const latestResponse = useMemo(() => {
+    return feed.find((item) => item.type.includes("response")) || null;
+  }, [feed]);
+
+  function TapeCard({
+    labelText,
+    item,
+    emptyText,
+  }: {
+    labelText: string;
+    item: ActivityItem | null;
+    emptyText: string;
+  }) {
+    const itemTone = tone(item?.type || "");
+
+    return (
+      <div
+        style={{
+          border: `1px solid ${item ? `${itemTone}66` : "rgba(255,255,255,.12)"}`,
+          background: "rgba(255,255,255,.055)",
+          borderRadius: 22,
+          padding: 18,
+        }}
+      >
+        <div
+          style={{
+            color: item ? itemTone : "#9df3bf",
+            letterSpacing: 4,
+            fontWeight: 900,
+            fontSize: 11,
+            marginBottom: 10,
+            textTransform: "uppercase",
+          }}
+        >
+          {labelText}
+        </div>
+
+        <strong style={{ fontSize: 20, lineHeight: 1.1 }}>
+          {item?.title || emptyText}
+        </strong>
+
+        <p
+          style={{
+            color: "rgba(255,255,255,.66)",
+            lineHeight: 1.45,
+            marginBottom: 0,
+          }}
+        >
+          {item?.note || "No recent event recorded."}
+        </p>
+
+        <div style={{ marginTop: 10 }}>
+          {item && (
+            <span
+              style={{
+                ...chip,
+                color: heatTone(heatLabel(item)),
+                border: `1px solid ${heatTone(heatLabel(item))}66`,
+                background: "rgba(255,255,255,.055)",
+              }}
+            >
+              {heatLabel(item)}
+            </span>
+          )}
+          {item?.priority && <span style={chip}>{item.priority}</span>}
+          {item?.created_at && <span style={chip}>{item.created_at}</span>}
+        </div>
+      </div>
+    );
+  }
+
+
+  const groupedFeed = useMemo(() => {
+    const now = Date.now();
+
+    const groups = {
+      justNow: [] as ActivityItem[],
+      today: [] as ActivityItem[],
+      earlier: [] as ActivityItem[],
+    };
+
+    for (const item of filteredFeed) {
+      const created = new Date(item.created_at || 0).getTime();
+
+      if (!created || Number.isNaN(created)) {
+        groups.earlier.push(item);
+        continue;
       }
 
-      setReplies((current) => [
-        {
-          id: `local-${Date.now()}`,
-          from_email: email,
-          to_email: recipientEmail || OWNER_EMAIL,
-          message: reply,
-          body: reply,
-          created_at: new Date().toISOString(),
-        },
-        ...current,
-      ]);
-      setReply("");
-      setReplyStatus(data?.message || "Reply saved.");
-    } catch (error: any) {
-      setReplyStatus(error?.message || "Could not save reply.");
-    } finally {
-      setBusy(false);
+      const diff = now - created;
+      const oneHour = 1000 * 60 * 60;
+      const oneDay = oneHour * 24;
+
+      if (diff <= oneHour) {
+        groups.justNow.push(item);
+      } else if (diff <= oneDay) {
+        groups.today.push(item);
+      } else {
+        groups.earlier.push(item);
+      }
     }
+
+    return groups;
+  }, [filteredFeed]);
+
+  function FeedSection({
+    title,
+    items,
+  }: {
+    title: string;
+    items: ActivityItem[];
+  }) {
+    if (items.length === 0) return null;
+
+    return (
+      <section style={{ marginBottom: 26 }}>
+        <div
+          style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:14,
+            textTransform:"uppercase"
+          }}
+        >
+          {title}
+        </div>
+
+        {items.map((item) => {
+          const itemTone = tone(item.type);
+          const heat = heatLabel(item);
+          const heatColor = heatTone(heat);
+
+          return (
+            <article
+              key={item.id}
+              style={{
+                ...feedCard,
+                borderColor:
+                  clean(item.priority).toLowerCase() === "urgent"
+                    ? "rgba(255,120,120,.72)"
+                    : clean(item.priority).toLowerCase() === "high"
+                    ? "rgba(245,217,120,.72)"
+                    : `${itemTone}66`,
+              }}
+            >
+              <div style={{
+                color:itemTone,
+                letterSpacing:4,
+                fontWeight:900,
+                fontSize:12,
+                marginBottom:10,
+                textTransform:"uppercase"
+              }}>
+                {label(item.type)}
+              </div>
+
+              <h2 style={{
+                fontSize:32,
+                lineHeight:1.05,
+                margin:"0 0 12px"
+              }}>
+                {item.title}
+              </h2>
+
+              <p style={{
+                color:"rgba(255,255,255,.72)",
+                lineHeight:1.6,
+                fontSize:18
+              }}>
+                {item.note || "Operational activity recorded in the VaultForge intelligence layer."}
+              </p>
+
+              <div style={{ margin:"12px 0" }}>
+                <span
+                  style={{
+                    ...chip,
+                    color: heatColor,
+                    border: `1px solid ${heatColor}66`,
+                    background: "rgba(255,255,255,.055)",
+                  }}
+                >
+                  {heat}
+                </span>
+
+                {item.priority && (
+                  <span style={chip}>{item.priority}</span>
+                )}
+
+                {item.response && (
+                  <span style={chip}>{label(item.response)}</span>
+                )}
+
+                {item.member_email && (
+                  <span style={chip}>{item.member_email}</span>
+                )}
+
+                {item.created_at && (
+                  <span style={chip}>{item.created_at}</span>
+                )}
+              </div>
+
+              <div>
+                {eventDetailHref(item) && (
+                  <Link
+                    href={eventDetailHref(item)}
+                    style={btn}
+                  >
+                    Open Event
+                  </Link>
+                )}
+
+                {item.introduction_id && (
+                  <Link
+                    href={`/introduction/${encodeURIComponent(item.introduction_id)}`}
+                    style={ghost}
+                  >
+                    Open Introduction
+                  </Link>
+                )}
+
+                {item.signal_id && (
+                  <Link
+                    href={`/routing-room/${encodeURIComponent(item.signal_id)}`}
+                    style={ghost}
+                  >
+                    Routing Room
+                  </Link>
+                )}
+
+                {item.item_id && (
+                  <Link
+                    href={`/deal-room/${encodeURIComponent(item.item_id)}`}
+                    style={ghost}
+                  >
+                    Deal Room
+                  </Link>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </section>
+    );
+  }
+
+
+  function MetricCard({
+    title,
+    value,
+    detail,
+    emphasis,
+  }: {
+    title: string;
+    value: number | string;
+    detail: string;
+    emphasis?: "urgent" | "high" | "normal";
+  }) {
+    const border =
+      emphasis === "urgent"
+        ? "rgba(255,120,120,.72)"
+        : emphasis === "high"
+        ? "rgba(245,217,120,.72)"
+        : "rgba(157,243,191,.34)";
+
+    return (
+      <div
+        style={{
+          border: `1px solid ${border}`,
+          background:
+            "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
+          borderRadius: 24,
+          padding: 20,
+          boxShadow: "0 22px 70px rgba(0,0,0,.28)",
+        }}
+      >
+        <div
+          style={{
+            color: emphasis === "urgent" ? "#ffb3b3" : emphasis === "high" ? "#f5d978" : "#9df3bf",
+            letterSpacing: 4,
+            fontWeight: 900,
+            fontSize: 11,
+            marginBottom: 10,
+            textTransform: "uppercase",
+          }}
+        >
+          {title}
+        </div>
+
+        <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>
+          {value}
+        </div>
+
+        <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>
+          {detail}
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -516,161 +692,331 @@ export default function ActivityEventRoom({
         button:hover {
           transform: translateY(-1px);
           transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
-        textarea::placeholder,
-        input::placeholder {
-          color: rgba(255,255,255,.48);
-        }
-
-        @media (max-width: 760px) {
-          a,
-          button {
-            width: 100%;
-            box-sizing: border-box;
-          }
+          filter: brightness(1.05);
         }
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav title="Activity Event" subtitle="Operational event room" />
+        <VaultForgeMemberNav
+          title="Activity Feed"
+          subtitle="Live operational stream and platform pressure board"
+        />
+
+        <VaultForgePulseStrip
+          items={[
+            { label: "ACTIVITY", value: "LIVE", tone: "gold" },
+            { label: "RESPONSES", value: "TRACKING", tone: "green" },
+            { label: "ROUTING", value: "ACTIVE", tone: "purple" },
+            { label: "PRESSURE", value: "WATCHING", tone: "red" },
+          ]}
+        />
+
+        <VaultForgeSignalBar
+          urgent={metrics.urgent}
+          high={metrics.high + metrics.warm}
+          normal={Math.max(0, metrics.total - metrics.urgent - metrics.high - metrics.warm)}
+        />
 
         <section style={hero}>
-          <div style={eyebrow}>VaultForge Event Room</div>
-          <h1 style={{ fontSize: "clamp(52px,11vw,96px)", lineHeight: 0.9, margin: "0 0 18px" }}>
-            {title}
+          <div style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:12,
+            textTransform:"uppercase"
+          }}>
+            VaultForge Global Activity Stream
+          </div>
+
+          <h1 style={{
+            fontSize:"clamp(58px,12vw,108px)",
+            lineHeight:.86,
+            margin:"0 0 18px"
+          }}>
+            Live operational feed.
           </h1>
-          <p style={{ ...muted, fontSize: 20 }}>{note}</p>
+
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            fontSize:22,
+            lineHeight:1.5
+          }}>
+            Unified intelligence stream across routing, introductions, and member responses.
+            This is the beginning of the Bloomberg-style operational terminal layer.
+          </p>
 
           <div>
-            <span style={chip}>Type: {labelText(type)}</span>
-            <span style={chip}>Priority: {priority}</span>
-            <span style={chip}>Event: {eventId}</span>
-            {signalId && <span style={chip}>Signal: {signalId}</span>}
-            {itemId && <span style={chip}>Item: {itemId}</span>}
-            {memberEmail && <span style={chip}>Member: {memberEmail}</span>}
+            <span style={chip}>Feed Events: {metrics.total}</span>
+            <span style={chip}>Routing: {metrics.routing}</span>
+            <span style={chip}>Introductions: {metrics.intros}</span>
+            <span style={chip}>Responses: {metrics.responses}</span>
+            <span style={chip}>Urgent: {metrics.urgent}</span>
+            <span style={chip}>High: {metrics.high}</span>
+            <span style={chip}>Medium: {metrics.medium}</span>
             <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
-          <Link href="/activity" style={ghost}>Back to Activity</Link>
-          <Link href="/alerts" style={ghost}>Alerts</Link>
-          {signalId && <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link>}
-          {signalId && <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link>}
-          {itemId && <Link href={`/deal-room/${encodeURIComponent(itemId)}`} style={ghost}>Work Area</Link>}
-          <Link href={`/messages/new?to=${encodeURIComponent(recipientEmail || OWNER_EMAIL)}&signal_id=${encodeURIComponent(signalId)}&item_id=${encodeURIComponent(itemId)}&subject=${encodeURIComponent(`Reply: ${title}`)}`} style={btn}>
-            Message / Reply
-          </Link>
-          <Link href="/logout" style={danger}>Logout</Link>
+          <div style={{ marginTop: 14 }}>
+            <button type="button" style={btn} onClick={load}>
+              Refresh Feed
+            </button>
+
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
+            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
+            <Link href="/introductions" style={ghost}>Introductions</Link>
+
+            {owner && (
+              <Link href="/admin-intelligence" style={btn}>
+                Owner Intelligence
+              </Link>
+            )}
+          </div>
         </section>
 
-        {status && (
-          <section style={{ ...card, color: status.toLowerCase().includes("could") || status.toLowerCase().includes("failed") ? "#ffd0d0" : "#9df3bf" }}>
-            {status}
+        <section style={hero}>
+          <div style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:12,
+            textTransform:"uppercase"
+          }}>
+            Market Tape
+          </div>
+
+          <h2 style={{
+            fontSize:42,
+            lineHeight:1,
+            margin:"0 0 14px"
+          }}>
+            Latest platform movement.
+          </h2>
+
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            fontSize:18,
+            lineHeight:1.55
+          }}>
+            Fast snapshot of the newest routing, introduction, and member-response events.
+          </p>
+
+          <div style={{
+            display:"grid",
+            gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",
+            gap:14
+          }}>
+            <TapeCard labelText="Latest Routing" item={latestRouting} emptyText="No routing activity yet" />
+            <TapeCard labelText="Latest Introduction" item={latestIntro} emptyText="No introductions yet" />
+            <TapeCard labelText="Latest Response" item={latestResponse} emptyText="No member responses yet" />
+          </div>
+        </section>
+
+        <section style={hero}>
+          <div style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:12,
+            textTransform:"uppercase"
+          }}>
+            Command Metrics
+          </div>
+
+          <h2 style={{
+            fontSize:42,
+            lineHeight:1,
+            margin:"0 0 14px"
+          }}>
+            Platform pressure board.
+          </h2>
+
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            fontSize:18,
+            lineHeight:1.55
+          }}>
+            Read-only operational pressure snapshot across the current feed.
+          </p>
+
+          <div style={{
+            display:"grid",
+            gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",
+            gap:14
+          }}>
+            <MetricCard
+              title="Urgent Pressure"
+              value={metrics.urgent}
+              detail="Urgent events in the current activity window."
+              emphasis={metrics.urgent > 0 ? "urgent" : "normal"}
+            />
+            <MetricCard
+              title="High Priority"
+              value={metrics.high}
+              detail="High-priority opportunities and workflow events."
+              emphasis={metrics.high > 0 ? "high" : "normal"}
+            />
+            <MetricCard
+              title="Routing Volume"
+              value={metrics.routing}
+              detail="Routing actions captured in the operating stream."
+            />
+            <MetricCard
+              title="Intro Volume"
+              value={metrics.intros}
+              detail="Controlled introductions staged or visible."
+            />
+            <MetricCard
+              title="Response Volume"
+              value={metrics.responses}
+              detail="Member responses captured from intro/routing flow."
+            />
+            <MetricCard
+              title="Hot Events"
+              value={metrics.hot}
+              detail="Urgent, interested, call, or intro-request events."
+              emphasis={metrics.hot > 0 ? "urgent" : "normal"}
+            />
+            <MetricCard
+              title="Warm Events"
+              value={metrics.warm}
+              detail="High-priority, detail-needed, or intro-stage events."
+              emphasis={metrics.warm > 0 ? "high" : "normal"}
+            />
+          </div>
+        </section>
+
+        <section style={hero}>
+          <div style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:12,
+            textTransform:"uppercase"
+          }}>
+            Terminal Filters
+          </div>
+
+          <button type="button" style={filter === "all" ? btn : ghost} onClick={() => setFilter("all")}>
+            All Activity
+          </button>
+          <button type="button" style={filter === "routing" ? btn : ghost} onClick={() => setFilter("routing")}>
+            Routing
+          </button>
+          <button type="button" style={filter === "introductions" ? btn : ghost} onClick={() => setFilter("introductions")}>
+            Introductions
+          </button>
+          <button type="button" style={filter === "responses" ? btn : ghost} onClick={() => setFilter("responses")}>
+            Responses
+          </button>
+
+          <div style={{ marginTop: 18 }}>
+            <button type="button" style={priorityFilter === "all" ? btn : ghost} onClick={() => setPriorityFilter("all")}>
+              All Priorities
+            </button>
+            <button type="button" style={priorityFilter === "urgent" ? btn : ghost} onClick={() => setPriorityFilter("urgent")}>
+              Urgent
+            </button>
+            <button type="button" style={priorityFilter === "high" ? btn : ghost} onClick={() => setPriorityFilter("high")}>
+              High
+            </button>
+            <button type="button" style={priorityFilter === "medium" ? btn : ghost} onClick={() => setPriorityFilter("medium")}>
+              Medium
+            </button>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <button type="button" style={heatFilter === "all" ? btn : ghost} onClick={() => setHeatFilter("all")}>
+              All Heat
+            </button>
+            <button type="button" style={heatFilter === "hot" ? btn : ghost} onClick={() => setHeatFilter("hot")}>
+              Hot
+            </button>
+            <button type="button" style={heatFilter === "warm" ? btn : ghost} onClick={() => setHeatFilter("warm")}>
+              Warm
+            </button>
+            <button type="button" style={heatFilter === "normal" ? btn : ghost} onClick={() => setHeatFilter("normal")}>
+              Normal
+            </button>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search activity by title, note, member email, type, priority, or ID..."
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                borderRadius: 20,
+                border: "1px solid rgba(255,255,255,.18)",
+                background: "rgba(255,255,255,.075)",
+                color: "white",
+                padding: 16,
+                fontSize: 16,
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            lineHeight:1.6,
+            marginBottom:0
+          }}>
+            Showing {filteredFeed.length} of {feed.length} events. Type filter: {label(filter)}. Priority filter: {label(priorityFilter)}. Heat filter: {label(heatFilter)}. Search: {search.trim() || "None"}.
+          </p>
+
+          {search.trim() && (
+            <button type="button" style={ghost} onClick={() => setSearch("")}>
+              Clear Search
+            </button>
+          )}
+        </section>
+
+        {loading ? (
+          <section style={hero}>
+            Loading activity stream...
+          </section>
+        ) : filteredFeed.length === 0 ? (
+          <section style={hero}>
+            No activity available yet.
+          </section>
+        ) : (
+          <section>
+            <FeedSection title="Just Now" items={groupedFeed.justNow} />
+            <FeedSection title="Today" items={groupedFeed.today} />
+            <FeedSection title="Earlier" items={groupedFeed.earlier} />
           </section>
         )}
 
-        <section style={grid}>
-          <Stat title="What it is" value={labelText(type)} detail="This identifies whether the item came from routing, an intro, a response, pain, or activity." />
-          <Stat title="Who is involved" value={memberEmail || email || "Unknown"} detail={`Reply target: ${recipientEmail || OWNER_EMAIL}`} />
-          <Stat title="Where it goes" value={signalId ? "Routing Room" : itemId ? "Work Area" : "Activity"} detail="Use the buttons above to move into the exact operational page." />
-        </section>
+        <section style={{ ...hero, marginTop: 22 }}>
+          <div style={{
+            color:"#9df3bf",
+            letterSpacing:5,
+            fontWeight:950,
+            fontSize:12,
+            marginBottom:12,
+            textTransform:"uppercase"
+          }}>
+            Current Safety Mode
+          </div>
 
-        <section style={card}>
-          <div style={eyebrow}>Context / Photo</div>
-          {image ? (
-            <img
-              src={image}
-              alt="VaultForge event context"
-              style={{
-                width: "100%",
-                maxHeight: 420,
-                objectFit: "cover",
-                borderRadius: 24,
-                border: "1px solid rgba(255,255,255,.14)",
-                marginBottom: 16,
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                minHeight: 220,
-                borderRadius: 24,
-                border: "1px solid rgba(255,255,255,.12)",
-                background:
-                  "linear-gradient(135deg, rgba(232,196,107,.14), rgba(181,92,255,.12), rgba(157,243,191,.08))",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "rgba(255,255,255,.68)",
-                fontWeight: 900,
-                letterSpacing: 2,
-                textTransform: "uppercase",
-                marginBottom: 16,
-              }}
-            >
-              No image tied to this event yet
-            </div>
-          )}
-
-          <p style={muted}>
-            This room is the bridge between the activity stream and the exact deal, pain, routing, introduction, or response record.
+          <p style={{
+            color:"rgba(255,255,255,.72)",
+            fontSize:19,
+            lineHeight:1.6
+          }}>
+            This stream is read-only. It does not send notifications, create automations,
+            mutate deals, or trigger autonomous AI behavior.
           </p>
         </section>
-
-        <section style={card}>
-          <div style={eyebrow}>Reply / Follow-up</div>
-          {replyStatus && (
-            <p style={{ color: replyStatus.toLowerCase().includes("could") || replyStatus.toLowerCase().includes("missing") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {replyStatus}
-            </p>
-          )}
-
-          <label style={label}>Write a reply or information request</label>
-          <textarea
-            value={reply}
-            onChange={(event) => setReply(event.target.value)}
-            placeholder="Ask for details, reply to the intro, request next steps, ask for photos, address, price, timeline, or contact release..."
-            style={{ ...input, minHeight: 190, lineHeight: 1.5 }}
-          />
-
-          <button
-            type="button"
-            onClick={sendReply}
-            disabled={!canReply || busy}
-            style={{ ...btn, width: "100%", marginTop: 16, opacity: !canReply || busy ? 0.58 : 1 }}
-          >
-            {busy ? "Saving Reply..." : "Save Reply"}
-          </button>
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>Conversation / Response Chain</div>
-          {replies.length === 0 ? (
-            <p style={muted}>No replies are attached yet. Use the reply box above to start the event thread.</p>
-          ) : (
-            <div style={{ display: "grid", gap: 14 }}>
-              {replies.map((item, index) => (
-                <article key={clean(item.id) || index} style={{ ...card, marginBottom: 0 }}>
-                  <div>
-                    <span style={chip}>{clean(item.from_email || item.sender_email || item.member_email || "unknown sender")}</span>
-                    <span style={chip}>{dateText(item.created_at)}</span>
-                  </div>
-                  <p style={{ ...muted, fontSize: 18 }}>
-                    {clean(item.message || item.body || item.note || item.event_description || "Reply saved.")}
-                  </p>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section style={{ ...card, borderColor: "rgba(157,243,191,.22)" }}>
-          <div style={eyebrow}>Current Safety Mode</div>
-          <p style={muted}>
-            This room records replies and operational context. It does not release private contact information automatically.
-          </p>
-        </section>
+        <VaultForgeCommandFooter />
       </div>
     </main>
   );
