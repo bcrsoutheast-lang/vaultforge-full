@@ -233,8 +233,24 @@ export async function GET(request: Request) {
   }
 
   const painEmailColumns = ["member_email", "email", "owner_email", "created_by_email"];
-  const routingEmailColumns = ["member_email", "email", "owner_email"];
-  const activityEmailColumns = ["member_email", "email", "owner_email"];
+  const routingEmailColumns = [
+    "member_email",
+    "target_email",
+    "target_member_email",
+    "visible_to_email",
+    "recipient_email",
+    "email",
+    "owner_email",
+  ];
+  const activityEmailColumns = [
+    "member_email",
+    "target_email",
+    "target_member_email",
+    "visible_to_email",
+    "recipient_email",
+    "email",
+    "owner_email",
+  ];
   const profileEmailColumns = ["email", "member_email"];
   const projectEmailColumns = ["member_email", "email", "owner_email", "created_by_email"];
 
