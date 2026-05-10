@@ -34,22 +34,20 @@ function makeSupabase(): SupabaseAny | null {
   });
 }
 
-function readCookieEmail(request: Request) {
+function readCookie(request: Request, name: string) {
   const cookie = request.headers.get("cookie") || "";
-  const parts = cookie.split(";").map((part) => part.trim());
+  const match = cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
 
-  for (const name of ["vf_email", "vf_admin_email"]) {
-    const found = parts.find((part) => part.startsWith(`${name}=`));
-    if (found) {
-      try {
-        return decodeURIComponent(found.slice(name.length + 1)).toLowerCase();
-      } catch {
-        return found.slice(name.length + 1).toLowerCase();
-      }
-    }
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
   }
-
-  return "";
 }
 
 function getRequestEmail(request: Request) {
@@ -58,7 +56,8 @@ function getRequestEmail(request: Request) {
   return cleanEmail(
     request.headers.get("x-vf-email") ||
       url.searchParams.get("email") ||
-      readCookieEmail(request)
+      readCookie(request, "vf_email") ||
+      readCookie(request, "vf_admin_email")
   );
 }
 
@@ -88,7 +87,7 @@ async function countTable(
       head: true,
     });
 
-    if (!owner && email && emailColumns.length) {
+    if (!owner) {
       const orFilter = emailColumns
         .map((column) => `${column}.eq.${email}`)
         .join(",");
@@ -127,7 +126,7 @@ async function recentTable(
       .order("created_at", { ascending: false })
       .limit(6);
 
-    if (!owner && email && emailColumns.length) {
+    if (!owner) {
       const orFilter = emailColumns
         .map((column) => `${column}.eq.${email}`)
         .join(",");
@@ -177,6 +176,40 @@ async function recentTable(
   }
 }
 
+function emptyResponse(email: string, reason: string, status = 401) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: reason,
+      visibility: {
+        owner: false,
+        email,
+      },
+      counts: {
+        pain_signals: 0,
+        routing_actions: 0,
+        total_activity: 0,
+        members: 0,
+        projects: 0,
+        introductions: 0,
+        responses: 0,
+        urgent_routing: 0,
+        high_routing: 0,
+      },
+      recent: [],
+      ticker: ["LOGIN REQUIRED — LIVE DATA LOCKED"],
+      health: {
+        live_data_ready: false,
+        fake_data_allowed: false,
+        security_locked: true,
+        reason,
+      },
+      generated_at: new Date().toISOString(),
+    },
+    { status }
+  );
+}
+
 export async function GET(request: Request) {
   const supabase = makeSupabase();
 
@@ -193,113 +226,35 @@ export async function GET(request: Request) {
   const email = getRequestEmail(request);
   const owner = isOwnerRequest(request, email);
 
-  const painEmailColumns = [
-    "member_email",
-    "email",
-    "owner_email",
-    "created_by_email",
-  ];
-
-  const routingEmailColumns = [
-    "member_email",
-    "email",
-    "owner_email",
-  ];
-
-  const activityEmailColumns = [
-    "member_email",
-    "email",
-    "owner_email",
-  ];
-
-  const profileEmailColumns = [
-    "email",
-    "member_email",
-  ];
-
-  const projectEmailColumns = [
-    "member_email",
-    "email",
-    "owner_email",
-    "created_by_email",
-  ];
-
-  const [
-    painCount,
-    routingCount,
-    activityCount,
-    memberCount,
-    projectCount,
-  ] = await Promise.all([
-    countTable(
-      supabase,
-      "vf_pain_submissions",
+  if (!email) {
+    return emptyResponse(
       email,
-      owner,
-      painEmailColumns
-    ),
-    countTable(
-      supabase,
-      "vf_routing_signals",
-      email,
-      owner,
-      routingEmailColumns
-    ),
-    countTable(
-      supabase,
-      "vf_activity_events",
-      email,
-      owner,
-      activityEmailColumns
-    ),
-    countTable(
-      supabase,
-      "vf_profiles",
-      email,
-      owner,
-      profileEmailColumns
-    ),
-    countTable(
-      supabase,
-      "projects",
-      email,
-      owner,
-      projectEmailColumns
-    ),
-  ]);
+      "Login email is required before live member data can be shown."
+    );
+  }
+
+  const painEmailColumns = ["member_email", "email", "owner_email", "created_by_email"];
+  const routingEmailColumns = ["member_email", "email", "owner_email"];
+  const activityEmailColumns = ["member_email", "email", "owner_email"];
+  const profileEmailColumns = ["email", "member_email"];
+  const projectEmailColumns = ["member_email", "email", "owner_email", "created_by_email"];
+
+  const [painCount, routingCount, activityCount, memberCount, projectCount] =
+    await Promise.all([
+      countTable(supabase, "vf_pain_submissions", email, owner, painEmailColumns),
+      countTable(supabase, "vf_routing_signals", email, owner, routingEmailColumns),
+      countTable(supabase, "vf_activity_events", email, owner, activityEmailColumns),
+      countTable(supabase, "vf_profiles", email, owner, profileEmailColumns),
+      countTable(supabase, "projects", email, owner, projectEmailColumns),
+    ]);
 
   const [painRecent, routingRecent, activityRecent] = await Promise.all([
-    recentTable(
-      supabase,
-      "vf_pain_submissions",
-      "pain",
-      email,
-      owner,
-      painEmailColumns
-    ),
-    recentTable(
-      supabase,
-      "vf_routing_signals",
-      "routing",
-      email,
-      owner,
-      routingEmailColumns
-    ),
-    recentTable(
-      supabase,
-      "vf_activity_events",
-      "activity",
-      email,
-      owner,
-      activityEmailColumns
-    ),
+    recentTable(supabase, "vf_pain_submissions", "pain", email, owner, painEmailColumns),
+    recentTable(supabase, "vf_routing_signals", "routing", email, owner, routingEmailColumns),
+    recentTable(supabase, "vf_activity_events", "activity", email, owner, activityEmailColumns),
   ]);
 
-  const recent = [
-    ...painRecent,
-    ...routingRecent,
-    ...activityRecent,
-  ]
+  const recent = [...painRecent, ...routingRecent, ...activityRecent]
     .sort((a, b) => {
       const aTime = new Date(a.created_at || 0).getTime();
       const bTime = new Date(b.created_at || 0).getTime();
@@ -320,16 +275,8 @@ export async function GET(request: Request) {
   };
 
   const ticker = recent.length
-    ? recent.map(
-        (item) =>
-          `${String(item.source || "LIVE").toUpperCase()}: ${String(
-            item.title || "Activity"
-          ).slice(0, 80)}`
-      )
-    : [
-        "LIVE DATA CONNECTED — WAITING FOR MEMBER ACTIVITY",
-        "NO FAKE DASHBOARD ACTIVITY ACTIVE",
-      ];
+    ? recent.map((item) => `${String(item.source || "LIVE").toUpperCase()}: ${String(item.title || "Activity").slice(0, 80)}`)
+    : ["LIVE DATA CONNECTED — NO MEMBER ACTIVITY YET"];
 
   return NextResponse.json({
     ok: true,
@@ -343,6 +290,7 @@ export async function GET(request: Request) {
     health: {
       live_data_ready: true,
       fake_data_allowed: false,
+      security_locked: false,
       canonical_tables: [
         "vf_pain_submissions",
         "vf_routing_signals",
