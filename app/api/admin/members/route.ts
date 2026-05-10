@@ -544,17 +544,113 @@ async function logActivity(supabase: any, payload: AnyRow) {
   }
 }
 
+
+function hasRealEmail(row: AnyRow) {
+  const email = cleanEmail(row.email || row.member_email);
+  return email.includes("@") && !email.endsWith("@example.com") && email !== "test@test.com";
+}
+
+function safeNetworkMember(member: AnyRow) {
+  return {
+    id: member.id || member._source_id || member.email,
+    email: member.email,
+    full_name: member.full_name || member.name || member.member_name || member.display_name || "",
+    name: member.full_name || member.name || member.member_name || member.display_name || "",
+    company: member.company || member.company_name || member.business_name || member.organization || member.firm || "",
+    company_name: member.company_name || member.company || member.business_name || member.organization || member.firm || "",
+    headline: member.headline || member.tagline || member.bio || member.about || member.summary || "",
+    bio: member.bio || member.about || member.summary || member.notes || "",
+
+    member_type: member.member_type || member.member_types || member.roles || member.role || member.primary_role || "",
+    member_types: member.member_types || member.member_type || member.roles || member.role || member.primary_role || "",
+    roles: member.roles || member.member_types || member.member_type || member.role || member.primary_role || "",
+
+    markets: member.markets || member.market_states || member.buy_box_states || member.states || member.state || "",
+    states: member.states || member.market_states || member.buy_box_states || member.markets || member.state || "",
+    buy_box_states: member.buy_box_states || member.market_states || member.markets || member.states || member.state || "",
+
+    strategies: member.strategies || member.strategy || member.buy_box_strategies || member.exit_strategy || "",
+    buy_box_strategies: member.buy_box_strategies || member.strategies || member.strategy || member.exit_strategy || "",
+
+    asset_types: member.asset_types || member.property_types || member.buy_box_types || member.property_type || member.deal_type || "",
+    property_types: member.property_types || member.asset_types || member.buy_box_types || member.property_type || member.deal_type || "",
+    buy_box_types: member.buy_box_types || member.asset_types || member.property_types || member.property_type || member.deal_type || "",
+
+    needs: member.needs || member.deal_needs || member.what_i_need || member.routing_needs || member.help_needed || "",
+    provides: member.provides || member.can_provide || member.what_i_provide || member.services || member.capabilities || "",
+    can_provide: member.can_provide || member.provides || member.what_i_provide || member.services || member.capabilities || "",
+
+    profile_complete: Boolean(member.profile_complete),
+    access_status: member.access_status === "active" ? "active" : "member",
+    admin_bucket: member.admin_bucket === "active" ? "active" : "network",
+    is_active: Boolean(member.is_active),
+    created_at: member.created_at || null,
+    updated_at: member.updated_at || null,
+    _source_table: member._source_table || "member_directory",
+  };
+}
+
+function directoryMembersForRequester(members: AnyRow[], requesterEmail: string) {
+  return members
+    .filter(hasRealEmail)
+    .filter((member) => {
+      if (member.email === OWNER_EMAIL) return false;
+      if (member.is_deleted || member.is_suspended) return false;
+      if (member.admin_bucket === "deleted" || member.admin_bucket === "suspended") return false;
+
+      // Show active/profile-complete network records, plus the requester so their directory does not look empty.
+      return (
+        member.email === requesterEmail ||
+        member.admin_bucket === "active" ||
+        member.is_active ||
+        member.profile_complete
+      );
+    })
+    .map(safeNetworkMember);
+}
+
+
 export async function GET(request: Request) {
   try {
-    if (!isAdminRequest(request)) {
-      return NextResponse.json({ ok: false, error: "Owner admin access required." }, { status: 403 });
+    const requesterEmail = emailFromRequest(request);
+    const admin = isAdminRequest(request);
+
+    if (!requesterEmail) {
+      return NextResponse.json(
+        { ok: false, error: "Login email required.", members: [] },
+        { status: 401 }
+      );
     }
 
     const supabase = supabaseClient();
     const members = await loadMembers(supabase);
 
+    if (!admin) {
+      const safeMembers = directoryMembersForRequester(members, requesterEmail);
+
+      return NextResponse.json({
+        ok: true,
+        owner: false,
+        mode: "member_network_directory",
+        members: safeMembers,
+        counts: {
+          total: safeMembers.length,
+          pending: 0,
+          active: safeMembers.filter((member) => member.admin_bucket === "active").length,
+          suspended: 0,
+          deleted: 0,
+          locked: 0,
+        },
+        sources_checked: TABLES,
+        source: "member_network_directory",
+        message: "Member-safe network directory loaded. Admin controls and destructive fields are hidden.",
+      });
+    }
+
     return NextResponse.json({
       ok: true,
+      owner: true,
+      mode: "owner_admin_members",
       members,
       counts: {
         total: members.length,
@@ -572,8 +668,9 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Could not load admin members.",
+        error: "Could not load members.",
         details: error?.message || String(error),
+        members: [],
       },
       { status: 500 }
     );
