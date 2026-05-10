@@ -1,43 +1,18 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect } from "react";
 
 export const dynamic = "force-dynamic";
 
-function clearCookie(name: string) {
-  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
-  document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
-}
-
 export default function ResetIdentityPage() {
-  const [done, setDone] = useState(false);
-
   useEffect(() => {
     try {
       localStorage.clear();
       sessionStorage.clear();
-
-      [
-        "vf_email",
-        "vf_member_email",
-        "vf_login_email",
-        "vf_member_login",
-        "vf_admin",
-        "vf_admin_email",
-        "isAdmin",
-        "vf_auth_user_id",
-        "vf_auth_access_token",
-        "vf_auth_refresh_token",
-        "test_email",
-        "demo_email",
-        "vf_demo_email",
-        "vf_test_email",
-      ].forEach(clearCookie);
     } catch {}
 
-    setDone(true);
+    window.location.href = "/api/identity/reset";
   }, []);
 
   return (
@@ -73,30 +48,12 @@ export default function ResetIdentityPage() {
         </div>
 
         <h1 style={{ fontSize: 44, margin: "0 0 14px" }}>
-          Browser identity cleared.
+          Clearing browser identity...
         </h1>
 
         <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.6 }}>
-          {done
-            ? "Local storage, session storage, and VaultForge identity cookies were cleared in this browser."
-            : "Clearing browser identity..."}
+          This clears local storage, session storage, and then calls the server-side cookie purge.
         </p>
-
-        <Link
-          href="/login"
-          style={{
-            display: "inline-flex",
-            marginTop: 18,
-            borderRadius: 999,
-            padding: "14px 18px",
-            background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-            color: "#06101e",
-            textDecoration: "none",
-            fontWeight: 950,
-          }}
-        >
-          Go To Clean Login
-        </Link>
       </section>
     </main>
   );
