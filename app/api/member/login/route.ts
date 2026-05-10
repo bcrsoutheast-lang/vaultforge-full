@@ -94,7 +94,14 @@ async function upsertProfile(email: string, authUserId: string) {
   }
 }
 
-function setSessionCookies(response: NextResponse, email: string, authUserId: string, accessToken: string, refreshToken: string, sessionMaxAge: number) {
+function setCookieSet(
+  response: NextResponse,
+  email: string,
+  authUserId: string,
+  accessToken: string,
+  refreshToken: string,
+  sessionMaxAge: number
+) {
   const isOwner = email === OWNER_EMAIL;
 
   response.cookies.set("vf_auth_access_token", accessToken, privateCookieOptions(sessionMaxAge));
@@ -149,6 +156,7 @@ export async function POST(request: Request) {
 
     const sessionMaxAge = data.session.expires_in || 60 * 60 * 24 * 7;
     const isOwner = email === OWNER_EMAIL;
+    const redirectTo = isOwner ? "/admin" : "/dashboard";
 
     const response = NextResponse.json({
       ok: true,
@@ -157,16 +165,17 @@ export async function POST(request: Request) {
       auth_user_id: data.user.id,
       is_owner: isOwner,
       is_admin: isOwner,
-      redirect_to: "/dashboard",
+      redirect_to: redirectTo,
       storage: {
         vf_email: email,
         vf_member_email: email,
         vf_member_login: "1",
         vf_admin: isOwner ? "1" : "",
+        vf_redirect_to: redirectTo,
       },
     });
 
-    setSessionCookies(
+    setCookieSet(
       response,
       email,
       data.user.id,
