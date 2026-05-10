@@ -70,6 +70,27 @@ function first(...values: unknown[]) {
   return "";
 }
 
+function photoRecords(body: AnyRow) {
+  const photos = Array.isArray(body.photos) ? body.photos : [];
+  const photoUrls = Array.isArray(body.photo_urls) ? body.photo_urls : [];
+
+  if (photos.length) {
+    return photos.slice(0, 8).map((photo: AnyRow, index: number) => ({
+      name: first(photo.name, `photo-${index + 1}`),
+      size: Number(photo.size || 0),
+      type: first(photo.type, "image"),
+      data_url: first(photo.data_url, photo.dataUrl, photo.url),
+    }));
+  }
+
+  return photoUrls.slice(0, 8).map((url: string, index: number) => ({
+    name: `photo-${index + 1}`,
+    size: 0,
+    type: "image",
+    data_url: url,
+  }));
+}
+
 async function insertFirstWorking(supabase: any, tables: string[], variants: AnyRow[]) {
   const errors: string[] = [];
 
@@ -83,9 +104,9 @@ async function insertFirstWorking(supabase: any, tables: string[], variants: Any
           .single();
 
         if (!error && data) return { ok: true, table, row: data };
-        if (error?.message && errors.length < 10) errors.push(`${table}: ${error.message}`);
+        if (error?.message && errors.length < 12) errors.push(`${table}: ${error.message}`);
       } catch (error: any) {
-        if (error?.message && errors.length < 10) errors.push(`${table}: ${error.message}`);
+        if (error?.message && errors.length < 12) errors.push(`${table}: ${error.message}`);
       }
     }
   }
@@ -93,10 +114,11 @@ async function insertFirstWorking(supabase: any, tables: string[], variants: Any
   return { ok: false, error: errors[0] || "No insert target accepted payload.", errors };
 }
 
-function createSignalPayload(body: AnyRow, painRow: AnyRow, email: string) {
+function createSignalPayload(body: AnyRow, painRow: AnyRow, email: string, photos: AnyRow[]) {
   const painId = first(painRow.id, painRow.pain_id, painRow.uuid);
   const title = first(body.title, body.pain_label, "VaultForge pain signal");
   const routeSummary = first(body.route_summary, body.notes, "VaultForge pain signal submitted.");
+  const primaryPhoto = first(photos[0]?.data_url);
 
   return {
     title,
@@ -118,6 +140,8 @@ function createSignalPayload(body: AnyRow, painRow: AnyRow, email: string) {
     message: routeSummary,
     note: routeSummary,
     description: routeSummary,
+    image_url: primaryPhoto || null,
+    photo_url: primaryPhoto || null,
     source: "adaptive_pain_button",
     source_table: "pain",
     status: "active",
@@ -129,17 +153,19 @@ function createSignalPayload(body: AnyRow, painRow: AnyRow, email: string) {
       route_summary: routeSummary,
       best_route: body.best_route,
       help_requested: body.help_requested,
-      photo_urls: body.photo_urls || [],
+      photos,
+      photo_urls: photos.map((photo) => photo.data_url).filter(Boolean),
       raw_fields: body.raw_fields || {},
     },
   };
 }
 
-function createActivityPayload(body: AnyRow, painRow: AnyRow, email: string, signalRow: AnyRow | null) {
+function createActivityPayload(body: AnyRow, painRow: AnyRow, email: string, signalRow: AnyRow | null, photos: AnyRow[]) {
   const painId = first(painRow.id, painRow.pain_id, painRow.uuid);
   const signalId = first(signalRow?.id, signalRow?.signal_id, signalRow?.uuid);
   const title = first(body.title, body.pain_label, "VaultForge pain signal");
   const routeSummary = first(body.route_summary, body.notes, "VaultForge pain signal submitted.");
+  const primaryPhoto = first(photos[0]?.data_url);
 
   return {
     event_type: "pain_signal",
@@ -157,6 +183,8 @@ function createActivityPayload(body: AnyRow, painRow: AnyRow, email: string, sig
     related_alert_id: signalId || null,
     signal_id: signalId || null,
     priority: body.urgency === "emergency" ? "urgent" : body.urgency === "high" ? "high" : "medium",
+    image_url: primaryPhoto || null,
+    photo_url: primaryPhoto || null,
     visibility: "member",
     source: "adaptive_pain_button",
     created_at: new Date().toISOString(),
@@ -168,7 +196,8 @@ function createActivityPayload(body: AnyRow, painRow: AnyRow, email: string, sig
       route_summary: routeSummary,
       best_route: body.best_route,
       help_requested: body.help_requested,
-      photo_urls: body.photo_urls || [],
+      photos,
+      photo_urls: photos.map((photo) => photo.data_url).filter(Boolean),
     },
   };
 }
@@ -223,6 +252,9 @@ export async function POST(request: Request) {
 
     const supabase = supabaseClient();
     const now = new Date().toISOString();
+    const photos = photoRecords(body);
+    const photoUrls = photos.map((photo) => photo.data_url).filter(Boolean);
+    const primaryPhoto = first(photoUrls[0]);
 
     const painCanonical = {
       email,
@@ -248,14 +280,17 @@ export async function POST(request: Request) {
       route_summary: body.route_summary,
       best_route: body.best_route,
       notes: body.notes,
-      photo_urls: body.photo_urls || [],
+      photo_urls: photoUrls,
+      image_url: primaryPhoto || null,
+      photo_url: primaryPhoto || null,
       status: "new",
       source: "adaptive_pain_button",
       created_at: now,
       updated_at: now,
       metadata: {
         raw_fields: body.raw_fields || {},
-        photo_urls: body.photo_urls || [],
+        photos,
+        photo_urls: photoUrls,
         source: "adaptive_pain_button",
       },
     };
@@ -274,6 +309,8 @@ export async function POST(request: Request) {
           city: painCanonical.city,
           help_requested: painCanonical.help_requested,
           notes: painCanonical.notes,
+          image_url: primaryPhoto || null,
+          photo_url: primaryPhoto || null,
           created_at: now,
           metadata: painCanonical.metadata,
         },
@@ -281,7 +318,9 @@ export async function POST(request: Request) {
           email,
           title: painCanonical.title,
           message: first(painCanonical.route_summary, painCanonical.notes),
+          image_url: primaryPhoto || null,
           created_at: now,
+          metadata: painCanonical.metadata,
         },
       ]
     );
@@ -293,7 +332,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const signalPayload = createSignalPayload(body, painResult.row, email);
+    const signalPayload = createSignalPayload(body, painResult.row, email, photos);
     const signalResult = await insertFirstWorking(
       supabase,
       ["vf_intelligence_signals", "intelligence_signals", "vf_signals", "signals"],
@@ -308,6 +347,7 @@ export async function POST(request: Request) {
           item_id: signalPayload.item_id,
           member_email: signalPayload.member_email,
           note: signalPayload.note,
+          image_url: primaryPhoto || null,
           source: signalPayload.source,
           created_at: now,
           metadata: signalPayload.metadata,
@@ -317,7 +357,7 @@ export async function POST(request: Request) {
 
     const signalRow = signalResult.ok ? signalResult.row : null;
 
-    const activityPayload = createActivityPayload(body, painResult.row, email, signalRow);
+    const activityPayload = createActivityPayload(body, painResult.row, email, signalRow, photos);
     const activityResult = await insertFirstWorking(
       supabase,
       ["vf_activity_events", "activity_events"],
@@ -331,6 +371,7 @@ export async function POST(request: Request) {
           owner_email: OWNER_EMAIL,
           related_deal_id: activityPayload.related_deal_id,
           related_alert_id: activityPayload.related_alert_id,
+          image_url: primaryPhoto || null,
           visibility: "member",
           metadata: activityPayload.metadata,
         },
@@ -338,6 +379,7 @@ export async function POST(request: Request) {
           event_type: activityPayload.event_type,
           event_title: activityPayload.event_title,
           event_description: activityPayload.event_description,
+          metadata: activityPayload.metadata,
         },
       ]
     );
@@ -366,6 +408,11 @@ export async function POST(request: Request) {
       ]
     );
 
+    const painId = first(painResult.row?.id, painResult.row?.pain_id, painResult.row?.uuid);
+    const signalId = first(signalRow?.id, signalRow?.signal_id, signalRow?.uuid, activityPayload.signal_id);
+    const routingId = routingResult.ok ? first(routingResult.row?.id, routingResult.row?.routing_id, routingResult.row?.uuid) : "";
+    const activityId = activityResult.ok ? first(activityResult.row?.id, activityResult.row?.event_id, activityResult.row?.uuid) : "";
+
     return NextResponse.json({
       ok: true,
       message: "Pain signal submitted and routed into VaultForge intelligence.",
@@ -373,6 +420,16 @@ export async function POST(request: Request) {
       signal: signalResult,
       activity: activityResult,
       routing: routingResult,
+      links: {
+        pain_id: painId,
+        signal_id: signalId,
+        routing_id: routingId,
+        activity_id: activityId,
+        pain_room: painId ? `/pain-room/${encodeURIComponent(painId)}` : "/pain-messages",
+        signal_room: signalId ? `/signals/${encodeURIComponent(signalId)}` : "/alerts",
+        routing_room: signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox",
+        activity_room: activityId ? `/activity/pain_signal/${encodeURIComponent(activityId)}` : "/activity",
+      },
       next: {
         activity: "/activity",
         alerts: "/alerts",
