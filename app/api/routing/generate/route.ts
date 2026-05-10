@@ -208,7 +208,64 @@ function makeSignalId(body: AnyRecord, email: string) {
   return `deal-${cleanItem}-${email || "owner"}`;
 }
 
-function makeRoutingPayload(body: AnyRecord, ownerEmail: string) {
+
+async function findAssignedMemberEmail(supabase: any, body: AnyRecord, ownerEmail: string) {
+  const explicit = cleanEmail(
+    body.target_member_email ||
+      body.target_email ||
+      body.member_email ||
+      body.recipient_email ||
+      body.route_to_email ||
+      body.assigned_member_email
+  );
+
+  if (explicit && explicit.includes("@") && explicit !== OWNER_EMAIL) {
+    return explicit;
+  }
+
+  const tables = ["vf_profiles", "profiles", "member_profiles"];
+
+  for (const table of tables) {
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .limit(50);
+
+      if (error || !Array.isArray(data)) continue;
+
+      const liveMembers = data
+        .map((row: AnyRecord) => ({
+          email: cleanEmail(row.email || row.member_email || row.user_email),
+          row,
+        }))
+        .filter((item) => {
+          if (!item.email || !item.email.includes("@")) return false;
+          if (item.email === OWNER_EMAIL) return false;
+          if (item.email === ownerEmail) return false;
+          if (item.email.endsWith("@example.com")) return false;
+
+          const status = clean(
+            item.row.access_status ||
+              item.row.member_status ||
+              item.row.status
+          ).toLowerCase();
+
+          return !["deleted", "removed", "suspended", "disabled"].includes(status);
+        });
+
+      if (liveMembers.length > 0) {
+        return liveMembers[0].email;
+      }
+    } catch {
+      // Try next profile table.
+    }
+  }
+
+  return "";
+}
+
+function makeRoutingPayload(body: AnyRecord, ownerEmail: string, assignedMemberEmail: string) {
   const sourceText = [
     body.title,
     body.name,
@@ -316,9 +373,9 @@ function makeRoutingPayload(body: AnyRecord, ownerEmail: string) {
     confidence_score: confidenceScore,
     match_score: confidenceScore,
 
-    target_email: cleanEmail(body.target_email || body.member_email || body.recipient_email) || null,
-    target_member_email: cleanEmail(body.target_member_email || body.target_email || body.member_email) || null,
-    member_email: cleanEmail(body.member_email || body.target_email) || null,
+    target_email: assignedMemberEmail || null,
+    target_member_email: assignedMemberEmail || null,
+    member_email: assignedMemberEmail || null,
 
     source: first(body.source, "routing_generator"),
     source_table: first(body.source_table) || null,
@@ -428,7 +485,8 @@ export async function POST(request: Request) {
 
     const ownerEmail = email || OWNER_EMAIL;
     const supabase = supabaseClient();
-    const payload = makeRoutingPayload(body, ownerEmail);
+    const assignedMemberEmail = await findAssignedMemberEmail(supabase, body, ownerEmail);
+    const payload = makeRoutingPayload(body, ownerEmail, assignedMemberEmail);
 
     const result = await insertRoutingAction(supabase, payload);
 
@@ -447,12 +505,15 @@ export async function POST(request: Request) {
       ok: true,
       table: ROUTING_TABLE,
       routing_action: result.data,
+      assigned_member_email: assignedMemberEmail || null,
       signal_id: payload.signal_id,
       item_id: payload.item_id,
       confidence_score: payload.confidence_score,
       routing_summary: payload.routing_summary,
       keys: result.keys,
-      message: "Routing action generated safely for owner review.",
+      message: assignedMemberEmail
+        ? "Routing action generated and assigned to member for visibility."
+        : "Routing action generated for owner review only.",
       note: "This generated a routing record only. It did not notify members, create introductions, or execute automation.",
     });
   } catch (error: any) {
