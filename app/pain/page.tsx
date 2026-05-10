@@ -22,6 +22,17 @@ type SelectedPhoto = {
   dataUrl: string;
 };
 
+type SubmitLinks = {
+  pain_id?: string;
+  signal_id?: string;
+  routing_id?: string;
+  activity_id?: string;
+  pain_room?: string;
+  signal_room?: string;
+  routing_room?: string;
+  activity_room?: string;
+};
+
 const OPERATING_STATES = [
   { value: "", label: "Select operating state" },
   { value: "GA", label: "Georgia" },
@@ -320,6 +331,7 @@ export default function PainPage() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
+  const [submitLinks, setSubmitLinks] = useState<SubmitLinks | null>(null);
 
   const [form, setForm] = useState<Record<string, string>>({
     title: "",
@@ -434,6 +446,7 @@ export default function PainPage() {
     if (busy) return;
     setBusy(true);
     setStatus("");
+    setSubmitLinks(null);
 
     try {
       const currentEmail = email || getEmail();
@@ -495,6 +508,7 @@ export default function PainPage() {
         throw new Error(data?.error || data?.details || "Pain submit failed.");
       }
 
+      setSubmitLinks(data?.links || data?.next || null);
       setStatus(data?.message || "Pain signal submitted and routed into VaultForge intelligence.");
     } catch (error: any) {
       setStatus(error?.message || "Could not submit pain signal.");
@@ -549,6 +563,18 @@ export default function PainPage() {
             }}
           >
             <strong>{status}</strong>
+
+            {submitLinks && (
+              <div style={{ marginTop: 16 }}>
+                {submitLinks.pain_room && <Link href={submitLinks.pain_room} style={btn}>Open Pain Room</Link>}
+                {submitLinks.signal_room && <Link href={submitLinks.signal_room} style={ghost}>Open Signal</Link>}
+                {submitLinks.routing_room && <Link href={submitLinks.routing_room} style={ghost}>Routing Room</Link>}
+                {submitLinks.activity_room && <Link href={submitLinks.activity_room} style={ghost}>Activity Event</Link>}
+                <Link href="/activity" style={ghost}>Activity Feed</Link>
+                <Link href="/alerts" style={ghost}>Alerts</Link>
+                <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
+              </div>
+            )}
           </section>
         )}
 
