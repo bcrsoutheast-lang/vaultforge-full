@@ -173,6 +173,161 @@ function memberKey(member: Member) {
   return cleanEmail(member.email || member.member_email) || asText(member.id || member._source_id || member.auth_user_id);
 }
 
+
+function splitList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => asText(item))
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+
+  const text = asText(value);
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => asText(item))
+        .filter(Boolean)
+        .slice(0, 8);
+    }
+  } catch {
+    // Continue to comma split.
+  }
+
+  return text
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = asText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function memberCompany(member: Member) {
+  return firstText(
+    member.company,
+    member.company_name,
+    member.business_name,
+    member.organization,
+    member.firm,
+    member.team
+  );
+}
+
+function memberHeadline(member: Member) {
+  return firstText(
+    member.headline,
+    member.tagline,
+    member.bio,
+    member.about,
+    member.summary,
+    member.notes,
+    "VaultForge member profile. More network details will appear as the profile is completed."
+  );
+}
+
+function memberRoles(member: Member) {
+  return splitList(
+    member.member_types ||
+      member.member_type ||
+      member.roles ||
+      member.role ||
+      member.member_role ||
+      member.primary_role
+  );
+}
+
+function memberMarkets(member: Member) {
+  return splitList(
+    member.buy_box_states ||
+      member.market_states ||
+      member.markets ||
+      member.states ||
+      member.state ||
+      member.service_states
+  );
+}
+
+function memberStrategies(member: Member) {
+  return splitList(
+    member.buy_box_strategies ||
+      member.strategies ||
+      member.strategy ||
+      member.exit_strategy ||
+      member.investment_strategy
+  );
+}
+
+function memberAssetTypes(member: Member) {
+  return splitList(
+    member.buy_box_types ||
+      member.property_types ||
+      member.asset_types ||
+      member.property_type ||
+      member.deal_type ||
+      member.asset_type
+  );
+}
+
+function memberNeeds(member: Member) {
+  return splitList(
+    member.needs ||
+      member.deal_needs ||
+      member.what_i_need ||
+      member.routing_needs ||
+      member.help_needed ||
+      member.capital_needs
+  );
+}
+
+function memberProvides(member: Member) {
+  return splitList(
+    member.can_provide ||
+      member.what_i_provide ||
+      member.provides ||
+      member.services ||
+      member.capabilities ||
+      member.can_help_with
+  );
+}
+
+function ChipList({
+  title,
+  values,
+  empty,
+}: {
+  title: string;
+  values: string[];
+  empty: string;
+}) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={greenEyebrow}>{title}</div>
+      {values.length ? (
+        <div>
+          {values.map((value) => (
+            <span key={`${title}-${value}`} style={chip}>
+              {value}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p style={{ ...muted, margin: 0 }}>{empty}</p>
+      )}
+    </div>
+  );
+}
+
+
 function StatCard({ label, value, detail }: { label: string; value: number; detail: string }) {
   return (
     <div style={card}>
@@ -191,6 +346,7 @@ export default function MembersPage() {
   const [rawSource, setRawSource] = useState("");
   const [currentEmail, setCurrentEmail] = useState("");
   const [ownerView, setOwnerView] = useState(false);
+  const [search, setSearch] = useState("");
 
   async function load() {
     setStatus("Loading real members...");
@@ -294,6 +450,30 @@ export default function MembersPage() {
     };
   }, [realMembers]);
 
+  const filteredMembers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    if (!q) return realMembers;
+
+    return realMembers.filter((member) => {
+      return [
+        memberName(member),
+        memberCompany(member),
+        memberHeadline(member),
+        cleanEmail(member.email || member.member_email),
+        ...memberRoles(member),
+        ...memberMarkets(member),
+        ...memberStrategies(member),
+        ...memberAssetTypes(member),
+        ...memberNeeds(member),
+        ...memberProvides(member),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [realMembers, search]);
+
   return (
     <main style={page}>
       <style>{`
@@ -322,7 +502,7 @@ export default function MembersPage() {
         <section style={hero}>
           <div style={eyebrow}>VaultForge Members · Real Admin Bridge</div>
           <h1 style={{ fontSize: "clamp(56px,12vw,104px)", lineHeight: 0.88, margin: "0 0 18px" }}>
-            Real member management.
+            {ownerView ? "Real member management." : "Private network directory."}
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
             {ownerView
@@ -377,6 +557,26 @@ export default function MembersPage() {
           </p>
         </section>
 
+
+        <section style={{ ...hero, borderColor: "rgba(232,196,107,.22)" }}>
+          <div style={greenEyebrow}>Network Search</div>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search members by name, role, market, strategy, needs, or what they provide..."
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              borderRadius: 18,
+              border: "1px solid rgba(255,255,255,.18)",
+              background: "rgba(255,255,255,.075)",
+              color: "white",
+              padding: 14,
+              fontSize: 15,
+            }}
+          />
+        </section>
+
         {status && <section style={hero}>{status}</section>}
 
         {!status && realMembers.length === 0 && (
@@ -393,7 +593,7 @@ export default function MembersPage() {
         )}
 
         <section style={{ display: "grid", gap: 18 }}>
-          {realMembers.map((member) => {
+          {filteredMembers.map((member) => {
             const email = cleanEmail(member.email || member.member_email);
             const bucket = asText(member.admin_bucket, "locked");
             const tone = bucketTone(bucket);
@@ -414,14 +614,75 @@ export default function MembersPage() {
                 </h2>
 
                 <p style={{ ...muted, fontSize: 18 }}>
+                  {memberCompany(member) && (
+                    <>
+                      <strong style={{ color: "#e8c46b" }}>{memberCompany(member)}</strong>
+                      <br />
+                    </>
+                  )}
                   <strong style={{ color: "#9df3bf" }}>{email}</strong>
-                  <br />
-                  ID: {asText(member.id || member._source_id || member.auth_user_id, "—")}
-                  <br />
-                  Created: {formatDate(member.created_at)}
-                  <br />
-                  Updated: {formatDate(member.updated_at)}
+                  {ownerView && (
+                    <>
+                      <br />
+                      ID: {asText(member.id || member._source_id || member.auth_user_id, "—")}
+                      <br />
+                      Created: {formatDate(member.created_at)}
+                      <br />
+                      Updated: {formatDate(member.updated_at)}
+                    </>
+                  )}
                 </p>
+
+                <section
+                  style={{
+                    border: "1px solid rgba(255,255,255,.10)",
+                    background: "rgba(255,255,255,.035)",
+                    borderRadius: 22,
+                    padding: 16,
+                    margin: "14px 0",
+                  }}
+                >
+                  <div style={greenEyebrow}>Network Intelligence</div>
+                  <p style={{ ...muted, fontSize: 17, marginTop: 0 }}>
+                    {memberHeadline(member)}
+                  </p>
+
+                  <ChipList
+                    title="Roles / Member Type"
+                    values={memberRoles(member)}
+                    empty="No roles listed yet."
+                  />
+
+                  <ChipList
+                    title="Markets"
+                    values={memberMarkets(member)}
+                    empty="No markets listed yet."
+                  />
+
+                  <ChipList
+                    title="Strategies"
+                    values={memberStrategies(member)}
+                    empty="No strategies listed yet."
+                  />
+
+                  <ChipList
+                    title="Asset Focus"
+                    values={memberAssetTypes(member)}
+                    empty="No asset focus listed yet."
+                  />
+
+                  <ChipList
+                    title="Needs"
+                    values={memberNeeds(member)}
+                    empty="No needs listed yet."
+                  />
+
+                  <ChipList
+                    title="Can Provide"
+                    values={memberProvides(member)}
+                    empty="No provider abilities listed yet."
+                  />
+                </section>
 
                 {ownerView ? (
                   <div>
@@ -449,9 +710,9 @@ export default function MembersPage() {
                   </div>
                 ) : (
                   <div>
-                    <Link href="/routing-inbox" style={btn}>View Routing</Link>
-                    <Link href="/messages" style={ghost}>Messages</Link>
+                    <Link href={`/messages/new?to=${encodeURIComponent(email)}`} style={btn}>Message / Request Connection</Link>
                     <Link href="/introductions" style={ghost}>Introductions</Link>
+                    <Link href="/routing-inbox" style={ghost}>View Routing</Link>
                   </div>
                 )}
               </article>
