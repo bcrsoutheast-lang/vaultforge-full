@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
@@ -14,6 +14,24 @@ type PainType = {
   defaultHelp: string;
   fields: string[];
 };
+
+type SelectedPhoto = {
+  name: string;
+  size: number;
+  type: string;
+  dataUrl: string;
+};
+
+const OPERATING_STATES = [
+  { value: "", label: "Select operating state" },
+  { value: "GA", label: "Georgia" },
+  { value: "FL", label: "Florida" },
+  { value: "TN", label: "Tennessee" },
+  { value: "AL", label: "Alabama" },
+  { value: "TX", label: "Texas" },
+  { value: "NC", label: "North Carolina" },
+  { value: "SC", label: "South Carolina" },
+];
 
 const PAIN_TYPES: PainType[] = [
   {
@@ -301,6 +319,7 @@ export default function PainPage() {
   const [selectedKey, setSelectedKey] = useState(PAIN_TYPES[0].key);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
 
   const [form, setForm] = useState<Record<string, string>>({
     title: "",
@@ -342,11 +361,43 @@ export default function PainPage() {
     noi: "",
     helpRequested: "",
     notes: "",
-    photoUrls: "",
   });
 
   function update(key: string, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function handlePhotoFiles(fileList: FileList | null) {
+    const files = Array.from(fileList || []).slice(0, 8);
+
+    if (!files.length) return;
+
+    const loaded = await Promise.all(
+      files.map(
+        (file) =>
+          new Promise<SelectedPhoto>((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = () => {
+              resolve({
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                dataUrl: String(reader.result || ""),
+              });
+            };
+
+            reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+            reader.readAsDataURL(file);
+          })
+      )
+    );
+
+    setPhotos((current) => [...current, ...loaded].slice(0, 8));
+  }
+
+  function removePhoto(index: number) {
+    setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index));
   }
 
   function init() {
@@ -355,9 +406,9 @@ export default function PainPage() {
     setOwner(isOwner(currentEmail));
   }
 
-  useState(() => {
+  useEffect(() => {
     init();
-  });
+  }, []);
 
   const selected = useMemo(() => PAIN_TYPES.find((item) => item.key === selectedKey) || PAIN_TYPES[0], [selectedKey]);
 
@@ -390,10 +441,12 @@ export default function PainPage() {
       if (!clean(form.title)) throw new Error("Add a short pain/opportunity title.");
       if (!clean(form.state)) throw new Error("Select or enter a state/market.");
 
-      const photoUrls = form.photoUrls
-        .split("\n")
-        .map((item) => item.trim())
-        .filter(Boolean);
+      const selectedPhotos = photos.map((photo) => ({
+        name: photo.name,
+        size: photo.size,
+        type: photo.type,
+        data_url: photo.dataUrl,
+      }));
 
       const payload = {
         email: currentEmail,
@@ -419,7 +472,9 @@ export default function PainPage() {
         route_summary: routeSummary,
         best_route: selected.route,
         notes: form.notes,
-        photo_urls: photoUrls,
+        photo_urls: selectedPhotos.map((photo) => photo.data_url),
+        photos: selectedPhotos,
+        photo_count: selectedPhotos.length,
         raw_fields: form,
         source: "adaptive_pain_button",
       };
@@ -542,8 +597,14 @@ export default function PainPage() {
 
           <section style={card}>
             <div style={eyebrow}>Market / Asset</div>
-            <label style={label}>State</label>
-            <input value={form.state} onChange={(e) => update("state", e.target.value)} style={input} placeholder="GA, FL, TN, AL, TX, NC, SC..." />
+            <label style={label}>Operating State</label>
+            <select value={form.state} onChange={(e) => update("state", e.target.value)} style={input}>
+              {OPERATING_STATES.map((state) => (
+                <option key={state.value} value={state.value}>
+                  {state.label}
+                </option>
+              ))}
+            </select>
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>City</label>
@@ -551,8 +612,8 @@ export default function PainPage() {
             </div>
 
             <div style={{ marginTop: 16 }}>
-              <label style={label}>County</label>
-              <input value={form.county} onChange={(e) => update("county", e.target.value)} style={input} placeholder="County" />
+              <label style={label}>Area / Submarket</label>
+              <input value={form.county} onChange={(e) => update("county", e.target.value)} style={input} placeholder="Example: Buckhead, East Atlanta, North Fulton, Tampa Bay..." />
             </div>
 
             <div style={{ marginTop: 16 }}>
@@ -568,8 +629,8 @@ export default function PainPage() {
             </div>
 
             <div style={{ marginTop: 16 }}>
-              <label style={label}>Address / Area</label>
-              <input value={form.address} onChange={(e) => update("address", e.target.value)} style={input} placeholder="Exact address or general area if confidential" />
+              <label style={label}>Address or General Location</label>
+              <input value={form.address} onChange={(e) => update("address", e.target.value)} style={input} placeholder="Exact address if safe, or general location if confidential. No ZIP required." />
             </div>
           </section>
         </section>
@@ -636,11 +697,63 @@ export default function PainPage() {
         </section>
 
         <section style={card}>
-          <div style={eyebrow}>Photos / Documents</div>
+          <div style={eyebrow}>Photos / Files</div>
           <p style={muted}>
-            Paste photo/document URLs one per line for now. Direct upload can be added next after the Pain save flow is stable.
+            Select photos from your phone or upload files from your device. Keep this to the most useful 8 files for now.
           </p>
-          <textarea value={form.photoUrls} onChange={(e) => update("photoUrls", e.target.value)} style={{ ...input, minHeight: 150 }} placeholder="https://..." />
+
+          <label style={label}>Upload from phone or file</label>
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            multiple
+            onChange={(e) => handlePhotoFiles(e.target.files)}
+            style={input}
+          />
+
+          {photos.length > 0 && (
+            <div style={{ ...grid, marginTop: 16 }}>
+              {photos.map((photo, index) => (
+                <div key={`${photo.name}-${index}`} style={card}>
+                  {photo.type.startsWith("image/") ? (
+                    <img
+                      src={photo.dataUrl}
+                      alt={photo.name}
+                      style={{
+                        width: "100%",
+                        height: 170,
+                        objectFit: "cover",
+                        borderRadius: 18,
+                        border: "1px solid rgba(255,255,255,.14)",
+                        marginBottom: 12,
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        height: 170,
+                        display: "grid",
+                        placeItems: "center",
+                        borderRadius: 18,
+                        border: "1px solid rgba(255,255,255,.14)",
+                        background: "rgba(255,255,255,.06)",
+                        marginBottom: 12,
+                        fontWeight: 950,
+                      }}
+                    >
+                      FILE
+                    </div>
+                  )}
+
+                  <div style={{ fontWeight: 950, wordBreak: "break-word" }}>{photo.name}</div>
+                  <p style={muted}>{Math.round(photo.size / 1024)} KB</p>
+                  <button type="button" style={danger} onClick={() => removePhoto(index)}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section style={hero}>
@@ -653,6 +766,7 @@ export default function PainPage() {
             <span style={chip}>Best Route: {selected.route}</span>
             <span style={chip}>Urgency Score: {urgencyScore}</span>
             <span style={chip}>Feeds: Activity / Alerts / Routing</span>
+            <span style={chip}>Photos: {photos.length}</span>
           </div>
 
           <button type="button" onClick={submitPain} disabled={!canSubmit || busy} style={{ ...btn, width: "100%", marginTop: 18, opacity: !canSubmit || busy ? 0.58 : 1 }}>
