@@ -263,7 +263,7 @@ export async function GET(request: Request) {
         source: "routing",
         email,
         owner,
-        emailColumns: ["member_email", "email", "owner_email"],
+        emailColumns: ["member_email", "target_email", "target_member_email", "visible_to_email", "recipient_email", "email", "owner_email"],
       }),
       loadCanonicalRows({
         supabase,
@@ -271,7 +271,7 @@ export async function GET(request: Request) {
         source: "activity",
         email,
         owner,
-        emailColumns: ["member_email", "email", "owner_email"],
+        emailColumns: ["member_email", "target_email", "target_member_email", "visible_to_email", "recipient_email", "email", "owner_email"],
       }),
     ]);
 
