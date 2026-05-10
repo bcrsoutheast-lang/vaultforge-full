@@ -442,6 +442,27 @@ export default function PainPage() {
     return email.includes("@") && clean(form.title).length > 1 && clean(form.state).length > 0 && clean(form.helpRequested || selected.defaultHelp).length > 0;
   }, [email, form.title, form.state, form.helpRequested, selected.defaultHelp]);
 
+  function submitPainClick() {
+    const currentEmail = email || getEmail();
+
+    if (!currentEmail.includes("@")) {
+      setStatus("Login email missing. Please log in again before submitting pain.");
+      return;
+    }
+
+    if (!clean(form.title)) {
+      setStatus("Add a short pain/opportunity title before submitting.");
+      return;
+    }
+
+    if (!clean(form.state)) {
+      setStatus("Select an operating state before submitting.");
+      return;
+    }
+
+    submitPain();
+  }
+
   async function submitPain() {
     if (busy) return;
     setBusy(true);
@@ -795,9 +816,15 @@ export default function PainPage() {
             <span style={chip}>Photos: {photos.length}</span>
           </div>
 
-          <button type="button" onClick={submitPain} disabled={!canSubmit || busy} style={{ ...btn, width: "100%", marginTop: 18, opacity: !canSubmit || busy ? 0.58 : 1 }}>
+          <button type="button" onClick={submitPainClick} disabled={busy} style={{ ...btn, width: "100%", marginTop: 18, opacity: busy ? 0.58 : 1 }}>
             {busy ? "Submitting Pain Signal..." : "Submit Pain Signal"}
           </button>
+
+          {!canSubmit && (
+            <p style={{ ...muted, marginTop: 12 }}>
+              Required before submit: logged-in email, pain title, and operating state.
+            </p>
+          )}
         </section>
 
         <section style={{ ...hero, borderColor: "rgba(157,243,191,.22)" }}>
