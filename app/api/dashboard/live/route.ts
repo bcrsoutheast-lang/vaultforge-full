@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -242,7 +241,7 @@ export async function GET(request: Request) {
   const [painCount, routingCount, activityCount, memberCount, projectCount] =
     await Promise.all([
       countTable(supabase, "vf_pain_submissions", email, owner, painEmailColumns),
-      countTable(supabase, "vf_routing_signals", email, owner, routingEmailColumns),
+      countTable(supabase, "vf_routing_actions", email, owner, routingEmailColumns),
       countTable(supabase, "vf_activity_events", email, owner, activityEmailColumns),
       countTable(supabase, "vf_profiles", email, owner, profileEmailColumns),
       countTable(supabase, "projects", email, owner, projectEmailColumns),
@@ -250,7 +249,7 @@ export async function GET(request: Request) {
 
   const [painRecent, routingRecent, activityRecent] = await Promise.all([
     recentTable(supabase, "vf_pain_submissions", "pain", email, owner, painEmailColumns),
-    recentTable(supabase, "vf_routing_signals", "routing", email, owner, routingEmailColumns),
+    recentTable(supabase, "vf_routing_actions", "routing", email, owner, routingEmailColumns),
     recentTable(supabase, "vf_activity_events", "activity", email, owner, activityEmailColumns),
   ]);
 
@@ -293,7 +292,7 @@ export async function GET(request: Request) {
       security_locked: false,
       canonical_tables: [
         "vf_pain_submissions",
-        "vf_routing_signals",
+        "vf_routing_actions",
         "vf_activity_events",
       ],
       tables_ok: [
