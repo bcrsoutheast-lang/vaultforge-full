@@ -129,14 +129,18 @@ function getLocalEmail() {
   }
 }
 
+function getParam(params: URLSearchParams, names: string[]) {
+  for (const name of names) {
+    const value = clean(params.get(name));
+    if (value) return value;
+  }
+
+  return "";
+}
+
 function getParamEmail(params: URLSearchParams) {
   return cleanEmail(
-    params.get("to") ||
-      params.get("email") ||
-      params.get("member_email") ||
-      params.get("recipient_email") ||
-      params.get("target_email") ||
-      ""
+    getParam(params, ["to", "email", "member_email", "recipient_email", "target_email"])
   );
 }
 
@@ -151,9 +155,11 @@ async function safeJson(res: Response) {
 export default function NewMessagePage() {
   const [fromEmail, setFromEmail] = useState("");
   const [toEmail, setToEmail] = useState("");
+  const [itemId, setItemId] = useState("");
+  const [signalId, setSignalId] = useState("");
   const [subject, setSubject] = useState("VaultForge connection request");
   const [body, setBody] = useState(
-    "I saw your member profile in the VaultForge network and would like to connect."
+    "I saw this VaultForge opportunity/member profile and would like to connect."
   );
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -161,8 +167,18 @@ export default function NewMessagePage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const nextItemId = getParam(params, ["item_id", "deal_id", "project_id", "pain_id"]);
+    const nextSignalId = getParam(params, ["signal_id", "alert_id"]);
+
     setFromEmail(getLocalEmail());
     setToEmail(getParamEmail(params));
+    setItemId(nextItemId);
+    setSignalId(nextSignalId);
+
+    if (nextSignalId || nextItemId) {
+      setSubject("VaultForge alert follow-up");
+      setBody("I need more information about this VaultForge signal/opportunity.");
+    }
   }, []);
 
   const canSend = useMemo(() => {
@@ -180,64 +196,42 @@ export default function NewMessagePage() {
       const recipient = cleanEmail(toEmail);
 
       if (!sender) throw new Error("Login email missing. Please log in again.");
-      if (!recipient) throw new Error("Missing member email for message thread.");
+      if (!recipient) throw new Error("Missing recipient email.");
       if (!clean(body)) throw new Error("Write a message before sending.");
 
       const payload = {
         from_email: sender,
         sender_email: sender,
-        member_email: sender,
         to_email: recipient,
         recipient_email: recipient,
         target_email: recipient,
         subject: clean(subject) || "VaultForge connection request",
         message: clean(body),
         body: clean(body),
-        message_type: "member_connection_request",
-        source: "members_directory",
+        message_type: itemId || signalId ? "alert_connection_request" : "member_connection_request",
+        source: "messages_new_page",
+        item_id: itemId || null,
+        signal_id: signalId || null,
       };
 
-      const endpoints = [
-        "/api/messages/new",
-        "/api/messages/create",
-        "/api/messages/send",
-        "/api/messages",
-        "/api/pain/message",
-      ];
+      const res = await fetch("/api/messages/new", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": sender,
+          "x-vf-recipient-email": recipient,
+        },
+        body: JSON.stringify(payload),
+      });
 
-      const errors: string[] = [];
+      const data = await safeJson(res);
 
-      for (const endpoint of endpoints) {
-        try {
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-vf-email": sender,
-              "x-vf-recipient-email": recipient,
-            },
-            body: JSON.stringify(payload),
-          });
-
-          const data = await safeJson(res);
-
-          if (res.ok && data?.ok !== false) {
-            setSent(true);
-            setStatus(data?.message || "Connection request saved.");
-            return;
-          }
-
-          errors.push(`${endpoint}: ${data?.error || data?.details || res.status}`);
-        } catch (error: any) {
-          errors.push(`${endpoint}: ${error?.message || "failed"}`);
-        }
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not save connection request.");
       }
 
-      throw new Error(
-        errors.length
-          ? `No message endpoint accepted this request yet. ${errors.slice(0, 3).join(" | ")}`
-          : "No message endpoint accepted this request yet."
-      );
+      setSent(true);
+      setStatus(data?.message || "Connection request saved.");
     } catch (error: any) {
       setStatus(error?.message || "Could not send message.");
     } finally {
@@ -287,10 +281,13 @@ export default function NewMessagePage() {
           <div>
             <span style={chip}>From: {fromEmail || "unknown"}</span>
             <span style={chip}>To: {toEmail || "missing"}</span>
-            <span style={chip}>{sent ? "Sent" : "Draft"}</span>
+            {signalId && <span style={chip}>Signal: {signalId}</span>}
+            {itemId && <span style={chip}>Item: {itemId}</span>}
+            <span style={chip}>{sent ? "Saved" : "Draft"}</span>
           </div>
 
           <Link href="/members" style={ghost}>Back to Members</Link>
+          <Link href="/alerts" style={ghost}>Alerts</Link>
           <Link href="/messages" style={ghost}>All Messages</Link>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/logout" style={danger}>Logout</Link>
@@ -303,7 +300,7 @@ export default function NewMessagePage() {
               color:
                 status.toLowerCase().includes("could") ||
                 status.toLowerCase().includes("missing") ||
-                status.toLowerCase().includes("no message endpoint")
+                status.toLowerCase().includes("required")
                   ? "#ffd0d0"
                   : "#9df3bf",
             }}
@@ -327,7 +324,7 @@ export default function NewMessagePage() {
             </div>
 
             <div>
-              <label style={label}>Member Email</label>
+              <label style={label}>Recipient Email</label>
               <input
                 value={toEmail}
                 onChange={(event) => setToEmail(cleanEmail(event.target.value))}
@@ -348,12 +345,12 @@ export default function NewMessagePage() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <label style={label}>Message</label>
+            <label style={label}>What information do you need?</label>
             <textarea
               value={body}
               onChange={(event) => setBody(event.target.value)}
-              placeholder="Write your connection request..."
-              style={{ ...input, minHeight: 180, lineHeight: 1.5 }}
+              placeholder="Example: I need more information about price, access, photos, timeline, owner contact release, or capital need..."
+              style={{ ...input, minHeight: 190, lineHeight: 1.5 }}
             />
           </div>
 
@@ -375,8 +372,7 @@ export default function NewMessagePage() {
         <section style={{ ...card, borderColor: "rgba(157,243,191,.22)" }}>
           <div style={eyebrow}>Current Safety Mode</div>
           <p style={muted}>
-            This page is built as a controlled member-to-member connection request. If the backend message endpoint is not present yet,
-            the page will clearly report it instead of silently failing.
+            This page records a controlled message request. It does not automatically release private contact information.
           </p>
         </section>
       </div>
