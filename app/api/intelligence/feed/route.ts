@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -164,7 +163,7 @@ function toAlert(row: Row, source: "pain" | "routing" | "activity") {
       source === "pain"
         ? "vf_pain_submissions"
         : source === "routing"
-        ? "vf_routing_signals"
+        ? "vf_routing_actions"
         : "vf_activity_events",
     safe_href: signalHref(row, source),
     created_at: clean(row.created_at || row.updated_at),
@@ -260,7 +259,7 @@ export async function GET(request: Request) {
       }),
       loadCanonicalRows({
         supabase,
-        table: "vf_routing_signals",
+        table: "vf_routing_actions",
         source: "routing",
         email,
         owner,
@@ -303,7 +302,7 @@ export async function GET(request: Request) {
         synthetic_generation: false,
         canonical_tables: [
           "vf_pain_submissions",
-          "vf_routing_signals",
+          "vf_routing_actions",
           "vf_activity_events",
         ],
         sources: {
