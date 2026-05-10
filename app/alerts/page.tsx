@@ -327,8 +327,6 @@ export default function AlertsPage() {
   const [search, setSearch] = useState("");
   const [generateStatus, setGenerateStatus] = useState("");
   const [generatingId, setGeneratingId] = useState("");
-  const [actionStatus, setActionStatus] = useState("");
-  const [actionBusyId, setActionBusyId] = useState("");
 
   async function load() {
     setStatus("Loading smart alerts...");
@@ -407,67 +405,6 @@ export default function AlertsPage() {
     } finally {
       setGeneratingId("");
     }
-  }
-
-
-  async function alertAction(item: SignalCard, action: string) {
-    const signalId = exactSignalId(item);
-    const itemId = exactItemId(item);
-    const activeId = `${action}-${signalId || itemId || titleOf(item)}`;
-
-    setActionBusyId(activeId);
-    setActionStatus("");
-
-    try {
-      const res = await fetch("/api/alerts/action", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-admin": owner ? "1" : "0",
-        },
-        body: JSON.stringify({
-          action,
-          email,
-          owner: owner ? "1" : "0",
-          signal_id: signalId,
-          item_id: itemId,
-          title: titleOf(item),
-          message: messageOf(item),
-          priority: priorityOf(item),
-          alert_type: typeOf(item),
-          source_table: item?.source_table || "",
-          source: "alerts_page",
-          owner_email: OWNER_EMAIL,
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Alert action failed.");
-      }
-
-      setActionStatus(data?.message || "Alert action saved.");
-
-      if (["archive", "dismiss", "delete", "resolve"].includes(action)) {
-        setSignals((current) =>
-          current.filter((row) => {
-            const rowSignal = exactSignalId(row);
-            const rowItem = exactItemId(row);
-            return rowSignal !== signalId || rowItem !== itemId;
-          })
-        );
-      }
-    } catch (error: any) {
-      setActionStatus(error?.message || "Alert action failed.");
-    } finally {
-      setActionBusyId("");
-    }
-  }
-
-  function busyFor(item: SignalCard, action: string) {
-    return actionBusyId === `${action}-${exactSignalId(item) || exactItemId(item) || titleOf(item)}`;
   }
 
   useEffect(() => {
@@ -589,12 +526,6 @@ export default function AlertsPage() {
               {generateStatus}
             </p>
           )}
-
-          {actionStatus && (
-            <p style={{ color: actionStatus.toLowerCase().includes("failed") || actionStatus.toLowerCase().includes("required") || actionStatus.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {actionStatus}
-            </p>
-          )}
         </section>
 
         <section style={statGrid}>
@@ -652,27 +583,56 @@ export default function AlertsPage() {
                     <Link href={exactSignalHref(item)} style={btn}>Open Exact Signal</Link>
                     <Link href={exactRoutingHref(item)} style={ghost}>Routing Room</Link>
                     <Link href={exactWorkHref(item)} style={ghost}>Open Exact Work Area</Link>
-                    <button type="button" style={btn} disabled={busyFor(item, "save")} onClick={() => alertAction(item, "save")}>
-                      {busyFor(item, "save") ? "Saving..." : "Save Alert"}
-                    </button>
-                    <button type="button" style={ghost} disabled={busyFor(item, "interested")} onClick={() => alertAction(item, "interested")}>
-                      {busyFor(item, "interested") ? "Saving..." : "Interested"}
-                    </button>
-                    <button type="button" style={ghost} disabled={busyFor(item, "need_more_info")} onClick={() => alertAction(item, "need_more_info")}>
-                      {busyFor(item, "need_more_info") ? "Saving..." : "Need More Info"}
-                    </button>
-                    <button type="button" style={ghost} disabled={busyFor(item, "request_intro")} onClick={() => alertAction(item, "request_intro")}>
-                      {busyFor(item, "request_intro") ? "Requesting..." : "Request Intro"}
-                    </button>
-                    <Link href={`/messages/new?to=${encodeURIComponent(OWNER_EMAIL)}&item_id=${encodeURIComponent(itemId || "")}&signal_id=${encodeURIComponent(signalId || "")}`} style={ghost}>
+
+                    <Link
+                      href={`/alert-action/save?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
+                      style={btn}
+                    >
+                      Save Alert
+                    </Link>
+
+                    <Link
+                      href={`/alert-action/interested?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
+                      style={ghost}
+                    >
+                      Interested
+                    </Link>
+
+                    <Link
+                      href={`/alert-action/need-more-info?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
+                      style={ghost}
+                    >
+                      Need More Info
+                    </Link>
+
+                    <Link
+                      href={`/alert-action/request-intro?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
+                      style={ghost}
+                    >
+                      Request Intro
+                    </Link>
+
+                    <Link
+                      href={`/messages/new?to=${encodeURIComponent(OWNER_EMAIL)}&item_id=${encodeURIComponent(itemId || "")}&signal_id=${encodeURIComponent(signalId || "")}&subject=${encodeURIComponent(`Alert follow-up: ${titleOf(item)}`)}`}
+                      style={ghost}
+                    >
                       Message Owner
                     </Link>
-                    <button type="button" style={ghost} disabled={busyFor(item, "archive")} onClick={() => alertAction(item, "archive")}>
-                      {busyFor(item, "archive") ? "Archiving..." : "Archive"}
-                    </button>
-                    <button type="button" style={ghost} disabled={busyFor(item, "dismiss")} onClick={() => alertAction(item, "dismiss")}>
-                      {busyFor(item, "dismiss") ? "Dismissing..." : "Dismiss"}
-                    </button>
+
+                    <Link
+                      href={`/alert-action/archive?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
+                      style={ghost}
+                    >
+                      Archive
+                    </Link>
+
+                    <Link
+                      href={`/alert-action/dismiss?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
+                      style={ghost}
+                    >
+                      Dismiss
+                    </Link>
+
                     {owner && (
                       <>
                         <button
@@ -683,12 +643,20 @@ export default function AlertsPage() {
                         >
                           {generatingId === (signalId || itemId || titleOf(item)) ? "Generating..." : "Generate Routing"}
                         </button>
-                        <button type="button" style={ghost} disabled={busyFor(item, "resolve")} onClick={() => alertAction(item, "resolve")}>
-                          {busyFor(item, "resolve") ? "Resolving..." : "Mark Resolved"}
-                        </button>
-                        <button type="button" style={danger} disabled={busyFor(item, "delete")} onClick={() => alertAction(item, "delete")}>
-                          {busyFor(item, "delete") ? "Deleting..." : "Delete Alert"}
-                        </button>
+
+                        <Link
+                          href={`/alert-action/resolve?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
+                          style={ghost}
+                        >
+                          Mark Resolved
+                        </Link>
+
+                        <Link
+                          href={`/alert-action/delete?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
+                          style={danger}
+                        >
+                          Delete Alert
+                        </Link>
                       </>
                     )}
                   </div>
@@ -703,7 +671,7 @@ export default function AlertsPage() {
             Current Safety Mode
           </div>
           <p style={{ ...muted, fontSize: 19 }}>
-            This page only fixes exact navigation. It does not auto-route, notify, create introductions, or mutate records.
+            This page now routes member actions into controlled workflow forms. Private contact release remains gated and owner-only controls stay protected.
           </p>
         </section>
         <VaultForgeCommandFooter />
