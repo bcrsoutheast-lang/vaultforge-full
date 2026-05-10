@@ -1,8 +1,11 @@
+
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 function supabaseAuthClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -47,7 +50,7 @@ function cleanEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
-function cookieOptions(maxAge: number) {
+function privateCookieOptions(maxAge: number) {
   return {
     path: "/",
     httpOnly: true,
@@ -62,7 +65,7 @@ function publicCookieOptions(maxAge: number) {
     path: "/",
     httpOnly: false,
     sameSite: "lax" as const,
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     maxAge,
   };
 }
@@ -88,6 +91,29 @@ async function upsertProfile(email: string, authUserId: string) {
     } catch {
       // Try next known profile table.
     }
+  }
+}
+
+function setSessionCookies(response: NextResponse, email: string, authUserId: string, accessToken: string, refreshToken: string, sessionMaxAge: number) {
+  const isOwner = email === OWNER_EMAIL;
+
+  response.cookies.set("vf_auth_access_token", accessToken, privateCookieOptions(sessionMaxAge));
+  response.cookies.set("vf_auth_refresh_token", refreshToken, privateCookieOptions(60 * 60 * 24 * 30));
+  response.cookies.set("vf_auth_user_id", authUserId, privateCookieOptions(sessionMaxAge));
+
+  response.cookies.set("vf_email", email, publicCookieOptions(sessionMaxAge));
+  response.cookies.set("vf_member_email", email, publicCookieOptions(sessionMaxAge));
+  response.cookies.set("vf_login_email", email, publicCookieOptions(sessionMaxAge));
+  response.cookies.set("vf_member_login", "1", publicCookieOptions(sessionMaxAge));
+
+  if (isOwner) {
+    response.cookies.set("vf_admin", "1", publicCookieOptions(sessionMaxAge));
+    response.cookies.set("vf_admin_email", email, publicCookieOptions(sessionMaxAge));
+    response.cookies.set("isAdmin", "true", publicCookieOptions(sessionMaxAge));
+  } else {
+    response.cookies.set("vf_admin", "", publicCookieOptions(0));
+    response.cookies.set("vf_admin_email", "", publicCookieOptions(0));
+    response.cookies.set("isAdmin", "", publicCookieOptions(0));
   }
 }
 
@@ -121,20 +147,33 @@ export async function POST(request: Request) {
 
     await upsertProfile(email, data.user.id);
 
+    const sessionMaxAge = data.session.expires_in || 60 * 60 * 24 * 7;
+    const isOwner = email === OWNER_EMAIL;
+
     const response = NextResponse.json({
       ok: true,
       email,
+      member_email: email,
       auth_user_id: data.user.id,
+      is_owner: isOwner,
+      is_admin: isOwner,
       redirect_to: "/dashboard",
+      storage: {
+        vf_email: email,
+        vf_member_email: email,
+        vf_member_login: "1",
+        vf_admin: isOwner ? "1" : "",
+      },
     });
 
-    const sessionMaxAge = data.session.expires_in || 60 * 60 * 24 * 7;
-
-    response.cookies.set("vf_auth_access_token", data.session.access_token, cookieOptions(sessionMaxAge));
-    response.cookies.set("vf_auth_refresh_token", data.session.refresh_token, cookieOptions(60 * 60 * 24 * 30));
-    response.cookies.set("vf_auth_user_id", data.user.id, cookieOptions(sessionMaxAge));
-    response.cookies.set("vf_email", email, publicCookieOptions(sessionMaxAge));
-    response.cookies.set("vf_member_login", "1", publicCookieOptions(sessionMaxAge));
+    setSessionCookies(
+      response,
+      email,
+      data.user.id,
+      data.session.access_token,
+      data.session.refresh_token,
+      sessionMaxAge
+    );
 
     return response;
   } catch (error: any) {
