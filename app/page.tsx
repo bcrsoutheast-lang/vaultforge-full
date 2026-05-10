@@ -500,8 +500,8 @@ export default function HomePage() {
             <Link href="/apply" style={primary}>
               {founderActive ? "Create Founder Access" : "Request Member Access"}
             </Link>
-            <Link href="/member-preview" style={secondary}>
-              Preview Command Center
+            <Link href="/login" style={secondary}>
+              Member Login
             </Link>
             <Link href="/terms" style={secondary}>
               Read Member Rules
@@ -590,8 +590,8 @@ export default function HomePage() {
               <Link href="/apply" style={primary}>
                 Create Founder Access — $49 First Month
               </Link>
-              <Link href="/member-preview" style={secondary}>
-                Preview Command Center
+              <Link href="/login" style={secondary}>
+                Member Login
               </Link>
             </div>
           </section>
@@ -789,8 +789,8 @@ export default function HomePage() {
             <Link href="/apply" style={primary}>
               {founderActive ? "Create Founder Access — $49 First Month" : "Apply for Member Access"}
             </Link>
-            <Link href="/member-preview" style={secondary}>
-              Preview Command Center
+            <Link href="/login" style={secondary}>
+              Member Login
             </Link>
           </div>
         </section>
