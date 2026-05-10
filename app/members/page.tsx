@@ -122,19 +122,23 @@ function asText(value: unknown, fallback = "") {
 }
 
 function getEmail() {
-  if (typeof window === "undefined") return OWNER_EMAIL;
+  if (typeof window === "undefined") return "";
 
   try {
     return (
       localStorage.getItem("vf_email") ||
       sessionStorage.getItem("vf_email") ||
-      OWNER_EMAIL
+      ""
     )
       .trim()
       .toLowerCase();
   } catch {
-    return OWNER_EMAIL;
+    return "";
   }
+}
+
+function isOwnerEmail(email: string) {
+  return cleanEmail(email) === OWNER_EMAIL;
 }
 
 function formatDate(value: unknown) {
@@ -185,6 +189,8 @@ export default function MembersPage() {
   const [toast, setToast] = useState("");
   const [busyKey, setBusyKey] = useState("");
   const [rawSource, setRawSource] = useState("");
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [ownerView, setOwnerView] = useState(false);
 
   async function load() {
     setStatus("Loading real members...");
@@ -192,12 +198,20 @@ export default function MembersPage() {
 
     try {
       const email = getEmail();
+      const isOwner = isOwnerEmail(email);
 
-      const res = await fetch(`/api/admin/members?email=${encodeURIComponent(email)}&owner=1`, {
+      setCurrentEmail(email);
+      setOwnerView(isOwner);
+
+      if (!email) {
+        throw new Error("Login email not found. Please log in again.");
+      }
+
+      const res = await fetch(`/api/admin/members?email=${encodeURIComponent(email)}&owner=${isOwner ? "1" : "0"}`, {
         cache: "no-store",
         headers: {
           "x-vf-email": email,
-          "x-vf-admin": "1",
+          "x-vf-admin": isOwner ? "1" : "0",
         },
       });
 
@@ -217,6 +231,13 @@ export default function MembersPage() {
   }
 
   async function memberAction(member: Member, action: string) {
+    const adminEmail = getEmail();
+
+    if (!isOwnerEmail(adminEmail)) {
+      setToast("Owner access required. Member accounts cannot manage, activate, suspend, restore, or delete members.");
+      return;
+    }
+
     const email = cleanEmail(member.email || member.member_email);
     const id = asText(member.id || member._source_id || member.auth_user_id);
     const key = `${email || id}-${action}`;
@@ -230,8 +251,6 @@ export default function MembersPage() {
     setToast("");
 
     try {
-      const adminEmail = getEmail();
-
       const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: {
@@ -297,7 +316,7 @@ export default function MembersPage() {
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Members"
-          subtitle="Real member management and network intelligence"
+          subtitle={ownerView ? "Owner member management" : "Private member network directory"}
         />
 
         <section style={hero}>
@@ -306,15 +325,23 @@ export default function MembersPage() {
             Real member management.
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
-            This replaces the old fake Member Command Directory. It reads real member records from <strong>/api/admin/members</strong>.
+            {ownerView
+              ? "Owner view: real member management controls are available only to the VaultForge owner account."
+              : "Member view: read-only network directory. Admin controls are hidden and blocked for regular members."}
           </p>
 
-          <Link href="/admin" style={btn}>Admin Home</Link>
-          <Link href="/member-preview" style={ghost}>Preview Members Area</Link>
+          <div>
+            <span style={chip}>Signed in: {currentEmail || "unknown"}</span>
+            <span style={chip}>{ownerView ? "Owner Controls Active" : "Member Directory View"}</span>
+          </div>
+
+          {ownerView && <Link href="/admin" style={btn}>Admin Home</Link>}
           <Link href="/profile" style={ghost}>Edit Profile / Alerts</Link>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <Link href="/alerts" style={ghost}>Alerts</Link>
+          <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
           <Link href="/logout" style={danger}>Logout</Link>
-          <button type="button" onClick={load} style={btn}>Refresh Real Members</button>
+          <button type="button" onClick={load} style={btn}>Refresh Members</button>
         </section>
 
         {toast && (
@@ -342,7 +369,7 @@ export default function MembersPage() {
         <section style={{ ...hero, borderColor: "rgba(157,243,191,.22)" }}>
           <div style={greenEyebrow}>API Source</div>
           <p style={muted}>
-            Source: {rawSource || "not loaded yet"}
+            Source: {rawSource || "not loaded yet"} · Mode: {ownerView ? "Owner management" : "Member read-only"}
             <br />
             Raw records returned: {members.length}
             <br />
@@ -396,29 +423,37 @@ export default function MembersPage() {
                   Updated: {formatDate(member.updated_at)}
                 </p>
 
-                <div>
-                  <button type="button" disabled={busyKey === `${email}-activate`} onClick={() => memberAction(member, "activate")} style={btn}>
-                    Activate
-                  </button>
-                  <button type="button" disabled={busyKey === `${email}-mark_paid`} onClick={() => memberAction(member, "mark_paid")} style={btn}>
-                    Mark Paid
-                  </button>
-                  <button type="button" disabled={busyKey === `${email}-mark_unpaid`} onClick={() => memberAction(member, "mark_unpaid")} style={ghost}>
-                    Mark Unpaid
-                  </button>
-                  <button type="button" disabled={busyKey === `${email}-lock`} onClick={() => memberAction(member, "lock")} style={ghost}>
-                    Lock
-                  </button>
-                  <button type="button" disabled={busyKey === `${email}-suspend`} onClick={() => memberAction(member, "suspend")} style={danger}>
-                    Suspend
-                  </button>
-                  <button type="button" disabled={busyKey === `${email}-restore`} onClick={() => memberAction(member, "restore")} style={ghost}>
-                    Restore
-                  </button>
-                  <button type="button" disabled={busyKey === `${email}-delete`} onClick={() => memberAction(member, "delete")} style={danger}>
-                    Delete
-                  </button>
-                </div>
+                {ownerView ? (
+                  <div>
+                    <button type="button" disabled={busyKey === `${email}-activate`} onClick={() => memberAction(member, "activate")} style={btn}>
+                      Activate
+                    </button>
+                    <button type="button" disabled={busyKey === `${email}-mark_paid`} onClick={() => memberAction(member, "mark_paid")} style={btn}>
+                      Mark Paid
+                    </button>
+                    <button type="button" disabled={busyKey === `${email}-mark_unpaid`} onClick={() => memberAction(member, "mark_unpaid")} style={ghost}>
+                      Mark Unpaid
+                    </button>
+                    <button type="button" disabled={busyKey === `${email}-lock`} onClick={() => memberAction(member, "lock")} style={ghost}>
+                      Lock
+                    </button>
+                    <button type="button" disabled={busyKey === `${email}-suspend`} onClick={() => memberAction(member, "suspend")} style={danger}>
+                      Suspend
+                    </button>
+                    <button type="button" disabled={busyKey === `${email}-restore`} onClick={() => memberAction(member, "restore")} style={ghost}>
+                      Restore
+                    </button>
+                    <button type="button" disabled={busyKey === `${email}-delete`} onClick={() => memberAction(member, "delete")} style={danger}>
+                      Delete
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <Link href="/routing-inbox" style={btn}>View Routing</Link>
+                    <Link href="/messages" style={ghost}>Messages</Link>
+                    <Link href="/introductions" style={ghost}>Introductions</Link>
+                  </div>
+                )}
               </article>
             );
           })}
