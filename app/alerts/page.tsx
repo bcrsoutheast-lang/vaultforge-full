@@ -1,130 +1,18 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
-import {
-  VaultForgePulseStrip,
-  VaultForgeSignalBar,
-  VaultForgeCommandFooter,
-} from "../components/VaultForgeVisualLayer";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 type SignalCard = Record<string, any>;
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), radial-gradient(circle at bottom right, rgba(181,92,255,.18), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
-  color: "white",
-  padding: "28px 18px 100px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.34)",
-  background:
-    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
-  borderRadius: 34,
-  padding: 26,
-  marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.34)",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.13)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-  borderRadius: 28,
-  padding: 22,
-  boxShadow: "0 26px 80px rgba(0,0,0,.34)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
-  gap: 18,
-};
-
-const statGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 14,
-  marginBottom: 22,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
-};
-
-const btn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#06100a",
-  border: "none",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 950,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const ghost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.055)",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 900,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const danger: React.CSSProperties = {
-  ...ghost,
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.38)",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
-  color: "white",
-  padding: 14,
-  fontSize: 15,
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.72)",
-  lineHeight: 1.55,
-};
-
 function clean(value: unknown) {
   return String(value || "").trim();
+}
+
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
 }
 
 function readCookie(name: string) {
@@ -146,13 +34,17 @@ function readCookie(name: string) {
 function getEmail() {
   if (typeof window === "undefined") return "";
 
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    readCookie("vf_email") ||
-    readCookie("vf_admin_email") ||
-    ""
-  ).trim().toLowerCase();
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
+
+  for (const key of keys) {
+    const localValue = cleanEmail(window.localStorage.getItem(key));
+    if (localValue.includes("@")) return localValue;
+
+    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
+    if (sessionValue.includes("@")) return sessionValue;
+  }
+
+  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
 function isOwner(email: string) {
@@ -167,11 +59,6 @@ async function safeJson(res: Response) {
   }
 }
 
-function label(value: string) {
-  const text = clean(value || "signal").replace(/_/g, " ");
-  return text.slice(0, 1).toUpperCase() + text.slice(1);
-}
-
 function first(...values: unknown[]) {
   for (const value of values) {
     const text = clean(value);
@@ -181,44 +68,19 @@ function first(...values: unknown[]) {
 }
 
 function exactSignalId(item: SignalCard) {
-  return first(
-    item.signal_id,
-    item.signalId,
-    item.alert_id,
-    item.alertId,
-    item.id
-  );
+  return first(item.signal_id, item.signalId, item.alert_id, item.alertId, item.id);
 }
 
 function exactItemId(item: SignalCard) {
-  return first(
-    item.item_id,
-    item.itemId,
-    item.deal_id,
-    item.dealId,
-    item.project_id,
-    item.projectId,
-    item.property_id,
-    item.propertyId,
-    item.pain_id,
-    item.painId
-  );
+  return first(item.item_id, item.itemId, item.deal_id, item.dealId, item.project_id, item.projectId, item.property_id, item.propertyId, item.pain_id, item.painId);
 }
 
-function exactSignalHref(item: SignalCard) {
-  const signalId = exactSignalId(item);
-  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/intelligence";
+function titleOf(item: SignalCard) {
+  return first(item.title, item.name, item.headline, item.signal_title, item.alert_title, "VaultForge Signal");
 }
 
-function exactWorkHref(item: SignalCard) {
-  const itemId = exactItemId(item);
-  if (itemId) return `/deal-room/${encodeURIComponent(itemId)}`;
-  return exactSignalHref(item);
-}
-
-function exactRoutingHref(item: SignalCard) {
-  const signalId = exactSignalId(item);
-  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
+function messageOf(item: SignalCard) {
+  return first(item.message, item.description, item.note, item.summary, item.reason, "Signal context ready for owner follow-up.");
 }
 
 function priorityOf(item: SignalCard) {
@@ -230,14 +92,6 @@ function priorityTone(item: SignalCard) {
   if (priority === "urgent") return "#ffb3b3";
   if (priority === "high") return "#f5d978";
   return "#9df3bf";
-}
-
-function titleOf(item: SignalCard) {
-  return first(item.title, item.name, item.headline, item.signal_title, item.alert_title, "VaultForge Signal");
-}
-
-function messageOf(item: SignalCard) {
-  return first(item.message, item.description, item.note, item.summary, item.reason, "Signal context ready for exact routing.");
 }
 
 function marketOf(item: SignalCard) {
@@ -257,21 +111,40 @@ function scoreOf(item: SignalCard) {
   return 58;
 }
 
+function exactSignalHref(item: SignalCard) {
+  const signalId = exactSignalId(item);
+  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/intelligence";
+}
+
+function exactWorkHref(item: SignalCard) {
+  const itemId = exactItemId(item);
+  return itemId ? `/deal-room/${encodeURIComponent(itemId)}` : exactSignalHref(item);
+}
+
+function exactRoutingHref(item: SignalCard) {
+  const signalId = exactSignalId(item);
+  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
+}
+
+function connectHref(item: SignalCard, viewerEmail: string) {
+  const signalId = exactSignalId(item);
+  const itemId = exactItemId(item);
+
+  if (!signalId) return "/alerts";
+
+  const query = new URLSearchParams();
+  if (viewerEmail) query.set("email", viewerEmail);
+  if (itemId) query.set("item_id", itemId);
+
+  return `/connect/${encodeURIComponent(signalId)}?${query.toString()}`;
+}
+
 async function loadSignals(currentEmail: string, owner: boolean) {
-  const headers = {
-    "x-vf-email": currentEmail,
-    "x-vf-admin": owner ? "1" : "0",
-  };
+  const headers = { "x-vf-email": currentEmail, "x-vf-admin": owner ? "1" : "0" };
 
   const [storedRes, feedRes] = await Promise.all([
-    fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
-      cache: "no-store",
-      headers,
-    }),
-    fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
-      cache: "no-store",
-      headers,
-    }),
+    fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, { cache: "no-store", headers }),
+    fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, { cache: "no-store", headers }),
   ]);
 
   const storedData = await safeJson(storedRes);
@@ -299,20 +172,106 @@ async function loadSignals(currentEmail: string, owner: boolean) {
   return Array.from(map.values());
 }
 
-function StatCard({
-  title,
-  value,
-  detail,
-}: {
-  title: string;
-  value: string | number;
-  detail: string;
-}) {
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
+    color: "white",
+    padding: "28px 18px 100px",
+    fontFamily: "Inter, Arial, sans-serif",
+  },
+  wrap: { maxWidth: 1240, margin: "0 auto" },
+  hero: {
+    border: "1px solid rgba(232,196,107,.34)",
+    background: "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
+    borderRadius: 34,
+    padding: 26,
+    marginBottom: 22,
+    boxShadow: "0 30px 90px rgba(0,0,0,.34)",
+  },
+  card: {
+    border: "1px solid rgba(255,255,255,.13)",
+    background: "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
+    borderRadius: 28,
+    padding: 22,
+    boxShadow: "0 26px 80px rgba(0,0,0,.34)",
+  },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 18 },
+  chip: {
+    display: "inline-flex",
+    border: "1px solid rgba(157,243,191,.25)",
+    color: "#9df3bf",
+    background: "rgba(157,243,191,.07)",
+    borderRadius: 999,
+    padding: "8px 11px",
+    fontWeight: 850,
+    fontSize: 13,
+    margin: "0 7px 7px 0",
+  },
+  btn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
+    color: "#06100a",
+    border: "none",
+    borderRadius: 999,
+    padding: "13px 18px",
+    fontWeight: 950,
+    textDecoration: "none",
+    cursor: "pointer",
+    margin: "6px 6px 0 0",
+    minHeight: 46,
+  },
+  ghost: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "white",
+    border: "1px solid rgba(255,255,255,.18)",
+    background: "rgba(255,255,255,.055)",
+    borderRadius: 999,
+    padding: "13px 18px",
+    fontWeight: 900,
+    textDecoration: "none",
+    cursor: "pointer",
+    margin: "6px 6px 0 0",
+    minHeight: 46,
+  },
+  danger: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#ffd0d0",
+    border: "1px solid rgba(255,120,120,.38)",
+    background: "rgba(255,255,255,.055)",
+    borderRadius: 999,
+    padding: "13px 18px",
+    fontWeight: 900,
+    textDecoration: "none",
+    cursor: "pointer",
+    margin: "6px 6px 0 0",
+    minHeight: 46,
+  },
+  input: {
+    width: "100%",
+    boxSizing: "border-box",
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,.18)",
+    background: "rgba(255,255,255,.075)",
+    color: "white",
+    padding: 14,
+    fontSize: 15,
+  },
+  muted: { color: "rgba(255,255,255,.72)", lineHeight: 1.55 },
+  eyebrow: { color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" },
+};
+
+function StatCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
   return (
-    <div style={card}>
-      <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
-        {title}
-      </div>
+    <div style={styles.card}>
+      <div style={styles.eyebrow}>{title}</div>
       <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
       <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>{detail}</p>
     </div>
@@ -367,11 +326,7 @@ export default function AlertsPage() {
     try {
       const res = await fetch("/api/routing/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-admin": "1",
-        },
+        headers: { "Content-Type": "application/json", "x-vf-email": email, "x-vf-admin": "1" },
         body: JSON.stringify({
           email,
           admin_email: email,
@@ -394,11 +349,7 @@ export default function AlertsPage() {
       });
 
       const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not generate routing action.");
-      }
-
+      if (!res.ok || data?.ok === false) throw new Error(data?.error || data?.details || "Could not generate routing action.");
       setGenerateStatus(data?.message || "Routing action generated from exact card.");
     } catch (error: any) {
       setGenerateStatus(error?.message || "Could not generate routing action.");
@@ -413,268 +364,143 @@ export default function AlertsPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    if (!q) return signals;
 
-    return signals
-      .filter((item) => {
-        if (!q) return true;
-        return [
-          titleOf(item),
-          messageOf(item),
-          marketOf(item),
-          typeOf(item),
-          priorityOf(item),
-          exactSignalId(item),
-          exactItemId(item),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(q);
-      })
-      .sort((a, b) => scoreOf(b) - scoreOf(a));
+    return signals.filter((item) =>
+      [titleOf(item), messageOf(item), marketOf(item), priorityOf(item), typeOf(item), exactSignalId(item), exactItemId(item)]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
   }, [signals, search]);
 
   const urgent = signals.filter((item) => priorityOf(item) === "urgent").length;
-  const high = signals.filter((item) => priorityOf(item) === "high").length;
-  const withWork = signals.filter((item) => exactItemId(item)).length;
+  const exactSignals = signals.filter((item) => exactSignalId(item)).length;
+  const exactItems = signals.filter((item) => exactItemId(item)).length;
 
   return (
-    <main style={page}>
+    <main style={styles.page}>
       <style>{`
-        a:hover,
-        button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
+        a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
+        input::placeholder { color: rgba(255,255,255,.48); }
         @media (max-width: 760px) {
-          .vf-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 10px !important;
-          }
-
-          .vf-actions > * {
-            width: 100%;
-            margin: 0 !important;
-            box-sizing: border-box;
-          }
+          .vf-actions { display: grid !important; grid-template-columns: 1fr !important; gap: 10px !important; }
+          .vf-actions > * { width: 100%; margin: 0 !important; box-sizing: border-box; }
         }
       `}</style>
 
-      <div style={wrap}>
-        <VaultForgeMemberNav
-          title="Smart Alerts"
-          subtitle="Exact routing intelligence and opportunity signals"
-        />
-
-        <VaultForgePulseStrip
-          items={[
-            { label: "ALERTS", value: "TRACKING", tone: "gold" },
-            { label: "URGENT", value: "MONITORING", tone: "red" },
-            { label: "ROUTES", value: "ACTIVE", tone: "green" },
-            { label: "NETWORK", value: "WATCHING", tone: "purple" },
-          ]}
-        />
-
-        <VaultForgeSignalBar
-          urgent={urgent}
-          high={high}
-          normal={Math.max(0, signals.length - urgent - high)}
-        />
-
-        <section style={hero}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            VaultForge Smart Alerts
+      <div style={styles.wrap}>
+        <nav style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+          <Link href="/dashboard" style={{ color: "#f8e7b0", textDecoration: "none", fontWeight: 950, letterSpacing: ".12em" }}>
+            VAULTFORGE
+          </Link>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Link href="/pain-feed" style={styles.ghost}>Pain Feed</Link>
+            <Link href="/messages" style={styles.ghost}>Messages</Link>
+            <Link href="/routing-inbox" style={styles.ghost}>Routing</Link>
+            <Link href="/dashboard" style={styles.ghost}>Dashboard</Link>
           </div>
+        </nav>
 
+        <section style={styles.hero}>
+          <div style={styles.eyebrow}>VaultForge Smart Alerts</div>
           <h1 style={{ fontSize: "clamp(56px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            Exact alerts.
+            Alerts route clean.
           </h1>
-
-          <p style={{ ...muted, fontSize: 22 }}>
-            Alerts now open the exact signal, exact routing room, or exact deal/work area tied to the clicked card.
+          <p style={{ ...styles.muted, fontSize: 22 }}>
+            Need More Info and Message Owner now open the simple Connect system. They no longer use the broken old message save path.
           </p>
 
           <div>
-            <span style={chip}>Alerts: {signals.length}</span>
-            <span style={chip}>Urgent: {urgent}</span>
-            <span style={chip}>High: {high}</span>
-            <span style={chip}>With Work Area: {withWork}</span>
-            <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
+            <span style={styles.chip}>Signed in: {email || "unknown"}</span>
+            <span style={styles.chip}>Alerts: {signals.length}</span>
+            <span style={styles.chip}>Exact Signals: {exactSignals}</span>
+            <span style={styles.chip}>Exact Items: {exactItems}</span>
+            <span style={styles.chip}>Urgent: {urgent}</span>
+            <span style={styles.chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
           <div className="vf-actions" style={{ marginTop: 14 }}>
-            <button type="button" style={btn} onClick={load}>Refresh Alerts</button>
-            <Link href="/intelligence" style={ghost}>Intelligence</Link>
-            <Link href="/activity" style={ghost}>Activity</Link>
-            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            <Link href="/introductions" style={ghost}>Introductions</Link>
-            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
-            {owner && <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>}
-            <Link href="/logout" style={danger}>Logout</Link>
+            <button type="button" style={styles.btn} onClick={load}>Refresh Alerts</button>
+            <Link href="/messages" style={styles.ghost}>Messages</Link>
+            <Link href="/pain-feed" style={styles.ghost}>Pain Feed</Link>
+            <Link href="/logout" style={styles.danger}>Logout</Link>
           </div>
 
-          {status && (
+          {status ? (
             <p style={{ color: status.toLowerCase().includes("could not") || status.toLowerCase().includes("not found") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
               {status}
             </p>
-          )}
+          ) : null}
 
-          {generateStatus && (
+          {generateStatus ? (
             <p style={{ color: generateStatus.toLowerCase().includes("could not") || generateStatus.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
               {generateStatus}
             </p>
-          )}
+          ) : null}
         </section>
 
-        <section style={statGrid}>
-          <StatCard title="Alerts" value={signals.length} detail="Total exact-routable alert/signal cards." />
-          <StatCard title="Urgent" value={urgent} detail="Urgent pressure signals." />
-          <StatCard title="High" value={high} detail="High-priority signals." />
-          <StatCard title="Exact Work" value={withWork} detail="Cards with direct item/deal IDs." />
+        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 14, marginBottom: 22 }}>
+          <StatCard title="Alerts" value={signals.length} detail="Total alert cards loaded." />
+          <StatCard title="Exact Signals" value={exactSignals} detail="Cards with signal rooms." />
+          <StatCard title="Exact Items" value={exactItems} detail="Cards with work areas." />
+          <StatCard title="Urgent" value={urgent} detail="Urgent alert pressure." />
         </section>
 
-        <section style={hero}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            Search
-          </div>
-          <input
-            style={input}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search alert title, market, priority, ID..."
-          />
+        <section style={styles.hero}>
+          <div style={styles.eyebrow}>Search Alerts</div>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search alerts, markets, priorities, signal IDs..." style={styles.input} />
         </section>
 
-        {filtered.length === 0 ? (
-          <section style={hero}>
-            <strong>No alert cards match this view.</strong>
-          </section>
+        {filtered.length === 0 && !status ? (
+          <section style={styles.hero}>No matching alerts.</section>
         ) : (
-          <section style={grid}>
+          <section style={styles.grid}>
             {filtered.map((item, index) => {
-              const tone = priorityTone(item);
               const signalId = exactSignalId(item);
               const itemId = exactItemId(item);
+              const tone = priorityTone(item);
+              const activeId = signalId || itemId || titleOf(item);
+              const connect = connectHref(item, email);
 
               return (
-                <article key={signalId || itemId || index} style={{ ...card, borderColor: `${tone}66` }}>
-                  <div style={{ color: tone, letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
-                    {label(priorityOf(item))} · {label(typeOf(item))}
+                <article key={`${activeId}-${index}`} style={{ ...styles.card, borderColor: `${tone}66` }}>
+                  <div style={{ ...styles.eyebrow, color: tone }}>
+                    {priorityOf(item).toUpperCase()} · {typeOf(item)}
                   </div>
 
-                  <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>
-                    {titleOf(item)}
-                  </h2>
+                  <h2 style={{ fontSize: 34, lineHeight: 1.05, margin: "0 0 12px" }}>{titleOf(item)}</h2>
+                  <p style={{ ...styles.muted, fontSize: 18 }}>{messageOf(item)}</p>
 
-                  <p style={{ ...muted, fontSize: 18 }}>
-                    {messageOf(item)}
-                  </p>
-
-                  <div style={{ margin: "12px 0" }}>
-                    <span style={chip}>Score: {scoreOf(item)}</span>
-                    {marketOf(item) && <span style={chip}>{marketOf(item)}</span>}
-                    {signalId && <span style={chip}>Signal: {signalId}</span>}
-                    {itemId && <span style={chip}>Item: {itemId}</span>}
+                  <div>
+                    <span style={styles.chip}>Score: {scoreOf(item)}</span>
+                    {marketOf(item) ? <span style={styles.chip}>{marketOf(item)}</span> : null}
+                    {signalId ? <span style={styles.chip}>Signal: {signalId}</span> : null}
+                    {itemId ? <span style={styles.chip}>Item: {itemId}</span> : null}
                   </div>
 
                   <div className="vf-actions">
-                    <Link href={exactSignalHref(item)} style={btn}>Open Exact Signal</Link>
-                    <Link href={exactRoutingHref(item)} style={ghost}>Routing Room</Link>
-                    <Link href={exactWorkHref(item)} style={ghost}>Open Exact Work Area</Link>
-
-                    <Link
-                      href={`/alert-action/save?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
-                      style={btn}
-                    >
-                      Save Alert
-                    </Link>
-
-                    <Link
-                      href={`/alert-action/interested?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
-                      style={ghost}
-                    >
-                      Interested
-                    </Link>
-
-                    <Link
-                      href={`/alert-action/need-more-info?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
-                      style={ghost}
-                    >
-                      Need More Info
-                    </Link>
-
-                    <Link
-                      href={`/alert-action/request-intro?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
-                      style={ghost}
-                    >
-                      Request Intro
-                    </Link>
-
-                    <Link
-                      href={`/messages/new?to=${encodeURIComponent(OWNER_EMAIL)}&item_id=${encodeURIComponent(itemId || "")}&signal_id=${encodeURIComponent(signalId || "")}&subject=${encodeURIComponent(`Alert follow-up: ${titleOf(item)}`)}`}
-                      style={ghost}
-                    >
-                      Message Owner
-                    </Link>
-
-                    <Link
-                      href={`/alert-action/archive?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
-                      style={ghost}
-                    >
-                      Archive
-                    </Link>
-
-                    <Link
-                      href={`/alert-action/dismiss?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
-                      style={ghost}
-                    >
-                      Dismiss
-                    </Link>
-
-                    {owner && (
-                      <>
-                        <button
-                          type="button"
-                          style={ghost}
-                          disabled={generatingId === (signalId || itemId || titleOf(item))}
-                          onClick={() => generateRoutingFromCard(item)}
-                        >
-                          {generatingId === (signalId || itemId || titleOf(item)) ? "Generating..." : "Generate Routing"}
-                        </button>
-
-                        <Link
-                          href={`/alert-action/resolve?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
-                          style={ghost}
-                        >
-                          Mark Resolved
-                        </Link>
-
-                        <Link
-                          href={`/alert-action/delete?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(itemId || "")}&title=${encodeURIComponent(titleOf(item))}&message=${encodeURIComponent(messageOf(item))}`}
-                          style={danger}
-                        >
-                          Delete Alert
-                        </Link>
-                      </>
-                    )}
+                    <Link href={connect} style={styles.btn}>Need More Info</Link>
+                    <Link href={connect} style={styles.ghost}>Message Owner</Link>
+                    <Link href={exactSignalHref(item)} style={styles.ghost}>Open Signal</Link>
+                    <Link href={exactRoutingHref(item)} style={styles.ghost}>Routing Room</Link>
+                    <Link href={exactWorkHref(item)} style={styles.ghost}>Work Area</Link>
+                    {owner ? (
+                      <button
+                        type="button"
+                        style={styles.ghost}
+                        disabled={generatingId === activeId}
+                        onClick={() => generateRoutingFromCard(item)}
+                      >
+                        {generatingId === activeId ? "Generating..." : "Generate Routing"}
+                      </button>
+                    ) : null}
                   </div>
                 </article>
               );
             })}
           </section>
         )}
-
-        <section style={{ ...hero, marginTop: 22 }}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            Current Safety Mode
-          </div>
-          <p style={{ ...muted, fontSize: 19 }}>
-            This page now routes member actions into controlled workflow forms. Private contact release remains gated and owner-only controls stay protected.
-          </p>
-        </section>
-        <VaultForgeCommandFooter />
       </div>
     </main>
   );
