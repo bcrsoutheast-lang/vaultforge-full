@@ -5,6 +5,25 @@ import Link from "next/link";
 
 type Message = Record<string, any>;
 
+type BucketKey =
+  | "all"
+  | "pain"
+  | "alerts"
+  | "activity"
+  | "projects"
+  | "routing"
+  | "introductions"
+  | "general"
+  | "archived";
+
+type Bucket = {
+  key: BucketKey;
+  title: string;
+  subtitle: string;
+  href: string;
+  threads: Message[];
+};
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -60,16 +79,89 @@ function fmt(value: unknown) {
   return date.toLocaleString();
 }
 
+function metadataOf(thread: Message) {
+  return typeof thread?.metadata === "object" && thread.metadata ? thread.metadata : {};
+}
+
+function textBlob(thread: Message) {
+  const metadata = metadataOf(thread);
+
+  return [
+    thread.subject,
+    thread.body,
+    thread.message,
+    thread.thread_id,
+    thread.signal_id,
+    thread.item_id,
+    thread.status,
+    thread.source,
+    metadata.source,
+    metadata.source_page,
+    metadata.source_table,
+    metadata.context_title,
+    metadata.signal_id,
+    metadata.item_id,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function threadCategory(thread: Message): BucketKey {
+  if (thread.status === "archived") return "archived";
+
+  const blob = textBlob(thread);
+
+  if (blob.includes("pain") || blob.includes("vf_pain") || blob.includes("pain-room") || blob.includes("pain feed")) return "pain";
+  if (blob.includes("alert") || blob.includes("need more info")) return "alerts";
+  if (blob.includes("activity") || blob.includes("event")) return "activity";
+  if (blob.includes("project") || blob.includes("deal-room") || blob.includes("deal room") || blob.includes("property")) return "projects";
+  if (blob.includes("routing") || blob.includes("route")) return "routing";
+  if (blob.includes("intro") || blob.includes("introduction")) return "introductions";
+
+  return "general";
+}
+
+function latestPreview(threads: Message[]) {
+  if (!threads.length) return "No messages yet.";
+  const latest = [...threads].sort(
+    (a, b) =>
+      new Date(String(b.created_at || b.updated_at || 0)).getTime() -
+      new Date(String(a.created_at || a.updated_at || 0)).getTime()
+  )[0];
+
+  return clean(latest.body || latest.message || latest.subject || "Open latest conversation.");
+}
+
+function latestTime(threads: Message[]) {
+  if (!threads.length) return "—";
+  const latest = [...threads].sort(
+    (a, b) =>
+      new Date(String(b.created_at || b.updated_at || 0)).getTime() -
+      new Date(String(a.created_at || a.updated_at || 0)).getTime()
+  )[0];
+
+  return fmt(latest.created_at || latest.updated_at);
+}
+
+function unreadCount(threads: Message[], email: string) {
+  const viewer = cleanEmail(email);
+
+  return threads.filter((thread) => {
+    const incoming = cleanEmail(thread.to_email) === viewer;
+    return incoming && !thread.is_read && thread.status !== "archived" && thread.status !== "deleted";
+  }).length;
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 30%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 30%), radial-gradient(circle at bottom right, rgba(157,243,191,.08), transparent 30%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
   padding: "22px 16px 82px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { width: "min(1040px,100%)", margin: "0 auto" };
+const wrap: React.CSSProperties = { width: "min(1180px,100%)", margin: "0 auto" };
 
 const card: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.28)",
@@ -77,6 +169,18 @@ const card: React.CSSProperties = {
   padding: 24,
   background: "rgba(255,255,255,.06)",
   marginBottom: 16,
+  boxShadow: "0 22px 80px rgba(0,0,0,.26)",
+};
+
+const bucketCard: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.22)",
+  borderRadius: 26,
+  padding: 22,
+  background: "linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.032))",
+  color: "white",
+  textDecoration: "none",
+  display: "block",
+  boxShadow: "0 18px 60px rgba(0,0,0,.24)",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -128,13 +232,26 @@ const input: React.CSSProperties = {
   fontSize: 16,
 };
 
-export default function SimpleMessagesInbox() {
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.22)",
+  borderRadius: 999,
+  padding: "7px 10px",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  margin: "0 7px 7px 0",
+  fontSize: 12,
+  fontWeight: 850,
+};
+
+export default function MessagesCommandCenter() {
   const [email, setEmail] = useState("");
   const [threads, setThreads] = useState<Message[]>([]);
   const [status, setStatus] = useState("Loading messages...");
   const [busyThread, setBusyThread] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
+  const [activeBucket, setActiveBucket] = useState<BucketKey>("all");
 
   async function load(nextShowArchived = showArchived) {
     const viewer = getEmail();
@@ -210,11 +327,111 @@ export default function SimpleMessagesInbox() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return threads;
+  const buckets = useMemo<Bucket[]>(() => {
+    const activeThreads = threads.filter((thread) => thread.status !== "deleted");
+    const nonArchived = activeThreads.filter((thread) => thread.status !== "archived");
+    const archived = activeThreads.filter((thread) => thread.status === "archived");
 
-    return threads.filter((thread) =>
+    const bucketMap: Record<BucketKey, Message[]> = {
+      all: nonArchived,
+      pain: [],
+      alerts: [],
+      activity: [],
+      projects: [],
+      routing: [],
+      introductions: [],
+      general: [],
+      archived,
+    };
+
+    for (const thread of nonArchived) {
+      const category = threadCategory(thread);
+      if (category === "archived") {
+        bucketMap.archived.push(thread);
+      } else {
+        bucketMap[category].push(thread);
+      }
+    }
+
+    return [
+      {
+        key: "all",
+        title: "All Messages",
+        subtitle: "Every active VaultForge conversation.",
+        href: "/messages",
+        threads: bucketMap.all,
+      },
+      {
+        key: "pain",
+        title: "Pain Messages",
+        subtitle: "Pain Button, Pain Feed, Pain Room follow-ups.",
+        href: "/pain-feed",
+        threads: bucketMap.pain,
+      },
+      {
+        key: "alerts",
+        title: "Alert Messages",
+        subtitle: "Need More Info and alert response conversations.",
+        href: "/alerts",
+        threads: bucketMap.alerts,
+      },
+      {
+        key: "activity",
+        title: "Activity Messages",
+        subtitle: "Activity stream follow-ups and event replies.",
+        href: "/activity",
+        threads: bucketMap.activity,
+      },
+      {
+        key: "projects",
+        title: "Project Messages",
+        subtitle: "Deal rooms, projects, property, and work-area conversations.",
+        href: "/projects",
+        threads: bucketMap.projects,
+      },
+      {
+        key: "routing",
+        title: "Routing Messages",
+        subtitle: "Routing action and signal-routing conversations.",
+        href: "/routing-inbox",
+        threads: bucketMap.routing,
+      },
+      {
+        key: "introductions",
+        title: "Introduction Messages",
+        subtitle: "Controlled introduction and connection conversations.",
+        href: "/introductions",
+        threads: bucketMap.introductions,
+      },
+      {
+        key: "general",
+        title: "General Messages",
+        subtitle: "Uncategorized owner/member communication.",
+        href: "/messages",
+        threads: bucketMap.general,
+      },
+      {
+        key: "archived",
+        title: "Archived Messages",
+        subtitle: "Cleaned-up threads kept for later review.",
+        href: "/messages",
+        threads: bucketMap.archived,
+      },
+    ];
+  }, [threads]);
+
+  const activeThreads = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const bucket = buckets.find((item) => item.key === activeBucket);
+    let source = bucket ? bucket.threads : threads;
+
+    if (activeBucket === "archived") {
+      source = source.filter((thread) => thread.status === "archived");
+    }
+
+    if (!q) return source;
+
+    return source.filter((thread) =>
       [
         thread.subject,
         thread.body,
@@ -224,15 +441,17 @@ export default function SimpleMessagesInbox() {
         thread.signal_id,
         thread.item_id,
         thread.status,
+        textBlob(thread),
       ]
         .join(" ")
         .toLowerCase()
         .includes(q)
     );
-  }, [threads, search]);
+  }, [threads, buckets, activeBucket, search]);
 
-  const activeCount = threads.filter((thread) => thread.status !== "archived" && thread.status !== "deleted").length;
-  const archivedCount = threads.filter((thread) => thread.status === "archived").length;
+  const totalActive = buckets.find((bucket) => bucket.key === "all")?.threads.length || 0;
+  const totalArchived = buckets.find((bucket) => bucket.key === "archived")?.threads.length || 0;
+  const totalUnread = unreadCount(threads, email);
 
   return (
     <main style={page}>
@@ -260,22 +479,28 @@ export default function SimpleMessagesInbox() {
             justify-content: center;
             margin: 0 !important;
           }
+
+          .vf-buckets {
+            grid-template-columns: 1fr !important;
+          }
         }
       `}</style>
 
       <div style={wrap}>
         <section style={card}>
-          <p style={eyebrow}>VaultForge Simple Messages</p>
+          <p style={eyebrow}>VaultForge Messages</p>
           <h1 style={{ fontSize: "clamp(48px,11vw,86px)", lineHeight: 0.9, margin: "10px 0 18px" }}>
-            Inbox cleanup.
+            Communication command.
           </h1>
-          <p style={muted}>Simple owner/member communication with clean-up buttons. Archive, restore, or delete old threads.</p>
-          <p style={muted}>Signed in: {email || "unknown"}</p>
+          <p style={{ ...muted, fontSize: 18 }}>
+            Clean, simple message workstations grouped by source. Open the right stack fast without mixing everything together.
+          </p>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            <span style={{ ...ghost, minHeight: 34, padding: "8px 12px" }}>Visible: {filtered.length}</span>
-            <span style={{ ...ghost, minHeight: 34, padding: "8px 12px" }}>Active: {activeCount}</span>
-            <span style={{ ...ghost, minHeight: 34, padding: "8px 12px" }}>Archived: {archivedCount}</span>
+          <div style={{ marginTop: 14 }}>
+            <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>Active: {totalActive}</span>
+            <span style={chip}>Unread: {totalUnread}</span>
+            <span style={chip}>Archived: {totalArchived}</span>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
@@ -291,16 +516,57 @@ export default function SimpleMessagesInbox() {
               }}
               style={ghost}
             >
-              {showArchived ? "Hide Archived" : "Show Archived"}
+              {showArchived ? "Hide Archived" : "Load Archived"}
             </button>
             <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-            <Link href="/signals" style={ghost}>Signals</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
+            <Link href="/activity" style={ghost}>Activity</Link>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
           </div>
         </section>
 
+        <section className="vf-buckets" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 14, marginBottom: 16 }}>
+          {buckets.map((bucket) => {
+            if (bucket.key === "archived" && !showArchived) return null;
+
+            const count = bucket.threads.length;
+            const unread = unreadCount(bucket.threads, email);
+            const active = activeBucket === bucket.key;
+
+            return (
+              <button
+                key={bucket.key}
+                type="button"
+                onClick={() => setActiveBucket(bucket.key)}
+                style={{
+                  ...bucketCard,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  borderColor: active ? "rgba(232,196,107,.75)" : "rgba(232,196,107,.22)",
+                  background: active
+                    ? "linear-gradient(145deg,rgba(232,196,107,.18),rgba(255,255,255,.055))"
+                    : bucketCard.background,
+                }}
+              >
+                <p style={eyebrow}>{bucket.title}</p>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
+                  <strong style={{ fontSize: 44, lineHeight: 1 }}>{count}</strong>
+                  <span style={{ color: unread ? "#9df3bf" : "#94a3b8", fontWeight: 900 }}>{unread} unread</span>
+                </div>
+                <p style={{ ...muted, marginTop: 0, minHeight: 44 }}>{bucket.subtitle}</p>
+                <p style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.35, margin: 0 }}>
+                  Latest: {latestPreview(bucket.threads).slice(0, 96)}
+                </p>
+                <p style={{ color: "#94a3b8", fontSize: 13, marginBottom: 0 }}>{latestTime(bucket.threads)}</p>
+              </button>
+            );
+          })}
+        </section>
+
         <section style={card}>
-          <p style={eyebrow}>Search</p>
+          <p style={eyebrow}>
+            {buckets.find((bucket) => bucket.key === activeBucket)?.title || "Messages"} · {activeThreads.length}
+          </p>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -311,12 +577,13 @@ export default function SimpleMessagesInbox() {
 
         {status ? <section style={card}>{status}</section> : null}
 
-        {filtered.length === 0 && !status ? <section style={card}>No messages found.</section> : null}
+        {activeThreads.length === 0 && !status ? <section style={card}>No messages found in this workstation.</section> : null}
 
-        {filtered.map((thread) => {
+        {activeThreads.map((thread) => {
           const archived = thread.status === "archived";
           const threadId = clean(thread.thread_id);
           const busy = busyThread === threadId;
+          const category = threadCategory(thread);
 
           return (
             <article
@@ -327,7 +594,7 @@ export default function SimpleMessagesInbox() {
                 borderColor: archived ? "rgba(148,163,184,.32)" : "rgba(232,196,107,.28)",
               }}
             >
-              <p style={eyebrow}>{archived ? "Archived Thread" : "Thread"}</p>
+              <p style={eyebrow}>{archived ? "Archived Thread" : `${category} thread`}</p>
               <h2 style={{ marginBottom: 8 }}>{thread.subject || "VaultForge message"}</h2>
               <p style={muted}>{thread.body || "Open conversation."}</p>
 
