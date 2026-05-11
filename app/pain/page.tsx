@@ -7,88 +7,49 @@ import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 const STATES = ["Georgia", "Florida", "North Carolina", "South Carolina", "Tennessee", "Alabama", "Texas"];
 
 const PAIN_TYPES = [
-  {
-    key: "distressed_seller",
-    eyebrow: "SELLER / EXIT",
-    title: "Distressed Seller",
-    note: "Owner needs a fast, clean, or private path out.",
-  },
-  {
-    key: "buyer_needed",
-    eyebrow: "DISPOSITION",
-    title: "Buyer Needed",
-    note: "Deal needs an end buyer, investor, or acquisition path.",
-  },
-  {
-    key: "capital_needed",
-    eyebrow: "FUNDING",
-    title: "Capital Needed",
-    note: "Bridge, gap, private money, JV, or acquisition capital needed.",
-  },
-  {
-    key: "contractor_needed",
-    eyebrow: "EXECUTION",
-    title: "Contractor Needed",
-    note: "Project needs labor, repair, buildout, inspection, or bid help.",
-  },
-  {
-    key: "stalled_project",
-    eyebrow: "PROJECT RESCUE",
-    title: "Stalled Project",
-    note: "Delay, money gap, permit, contractor, or execution issue.",
-  },
-  {
-    key: "permit_city_issue",
-    eyebrow: "MUNICIPAL",
-    title: "Permit / City Issue",
-    note: "Inspection, zoning, permit, municipal, code, or city issue blocking progress.",
-  },
-  {
-    key: "emergency_exit",
-    eyebrow: "URGENT",
-    title: "Emergency Exit",
-    note: "Urgent situation where speed, discretion, and routing are needed immediately.",
-  },
-  {
-    key: "land_opportunity",
-    eyebrow: "DEVELOPER / BUILDER / LAND BUYER",
-    title: "Land Opportunity",
-    note: "Land, entitlement, development, builder, rezoning, or site opportunity.",
-  },
-  {
-    key: "commercial_opportunity",
-    eyebrow: "COMMERCIAL BUYER / CAPITAL / OPERATOR",
-    title: "Commercial Opportunity",
-    note: "Commercial, multifamily, mixed-use, retail, office, industrial, or income asset.",
-  },
+  { key: "distressed_seller", eyebrow: "SELLER / EXIT", title: "Distressed Seller", note: "Owner needs a fast, clean, or private path out." },
+  { key: "buyer_needed", eyebrow: "DISPOSITION", title: "Buyer Needed", note: "Deal needs an end buyer, investor, or acquisition path." },
+  { key: "capital_needed", eyebrow: "FUNDING", title: "Capital Needed", note: "Bridge, gap, private money, JV, or acquisition capital needed." },
+  { key: "contractor_needed", eyebrow: "EXECUTION", title: "Contractor Needed", note: "Project needs labor, repair, buildout, inspection, or bid help." },
+  { key: "stalled_project", eyebrow: "PROJECT RESCUE", title: "Stalled Project", note: "Delay, money gap, permit, contractor, or execution issue." },
+  { key: "permit_city_issue", eyebrow: "MUNICIPAL", title: "Permit / City Issue", note: "Inspection, zoning, permit, municipal, code, or city issue blocking progress." },
+  { key: "emergency_exit", eyebrow: "URGENT", title: "Emergency Exit", note: "Urgent situation where speed, discretion, and routing are needed immediately." },
+  { key: "land_opportunity", eyebrow: "DEVELOPER / BUILDER / LAND BUYER", title: "Land Opportunity", note: "Land, entitlement, development, builder, rezoning, or site opportunity." },
+  { key: "commercial_opportunity", eyebrow: "COMMERCIAL BUYER / CAPITAL / OPERATOR", title: "Commercial Opportunity", note: "Commercial, multifamily, mixed-use, retail, office, industrial, or income asset." },
 ];
 
-const RESIDENTIAL_FIELDS = [
-  ["beds", "Beds", "3"],
-  ["baths", "Baths", "2"],
-  ["sqft", "Square Feet", "1,650"],
-  ["year_built", "Year Built", "1998"],
-  ["occupancy", "Occupancy", "Vacant / Owner occupied / Tenant"],
-  ["repairs_scope", "Repair Scope", "Roof, HVAC, cosmetic, foundation..."],
-];
-
-const COMMERCIAL_FIELDS = [
-  ["commercial_property_type", "Commercial Property Type", "Retail, office, industrial, mixed-use..."],
-  ["units_or_sqft", "Units / Square Feet", "12 units / 18,000 sqft"],
-  ["tenant_status", "Tenant Status", "Vacant / occupied / partially leased"],
-  ["noi_or_rent", "NOI / Rent", "$8,500 monthly rent / $72k NOI"],
-  ["lease_status", "Lease Status", "Month-to-month / long-term / expiring"],
-  ["commercial_notes", "Commercial Notes", "Parking, zoning, traffic, tenant mix..."],
-];
-
-const LAND_FIELDS = [
-  ["acres", "Acres", "5.2"],
-  ["zoning", "Zoning", "R-3 / commercial / agricultural / unknown"],
-  ["utilities", "Utilities", "Water, sewer, power available?"],
-  ["road_access", "Road Access", "Paved road / easement / landlocked"],
-  ["entitlement_status", "Entitlement Status", "Raw, entitled, rezoning, permits pending"],
-  ["land_notes", "Land Notes", "Topography, frontage, nearby development..."],
-];
+const FIELD_SETS: Record<string, Array<[string, string, string]>> = {
+  Residential: [
+    ["beds", "Beds", "3"],
+    ["baths", "Baths", "2"],
+    ["sqft", "Square Feet", "1,650"],
+    ["year_built", "Year Built", "1998"],
+    ["occupancy", "Occupancy", "Vacant / Owner occupied / Tenant occupied"],
+    ["repair_scope", "Repair Scope", "Roof, HVAC, cosmetic, foundation, full rehab..."],
+    ["exit_strategy", "Likely Exit Strategy", "Flip / rental / wholesale / creative finance"],
+    ["access_status", "Access Status", "Can show / drive-by only / needs appointment"],
+  ],
+  Commercial: [
+    ["commercial_property_type", "Commercial Property Type", "Retail, office, industrial, mixed-use, multifamily..."],
+    ["units_or_sqft", "Units / Square Feet", "12 units / 18,000 sqft"],
+    ["tenant_status", "Tenant Status", "Vacant / occupied / partially leased"],
+    ["noi_or_rent", "NOI / Rent", "$8,500 monthly rent / $72k NOI"],
+    ["lease_status", "Lease Status", "Month-to-month / long-term / expiring"],
+    ["cap_rate", "Cap Rate / Yield", "7.5% / unknown"],
+    ["parking_access", "Parking / Access", "On-site parking, frontage, access notes"],
+    ["commercial_notes", "Commercial Notes", "Tenant mix, zoning, traffic, condition..."],
+  ],
+  Land: [
+    ["acres", "Acres", "5.2"],
+    ["zoning", "Zoning", "R-3 / commercial / agricultural / unknown"],
+    ["utilities", "Utilities", "Water, sewer, power available?"],
+    ["road_access", "Road Access", "Paved road / easement / landlocked"],
+    ["entitlement_status", "Entitlement Status", "Raw, entitled, rezoning, permits pending"],
+    ["topography", "Topography", "Flat, wooded, slope, floodplain concerns"],
+    ["frontage", "Frontage", "Road frontage / corner lot / access notes"],
+    ["land_notes", "Land Notes", "Nearby development, builder fit, subdivision potential..."],
+  ],
+};
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -264,14 +225,23 @@ export default function PainPage() {
     return PAIN_TYPES.find((item) => item.key === form.pain_type) || PAIN_TYPES[0];
   }, [form.pain_type]);
 
-  const assetFields = useMemo(() => {
-    if (form.asset_type === "Commercial") return COMMERCIAL_FIELDS;
-    if (form.asset_type === "Land") return LAND_FIELDS;
-    return RESIDENTIAL_FIELDS;
-  }, [form.asset_type]);
+  const assetFields = FIELD_SETS[form.asset_type] || FIELD_SETS.Residential;
 
   function update(key: string, value: any) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function selectAsset(assetType: "Residential" | "Commercial" | "Land") {
+    setForm((prev) => ({
+      ...prev,
+      asset_type: assetType,
+      pain_type:
+        assetType === "Commercial"
+          ? "commercial_opportunity"
+          : assetType === "Land"
+          ? "land_opportunity"
+          : prev.pain_type,
+    }));
   }
 
   function selectFiles(nextFiles: FileList | null) {
@@ -397,6 +367,7 @@ export default function PainPage() {
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>Asset: {form.asset_type}</span>
             <span style={chip}>State: {form.operating_state}</span>
+            <span style={chip}>Version: asset-fields-visible</span>
           </div>
         </section>
 
@@ -443,6 +414,66 @@ export default function PainPage() {
           </div>
         </section>
 
+        <section style={card}>
+          <p style={goldEyebrow}>Asset Form Type</p>
+          <h2 style={{ fontSize: "clamp(32px,6vw,58px)", margin: "8px 0 14px", letterSpacing: "-.04em" }}>
+            {form.asset_type} fields are active.
+          </h2>
+          <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.5 }}>
+            Click Residential, Commercial, or Land. The exact field card below changes immediately.
+          </p>
+
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12, marginTop: 18 }}>
+            {(["Residential", "Commercial", "Land"] as const).map((assetType) => {
+              const active = form.asset_type === assetType;
+              return (
+                <button
+                  key={assetType}
+                  type="button"
+                  onClick={() => selectAsset(assetType)}
+                  style={{
+                    minHeight: 86,
+                    borderRadius: 22,
+                    border: active ? "1px solid rgba(232,196,107,.80)" : "1px solid rgba(255,255,255,.16)",
+                    background: active ? "linear-gradient(135deg,#f8e7b0,#9df3bf,#b55cff)" : "rgba(255,255,255,.06)",
+                    color: active ? "#06100a" : "white",
+                    fontSize: 22,
+                    fontWeight: 950,
+                    cursor: "pointer",
+                  }}
+                >
+                  {assetType}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section style={{ ...card, borderColor: "rgba(157,243,191,.38)" }}>
+          <p style={goldEyebrow}>{form.asset_type} Specific Fields</p>
+          <h2 style={{ marginTop: 0 }}>
+            {form.asset_type === "Residential"
+              ? "Beds, baths, sqft, occupancy, repair scope, and exit strategy."
+              : form.asset_type === "Commercial"
+              ? "Property type, units/sqft, tenant status, NOI/rent, lease status, and cap rate."
+              : "Acres, zoning, utilities, road access, entitlement status, and land notes."}
+          </h2>
+
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 14 }}>
+            {assetFields.map(([key, fieldLabel, placeholder]) => (
+              <div key={key}>
+                <label style={label}>{fieldLabel}</label>
+                <input
+                  style={input}
+                  value={form[key] || ""}
+                  onChange={(e) => update(key, e.target.value)}
+                  placeholder={placeholder}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
           <div style={card}>
             <p style={eyebrow}>Core Signal</p>
@@ -470,35 +501,8 @@ export default function PainPage() {
             <label style={{ ...label, marginTop: 18 }}>Area / Submarket</label>
             <input style={input} value={form.area} onChange={(e) => update("area", e.target.value)} placeholder="Example: Buckhead, East Atlanta, North..." />
 
-            <label style={{ ...label, marginTop: 18 }}>Asset Type</label>
-            <select style={input} value={form.asset_type} onChange={(e) => update("asset_type", e.target.value)}>
-              <option>Residential</option>
-              <option>Commercial</option>
-              <option>Land</option>
-            </select>
-
             <label style={{ ...label, marginTop: 18 }}>Address or General Location</label>
             <input style={input} value={form.address} onChange={(e) => update("address", e.target.value)} placeholder="Exact address if safe, or general location" />
-          </div>
-        </section>
-
-        <section style={card}>
-          <p style={goldEyebrow}>{form.asset_type} Details</p>
-          <p style={{ color: "#cbd5e1", fontSize: 18 }}>
-            These fields change based on Residential, Commercial, or Land.
-          </p>
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 14 }}>
-            {assetFields.map(([key, fieldLabel, placeholder]) => (
-              <div key={key}>
-                <label style={label}>{fieldLabel}</label>
-                <input
-                  style={input}
-                  value={form[key] || ""}
-                  onChange={(e) => update(key, e.target.value)}
-                  placeholder={placeholder}
-                />
-              </div>
-            ))}
           </div>
         </section>
 
