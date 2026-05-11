@@ -170,19 +170,37 @@ function photosFrom(row: AnyRow) {
 function ownerEmailFrom(row: AnyRow) {
   const metadata = metadataOf(row);
 
-  return cleanEmail(
-    row.owner_email ||
-      row.submitted_by ||
-      row.user_email ||
-      row.member_email ||
-      row.email ||
-      row.sender_email ||
-      metadata.owner_email ||
-      metadata.submitted_by ||
-      metadata.user_email ||
-      metadata.member_email ||
-      metadata.email
+  const canonical = cleanEmail(
+    first(
+      row.owner_email,
+      metadata.owner_email,
+      row.created_by_email,
+      metadata.created_by_email,
+      row.submitted_by_email,
+      metadata.submitted_by_email,
+      row.creator_email,
+      metadata.creator_email
+    )
   );
+
+  if (canonical) return canonical;
+
+  const legacy = cleanEmail(
+    first(
+      row.submitted_by,
+      metadata.submitted_by,
+      row.user_email,
+      metadata.user_email,
+      row.member_email,
+      metadata.member_email,
+      row.email,
+      metadata.email,
+      row.sender_email,
+      metadata.sender_email
+    )
+  );
+
+  return legacy;
 }
 
 function canSee(row: AnyRow, email: string, owner: boolean) {
@@ -321,12 +339,13 @@ function normalizeSignal(row: AnyRow, signalId: string, sourceTable: string) {
 
   const directLinks = {
     dashboard: "/dashboard",
+    intelligence: "/intelligence",
     signals: "/signals",
     signal_room: `/signals/${encodeURIComponent(resolvedSignalId || signalId)}`,
     pain_room: itemId ? `/pain-room/${encodeURIComponent(itemId)}` : "",
     project_room: itemId ? `/deal-room/${encodeURIComponent(itemId)}` : "",
     routing_room: `/routing-room/${encodeURIComponent(resolvedSignalId || signalId)}`,
-    message_owner: `/messages/new?recipient=${encodeURIComponent(ownerEmail)}&signal_id=${encodeURIComponent(resolvedSignalId || signalId)}&item_id=${encodeURIComponent(itemId)}&subject=${encodeURIComponent(titleOf(row, signalId))}`,
+    message_owner: `/messages/new?recipient=${encodeURIComponent(ownerEmail)}&to=${encodeURIComponent(ownerEmail)}&owner_email=${encodeURIComponent(ownerEmail)}&signal_id=${encodeURIComponent(resolvedSignalId || signalId)}&item_id=${encodeURIComponent(itemId)}&subject=${encodeURIComponent(titleOf(row, signalId))}`,
     messages: "/messages",
     ...rawDirectLinks,
   };
@@ -350,7 +369,11 @@ function normalizeSignal(row: AnyRow, signalId: string, sourceTable: string) {
     strategy: first(row.strategy, row.asset_strategy, row.exit_strategy, metadata.strategy, metadata.asset_strategy, metadata.exit_strategy),
     role_needed: first(row.role_needed, row.target_role, row.deal_need, metadata.role_needed, metadata.target_role, metadata.deal_need, "Buyer"),
     owner_email: ownerEmail,
+    created_by_email: first(row.created_by_email, metadata.created_by_email, ownerEmail),
+    submitted_by_email: first(row.submitted_by_email, metadata.submitted_by_email, ownerEmail),
     submitted_by: first(row.submitted_by, row.user_email, row.member_email, row.email, ownerEmail),
+    member_email: first(row.member_email, metadata.member_email, ownerEmail),
+    user_email: first(row.user_email, metadata.user_email, ownerEmail),
     created_at: first(row.created_at, metadata.created_at, row.updated_at, new Date().toISOString()),
     updated_at: first(row.updated_at, metadata.updated_at, row.created_at, new Date().toISOString()),
     source_table: sourceTable,
@@ -406,6 +429,7 @@ async function findSignal(supabase: any, signalId: string, email: string, owner:
   const tables = [
     "vf_pain_submissions",
     "vf_intelligence_signals",
+    "vf_routing_signals",
     "vf_routing_actions",
     "property_cards",
     "projects",
@@ -417,7 +441,7 @@ async function findSignal(supabase: any, signalId: string, email: string, owner:
   ];
 
   for (const table of tables) {
-    const rows = await selectRecent(supabase, table, 150);
+    const rows = await selectRecent(supabase, table, 200);
     const found = rows.find((row: AnyRow) => matchesSignalId(row, signalId) && canSee(row, email, owner));
     if (found) return normalizeSignal(found, signalId, table);
   }
@@ -478,18 +502,20 @@ export async function GET(request: Request, context: RouteContext) {
       relatedRows(supabase, ["vf_alerts", "alerts", "vf_intelligence_signals"], resolvedSignalId, itemId, email, owner, 80),
     ]);
 
-    const fallbackSignal = signal || normalizeSignal(
-      {
-        id: signalId,
-        signal_id: signalId,
-        title: `Signal ${signalId}`,
-        note: "This signal room exists, but no matching source record was found yet.",
-        owner_email: OWNER_EMAIL,
-        status: "review",
-      },
-      signalId,
-      "fallback"
-    );
+    const fallbackSignal =
+      signal ||
+      normalizeSignal(
+        {
+          id: signalId,
+          signal_id: signalId,
+          title: `Signal ${signalId}`,
+          note: "This signal room exists, but no matching source record was found yet.",
+          owner_email: OWNER_EMAIL,
+          status: "review",
+        },
+        signalId,
+        "fallback"
+      );
 
     const score = signalScore(fallbackSignal, routingActions, messages, activity);
 
@@ -517,7 +543,7 @@ export async function GET(request: Request, context: RouteContext) {
       },
       direct_links: fallbackSignal.direct_links || {},
       source: "api/signals/[signalId]",
-      debug: url.searchParams.get("debug") === "1" ? { source_table: fallbackSignal.source_table } : undefined,
+      debug: url.searchParams.get("debug") === "1" ? { source_table: fallbackSignal.source_table, owner_email: fallbackSignal.owner_email } : undefined,
     });
   } catch (error: any) {
     return NextResponse.json(
