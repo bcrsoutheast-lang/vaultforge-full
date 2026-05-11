@@ -16,9 +16,7 @@ function supabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) {
-    throw new Error("Missing Supabase environment values.");
-  }
+  if (!url || !key) throw new Error("Missing Supabase environment values.");
 
   return createClient(url, key, {
     auth: {
@@ -61,16 +59,12 @@ function readCookie(cookieHeader: string, name: string) {
   return "";
 }
 
-function requestEmail(request: Request, body: AnyRow) {
+function requestEmail(request: Request) {
   const url = new URL(request.url);
   const cookie = request.headers.get("cookie") || "";
 
   return cleanEmail(
     request.headers.get("x-vf-email") ||
-      body.from_email ||
-      body.sender_email ||
-      body.member_email ||
-      body.email ||
       url.searchParams.get("email") ||
       readCookie(cookie, "vf_email") ||
       readCookie(cookie, "vf_member_email") ||
@@ -78,208 +72,188 @@ function requestEmail(request: Request, body: AnyRow) {
   );
 }
 
-function recipientEmail(body: AnyRow) {
-  return cleanEmail(
-    first(
-      body.to_email,
-      body.recipient_email,
-      body.target_email,
-      body.owner_email,
-      body.counterparty_email,
-      body.member_email,
-      body.to,
-      body.recipient
-    )
+function isOwnerRequest(request: Request, email: string) {
+  const url = new URL(request.url);
+  const cookie = request.headers.get("cookie") || "";
+
+  return (
+    email === OWNER_EMAIL ||
+    clean(request.headers.get("x-vf-admin")) === "1" ||
+    clean(url.searchParams.get("owner")) === "1" ||
+    cookie.includes("vf_admin=1") ||
+    cookie.includes("isAdmin=true")
   );
 }
 
-function stableThreadId(signalId: string, itemId: string, fromEmail: string, toEmail: string, supplied = "") {
-  const existing = clean(supplied);
-  if (existing) return existing;
-
-  const basis = signalId || itemId || "general";
-  const participants = [fromEmail, toEmail].map((email) => cleanEmail(email)).sort().join("__");
-  const raw = `${basis}__${participants}`;
-  return `thread_${raw.replace(/[^a-zA-Z0-9_@.-]/g, "_").slice(0, 150)}`;
+function metadataOf(row: AnyRow) {
+  return typeof row.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
-function makeId(prefix: string) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+function normalizeMessage(row: AnyRow, table: string) {
+  const metadata = metadataOf(row);
+
+  const fromEmail = cleanEmail(first(row.from_email, row.sender_email, row.member_email, row.email, metadata.from_email, metadata.sender_email, metadata.member_email));
+  const toEmail = cleanEmail(first(row.to_email, row.recipient_email, row.target_email, row.owner_email, metadata.to_email, metadata.recipient_email, metadata.target_email, metadata.owner_email));
+
+  return {
+    ...row,
+    id: first(row.id, row.message_id, metadata.message_id, `${table}-${row.created_at || ""}-${fromEmail}`),
+    message_id: first(row.message_id, row.id, metadata.message_id),
+    thread_id: first(row.thread_id, metadata.thread_id, row.threadId),
+    from_email: fromEmail,
+    to_email: toEmail,
+    sender_email: fromEmail,
+    recipient_email: toEmail,
+    subject: first(row.subject, row.title, metadata.subject, "VaultForge message"),
+    body: first(row.body, row.message, row.note, metadata.body, metadata.message, metadata.note),
+    message: first(row.message, row.body, row.note, metadata.message, metadata.body, metadata.note),
+    signal_id: first(row.signal_id, row.related_signal_id, metadata.signal_id),
+    item_id: first(row.item_id, row.pain_id, row.deal_id, row.project_id, metadata.item_id, metadata.pain_id, metadata.deal_id, metadata.project_id),
+    created_at: first(row.created_at, metadata.created_at, row.updated_at, new Date().toISOString()),
+    updated_at: first(row.updated_at, row.created_at, metadata.updated_at),
+    _source_table: table,
+    metadata,
+  };
 }
 
-async function tryInsert(supabase: any, table: string, payloads: AnyRow[]) {
-  const errors: string[] = [];
+function canSee(row: AnyRow, email: string, owner: boolean) {
+  if (owner) return true;
 
-  for (const payload of payloads) {
+  const normalized = normalizeMessage(row, "check");
+  const emails = [
+    normalized.from_email,
+    normalized.to_email,
+    row.visible_to_email,
+    metadataOf(row).visible_to_email,
+  ]
+    .map(cleanEmail)
+    .filter(Boolean);
+
+  if (emails.length === 0) return true;
+  return emails.includes(email);
+}
+
+async function selectRecent(supabase: any, table: string) {
+  const orderColumns = ["created_at", "updated_at", "id"];
+
+  for (const column of orderColumns) {
     try {
-      const { data, error } = await supabase.from(table).insert(payload).select("*").single();
-
-      if (!error && data) {
-        return { ok: true, table, data, keys: Object.keys(payload) };
-      }
-
-      if (error?.message) errors.push(`${table}: ${error.message}`);
-    } catch (error: any) {
-      errors.push(`${table}: ${error?.message || String(error)}`);
+      const { data, error } = await supabase.from(table).select("*").order(column, { ascending: false }).limit(250);
+      if (!error && Array.isArray(data)) return data;
+    } catch {
+      // try next
     }
   }
 
-  return { ok: false, table, error: errors.join(" | ") || `Insert failed for ${table}` };
+  try {
+    const { data, error } = await supabase.from(table).select("*").limit(250);
+    if (!error && Array.isArray(data)) return data;
+  } catch {
+    // no-op
+  }
+
+  return [];
 }
 
-export async function POST(request: Request) {
+function messageMatches(row: AnyRow, threadId: string, signalId: string, itemId: string) {
+  const message = normalizeMessage(row, "match");
+  const metadata = metadataOf(row);
+
+  const values = [
+    message.thread_id,
+    message.signal_id,
+    message.item_id,
+    row.threadId,
+    row.signalId,
+    row.itemId,
+    row.pain_id,
+    row.deal_id,
+    row.project_id,
+    metadata.thread_id,
+    metadata.signal_id,
+    metadata.item_id,
+    metadata.pain_id,
+    metadata.deal_id,
+    metadata.project_id,
+  ].map(clean);
+
+  return (
+    (threadId && values.includes(threadId)) ||
+    (signalId && values.includes(signalId)) ||
+    (itemId && values.includes(itemId))
+  );
+}
+
+export async function GET(request: Request) {
   try {
-    const body = (await request.json().catch(() => ({}))) as AnyRow;
+    const url = new URL(request.url);
+    const email = requestEmail(request);
+    const owner = isOwnerRequest(request, email);
 
-    const fromEmail = requestEmail(request, body);
-    const toEmail = recipientEmail(body);
-    const subject = clean(body.subject || body.title || "VaultForge connection request");
-    const messageBody = clean(
-      body.body ||
-        body.message ||
-        body.note ||
-        body.notes ||
-        "I need more information about this VaultForge signal/opportunity."
-    );
+    const threadId = clean(url.searchParams.get("thread_id") || url.searchParams.get("threadId") || "");
+    const signalId = clean(url.searchParams.get("signal_id") || url.searchParams.get("signalId") || "");
+    const itemId = clean(url.searchParams.get("item_id") || url.searchParams.get("itemId") || "");
+    const limit = Math.min(250, Math.max(1, Number(url.searchParams.get("limit") || 100)));
 
-    const signalId = clean(body.signal_id || body.signalId || body.related_signal_id || "");
-    const itemId = clean(body.item_id || body.itemId || body.related_item_id || body.pain_id || body.deal_id || body.project_id || "");
-    const source = clean(body.source || "vaultforge_message");
-    const recipientSource = clean(body.recipient_source || body.recipientSource || "");
-    const contextTitle = clean(body.context_title || body.contextTitle || "");
-    const threadId = stableThreadId(signalId, itemId, fromEmail, toEmail, body.thread_id || body.threadId);
-    const messageId = makeId("msg");
-    const now = new Date().toISOString();
-
-    if (!fromEmail) {
-      return NextResponse.json({ ok: false, error: "Sender email required." }, { status: 400 });
+    if (!email && !owner) {
+      return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
     }
 
-    if (!toEmail) {
-      return NextResponse.json({ ok: false, error: "Recipient email required." }, { status: 400 });
+    if (!threadId && !signalId && !itemId) {
+      return NextResponse.json({ ok: false, error: "thread_id, signal_id, or item_id required." }, { status: 400 });
     }
-
-    if (!messageBody) {
-      return NextResponse.json({ ok: false, error: "Message body required." }, { status: 400 });
-    }
-
-    const selfMessage = fromEmail === toEmail;
-
-    const metadata = {
-      source: "api/messages/new",
-      request_source: source,
-      recipient_source: recipientSource,
-      context_title: contextTitle,
-      from_email: fromEmail,
-      to_email: toEmail,
-      subject,
-      body: messageBody,
-      signal_id: signalId,
-      item_id: itemId,
-      thread_id: threadId,
-      self_message: selfMessage,
-      raw: body,
-    };
-
-    const fullPayload = {
-      id: messageId,
-      message_id: messageId,
-      thread_id: threadId,
-      from_email: fromEmail,
-      to_email: toEmail,
-      sender_email: fromEmail,
-      recipient_email: toEmail,
-      target_email: toEmail,
-      member_email: fromEmail,
-      owner_email: toEmail,
-      subject,
-      body: messageBody,
-      message: messageBody,
-      note: messageBody,
-      message_type: selfMessage ? "owner_note" : first(body.message_type, "connection_request"),
-      source,
-      signal_id: signalId || null,
-      item_id: itemId || null,
-      pain_id: clean(body.pain_id) || (source.includes("pain") ? itemId || null : null),
-      deal_id: clean(body.deal_id) || null,
-      project_id: clean(body.project_id) || null,
-      status: "open",
-      archived: false,
-      read: false,
-      created_at: now,
-      updated_at: now,
-      metadata,
-    };
-
-    const safePayload = {
-      thread_id: threadId,
-      from_email: fromEmail,
-      to_email: toEmail,
-      subject,
-      body: messageBody,
-      message: messageBody,
-      signal_id: signalId || null,
-      item_id: itemId || null,
-      status: "open",
-      metadata,
-      created_at: now,
-      updated_at: now,
-    };
-
-    const simplePayload = {
-      email: fromEmail,
-      subject,
-      message: messageBody,
-      metadata,
-      created_at: now,
-    };
 
     const supabase = supabaseClient();
-
     const tables = ["vf_messages", "messages", "member_messages", "deal_messages"];
-    const attempts: AnyRow[] = [];
+    const found: AnyRow[] = [];
 
     for (const table of tables) {
-      const result = await tryInsert(supabase, table, [fullPayload, safePayload, simplePayload]);
-      attempts.push(result);
+      const rows = await selectRecent(supabase, table);
 
-      if (result.ok) {
-        return NextResponse.json({
-          ok: true,
-          saved: true,
-          table: result.table,
-          message: result.data,
-          thread_id: threadId,
-          message_id: result.data.id || result.data.message_id || messageId,
-          from_email: fromEmail,
-          to_email: toEmail,
-          self_message: selfMessage,
-          links: {
-            inbox: "/messages",
-            thread: `/messages/${encodeURIComponent(threadId)}`,
-            signal: signalId ? `/signals/${encodeURIComponent(signalId)}` : "",
-          },
-          note: selfMessage
-            ? "Saved as an owner note because sender and recipient are the same."
-            : "Connection request saved.",
-        });
+      for (const row of rows) {
+        if (!messageMatches(row, threadId, signalId, itemId)) continue;
+        if (!canSee(row, email, owner)) continue;
+        found.push(normalizeMessage(row, table));
       }
     }
 
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Message could not be saved.",
-        attempts,
-        expected_fields: ["thread_id", "from_email", "to_email", "subject", "body", "signal_id", "item_id"],
-      },
-      { status: 500 }
-    );
+    const seen = new Set<string>();
+    const messages = found
+      .filter((message) => {
+        const key = `${message._source_table}-${message.id}-${message.created_at}-${message.body}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+      .slice(0, limit);
+
+    const latest = messages[messages.length - 1] || {};
+    const viewerEmail = email;
+    const otherEmail =
+      messages.find((message) => message.from_email && message.from_email !== viewerEmail)?.from_email ||
+      messages.find((message) => message.to_email && message.to_email !== viewerEmail)?.to_email ||
+      latest.to_email ||
+      latest.from_email ||
+      "";
+
+    return NextResponse.json({
+      ok: true,
+      thread_id: threadId || latest.thread_id || "",
+      signal_id: signalId || latest.signal_id || "",
+      item_id: itemId || latest.item_id || "",
+      messages,
+      count: messages.length,
+      viewer_email: viewerEmail,
+      other_email: otherEmail,
+      source: "api/messages/thread",
+      tables_checked: tables,
+    });
   } catch (error: any) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Message request failed.",
+        error: "Could not load message thread.",
         details: error?.message || String(error),
       },
       { status: 500 }
