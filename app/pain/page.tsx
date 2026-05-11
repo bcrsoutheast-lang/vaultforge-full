@@ -6,15 +6,6 @@ import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-type PainType = {
-  key: string;
-  label: string;
-  description: string;
-  route: string;
-  defaultHelp: string;
-  fields: string[];
-};
-
 type SelectedPhoto = {
   name: string;
   size: number;
@@ -22,15 +13,12 @@ type SelectedPhoto = {
   dataUrl: string;
 };
 
-type SubmitLinks = {
-  pain_id?: string;
-  signal_id?: string;
-  routing_id?: string;
-  activity_id?: string;
-  pain_room?: string;
-  signal_room?: string;
-  routing_room?: string;
-  activity_room?: string;
+type PainType = {
+  key: string;
+  label: string;
+  description: string;
+  route: string;
+  defaultHelp: string;
 };
 
 const OPERATING_STATES = [
@@ -48,18 +36,16 @@ const PAIN_TYPES: PainType[] = [
   {
     key: "distressed_seller",
     label: "Distressed Seller",
-    description: "Seller pressure, pre-foreclosure, inherited property, urgent disposition, or owner needs a path out.",
-    route: "buyer / operator / capital",
-    defaultHelp: "Need buyer, operator, private capital, or structured exit.",
-    fields: ["sellerSituation", "timeline", "propertyCondition", "askingPrice", "mortgageBalance"],
+    description: "Seller pressure, urgent disposition, inherited property, foreclosure, or owner needs a path out.",
+    route: "buyer / capital / operator",
+    defaultHelp: "Need buyer, private capital, operator, or structured exit.",
   },
   {
     key: "funding_gap",
     label: "Funding Gap",
-    description: "Deal works but needs bridge capital, gap funding, transactional funding, private lender, or JV capital.",
-    route: "lender / private capital / JV partner",
+    description: "Deal works but needs bridge capital, gap funding, transactional funding, or JV capital.",
+    route: "lender / private capital / JV",
     defaultHelp: "Need lender, private capital, gap funding, or JV capital partner.",
-    fields: ["capitalNeeded", "capitalUse", "timeline", "exitPlan", "collateral"],
   },
   {
     key: "buyer_needed",
@@ -67,79 +53,55 @@ const PAIN_TYPES: PainType[] = [
     description: "You have a deal, assignment, listing, off-market asset, or disposition need.",
     route: "buyer / acquisition partner",
     defaultHelp: "Need cash buyer, acquisition partner, or disposition route.",
-    fields: ["askingPrice", "arv", "repairEstimate", "timeline", "accessNotes"],
   },
   {
     key: "operator_needed",
     label: "Operator Needed",
-    description: "Need boots on ground, GC/operator, project manager, disposition help, or local execution.",
+    description: "Need boots on ground, GC/operator, project manager, or local execution.",
     route: "operator / contractor / local partner",
     defaultHelp: "Need operator, contractor, project manager, or execution partner.",
-    fields: ["operatorNeed", "timeline", "budget", "siteStatus", "accessNotes"],
   },
   {
     key: "stalled_construction",
     label: "Stalled Construction",
     description: "Project is stuck because of funding, contractor, permit, scope, inspection, or execution problem.",
-    route: "operator / capital / contractor / permit support",
+    route: "operator / capital / contractor",
     defaultHelp: "Need capital, operator, contractor, permit help, or project rescue.",
-    fields: ["stage", "capitalNeeded", "remainingWork", "permitStatus", "timeline"],
   },
   {
     key: "off_market_opportunity",
     label: "Off-Market Opportunity",
-    description: "Potential deal or private opportunity that needs routing before it becomes public.",
+    description: "Private opportunity that needs routing before it becomes public.",
     route: "buyer / capital / operator",
     defaultHelp: "Need the right buyer, operator, or capital route.",
-    fields: ["askingPrice", "arv", "repairEstimate", "timeline", "sellerSituation"],
-  },
-  {
-    key: "wholesale_assignment",
-    label: "Wholesale Assignment",
-    description: "Assignment opportunity needing buyer route, diligence help, or fast disposition.",
-    route: "buyer / disposition",
-    defaultHelp: "Need buyer, dispo help, or transaction path.",
-    fields: ["askingPrice", "arv", "repairEstimate", "contractDeadline", "accessNotes"],
   },
   {
     key: "permit_city_issue",
     label: "Permit / City Issue",
     description: "Inspection, zoning, permit, municipality, code, or city issue blocking progress.",
-    route: "operator / permit specialist / local partner",
+    route: "operator / permit specialist",
     defaultHelp: "Need city/permit guidance, local operator, or compliance path.",
-    fields: ["permitStatus", "cityIssue", "timeline", "siteStatus", "neededDecision"],
-  },
-  {
-    key: "tenant_occupancy",
-    label: "Tenant / Occupancy Problem",
-    description: "Tenant, squatter, access, occupancy, relocation, or operational issue affecting execution.",
-    route: "operator / attorney / buyer",
-    defaultHelp: "Need operator, legal path, buyer, or occupancy strategy.",
-    fields: ["occupancyStatus", "timeline", "risk", "accessNotes", "neededDecision"],
   },
   {
     key: "emergency_exit",
     label: "Emergency Exit",
-    description: "Urgent situation where owner/member needs speed, discretion, and a route immediately.",
+    description: "Urgent situation where speed, discretion, and routing are needed immediately.",
     route: "buyer / capital / owner review",
     defaultHelp: "Need urgent buyer, funding, or owner-reviewed execution route.",
-    fields: ["deadline", "capitalNeeded", "askingPrice", "risk", "neededDecision"],
   },
   {
     key: "land_opportunity",
     label: "Land Opportunity",
     description: "Land, entitlement, development, builder, rezoning, or site opportunity.",
-    route: "developer / builder / land buyer / capital",
+    route: "developer / builder / land buyer",
     defaultHelp: "Need developer, builder, land buyer, entitlement help, or capital.",
-    fields: ["acreage", "zoning", "utilities", "askingPrice", "timeline"],
   },
   {
     key: "commercial_opportunity",
     label: "Commercial Opportunity",
-    description: "Commercial, multifamily, mixed-use, retail, office, industrial, or income asset opportunity.",
+    description: "Commercial, multifamily, mixed-use, retail, office, industrial, or income asset.",
     route: "commercial buyer / capital / operator",
     defaultHelp: "Need commercial buyer, capital partner, operator, or diligence support.",
-    fields: ["assetClass", "noi", "askingPrice", "capitalNeeded", "timeline"],
   },
 ];
 
@@ -271,11 +233,14 @@ function cleanEmail(value: unknown) {
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
+
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${name}=`));
+
   if (!match) return "";
+
   try {
     return decodeURIComponent(match.slice(name.length + 1));
   } catch {
@@ -285,6 +250,7 @@ function readCookie(name: string) {
 
 function getEmail() {
   if (typeof window === "undefined") return "";
+
   return cleanEmail(
     localStorage.getItem("vf_email") ||
       sessionStorage.getItem("vf_email") ||
@@ -298,12 +264,14 @@ function isOwner(email: string) {
   return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
-function money(value: string) {
-  const cleanValue = clean(value).replace(/[^\d.]/g, "");
-  if (!cleanValue) return "";
-  const num = Number(cleanValue);
-  if (!Number.isFinite(num)) return value;
-  return num.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+function scoreUrgency(urgency: string, timeline: string, capitalNeeded: string) {
+  let score = 30;
+  if (urgency === "emergency") score += 45;
+  if (urgency === "high") score += 30;
+  if (urgency === "medium") score += 15;
+  if (timeline) score += 10;
+  if (capitalNeeded) score += 10;
+  return Math.min(100, score);
 }
 
 async function safeJson(res: Response) {
@@ -314,30 +282,19 @@ async function safeJson(res: Response) {
   }
 }
 
-function scoreUrgency(urgency: string, deadline: string, capitalNeeded: string) {
-  let score = 30;
-  if (urgency === "emergency") score += 45;
-  if (urgency === "high") score += 30;
-  if (urgency === "medium") score += 15;
-  if (deadline) score += 10;
-  if (clean(capitalNeeded)) score += 10;
-  return Math.min(100, score);
-}
-
 export default function PainPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
-  const [selectedKey, setSelectedKey] = useState(PAIN_TYPES[0].key);
+  const [painTypeKey, setPainTypeKey] = useState("distressed_seller");
+  const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
-  const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
-  const [submitLinks, setSubmitLinks] = useState<SubmitLinks | null>(null);
 
-  const [form, setForm] = useState<Record<string, string>>({
+  const [form, setForm] = useState({
     title: "",
     state: "",
     city: "",
-    county: "",
+    area: "",
     assetType: "Residential",
     address: "",
     confidentiality: "Members only",
@@ -346,36 +303,36 @@ export default function PainPage() {
     capitalNeeded: "",
     askingPrice: "",
     arv: "",
-    repairEstimate: "",
-    sellerSituation: "",
-    mortgageBalance: "",
-    propertyCondition: "",
-    capitalUse: "",
-    exitPlan: "",
-    collateral: "",
-    operatorNeed: "",
-    budget: "",
-    siteStatus: "",
-    stage: "",
-    remainingWork: "",
-    permitStatus: "",
-    cityIssue: "",
-    neededDecision: "",
-    contractDeadline: "",
-    accessNotes: "",
-    occupancyStatus: "",
-    risk: "",
-    deadline: "",
-    acreage: "",
-    zoning: "",
-    utilities: "",
-    assetClass: "",
-    noi: "",
+    repairs: "",
     helpRequested: "",
     notes: "",
   });
 
-  function update(key: string, value: string) {
+  useEffect(() => {
+    const currentEmail = getEmail();
+    setEmail(currentEmail);
+    setOwner(isOwner(currentEmail));
+  }, []);
+
+  const painType = useMemo(() => {
+    return PAIN_TYPES.find((item) => item.key === painTypeKey) || PAIN_TYPES[0];
+  }, [painTypeKey]);
+
+  const urgencyScore = useMemo(() => {
+    return scoreUrgency(form.urgency, form.timeline, form.capitalNeeded);
+  }, [form.urgency, form.timeline, form.capitalNeeded]);
+
+  const routeSummary = useMemo(() => {
+    const market = [form.city, form.state].filter(Boolean).join(", ") || "Unassigned market";
+    const help = form.helpRequested || painType.defaultHelp;
+    return `${painType.label} signal. Market: ${market}. Asset: ${form.assetType}. Urgency: ${form.urgency}. Help requested: ${help}. Best route: ${painType.route}.`;
+  }, [form, painType]);
+
+  const canSubmit = useMemo(() => {
+    return email.includes("@") && clean(form.title) && clean(form.state);
+  }, [email, form.title, form.state]);
+
+  function update(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -412,36 +369,6 @@ export default function PainPage() {
     setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index));
   }
 
-  function init() {
-    const currentEmail = getEmail();
-    setEmail(currentEmail);
-    setOwner(isOwner(currentEmail));
-  }
-
-  useEffect(() => {
-    init();
-  }, []);
-
-  const selected = useMemo(() => PAIN_TYPES.find((item) => item.key === selectedKey) || PAIN_TYPES[0], [selectedKey]);
-
-  const urgencyScore = useMemo(() => {
-    return scoreUrgency(form.urgency, form.deadline || form.timeline || form.contractDeadline, form.capitalNeeded);
-  }, [form.urgency, form.deadline, form.timeline, form.contractDeadline, form.capitalNeeded]);
-
-  const routeSummary = useMemo(() => {
-    const market = [form.city, form.state].filter(Boolean).join(", ") || "Unassigned market";
-    const capital = form.capitalNeeded ? ` Capital needed: ${money(form.capitalNeeded)}.` : "";
-    const price = form.askingPrice ? ` Asking: ${money(form.askingPrice)}.` : "";
-    const arv = form.arv ? ` ARV: ${money(form.arv)}.` : "";
-    const help = form.helpRequested || selected.defaultHelp;
-
-    return `${selected.label} signal. Market: ${market}. Asset: ${form.assetType || "Unknown"}. Urgency: ${form.urgency}. Help requested: ${help}.${price}${arv}${capital} Best route: ${selected.route}.`;
-  }, [form, selected]);
-
-  const canSubmit = useMemo(() => {
-    return email.includes("@") && clean(form.title).length > 1 && clean(form.state).length > 0 && clean(form.helpRequested || selected.defaultHelp).length > 0;
-  }, [email, form.title, form.state, form.helpRequested, selected.defaultHelp]);
-
   function submitPainClick() {
     const currentEmail = email || getEmail();
 
@@ -465,52 +392,47 @@ export default function PainPage() {
 
   async function submitPain() {
     if (busy) return;
+
     setBusy(true);
     setStatus("");
-    setSubmitLinks(null);
 
     try {
       const currentEmail = email || getEmail();
-      if (!currentEmail.includes("@")) throw new Error("Login email missing. Please log in again.");
-      if (!clean(form.title)) throw new Error("Add a short pain/opportunity title.");
-      if (!clean(form.state)) throw new Error("Select or enter a state/market.");
-
-      const selectedPhotos = photos.map((photo) => ({
-        name: photo.name,
-        size: photo.size,
-        type: photo.type,
-        data_url: photo.dataUrl,
-      }));
 
       const payload = {
         email: currentEmail,
         member_email: currentEmail,
         owner_email: OWNER_EMAIL,
-        pain_type: selected.key,
-        pain_label: selected.label,
+        pain_type: painType.key,
+        pain_label: painType.label,
         title: form.title,
         state: form.state,
         city: form.city,
-        county: form.county,
+        county: form.area,
         asset_type: form.assetType,
         address: form.address,
         confidentiality: form.confidentiality,
         urgency: form.urgency,
         urgency_score: urgencyScore,
-        timeline: form.timeline || form.deadline || form.contractDeadline,
+        timeline: form.timeline,
         capital_needed: form.capitalNeeded,
         asking_price: form.askingPrice,
         arv: form.arv,
-        repair_estimate: form.repairEstimate,
-        help_requested: form.helpRequested || selected.defaultHelp,
+        repair_estimate: form.repairs,
+        help_requested: form.helpRequested || painType.defaultHelp,
         route_summary: routeSummary,
-        best_route: selected.route,
+        best_route: painType.route,
         notes: form.notes,
-        photo_urls: selectedPhotos.map((photo) => photo.data_url),
-        photos: selectedPhotos,
-        photo_count: selectedPhotos.length,
+        photo_urls: photos.map((photo) => photo.dataUrl),
+        photos: photos.map((photo) => ({
+          name: photo.name,
+          size: photo.size,
+          type: photo.type,
+          data_url: photo.dataUrl,
+        })),
+        photo_count: photos.length,
         raw_fields: form,
-        source: "adaptive_pain_button",
+        source: "adaptive_pain_button_safe",
       };
 
       const res = await fetch("/api/pain/create", {
@@ -529,7 +451,6 @@ export default function PainPage() {
         throw new Error(data?.error || data?.details || "Pain submit failed.");
       }
 
-      setSubmitLinks(data?.links || data?.next || null);
       setStatus(data?.message || "Pain signal submitted and routed into VaultForge intelligence.");
     } catch (error: any) {
       setStatus(error?.message || "Could not submit pain signal.");
@@ -541,10 +462,26 @@ export default function PainPage() {
   return (
     <main style={page}>
       <style>{`
-        a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
-        textarea::placeholder, input::placeholder { color: rgba(255,255,255,.48); }
-        select { appearance: none; }
-        @media (max-width: 760px) { a, button { width: 100%; box-sizing: border-box; } }
+        a:hover, button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        input::placeholder, textarea::placeholder {
+          color: rgba(255,255,255,.48);
+        }
+
+        select {
+          appearance: none;
+        }
+
+        @media (max-width: 760px) {
+          a, button {
+            width: 100%;
+            box-sizing: border-box;
+          }
+        }
       `}</style>
 
       <div style={wrap}>
@@ -556,21 +493,22 @@ export default function PainPage() {
             Turn pressure into routed opportunity.
           </h1>
           <p style={{ ...muted, fontSize: 22 }}>
-            Submit a real estate problem, stalled deal, funding gap, buyer need, city issue, or execution problem. VaultForge turns it into a signal, activity event, and routing candidate.
+            Submit a real estate problem, stalled deal, funding gap, buyer need, city issue, or execution problem.
           </p>
 
           <div>
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>Urgency Score: {urgencyScore}</span>
-            <span style={chip}>Route: {selected.route}</span>
+            <span style={chip}>Route: {painType.route}</span>
+            <span style={chip}>Photos: {photos.length}</span>
             <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
-          <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <Link href="/alerts" style={ghost}>Alerts</Link>
+          <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
           <Link href="/activity" style={ghost}>Activity</Link>
+          <Link href="/alerts" style={ghost}>Alerts</Link>
           <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-          <Link href="/members" style={ghost}>Members</Link>
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/logout" style={danger}>Logout</Link>
         </section>
 
@@ -578,20 +516,19 @@ export default function PainPage() {
           <section
             style={{
               ...hero,
-              color: status.toLowerCase().includes("failed") || status.toLowerCase().includes("missing") || status.toLowerCase().includes("could")
-                ? "#ffd0d0"
-                : "#9df3bf",
+              color:
+                status.toLowerCase().includes("failed") ||
+                status.toLowerCase().includes("missing") ||
+                status.toLowerCase().includes("could")
+                  ? "#ffd0d0"
+                  : "#9df3bf",
             }}
           >
             <strong>{status}</strong>
-
-            {submitLinks && (
+            {!status.toLowerCase().includes("failed") && !status.toLowerCase().includes("missing") && (
               <div style={{ marginTop: 16 }}>
-                {submitLinks.pain_room && <Link href={submitLinks.pain_room} style={btn}>Open Pain Room</Link>}
-                {submitLinks.signal_room && <Link href={submitLinks.signal_room} style={ghost}>Open Signal</Link>}
-                {submitLinks.routing_room && <Link href={submitLinks.routing_room} style={ghost}>Routing Room</Link>}
-                {submitLinks.activity_room && <Link href={submitLinks.activity_room} style={ghost}>Activity Event</Link>}
-                <Link href="/activity" style={ghost}>Activity Feed</Link>
+                <Link href="/pain-feed" style={btn}>Open Pain Feed</Link>
+                <Link href="/activity" style={ghost}>Activity</Link>
                 <Link href="/alerts" style={ghost}>Alerts</Link>
                 <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
               </div>
@@ -607,14 +544,17 @@ export default function PainPage() {
                 key={type.key}
                 type="button"
                 onClick={() => {
-                  setSelectedKey(type.key);
+                  setPainTypeKey(type.key);
                   update("helpRequested", type.defaultHelp);
                 }}
                 style={{
                   ...card,
                   textAlign: "left",
                   cursor: "pointer",
-                  borderColor: selected.key === type.key ? "rgba(245,217,120,.78)" : "rgba(255,255,255,.13)",
+                  borderColor:
+                    painType.key === type.key
+                      ? "rgba(245,217,120,.78)"
+                      : "rgba(255,255,255,.13)",
                 }}
               >
                 <div style={eyebrow}>{type.route}</div>
@@ -628,24 +568,40 @@ export default function PainPage() {
         <section style={grid}>
           <section style={card}>
             <div style={eyebrow}>Core Signal</div>
+
             <label style={label}>Title / What is happening?</label>
-            <input value={form.title} onChange={(e) => update("title", e.target.value)} style={input} placeholder="Example: Stalled flip needs gap funding" />
+            <input
+              value={form.title}
+              onChange={(event) => update("title", event.target.value)}
+              style={input}
+              placeholder="Example: Stalled flip needs gap funding"
+            />
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Help Requested</label>
-              <textarea value={form.helpRequested || selected.defaultHelp} onChange={(e) => update("helpRequested", e.target.value)} style={{ ...input, minHeight: 120 }} />
+              <textarea
+                value={form.helpRequested || painType.defaultHelp}
+                onChange={(event) => update("helpRequested", event.target.value)}
+                style={{ ...input, minHeight: 120 }}
+              />
             </div>
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Notes / Situation</label>
-              <textarea value={form.notes} onChange={(e) => update("notes", e.target.value)} style={{ ...input, minHeight: 160 }} placeholder="Explain the pressure, opportunity, obstacle, and what needs to happen next." />
+              <textarea
+                value={form.notes}
+                onChange={(event) => update("notes", event.target.value)}
+                style={{ ...input, minHeight: 160 }}
+                placeholder="Explain the pressure, opportunity, obstacle, and what needs to happen next."
+              />
             </div>
           </section>
 
           <section style={card}>
             <div style={eyebrow}>Market / Asset</div>
+
             <label style={label}>Operating State</label>
-            <select value={form.state} onChange={(e) => update("state", e.target.value)} style={input}>
+            <select value={form.state} onChange={(event) => update("state", event.target.value)} style={input}>
               {OPERATING_STATES.map((state) => (
                 <option key={state.value} value={state.value}>
                   {state.label}
@@ -655,17 +611,27 @@ export default function PainPage() {
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>City</label>
-              <input value={form.city} onChange={(e) => update("city", e.target.value)} style={input} placeholder="City / market" />
+              <input
+                value={form.city}
+                onChange={(event) => update("city", event.target.value)}
+                style={input}
+                placeholder="City / market"
+              />
             </div>
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Area / Submarket</label>
-              <input value={form.county} onChange={(e) => update("county", e.target.value)} style={input} placeholder="Example: Buckhead, East Atlanta, North Fulton, Tampa Bay..." />
+              <input
+                value={form.area}
+                onChange={(event) => update("area", event.target.value)}
+                style={input}
+                placeholder="Example: Buckhead, East Atlanta, North Fulton..."
+              />
             </div>
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Asset Type</label>
-              <select value={form.assetType} onChange={(e) => update("assetType", e.target.value)} style={input}>
+              <select value={form.assetType} onChange={(event) => update("assetType", event.target.value)} style={input}>
                 <option>Residential</option>
                 <option>Commercial</option>
                 <option>Land</option>
@@ -677,7 +643,12 @@ export default function PainPage() {
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Address or General Location</label>
-              <input value={form.address} onChange={(e) => update("address", e.target.value)} style={input} placeholder="Exact address if safe, or general location if confidential. No ZIP required." />
+              <input
+                value={form.address}
+                onChange={(event) => update("address", event.target.value)}
+                style={input}
+                placeholder="Exact address if safe, or general location. No ZIP required."
+              />
             </div>
           </section>
         </section>
@@ -685,8 +656,9 @@ export default function PainPage() {
         <section style={grid}>
           <section style={card}>
             <div style={eyebrow}>Pressure / Timeline</div>
+
             <label style={label}>Urgency</label>
-            <select value={form.urgency} onChange={(e) => update("urgency", e.target.value)} style={input}>
+            <select value={form.urgency} onChange={(event) => update("urgency", event.target.value)} style={input}>
               <option value="emergency">Emergency</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>
@@ -695,12 +667,17 @@ export default function PainPage() {
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Timeline / Deadline</label>
-              <input value={form.timeline} onChange={(e) => update("timeline", e.target.value)} style={input} placeholder="Example: 7 days, 30 days, closing Friday..." />
+              <input
+                value={form.timeline}
+                onChange={(event) => update("timeline", event.target.value)}
+                style={input}
+                placeholder="Example: 7 days, 30 days, closing Friday..."
+              />
             </div>
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Confidentiality</label>
-              <select value={form.confidentiality} onChange={(e) => update("confidentiality", e.target.value)} style={input}>
+              <select value={form.confidentiality} onChange={(event) => update("confidentiality", event.target.value)} style={input}>
                 <option>Members only</option>
                 <option>Owner review first</option>
                 <option>Private / sensitive</option>
@@ -711,42 +688,51 @@ export default function PainPage() {
 
           <section style={card}>
             <div style={eyebrow}>Numbers</div>
+
             <label style={label}>Capital Needed</label>
-            <input value={form.capitalNeeded} onChange={(e) => update("capitalNeeded", e.target.value)} style={input} placeholder="$125,000" />
+            <input
+              value={form.capitalNeeded}
+              onChange={(event) => update("capitalNeeded", event.target.value)}
+              style={input}
+              placeholder="$125,000"
+            />
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Asking Price</label>
-              <input value={form.askingPrice} onChange={(e) => update("askingPrice", e.target.value)} style={input} placeholder="$210,000" />
+              <input
+                value={form.askingPrice}
+                onChange={(event) => update("askingPrice", event.target.value)}
+                style={input}
+                placeholder="$210,000"
+              />
             </div>
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>ARV / Value</label>
-              <input value={form.arv} onChange={(e) => update("arv", e.target.value)} style={input} placeholder="$300,000" />
+              <input
+                value={form.arv}
+                onChange={(event) => update("arv", event.target.value)}
+                style={input}
+                placeholder="$300,000"
+              />
             </div>
 
             <div style={{ marginTop: 16 }}>
               <label style={label}>Repairs / Remaining Work</label>
-              <input value={form.repairEstimate || form.remainingWork} onChange={(e) => { update("repairEstimate", e.target.value); update("remainingWork", e.target.value); }} style={input} placeholder="$45,000 or scope summary" />
+              <input
+                value={form.repairs}
+                onChange={(event) => update("repairs", event.target.value)}
+                style={input}
+                placeholder="$45,000 or scope summary"
+              />
             </div>
           </section>
         </section>
 
         <section style={card}>
-          <div style={eyebrow}>Adaptive Detail Fields · {selected.label}</div>
-          <div style={grid}>
-            {selected.fields.map((field) => (
-              <div key={field}>
-                <label style={label}>{field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}</label>
-                <input value={form[field] || ""} onChange={(e) => update(field, e.target.value)} style={input} />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section style={card}>
           <div style={eyebrow}>Photos / Files</div>
           <p style={muted}>
-            Select photos from your phone or upload files from your device. Keep this to the most useful 8 files for now.
+            Select photos from your phone or upload files from your device. This previews files now and sends photo data to the create API.
           </p>
 
           <label style={label}>Upload from phone or file</label>
@@ -754,7 +740,7 @@ export default function PainPage() {
             type="file"
             accept="image/*,.pdf"
             multiple
-            onChange={(e) => handlePhotoFiles(e.target.files)}
+            onChange={(event) => handlePhotoFiles(event.target.files)}
             style={input}
           />
 
@@ -806,17 +792,22 @@ export default function PainPage() {
         <section style={hero}>
           <div style={eyebrow}>Route Preview</div>
           <h2 style={{ fontSize: "clamp(34px,7vw,62px)", lineHeight: 0.95, margin: "0 0 14px" }}>
-            {selected.label}
+            {painType.label}
           </h2>
           <p style={{ ...muted, fontSize: 20 }}>{routeSummary}</p>
           <div>
-            <span style={chip}>Best Route: {selected.route}</span>
+            <span style={chip}>Best Route: {painType.route}</span>
             <span style={chip}>Urgency Score: {urgencyScore}</span>
             <span style={chip}>Feeds: Activity / Alerts / Routing</span>
             <span style={chip}>Photos: {photos.length}</span>
           </div>
 
-          <button type="button" onClick={submitPainClick} disabled={busy} style={{ ...btn, width: "100%", marginTop: 18, opacity: busy ? 0.58 : 1 }}>
+          <button
+            type="button"
+            onClick={submitPainClick}
+            disabled={busy}
+            style={{ ...btn, width: "100%", marginTop: 18, opacity: busy ? 0.58 : 1 }}
+          >
             {busy ? "Submitting Pain Signal..." : "Submit Pain Signal"}
           </button>
 
