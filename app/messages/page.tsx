@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 
 type Message = Record<string, any>;
 
@@ -27,7 +28,9 @@ function readCookie(name: string) {
   }
 }
 
-function getEmail() {
+function getEmail(urlEmail = "") {
+  const direct = cleanEmail(urlEmail);
+  if (direct.includes("@")) return direct;
   if (typeof window === "undefined") return "";
   return cleanEmail(
     localStorage.getItem("vf_email") ||
@@ -38,18 +41,18 @@ function getEmail() {
   );
 }
 
+function fmt(value: unknown) {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "Recent";
+  return date.toLocaleString();
+}
+
 async function safeJson(res: Response) {
   try {
     return await res.json();
   } catch {
     return {};
   }
-}
-
-function fmt(value: unknown) {
-  const date = new Date(String(value || ""));
-  if (Number.isNaN(date.getTime())) return "Recent";
-  return date.toLocaleString();
 }
 
 const page: React.CSSProperties = {
@@ -60,8 +63,7 @@ const page: React.CSSProperties = {
   padding: "22px 16px 82px",
   fontFamily: "Arial, sans-serif",
 };
-
-const wrap: React.CSSProperties = { width: "min(1040px,100%)", margin: "0 auto" };
+const wrap: React.CSSProperties = { width: "min(980px,100%)", margin: "0 auto" };
 const card: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.28)",
   borderRadius: 28,
@@ -113,23 +115,28 @@ const input: React.CSSProperties = {
   fontSize: 16,
 };
 
-export default function SimpleMessagesInbox() {
-  const [email, setEmail] = useState("");
-  const [threads, setThreads] = useState<Message[]>([]);
-  const [status, setStatus] = useState("Loading messages...");
-  const [busyThread, setBusyThread] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
-  const [search, setSearch] = useState("");
+export default function SimpleThreadPage() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const threadId = decodeURIComponent(String(params?.threadId || ""));
 
-  async function load(nextShowArchived = showArchived) {
-    const viewer = getEmail();
+  const [email, setEmail] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [reply, setReply] = useState("");
+  const [status, setStatus] = useState("Loading thread...");
+  const [busy, setBusy] = useState(false);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+
+  async function load() {
+    const viewer = getEmail(searchParams.get("email") || "");
     setEmail(viewer);
-    setStatus("Loading messages...");
+    setStatus("Loading thread...");
 
     try {
       const query = new URLSearchParams();
+      query.set("thread_id", threadId);
       query.set("email", viewer);
-      if (nextShowArchived) query.set("include_archived", "1");
+      query.set("include_archived", "1");
 
       const res = await fetch(`/api/simple-messages?${query.toString()}`, {
         cache: "no-store",
@@ -138,19 +145,18 @@ export default function SimpleMessagesInbox() {
 
       const data = await safeJson(res);
 
-      if (!res.ok || data?.ok === false) throw new Error(data?.error || "Could not load messages.");
+      if (!res.ok || data?.ok === false) throw new Error(data?.error || "Could not load thread.");
 
-      setThreads(Array.isArray(data.threads) ? data.threads : []);
+      setMessages(Array.isArray(data.messages) ? data.messages : []);
       setStatus("");
     } catch (error: any) {
-      setStatus(error?.message || "Could not load messages.");
+      setStatus(error?.message || "Could not load thread.");
+      setMessages([]);
     }
   }
 
-  async function cleanup(threadId: string, action: "archive" | "restore" | "delete") {
-    if (!threadId) return;
-
-    setBusyThread(threadId);
+  async function cleanup(action: "archive" | "restore" | "delete") {
+    setCleanupBusy(true);
     setStatus("");
 
     try {
@@ -176,42 +182,68 @@ export default function SimpleMessagesInbox() {
 
       if (!res.ok || data?.ok === false) throw new Error(data?.error || `Could not ${action} thread.`);
 
-      await load(showArchived);
+      if (action === "delete") {
+        window.location.href = "/messages";
+        return;
+      }
+
+      await load();
     } catch (error: any) {
       setStatus(error?.message || `Could not ${action} thread.`);
     } finally {
-      setBusyThread("");
+      setCleanupBusy(false);
     }
   }
 
   useEffect(() => {
-    load(false);
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [threadId]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return threads;
+  const latest = messages[messages.length - 1] || {};
+  const archived = messages.length > 0 && messages.every((message) => clean(message.status) === "archived");
 
-    return threads.filter((thread) =>
-      [
-        thread.subject,
-        thread.body,
-        thread.from_email,
-        thread.to_email,
-        thread.thread_id,
-        thread.signal_id,
-        thread.item_id,
-        thread.status,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
+  const otherEmail = useMemo(() => {
+    return cleanEmail(
+      messages.find((message) => cleanEmail(message.from_email) && cleanEmail(message.from_email) !== cleanEmail(email))?.from_email ||
+        messages.find((message) => cleanEmail(message.to_email) && cleanEmail(message.to_email) !== cleanEmail(email))?.to_email ||
+        latest.to_email ||
+        ""
     );
-  }, [threads, search]);
+  }, [messages, email, latest]);
 
-  const activeCount = threads.filter((thread) => thread.status !== "archived" && thread.status !== "deleted").length;
-  const archivedCount = threads.filter((thread) => thread.status === "archived").length;
+  async function sendReply() {
+    if (!reply.trim()) return;
+    setBusy(true);
+    setStatus("");
+
+    try {
+      const res = await fetch("/api/simple-messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-vf-email": email },
+        body: JSON.stringify({
+          thread_id: threadId,
+          from_email: email,
+          to_email: otherEmail,
+          signal_id: latest.signal_id || "",
+          item_id: latest.item_id || "",
+          subject: latest.subject || "VaultForge reply",
+          body: reply,
+        }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) throw new Error(data?.error || "Reply could not be saved.");
+
+      setReply("");
+      await load();
+    } catch (error: any) {
+      setStatus(error?.message || "Reply could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <main style={page}>
@@ -222,7 +254,7 @@ export default function SimpleMessagesInbox() {
           filter: brightness(1.06);
         }
 
-        input::placeholder {
+        textarea::placeholder {
           color: rgba(255,255,255,.42);
         }
 
@@ -244,104 +276,87 @@ export default function SimpleMessagesInbox() {
 
       <div style={wrap}>
         <section style={card}>
-          <p style={eyebrow}>VaultForge Simple Messages</p>
+          <p style={eyebrow}>VaultForge Simple Thread</p>
           <h1 style={{ fontSize: "clamp(48px,11vw,86px)", lineHeight: 0.9, margin: "10px 0 18px" }}>
-            Inbox cleanup.
+            Conversation.
           </h1>
-          <p style={muted}>Simple owner/member communication with clean-up buttons. Archive, restore, or delete old threads.</p>
-          <p style={muted}>Signed in: {email || "unknown"}</p>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            <span style={{ ...ghost, minHeight: 34, padding: "8px 12px" }}>Visible: {filtered.length}</span>
-            <span style={{ ...ghost, minHeight: 34, padding: "8px 12px" }}>Active: {activeCount}</span>
-            <span style={{ ...ghost, minHeight: 34, padding: "8px 12px" }}>Archived: {archivedCount}</span>
-          </div>
+          <p style={muted}>You: {email || "unknown"} · With: {otherEmail || "unknown"}</p>
+          <p style={muted}>Thread status: {archived ? "Archived" : clean(latest.status || "open")}</p>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <button type="button" onClick={() => load(showArchived)} style={btn}>
-              Refresh
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const next = !showArchived;
-                setShowArchived(next);
-                load(next);
-              }}
-              style={ghost}
-            >
-              {showArchived ? "Hide Archived" : "Show Archived"}
-            </button>
+            <button type="button" onClick={load} style={btn}>Refresh</button>
+            <Link href="/messages" style={ghost}>Inbox</Link>
             <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-            <Link href="/signals" style={ghost}>Signals</Link>
-            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            {latest.signal_id ? <Link href={`/signals/${encodeURIComponent(latest.signal_id)}`} style={ghost}>Signal</Link> : null}
+            {archived ? (
+              <button type="button" disabled={cleanupBusy} onClick={() => cleanup("restore")} style={ghost}>
+                {cleanupBusy ? "Working..." : "Restore Thread"}
+              </button>
+            ) : (
+              <button type="button" disabled={cleanupBusy} onClick={() => cleanup("archive")} style={ghost}>
+                {cleanupBusy ? "Working..." : "Archive Thread"}
+              </button>
+            )}
+            <button type="button" disabled={cleanupBusy} onClick={() => cleanup("delete")} style={danger}>
+              {cleanupBusy ? "Working..." : "Delete Thread"}
+            </button>
           </div>
-        </section>
-
-        <section style={card}>
-          <p style={eyebrow}>Search</p>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search sender, owner, subject, signal id, thread id..."
-            style={input}
-          />
         </section>
 
         {status ? <section style={card}>{status}</section> : null}
 
-        {filtered.length === 0 && !status ? <section style={card}>No messages found.</section> : null}
+        <section style={card}>
+          <p style={eyebrow}>Messages</p>
+          {messages.length === 0 ? <p style={muted}>No messages yet.</p> : null}
+          {messages.map((message) => {
+            const mine = cleanEmail(message.from_email) === cleanEmail(email);
+            return (
+              <article
+                key={message.id}
+                style={{
+                  border: "1px solid rgba(255,255,255,.12)",
+                  background: mine ? "rgba(232,196,107,.12)" : "rgba(255,255,255,.05)",
+                  borderRadius: 20,
+                  padding: 16,
+                  marginBottom: 12,
+                  marginLeft: mine ? 30 : 0,
+                  marginRight: mine ? 0 : 30,
+                  opacity: message.status === "archived" ? 0.72 : 1,
+                }}
+              >
+                <strong>{message.subject}</strong>
+                <p style={muted}>{message.body}</p>
+                <p style={{ color: "#94a3b8", fontSize: 13 }}>
+                  From {message.from_email} to {message.to_email} · {fmt(message.created_at)} · {message.status || "open"}
+                </p>
+              </article>
+            );
+          })}
+        </section>
 
-        {filtered.map((thread) => {
-          const archived = thread.status === "archived";
-          const threadId = clean(thread.thread_id);
-          const busy = busyThread === threadId;
-
-          return (
-            <article
-              key={threadId}
-              style={{
-                ...card,
-                opacity: archived ? 0.72 : 1,
-                borderColor: archived ? "rgba(148,163,184,.32)" : "rgba(232,196,107,.28)",
-              }}
+        {!archived ? (
+          <section style={card}>
+            <p style={eyebrow}>Reply</p>
+            <textarea
+              value={reply}
+              onChange={(event) => setReply(event.target.value)}
+              style={{ ...input, minHeight: 150 }}
+              placeholder="Write a reply..."
+            />
+            <button
+              type="button"
+              disabled={busy || !reply.trim()}
+              onClick={sendReply}
+              style={{ ...btn, width: "100%", marginTop: 16, opacity: busy || !reply.trim() ? 0.55 : 1 }}
             >
-              <p style={eyebrow}>{archived ? "Archived Thread" : "Thread"}</p>
-              <h2 style={{ marginBottom: 8 }}>{thread.subject || "VaultForge message"}</h2>
-              <p style={muted}>{thread.body || "Open conversation."}</p>
-
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
-                <span style={{ ...ghost, minHeight: 32, padding: "7px 10px", fontSize: 13 }}>From: {thread.from_email}</span>
-                <span style={{ ...ghost, minHeight: 32, padding: "7px 10px", fontSize: 13 }}>To: {thread.to_email}</span>
-                <span style={{ ...ghost, minHeight: 32, padding: "7px 10px", fontSize: 13 }}>Status: {thread.status || "open"}</span>
-                <span style={{ ...ghost, minHeight: 32, padding: "7px 10px", fontSize: 13 }}>{fmt(thread.created_at)}</span>
-              </div>
-
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                <Link href={`/messages/${encodeURIComponent(threadId)}?email=${encodeURIComponent(email)}`} style={btn}>
-                  Open Thread
-                </Link>
-                {archived ? (
-                  <button type="button" disabled={busy} onClick={() => cleanup(threadId, "restore")} style={ghost}>
-                    {busy ? "Working..." : "Restore"}
-                  </button>
-                ) : (
-                  <button type="button" disabled={busy} onClick={() => cleanup(threadId, "archive")} style={ghost}>
-                    {busy ? "Working..." : "Archive"}
-                  </button>
-                )}
-                <button type="button" disabled={busy} onClick={() => cleanup(threadId, "delete")} style={danger}>
-                  {busy ? "Working..." : "Delete"}
-                </button>
-                {thread.signal_id ? (
-                  <Link href={`/signals/${encodeURIComponent(thread.signal_id)}`} style={ghost}>
-                    Signal
-                  </Link>
-                ) : null}
-              </div>
-            </article>
-          );
-        })}
+              {busy ? "Saving..." : "Send Reply"}
+            </button>
+          </section>
+        ) : (
+          <section style={card}>
+            <p style={muted}>This thread is archived. Restore it before replying.</p>
+          </section>
+        )}
       </div>
     </main>
   );
