@@ -390,6 +390,46 @@ export default function PainPage() {
     submitPain();
   }
 
+  async function uploadPhotos(currentEmail: string) {
+    if (!photos.length) {
+      return {
+        uploadedPhotos: [] as Record<string, any>[],
+        uploadedUrls: [] as string[],
+        uploadErrors: [] as string[],
+      };
+    }
+
+    const uploadRes = await fetch("/api/uploads/pain", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vf-email": currentEmail,
+        "x-vf-admin": owner ? "1" : "0",
+      },
+      body: JSON.stringify({
+        email: currentEmail,
+        files: photos.map((photo) => ({
+          name: photo.name,
+          size: photo.size,
+          type: photo.type,
+          data_url: photo.dataUrl,
+        })),
+      }),
+    });
+
+    const uploadData = await safeJson(uploadRes);
+
+    if (!uploadRes.ok || uploadData?.ok === false) {
+      throw new Error(uploadData?.error || uploadData?.details || "Photo upload failed.");
+    }
+
+    return {
+      uploadedPhotos: Array.isArray(uploadData.files) ? uploadData.files : [],
+      uploadedUrls: Array.isArray(uploadData.urls) ? uploadData.urls : [],
+      uploadErrors: Array.isArray(uploadData.errors) ? uploadData.errors : [],
+    };
+  }
+
   async function submitPain() {
     if (busy) return;
 
@@ -399,6 +439,10 @@ export default function PainPage() {
     try {
       const currentEmail = email || getEmail();
 
+      setStatus(photos.length ? "Uploading photos..." : "Submitting pain signal...");
+      const uploadResult = await uploadPhotos(currentEmail);
+
+      setStatus("Saving pain signal...");
       const payload = {
         email: currentEmail,
         member_email: currentEmail,
@@ -423,14 +467,10 @@ export default function PainPage() {
         route_summary: routeSummary,
         best_route: painType.route,
         notes: form.notes,
-        photo_urls: photos.map((photo) => photo.dataUrl),
-        photos: photos.map((photo) => ({
-          name: photo.name,
-          size: photo.size,
-          type: photo.type,
-          data_url: photo.dataUrl,
-        })),
-        photo_count: photos.length,
+        photo_urls: uploadResult.uploadedUrls,
+        photos: uploadResult.uploadedPhotos,
+        photo_count: uploadResult.uploadedPhotos.length,
+        upload_errors: uploadResult.uploadErrors,
         raw_fields: form,
         source: "adaptive_pain_button_safe",
       };
@@ -451,7 +491,13 @@ export default function PainPage() {
         throw new Error(data?.error || data?.details || "Pain submit failed.");
       }
 
-      setStatus(data?.message || "Pain signal submitted and routed into VaultForge intelligence.");
+      const uploadedCount = uploadResult.uploadedPhotos.length;
+      const warning = uploadResult.uploadErrors.length
+        ? ` Photo upload warnings: ${uploadResult.uploadErrors.join(" | ")}`
+        : "";
+      setStatus(
+        `${data?.message || "Pain signal submitted and routed into VaultForge intelligence."} Photos saved: ${uploadedCount}.${warning}`
+      );
     } catch (error: any) {
       setStatus(error?.message || "Could not submit pain signal.");
     } finally {
@@ -732,7 +778,7 @@ export default function PainPage() {
         <section style={card}>
           <div style={eyebrow}>Photos / Files</div>
           <p style={muted}>
-            Select photos from your phone or upload files from your device. This previews files now and sends photo data to the create API.
+            Select photos from your phone or upload files from your device. Photos upload to Supabase Storage before the Pain record is saved.
           </p>
 
           <label style={label}>Upload from phone or file</label>
@@ -821,7 +867,7 @@ export default function PainPage() {
         <section style={{ ...hero, borderColor: "rgba(157,243,191,.22)" }}>
           <div style={eyebrow}>Current Safety Mode</div>
           <p style={muted}>
-            Pain submissions create controlled platform records. Private contact details remain gated. No autonomous notifications or contact release occur from this page.
+            Pain submissions create controlled platform records. Private contact details remain gated. Photos upload to Supabase Storage bucket vaultforge-pain-photos before the record is saved.
           </p>
         </section>
       </div>
