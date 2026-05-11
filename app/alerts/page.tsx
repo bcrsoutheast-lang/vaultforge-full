@@ -5,7 +5,7 @@ import Link from "next/link";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-type SignalCard = Record<string, any>;
+type Row = Record<string, any>;
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -15,8 +15,24 @@ function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
+function first(...values: unknown[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
+    }
+
+    const text = clean(value);
+    if (text) return text;
+  }
+
+  return "";
+}
+
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
+
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -59,300 +75,584 @@ async function safeJson(res: Response) {
   }
 }
 
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text) return text;
+function metadataOf(row: Row) {
+  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
+}
+
+function titleOf(row: Row) {
+  const metadata = metadataOf(row);
+
+  return first(
+    row.title,
+    row.signal_title,
+    row.event_title,
+    row.alert_title,
+    row.headline,
+    row.name,
+    row.pain_label,
+    metadata.title,
+    metadata.signal_title,
+    metadata.event_title,
+    "VaultForge Alert"
+  );
+}
+
+function noteOf(row: Row) {
+  const metadata = metadataOf(row);
+
+  return first(
+    row.note,
+    row.notes,
+    row.summary,
+    row.description,
+    row.event_description,
+    row.message,
+    row.body,
+    row.route_summary,
+    row.help_requested,
+    metadata.note,
+    metadata.notes,
+    metadata.summary,
+    metadata.description,
+    metadata.message,
+    metadata.route_summary,
+    "Alert context ready for owner follow-up."
+  );
+}
+
+function signalIdOf(row: Row) {
+  const metadata = metadataOf(row);
+
+  return first(
+    row.signal_id,
+    row.signalId,
+    row.alert_id,
+    row.alertId,
+    row.related_alert_id,
+    metadata.signal_id,
+    metadata.alert_id,
+    row.id
+  );
+}
+
+function itemIdOf(row: Row) {
+  const metadata = metadataOf(row);
+
+  return first(
+    row.item_id,
+    row.itemId,
+    row.pain_id,
+    row.painId,
+    row.deal_id,
+    row.project_id,
+    row.property_id,
+    metadata.item_id,
+    metadata.pain_id,
+    metadata.deal_id,
+    metadata.project_id
+  );
+}
+
+function ownerEmailOf(row: Row) {
+  const metadata = metadataOf(row);
+
+  const candidates = [
+    row.owner_email,
+    row.submitted_by_email,
+    row.created_by_email,
+    row.creator_email,
+    row.submitted_by,
+    row.user_email,
+    row.member_email,
+    row.target_email,
+    row.target_member_email,
+    row.recipient_email,
+    row.email,
+    metadata.owner_email,
+    metadata.submitted_by_email,
+    metadata.created_by_email,
+    metadata.creator_email,
+    metadata.submitted_by,
+    metadata.user_email,
+    metadata.member_email,
+    metadata.target_email,
+    metadata.target_member_email,
+    metadata.recipient_email,
+    metadata.email,
+  ]
+    .map(cleanEmail)
+    .filter((email) => email.includes("@"));
+
+  return candidates.find((email) => email !== OWNER_EMAIL) || candidates[0] || "";
+}
+
+function imageOf(row: Row) {
+  const metadata = metadataOf(row);
+  const photos = Array.isArray(row.photos) ? row.photos : [];
+  const photoUrls = Array.isArray(row.photo_urls) ? row.photo_urls : [];
+  const metadataPhotoUrls = Array.isArray(metadata.photo_urls) ? metadata.photo_urls : [];
+
+  return first(
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    row.main_photo_url,
+    row.cover_image,
+    row.thumbnail_url,
+    metadata.image_url,
+    metadata.photo_url,
+    metadata.primary_photo_url,
+    metadata.main_photo_url,
+    photoUrls[0],
+    metadataPhotoUrls[0],
+    photos[0]?.url,
+    photos[0]?.publicUrl,
+    photos[0]?.public_url,
+    photos[0]?.data_url,
+    photos[0]?.dataUrl,
+    photos[0]
+  );
+}
+
+function marketOf(row: Row) {
+  const metadata = metadataOf(row);
+
+  return first(
+    row.market,
+    [row.city, row.state].filter(Boolean).join(", "),
+    row.location,
+    row.state,
+    metadata.market,
+    metadata.location
+  );
+}
+
+function typeOf(row: Row) {
+  const metadata = metadataOf(row);
+
+  return first(
+    row.alert_type,
+    row.type,
+    row.category,
+    row.signal_type,
+    row.source,
+    metadata.alert_type,
+    metadata.type,
+    "alert"
+  );
+}
+
+function priorityOf(row: Row) {
+  const metadata = metadataOf(row);
+
+  return first(
+    row.priority,
+    row.urgency,
+    row.urgency_level,
+    row.severity,
+    metadata.priority,
+    metadata.urgency,
+    "medium"
+  ).toLowerCase();
+}
+
+function scoreOf(row: Row) {
+  const raw = Number(first(row.score, row.signal_score, row.confidence_score, row.match_score));
+
+  if (Number.isFinite(raw) && raw > 0) {
+    return Math.max(0, Math.min(100, Math.round(raw)));
   }
-  return "";
+
+  let score = 54;
+  const priority = priorityOf(row);
+
+  if (priority.includes("urgent")) score += 24;
+  if (priority.includes("high")) score += 14;
+  if (marketOf(row)) score += 6;
+  if (ownerEmailOf(row)) score += 8;
+  if (imageOf(row)) score += 6;
+
+  return Math.max(0, Math.min(100, score));
 }
 
-function exactSignalId(item: SignalCard) {
-  return first(item.signal_id, item.signalId, item.alert_id, item.alertId, item.id);
-}
+function toneOf(row: Row) {
+  const priority = priorityOf(row);
 
-function exactItemId(item: SignalCard) {
-  return first(item.item_id, item.itemId, item.deal_id, item.dealId, item.project_id, item.projectId, item.property_id, item.propertyId, item.pain_id, item.painId);
-}
-
-function titleOf(item: SignalCard) {
-  return first(item.title, item.name, item.headline, item.signal_title, item.alert_title, "VaultForge Signal");
-}
-
-function messageOf(item: SignalCard) {
-  return first(item.message, item.description, item.note, item.summary, item.reason, "Signal context ready for owner follow-up.");
-}
-
-function priorityOf(item: SignalCard) {
-  return first(item.priority, item.severity, item.alert_priority, item.urgency, "medium").toLowerCase();
-}
-
-function priorityTone(item: SignalCard) {
-  const priority = priorityOf(item);
-  if (priority === "urgent") return "#ffb3b3";
-  if (priority === "high") return "#f5d978";
+  if (priority.includes("urgent") || priority.includes("critical")) return "#ef4444";
+  if (priority.includes("high")) return "#e8c46b";
   return "#9df3bf";
 }
 
-function marketOf(item: SignalCard) {
-  return first(item.market, item.state, item.location, [item.city, item.state].filter(Boolean).join(", "));
-}
-
-function typeOf(item: SignalCard) {
-  return first(item.alert_type, item.type, item.category, item.signal_type, item.source, "signal");
-}
-
-function scoreOf(item: SignalCard) {
-  const raw = Number(item.score || item.confidence_score || item.match_score || 0);
-  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
-  const priority = priorityOf(item);
-  if (priority === "urgent") return 84;
-  if (priority === "high") return 72;
-  return 58;
-}
-
-function exactSignalHref(item: SignalCard) {
-  const signalId = exactSignalId(item);
-  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/intelligence";
-}
-
-function exactWorkHref(item: SignalCard) {
-  const itemId = exactItemId(item);
-  return itemId ? `/deal-room/${encodeURIComponent(itemId)}` : exactSignalHref(item);
-}
-
-function exactRoutingHref(item: SignalCard) {
-  const signalId = exactSignalId(item);
-  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
-}
-
-function connectHref(item: SignalCard, viewerEmail: string) {
-  const signalId = exactSignalId(item);
-  const itemId = exactItemId(item);
+function connectHref(row: Row, email: string) {
+  const signalId = signalIdOf(row);
+  const itemId = itemIdOf(row);
 
   if (!signalId) return "/alerts";
 
   const query = new URLSearchParams();
-  if (viewerEmail) query.set("email", viewerEmail);
+  if (email) query.set("email", email);
   if (itemId) query.set("item_id", itemId);
 
   return `/connect/${encodeURIComponent(signalId)}?${query.toString()}`;
 }
 
-async function loadSignals(currentEmail: string, owner: boolean) {
-  const headers = { "x-vf-email": currentEmail, "x-vf-admin": owner ? "1" : "0" };
+function signalHref(row: Row) {
+  const signalId = signalIdOf(row);
+  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/signals";
+}
 
-  const [storedRes, feedRes] = await Promise.all([
-    fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, { cache: "no-store", headers }),
-    fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, { cache: "no-store", headers }),
-  ]);
+function routingHref(row: Row) {
+  const signalId = signalIdOf(row);
+  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
+}
 
-  const storedData = await safeJson(storedRes);
-  const feedData = await safeJson(feedRes);
+function workHref(row: Row) {
+  const itemId = itemIdOf(row);
+  if (itemId) return `/deal-room/${encodeURIComponent(itemId)}`;
+  return signalHref(row);
+}
 
-  const stored = Array.isArray(storedData?.alerts)
-    ? storedData.alerts
-    : Array.isArray(storedData?.signals)
-    ? storedData.signals
-    : [];
+async function loadAlerts(currentEmail: string, owner: boolean) {
+  const headers = {
+    "x-vf-email": currentEmail,
+    "x-vf-admin": owner ? "1" : "0",
+  };
 
-  const generated = Array.isArray(feedData?.alerts)
-    ? feedData.alerts
-    : Array.isArray(feedData?.signals)
-    ? feedData.signals
-    : [];
+  const urls = [
+    `/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`,
+    `/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`,
+    `/api/pain/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`,
+    `/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`,
+  ];
 
-  const map = new Map<string, SignalCard>();
+  const rows: Row[] = [];
 
-  for (const item of [...stored, ...generated]) {
-    const signalId = exactSignalId(item) || `${titleOf(item)}-${messageOf(item)}`;
-    map.set(signalId, item);
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: "no-store", headers });
+      const data = await safeJson(res);
+
+      const list = Array.isArray(data.alerts)
+        ? data.alerts
+        : Array.isArray(data.signals)
+        ? data.signals
+        : Array.isArray(data.pains)
+        ? data.pains
+        : Array.isArray(data.actions)
+        ? data.actions
+        : Array.isArray(data.data)
+        ? data.data
+        : [];
+
+      rows.push(...list.map((item: Row) => ({ ...item, _loaded_from: url })));
+    } catch {
+      // Keep page alive if one feed is unavailable.
+    }
   }
 
-  return Array.from(map.values());
+  const seen = new Set<string>();
+
+  return rows
+    .filter((row) => {
+      const key = first(signalIdOf(row), itemIdOf(row), row.id, titleOf(row) + noteOf(row));
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => scoreOf(b) - scoreOf(a));
+}
+
+async function generateRouting(item: Row, email: string) {
+  const signalId = signalIdOf(item);
+  const itemId = itemIdOf(item);
+
+  const res = await fetch("/api/routing/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-vf-email": email,
+      "x-vf-admin": "1",
+    },
+    body: JSON.stringify({
+      email,
+      admin_email: email,
+      owner: "1",
+      signal_id: signalId,
+      item_id: itemId,
+      title: titleOf(item),
+      note: noteOf(item),
+      market: marketOf(item),
+      priority: priorityOf(item),
+      source: "alerts_window_generate",
+      item_kind: typeOf(item),
+    }),
+  });
+
+  const data = await safeJson(res);
+
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || data?.details || "Could not generate routing.");
+  }
+
+  return data;
 }
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background:
-      "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
+      "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 30%), radial-gradient(circle at bottom right, rgba(148,163,184,.10), transparent 32%), linear-gradient(180deg,#020303,#07090d 50%,#020303)",
     color: "white",
-    padding: "28px 18px 100px",
+    padding: "22px 16px 82px",
     fontFamily: "Inter, Arial, sans-serif",
   },
-  wrap: { maxWidth: 1240, margin: "0 auto" },
+  wrap: {
+    width: "min(1240px,100%)",
+    margin: "0 auto",
+  },
   hero: {
-    border: "1px solid rgba(232,196,107,.34)",
-    background: "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
-    borderRadius: 34,
-    padding: 26,
-    marginBottom: 22,
-    boxShadow: "0 30px 90px rgba(0,0,0,.34)",
+    border: "1px solid rgba(232,196,107,.28)",
+    borderRadius: 30,
+    padding: 24,
+    background: "linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.026))",
+    boxShadow: "0 28px 90px rgba(0,0,0,.38)",
+    marginBottom: 16,
+  },
+  eyebrow: {
+    color: "#e8c46b",
+    fontSize: 12,
+    letterSpacing: ".18em",
+    textTransform: "uppercase",
+    fontWeight: 950,
+    margin: "0 0 10px",
+  },
+  title: {
+    fontSize: "clamp(44px,8vw,92px)",
+    lineHeight: 0.88,
+    margin: 0,
+    letterSpacing: "-.06em",
+  },
+  muted: {
+    color: "#cbd5e1",
+    lineHeight: 1.55,
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(315px,1fr))",
+    gap: 16,
   },
   card: {
-    border: "1px solid rgba(255,255,255,.13)",
-    background: "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-    borderRadius: 28,
-    padding: 22,
-    boxShadow: "0 26px 80px rgba(0,0,0,.34)",
-  },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 18 },
-  chip: {
-    display: "inline-flex",
-    border: "1px solid rgba(157,243,191,.25)",
-    color: "#9df3bf",
-    background: "rgba(157,243,191,.07)",
-    borderRadius: 999,
-    padding: "8px 11px",
-    fontWeight: 850,
-    fontSize: 13,
-    margin: "0 7px 7px 0",
-  },
-  btn: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-    color: "#06100a",
-    border: "none",
-    borderRadius: 999,
-    padding: "13px 18px",
-    fontWeight: 950,
-    textDecoration: "none",
-    cursor: "pointer",
-    margin: "6px 6px 0 0",
-    minHeight: 46,
-  },
-  ghost: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
+    border: "1px solid rgba(232,196,107,.18)",
+    borderRadius: 24,
+    overflow: "hidden",
+    background: "linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.026))",
+    boxShadow: "0 20px 70px rgba(0,0,0,.25)",
     color: "white",
-    border: "1px solid rgba(255,255,255,.18)",
+  },
+  body: {
+    padding: 18,
+  },
+  chip: {
+    color: "#e5e7eb",
+    border: "1px solid rgba(255,255,255,.14)",
     background: "rgba(255,255,255,.055)",
     borderRadius: 999,
-    padding: "13px 18px",
-    fontWeight: 900,
-    textDecoration: "none",
-    cursor: "pointer",
-    margin: "6px 6px 0 0",
-    minHeight: 46,
+    padding: "8px 10px",
+    fontSize: 12,
+    fontWeight: 850,
+    display: "inline-flex",
+    margin: "0 8px 8px 0",
   },
-  danger: {
+  actionRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 16,
+  },
+  primary: {
+    color: "#101010",
+    textDecoration: "none",
+    borderRadius: 15,
+    padding: "12px 15px",
+    minHeight: 45,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#ffd0d0",
-    border: "1px solid rgba(255,120,120,.38)",
-    background: "rgba(255,255,255,.055)",
-    borderRadius: 999,
-    padding: "13px 18px",
-    fontWeight: 900,
-    textDecoration: "none",
+    fontWeight: 950,
+    background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+    border: "1px solid rgba(232,196,107,.7)",
     cursor: "pointer",
-    margin: "6px 6px 0 0",
-    minHeight: 46,
+  },
+  secondary: {
+    color: "#fff",
+    textDecoration: "none",
+    borderRadius: 15,
+    padding: "12px 15px",
+    minHeight: 45,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 850,
+    border: "1px solid rgba(255,255,255,.14)",
+    background: "rgba(255,255,255,.055)",
+    cursor: "pointer",
   },
   input: {
     width: "100%",
     boxSizing: "border-box",
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,.18)",
-    background: "rgba(255,255,255,.075)",
+    minHeight: 54,
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,.16)",
+    background: "rgba(255,255,255,.07)",
     color: "white",
-    padding: 14,
-    fontSize: 15,
+    padding: "0 16px",
+    fontSize: 16,
+    outline: "none",
   },
-  muted: { color: "rgba(255,255,255,.72)", lineHeight: 1.55 },
-  eyebrow: { color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" },
 };
 
-function StatCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
+function WindowCard({
+  row,
+  email,
+  owner,
+  generatingId,
+  onGenerate,
+}: {
+  row: Row;
+  email: string;
+  owner: boolean;
+  generatingId: string;
+  onGenerate: (row: Row) => void;
+}) {
+  const image = imageOf(row);
+  const tone = toneOf(row);
+  const signalId = signalIdOf(row);
+  const itemId = itemIdOf(row);
+  const ownerEmail = ownerEmailOf(row);
+  const activeId = first(signalId, itemId, titleOf(row));
+
   return (
-    <div style={styles.card}>
-      <div style={styles.eyebrow}>{title}</div>
-      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
-      <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>{detail}</p>
-    </div>
+    <article style={{ ...styles.card, borderColor: `${tone}66` }}>
+      {image ? (
+        <Link href={signalHref(row)} style={{ display: "block", textDecoration: "none" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image}
+            alt={titleOf(row)}
+            style={{
+              width: "100%",
+              height: 210,
+              objectFit: "cover",
+              display: "block",
+            }}
+          />
+        </Link>
+      ) : (
+        <div
+          style={{
+            height: 210,
+            display: "grid",
+            placeItems: "center",
+            color: "rgba(255,255,255,.55)",
+            borderBottom: "1px solid rgba(255,255,255,.10)",
+          }}
+        >
+          No photo connected
+        </div>
+      )}
+
+      <div style={styles.body}>
+        <p style={{ ...styles.eyebrow, color: tone }}>
+          {priorityOf(row)} · {typeOf(row)} · score {scoreOf(row)}
+        </p>
+
+        <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>{titleOf(row)}</h2>
+        <p style={{ ...styles.muted, fontSize: 16 }}>{noteOf(row)}</p>
+
+        <div style={{ marginTop: 12 }}>
+          {marketOf(row) ? <span style={styles.chip}>{marketOf(row)}</span> : null}
+          {signalId ? <span style={styles.chip}>Signal: {signalId}</span> : null}
+          {itemId ? <span style={styles.chip}>Item: {itemId}</span> : null}
+          <span style={styles.chip}>Owner: {ownerEmail || "resolved in Connect"}</span>
+        </div>
+
+        <div className="vf-actions" style={styles.actionRow}>
+          <Link href={connectHref(row, email)} style={styles.primary}>
+            Need More Info
+          </Link>
+          <Link href={connectHref(row, email)} style={styles.secondary}>
+            Message Owner
+          </Link>
+          <Link href={signalHref(row)} style={styles.secondary}>
+            Open Signal
+          </Link>
+          <Link href={routingHref(row)} style={styles.secondary}>
+            Routing Room
+          </Link>
+          <Link href={workHref(row)} style={styles.secondary}>
+            Work Area
+          </Link>
+          {owner ? (
+            <button
+              type="button"
+              onClick={() => onGenerate(row)}
+              disabled={generatingId === activeId}
+              style={styles.secondary}
+            >
+              {generatingId === activeId ? "Generating..." : "Generate Routing"}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </article>
   );
 }
 
 export default function AlertsPage() {
   const [email, setEmail] = useState("");
   const [owner, setOwner] = useState(false);
-  const [signals, setSignals] = useState<SignalCard[]>([]);
-  const [status, setStatus] = useState("Loading smart alerts...");
+  const [rows, setRows] = useState<Row[]>([]);
+  const [status, setStatus] = useState("Loading alerts...");
   const [search, setSearch] = useState("");
-  const [generateStatus, setGenerateStatus] = useState("");
   const [generatingId, setGeneratingId] = useState("");
+  const [generateStatus, setGenerateStatus] = useState("");
 
   async function load() {
-    setStatus("Loading smart alerts...");
+    const currentEmail = getEmail();
+    const currentOwner = isOwner(currentEmail);
+
+    setEmail(currentEmail);
+    setOwner(currentOwner);
+    setStatus("Loading alerts...");
+
+    if (!currentEmail) {
+      setRows([]);
+      setStatus("Login email not found. Please log in again.");
+      return;
+    }
 
     try {
-      const currentEmail = getEmail();
-      const currentOwner = isOwner(currentEmail);
-
-      setEmail(currentEmail);
-      setOwner(currentOwner);
-
-      if (!currentEmail) {
-        setStatus("Login email not found. Please log in again.");
-        return;
-      }
-
-      const rows = await loadSignals(currentEmail, currentOwner);
-      setSignals(rows);
-      setStatus(rows.length ? "" : "No alerts available yet.");
+      const loaded = await loadAlerts(currentEmail, currentOwner);
+      setRows(loaded);
+      setStatus(loaded.length ? "" : "No alerts found yet.");
     } catch (error: any) {
+      setRows([]);
       setStatus(error?.message || "Could not load alerts.");
     }
   }
 
-  async function generateRoutingFromCard(item: SignalCard) {
-    if (!owner) {
-      setGenerateStatus("Owner/admin access required to generate routing actions.");
-      return;
-    }
-
-    const signalId = exactSignalId(item);
-    const itemId = exactItemId(item);
-    const activeId = signalId || itemId || titleOf(item);
+  async function handleGenerate(row: Row) {
+    const activeId = first(signalIdOf(row), itemIdOf(row), titleOf(row));
 
     setGeneratingId(activeId);
-    setGenerateStatus("Generating routing action from exact card...");
+    setGenerateStatus("Generating routing action...");
 
     try {
-      const res = await fetch("/api/routing/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-vf-email": email, "x-vf-admin": "1" },
-        body: JSON.stringify({
-          email,
-          admin_email: email,
-          owner: "1",
-          signal_id: signalId,
-          item_id: itemId,
-          title: titleOf(item),
-          note: messageOf(item),
-          state: item?.state || item?.market || item?.location || "",
-          market: item?.market || item?.state || item?.location || "",
-          city: item?.city || "",
-          strategy: item?.strategy || item?.asset_strategy || item?.exit_strategy || "",
-          asset_type: item?.property_type || item?.asset_type || item?.item_kind || "",
-          role_needed: item?.role_needed || item?.target_role || item?.deal_need || "",
-          priority: priorityOf(item),
-          source: "exact_card_generate",
-          source_table: item?.source_table || "",
-          item_kind: item?.item_kind || typeOf(item),
-        }),
-      });
-
-      const data = await safeJson(res);
-      if (!res.ok || data?.ok === false) throw new Error(data?.error || data?.details || "Could not generate routing action.");
-      setGenerateStatus(data?.message || "Routing action generated from exact card.");
+      await generateRouting(row, email);
+      setGenerateStatus("Routing action generated.");
+      await load();
     } catch (error: any) {
-      setGenerateStatus(error?.message || "Could not generate routing action.");
+      setGenerateStatus(error?.message || "Could not generate routing.");
     } finally {
       setGeneratingId("");
     }
@@ -364,28 +664,48 @@ export default function AlertsPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return signals;
+    if (!q) return rows;
 
-    return signals.filter((item) =>
-      [titleOf(item), messageOf(item), marketOf(item), priorityOf(item), typeOf(item), exactSignalId(item), exactItemId(item)]
+    return rows.filter((row) =>
+      [titleOf(row), noteOf(row), marketOf(row), priorityOf(row), signalIdOf(row), itemIdOf(row), ownerEmailOf(row), typeOf(row)]
         .join(" ")
         .toLowerCase()
         .includes(q)
     );
-  }, [signals, search]);
+  }, [rows, search]);
 
-  const urgent = signals.filter((item) => priorityOf(item) === "urgent").length;
-  const exactSignals = signals.filter((item) => exactSignalId(item)).length;
-  const exactItems = signals.filter((item) => exactItemId(item)).length;
+  const urgent = rows.filter((row) => priorityOf(row).includes("urgent")).length;
+  const high = rows.filter((row) => priorityOf(row).includes("high")).length;
+  const withPhotos = rows.filter((row) => imageOf(row)).length;
+  const withOwners = rows.filter((row) => ownerEmailOf(row)).length;
 
   return (
     <main style={styles.page}>
       <style>{`
-        a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
-        input::placeholder { color: rgba(255,255,255,.48); }
-        @media (max-width: 760px) {
-          .vf-actions { display: grid !important; grid-template-columns: 1fr !important; gap: 10px !important; }
-          .vf-actions > * { width: 100%; margin: 0 !important; box-sizing: border-box; }
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        input::placeholder {
+          color: rgba(255,255,255,.42);
+        }
+
+        @media (max-width: 820px) {
+          .vf-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 10px !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+            justify-content: center;
+            margin: 0 !important;
+          }
         }
       `}</style>
 
@@ -395,112 +715,84 @@ export default function AlertsPage() {
             VAULTFORGE
           </Link>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Link href="/pain-feed" style={styles.ghost}>Pain Feed</Link>
-            <Link href="/messages" style={styles.ghost}>Messages</Link>
-            <Link href="/routing-inbox" style={styles.ghost}>Routing</Link>
-            <Link href="/dashboard" style={styles.ghost}>Dashboard</Link>
+            <Link href="/pain-feed" style={styles.secondary}>
+              Pain Feed
+            </Link>
+            <Link href="/activity" style={styles.secondary}>
+              Activity
+            </Link>
+            <Link href="/signals" style={styles.secondary}>
+              Signals
+            </Link>
+            <Link href="/messages" style={styles.secondary}>
+              Messages
+            </Link>
           </div>
         </nav>
 
         <section style={styles.hero}>
-          <div style={styles.eyebrow}>VaultForge Smart Alerts</div>
-          <h1 style={{ fontSize: "clamp(56px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            Alerts route clean.
-          </h1>
-          <p style={{ ...styles.muted, fontSize: 22 }}>
-            Need More Info and Message Owner now open the simple Connect system. They no longer use the broken old message save path.
+          <p style={styles.eyebrow}>VaultForge Alerts</p>
+          <h1 style={styles.title}>Alert windows.</h1>
+          <p style={{ ...styles.muted, maxWidth: 820, fontSize: 18, marginTop: 16 }}>
+            Same window-card layout as Pain, Activity, and Signals. Contact buttons stay on the working simple Connect path.
           </p>
 
-          <div>
+          <div style={{ marginTop: 16 }}>
             <span style={styles.chip}>Signed in: {email || "unknown"}</span>
-            <span style={styles.chip}>Alerts: {signals.length}</span>
-            <span style={styles.chip}>Exact Signals: {exactSignals}</span>
-            <span style={styles.chip}>Exact Items: {exactItems}</span>
+            <span style={styles.chip}>Alerts: {rows.length}</span>
             <span style={styles.chip}>Urgent: {urgent}</span>
+            <span style={styles.chip}>High: {high}</span>
+            <span style={styles.chip}>Photos: {withPhotos}</span>
+            <span style={styles.chip}>Owners: {withOwners}</span>
             <span style={styles.chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
-          <div className="vf-actions" style={{ marginTop: 14 }}>
-            <button type="button" style={styles.btn} onClick={load}>Refresh Alerts</button>
-            <Link href="/messages" style={styles.ghost}>Messages</Link>
-            <Link href="/pain-feed" style={styles.ghost}>Pain Feed</Link>
-            <Link href="/logout" style={styles.danger}>Logout</Link>
+          <div className="vf-actions" style={styles.actionRow}>
+            <button type="button" onClick={load} style={styles.primary}>
+              Refresh Alerts
+            </button>
+            <Link href="/pain-feed" style={styles.secondary}>
+              Pain Feed
+            </Link>
+            <Link href="/messages" style={styles.secondary}>
+              Messages
+            </Link>
+            <Link href="/activity" style={styles.secondary}>
+              Activity
+            </Link>
           </div>
 
-          {status ? (
-            <p style={{ color: status.toLowerCase().includes("could not") || status.toLowerCase().includes("not found") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {status}
-            </p>
-          ) : null}
-
-          {generateStatus ? (
-            <p style={{ color: generateStatus.toLowerCase().includes("could not") || generateStatus.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {generateStatus}
-            </p>
-          ) : null}
-        </section>
-
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 14, marginBottom: 22 }}>
-          <StatCard title="Alerts" value={signals.length} detail="Total alert cards loaded." />
-          <StatCard title="Exact Signals" value={exactSignals} detail="Cards with signal rooms." />
-          <StatCard title="Exact Items" value={exactItems} detail="Cards with work areas." />
-          <StatCard title="Urgent" value={urgent} detail="Urgent alert pressure." />
+          {generateStatus ? <p style={{ ...styles.muted, marginBottom: 0 }}>{generateStatus}</p> : null}
         </section>
 
         <section style={styles.hero}>
-          <div style={styles.eyebrow}>Search Alerts</div>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search alerts, markets, priorities, signal IDs..." style={styles.input} />
+          <p style={styles.eyebrow}>Search Alerts</p>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search title, market, owner, priority, signal id..."
+            style={styles.input}
+          />
         </section>
 
-        {filtered.length === 0 && !status ? (
-          <section style={styles.hero}>No matching alerts.</section>
-        ) : (
-          <section style={styles.grid}>
-            {filtered.map((item, index) => {
-              const signalId = exactSignalId(item);
-              const itemId = exactItemId(item);
-              const tone = priorityTone(item);
-              const activeId = signalId || itemId || titleOf(item);
-              const connect = connectHref(item, email);
-
-              return (
-                <article key={`${activeId}-${index}`} style={{ ...styles.card, borderColor: `${tone}66` }}>
-                  <div style={{ ...styles.eyebrow, color: tone }}>
-                    {priorityOf(item).toUpperCase()} · {typeOf(item)}
-                  </div>
-
-                  <h2 style={{ fontSize: 34, lineHeight: 1.05, margin: "0 0 12px" }}>{titleOf(item)}</h2>
-                  <p style={{ ...styles.muted, fontSize: 18 }}>{messageOf(item)}</p>
-
-                  <div>
-                    <span style={styles.chip}>Score: {scoreOf(item)}</span>
-                    {marketOf(item) ? <span style={styles.chip}>{marketOf(item)}</span> : null}
-                    {signalId ? <span style={styles.chip}>Signal: {signalId}</span> : null}
-                    {itemId ? <span style={styles.chip}>Item: {itemId}</span> : null}
-                  </div>
-
-                  <div className="vf-actions">
-                    <Link href={connect} style={styles.btn}>Need More Info</Link>
-                    <Link href={connect} style={styles.ghost}>Message Owner</Link>
-                    <Link href={exactSignalHref(item)} style={styles.ghost}>Open Signal</Link>
-                    <Link href={exactRoutingHref(item)} style={styles.ghost}>Routing Room</Link>
-                    <Link href={exactWorkHref(item)} style={styles.ghost}>Work Area</Link>
-                    {owner ? (
-                      <button
-                        type="button"
-                        style={styles.ghost}
-                        disabled={generatingId === activeId}
-                        onClick={() => generateRoutingFromCard(item)}
-                      >
-                        {generatingId === activeId ? "Generating..." : "Generate Routing"}
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
-              );
-            })}
+        {status ? (
+          <section style={styles.hero}>
+            <p style={{ ...styles.muted, margin: 0 }}>{status}</p>
           </section>
-        )}
+        ) : null}
+
+        <section style={styles.grid}>
+          {filtered.map((row, index) => (
+            <WindowCard
+              key={`${signalIdOf(row)}-${itemIdOf(row)}-${index}`}
+              row={row}
+              email={email}
+              owner={owner}
+              generatingId={generatingId}
+              onGenerate={handleGenerate}
+            />
+          ))}
+        </section>
       </div>
     </main>
   );
