@@ -86,6 +86,7 @@ const links = [
   { label: "Alerts", href: "/alerts", key: "alerts", tag: "SIGNAL" },
   { label: "Routing", href: "/routing-inbox", key: "routing", tag: "FLOW" },
   { label: "Introductions", href: "/introductions", key: "introductions", tag: "INTRO" },
+  { label: "Signals", href: "/signals", key: "signals", tag: "SIG" },
   { label: "Messages", href: "/messages", key: "messages", tag: "MSG" },
   { label: "Members", href: "/members", key: "members", tag: "NET" },
   { label: "Projects", href: "/projects", key: "projects", tag: "DEAL" },
@@ -106,7 +107,7 @@ const shell: React.CSSProperties = {
 
 const top: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(150px,.75fr) minmax(220px,1.4fr) minmax(150px,.75fr)",
+  gridTemplateColumns: "minmax(220px,.85fr) minmax(220px,1.2fr) minmax(150px,.7fr)",
   alignItems: "center",
   gap: 14,
   marginBottom: 16,
@@ -115,21 +116,23 @@ const top: React.CSSProperties = {
 const logoWrap: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 12,
+  gap: 14,
   textDecoration: "none",
   color: "white",
   minWidth: 0,
 };
 
-const mark: React.CSSProperties = {
-  width: 58,
-  height: 58,
-  borderRadius: 18,
-  border: "1px solid rgba(232,196,107,.42)",
-  background:
-    "linear-gradient(135deg,#e8c46b 0%,#e8c46b 42%,#f8fafc 43%,#cbd5e1 58%,#111827 59%,#05070a 100%)",
-  boxShadow: "0 14px 42px rgba(232,196,107,.20), inset 0 1px 0 rgba(255,255,255,.34)",
+const logoBox: React.CSSProperties = {
+  width: 112,
+  height: 72,
+  borderRadius: 16,
+  border: "1px solid rgba(232,196,107,.30)",
+  background: "rgba(0,0,0,.34)",
+  boxShadow: "0 18px 52px rgba(0,0,0,.36)",
+  overflow: "hidden",
   flex: "0 0 auto",
+  display: "grid",
+  placeItems: "center",
 };
 
 const center: React.CSSProperties = {
@@ -220,13 +223,20 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
 
       <section className="vf-command-top" style={top}>
         <Link href="/dashboard" className="vf-logo-link" style={logoWrap}>
-          <div style={mark} aria-hidden="true" />
+          <div style={logoBox}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/vaultforge-logo.png"
+              alt="VaultForge"
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ color: "#f8e7b0", fontWeight: 950, letterSpacing: ".16em", fontSize: 14 }}>
               VAULTFORGE
             </div>
             <div style={{ color: "#cbd5e1", fontSize: 13, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              Private Deal Flow OS
+              Private Deal Flow · Real Execution
             </div>
           </div>
         </Link>
