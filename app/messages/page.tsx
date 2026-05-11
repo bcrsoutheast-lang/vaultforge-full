@@ -19,9 +19,12 @@ type BucketKey =
 type Bucket = {
   key: BucketKey;
   title: string;
+  label: string;
   subtitle: string;
+  mission: string;
   href: string;
   threads: Message[];
+  accent: string;
 };
 
 function clean(value: unknown) {
@@ -121,25 +124,25 @@ function threadCategory(thread: Message): BucketKey {
   return "general";
 }
 
-function latestPreview(threads: Message[]) {
-  if (!threads.length) return "No messages yet.";
-  const latest = [...threads].sort(
+function latestThread(threads: Message[]) {
+  if (!threads.length) return null;
+
+  return [...threads].sort(
     (a, b) =>
       new Date(String(b.created_at || b.updated_at || 0)).getTime() -
       new Date(String(a.created_at || a.updated_at || 0)).getTime()
   )[0];
+}
 
+function latestPreview(threads: Message[]) {
+  const latest = latestThread(threads);
+  if (!latest) return "No conversations in this station.";
   return clean(latest.body || latest.message || latest.subject || "Open latest conversation.");
 }
 
 function latestTime(threads: Message[]) {
-  if (!threads.length) return "—";
-  const latest = [...threads].sort(
-    (a, b) =>
-      new Date(String(b.created_at || b.updated_at || 0)).getTime() -
-      new Date(String(a.created_at || a.updated_at || 0)).getTime()
-  )[0];
-
+  const latest = latestThread(threads);
+  if (!latest) return "—";
   return fmt(latest.created_at || latest.updated_at);
 }
 
@@ -152,35 +155,69 @@ function unreadCount(threads: Message[], email: string) {
   }).length;
 }
 
+function sourcePathForBucket(key: BucketKey) {
+  if (key === "pain") return "/pain-feed";
+  if (key === "alerts") return "/alerts";
+  if (key === "activity") return "/activity";
+  if (key === "projects") return "/projects";
+  if (key === "routing") return "/routing-inbox";
+  if (key === "introductions") return "/introductions";
+  return "/messages";
+}
+
+function sourcePathForThread(thread: Message) {
+  const category = threadCategory(thread);
+
+  if (thread.signal_id && category !== "projects") {
+    return `/signals/${encodeURIComponent(thread.signal_id)}`;
+  }
+
+  return sourcePathForBucket(category);
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 30%), radial-gradient(circle at bottom right, rgba(157,243,191,.08), transparent 30%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at 85% 10%, rgba(157,243,191,.12), transparent 26%), radial-gradient(circle at 90% 85%, rgba(181,92,255,.14), transparent 30%), linear-gradient(180deg,#020303 0%,#071326 48%,#020303 100%)",
   color: "white",
-  padding: "22px 16px 82px",
+  padding: "22px 16px 92px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { width: "min(1180px,100%)", margin: "0 auto" };
+const wrap: React.CSSProperties = { width: "min(1240px,100%)", margin: "0 auto" };
 
-const card: React.CSSProperties = {
+const glass: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.28)",
-  borderRadius: 28,
+  borderRadius: 32,
   padding: 24,
-  background: "rgba(255,255,255,.06)",
+  background:
+    "linear-gradient(145deg,rgba(255,255,255,.092),rgba(255,255,255,.034)), linear-gradient(135deg,rgba(232,196,107,.08),rgba(157,243,191,.035))",
   marginBottom: 16,
-  boxShadow: "0 22px 80px rgba(0,0,0,.26)",
+  boxShadow: "0 34px 110px rgba(0,0,0,.34)",
+  backdropFilter: "blur(14px)",
 };
 
-const bucketCard: React.CSSProperties = {
+const stationCard: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.22)",
-  borderRadius: 26,
+  borderRadius: 28,
   padding: 22,
-  background: "linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.032))",
+  background: "linear-gradient(145deg,rgba(255,255,255,.086),rgba(255,255,255,.032))",
   color: "white",
   textDecoration: "none",
   display: "block",
-  boxShadow: "0 18px 60px rgba(0,0,0,.24)",
+  boxShadow: "0 20px 70px rgba(0,0,0,.28)",
+  cursor: "pointer",
+  textAlign: "left",
+  minHeight: 260,
+};
+
+const threadCard: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 28,
+  padding: 22,
+  background: "linear-gradient(145deg,rgba(255,255,255,.072),rgba(255,255,255,.026))",
+  marginBottom: 14,
+  boxShadow: "0 20px 70px rgba(0,0,0,.24)",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -193,7 +230,7 @@ const eyebrow: React.CSSProperties = {
 
 const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
 
-const btn: React.CSSProperties = {
+const button: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
@@ -201,7 +238,7 @@ const btn: React.CSSProperties = {
   borderRadius: 999,
   padding: "12px 16px",
   border: 0,
-  background: "#e8c46b",
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
   fontWeight: 950,
   textDecoration: "none",
@@ -209,7 +246,7 @@ const btn: React.CSSProperties = {
 };
 
 const ghost: React.CSSProperties = {
-  ...btn,
+  ...button,
   background: "rgba(255,255,255,.06)",
   border: "1px solid rgba(255,255,255,.16)",
   color: "white",
@@ -224,12 +261,13 @@ const danger: React.CSSProperties = {
 const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  borderRadius: 16,
+  borderRadius: 18,
   border: "1px solid rgba(255,255,255,.18)",
   background: "rgba(255,255,255,.08)",
   color: "white",
-  padding: 14,
+  padding: "15px 16px",
   fontSize: 16,
+  outline: "none",
 };
 
 const chip: React.CSSProperties = {
@@ -242,6 +280,13 @@ const chip: React.CSSProperties = {
   margin: "0 7px 7px 0",
   fontSize: 12,
   fontWeight: 850,
+};
+
+const softChip: React.CSSProperties = {
+  ...chip,
+  color: "#e5e7eb",
+  border: "1px solid rgba(255,255,255,.14)",
+  background: "rgba(255,255,255,.055)",
 };
 
 export default function MessagesCommandCenter() {
@@ -346,79 +391,105 @@ export default function MessagesCommandCenter() {
 
     for (const thread of nonArchived) {
       const category = threadCategory(thread);
-      if (category === "archived") {
-        bucketMap.archived.push(thread);
-      } else {
-        bucketMap[category].push(thread);
-      }
+      if (category === "archived") bucketMap.archived.push(thread);
+      else bucketMap[category].push(thread);
     }
 
     return [
       {
         key: "all",
         title: "All Messages",
-        subtitle: "Every active VaultForge conversation.",
+        label: "Command",
+        subtitle: "Everything active.",
+        mission: "One clean view across the whole network.",
         href: "/messages",
         threads: bucketMap.all,
+        accent: "#e8c46b",
       },
       {
         key: "pain",
-        title: "Pain Messages",
-        subtitle: "Pain Button, Pain Feed, Pain Room follow-ups.",
+        title: "Pain",
+        label: "Intake",
+        subtitle: "Pain feed and problem requests.",
+        mission: "Problems that need action, routing, or owner contact.",
         href: "/pain-feed",
         threads: bucketMap.pain,
+        accent: "#ef4444",
       },
       {
         key: "alerts",
-        title: "Alert Messages",
-        subtitle: "Need More Info and alert response conversations.",
+        title: "Alerts",
+        label: "Signals",
+        subtitle: "Need More Info and alert responses.",
+        mission: "High-signal follow-ups from intelligence windows.",
         href: "/alerts",
         threads: bucketMap.alerts,
+        accent: "#f59e0b",
       },
       {
         key: "activity",
-        title: "Activity Messages",
-        subtitle: "Activity stream follow-ups and event replies.",
+        title: "Activity",
+        label: "Events",
+        subtitle: "Activity stream and event replies.",
+        mission: "Operational movement from the live activity board.",
         href: "/activity",
         threads: bucketMap.activity,
+        accent: "#38bdf8",
       },
       {
         key: "projects",
-        title: "Project Messages",
-        subtitle: "Deal rooms, projects, property, and work-area conversations.",
+        title: "Projects",
+        label: "Deals",
+        subtitle: "Deal rooms and property work.",
+        mission: "Project, property, and deal-room conversations.",
         href: "/projects",
         threads: bucketMap.projects,
+        accent: "#9df3bf",
       },
       {
         key: "routing",
-        title: "Routing Messages",
-        subtitle: "Routing action and signal-routing conversations.",
+        title: "Routing",
+        label: "Flow",
+        subtitle: "Routing action conversations.",
+        mission: "Member fit, routing, and execution movement.",
         href: "/routing-inbox",
         threads: bucketMap.routing,
+        accent: "#b55cff",
       },
       {
         key: "introductions",
-        title: "Introduction Messages",
-        subtitle: "Controlled introduction and connection conversations.",
+        title: "Introductions",
+        label: "Network",
+        subtitle: "Controlled intro conversations.",
+        mission: "Warm introductions and connection control.",
         href: "/introductions",
         threads: bucketMap.introductions,
+        accent: "#fb7185",
       },
       {
         key: "general",
-        title: "General Messages",
-        subtitle: "Uncategorized owner/member communication.",
+        title: "General",
+        label: "Inbox",
+        subtitle: "Unsorted conversations.",
+        mission: "Everything useful that has not been assigned a source yet.",
         href: "/messages",
         threads: bucketMap.general,
+        accent: "#94a3b8",
       },
       {
         key: "archived",
-        title: "Archived Messages",
-        subtitle: "Cleaned-up threads kept for later review.",
+        title: "Archived",
+        label: "Cleaned",
+        subtitle: "Stored for review.",
+        mission: "Closed or cleaned conversations kept out of the way.",
         href: "/messages",
         threads: bucketMap.archived,
+        accent: "#64748b",
       },
     ];
   }, [threads]);
+
+  const activeBucketData = buckets.find((bucket) => bucket.key === activeBucket) || buckets[0];
 
   const activeThreads = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -452,6 +523,9 @@ export default function MessagesCommandCenter() {
   const totalActive = buckets.find((bucket) => bucket.key === "all")?.threads.length || 0;
   const totalArchived = buckets.find((bucket) => bucket.key === "archived")?.threads.length || 0;
   const totalUnread = unreadCount(threads, email);
+  const highPriorityCount =
+    buckets.find((bucket) => bucket.key === "pain")?.threads.length ||
+    0 + (buckets.find((bucket) => bucket.key === "alerts")?.threads.length || 0);
 
   return (
     <main style={page}>
@@ -459,14 +533,14 @@ export default function MessagesCommandCenter() {
         a:hover, button:hover {
           transform: translateY(-1px);
           transition: all .18s ease;
-          filter: brightness(1.06);
+          filter: brightness(1.07);
         }
 
         input::placeholder {
           color: rgba(255,255,255,.42);
         }
 
-        @media (max-width: 760px) {
+        @media (max-width: 860px) {
           .vf-actions {
             display: grid !important;
             grid-template-columns: 1fr !important;
@@ -480,32 +554,75 @@ export default function MessagesCommandCenter() {
             margin: 0 !important;
           }
 
-          .vf-buckets {
+          .vf-stations {
+            grid-template-columns: 1fr !important;
+          }
+
+          .vf-metrics {
+            grid-template-columns: 1fr 1fr !important;
+          }
+        }
+
+        @media (max-width: 540px) {
+          .vf-metrics {
             grid-template-columns: 1fr !important;
           }
         }
       `}</style>
 
       <div style={wrap}>
-        <section style={card}>
-          <p style={eyebrow}>VaultForge Messages</p>
-          <h1 style={{ fontSize: "clamp(48px,11vw,86px)", lineHeight: 0.9, margin: "10px 0 18px" }}>
-            Communication command.
-          </h1>
-          <p style={{ ...muted, fontSize: 18 }}>
-            Clean, simple message workstations grouped by source. Open the right stack fast without mixing everything together.
-          </p>
+        <nav style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+          <Link href="/dashboard" style={{ color: "#f8e7b0", textDecoration: "none", fontWeight: 950, letterSpacing: ".12em" }}>
+            VAULTFORGE
+          </Link>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+            <Link href="/alerts" style={ghost}>Alerts</Link>
+            <Link href="/activity" style={ghost}>Activity</Link>
+            <Link href="/routing-inbox" style={ghost}>Routing</Link>
+          </div>
+        </nav>
 
-          <div style={{ marginTop: 14 }}>
-            <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>Active: {totalActive}</span>
-            <span style={chip}>Unread: {totalUnread}</span>
-            <span style={chip}>Archived: {totalArchived}</span>
+        <section style={glass}>
+          <p style={eyebrow}>VaultForge Communications OS</p>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.5fr) minmax(260px,.8fr)", gap: 18, alignItems: "end" }}>
+            <div>
+              <h1 style={{ fontSize: "clamp(54px,11vw,104px)", lineHeight: 0.84, margin: "10px 0 18px", letterSpacing: "-.07em" }}>
+                Message command center.
+              </h1>
+              <p style={{ ...muted, fontSize: 19, maxWidth: 760 }}>
+                Every conversation has a station. Pain, alerts, projects, routing, introductions, and activity stay organized so operators know exactly where to work.
+              </p>
+            </div>
+            <div style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 24, padding: 16, background: "rgba(0,0,0,.18)" }}>
+              <p style={{ ...eyebrow, color: "#9df3bf" }}>Operator View</p>
+              <p style={{ ...muted, margin: "0 0 8px" }}>Signed in</p>
+              <strong style={{ overflowWrap: "anywhere" }}>{email || "unknown"}</strong>
+            </div>
+          </div>
+
+          <div className="vf-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 20 }}>
+            <div style={{ border: "1px solid rgba(232,196,107,.24)", borderRadius: 22, padding: 16, background: "rgba(232,196,107,.08)" }}>
+              <p style={eyebrow}>Active</p>
+              <strong style={{ fontSize: 42 }}>{totalActive}</strong>
+            </div>
+            <div style={{ border: "1px solid rgba(157,243,191,.24)", borderRadius: 22, padding: 16, background: "rgba(157,243,191,.07)" }}>
+              <p style={{ ...eyebrow, color: "#9df3bf" }}>Unread</p>
+              <strong style={{ fontSize: 42 }}>{totalUnread}</strong>
+            </div>
+            <div style={{ border: "1px solid rgba(239,68,68,.24)", borderRadius: 22, padding: 16, background: "rgba(239,68,68,.07)" }}>
+              <p style={{ ...eyebrow, color: "#fecaca" }}>Pressure</p>
+              <strong style={{ fontSize: 42 }}>{highPriorityCount}</strong>
+            </div>
+            <div style={{ border: "1px solid rgba(148,163,184,.22)", borderRadius: 22, padding: 16, background: "rgba(148,163,184,.07)" }}>
+              <p style={{ ...eyebrow, color: "#cbd5e1" }}>Archived</p>
+              <strong style={{ fontSize: 42 }}>{totalArchived}</strong>
+            </div>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <button type="button" onClick={() => load(showArchived)} style={btn}>
-              Refresh
+            <button type="button" onClick={() => load(showArchived)} style={button}>
+              Refresh Command
             </button>
             <button
               type="button"
@@ -513,19 +630,19 @@ export default function MessagesCommandCenter() {
                 const next = !showArchived;
                 setShowArchived(next);
                 load(next);
+                if (next) setActiveBucket("archived");
+                else if (activeBucket === "archived") setActiveBucket("all");
               }}
               style={ghost}
             >
               {showArchived ? "Hide Archived" : "Load Archived"}
             </button>
-            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            <Link href="/activity" style={ghost}>Activity</Link>
+            <Link href="/messages" style={ghost}>Inbox</Link>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
           </div>
         </section>
 
-        <section className="vf-buckets" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 14, marginBottom: 16 }}>
+        <section className="vf-stations" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(255px,1fr))", gap: 14, marginBottom: 16 }}>
           {buckets.map((bucket) => {
             if (bucket.key === "archived" && !showArchived) return null;
 
@@ -539,34 +656,56 @@ export default function MessagesCommandCenter() {
                 type="button"
                 onClick={() => setActiveBucket(bucket.key)}
                 style={{
-                  ...bucketCard,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  borderColor: active ? "rgba(232,196,107,.75)" : "rgba(232,196,107,.22)",
+                  ...stationCard,
+                  borderColor: active ? bucket.accent : "rgba(232,196,107,.22)",
                   background: active
-                    ? "linear-gradient(145deg,rgba(232,196,107,.18),rgba(255,255,255,.055))"
-                    : bucketCard.background,
+                    ? `linear-gradient(145deg,${bucket.accent}28,rgba(255,255,255,.055))`
+                    : stationCard.background,
                 }}
               >
-                <p style={eyebrow}>{bucket.title}</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
-                  <strong style={{ fontSize: 44, lineHeight: 1 }}>{count}</strong>
-                  <span style={{ color: unread ? "#9df3bf" : "#94a3b8", fontWeight: 900 }}>{unread} unread</span>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                  <div>
+                    <p style={{ ...eyebrow, color: bucket.accent }}>{bucket.label}</p>
+                    <h2 style={{ fontSize: 30, lineHeight: 1, margin: "0 0 10px" }}>{bucket.title}</h2>
+                  </div>
+                  <div style={{ width: 54, height: 54, borderRadius: 18, display: "grid", placeItems: "center", border: `1px solid ${bucket.accent}66`, color: bucket.accent, background: `${bucket.accent}12`, fontWeight: 950 }}>
+                    {count}
+                  </div>
                 </div>
-                <p style={{ ...muted, marginTop: 0, minHeight: 44 }}>{bucket.subtitle}</p>
-                <p style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.35, margin: 0 }}>
-                  Latest: {latestPreview(bucket.threads).slice(0, 96)}
+
+                <p style={{ ...muted, minHeight: 42, marginTop: 4 }}>{bucket.subtitle}</p>
+                <p style={{ color: "#94a3b8", fontSize: 13, minHeight: 40, lineHeight: 1.35 }}>
+                  {bucket.mission}
                 </p>
-                <p style={{ color: "#94a3b8", fontSize: 13, marginBottom: 0 }}>{latestTime(bucket.threads)}</p>
+
+                <div style={{ marginTop: 12 }}>
+                  <span style={chip}>{count} total</span>
+                  <span style={unread ? chip : softChip}>{unread} unread</span>
+                </div>
+
+                <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 12, marginTop: 12 }}>
+                  <p style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 1.4, margin: 0 }}>
+                    {latestPreview(bucket.threads).slice(0, 108)}
+                  </p>
+                  <p style={{ color: "#94a3b8", fontSize: 12, margin: "8px 0 0" }}>{latestTime(bucket.threads)}</p>
+                </div>
               </button>
             );
           })}
         </section>
 
-        <section style={card}>
-          <p style={eyebrow}>
-            {buckets.find((bucket) => bucket.key === activeBucket)?.title || "Messages"} · {activeThreads.length}
-          </p>
+        <section style={glass}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+            <div>
+              <p style={{ ...eyebrow, color: activeBucketData.accent }}>{activeBucketData.label} Station</p>
+              <h2 style={{ fontSize: 36, lineHeight: 1, margin: "0 0 8px" }}>{activeBucketData.title}</h2>
+              <p style={{ ...muted, margin: 0 }}>{activeBucketData.mission}</p>
+            </div>
+            <Link href={activeBucketData.href} style={ghost}>
+              Open Source Page
+            </Link>
+          </div>
+
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -575,40 +714,56 @@ export default function MessagesCommandCenter() {
           />
         </section>
 
-        {status ? <section style={card}>{status}</section> : null}
+        {status ? <section style={glass}>{status}</section> : null}
 
-        {activeThreads.length === 0 && !status ? <section style={card}>No messages found in this workstation.</section> : null}
+        {activeThreads.length === 0 && !status ? (
+          <section style={glass}>No conversations in this station yet.</section>
+        ) : null}
 
         {activeThreads.map((thread) => {
           const archived = thread.status === "archived";
           const threadId = clean(thread.thread_id);
           const busy = busyThread === threadId;
           const category = threadCategory(thread);
+          const bucket = buckets.find((item) => item.key === category) || buckets[0];
 
           return (
             <article
               key={threadId}
               style={{
-                ...card,
+                ...threadCard,
                 opacity: archived ? 0.72 : 1,
-                borderColor: archived ? "rgba(148,163,184,.32)" : "rgba(232,196,107,.28)",
+                borderColor: archived ? "rgba(148,163,184,.32)" : `${bucket.accent}77`,
               }}
             >
-              <p style={eyebrow}>{archived ? "Archived Thread" : `${category} thread`}</p>
-              <h2 style={{ marginBottom: 8 }}>{thread.subject || "VaultForge message"}</h2>
-              <p style={muted}>{thread.body || "Open conversation."}</p>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 14, alignItems: "start" }}>
+                <div>
+                  <p style={{ ...eyebrow, color: bucket.accent }}>{archived ? "Archived Thread" : `${bucket.title} Thread`}</p>
+                  <h2 style={{ margin: "0 0 8px", fontSize: 28 }}>{thread.subject || "VaultForge message"}</h2>
+                  <p style={{ ...muted, margin: "0 0 12px" }}>{thread.body || "Open conversation."}</p>
+                </div>
+                <div style={{ border: `1px solid ${bucket.accent}55`, borderRadius: 16, padding: "9px 11px", color: bucket.accent, background: `${bucket.accent}12`, fontWeight: 950 }}>
+                  {category.toUpperCase()}
+                </div>
+              </div>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
-                <span style={{ ...ghost, minHeight: 32, padding: "7px 10px", fontSize: 13 }}>From: {thread.from_email}</span>
-                <span style={{ ...ghost, minHeight: 32, padding: "7px 10px", fontSize: 13 }}>To: {thread.to_email}</span>
-                <span style={{ ...ghost, minHeight: 32, padding: "7px 10px", fontSize: 13 }}>Status: {thread.status || "open"}</span>
-                <span style={{ ...ghost, minHeight: 32, padding: "7px 10px", fontSize: 13 }}>{fmt(thread.created_at)}</span>
+                <span style={softChip}>From: {thread.from_email}</span>
+                <span style={softChip}>To: {thread.to_email}</span>
+                <span style={softChip}>Status: {thread.status || "open"}</span>
+                <span style={softChip}>{fmt(thread.created_at)}</span>
+                {thread.signal_id ? <span style={softChip}>Signal: {thread.signal_id}</span> : null}
               </div>
 
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                <Link href={`/messages/${encodeURIComponent(threadId)}?email=${encodeURIComponent(email)}`} style={btn}>
+                <Link href={`/messages/${encodeURIComponent(threadId)}?email=${encodeURIComponent(email)}`} style={button}>
                   Open Thread
                 </Link>
+
+                <Link href={sourcePathForThread(thread)} style={ghost}>
+                  Open Source
+                </Link>
+
                 {archived ? (
                   <button type="button" disabled={busy} onClick={() => cleanup(threadId, "restore")} style={ghost}>
                     {busy ? "Working..." : "Restore"}
@@ -618,14 +773,10 @@ export default function MessagesCommandCenter() {
                     {busy ? "Working..." : "Archive"}
                   </button>
                 )}
+
                 <button type="button" disabled={busy} onClick={() => cleanup(threadId, "delete")} style={danger}>
                   {busy ? "Working..." : "Delete"}
                 </button>
-                {thread.signal_id ? (
-                  <Link href={`/signals/${encodeURIComponent(thread.signal_id)}`} style={ghost}>
-                    Signal
-                  </Link>
-                ) : null}
               </div>
             </article>
           );
