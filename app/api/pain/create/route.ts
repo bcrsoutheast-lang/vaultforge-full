@@ -4,513 +4,284 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+type AnyRecord = Record<string, any>;
 
-type AnyRow = Record<string, any>;
+const PAIN_TABLE = "vf_pain_submissions";
 
-function supabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) {
-    throw new Error("Missing Supabase environment values.");
-  }
+  if (!url || !key) return null;
 
   return createClient(url, key, {
     auth: {
-      autoRefreshToken: false,
       persistSession: false,
-      detectSessionInUrl: false,
+      autoRefreshToken: false,
     },
   });
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
+function cleanText(value: unknown) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
 }
 
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
+function cleanLower(value: unknown) {
+  return cleanText(value).toLowerCase();
 }
 
-function readCookie(cookieHeader: string, name: string) {
-  const parts = cookieHeader.split(";").map((part) => part.trim());
-
-  for (const part of parts) {
-    if (!part.startsWith(`${name}=`)) continue;
-
-    try {
-      return decodeURIComponent(part.slice(name.length + 1));
-    } catch {
-      return part.slice(name.length + 1);
-    }
-  }
-
-  return "";
-}
-
-function requestEmail(request: Request, body: AnyRow) {
-  const cookie = request.headers.get("cookie") || "";
-
-  return cleanEmail(
-    request.headers.get("x-vf-email") ||
-      body.email ||
-      body.member_email ||
-      readCookie(cookie, "vf_email") ||
-      readCookie(cookie, "vf_member_email") ||
-      readCookie(cookie, "vf_admin_email")
-  );
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
+function firstText(body: AnyRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = body?.[key];
+    const text = cleanText(value);
     if (text) return text;
   }
-
   return "";
 }
 
-function photoRecords(body: AnyRow) {
-  const photos = Array.isArray(body.photos) ? body.photos : [];
-  const photoUrls = Array.isArray(body.photo_urls) ? body.photo_urls : [];
-
-  if (photos.length) {
-    return photos.slice(0, 8).map((photo: AnyRow, index: number) => {
-      const url = first(photo.url, photo.public_url, photo.data_url, photo.dataUrl);
-      return {
-        name: first(photo.name, `pain-photo-${index + 1}`),
-        size: Number(photo.size || 0),
-        type: first(photo.type, "image"),
-        path: first(photo.path),
-        bucket: first(photo.bucket),
-        url,
-        public_url: url,
-      };
-    });
+function arrayFromAny(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => cleanText(item)).filter(Boolean);
   }
-
-  return photoUrls.slice(0, 8).map((url: string, index: number) => ({
-    name: `pain-photo-${index + 1}`,
-    size: 0,
-    type: "image",
-    path: "",
-    bucket: "",
-    url,
-    public_url: url,
-  }));
-}
-
-async function insertFirstWorking(supabase: any, tables: string[], variants: AnyRow[]) {
-  const errors: string[] = [];
-
-  for (const table of tables) {
-    for (const payload of variants) {
-      try {
-        const { data, error } = await supabase
-          .from(table)
-          .insert(payload)
-          .select("*")
-          .single();
-
-        if (!error && data) {
-          return { ok: true, table, row: data };
-        }
-
-        if (error?.message && errors.length < 16) {
-          errors.push(`${table}: ${error.message}`);
-        }
-      } catch (error: any) {
-        if (error?.message && errors.length < 16) {
-          errors.push(`${table}: ${error.message}`);
-        }
-      }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map((item) => cleanText(item)).filter(Boolean);
+    } catch {
+      return [trimmed];
     }
   }
+  return [];
+}
 
+function makeId(prefix: string) {
+  const random = Math.random().toString(36).slice(2, 10);
+  return `${prefix}_${Date.now()}_${random}`;
+}
+
+function makeDirectLinks(baseUrl: string, painId: string, signalId: string, routingId: string, activityId: string) {
+  const base = baseUrl.replace(/\/$/, "");
   return {
-    ok: false,
-    error: errors[0] || "No insert target accepted payload.",
-    errors,
+    pain_room: `${base}/pain-room/${encodeURIComponent(painId)}`,
+    signal_room: `${base}/signals/${encodeURIComponent(signalId)}`,
+    routing_room: `${base}/routing-room/${encodeURIComponent(routingId || signalId)}`,
+    activity_room: `${base}/activity/pain/${encodeURIComponent(activityId)}`,
+    pain_feed: `${base}/pain-feed`,
+    alerts: `${base}/alerts`,
+    routing_inbox: `${base}/routing-inbox`,
   };
 }
 
-function createSignalPayload(body: AnyRow, painRow: AnyRow, email: string, photos: AnyRow[]) {
-  const painId = first(painRow.id, painRow.pain_id, painRow.uuid);
-  const title = first(body.title, body.pain_label, "VaultForge pain signal");
-  const routeSummary = first(body.route_summary, body.notes, "VaultForge pain signal submitted.");
-  const photoUrls = photos.map((photo) => first(photo.url, photo.public_url)).filter(Boolean);
-  const primaryPhoto = first(photoUrls[0]);
-
-  return {
-    title,
-    name: title,
-    signal_title: title,
-    type: "pain_signal",
-    signal_type: "pain",
-    priority:
-      body.urgency === "emergency"
-        ? "urgent"
-        : body.urgency === "high"
-        ? "high"
-        : "medium",
-    score: Number(body.urgency_score || 60),
-    market: [body.city, body.state].filter(Boolean).join(", "),
-    state: body.state,
-    city: body.city,
-    asset_type: body.asset_type,
-    item_id: painId,
-    pain_id: painId,
-    related_deal_id: painId,
-    member_email: email,
-    owner_email: OWNER_EMAIL,
-    message: routeSummary,
-    note: routeSummary,
-    description: routeSummary,
-    image_url: primaryPhoto || null,
-    photo_url: primaryPhoto || null,
-    photo_urls: photoUrls,
-    source: "adaptive_pain_button",
-    source_table: "pain",
-    status: "active",
-    created_at: new Date().toISOString(),
-    metadata: {
-      pain_id: painId,
-      pain_type: body.pain_type,
-      pain_label: body.pain_label,
-      route_summary: routeSummary,
-      best_route: body.best_route,
-      help_requested: body.help_requested,
-      photos,
-      photo_urls: photoUrls,
-      raw_fields: body.raw_fields || {},
+function json(data: AnyRecord, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
     },
-  };
+  });
 }
 
-function createActivityPayload(body: AnyRow, painRow: AnyRow, email: string, signalRow: AnyRow | null, photos: AnyRow[]) {
-  const painId = first(painRow.id, painRow.pain_id, painRow.uuid);
-  const signalId = first(signalRow?.id, signalRow?.signal_id, signalRow?.uuid);
-  const title = first(body.title, body.pain_label, "VaultForge pain signal");
-  const routeSummary = first(body.route_summary, body.notes, "VaultForge pain signal submitted.");
-  const photoUrls = photos.map((photo) => first(photo.url, photo.public_url)).filter(Boolean);
-  const primaryPhoto = first(photoUrls[0]);
-
-  return {
-    event_type: "pain_signal",
-    type: "pain_signal",
-    event_title: title,
-    title,
-    event_description: routeSummary,
-    note: routeSummary,
-    message: routeSummary,
-    member_email: email,
-    owner_email: OWNER_EMAIL,
-    related_deal_id: painId,
-    item_id: painId,
-    pain_id: painId,
-    related_alert_id: signalId || null,
-    signal_id: signalId || null,
-    priority:
-      body.urgency === "emergency"
-        ? "urgent"
-        : body.urgency === "high"
-        ? "high"
-        : "medium",
-    image_url: primaryPhoto || null,
-    photo_url: primaryPhoto || null,
-    photo_urls: photoUrls,
-    visibility: "member",
-    source: "adaptive_pain_button",
-    created_at: new Date().toISOString(),
-    metadata: {
-      pain_id: painId,
-      signal_id: signalId,
-      pain_type: body.pain_type,
-      pain_label: body.pain_label,
-      route_summary: routeSummary,
-      best_route: body.best_route,
-      help_requested: body.help_requested,
-      photos,
-      photo_urls: photoUrls,
-    },
-  };
+async function safeInsert(client: any, table: string, payload: AnyRecord) {
+  try {
+    const { data, error } = await client.from(table).insert(payload).select("*").single();
+    if (error) return { data: null, error };
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error };
+  }
 }
 
-function createRoutingPayload(body: AnyRow, painRow: AnyRow, email: string, signalRow: AnyRow | null) {
-  const painId = first(painRow.id, painRow.pain_id, painRow.uuid);
-  const signalId = first(signalRow?.id, signalRow?.signal_id, signalRow?.uuid);
-  const title = first(body.title, body.pain_label, "VaultForge pain routing");
-  const routeSummary = first(body.route_summary, body.notes, "VaultForge pain signal submitted.");
+async function bestEffortInsert(client: any, table: string, payload: AnyRecord) {
+  try {
+    await client.from(table).insert(payload);
+  } catch {
+    // Best effort only. Pain save must not fail because a secondary signal/activity table is missing.
+  }
+}
 
-  return {
-    title,
-    note: routeSummary,
-    role: "buyer",
-    route_role: "buyer",
-    target_role: body.best_route || "buyer / capital / operator",
-    priority:
-      body.urgency === "emergency"
-        ? "urgent"
-        : body.urgency === "high"
-        ? "high"
-        : "medium",
-    score: Number(body.urgency_score || 60),
-    signal_id: signalId,
-    item_id: painId,
-    pain_id: painId,
-    member_email: email,
-    target_email: email,
-    target_member_email: email,
-    owner_email: OWNER_EMAIL,
-    status: "pending",
-    source: "adaptive_pain_button",
-    created_at: new Date().toISOString(),
-    metadata: {
-      pain_id: painId,
-      signal_id: signalId,
-      pain_type: body.pain_type,
-      route_summary: routeSummary,
-      best_route: body.best_route,
-      help_requested: body.help_requested,
-    },
-  };
+export async function GET() {
+  const client = supabaseAdmin();
+  if (!client) {
+    return json({ ok: false, error: "Supabase environment variables are missing." }, 500);
+  }
+
+  return json({
+    ok: true,
+    route: "/api/pain/create",
+    writes_to: PAIN_TABLE,
+    message: "Pain create route is live.",
+  });
 }
 
 export async function POST(request: Request) {
+  const client = supabaseAdmin();
+  if (!client) {
+    return json({ ok: false, error: "Supabase environment variables are missing." }, 500);
+  }
+
+  let body: AnyRecord = {};
+
   try {
-    const body = await request.json().catch(() => ({}));
-    const email = requestEmail(request, body);
+    body = await request.json();
+  } catch {
+    return json({ ok: false, error: "Invalid JSON body." }, 400);
+  }
 
-    if (!email || !email.includes("@")) {
-      return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
-    }
+  const cookieHeader = request.headers.get("cookie") || "";
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
 
-    if (!clean(body.title)) {
-      return NextResponse.json({ ok: false, error: "Pain title required." }, { status: 400 });
-    }
+  const submittedBy =
+    firstText(body, ["submitted_by", "submittedBy", "user_email", "member_email", "memberEmail", "email"]) ||
+    cleanLower(cookieHeader.match(/vf_email=([^;]+)/)?.[1] ? decodeURIComponent(cookieHeader.match(/vf_email=([^;]+)/)?.[1] || "") : "") ||
+    "unknown";
 
-    const supabase = supabaseClient();
-    const now = new Date().toISOString();
-    const photos = photoRecords(body);
-    const photoUrls = photos.map((photo) => first(photo.url, photo.public_url)).filter(Boolean);
-    const primaryPhoto = first(photoUrls[0]);
+  const title = firstText(body, ["title", "headline", "name"]);
+  const notes = firstText(body, ["notes", "situation", "details", "description"]);
+  const helpRequested = firstText(body, ["help_requested", "helpRequested", "requested_help", "requestedHelp"]);
+  const painType = firstText(body, ["pain_type", "painType", "type", "category"]);
 
-    const painCanonical = {
-      email,
-      member_email: email,
-      owner_email: OWNER_EMAIL,
-      pain_type: body.pain_type || "general",
-      pain_label: body.pain_label || body.pain_type || "Pain Signal",
-      title: body.title,
-      state: body.state,
-      city: body.city,
-      county: body.county,
-      asset_type: body.asset_type,
-      address: body.address,
-      confidentiality: body.confidentiality,
-      urgency: body.urgency,
-      urgency_score: body.urgency_score,
-      timeline: body.timeline,
-      capital_needed: body.capital_needed,
-      asking_price: body.asking_price,
-      arv: body.arv,
-      repair_estimate: body.repair_estimate,
-      help_requested: body.help_requested,
-      route_summary: body.route_summary,
-      best_route: body.best_route,
-      notes: body.notes,
-      image_url: primaryPhoto || null,
-      photo_url: primaryPhoto || null,
-      photo_urls: photoUrls,
-      photos,
-      photo_count: photos.length,
-      status: "new",
-      source: "adaptive_pain_button",
-      created_at: now,
-      updated_at: now,
-      metadata: {
-        raw_fields: body.raw_fields || {},
-        photos,
-        photo_urls: photoUrls,
-        upload_errors: body.upload_errors || [],
-        source: "adaptive_pain_button",
-      },
-    };
+  if (!title && !notes && !helpRequested) {
+    return json({ ok: false, error: "Missing Pain title, notes, or help requested." }, 400);
+  }
 
-    const painResult = await insertFirstWorking(
-      supabase,
-      ["pain_requests", "vf_pain_requests", "vf_pain_signals", "pain_signals"],
-      [
-        painCanonical,
-        {
-          member_email: painCanonical.member_email,
-          email,
-          title: painCanonical.title,
-          pain_type: painCanonical.pain_type,
-          pain_label: painCanonical.pain_label,
-          urgency: painCanonical.urgency,
-          state: painCanonical.state,
-          city: painCanonical.city,
-          help_requested: painCanonical.help_requested,
-          route_summary: painCanonical.route_summary,
-          notes: painCanonical.notes,
-          image_url: primaryPhoto || null,
-          photo_url: primaryPhoto || null,
-          photo_urls: photoUrls,
-          photos,
-          created_at: now,
-          updated_at: now,
-          metadata: painCanonical.metadata,
-        },
-        {
-          email,
-          title: painCanonical.title,
-          message: first(painCanonical.route_summary, painCanonical.notes),
-          image_url: primaryPhoto || null,
-          photo_url: primaryPhoto || null,
-          photo_urls: photoUrls,
-          created_at: now,
-          metadata: painCanonical.metadata,
-        },
-      ]
-    );
+  const photoUrls = [
+    ...arrayFromAny(body.photo_urls),
+    ...arrayFromAny(body.photoUrls),
+    ...arrayFromAny(body.photos),
+    ...arrayFromAny(body.files),
+  ];
 
-    if (!painResult.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Pain request could not be saved.",
-          details: painResult.error,
-          attempts: painResult.errors,
-        },
-        { status: 500 }
-      );
-    }
+  const uniquePhotoUrls = Array.from(new Set(photoUrls.filter(Boolean)));
+  const firstPhoto = firstText(body, ["image_url", "imageUrl", "photo_url", "photoUrl"]) || uniquePhotoUrls[0] || "";
 
-    const signalPayload = createSignalPayload(body, painResult.row, email, photos);
-    const signalResult = await insertFirstWorking(
-      supabase,
-      ["vf_intelligence_signals", "intelligence_signals", "vf_signals", "signals"],
-      [
-        signalPayload,
-        {
-          title: signalPayload.title,
-          signal_type: signalPayload.signal_type,
-          priority: signalPayload.priority,
-          score: signalPayload.score,
-          market: signalPayload.market,
-          item_id: signalPayload.item_id,
-          member_email: signalPayload.member_email,
-          note: signalPayload.note,
-          image_url: primaryPhoto || null,
-          photo_url: primaryPhoto || null,
-          photo_urls: photoUrls,
-          source: signalPayload.source,
-          created_at: now,
-          metadata: signalPayload.metadata,
-        },
-      ]
-    );
+  const signalId = firstText(body, ["signal_id", "signalId"]) || makeId("signal");
+  const routingId = firstText(body, ["routing_id", "routingId"]) || signalId;
+  const activityId = firstText(body, ["activity_id", "activityId"]) || makeId("activity");
 
-    const signalRow = signalResult.ok ? signalResult.row : null;
+  const directLinks = makeDirectLinks(baseUrl, "pending", signalId, routingId, activityId);
 
-    const activityPayload = createActivityPayload(body, painResult.row, email, signalRow, photos);
-    const activityResult = await insertFirstWorking(
-      supabase,
-      ["vf_activity_events", "activity_events"],
-      [
-        activityPayload,
-        {
-          event_type: activityPayload.event_type,
-          event_title: activityPayload.event_title,
-          event_description: activityPayload.event_description,
-          member_email: email,
-          owner_email: OWNER_EMAIL,
-          related_deal_id: activityPayload.related_deal_id,
-          related_alert_id: activityPayload.related_alert_id,
-          image_url: primaryPhoto || null,
-          photo_url: primaryPhoto || null,
-          photo_urls: photoUrls,
-          visibility: "member",
-          metadata: activityPayload.metadata,
-        },
-        {
-          event_type: activityPayload.event_type,
-          event_title: activityPayload.event_title,
-          event_description: activityPayload.event_description,
-          metadata: activityPayload.metadata,
-        },
-      ]
-    );
+  const payload: AnyRecord = {
+    member_email: submittedBy,
+    submitted_by: submittedBy,
+    user_email: submittedBy,
+    title: title || painType || "VaultForge Pain Request",
+    description: notes || helpRequested || title || "",
+    notes,
+    help_requested: helpRequested,
+    requested_help: helpRequested,
+    pain_type: painType || "General Pain",
+    urgency: firstText(body, ["urgency", "urgency_level", "urgencyLevel"]),
+    urgency_level: firstText(body, ["urgency_level", "urgencyLevel", "urgency"]),
+    timeline: firstText(body, ["timeline", "deadline"]),
+    confidentiality: firstText(body, ["confidentiality", "privacy"]),
+    operating_state: firstText(body, ["operating_state", "operatingState", "state"]),
+    state: firstText(body, ["state", "operating_state", "operatingState"]),
+    city: firstText(body, ["city"]),
+    area: firstText(body, ["area", "submarket"]),
+    submarket: firstText(body, ["submarket", "area"]),
+    asset_type: firstText(body, ["asset_type", "assetType"]),
+    property_address: firstText(body, ["property_address", "propertyAddress", "address", "location"]),
+    address: firstText(body, ["address", "property_address", "propertyAddress", "location"]),
+    location: firstText(body, ["location", "address", "property_address", "propertyAddress"]),
+    capital_needed: firstText(body, ["capital_needed", "capitalNeeded"]),
+    asking_price: firstText(body, ["asking_price", "askingPrice"]),
+    arv_value: firstText(body, ["arv_value", "arvValue", "estimated_value", "estimatedValue"]),
+    repairs_needed: firstText(body, ["repairs_needed", "repairsNeeded", "estimated_repairs", "estimatedRepairs"]),
+    estimated_value: firstText(body, ["estimated_value", "estimatedValue", "arv_value", "arvValue"]),
+    estimated_repairs: firstText(body, ["estimated_repairs", "estimatedRepairs", "repairs_needed", "repairsNeeded"]),
+    image_url: firstPhoto,
+    photo_url: firstPhoto,
+    photo_urls: uniquePhotoUrls,
+    photos: uniquePhotoUrls,
+    signal_id: signalId,
+    routing_id: routingId,
+    activity_id: activityId,
+    status: "new",
+    routing_status: "new",
+    route_context: firstText(body, ["route_context", "routeContext"]) || "buyer / capital / operator",
+    direct_links: directLinks,
+    archived: false,
+    resolved: false,
+    updated_at: new Date().toISOString(),
+  };
 
-    const routingPayload = createRoutingPayload(body, painResult.row, email, signalRow);
-    const routingResult = await insertFirstWorking(
-      supabase,
-      ["vf_routing_actions", "routing_actions"],
-      [
-        routingPayload,
-        {
-          title: routingPayload.title,
-          note: routingPayload.note,
-          role: routingPayload.role,
-          priority: routingPayload.priority,
-          score: routingPayload.score,
-          signal_id: routingPayload.signal_id,
-          item_id: routingPayload.item_id,
-          member_email: routingPayload.member_email,
-          owner_email: OWNER_EMAIL,
-          status: routingPayload.status,
-          source: routingPayload.source,
-          created_at: now,
-          metadata: routingPayload.metadata,
-        },
-      ]
-    );
+  const insertResult = await safeInsert(client, PAIN_TABLE, payload);
 
-    const painId = first(painResult.row?.id, painResult.row?.pain_id, painResult.row?.uuid);
-    const signalId = first(signalRow?.id, signalRow?.signal_id, signalRow?.uuid, activityPayload.signal_id);
-    const routingId = routingResult.ok ? first(routingResult.row?.id, routingResult.row?.routing_id, routingResult.row?.uuid) : "";
-    const activityId = activityResult.ok ? first(activityResult.row?.id, activityResult.row?.event_id, activityResult.row?.uuid) : "";
-
-    return NextResponse.json({
-      ok: true,
-      message: "Pain signal submitted and routed into VaultForge intelligence.",
-      pain: painResult,
-      signal: signalResult,
-      activity: activityResult,
-      routing: routingResult,
-      photo_urls: photoUrls,
-      photos,
-      links: {
-        pain_id: painId,
-        signal_id: signalId,
-        routing_id: routingId,
-        activity_id: activityId,
-        pain_room: painId ? `/pain-room/${encodeURIComponent(painId)}` : "/pain-feed",
-        signal_room: signalId ? `/signals/${encodeURIComponent(signalId)}` : "/alerts",
-        routing_room: signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox",
-        activity_room: activityId ? `/activity/pain_signal/${encodeURIComponent(activityId)}` : "/activity",
-      },
-      next: {
-        pain_feed: "/pain-feed",
-        activity: "/activity",
-        alerts: "/alerts",
-        routing_inbox: "/routing-inbox",
-      },
-    });
-  } catch (error: any) {
-    return NextResponse.json(
+  if (insertResult.error) {
+    return json(
       {
         ok: false,
-        error: "Pain create route failed.",
-        details: error?.message || String(error),
+        error: "Pain request could not be saved.",
+        table: PAIN_TABLE,
+        supabase_error: insertResult.error.message || String(insertResult.error),
+        supabase_details: insertResult.error.details || null,
+        supabase_hint: insertResult.error.hint || null,
+        attempted_keys: Object.keys(payload),
       },
-      { status: 500 }
+      500,
     );
   }
+
+  const saved = insertResult.data || {};
+  const painId = cleanText(saved.id) || cleanText(saved.signal_id) || signalId;
+  const savedLinks = makeDirectLinks(baseUrl, painId, signalId, routingId, activityId);
+
+  await bestEffortInsert(client, "vf_activity_events", {
+    event_type: "pain_submitted",
+    event_id: activityId,
+    item_id: painId,
+    signal_id: signalId,
+    member_email: submittedBy,
+    title: payload.title,
+    description: notes || helpRequested,
+    status: "new",
+    source: "pain",
+    metadata: { pain_id: painId, direct_links: savedLinks, photo_urls: uniquePhotoUrls },
+  });
+
+  await bestEffortInsert(client, "vf_routing_actions", {
+    action_type: "pain_routing_needed",
+    signal_id: signalId,
+    item_id: painId,
+    member_email: submittedBy,
+    title: payload.title,
+    status: "new",
+    route_context: payload.route_context,
+    metadata: { pain_id: painId, direct_links: savedLinks, photo_urls: uniquePhotoUrls },
+  });
+
+  await bestEffortInsert(client, "vf_routing_signals", {
+    signal_id: signalId,
+    item_id: painId,
+    member_email: submittedBy,
+    title: payload.title,
+    signal_type: "pain",
+    status: "new",
+    metadata: { pain_id: painId, direct_links: savedLinks, photo_urls: uniquePhotoUrls },
+  });
+
+  return json({
+    ok: true,
+    saved: true,
+    table: PAIN_TABLE,
+    id: painId,
+    pain_id: painId,
+    signal_id: signalId,
+    routing_id: routingId,
+    activity_id: activityId,
+    photos_saved: uniquePhotoUrls.length,
+    direct_links: savedLinks,
+    record: saved,
+  });
 }
