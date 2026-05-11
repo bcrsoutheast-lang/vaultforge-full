@@ -166,15 +166,15 @@ function first(...values: unknown[]) {
 }
 
 function titleOf(item: PainItem) {
-  return first(item.title, item.event_title, item.signal_title, item.name, item.pain_label, "VaultForge Pain Signal");
+  return first(item.title, item.pain_label, item.name, "Pain Signal");
 }
 
 function noteOf(item: PainItem) {
-  return first(item.note, item.event_description, item.description, item.message, item.route_summary, item.metadata?.route_summary, "Pain signal routed into VaultForge.");
+  return first(item.note, item.notes, item.description, item.message, item.route_summary, item.metadata?.route_summary, "Pain signal routed into VaultForge.");
 }
 
 function idOf(item: PainItem) {
-  return first(item.item_id, item.pain_id, item.related_deal_id, item.id, item.metadata?.pain_id);
+  return first(item.id, item.pain_id, item.uuid, item.metadata?.pain_id);
 }
 
 function signalIdOf(item: PainItem) {
@@ -223,68 +223,24 @@ export default function PainFeedPage() {
         return;
       }
 
-      const headers = {
-        "x-vf-email": currentEmail,
-        "x-vf-admin": currentOwner ? "1" : "0",
-      };
-
-      const [activityRes, feedRes, routingRes] = await Promise.all([
-        fetch(`/api/activity/event?event_type=pain_signal&event_id=latest&email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers,
-        }).catch(() => null),
-        fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers,
-        }).catch(() => null),
-        fetch(`/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
-          cache: "no-store",
-          headers,
-        }).catch(() => null),
-      ]);
-
-      const activityData = activityRes ? await safeJson(activityRes) : {};
-      const feedData = feedRes ? await safeJson(feedRes) : {};
-      const routingData = routingRes ? await safeJson(routingRes) : {};
-
-      const combined = [
-        ...(Array.isArray(feedData.alerts) ? feedData.alerts : []),
-        ...(Array.isArray(feedData.signals) ? feedData.signals : []),
-        ...(Array.isArray(routingData.actions) ? routingData.actions : []),
-        ...(activityData.event ? [activityData.event] : []),
-      ];
-
-      const painOnly = combined.filter((item) => {
-        const text = [
-          item.type,
-          item.event_type,
-          item.signal_type,
-          item.source,
-          item.source_table,
-          item.title,
-          item.event_title,
-          item.note,
-          item.message,
-          item.metadata?.pain_id,
-          item.metadata?.pain_type,
-          item.pain_id,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return text.includes("pain");
+      const res = await fetch(`/api/pain/feed?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": currentEmail,
+          "x-vf-admin": currentOwner ? "1" : "0",
+        },
       });
 
-      const seen = new Set<string>();
-      const deduped = painOnly.filter((item) => {
-        const key = `${idOf(item)}-${signalIdOf(item)}-${titleOf(item)}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      const data = await safeJson(res);
 
-      setItems(deduped);
-      setStatus(deduped.length ? "" : "No pain signals found yet. Submit a new Pain Button item first.");
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Could not load pain feed.");
+      }
+
+      const realItems = Array.isArray(data.pains) ? data.pains : [];
+
+      setItems(realItems);
+      setStatus(realItems.length ? "" : "No real pain records found yet. Submit a new Pain Button item first.");
     } catch (error: any) {
       setItems([]);
       setStatus(error?.message || "Could not load pain feed.");
@@ -319,7 +275,7 @@ export default function PainFeedPage() {
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav title="Pain Feed" subtitle="Pain signals, routing pressure, and operational follow-up" />
+        <VaultForgeMemberNav title="Pain Feed" subtitle="Real pain records, routing pressure, and operational follow-up" />
 
         <section style={hero}>
           <div style={eyebrow}>VaultForge Pain Feed</div>
@@ -327,7 +283,7 @@ export default function PainFeedPage() {
             Pain signal command feed.
           </h1>
           <p style={{ ...muted, fontSize: 21 }}>
-            This is the feed. The form lives at <strong style={{ color: "#9df3bf" }}>/pain</strong>. Pain signals should appear here after submit.
+            This feed shows real saved Pain Button records from Supabase.
           </p>
 
           <div>
