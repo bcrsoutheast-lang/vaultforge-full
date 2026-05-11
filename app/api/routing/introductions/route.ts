@@ -98,29 +98,49 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function metadataOf(row: AnyRecord) {
+  return typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+}
+
+function resolveOwnerEmail(row: AnyRecord, fallbackEmail = "") {
+  const metadata = metadataOf(row);
+  const candidates = [
+    row.owner_email,
+    row.created_by_email,
+    row.submitted_by_email,
+    row.creator_email,
+    row.submitted_by,
+    row.user_email,
+    row.member_email,
+    row.email,
+    metadata.owner_email,
+    metadata.created_by_email,
+    metadata.submitted_by_email,
+    metadata.creator_email,
+    metadata.submitted_by,
+    metadata.user_email,
+    metadata.member_email,
+    metadata.email,
+    fallbackEmail,
+  ]
+    .map(cleanEmail)
+    .filter((email) => email.includes("@"));
+
+  return candidates.find((email) => email !== OWNER_EMAIL) || candidates[0] || OWNER_EMAIL;
+}
+
 function normalizeIntro(row: AnyRecord) {
+  const metadata = metadataOf(row);
   const id = first(row.id, row.introduction_id, row.intro_id);
-  const signalId = first(row.signal_id, row.alert_id);
-  const itemId = first(row.item_id, row.deal_id, row.project_id, row.property_id, row.pain_id);
+  const signalId = first(row.signal_id, row.alert_id, metadata.signal_id, metadata.alert_id);
+  const itemId = first(row.item_id, row.deal_id, row.project_id, row.property_id, row.pain_id, metadata.item_id, metadata.deal_id, metadata.project_id, metadata.property_id, metadata.pain_id);
   const status = first(row.intro_status, row.status, "staged");
-  const visibleTo = cleanEmail(
-    first(
-      row.visible_to_email,
-      row.member_email,
-      row.recipient_email,
-      row.intro_to_email,
-      row.responding_member_email
-    )
-  );
-  const counterparty = cleanEmail(
-    first(
-      row.counterparty_email,
-      row.sender_email,
-      row.recipient_email,
-      row.intro_to_email,
-      row.member_email
-    )
-  );
+
+  const visibleTo = cleanEmail(first(row.visible_to_email, row.member_email, row.recipient_email, row.intro_to_email, row.responding_member_email, metadata.visible_to_email, metadata.member_email, metadata.recipient_email, metadata.intro_to_email, metadata.responding_member_email));
+
+  const ownerEmail = resolveOwnerEmail(row);
+
+  const counterparty = cleanEmail(first(row.counterparty_email, row.owner_email, row.created_by_email, row.submitted_by_email, row.sender_email, row.recipient_email, row.intro_to_email, row.member_email, metadata.counterparty_email, metadata.owner_email, metadata.created_by_email, metadata.submitted_by_email, metadata.sender_email, metadata.recipient_email, metadata.intro_to_email, metadata.member_email, ownerEmail));
 
   return {
     id,
@@ -147,18 +167,18 @@ function normalizeIntro(row: AnyRecord) {
     priority: first(row.priority, "medium"),
     source: first(row.source, "controlled_introduction"),
 
-    sender_email: cleanEmail(row.sender_email),
-    recipient_email: cleanEmail(row.recipient_email),
+    sender_email: cleanEmail(first(row.sender_email, ownerEmail)),
+    recipient_email: cleanEmail(first(row.recipient_email, visibleTo)),
     member_email: cleanEmail(first(row.member_email, visibleTo)),
     intro_to_email: cleanEmail(first(row.intro_to_email, row.recipient_email, visibleTo)),
     visible_to_email: visibleTo,
     responding_member_email: cleanEmail(row.responding_member_email),
     counterparty_email: counterparty,
 
-    staged_by_email: cleanEmail(first(row.staged_by_email, row.created_by, row.admin_email, row.owner_email)),
-    created_by: cleanEmail(row.created_by),
-    owner_email: cleanEmail(row.owner_email),
-    admin_email: cleanEmail(row.admin_email),
+    staged_by_email: cleanEmail(first(row.staged_by_email, row.created_by, row.admin_email, row.owner_email, ownerEmail)),
+    created_by: cleanEmail(first(row.created_by, ownerEmail)),
+    owner_email: ownerEmail,
+    admin_email: cleanEmail(first(row.admin_email, row.staged_by_email, OWNER_EMAIL)),
 
     approved: Boolean(row.approved),
     paused: Boolean(row.paused),
@@ -178,37 +198,13 @@ function makeIntroPayload(body: AnyRecord, ownerEmail: string) {
   const id = first(body.introduction_id, body.intro_id);
   const signalId = first(body.signal_id, body.signalId, body.alert_id, body.alertId);
   const itemId = first(body.item_id, body.itemId, body.deal_id, body.project_id, body.property_id, body.pain_id);
-  const visibleTo = cleanEmail(
-    first(
-      body.visible_to_email,
-      body.member_email,
-      body.recipient_email,
-      body.intro_to_email,
-      body.target_email
-    )
-  );
-  const counterparty = cleanEmail(
-    first(
-      body.counterparty_email,
-      body.sender_email,
-      body.owner_email,
-      ownerEmail
-    )
-  );
+  const visibleTo = cleanEmail(first(body.visible_to_email, body.member_email, body.recipient_email, body.intro_to_email, body.target_email));
 
-  const title = first(
-    body.title,
-    body.subject,
-    signalId ? `Controlled introduction for ${signalId}` : "Controlled introduction"
-  );
+  const resolvedOwner = resolveOwnerEmail(body, ownerEmail);
+  const counterparty = cleanEmail(first(body.counterparty_email, body.owner_email, body.created_by_email, body.submitted_by_email, body.sender_email, resolvedOwner));
 
-  const note = first(
-    body.note,
-    body.notes,
-    body.message,
-    "Owner-staged controlled introduction. No notification has been sent."
-  );
-
+  const title = first(body.title, body.subject, signalId ? `Controlled introduction for ${signalId}` : "Controlled introduction");
+  const note = first(body.note, body.notes, body.message, "Owner-staged controlled introduction. No notification has been sent.");
   const status = first(body.status, body.intro_status, "staged");
 
   return {
@@ -236,18 +232,18 @@ function makeIntroPayload(body: AnyRecord, ownerEmail: string) {
     priority: first(body.priority, "medium"),
     source: first(body.source, "owner_staged_intro"),
 
-    sender_email: cleanEmail(first(body.sender_email, ownerEmail)) || null,
-    recipient_email: cleanEmail(first(body.recipient_email, visibleTo)) || null,
+    sender_email: resolvedOwner || ownerEmail || null,
+    recipient_email: visibleTo || null,
     member_email: visibleTo || null,
-    intro_to_email: cleanEmail(first(body.intro_to_email, visibleTo)) || null,
+    intro_to_email: visibleTo || null,
     visible_to_email: visibleTo || null,
     responding_member_email: cleanEmail(body.responding_member_email) || null,
     counterparty_email: counterparty || null,
 
-    staged_by_email: ownerEmail,
-    created_by: ownerEmail,
-    owner_email: ownerEmail,
-    admin_email: ownerEmail,
+    staged_by_email: ownerEmail || OWNER_EMAIL,
+    created_by: ownerEmail || OWNER_EMAIL,
+    owner_email: resolvedOwner || ownerEmail || OWNER_EMAIL,
+    admin_email: ownerEmail || OWNER_EMAIL,
 
     approved: Boolean(body.approved),
     paused: Boolean(body.paused),
@@ -256,6 +252,8 @@ function makeIntroPayload(body: AnyRecord, ownerEmail: string) {
 
     metadata: {
       ...(body.metadata && typeof body.metadata === "object" ? body.metadata : {}),
+      owner_email: resolvedOwner || ownerEmail || OWNER_EMAIL,
+      counterparty_email: counterparty || null,
       safety: "staged_only_no_notification",
     },
 
@@ -305,6 +303,7 @@ async function insertIntro(supabase: any, payload: AnyRecord) {
       member_email: payload.member_email,
       counterparty_email: payload.counterparty_email,
       staged_by_email: payload.staged_by_email,
+      owner_email: payload.owner_email,
       created_at: payload.created_at,
       updated_at: payload.updated_at,
     },
@@ -314,30 +313,16 @@ async function insertIntro(supabase: any, payload: AnyRecord) {
 
   for (const variant of variants) {
     try {
-      const { data, error } = await supabase
-        .from(INTRO_TABLE)
-        .insert(variant)
-        .select("*")
-        .single();
+      const { data, error } = await supabase.from(INTRO_TABLE).insert(variant).select("*").single();
 
-      if (!error && data) {
-        return {
-          ok: true,
-          data,
-          keys: Object.keys(variant),
-        };
-      }
-
+      if (!error && data) return { ok: true, data, keys: Object.keys(variant) };
       if (error?.message) errors.push(error.message);
     } catch (error: any) {
       if (error?.message) errors.push(error.message);
     }
   }
 
-  return {
-    ok: false,
-    error: errors[0] || "Could not stage controlled introduction.",
-  };
+  return { ok: false, error: errors[0] || "Could not stage controlled introduction." };
 }
 
 export async function POST(request: Request) {
@@ -346,40 +331,21 @@ export async function POST(request: Request) {
     const email = requestEmail(request, body);
 
     if (!isOwnerRequest(request, email, body)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Owner/admin access required to stage controlled introductions.",
-        },
-        { status: 403 }
-      );
+      return NextResponse.json({ ok: false, error: "Owner/admin access required to stage controlled introductions." }, { status: 403 });
     }
 
     const ownerEmail = email || OWNER_EMAIL;
     const payload = makeIntroPayload(body, ownerEmail);
 
     if (!payload.visible_to_email && !payload.recipient_email && !payload.member_email) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "A visible/member/recipient email is required to stage an introduction.",
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "A visible/member/recipient email is required to stage an introduction." }, { status: 400 });
     }
 
     const supabase = supabaseClient();
     const result = await insertIntro(supabase, payload);
 
     if (!result.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: result.error,
-          table: INTRO_TABLE,
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: result.error, table: INTRO_TABLE }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -407,13 +373,7 @@ export async function GET(request: Request) {
     const email = requestEmail(request);
 
     if (!email) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Login email required.",
-        },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
     }
 
     const owner = isOwnerRequest(request, email);
@@ -424,35 +384,16 @@ export async function GET(request: Request) {
 
     const supabase = supabaseClient();
 
-    let query = supabase
-      .from(INTRO_TABLE)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(owner ? 250 : 100);
+    let query = supabase.from(INTRO_TABLE).select("*").order("created_at", { ascending: false }).limit(owner ? 250 : 100);
 
-    if (signalId) {
-      query = query.eq("signal_id", signalId);
-    }
-
-    if (itemId) {
-      query = query.eq("item_id", itemId);
-    }
-
-    if (introId) {
-      query = query.eq("id", introId);
-    }
+    if (signalId) query = query.eq("signal_id", signalId);
+    if (itemId) query = query.eq("item_id", itemId);
+    if (introId) query = query.eq("id", introId);
 
     const { data, error } = await query;
 
     if (error) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: error.message,
-          table: INTRO_TABLE,
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: error.message, table: INTRO_TABLE }, { status: 500 });
     }
 
     let introductions = Array.isArray(data) ? data.map(normalizeIntro) : [];
@@ -466,6 +407,7 @@ export async function GET(request: Request) {
           intro.intro_to_email,
           intro.responding_member_email,
           intro.counterparty_email,
+          intro.owner_email,
         ]
           .map(cleanEmail)
           .filter(Boolean);
@@ -488,9 +430,8 @@ export async function GET(request: Request) {
         sent: introductions.filter((item: AnyRecord) => item.sent === true || item.status === "sent").length,
         paused: introductions.filter((item: AnyRecord) => item.paused === true || item.status === "paused").length,
       },
-      note: owner
-        ? "Owner/global controlled introductions."
-        : "Member-safe controlled introductions visible to this email.",
+      resolver: "universal_owner_counterparty_visible_to",
+      note: owner ? "Owner/global controlled introductions." : "Member-safe controlled introductions visible to this email.",
     });
   } catch (error: any) {
     return NextResponse.json(
