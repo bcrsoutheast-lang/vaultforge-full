@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
@@ -171,110 +172,59 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 
-function WindowCard({ row, email }: { row: Row; email: string }) {
-  const image = imageOf(row);
-  const tone = toneOf(row);
-  const signalId = signalIdOf(row);
-  const itemId = itemIdOf(row);
-  const ownerEmail = ownerEmailOf(row);
+export default function SignalRoomPage() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const signalId = decodeURIComponent(String(params?.signalId || ""));
 
-  return (
-    <article style={{ ...styles.card, borderColor: `${tone}66` }}>
-      {image ? (
-        <Link href={signalHref(row)} style={{ display: "block", textDecoration: "none" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt={titleOf(row)} style={{ width: "100%", height: 210, objectFit: "cover", display: "block" }} />
-        </Link>
-      ) : (
-        <div style={{ height: 210, display: "grid", placeItems: "center", color: "rgba(255,255,255,.55)", borderBottom: "1px solid rgba(255,255,255,.10)" }}>
-          No photo connected
-        </div>
-      )}
-
-      <div style={styles.body}>
-        <p style={{ ...styles.eyebrow, color: tone }}>{priorityOf(row)} · score {scoreOf(row)}</p>
-        <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>{titleOf(row)}</h2>
-        <p style={{ ...styles.muted, fontSize: 16 }}>{noteOf(row)}</p>
-
-        <div style={{ marginTop: 12 }}>
-          {marketOf(row) ? <span style={styles.chip}>{marketOf(row)}</span> : null}
-          {signalId ? <span style={styles.chip}>Signal: {signalId}</span> : null}
-          {itemId ? <span style={styles.chip}>Item: {itemId}</span> : null}
-          <span style={styles.chip}>Owner: {ownerEmail || "resolved in Connect"}</span>
-        </div>
-
-        <div className="vf-actions" style={styles.actionRow}>
-          <Link href={connectHref(row, email)} style={styles.primary}>Contact Owner</Link>
-          <Link href={signalHref(row)} style={styles.secondary}>Open Signal</Link>
-          <Link href={routingHref(row)} style={styles.secondary}>Routing Room</Link>
-          <Link href={painHref(row)} style={styles.secondary}>Work Area</Link>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-
-async function loadRows(email: string, owner: boolean) {
-  const headers = { "x-vf-email": email, "x-vf-admin": owner ? "1" : "0" };
-  const urls = [
-    `/api/pain/feed?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`,
-    `/api/intelligence/feed?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`,
-    `/api/intelligence/stored?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`,
-    `/api/routing/actions?email=${encodeURIComponent(email)}&owner=${owner ? "1" : "0"}`,
-  ];
-  const rows: Row[] = [];
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, { cache: "no-store", headers });
-      const data = await safeJson(res);
-      const list = Array.isArray(data.pains) ? data.pains : Array.isArray(data.signals) ? data.signals : Array.isArray(data.alerts) ? data.alerts : Array.isArray(data.actions) ? data.actions : Array.isArray(data.data) ? data.data : [];
-      rows.push(...list.map((item: Row) => ({ ...item, _loaded_from: url })));
-    } catch {}
-  }
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    const key = first(signalIdOf(row), itemIdOf(row), row.id, titleOf(row) + noteOf(row));
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).sort((a, b) => scoreOf(b) - scoreOf(a));
-}
-
-export default function SignalsPage() {
   const [email, setEmail] = useState("");
-  const [rows, setRows] = useState<Row[]>([]);
-  const [status, setStatus] = useState("Loading signals...");
-  const [search, setSearch] = useState("");
+  const [signal, setSignal] = useState<Row>({});
+  const [status, setStatus] = useState("Loading signal...");
+  const [debug, setDebug] = useState("");
 
   async function load() {
-    const currentEmail = getEmail();
+    const currentEmail = getEmail() || cleanEmail(searchParams.get("email"));
     const owner = isOwner(currentEmail);
     setEmail(currentEmail);
-    setStatus("Loading signals...");
-    if (!currentEmail) {
-      setRows([]);
-      setStatus("Login email not found. Please log in again.");
+    setStatus("Loading signal...");
+    setDebug("");
+
+    if (!signalId) {
+      setStatus("Signal ID missing.");
       return;
     }
-    const loaded = await loadRows(currentEmail, owner);
-    setRows(loaded);
-    setStatus(loaded.length ? "" : "No signals found yet.");
+
+    try {
+      const q = new URLSearchParams();
+      if (currentEmail) q.set("email", currentEmail);
+      if (owner) q.set("owner", "1");
+      const res = await fetch(`/api/signals/${encodeURIComponent(signalId)}?${q.toString()}`, {
+        cache: "no-store",
+        headers: { "x-vf-email": currentEmail, "x-vf-admin": owner ? "1" : "0" },
+      });
+      const data = await safeJson(res);
+      if (!res.ok || data?.ok === false) throw new Error(data?.error || data?.details || "Signal lookup failed.");
+      const row = data.signal || data || {};
+      setSignal({ ...row, signal_id: first(row.signal_id, signalId) });
+      setStatus("");
+      setDebug(`owner=${ownerEmailOf(row) || "missing"} item=${itemIdOf(row) || "missing"} source=${row._source_table || row.source_table || data.source || "api/signals"}`);
+    } catch (error: any) {
+      setStatus(error?.message || "Could not load signal.");
+      setSignal({});
+    }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [signalId]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => [titleOf(row), noteOf(row), marketOf(row), priorityOf(row), signalIdOf(row), itemIdOf(row), ownerEmailOf(row)].join(" ").toLowerCase().includes(q));
-  }, [rows, search]);
+  const fullSignal = { ...signal, signal_id: signalId };
+  const image = imageOf(fullSignal);
+  const ownerEmail = ownerEmailOf(fullSignal);
+  const itemId = itemIdOf(fullSignal);
 
   return (
     <main style={styles.page}>
       <style>{`
         a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
-        input::placeholder { color: rgba(255,255,255,.42); }
         @media (max-width: 820px) {
           .vf-actions { display: grid !important; grid-template-columns: 1fr !important; gap: 10px !important; }
           .vf-actions > * { width: 100%; box-sizing: border-box; justify-content: center; margin: 0 !important; }
@@ -290,20 +240,55 @@ export default function SignalsPage() {
             <Link href="/messages" style={styles.secondary}>Messages</Link>
           </div>
         </nav>
+
         <section style={styles.hero}>
-          <p style={styles.eyebrow}>VaultForge Signals</p>
-          <h1 style={styles.title}>Signal windows.</h1>
-          <p style={{ ...styles.muted, maxWidth: 820, fontSize: 18, marginTop: 16 }}>Signals now use window cards with photos and Message Owner routes to simple Connect.</p>
-          <div style={{ marginTop: 16 }}><span style={styles.chip}>Signed in: {email || "unknown"}</span><span style={styles.chip}>Signals: {rows.length}</span></div>
+          <p style={styles.eyebrow}>VaultForge Signal Room</p>
+          <h1 style={styles.title}>{titleOf(fullSignal)}</h1>
+          <p style={{ ...styles.muted, maxWidth: 850, fontSize: 18, marginTop: 16 }}>{noteOf(fullSignal)}</p>
+          <div style={{ marginTop: 16 }}>
+            <span style={styles.chip}>Signed in: {email || "unknown"}</span>
+            <span style={styles.chip}>Signal: {signalId}</span>
+            {itemId ? <span style={styles.chip}>Item: {itemId}</span> : null}
+            <span style={styles.chip}>Owner: {ownerEmail || "resolved in Connect"}</span>
+            <span style={styles.chip}>Score: {scoreOf(fullSignal)}</span>
+          </div>
           <div className="vf-actions" style={styles.actionRow}>
-            <button type="button" onClick={load} style={styles.primary}>Refresh Signals</button>
-            <Link href="/pain" style={styles.primary}>Submit Pain</Link>
-            <Link href="/messages" style={styles.secondary}>Messages</Link>
+            <Link href={connectHref(fullSignal, email)} style={styles.primary}>Message Owner</Link>
+            <Link href={routingHref(fullSignal)} style={styles.secondary}>Routing Room</Link>
+            <Link href="/activity" style={styles.secondary}>Activity</Link>
+            <button type="button" onClick={load} style={styles.secondary}>Refresh</button>
           </div>
         </section>
-        <section style={styles.hero}><p style={styles.eyebrow}>Search Signals</p><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search title, market, owner, signal id..." style={styles.input} /></section>
+
         {status ? <section style={styles.hero}><p style={{ ...styles.muted, margin: 0 }}>{status}</p></section> : null}
-        <section style={styles.grid}>{filtered.map((row, index) => <WindowCard key={`${signalIdOf(row)}-${itemIdOf(row)}-${index}`} row={row} email={email} />)}</section>
+
+        <section style={{ ...styles.card, marginBottom: 16 }}>
+          {image ? (
+            <a href={image} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={image} alt={titleOf(fullSignal)} style={{ width: "100%", maxHeight: 520, objectFit: "cover", display: "block" }} />
+            </a>
+          ) : (
+            <div style={{ height: 320, display: "grid", placeItems: "center", color: "rgba(255,255,255,.55)", borderBottom: "1px solid rgba(255,255,255,.10)" }}>No photo connected</div>
+          )}
+          <div style={styles.body}>
+            <p style={{ ...styles.eyebrow, color: toneOf(fullSignal) }}>{priorityOf(fullSignal)} · signal window</p>
+            <h2 style={{ fontSize: 34, lineHeight: 1.05, margin: "0 0 10px" }}>{titleOf(fullSignal)}</h2>
+            <p style={{ ...styles.muted, fontSize: 17 }}>{noteOf(fullSignal)}</p>
+            <div style={{ marginTop: 12 }}>
+              {marketOf(fullSignal) ? <span style={styles.chip}>{marketOf(fullSignal)}</span> : null}
+              <span style={styles.chip}>Owner: {ownerEmail || "missing"}</span>
+              <span style={styles.chip}>Priority: {priorityOf(fullSignal)}</span>
+              <span style={styles.chip}>Score: {scoreOf(fullSignal)}</span>
+            </div>
+          </div>
+        </section>
+
+        <section style={styles.hero}>
+          <p style={styles.eyebrow}>Signal Summary</p>
+          <p style={{ ...styles.muted, fontSize: 18 }}>Suggested action: contact the owner, confirm facts/photos/docs/terms, then route to matching members by market, asset type, capital need, and operator fit.</p>
+          {debug ? <pre style={{ whiteSpace: "pre-wrap", color: "#cbd5e1", fontSize: 13 }}>{debug}</pre> : null}
+        </section>
       </div>
     </main>
   );
