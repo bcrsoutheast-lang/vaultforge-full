@@ -104,6 +104,36 @@ function normalize(row: AnyRow) {
   };
 }
 
+function canTouchMessage(message: AnyRow, email: string, owner: boolean) {
+  if (owner) return true;
+  const from = cleanEmail(message.from_email);
+  const to = cleanEmail(message.to_email);
+  return from === email || to === email;
+}
+
+function latestByThread(messages: AnyRow[]) {
+  const map = new Map<string, AnyRow>();
+
+  for (const message of messages) {
+    const threadId = clean(message.thread_id);
+    if (!threadId) continue;
+
+    const previous = map.get(threadId);
+    const currentTime = new Date(String(message.created_at || message.updated_at || 0)).getTime();
+    const previousTime = new Date(String(previous?.created_at || previous?.updated_at || 0)).getTime();
+
+    if (!previous || currentTime >= previousTime) {
+      map.set(threadId, message);
+    }
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) =>
+      new Date(String(b.created_at || b.updated_at || 0)).getTime() -
+      new Date(String(a.created_at || a.updated_at || 0)).getTime()
+  );
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -112,32 +142,43 @@ export async function GET(request: Request) {
     const threadId = clean(url.searchParams.get("thread_id") || "");
     const signalId = clean(url.searchParams.get("signal_id") || "");
     const itemId = clean(url.searchParams.get("item_id") || "");
+    const includeArchived = clean(url.searchParams.get("include_archived") || "") === "1";
 
     if (!email) return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
 
     const supabase = supabaseClient();
-    let query = supabase.from("vf_simple_messages").select("*").order("created_at", { ascending: true }).limit(300);
+    let query = supabase.from("vf_simple_messages").select("*").order("created_at", { ascending: true }).limit(500);
 
     if (threadId) query = query.eq("thread_id", threadId);
     else if (signalId) query = query.eq("signal_id", signalId);
     else if (itemId) query = query.eq("item_id", itemId);
 
     const { data, error } = await query;
+
     if (error) return NextResponse.json({ ok: false, error: error.message, table: "vf_simple_messages" }, { status: 500 });
 
     let messages = Array.isArray(data) ? data.map(normalize) : [];
-    if (!owner) messages = messages.filter((m) => m.from_email === email || m.to_email === email);
 
-    const threadMap = new Map<string, AnyRow>();
-    for (const message of messages) threadMap.set(message.thread_id, message);
+    if (!owner) {
+      messages = messages.filter((message) => message.from_email === email || message.to_email === email);
+    }
+
+    if (!includeArchived) {
+      messages = messages.filter((message) => message.status !== "archived" && message.status !== "deleted");
+    } else {
+      messages = messages.filter((message) => message.status !== "deleted");
+    }
+
+    const threads = latestByThread(messages);
 
     return NextResponse.json({
       ok: true,
       email,
       owner,
       messages,
-      threads: Array.from(threadMap.values()).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()),
+      threads,
       count: messages.length,
+      thread_count: threads.length,
       table: "vf_simple_messages",
     });
   } catch (error: any) {
@@ -207,5 +248,123 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: "Could not save message.", details: error?.message || String(error) }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = (await request.json().catch(() => ({}))) as AnyRow;
+    const email = requestEmail(request, body);
+    const owner = isOwnerRequest(request, email);
+    const threadId = clean(body.thread_id);
+    const action = clean(body.action).toLowerCase();
+    const now = new Date().toISOString();
+
+    if (!email) return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
+    if (!threadId) return NextResponse.json({ ok: false, error: "thread_id required." }, { status: 400 });
+
+    const allowed = new Set(["archive", "restore", "read", "unread"]);
+    if (!allowed.has(action)) return NextResponse.json({ ok: false, error: "Unsupported cleanup action." }, { status: 400 });
+
+    const supabase = supabaseClient();
+    const existing = await supabase.from("vf_simple_messages").select("*").eq("thread_id", threadId).limit(100);
+
+    if (existing.error) {
+      return NextResponse.json({ ok: false, error: existing.error.message, table: "vf_simple_messages" }, { status: 500 });
+    }
+
+    const messages = Array.isArray(existing.data) ? existing.data : [];
+    if (!messages.length) return NextResponse.json({ ok: false, error: "Thread not found." }, { status: 404 });
+
+    if (!messages.some((message) => canTouchMessage(message, email, owner))) {
+      return NextResponse.json({ ok: false, error: "Not allowed to update this thread." }, { status: 403 });
+    }
+
+    const patch: AnyRow = { updated_at: now };
+
+    if (action === "archive") patch.status = "archived";
+    if (action === "restore") patch.status = "open";
+    if (action === "read") patch.is_read = true;
+    if (action === "unread") patch.is_read = false;
+
+    const { data, error } = await supabase
+      .from("vf_simple_messages")
+      .update(patch)
+      .eq("thread_id", threadId)
+      .select("*");
+
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message, table: "vf_simple_messages" }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      action,
+      thread_id: threadId,
+      updated: Array.isArray(data) ? data.length : 0,
+      messages: Array.isArray(data) ? data.map(normalize) : [],
+    });
+  } catch (error: any) {
+    return NextResponse.json({ ok: false, error: "Could not update message thread.", details: error?.message || String(error) }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const body = (await request.json().catch(() => ({}))) as AnyRow;
+    const email = requestEmail(request, body);
+    const owner = isOwnerRequest(request, email);
+    const threadId = clean(body.thread_id || url.searchParams.get("thread_id"));
+    const mode = clean(body.mode || url.searchParams.get("mode") || "soft").toLowerCase();
+
+    if (!email) return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
+    if (!threadId) return NextResponse.json({ ok: false, error: "thread_id required." }, { status: 400 });
+
+    const supabase = supabaseClient();
+    const existing = await supabase.from("vf_simple_messages").select("*").eq("thread_id", threadId).limit(100);
+
+    if (existing.error) {
+      return NextResponse.json({ ok: false, error: existing.error.message, table: "vf_simple_messages" }, { status: 500 });
+    }
+
+    const messages = Array.isArray(existing.data) ? existing.data : [];
+    if (!messages.length) return NextResponse.json({ ok: false, error: "Thread not found." }, { status: 404 });
+
+    if (!messages.some((message) => canTouchMessage(message, email, owner))) {
+      return NextResponse.json({ ok: false, error: "Not allowed to delete this thread." }, { status: 403 });
+    }
+
+    if (mode === "hard" && owner) {
+      const { data, error } = await supabase.from("vf_simple_messages").delete().eq("thread_id", threadId).select("id");
+      if (error) return NextResponse.json({ ok: false, error: error.message, table: "vf_simple_messages" }, { status: 500 });
+
+      return NextResponse.json({
+        ok: true,
+        deleted: true,
+        hard_deleted: true,
+        thread_id: threadId,
+        count: Array.isArray(data) ? data.length : 0,
+      });
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("vf_simple_messages")
+      .update({ status: "deleted", updated_at: now })
+      .eq("thread_id", threadId)
+      .select("id");
+
+    if (error) return NextResponse.json({ ok: false, error: error.message, table: "vf_simple_messages" }, { status: 500 });
+
+    return NextResponse.json({
+      ok: true,
+      deleted: true,
+      hard_deleted: false,
+      thread_id: threadId,
+      count: Array.isArray(data) ? data.length : 0,
+    });
+  } catch (error: any) {
+    return NextResponse.json({ ok: false, error: "Could not delete message thread.", details: error?.message || String(error) }, { status: 500 });
   }
 }
