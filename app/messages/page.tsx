@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import VaultForgeMemberNav from "../../components/VaultForgeMemberNav";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-type Message = Record<string, any>;
-
-type PageProps = { params: Promise<{ threadId: string }> | { threadId: string } };
+type MessageRow = Record<string, any>;
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -39,8 +37,8 @@ function getStoredEmail() {
   if (typeof window === "undefined") return "";
 
   const url = new URL(window.location.href);
-  const fromUrl = cleanEmail(url.searchParams.get("email"));
-  if (fromUrl.includes("@")) return fromUrl;
+  const urlEmail = cleanEmail(url.searchParams.get("email"));
+  if (urlEmail.includes("@")) return urlEmail;
 
   const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "member_email"];
 
@@ -66,20 +64,41 @@ function first(...values: unknown[]) {
   return "";
 }
 
-function fromEmailOf(row: Message) {
+function threadIdOf(row: MessageRow) {
+  return first(row.thread_id, row.threadId, row.id, row.message_thread_id);
+}
+
+function fromEmailOf(row: MessageRow) {
   return cleanEmail(row.from_email || row.sender_email || row.email || row.member_email);
 }
 
-function toEmailOf(row: Message) {
+function toEmailOf(row: MessageRow) {
   return cleanEmail(row.to_email || row.recipient_email || row.target_email || row.owner_email);
 }
 
-function subjectOf(row: Message) {
+function subjectOf(row: MessageRow) {
   return first(row.subject, row.title, "VaultForge message");
 }
 
-function bodyOf(row: Message) {
-  return first(row.body, row.message, row.note, row.description, "No message body.");
+function bodyOf(row: MessageRow) {
+  return first(row.body, row.message, row.note, row.description, "No message preview.");
+}
+
+function signalIdOf(row: MessageRow) {
+  return first(row.signal_id, row.signalId, row.related_signal_id);
+}
+
+function itemIdOf(row: MessageRow) {
+  return first(row.item_id, row.itemId, row.deal_id, row.project_id, row.pain_id);
+}
+
+function counterpart(row: MessageRow, activeEmail: string) {
+  const from = fromEmailOf(row);
+  const to = toEmailOf(row);
+
+  if (from && from !== activeEmail) return from;
+  if (to && to !== activeEmail) return to;
+  return to || from || OWNER_EMAIL;
 }
 
 const page: React.CSSProperties = {
@@ -92,23 +111,19 @@ const page: React.CSSProperties = {
     'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
 };
 
-const shell: React.CSSProperties = { maxWidth: 1050, margin: "0 auto" };
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.28)",
-  borderRadius: 28,
-  background:
-    "linear-gradient(135deg,rgba(45,35,24,.86),rgba(12,19,32,.92) 55%,rgba(3,5,9,.95))",
-  boxShadow: "0 24px 90px rgba(0,0,0,.35)",
-  padding: 28,
-  marginBottom: 24,
+const shell: React.CSSProperties = {
+  maxWidth: 1180,
+  margin: "0 auto",
 };
 
-const h1: React.CSSProperties = {
-  fontSize: "clamp(48px,9vw,96px)",
-  lineHeight: 0.9,
-  margin: "12px 0 20px",
-  letterSpacing: "-0.075em",
+const hero: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.28)",
+  borderRadius: 30,
+  background:
+    "linear-gradient(135deg,rgba(45,35,24,.82),rgba(12,19,32,.92) 55%,rgba(3,5,9,.95))",
+  boxShadow: "0 26px 90px rgba(0,0,0,.36)",
+  padding: 26,
+  marginBottom: 22,
 };
 
 const eyebrow: React.CSSProperties = {
@@ -119,12 +134,19 @@ const eyebrow: React.CSSProperties = {
   fontSize: 13,
 };
 
+const title: React.CSSProperties = {
+  fontSize: "clamp(46px,8vw,92px)",
+  lineHeight: 0.9,
+  margin: "12px 0 18px",
+  letterSpacing: "-0.075em",
+};
+
 const muted: React.CSSProperties = {
   color: "rgba(255,255,255,.68)",
   lineHeight: 1.55,
 };
 
-const button: React.CSSProperties = {
+const action: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -135,145 +157,139 @@ const button: React.CSSProperties = {
   color: "white",
   textDecoration: "none",
   fontWeight: 900,
-  background: "rgba(255,255,255,.07)",
+  background: "rgba(255,255,255,.06)",
   cursor: "pointer",
 };
 
-const goldButton: React.CSSProperties = {
-  ...button,
+const goldAction: React.CSSProperties = {
+  ...action,
   color: "#08111f",
   background: "linear-gradient(135deg,#fff1a8,#e8c46b)",
   border: 0,
 };
 
-const textarea: React.CSSProperties = {
+const input: React.CSSProperties = {
   width: "100%",
-  minHeight: 160,
-  borderRadius: 18,
+  boxSizing: "border-box",
+  minHeight: 54,
+  borderRadius: 16,
   border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.08)",
+  background: "rgba(255,255,255,.07)",
   color: "white",
-  padding: 18,
+  padding: "0 16px",
   fontSize: 16,
   outline: "none",
-  boxSizing: "border-box",
-  resize: "vertical",
 };
 
-export default function MessageThreadPage({ params }: PageProps) {
-  const [threadId, setThreadId] = useState("");
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.18)",
+  borderRadius: 24,
+  background: "linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.03))",
+  boxShadow: "0 20px 70px rgba(0,0,0,.28)",
+  padding: 20,
+  color: "white",
+  textDecoration: "none",
+};
+
+export default function MessagesPage() {
   const [email, setEmail] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [rows, setRows] = useState<MessageRow[]>([]);
+  const [status, setStatus] = useState("Loading messages...");
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
-  const [reply, setReply] = useState("");
-  const [toast, setToast] = useState("");
+  const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    Promise.resolve(params as any).then((resolved) => setThreadId(String(resolved?.threadId || "")));
-  }, [params]);
-
-  const latest = useMemo(() => messages[messages.length - 1] || {}, [messages]);
-
-  const otherEmail = useMemo(() => {
-    const active = cleanEmail(email);
-    const found =
-      messages.find((message) => fromEmailOf(message) && fromEmailOf(message) !== active) ||
-      messages.find((message) => toEmailOf(message) && toEmailOf(message) !== active);
-
-    if (!found) return OWNER_EMAIL;
-
-    const from = fromEmailOf(found);
-    const to = toEmailOf(found);
-
-    if (from && from !== active) return from;
-    if (to && to !== active) return to;
-    return OWNER_EMAIL;
-  }, [messages, email]);
-
-  async function load(activeThread = threadId, nextEmail = email) {
-    if (!activeThread) return;
-
-    const activeEmail = cleanEmail(nextEmail || getStoredEmail());
-    setEmail(activeEmail);
+  async function loadMessages() {
     setLoading(true);
-    setError("");
+    setStatus("Loading messages...");
+
+    const activeEmail = getStoredEmail();
+    setEmail(activeEmail);
+
+    if (!activeEmail) {
+      setRows([]);
+      setStatus("Login email not detected. Please log in again.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const owner = activeEmail === OWNER_EMAIL ? "&owner=1" : "";
-      const res = await fetch(
-        `/api/messages/thread?threadId=${encodeURIComponent(activeThread)}&thread_id=${encodeURIComponent(activeThread)}&email=${encodeURIComponent(activeEmail)}${owner}`,
-        {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": activeEmail,
-            "x-vf-admin": activeEmail === OWNER_EMAIL ? "1" : "0",
-          },
-        }
-      );
+      const res = await fetch(`/api/messages/thread?email=${encodeURIComponent(activeEmail)}${owner}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": activeEmail,
+          "x-vf-admin": activeEmail === OWNER_EMAIL ? "1" : "0",
+        },
+      });
 
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || json?.details || "Thread load failed.");
+        throw new Error(json?.error || json?.details || "Could not load messages.");
       }
 
-      setMessages(Array.isArray(json.messages) ? json.messages : []);
-    } catch (err: any) {
-      setError(err?.message || String(err));
-      setMessages([]);
+      const raw = Array.isArray(json.threads)
+        ? json.threads
+        : Array.isArray(json.messages)
+        ? json.messages
+        : Array.isArray(json.data)
+        ? json.data
+        : [];
+
+      const grouped = new Map<string, MessageRow>();
+
+      for (const row of raw) {
+        const threadId = threadIdOf(row);
+        if (!threadId) continue;
+
+        const existing = grouped.get(threadId);
+        const existingTime = new Date(existing?.created_at || existing?.updated_at || 0).getTime();
+        const rowTime = new Date(row.created_at || row.updated_at || 0).getTime();
+
+        if (!existing || rowTime >= existingTime) {
+          grouped.set(threadId, row);
+        }
+      }
+
+      const sorted = Array.from(grouped.values()).sort(
+        (a, b) =>
+          new Date(b.created_at || b.updated_at || 0).getTime() -
+          new Date(a.created_at || a.updated_at || 0).getTime()
+      );
+
+      setRows(sorted);
+      setStatus(sorted.length ? "" : "No message threads found yet.");
+    } catch (error: any) {
+      setRows([]);
+      setStatus(error?.message || "Could not load messages.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (threadId) load(threadId, getStoredEmail());
-  }, [threadId]);
+    loadMessages();
+  }, []);
 
-  async function sendReply() {
-    const text = reply.trim();
-    if (!text || !threadId || !email) return;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
 
-    setSending(true);
-    setToast("");
-
-    try {
-      const res = await fetch("/api/messages/new", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-        },
-        body: JSON.stringify({
-          from_email: email,
-          to_email: otherEmail,
-          subject: subjectOf(latest) || "VaultForge message reply",
-          body: text,
-          message: text,
-          thread_id: threadId,
-          signal_id: latest.signal_id || "",
-          item_id: latest.item_id || "",
-          source: "message_thread_reply",
-        }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || json?.details || "Reply could not be saved.");
-      }
-
-      setReply("");
-      setToast("Reply saved to thread.");
-      await load(threadId, email);
-    } catch (err: any) {
-      setToast(err?.message || String(err));
-    } finally {
-      setSending(false);
-    }
-  }
+    return rows.filter((row) =>
+      [
+        subjectOf(row),
+        bodyOf(row),
+        fromEmailOf(row),
+        toEmailOf(row),
+        signalIdOf(row),
+        itemIdOf(row),
+        threadIdOf(row),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [rows, search]);
 
   return (
     <main style={page}>
@@ -285,17 +301,17 @@ export default function MessageThreadPage({ params }: PageProps) {
           filter: brightness(1.05);
         }
 
-        textarea::placeholder {
+        input::placeholder {
           color: rgba(255,255,255,.42);
         }
 
         @media (max-width: 760px) {
-          .vf-thread-actions {
+          .vf-message-actions {
             display: grid !important;
             grid-template-columns: 1fr !important;
           }
 
-          .vf-thread-actions > * {
+          .vf-message-actions > * {
             width: 100%;
             box-sizing: border-box;
           }
@@ -303,86 +319,65 @@ export default function MessageThreadPage({ params }: PageProps) {
       `}</style>
 
       <div style={shell}>
-        <VaultForgeMemberNav title="Message Thread" subtitle="Controlled owner/member communication before private contact is released." />
+        <VaultForgeMemberNav title="Messages" subtitle="Requests, replies, owner communication, and controlled introductions." />
 
-        <section style={card}>
-          <div style={eyebrow}>VaultForge Message Thread</div>
-          <h1 style={h1}>Execution conversation.</h1>
-          <p style={{ ...muted, maxWidth: 760, fontSize: 20 }}>
-            Controlled thread for requests, owner replies, routing updates, and introductions.
+        <section style={hero}>
+          <div style={eyebrow}>VaultForge Communication</div>
+          <h1 style={title}>Message command center.</h1>
+          <p style={{ ...muted, maxWidth: 780, fontSize: 19 }}>
+            One inbox for signal requests, project owner messages, routing follow-ups, and execution conversations.
           </p>
 
-          <div className="vf-thread-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 22 }}>
-            <span style={button}>Signed in: {email || "not detected"}</span>
-            <span style={button}>Thread: {threadId || "loading"}</span>
-            <button type="button" style={goldButton} onClick={() => load(threadId, email)}>
-              Refresh Thread
+          <div className="vf-message-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 20 }}>
+            <span style={action}>Signed in: {email || "not detected"}</span>
+            <span style={action}>Threads: {filtered.length}</span>
+            <button type="button" style={goldAction} onClick={loadMessages}>
+              {loading ? "Refreshing..." : "Refresh Messages"}
             </button>
-            <Link href="/messages" style={button}>All Messages</Link>
-            <Link href="/signals" style={button}>Signals</Link>
-            <Link href="/dashboard" style={button}>Dashboard</Link>
+            <Link href="/dashboard" style={action}>Dashboard</Link>
+            <Link href="/signals" style={action}>Signals</Link>
+            <Link href="/pain-feed" style={action}>Pain Feed</Link>
           </div>
         </section>
 
-        {loading ? (
-          <section style={card}><p style={muted}>Loading thread...</p></section>
-        ) : error ? (
-          <section style={card}>
-            <h2 style={{ color: "#ffd0d0" }}>Thread failed to load.</h2>
-            <p style={muted}>{error}</p>
-          </section>
-        ) : messages.length === 0 ? (
-          <section style={card}><p style={muted}>No messages found in this thread yet.</p></section>
-        ) : (
-          <section style={card}>
-            <div style={eyebrow}>Thread Messages</div>
-            <div style={{ display: "grid", gap: 14, marginTop: 20 }}>
-              {messages.map((message, index) => {
-                const mine = fromEmailOf(message) === cleanEmail(email);
+        <section style={hero}>
+          <div style={eyebrow}>Search Messages</div>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by owner, signal, project, subject, or message..."
+            style={input}
+          />
+        </section>
 
-                return (
-                  <article
-                    key={`${message._source_table || "msg"}-${message.id || index}-${message.created_at || index}`}
-                    style={{
-                      maxWidth: 760,
-                      justifySelf: mine ? "end" : "start",
-                      border: mine ? "1px solid rgba(232,196,107,.36)" : "1px solid rgba(255,255,255,.12)",
-                      borderRadius: 24,
-                      background: mine ? "rgba(232,196,107,.11)" : "rgba(255,255,255,.06)",
-                      padding: 20,
-                    }}
-                  >
-                    <strong>{subjectOf(message)}</strong>
-                    <p style={{ ...muted, margin: "8px 0 12px" }}>{bodyOf(message)}</p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      <span style={{ ...button, minHeight: 32, padding: "0 10px", fontSize: 12 }}>
-                        From: {fromEmailOf(message) || "unknown"}
-                      </span>
-                      <span style={{ ...button, minHeight: 32, padding: "0 10px", fontSize: 12 }}>
-                        {fmtDate(message.created_at)}
-                      </span>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+        {status ? (
+          <section style={hero}>
+            <p style={{ ...muted, margin: 0 }}>{status}</p>
           </section>
-        )}
+        ) : null}
 
-        <section style={card}>
-          <div style={eyebrow}>Reply</div>
-          <div style={{ display: "grid", gap: 14, marginTop: 18 }}>
-            <textarea
-              style={textarea}
-              value={reply}
-              onChange={(event) => setReply(event.target.value)}
-              placeholder="Write a controlled VaultForge reply..."
-            />
-            <button type="button" style={goldButton} onClick={sendReply} disabled={sending || !reply.trim()}>
-              {sending ? "Saving..." : "Send Reply"}
-            </button>
-            {toast ? <p style={muted}>{toast}</p> : null}
-          </div>
+        <section style={{ display: "grid", gap: 14 }}>
+          {filtered.map((row) => {
+            const threadId = threadIdOf(row);
+            const signalId = signalIdOf(row);
+            const itemId = itemIdOf(row);
+            const other = counterpart(row, email);
+
+            return (
+              <Link key={threadId} href={`/messages/${encodeURIComponent(threadId)}`} style={card}>
+                <div style={eyebrow}>Thread · {fmtDate(row.created_at || row.updated_at)}</div>
+                <h2 style={{ fontSize: 28, lineHeight: 1.05, margin: "10px 0 8px" }}>{subjectOf(row)}</h2>
+                <p style={{ ...muted, fontSize: 16, margin: "0 0 14px" }}>{bodyOf(row)}</p>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <span style={action}>With: {other || "unknown"}</span>
+                  {signalId ? <span style={action}>Signal: {signalId}</span> : null}
+                  {itemId ? <span style={action}>Item: {itemId}</span> : null}
+                  <span style={goldAction}>Open Thread →</span>
+                </div>
+              </Link>
+            );
+          })}
         </section>
       </div>
     </main>
