@@ -1,9 +1,8 @@
-
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import Link from "next/link";
+import VaultForgeMemberNav from "../../components/VaultForgeMemberNav";
 
 type Row = Record<string, any>;
 
@@ -74,9 +73,15 @@ function first(...values: unknown[]) {
   return "";
 }
 
+function arr(value: unknown) {
+  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map(clean).filter(Boolean);
+  return [];
+}
+
 function titleOf(row: Row) {
   const m = meta(row);
-  return first(row.title, row.signal_title, row.event_title, row.alert_title, row.subject, row.name, m.title, m.signal_title, "VaultForge Record");
+  return first(row.title, row.signal_title, row.event_title, row.alert_title, row.subject, m.title, m.signal_title, "VaultForge Signal");
 }
 
 function noteOf(row: Row) {
@@ -84,9 +89,9 @@ function noteOf(row: Row) {
   return first(row.note, row.notes, row.summary, row.description, row.message, row.body, row.route_summary, m.note, m.summary, m.description, m.message, "Live VaultForge operational record.");
 }
 
-function signalIdOf(row: Row) {
+function signalIdOf(row: Row, fallback = "") {
   const m = meta(row);
-  return first(row.signal_id, row.signalId, row.alert_id, row.id, m.signal_id, m.alert_id);
+  return first(row.signal_id, row.signalId, row.id, m.signal_id, fallback);
 }
 
 function itemIdOf(row: Row) {
@@ -99,26 +104,39 @@ function ownerEmailOf(row: Row) {
   return cleanEmail(first(row.owner_email, row.submitted_by_email, row.created_by_email, row.member_email, row.target_email, row.recipient_email, m.owner_email, m.submitted_by_email, m.created_by_email, m.member_email, m.target_email, m.recipient_email));
 }
 
-function imgOf(row: Row) {
+function photoList(row: Row) {
   const m = meta(row);
-  const photos = Array.isArray(row.photos) ? row.photos : [];
-  const photoUrls = Array.isArray(row.photo_urls) ? row.photo_urls : [];
-  const mPhotos = Array.isArray(m.photos) ? m.photos : [];
-  const mPhotoUrls = Array.isArray(m.photo_urls) ? m.photo_urls : [];
+  const values = [
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    m.image_url,
+    m.photo_url,
+    ...(Array.isArray(row.photo_urls) ? row.photo_urls : []),
+    ...(Array.isArray(row.photos) ? row.photos : []),
+    ...(Array.isArray(m.photo_urls) ? m.photo_urls : []),
+    ...(Array.isArray(m.photos) ? m.photos : []),
+  ];
 
-  return first(row.image_url, row.photo_url, row.primary_photo_url, m.image_url, m.photo_url, photoUrls[0], mPhotoUrls[0], photos[0]?.url, photos[0], mPhotos[0]?.url, mPhotos[0]);
+  return values
+    .map((item: any) => {
+      if (typeof item === "string") return clean(item);
+      if (item && typeof item === "object") return clean(item.url || item.publicUrl || item.photo_url || item.image_url);
+      return "";
+    })
+    .filter((url) => url.startsWith("http"));
 }
 
-function connectHref(row: Row, email: string) {
-  const signalId = signalIdOf(row);
-  if (!signalId) return "/messages";
-
-  const query = new URLSearchParams();
-  if (email) query.set("email", email);
-  const itemId = itemIdOf(row);
-  if (itemId) query.set("item_id", itemId);
-
-  return `/connect/${encodeURIComponent(signalId)}?${query.toString()}`;
+function getIntel(row: Row) {
+  const m = meta(row);
+  return {
+    ai_summary: first(row.ai_summary, row.summary, m.ai_summary, m.summary, noteOf(row)),
+    best_actions: arr(row.best_actions || m.best_actions),
+    risk_flags: arr(row.risk_flags || m.risk_flags),
+    suggested_routes: arr(row.suggested_routes || m.suggested_routes || row.ai_tags || m.ai_tags),
+    priority_score: Number(row.priority_score || row.confidence_score || m.priority_score || 0),
+    route_summary: first(row.route_summary, m.route_summary),
+  };
 }
 
 const page: React.CSSProperties = {
@@ -133,12 +151,12 @@ const page: React.CSSProperties = {
 const wrap: React.CSSProperties = { width: "min(1180px,100%)", margin: "0 auto" };
 
 const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.28)",
+  border: "1px solid rgba(232,196,107,.26)",
   borderRadius: 28,
   padding: 24,
-  background: "rgba(255,255,255,.06)",
-  marginBottom: 16,
-  boxShadow: "0 24px 80px rgba(0,0,0,.26)",
+  background: "rgba(255,255,255,.055)",
+  marginBottom: 18,
+  boxShadow: "0 24px 80px rgba(0,0,0,.28)",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -155,7 +173,7 @@ const button: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  minHeight: 48,
+  minHeight: 50,
   borderRadius: 999,
   padding: "12px 18px",
   border: 0,
@@ -173,18 +191,6 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.08)",
-  color: "white",
-  padding: 14,
-  fontSize: 16,
-  outline: "none",
-};
-
 const chip: React.CSSProperties = {
   border: "1px solid rgba(157,243,191,.22)",
   borderRadius: 999,
@@ -197,63 +203,34 @@ const chip: React.CSSProperties = {
   display: "inline-flex",
 };
 
-function RecordCard({ row, email, mode }: { row: Row; email: string; mode: "alerts" | "routing" | "introductions" | "signals" }) {
-  const signalId = signalIdOf(row);
-  const itemId = itemIdOf(row);
-  const image = imgOf(row);
-  const owner = ownerEmailOf(row);
-
-  const signalHref = signalId ? `/signals/${encodeURIComponent(signalId)}` : "/signals";
-  const routingHref = signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
-  const introHref = row.id ? `/introduction/${encodeURIComponent(String(row.id))}` : "/introductions";
-  const sourceHref = mode === "introductions" ? introHref : mode === "routing" ? routingHref : signalHref;
+function Pair({ label, value }: { label: string; value: unknown }) {
+  const text = clean(value);
+  if (!text) return null;
 
   return (
-    <article style={card}>
-      {image ? (
-        <div style={{ borderRadius: 22, overflow: "hidden", border: "1px solid rgba(232,196,107,.22)", marginBottom: 16 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt={titleOf(row)} style={{ width: "100%", maxHeight: 260, objectFit: "cover", display: "block" }} />
-        </div>
-      ) : null}
-
-      <p style={eyebrow}>{mode} · operational card</p>
-      <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 10px" }}>{titleOf(row)}</h2>
-      <p style={{ ...muted, fontSize: 17 }}>{noteOf(row)}</p>
-
-      <div>
-        {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
-        {itemId ? <span style={chip}>Item: {itemId}</span> : null}
-        {owner ? <span style={chip}>Owner: {owner}</span> : null}
-        <span style={chip}>Source: {mode}</span>
-      </div>
-
-      <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-        <Link href="/dashboard" style={ghost}>Dashboard</Link>
-        <Link href={sourceHref} style={button}>Open</Link>
-        {signalId ? <Link href={connectHref(row, email)} style={ghost}>Message Owner</Link> : null}
-        {signalId ? <Link href={routingHref} style={ghost}>Routing Room</Link> : null}
-      </div>
-    </article>
+    <div style={{ borderBottom: "1px solid rgba(255,255,255,.08)", padding: "10px 0" }}>
+      <div style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 900 }}>{label}</div>
+      <div style={{ marginTop: 4, fontSize: 17, fontWeight: 800 }}>{text}</div>
+    </div>
   );
 }
 
-export default function CommandPage() {
+export default function SignalRoomPage({ params }: { params: { signalId: string } }) {
   const [email, setEmail] = useState("");
-  const [rows, setRows] = useState<Row[]>([]);
-  const [status, setStatus] = useState("Loading signals...");
-  const [search, setSearch] = useState("");
+  const [row, setRow] = useState<Row | null>(null);
+  const [status, setStatus] = useState("Loading signal room...");
+
+  const signalId = decodeURIComponent(params.signalId || "");
 
   async function load() {
     const viewer = getEmail();
     setEmail(viewer);
-    setStatus("Loading signals...");
+    setStatus("Loading signal room...");
 
     try {
-      const collected: Row[] = [];
       const urls = [
+        `/api/signals/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}`,
         `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
-        `/api/intelligence/feed?email=${encodeURIComponent(viewer)}&owner=0`,
         `/api/routing/actions?email=${encodeURIComponent(viewer)}&owner=0`,
       ];
 
@@ -263,52 +240,60 @@ export default function CommandPage() {
             cache: "no-store",
             headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
           });
+
           const data = await safeJson(res);
-          const list = Array.isArray(data.signals)
-            ? data.signals
-            : Array.isArray(data.pains)
-            ? data.pains
-            : Array.isArray(data.actions)
-            ? data.actions
-            : Array.isArray(data.data)
-            ? data.data
-            : [];
-          if (Array.isArray(list)) collected.push(...list);
+          const direct = data.signal || data.item || data.record || data.data;
+          const lists = [
+            ...(Array.isArray(data.signals) ? data.signals : []),
+            ...(Array.isArray(data.pains) ? data.pains : []),
+            ...(Array.isArray(data.actions) ? data.actions : []),
+            ...(Array.isArray(data.data) ? data.data : []),
+          ];
+
+          const candidates = direct && !Array.isArray(direct) ? [direct, ...lists] : lists;
+          const match = candidates.find((item: Row) => signalIdOf(item) === signalId || itemIdOf(item) === signalId || clean(item.id) === signalId);
+
+          if (match) {
+            setRow(match);
+            setStatus("");
+            return;
+          }
         } catch {
-          // Keep page alive if one feed is unavailable.
+          // Try next feed.
         }
       }
 
-      const seen = new Set<string>();
-      const unique = collected.filter((row) => {
-        const key = first(signalIdOf(row), itemIdOf(row), row.id, titleOf(row) + noteOf(row));
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
+      setRow({
+        signal_id: signalId,
+        title: "Signal Room",
+        summary: "Signal record not found in available feeds yet. The room is ready, but the source table did not return the record.",
+        metadata: {},
       });
-
-      setRows(unique);
-      setStatus(unique.length ? "" : "No signals records found yet.");
+      setStatus("Signal source not found yet.");
     } catch (error: any) {
-      setStatus(error?.message || "Could not load signals.");
+      setStatus(error?.message || "Could not load signal room.");
     }
   }
 
   useEffect(() => {
     load();
-  }, []);
+  }, [signalId]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
+  const m = meta(row || {});
+  const intel = getIntel(row || {});
+  const photos = photoList(row || {});
+  const itemId = itemIdOf(row || {});
+  const owner = ownerEmailOf(row || {});
+  const actualSignalId = signalIdOf(row || {}, signalId);
 
-    return rows.filter((row) =>
-      [titleOf(row), noteOf(row), signalIdOf(row), itemIdOf(row), ownerEmailOf(row)]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [rows, search]);
+  const assetSpecific = useMemo(() => {
+    const raw = m.asset_specific && typeof m.asset_specific === "object" ? m.asset_specific : {};
+    return Object.entries(raw).filter(([, value]) => clean(value));
+  }, [m]);
+
+  const connectHref = actualSignalId
+    ? `/connect/${encodeURIComponent(actualSignalId)}?email=${encodeURIComponent(email)}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ""}`
+    : "/messages";
 
   return (
     <main style={page}>
@@ -317,9 +302,6 @@ export default function CommandPage() {
           transform: translateY(-1px);
           transition: all .18s ease;
           filter: brightness(1.06);
-        }
-        input::placeholder {
-          color: rgba(255,255,255,.42);
         }
         @media (max-width: 760px) {
           .vf-grid {
@@ -339,42 +321,121 @@ export default function CommandPage() {
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav title="Signals" subtitle="Signal windows with dashboard access, owner messages, and routing-room links." active="signals" />
+        <VaultForgeMemberNav title="Signal Room" subtitle="Structured signal overview, summary, best actions, photos, and routing context." active="signals" />
 
         <section style={card}>
-          <p style={eyebrow}>VaultForge Signals</p>
-          <h1 style={{ fontSize: "clamp(50px,10vw,92px)", lineHeight: 0.88, margin: "10px 0 18px", letterSpacing: "-.06em" }}>
-            Signals.
+          <p style={eyebrow}>VaultForge Signal Room</p>
+          <h1 style={{ fontSize: "clamp(48px,10vw,92px)", lineHeight: 0.88, margin: "10px 0 18px", letterSpacing: "-.06em" }}>
+            {row ? titleOf(row) : "Loading Signal"}
           </h1>
-          <p style={{ ...muted, fontSize: 18 }}>Signal windows with dashboard access, owner messages, and routing-room links.</p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-            <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>Records: {rows.length}</span>
+          <p style={{ ...muted, fontSize: 18 }}>{row ? noteOf(row) : status}</p>
+
+          <div style={{ marginTop: 14 }}>
+            <span style={chip}>Signal: {actualSignalId || "pending"}</span>
+            {itemId ? <span style={chip}>Item: {itemId}</span> : null}
+            {owner ? <span style={chip}>Owner: {owner}</span> : null}
+            <span style={chip}>Score: {intel.priority_score || 75}</span>
           </div>
+
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <Link href="/dashboard" style={button}>Dashboard</Link>
-            <button type="button" onClick={load} style={ghost}>Refresh</button>
-            <Link href="/messages" style={ghost}>Messages</Link>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href={connectHref} style={button}>Message Owner</Link>
+            <Link href={`/routing-room/${encodeURIComponent(actualSignalId || signalId)}`} style={ghost}>Routing Room</Link>
+            <button type="button" style={ghost} onClick={load}>Refresh</button>
+          </div>
+        </section>
+
+        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1.25fr .75fr", gap: 18 }}>
+          <div style={card}>
+            <h2 style={{ marginTop: 0 }}>AI Summary</h2>
+            <p style={{ ...muted, fontSize: 22 }}>{intel.ai_summary}</p>
+
+            {intel.route_summary ? (
+              <div style={{ marginTop: 16, border: "1px solid rgba(232,196,107,.22)", borderRadius: 20, padding: 16, background: "rgba(232,196,107,.08)" }}>
+                <strong style={{ color: "#f8e7b0" }}>Suggested route:</strong>{" "}
+                <span style={muted}>{intel.route_summary}</span>
+              </div>
+            ) : null}
+          </div>
+
+          <div style={card}>
+            <h2 style={{ marginTop: 0 }}>Signal Overview</h2>
+            <Pair label="Type" value={m.pain_type || row?.action || row?.type} />
+            <Pair label="Asset" value={m.asset_type || row?.asset_type} />
+            <Pair label="Market" value={[m.city || row?.city, m.operating_state || row?.state || row?.market].filter(Boolean).join(", ")} />
+            <Pair label="Urgency" value={m.urgency || row?.priority} />
+            <Pair label="Source" value={row?.source || row?.source_table || "VaultForge Pain Submissions"} />
+          </div>
+        </section>
+
+        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 18 }}>
+          <div style={card}>
+            <h2 style={{ marginTop: 0 }}>Best Actions</h2>
+            {(intel.best_actions.length ? intel.best_actions : ["Review owner request.", "Confirm missing details.", "Route to matching member category."]).map((item) => (
+              <div key={item} style={{ ...chip, display: "flex", whiteSpace: "normal", borderRadius: 16 }}>{item}</div>
+            ))}
+          </div>
+
+          <div style={card}>
+            <h2 style={{ marginTop: 0 }}>Risk Flags</h2>
+            {(intel.risk_flags.length ? intel.risk_flags : ["No risk flags generated yet."]).map((item) => (
+              <div key={item} style={{ ...chip, display: "flex", whiteSpace: "normal", borderRadius: 16, color: "#ffd0d0", borderColor: "rgba(255,120,120,.28)", background: "rgba(255,120,120,.08)" }}>{item}</div>
+            ))}
+          </div>
+
+          <div style={card}>
+            <h2 style={{ marginTop: 0 }}>Suggested Routes</h2>
+            {(intel.suggested_routes.length ? intel.suggested_routes : ["Owner Review"]).map((item) => (
+              <div key={item} style={{ ...chip, display: "flex", whiteSpace: "normal", borderRadius: 16 }}>{item}</div>
+            ))}
           </div>
         </section>
 
         <section style={card}>
-          <p style={eyebrow}>Search</p>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search title, signal id, owner, note..."
-            style={input}
-          />
+          <h2 style={{ marginTop: 0 }}>Photos / Asset Context</h2>
+          {photos.length ? (
+            <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 14 }}>
+              {photos.map((url, index) => (
+                <div key={`${url}-${index}`} style={{ borderRadius: 22, overflow: "hidden", border: "1px solid rgba(232,196,107,.22)" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={`VaultForge signal asset ${index + 1}`} style={{ width: "100%", height: 260, objectFit: "cover", display: "block" }} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={muted}>No valid photos connected yet.</p>
+          )}
+        </section>
+
+        {assetSpecific.length ? (
+          <section style={card}>
+            <h2 style={{ marginTop: 0 }}>Asset-Specific Fields</h2>
+            <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+              {assetSpecific.map(([key, value]) => (
+                <Pair key={key} label={key.replace(/_/g, " ")} value={value} />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <div style={card}>
+            <h2 style={{ marginTop: 0 }}>Numbers</h2>
+            <Pair label="Capital Needed" value={m.capital_needed} />
+            <Pair label="Asking Price" value={m.asking_price} />
+            <Pair label="ARV / Value" value={m.arv_value || m.estimated_value} />
+            <Pair label="Repairs / Work" value={m.repairs_needed || m.estimated_repairs} />
+          </div>
+
+          <div style={card}>
+            <h2 style={{ marginTop: 0 }}>Routing / Messages</h2>
+            <Pair label="Routing Actions" value={row?.routing_count || row?.routing_actions_count || "Generated if routing table accepted the record"} />
+            <Pair label="Messages" value={row?.message_count || row?.messages_count || "Use Message Owner to start controlled communication"} />
+            <Pair label="Status" value={row?.status || row?.routing_status || "New"} />
+          </div>
         </section>
 
         {status ? <section style={card}>{status}</section> : null}
-
-        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))", gap: 16 }}>
-          {filtered.map((row, index) => (
-            <RecordCard key={`${signalIdOf(row)}-${itemIdOf(row)}-${row.id || index}`} row={row} email={email} mode="signals" />
-          ))}
-        </section>
       </div>
     </main>
   );
