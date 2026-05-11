@@ -80,7 +80,7 @@ function isActive(pathname: string, href: string, key: string, active = "") {
 
 const links = [
   { label: "Dashboard", href: "/dashboard", key: "dashboard", tag: "HOME" },
-  { label: "Pain Button", href: "/pain", key: "pain", tag: "FORM" },
+  { label: "Pain", href: "/pain", key: "pain", tag: "INTAKE" },
   { label: "Pain Feed", href: "/pain-feed", key: "pain-feed", tag: "FEED" },
   { label: "Activity", href: "/activity", key: "activity", tag: "LIVE" },
   { label: "Alerts", href: "/alerts", key: "alerts", tag: "SIGNAL" },
@@ -91,23 +91,23 @@ const links = [
   { label: "Members", href: "/members", key: "members", tag: "NET" },
   { label: "Projects", href: "/projects", key: "projects", tag: "DEAL" },
   { label: "Profile", href: "/profile", key: "profile", tag: "ID" },
-  { label: "Logout", href: "/logout", key: "logout", tag: "EXIT", danger: true },
 ];
 
 const shell: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.28)",
-  borderRadius: 30,
+  border: "1px solid rgba(232,196,107,.30)",
+  borderRadius: 34,
   padding: 18,
   background:
-    "linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.030)), radial-gradient(circle at top left,rgba(232,196,107,.14),transparent 34%), radial-gradient(circle at bottom right,rgba(181,92,255,.10),transparent 34%)",
-  boxShadow: "0 24px 90px rgba(0,0,0,.34)",
+    "linear-gradient(145deg,rgba(255,255,255,.092),rgba(255,255,255,.030)), radial-gradient(circle at top left,rgba(232,196,107,.16),transparent 34%), radial-gradient(circle at bottom right,rgba(157,243,191,.09),transparent 32%)",
+  boxShadow: "0 28px 96px rgba(0,0,0,.36)",
   color: "white",
-  marginBottom: 18,
+  marginBottom: 20,
+  backdropFilter: "blur(14px)",
 };
 
 const top: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(220px,.85fr) minmax(220px,1.2fr) minmax(150px,.7fr)",
+  gridTemplateColumns: "minmax(220px,.9fr) minmax(260px,1.25fr) minmax(180px,.75fr)",
   alignItems: "center",
   gap: 14,
   marginBottom: 16,
@@ -123,12 +123,12 @@ const logoWrap: React.CSSProperties = {
 };
 
 const logoBox: React.CSSProperties = {
-  width: 112,
-  height: 72,
-  borderRadius: 16,
-  border: "1px solid rgba(232,196,107,.30)",
-  background: "rgba(0,0,0,.34)",
-  boxShadow: "0 18px 52px rgba(0,0,0,.36)",
+  width: 120,
+  height: 76,
+  borderRadius: 18,
+  border: "1px solid rgba(232,196,107,.32)",
+  background: "rgba(0,0,0,.38)",
+  boxShadow: "0 18px 54px rgba(0,0,0,.38)",
   overflow: "hidden",
   flex: "0 0 auto",
   display: "grid",
@@ -137,10 +137,11 @@ const logoBox: React.CSSProperties = {
 
 const center: React.CSSProperties = {
   textAlign: "center",
-  border: "1px solid rgba(232,196,107,.22)",
-  borderRadius: 22,
-  padding: "12px 14px",
-  background: "rgba(0,0,0,.22)",
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 24,
+  padding: "13px 14px",
+  background:
+    "linear-gradient(135deg,rgba(0,0,0,.30),rgba(255,255,255,.035))",
   minWidth: 0,
 };
 
@@ -152,19 +153,20 @@ const pill: React.CSSProperties = {
   borderRadius: 999,
   color: "#9df3bf",
   background: "rgba(157,243,191,.075)",
-  padding: "7px 11px",
+  padding: "8px 11px",
   fontSize: 12,
   fontWeight: 900,
   maxWidth: "100%",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  textDecoration: "none",
 };
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(4,minmax(0,1fr))",
-  gap: 10,
+  gridTemplateColumns: "repeat(6,minmax(0,1fr))",
+  gap: 9,
 };
 
 export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Props) {
@@ -185,10 +187,21 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
     <header style={shell}>
       <style>{`
         .vf-command-link:hover,
-        .vf-logo-link:hover {
+        .vf-logo-link:hover,
+        .vf-command-pill:hover {
           transform: translateY(-1px);
           filter: brightness(1.08);
           transition: all .18s ease;
+        }
+
+        .vf-command-link {
+          transition: all .18s ease;
+        }
+
+        @media (max-width: 1120px) {
+          .vf-command-grid {
+            grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+          }
         }
 
         @media (max-width: 920px) {
@@ -218,12 +231,17 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
           .vf-command-link {
             min-height: 58px !important;
           }
+
+          .vf-logo-mark {
+            width: 104px !important;
+            height: 66px !important;
+          }
         }
       `}</style>
 
       <section className="vf-command-top" style={top}>
         <Link href="/dashboard" className="vf-logo-link" style={logoWrap}>
-          <div style={logoBox}>
+          <div className="vf-logo-mark" style={logoBox}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/vaultforge-logo.png"
@@ -235,32 +253,77 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
             <div style={{ color: "#f8e7b0", fontWeight: 950, letterSpacing: ".16em", fontSize: 14 }}>
               VAULTFORGE
             </div>
-            <div style={{ color: "#cbd5e1", fontSize: 13, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div
+              style={{
+                color: "#cbd5e1",
+                fontSize: 13,
+                marginTop: 4,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               Private Deal Flow · Real Execution
             </div>
           </div>
         </Link>
 
         <div style={center}>
-          <div style={{ color: "#e8c46b", fontWeight: 950, letterSpacing: ".18em", fontSize: 12, textTransform: "uppercase" }}>
+          <div
+            style={{
+              color: "#e8c46b",
+              fontWeight: 950,
+              letterSpacing: ".18em",
+              fontSize: 12,
+              textTransform: "uppercase",
+            }}
+          >
             VaultForge Command Center
           </div>
-          <div style={{ fontSize: "clamp(24px,5vw,42px)", lineHeight: 1, fontWeight: 950, marginTop: 5, letterSpacing: "-.045em" }}>
+          <div
+            style={{
+              fontSize: "clamp(25px,5vw,44px)",
+              lineHeight: 1,
+              fontWeight: 950,
+              marginTop: 6,
+              letterSpacing: "-.045em",
+            }}
+          >
             {workspace}
           </div>
-          {subtitle ? (
-            <div style={{ color: "#cbd5e1", lineHeight: 1.35, marginTop: 8, fontSize: 14 }}>{subtitle}</div>
-          ) : (
-            <div style={{ color: "#94a3b8", lineHeight: 1.35, marginTop: 8, fontSize: 14 }}>
-              Intelligence · Routing · Messaging · Execution
-            </div>
-          )}
+          <div style={{ color: "#94a3b8", lineHeight: 1.35, marginTop: 8, fontSize: 14 }}>
+            {subtitle || "Intelligence · Routing · Messaging · Execution"}
+          </div>
         </div>
 
-        <div className="vf-command-right" style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+        <div
+          className="vf-command-right"
+          style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", minWidth: 0 }}
+        >
           <span style={pill}>{email || "Signed in"}</span>
-          <Link href="/dashboard" style={{ ...pill, color: "#f8e7b0", borderColor: "rgba(232,196,107,.28)", background: "rgba(232,196,107,.08)", textDecoration: "none" }}>
+          <Link
+            href="/dashboard"
+            className="vf-command-pill"
+            style={{
+              ...pill,
+              color: "#f8e7b0",
+              borderColor: "rgba(232,196,107,.30)",
+              background: "rgba(232,196,107,.09)",
+            }}
+          >
             Dashboard
+          </Link>
+          <Link
+            href="/logout"
+            className="vf-command-pill"
+            style={{
+              ...pill,
+              color: "#ffd0d0",
+              borderColor: "rgba(255,120,120,.28)",
+              background: "rgba(255,120,120,.065)",
+            }}
+          >
+            Logout
           </Link>
         </div>
       </section>
@@ -275,29 +338,23 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
               href={link.href}
               className="vf-command-link"
               style={{
-                minHeight: 62,
-                borderRadius: 18,
-                border: selected
-                  ? "1px solid rgba(232,196,107,.68)"
-                  : link.danger
-                  ? "1px solid rgba(255,120,120,.30)"
-                  : "1px solid rgba(255,255,255,.14)",
-                background: selected
-                  ? "linear-gradient(135deg,#f8e7b0,#9df3bf,#b55cff)"
-                  : "rgba(255,255,255,.055)",
-                color: selected ? "#06100a" : link.danger ? "#ffd0d0" : "white",
+                minHeight: 58,
+                borderRadius: 17,
+                border: selected ? "1px solid rgba(232,196,107,.72)" : "1px solid rgba(255,255,255,.14)",
+                background: selected ? "linear-gradient(135deg,#f8e7b0,#9df3bf,#b55cff)" : "rgba(255,255,255,.055)",
+                color: selected ? "#06100a" : "white",
                 textDecoration: "none",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: 10,
-                padding: "12px 16px",
+                gap: 8,
+                padding: "11px 14px",
                 fontWeight: 950,
                 boxShadow: selected ? "0 14px 36px rgba(232,196,107,.18)" : "none",
               }}
             >
               <span>{link.label}</span>
-              <span style={{ fontSize: 12, opacity: selected ? 0.88 : 0.70, letterSpacing: ".08em" }}>{link.tag}</span>
+              <span style={{ fontSize: 11, opacity: selected ? 0.88 : 0.68, letterSpacing: ".08em" }}>{link.tag}</span>
             </Link>
           );
         })}
