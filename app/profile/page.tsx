@@ -1,12 +1,66 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type Profile = Record<string, any>;
 
 const MEMBER_TYPES = ["Buyer", "Seller", "Lender", "Wholesaler", "Realtor", "Contractor", "Operator", "Attorney", "Property Manager", "Investor"];
-const MARKETS = ["Georgia", "Florida", "Tennessee", "North Carolina", "South Carolina", "Texas", "Alabama", "National"];
+
+const STATES = [
+  "Alabama",
+  "Alaska",
+  "Arizona",
+  "Arkansas",
+  "California",
+  "Colorado",
+  "Connecticut",
+  "Delaware",
+  "Florida",
+  "Georgia",
+  "Hawaii",
+  "Idaho",
+  "Illinois",
+  "Indiana",
+  "Iowa",
+  "Kansas",
+  "Kentucky",
+  "Louisiana",
+  "Maine",
+  "Maryland",
+  "Massachusetts",
+  "Michigan",
+  "Minnesota",
+  "Mississippi",
+  "Missouri",
+  "Montana",
+  "Nebraska",
+  "Nevada",
+  "New Hampshire",
+  "New Jersey",
+  "New Mexico",
+  "New York",
+  "North Carolina",
+  "North Dakota",
+  "Ohio",
+  "Oklahoma",
+  "Oregon",
+  "Pennsylvania",
+  "Rhode Island",
+  "South Carolina",
+  "South Dakota",
+  "Tennessee",
+  "Texas",
+  "Utah",
+  "Vermont",
+  "Virginia",
+  "Washington",
+  "West Virginia",
+  "Wisconsin",
+  "Wyoming",
+  "National",
+];
+
 const STRATEGIES = ["Flips", "BRRRR", "Buy & Hold", "Funding", "Land", "Residential", "Commercial", "Creative Finance", "JV Equity", "Disposition"];
 const ASSET_FOCUS = ["SFR", "Multifamily", "Commercial", "Land", "Mobile Home Park", "Storage", "Mixed Use", "Distressed Property"];
 const NEEDS = [
@@ -122,6 +176,14 @@ function arr(value: unknown) {
   return [];
 }
 
+function toggle(list: string[], value: string) {
+  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+}
+
+function unique(values: string[]) {
+  return Array.from(new Set(values.map(clean).filter(Boolean)));
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -215,21 +277,110 @@ function ToggleChip({
   );
 }
 
-function toggle(list: string[], value: string) {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+function StatePickerModal({
+  title,
+  description,
+  mode,
+  open,
+  homeState,
+  operatingStates,
+  onClose,
+  onSelectHome,
+  onToggleOperating,
+}: {
+  title: string;
+  description: string;
+  mode: "home" | "operating";
+  open: boolean;
+  homeState: string;
+  operatingStates: string[];
+  onClose: () => void;
+  onSelectHome: (state: string) => void;
+  onToggleOperating: (state: string) => void;
+}) {
+  const [filter, setFilter] = useState("");
+
+  if (!open) return null;
+
+  const visible = STATES.filter((state) => state.toLowerCase().includes(filter.trim().toLowerCase()));
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        background: "rgba(0,0,0,.72)",
+        backdropFilter: "blur(12px)",
+        padding: 16,
+        overflow: "auto",
+      }}
+    >
+      <div
+        style={{
+          width: "min(860px,100%)",
+          margin: "40px auto",
+          border: "1px solid rgba(232,196,107,.34)",
+          borderRadius: 30,
+          background: "linear-gradient(180deg,#111827,#05070a)",
+          padding: 24,
+          boxShadow: "0 34px 120px rgba(0,0,0,.55)",
+        }}
+      >
+        <p style={eyebrow}>State Selector</p>
+        <h2 style={{ fontSize: "clamp(34px,8vw,66px)", lineHeight: .9, margin: "8px 0 14px" }}>{title}</h2>
+        <p style={{ ...muted, fontSize: 18 }}>{description}</p>
+
+        <input
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Search states..."
+          style={{ ...input, margin: "10px 0 16px" }}
+        />
+
+        <div style={{ display: "flex", flexWrap: "wrap" }}>
+          {visible.map((state) => {
+            const active = mode === "home" ? homeState === state : operatingStates.includes(state);
+
+            return (
+              <ToggleChip
+                key={state}
+                label={state}
+                active={active}
+                onClick={() => {
+                  if (mode === "home") onSelectHome(state);
+                  else onToggleOperating(state);
+                }}
+              />
+            );
+          })}
+        </div>
+
+        <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+          <button type="button" onClick={onClose} style={button}>Done</button>
+          <button type="button" onClick={onClose} style={ghost}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ProfilePage() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("Loading profile...");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [stateModal, setStateModal] = useState<"" | "home" | "operating">("");
 
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [phone, setPhone] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [homeState, setHomeState] = useState("");
+  const [operatingStates, setOperatingStates] = useState<string[]>([]);
   const [memberTypes, setMemberTypes] = useState<string[]>([]);
-  const [markets, setMarkets] = useState<string[]>([]);
   const [strategies, setStrategies] = useState<string[]>([]);
   const [assetFocus, setAssetFocus] = useState<string[]>([]);
   const [needs, setNeeds] = useState<string[]>([]);
@@ -240,10 +391,13 @@ export default function ProfilePage() {
   const [strategyNotes, setStrategyNotes] = useState("");
   const [networkAccepted, setNetworkAccepted] = useState(false);
 
+  const markets = useMemo(() => unique([homeState, ...operatingStates]), [homeState, operatingStates]);
+
   const routingScore = useMemo(() => {
     let score = 40;
     if (memberTypes.length) score += 8;
-    if (markets.length) score += 8;
+    if (homeState) score += 5;
+    if (operatingStates.length) score += 8;
     if (strategies.length) score += 8;
     if (assetFocus.length) score += 6;
     if (needs.length) score += 6;
@@ -253,7 +407,7 @@ export default function ProfilePage() {
     if (photoUrl) score += 4;
     if (networkAccepted) score += 3;
     return Math.min(100, score);
-  }, [memberTypes, markets, strategies, assetFocus, needs, canProvide, painSignals, buyBox, photoUrl, networkAccepted]);
+  }, [memberTypes, homeState, operatingStates, strategies, assetFocus, needs, canProvide, painSignals, buyBox, photoUrl, networkAccepted]);
 
   async function load() {
     const currentEmail = getEmail();
@@ -274,24 +428,61 @@ export default function ProfilePage() {
       if (!res.ok || data?.ok === false) throw new Error(data?.error || "Could not load profile.");
 
       const profile: Profile = data.profile || {};
-      setName(clean(profile.name));
-      setCompany(clean(profile.company));
+      const loadedMarkets = arr(profile.markets || profile.states || profile.operating_states);
+      const loadedHome = clean(profile.home_state || profile.market_primary || profile.primary_market || loadedMarkets[0]);
+
+      setName(clean(profile.name || profile.full_name));
+      setCompany(clean(profile.company || profile.company_name));
       setPhone(clean(profile.phone));
-      setPhotoUrl(clean(profile.profile_photo_url));
-      setMemberTypes(arr(profile.member_types));
-      setMarkets(arr(profile.markets));
-      setStrategies(arr(profile.strategies));
+      setPhotoUrl(clean(profile.profile_photo_url || profile.photo_url || profile.avatar_url));
+      setHomeState(loadedHome);
+      setOperatingStates(loadedMarkets.filter((state) => state !== loadedHome));
+      setMemberTypes(arr(profile.member_types || profile.member_type || profile.roles));
+      setStrategies(arr(profile.strategies || profile.strategy));
       setAssetFocus(arr(profile.asset_focus));
       setNeeds(arr(profile.needs));
       setCanProvide(arr(profile.can_provide));
       setPainSignals(arr(profile.pain_signals));
-      setBuyBox(clean(profile.buy_box));
-      setFundingCapacity(clean(profile.funding_capacity));
-      setStrategyNotes(clean(profile.strategy_notes));
-      setNetworkAccepted(Boolean(profile.network_accepted));
+      setBuyBox(clean(profile.buy_box || profile.buy_box_focus));
+      setFundingCapacity(clean(profile.funding_capacity || profile.capital_capacity));
+      setStrategyNotes(clean(profile.strategy_notes || profile.notes));
+      setNetworkAccepted(Boolean(profile.network_accepted || profile.accepted_to_network || profile.available_to_network));
       setStatus(profile ? "Profile loaded." : "New profile ready.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load profile.");
+    }
+  }
+
+  async function uploadPhoto(file: File | null | undefined) {
+    if (!file) return;
+
+    setUploading(true);
+    setStatus("Uploading profile photo...");
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("email", email);
+
+      const res = await fetch("/api/uploads/profile", {
+        method: "POST",
+        headers: { "x-vf-email": email },
+        body: form,
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.details || "Profile photo upload failed.");
+      }
+
+      setPhotoUrl(clean(data.profile_photo_url || data.photo_url || data.url));
+      setStatus("Profile photo uploaded. Hit Save Profile to lock it into your profile.");
+    } catch (error: any) {
+      setStatus(error?.message || "Profile photo upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -308,8 +499,14 @@ export default function ProfilePage() {
         company_name: company,
         phone,
         profile_photo_url: photoUrl,
-        member_types: memberTypes,
+        photo_url: photoUrl,
+        home_state: homeState,
+        market_primary: homeState,
+        primary_market: homeState,
         markets,
+        states: markets,
+        operating_states: operatingStates,
+        member_types: memberTypes,
         strategies,
         asset_focus: assetFocus,
         needs,
@@ -384,6 +581,33 @@ export default function ProfilePage() {
         }
       `}</style>
 
+      <StatePickerModal
+        open={stateModal === "home"}
+        mode="home"
+        title="Where are you from?"
+        description="Pick your home base. This helps VaultForge understand your primary market identity."
+        homeState={homeState}
+        operatingStates={operatingStates}
+        onClose={() => setStateModal("")}
+        onSelectHome={(state) => {
+          setHomeState(state);
+          setStateModal("");
+        }}
+        onToggleOperating={(state) => setOperatingStates(toggle(operatingStates, state))}
+      />
+
+      <StatePickerModal
+        open={stateModal === "operating"}
+        mode="operating"
+        title="Where do you deal?"
+        description="Pick every state you buy, lend, operate, build, source, or want routed into."
+        homeState={homeState}
+        operatingStates={operatingStates}
+        onClose={() => setStateModal("")}
+        onSelectHome={(state) => setHomeState(state)}
+        onToggleOperating={(state) => setOperatingStates(toggle(operatingStates, state))}
+      />
+
       <div style={wrap}>
         <nav style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
           <Link href="/dashboard" style={{ color: "#f8e7b0", textDecoration: "none", fontWeight: 950, letterSpacing: ".12em" }}>
@@ -402,7 +626,7 @@ export default function ProfilePage() {
             Network identity.
           </h1>
           <p style={{ ...muted, fontSize: 18 }}>
-            Your highlighted chips, photo, buy box, and network acceptance now save together.
+            Upload a real profile photo, set your home state, select where you deal, and keep your routing profile clean.
           </p>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
@@ -435,10 +659,19 @@ export default function ProfilePage() {
               <strong>Phone</strong>
               <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone number" style={{ ...input, marginTop: 8 }} />
             </label>
-            <label>
-              <strong>Profile Photo URL</strong>
-              <input value={photoUrl} onChange={(event) => setPhotoUrl(event.target.value)} placeholder="https://..." style={{ ...input, marginTop: 8 }} />
-            </label>
+            <div>
+              <strong>Profile Photo</strong>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={(event) => uploadPhoto(event.target.files?.[0])}
+                style={{ ...input, marginTop: 8 }}
+              />
+              <p style={{ ...muted, fontSize: 13, marginBottom: 0 }}>
+                Use phone pictures or upload a file. No URL needed.
+              </p>
+            </div>
           </div>
 
           {photoUrl ? (
@@ -447,19 +680,35 @@ export default function ProfilePage() {
               <img src={photoUrl} alt="Profile preview" style={{ width: "100%", maxHeight: 320, objectFit: "cover", display: "block" }} />
             </div>
           ) : null}
+
+          {uploading ? <p style={muted}>Uploading photo...</p> : null}
+        </section>
+
+        <section style={card}>
+          <p style={eyebrow}>State Intelligence</p>
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 22, padding: 18, background: "rgba(255,255,255,.04)" }}>
+              <p style={eyebrow}>Where are you from?</p>
+              <h2 style={{ marginTop: 0 }}>{homeState || "Not selected"}</h2>
+              <button type="button" onClick={() => setStateModal("home")} style={button}>
+                Choose Home State
+              </button>
+            </div>
+
+            <div style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 22, padding: 18, background: "rgba(255,255,255,.04)" }}>
+              <p style={eyebrow}>Where do you deal?</p>
+              <p style={muted}>{operatingStates.length ? operatingStates.join(", ") : "No deal states selected yet."}</p>
+              <button type="button" onClick={() => setStateModal("operating")} style={button}>
+                Choose Deal States
+              </button>
+            </div>
+          </div>
         </section>
 
         <section style={card}>
           <p style={eyebrow}>I Am</p>
           {MEMBER_TYPES.map((item) => (
             <ToggleChip key={item} label={item} active={memberTypes.includes(item)} onClick={() => setMemberTypes(toggle(memberTypes, item))} />
-          ))}
-        </section>
-
-        <section style={card}>
-          <p style={eyebrow}>Markets</p>
-          {MARKETS.map((item) => (
-            <ToggleChip key={item} label={item} active={markets.includes(item)} onClick={() => setMarkets(toggle(markets, item))} />
           ))}
         </section>
 
@@ -536,7 +785,7 @@ export default function ProfilePage() {
 
         <section style={{ ...card, position: "sticky", bottom: 12, zIndex: 10, backdropFilter: "blur(16px)" }}>
           <div className="vf-actions" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button type="button" disabled={saving || !email} onClick={save} style={{ ...button, opacity: saving || !email ? 0.55 : 1 }}>
+            <button type="button" disabled={saving || !email || uploading} onClick={save} style={{ ...button, opacity: saving || !email || uploading ? 0.55 : 1 }}>
               {saving ? "Saving..." : "Save Profile"}
             </button>
             <Link href="/members" style={ghost}>Back to Members</Link>
