@@ -13,6 +13,15 @@ function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
+function first(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value);
+    if (text) return text;
+  }
+
+  return "";
+}
+
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
 
@@ -38,26 +47,21 @@ function getLocalEmail() {
     const from = cleanEmail(params.get("from") || params.get("email"));
     if (from.includes("@")) return from;
 
-    return cleanEmail(
-      localStorage.getItem("vf_email") ||
-        sessionStorage.getItem("vf_email") ||
-        readCookie("vf_email") ||
-        readCookie("vf_member_email") ||
-        readCookie("vf_admin_email") ||
-        ""
-    );
+    const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
+
+    for (const key of keys) {
+      const value = cleanEmail(window.localStorage.getItem(key) || window.sessionStorage.getItem(key));
+      if (value.includes("@")) return value;
+    }
+
+    return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
   } catch {
     return "";
   }
 }
 
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
+function isOwnerEmail(email: string) {
+  return cleanEmail(email) === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
 function param(params: URLSearchParams, names: string[]) {
@@ -69,7 +73,7 @@ function param(params: URLSearchParams, names: string[]) {
 }
 
 function paramEmail(params: URLSearchParams) {
-  const candidates = [
+  const names = [
     "owner_email",
     "created_by_email",
     "submitted_by_email",
@@ -83,7 +87,7 @@ function paramEmail(params: URLSearchParams) {
     "sender_email",
   ];
 
-  for (const name of candidates) {
+  for (const name of names) {
     const value = cleanEmail(params.get(name));
     if (value.includes("@")) return value;
   }
@@ -91,8 +95,8 @@ function paramEmail(params: URLSearchParams) {
   return "";
 }
 
-function titleOf(row: any) {
-  return first(row?.title, row?.signal_title, row?.headline, row?.name, row?.pain_label, "VaultForge signal/opportunity");
+function titleOf(row: any, fallback = "VaultForge signal/opportunity") {
+  return first(row?.title, row?.signal_title, row?.headline, row?.name, row?.pain_label, fallback);
 }
 
 function ownerOf(row: any) {
@@ -107,6 +111,14 @@ function ownerOf(row: any) {
     row?.email,
     row?.recipient_email,
     row?.counterparty_email,
+    row?.metadata?.owner_email,
+    row?.metadata?.created_by_email,
+    row?.metadata?.submitted_by_email,
+    row?.metadata?.creator_email,
+    row?.metadata?.submitted_by,
+    row?.metadata?.user_email,
+    row?.metadata?.member_email,
+    row?.metadata?.email,
   ]
     .map(cleanEmail)
     .filter((email) => email.includes("@"));
@@ -144,32 +156,35 @@ const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", min
 export default function NewMessagePage() {
   const [fromEmail, setFromEmail] = useState("");
   const [toEmail, setToEmail] = useState("");
-  const [recipientSource, setRecipientSource] = useState("URL / pending");
+  const [recipientSource, setRecipientSource] = useState("Resolving recipient");
   const [itemId, setItemId] = useState("");
   const [signalId, setSignalId] = useState("");
   const [subject, setSubject] = useState("VaultForge connection request");
-  const [body, setBody] = useState("I saw this VaultForge opportunity/member profile and would like to connect.");
+  const [body, setBody] = useState("I need more information about this VaultForge signal/opportunity.");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [sent, setSent] = useState(false);
+  const [savedThreadId, setSavedThreadId] = useState("");
   const [contextTitle, setContextTitle] = useState("VaultForge signal/opportunity");
 
   useEffect(() => {
     async function init() {
       const params = new URLSearchParams(window.location.search);
-      const nextItemId = param(params, ["item_id", "deal_id", "project_id", "pain_id"]);
+      const nextItemId = param(params, ["item_id", "deal_id", "project_id", "pain_id", "itemId"]);
       const nextSignalId = param(params, ["signal_id", "alert_id", "signalId"]);
       const urlRecipient = paramEmail(params);
       const localEmail = getLocalEmail();
+      const urlSubject = clean(params.get("subject"));
+      const urlBody = clean(params.get("body") || params.get("message"));
 
       setFromEmail(localEmail);
       setItemId(nextItemId);
       setSignalId(nextSignalId);
 
-      if (nextSignalId || nextItemId) {
-        setSubject(clean(params.get("subject")) || "VaultForge alert follow-up");
-        setBody(clean(params.get("body")) || "I need more information about this VaultForge signal/opportunity.");
-      }
+      if (urlSubject) setSubject(urlSubject);
+      else if (nextSignalId || nextItemId) setSubject("VaultForge signal follow-up");
+
+      if (urlBody) setBody(urlBody);
 
       if (urlRecipient) {
         setToEmail(urlRecipient);
@@ -180,37 +195,46 @@ export default function NewMessagePage() {
         try {
           const q = new URLSearchParams();
           if (localEmail) q.set("email", localEmail);
-          if (localEmail === OWNER_EMAIL) q.set("owner", "1");
+          if (isOwnerEmail(localEmail)) q.set("owner", "1");
 
           const res = await fetch(`/api/signals/${encodeURIComponent(nextSignalId)}?${q.toString()}`, {
             cache: "no-store",
             headers: {
               "x-vf-email": localEmail,
-              "x-vf-admin": localEmail === OWNER_EMAIL ? "1" : "0",
+              "x-vf-admin": isOwnerEmail(localEmail) ? "1" : "0",
             },
           });
 
           const data = await safeJson(res);
           const signal = data.signal || null;
           const owner = ownerOf(signal);
-          const title = titleOf(signal);
+          const resolvedTitle = titleOf(signal, urlSubject || "VaultForge signal/opportunity");
 
-          if (title) setContextTitle(title);
+          setContextTitle(resolvedTitle);
 
           if (owner) {
             setToEmail(owner);
-            setRecipientSource(owner === OWNER_EMAIL ? "Admin fallback" : "Signal/project owner");
+            setRecipientSource(owner === OWNER_EMAIL ? "Admin fallback from Signal API" : "Signal/project owner");
+          } else if (!urlRecipient) {
+            setToEmail("");
+            setRecipientSource("Missing owner on signal");
           }
         } catch {
-          // URL recipient still applies.
+          if (!urlRecipient) setRecipientSource("Signal lookup failed");
         }
+      } else if (!urlRecipient) {
+        setRecipientSource("No signal or recipient provided");
       }
     }
 
     init();
   }, []);
 
-  const canSend = useMemo(() => fromEmail.includes("@") && toEmail.includes("@") && body.trim().length >= 2, [fromEmail, toEmail, body]);
+  const selfMessage = fromEmail && toEmail && cleanEmail(fromEmail) === cleanEmail(toEmail);
+
+  const canSend = useMemo(() => {
+    return fromEmail.includes("@") && toEmail.includes("@") && body.trim().length >= 2;
+  }, [fromEmail, toEmail, body]);
 
   async function submit() {
     if (busy) return;
@@ -236,7 +260,7 @@ export default function NewMessagePage() {
         subject: clean(subject) || "VaultForge connection request",
         message: clean(body),
         body: clean(body),
-        message_type: itemId || signalId ? "alert_connection_request" : "member_connection_request",
+        message_type: selfMessage ? "owner_note" : itemId || signalId ? "signal_connection_request" : "member_connection_request",
         source: "messages_new_page",
         item_id: itemId || null,
         signal_id: signalId || null,
@@ -261,7 +285,8 @@ export default function NewMessagePage() {
       }
 
       setSent(true);
-      setStatus(data?.message || "Connection request saved.");
+      setSavedThreadId(clean(data.thread_id));
+      setStatus(data?.note || data?.message || "Connection request saved.");
     } catch (error: any) {
       setStatus(error?.message || "Could not send message.");
     } finally {
@@ -280,19 +305,27 @@ export default function NewMessagePage() {
       <div style={wrap}>
         <section style={card}>
           <p style={eyebrow}>VaultForge Message Thread</p>
-          <h1 style={{ fontSize: "clamp(52px,12vw,94px)", lineHeight: 0.9, margin: "0 0 18px" }}>Request connection.</h1>
-          <p style={{ ...muted, fontSize: 20 }}>This sends a controlled VaultForge connection request to the actual owner/recipient when available.</p>
-          <span style={chip}>From: {fromEmail || "unknown"}</span>
-          <span style={chip}>To: {toEmail || "missing"}</span>
-          <span style={chip}>Source: {recipientSource}</span>
-          {signalId && <span style={chip}>Signal: {signalId}</span>}
-          {itemId && <span style={chip}>Item: {itemId}</span>}
-          <span style={chip}>{sent ? "Saved" : "Draft"}</span>
+          <h1 style={{ fontSize: "clamp(52px,12vw,94px)", lineHeight: 0.9, margin: "0 0 18px" }}>{selfMessage ? "Add owner note." : "Request connection."}</h1>
+          <p style={{ ...muted, fontSize: 20 }}>
+            {selfMessage
+              ? "You are the detected owner. This saves an owner note/thread instead of sending a request to yourself."
+              : "This sends a controlled VaultForge connection request to the actual owner/recipient when available."}
+          </p>
+
+          <div>
+            <span style={chip}>From: {fromEmail || "unknown"}</span>
+            <span style={chip}>To: {toEmail || "missing"}</span>
+            <span style={chip}>Source: {recipientSource}</span>
+            {signalId && <span style={chip}>Signal: {signalId}</span>}
+            {itemId && <span style={chip}>Item: {itemId}</span>}
+            <span style={chip}>{sent ? "Saved" : "Draft"}</span>
+          </div>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
-            <Link href="/members" style={ghost}>Back to Members</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
+            {savedThreadId ? <Link href={`/messages/${encodeURIComponent(savedThreadId)}`} style={btn}>Open Thread</Link> : null}
+            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Back to Signal</Link> : null}
             <Link href="/messages" style={ghost}>All Messages</Link>
+            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <Link href="/logout" style={{ ...ghost, color: "#fecaca", border: "1px solid rgba(239,68,68,.34)" }}>Logout</Link>
           </div>
@@ -319,18 +352,18 @@ export default function NewMessagePage() {
           </label>
 
           <label style={{ display: "block", marginTop: 18 }}>
-            <strong>What information do you need?</strong>
+            <strong>{selfMessage ? "Owner note / update" : "What information do you need?"}</strong>
             <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Ask for price, access, photos, timeline, owner contact release, or capital need..." style={{ ...input, minHeight: 190, lineHeight: 1.5, padding: 16, marginTop: 8 }} />
           </label>
 
           <button type="button" onClick={submit} disabled={!canSend || busy || sent} style={{ ...btn, width: "100%", marginTop: 18, opacity: !canSend || busy || sent ? 0.58 : 1 }}>
-            {sent ? "Request Saved" : busy ? "Sending..." : "Send Connection Request"}
+            {sent ? "Saved" : busy ? "Saving..." : selfMessage ? "Save Owner Note" : "Send Connection Request"}
           </button>
         </section>
 
         <section style={card}>
           <p style={eyebrow}>Safety Mode</p>
-          <p style={muted}>This records a controlled message request. It does not automatically release private contact information.</p>
+          <p style={muted}>This records a controlled message request/thread. It does not automatically release private contact information.</p>
         </section>
       </div>
     </main>
