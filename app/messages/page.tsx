@@ -5,6 +5,8 @@ import Link from "next/link";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
+type SignalRow = Record<string, any>;
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -18,7 +20,6 @@ function first(...values: unknown[]) {
     const text = clean(value);
     if (text) return text;
   }
-
   return "";
 }
 
@@ -56,18 +57,23 @@ function getLocalEmail() {
       const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
       if (sessionValue.includes("@")) return sessionValue;
     } catch {
-      // Continue.
+      // keep going
     }
   }
 
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email") || readCookie("email"));
+  return cleanEmail(
+    readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("vf_admin_email") ||
+      readCookie("email")
+  );
 }
 
 function isOwnerEmail(email: string) {
   return cleanEmail(email) === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
-function param(params: URLSearchParams, names: string[]) {
+function getParam(params: URLSearchParams, names: string[]) {
   for (const name of names) {
     const value = clean(params.get(name));
     if (value) return value;
@@ -75,7 +81,7 @@ function param(params: URLSearchParams, names: string[]) {
   return "";
 }
 
-function paramEmail(params: URLSearchParams) {
+function getParamEmail(params: URLSearchParams) {
   const names = [
     "owner_email",
     "created_by_email",
@@ -98,35 +104,62 @@ function paramEmail(params: URLSearchParams) {
   return "";
 }
 
-function titleOf(row: any, fallback = "VaultForge signal/opportunity") {
-  return first(row?.title, row?.signal_title, row?.headline, row?.name, row?.pain_label, fallback);
+function titleOf(signal: SignalRow, fallback = "VaultForge signal/opportunity") {
+  return first(
+    signal?.title,
+    signal?.signal_title,
+    signal?.headline,
+    signal?.name,
+    signal?.pain_label,
+    signal?.metadata?.title,
+    signal?.metadata?.signal_title,
+    fallback
+  );
 }
 
-function ownerOf(row: any) {
+function ownerFromSignal(signal: SignalRow) {
+  const metadata = typeof signal?.metadata === "object" && signal.metadata ? signal.metadata : {};
+
   const candidates = [
-    row?.owner_email,
-    row?.created_by_email,
-    row?.submitted_by_email,
-    row?.creator_email,
-    row?.submitted_by,
-    row?.user_email,
-    row?.member_email,
-    row?.email,
-    row?.recipient_email,
-    row?.counterparty_email,
-    row?.metadata?.owner_email,
-    row?.metadata?.created_by_email,
-    row?.metadata?.submitted_by_email,
-    row?.metadata?.creator_email,
-    row?.metadata?.submitted_by,
-    row?.metadata?.user_email,
-    row?.metadata?.member_email,
-    row?.metadata?.email,
+    signal?.owner_email,
+    signal?.submitted_by_email,
+    signal?.created_by_email,
+    signal?.creator_email,
+    signal?.submitted_by,
+    signal?.user_email,
+    signal?.member_email,
+    signal?.target_email,
+    signal?.target_member_email,
+    signal?.recipient_email,
+    signal?.email,
+    metadata.owner_email,
+    metadata.submitted_by_email,
+    metadata.created_by_email,
+    metadata.creator_email,
+    metadata.submitted_by,
+    metadata.user_email,
+    metadata.member_email,
+    metadata.target_email,
+    metadata.target_member_email,
+    metadata.recipient_email,
+    metadata.email,
   ]
     .map(cleanEmail)
     .filter((email) => email.includes("@"));
 
   return candidates.find((email) => email !== OWNER_EMAIL) || candidates[0] || "";
+}
+
+function parseRecipientFromLink(link: unknown) {
+  const text = clean(link);
+  if (!text) return "";
+
+  try {
+    const url = new URL(text, typeof window !== "undefined" ? window.location.origin : "https://vaultforge-full.vercel.app");
+    return getParamEmail(url.searchParams);
+  } catch {
+    return "";
+  }
 }
 
 async function safeJson(res: Response) {
@@ -148,6 +181,7 @@ const page: React.CSSProperties = {
 };
 
 const wrap: React.CSSProperties = { width: "min(1080px,100%)", margin: "0 auto" };
+
 const card: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.28)",
   borderRadius: 30,
@@ -156,6 +190,7 @@ const card: React.CSSProperties = {
   boxShadow: "0 28px 90px rgba(0,0,0,.38)",
   marginBottom: 16,
 };
+
 const eyebrow: React.CSSProperties = {
   color: "#e8c46b",
   fontSize: 12,
@@ -164,7 +199,9 @@ const eyebrow: React.CSSProperties = {
   fontWeight: 950,
   margin: "0 0 10px",
 };
+
 const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
+
 const chip: React.CSSProperties = {
   display: "inline-flex",
   border: "1px solid rgba(255,255,255,.14)",
@@ -176,6 +213,7 @@ const chip: React.CSSProperties = {
   fontSize: 12,
   margin: "0 7px 7px 0",
 };
+
 const btn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -190,6 +228,7 @@ const btn: React.CSSProperties = {
   minHeight: 45,
   cursor: "pointer",
 };
+
 const ghost: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -204,6 +243,7 @@ const ghost: React.CSSProperties = {
   minHeight: 45,
   cursor: "pointer",
 };
+
 const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
@@ -220,98 +260,125 @@ const input: React.CSSProperties = {
 export default function NewMessagePage() {
   const [fromEmail, setFromEmail] = useState("");
   const [toEmail, setToEmail] = useState("");
-  const [recipientSource, setRecipientSource] = useState("Resolving recipient");
+  const [recipientSource, setRecipientSource] = useState("Resolving recipient...");
   const [itemId, setItemId] = useState("");
   const [signalId, setSignalId] = useState("");
   const [subject, setSubject] = useState("VaultForge connection request");
   const [body, setBody] = useState("I need more information about this VaultForge signal/opportunity.");
   const [busy, setBusy] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [status, setStatus] = useState("");
+  const [debug, setDebug] = useState("");
   const [sent, setSent] = useState(false);
   const [savedThreadId, setSavedThreadId] = useState("");
   const [contextTitle, setContextTitle] = useState("VaultForge signal/opportunity");
 
-  useEffect(() => {
-    async function init() {
-      const params = new URLSearchParams(window.location.search);
-      const nextItemId = param(params, ["item_id", "deal_id", "project_id", "pain_id", "itemId"]);
-      const nextSignalId = param(params, ["signal_id", "alert_id", "signalId"]);
-      const urlRecipient = paramEmail(params);
-      const localEmail = getLocalEmail();
-      const urlSubject = clean(params.get("subject"));
-      const urlBody = clean(params.get("body") || params.get("message"));
+  async function resolveRecipient() {
+    const params = new URLSearchParams(window.location.search);
+    const localEmail = getLocalEmail();
+    const nextItemId = getParam(params, ["item_id", "deal_id", "project_id", "pain_id", "itemId"]);
+    const nextSignalId = getParam(params, ["signal_id", "alert_id", "signalId"]);
+    const urlRecipient = getParamEmail(params);
+    const urlSubject = clean(params.get("subject"));
+    const urlBody = clean(params.get("body") || params.get("message"));
 
-      setFromEmail(localEmail);
-      setItemId(nextItemId);
-      setSignalId(nextSignalId);
+    setFromEmail(localEmail);
+    setItemId(nextItemId);
+    setSignalId(nextSignalId);
+    setStatus("");
+    setDebug("");
 
-      if (urlSubject) setSubject(urlSubject);
-      else if (nextSignalId || nextItemId) setSubject("VaultForge signal follow-up");
+    if (urlSubject) setSubject(urlSubject);
+    else if (nextSignalId || nextItemId) setSubject("VaultForge alert follow-up");
 
-      if (urlBody) setBody(urlBody);
+    if (urlBody) setBody(urlBody);
 
-      if (urlRecipient) {
-        setToEmail(urlRecipient);
-        setRecipientSource("URL recipient");
-      }
-
-      if (nextSignalId) {
-        try {
-          const q = new URLSearchParams();
-          if (localEmail) q.set("email", localEmail);
-          if (isOwnerEmail(localEmail)) q.set("owner", "1");
-
-          const res = await fetch(`/api/signals/${encodeURIComponent(nextSignalId)}?${q.toString()}`, {
-            cache: "no-store",
-            headers: {
-              "x-vf-email": localEmail,
-              "x-vf-admin": isOwnerEmail(localEmail) ? "1" : "0",
-            },
-          });
-
-          const data = await safeJson(res);
-          const signal = data.signal || null;
-          const owner = ownerOf(signal);
-          const resolvedTitle = titleOf(signal, urlSubject || "VaultForge signal/opportunity");
-
-          setContextTitle(resolvedTitle);
-
-          if (owner) {
-            setToEmail(owner);
-            setRecipientSource(owner === OWNER_EMAIL ? "Admin fallback from Signal API" : "Signal/project owner");
-          } else if (!urlRecipient) {
-            setToEmail("");
-            setRecipientSource("Missing owner on signal");
-          }
-        } catch {
-          if (!urlRecipient) setRecipientSource("Signal lookup failed");
-        }
-      } else if (!urlRecipient) {
-        setRecipientSource("No signal or recipient provided");
-      }
+    if (urlRecipient) {
+      setToEmail(urlRecipient);
+      setRecipientSource("URL recipient");
+      return;
     }
 
-    init();
+    if (!nextSignalId) {
+      setToEmail("");
+      setRecipientSource("No signal_id or recipient in URL");
+      setDebug("Open this page from Pain Feed / Signal Room / Alert action. A bare /messages/new URL cannot know who to contact.");
+      return;
+    }
+
+    setResolving(true);
+    setRecipientSource("Looking up Signal API...");
+
+    try {
+      const q = new URLSearchParams();
+      if (localEmail) q.set("email", localEmail);
+      if (isOwnerEmail(localEmail)) q.set("owner", "1");
+
+      const res = await fetch(`/api/signals/${encodeURIComponent(nextSignalId)}?${q.toString()}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": localEmail,
+          "x-vf-admin": isOwnerEmail(localEmail) ? "1" : "0",
+        },
+      });
+
+      const data = await safeJson(res);
+      const signal = data.signal || {};
+      const directLinks = data.direct_links || signal.direct_links || {};
+
+      const resolved =
+        ownerFromSignal(signal) ||
+        parseRecipientFromLink(directLinks.message_owner) ||
+        parseRecipientFromLink(directLinks.message) ||
+        parseRecipientFromLink(data.message_owner);
+
+      const resolvedTitle = titleOf(signal, urlSubject || "VaultForge signal/opportunity");
+      setContextTitle(resolvedTitle);
+
+      if (resolved) {
+        setToEmail(resolved);
+        setRecipientSource(resolved === OWNER_EMAIL ? "Signal API admin fallback" : "Signal API owner");
+        setDebug(
+          `Resolved from /api/signals. owner_email=${clean(signal.owner_email) || "blank"} submitted_by_email=${clean(signal.submitted_by_email) || "blank"} member_email=${clean(signal.member_email) || "blank"} target_email=${clean(signal.target_email) || "blank"}`
+        );
+      } else {
+        setToEmail("");
+        setRecipientSource("Signal API returned no recipient");
+        setDebug(JSON.stringify({ ok: data.ok, signal_owner: signal.owner_email || null, signal_member: signal.member_email || null, direct_links: directLinks || null }).slice(0, 900));
+      }
+    } catch (error: any) {
+      setToEmail("");
+      setRecipientSource("Signal lookup failed");
+      setDebug(error?.message || String(error));
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  useEffect(() => {
+    resolveRecipient();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selfMessage = fromEmail && toEmail && cleanEmail(fromEmail) === cleanEmail(toEmail);
 
   const canSend = useMemo(() => {
-    return fromEmail.includes("@") && toEmail.includes("@") && body.trim().length >= 2;
-  }, [fromEmail, toEmail, body]);
+    return fromEmail.includes("@") && toEmail.includes("@") && body.trim().length >= 2 && !busy && !sent;
+  }, [fromEmail, toEmail, body, busy, sent]);
 
   async function submit() {
     if (busy) return;
 
     setBusy(true);
     setStatus("");
+    setDebug("");
 
     try {
       const sender = cleanEmail(fromEmail);
       const recipient = cleanEmail(toEmail);
 
       if (!sender) throw new Error("Login email missing. Please log in again.");
-      if (!recipient) throw new Error("Missing recipient email.");
+      if (!recipient) throw new Error("Missing recipient email. Press Resolve Recipient or open from Signal/Pain card.");
       if (!clean(body)) throw new Error("Write a message before sending.");
 
       const payload = {
@@ -345,6 +412,7 @@ export default function NewMessagePage() {
       const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
+        setDebug(JSON.stringify(data, null, 2).slice(0, 1800));
         throw new Error(data?.error || data?.details || "Could not save connection request.");
       }
 
@@ -354,15 +422,9 @@ export default function NewMessagePage() {
       setStatus(data?.note || data?.message || "Connection request saved.");
 
       if (threadId) {
-        try {
-          const url = `/messages/${encodeURIComponent(threadId)}?email=${encodeURIComponent(sender)}`;
-          window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
-          setTimeout(() => {
-            window.location.href = url;
-          }, 600);
-        } catch {
-          // Button still appears.
-        }
+        setTimeout(() => {
+          window.location.href = `/messages/${encodeURIComponent(threadId)}?email=${encodeURIComponent(sender)}`;
+        }, 700);
       }
     } catch (error: any) {
       setStatus(error?.message || "Could not send message.");
@@ -382,7 +444,9 @@ export default function NewMessagePage() {
       <div style={wrap}>
         <section style={card}>
           <p style={eyebrow}>VaultForge Message Thread</p>
-          <h1 style={{ fontSize: "clamp(52px,12vw,94px)", lineHeight: 0.9, margin: "0 0 18px" }}>{selfMessage ? "Add owner note." : "Request connection."}</h1>
+          <h1 style={{ fontSize: "clamp(52px,12vw,94px)", lineHeight: 0.9, margin: "0 0 18px" }}>
+            {selfMessage ? "Add owner note." : "Request connection."}
+          </h1>
           <p style={{ ...muted, fontSize: 20 }}>
             {selfMessage
               ? "You are the detected owner. This saves an owner note/thread instead of sending a request to yourself."
@@ -399,6 +463,9 @@ export default function NewMessagePage() {
           </div>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
+            <button type="button" onClick={resolveRecipient} style={btn} disabled={resolving}>
+              {resolving ? "Resolving..." : "Resolve Recipient"}
+            </button>
             {savedThreadId ? <Link href={`/messages/${encodeURIComponent(savedThreadId)}?email=${encodeURIComponent(fromEmail)}`} style={btn}>Open Thread</Link> : null}
             {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Back to Signal</Link> : null}
             <Link href="/messages" style={ghost}>All Messages</Link>
@@ -408,13 +475,26 @@ export default function NewMessagePage() {
           </div>
         </section>
 
-        {status && <section style={{ ...card, color: status.toLowerCase().includes("could") || status.toLowerCase().includes("missing") ? "#ffd0d0" : "#bbf7d0" }}><strong>{status}</strong></section>}
+        {status && (
+          <section style={{ ...card, color: status.toLowerCase().includes("could") || status.toLowerCase().includes("missing") ? "#ffd0d0" : "#bbf7d0" }}>
+            <strong>{status}</strong>
+          </section>
+        )}
+
+        {debug && (
+          <section style={card}>
+            <p style={eyebrow}>Resolver / Save Debug</p>
+            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#cbd5e1", fontSize: 13, lineHeight: 1.45, margin: 0 }}>
+              {debug}
+            </pre>
+          </section>
+        )}
 
         {!toEmail && (
           <section style={{ ...card, color: "#ffd0d0" }}>
-            <strong>No recipient was passed into this page.</strong>
+            <strong>No recipient is resolved yet.</strong>
             <p style={muted}>
-              Open this from a Pain card, Signal Room, Member card, or Alert action. A blank message page cannot know which owner/member to contact.
+              The URL must include a recipient or a signal_id that resolves through the Signal API. Press Resolve Recipient after ownership SQL changes.
             </p>
           </section>
         )}
@@ -442,7 +522,7 @@ export default function NewMessagePage() {
             <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Ask for price, access, photos, timeline, owner contact release, or capital need..." style={{ ...input, minHeight: 190, lineHeight: 1.5, padding: 16, marginTop: 8 }} />
           </label>
 
-          <button type="button" onClick={submit} disabled={!canSend || busy || sent} style={{ ...btn, width: "100%", marginTop: 18, opacity: !canSend || busy || sent ? 0.58 : 1 }}>
+          <button type="button" onClick={submit} disabled={!canSend} style={{ ...btn, width: "100%", marginTop: 18, opacity: !canSend ? 0.58 : 1 }}>
             {sent ? "Saved" : busy ? "Saving..." : selfMessage ? "Save Owner Note" : "Send Connection Request"}
           </button>
         </section>
