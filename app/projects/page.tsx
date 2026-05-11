@@ -25,6 +25,15 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
+const openPage: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
+  color: "white",
+  padding: "28px 18px 0",
+  fontFamily: "Arial, sans-serif",
+};
+
 const wrap: React.CSSProperties = {
   maxWidth: 1100,
   margin: "0 auto",
@@ -282,16 +291,24 @@ export default function ProjectsPage() {
   }
 
   return (
-    <>
-      <main style={page}>
-        <div style={wrap}>
-          <VaultForgeMemberNav
-            title="Projects"
-            subtitle="Deal rooms, saved targets, and project review tools"
-          />
-        </div>
-      </main>
+    <main style={openPage}>
+      <style>{`
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+      `}</style>
+
+      <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Projects"
+          subtitle="Deal rooms, saved targets, and project review tools"
+        />
+      </div>
+
       <ProjectsClient />
-    </>
+    </main>
   );
 }
