@@ -2,13 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
-import {
-  VaultForgePulseStrip,
-  VaultForgeSignalBar,
-  VaultForgeCommandFooter,
-  VaultForgeStatGrid,
-} from "../components/VaultForgeVisualLayer";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -49,7 +42,7 @@ function getEmail() {
     if (value.includes("@")) return value;
   }
 
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_admin_email"));
+  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
 function isOwner(email: string) {
@@ -82,30 +75,24 @@ function noteOf(item: PainItem) {
     item.description,
     item.message,
     item.route_summary,
+    item.help_requested,
     item.metadata?.route_summary,
+    item.metadata?.help_requested,
     "Pain signal routed into VaultForge."
   );
 }
 
 function painIdOf(item: PainItem) {
-  return first(item.id, item.pain_id, item.uuid, item.metadata?.pain_id);
+  return first(item.id, item.pain_id, item.uuid, item.item_id, item.metadata?.pain_id, item.metadata?.item_id);
 }
 
 function signalIdOf(item: PainItem) {
   const painId = painIdOf(item);
-  return first(
-    item.signal_id,
-    item.signalId,
-    item.related_alert_id,
-    item.alert_id,
-    item.metadata?.signal_id,
-    item.metadata?.alert_id,
-    painId
-  );
+  return first(item.signal_id, item.signalId, item.related_alert_id, item.alert_id, item.metadata?.signal_id, item.metadata?.alert_id, painId);
 }
 
 function priorityOf(item: PainItem) {
-  return first(item.priority, item.urgency, item.metadata?.priority, "medium").toLowerCase();
+  return first(item.priority, item.urgency, item.urgency_level, item.metadata?.priority, item.metadata?.urgency, "medium").toLowerCase();
 }
 
 function priorityTone(priority: string) {
@@ -116,7 +103,7 @@ function priorityTone(priority: string) {
 }
 
 function marketOf(item: PainItem) {
-  return first(item.market, [item.city, item.state].filter(Boolean).join(", "), item.state, item.metadata?.market);
+  return first(item.market, [item.city, item.state].filter(Boolean).join(", "), item.location, item.state, item.metadata?.market);
 }
 
 function typeOf(item: PainItem) {
@@ -124,20 +111,28 @@ function typeOf(item: PainItem) {
 }
 
 function ownerEmailOf(item: PainItem) {
-  return cleanEmail(
-    first(
-      item.owner_email,
-      item.submitted_by,
-      item.user_email,
-      item.member_email,
-      item.email,
-      item.metadata?.owner_email,
-      item.metadata?.submitted_by,
-      item.metadata?.user_email,
-      item.metadata?.member_email,
-      OWNER_EMAIL
-    )
-  );
+  const candidates = [
+    item.owner_email,
+    item.created_by_email,
+    item.submitted_by_email,
+    item.creator_email,
+    item.submitted_by,
+    item.user_email,
+    item.member_email,
+    item.email,
+    item.metadata?.owner_email,
+    item.metadata?.created_by_email,
+    item.metadata?.submitted_by_email,
+    item.metadata?.creator_email,
+    item.metadata?.submitted_by,
+    item.metadata?.user_email,
+    item.metadata?.member_email,
+    item.metadata?.email,
+  ]
+    .map(cleanEmail)
+    .filter((email) => email.includes("@"));
+
+  return candidates.find((email) => email !== OWNER_EMAIL) || candidates[0] || "";
 }
 
 function imageOf(item: PainItem) {
@@ -171,7 +166,7 @@ function scoreOf(item: PainItem) {
   if (priority.includes("urgent")) score += 24;
   if (priority.includes("high")) score += 14;
   if (marketOf(item)) score += 6;
-  if (ownerEmailOf(item) && ownerEmailOf(item) !== OWNER_EMAIL) score += 6;
+  if (ownerEmailOf(item)) score += 8;
   if (imageOf(item)) score += 6;
   return Math.max(0, Math.min(100, score));
 }
@@ -184,6 +179,25 @@ function signalHref(item: PainItem) {
 function painRoomHref(item: PainItem) {
   const painId = painIdOf(item);
   return painId ? `/pain-room/${encodeURIComponent(painId)}` : signalHref(item);
+}
+
+function messageHref(item: PainItem) {
+  const painId = painIdOf(item);
+  const signalId = signalIdOf(item);
+  const ownerEmail = ownerEmailOf(item);
+
+  const query = new URLSearchParams();
+  if (signalId) query.set("signal_id", signalId);
+  if (painId) query.set("item_id", painId);
+  if (ownerEmail) {
+    query.set("owner_email", ownerEmail);
+    query.set("recipient", ownerEmail);
+    query.set("to", ownerEmail);
+  }
+  query.set("subject", `Pain follow-up: ${titleOf(item)}`);
+  query.set("source", "pain_feed_card");
+
+  return `/messages/new?${query.toString()}`;
 }
 
 async function safeJson(res: Response) {
@@ -204,127 +218,19 @@ const page: React.CSSProperties = {
     'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
 };
 
-const wrap: React.CSSProperties = {
-  width: "min(1240px,100%)",
-  margin: "0 auto",
-};
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.28)",
-  borderRadius: 30,
-  padding: 24,
-  background:
-    "linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.026))",
-  boxShadow: "0 28px 90px rgba(0,0,0,.38)",
-  marginBottom: 16,
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  fontSize: 12,
-  letterSpacing: ".18em",
-  textTransform: "uppercase",
-  fontWeight: 950,
-  margin: "0 0 10px",
-};
-
-const title: React.CSSProperties = {
-  fontSize: "clamp(44px,8vw,92px)",
-  lineHeight: 0.88,
-  margin: 0,
-  letterSpacing: "-.06em",
-};
-
-const subtitle: React.CSSProperties = {
-  color: "#cbd5e1",
-  fontSize: 18,
-  lineHeight: 1.55,
-  maxWidth: 820,
-  margin: "16px 0 0",
-};
-
-const actionRow: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  marginTop: 16,
-};
-
-const primaryAction: React.CSSProperties = {
-  color: "#101010",
-  textDecoration: "none",
-  borderRadius: 15,
-  padding: "12px 15px",
-  minHeight: 45,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: 950,
-  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-  border: "1px solid rgba(232,196,107,.7)",
-  cursor: "pointer",
-};
-
-const secondaryAction: React.CSSProperties = {
-  color: "#fff",
-  textDecoration: "none",
-  borderRadius: 15,
-  padding: "12px 15px",
-  minHeight: 45,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: 850,
-  border: "1px solid rgba(255,255,255,.14)",
-  background: "rgba(255,255,255,.055)",
-  cursor: "pointer",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  minHeight: 54,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.07)",
-  color: "white",
-  padding: "0 16px",
-  fontSize: 16,
-  outline: "none",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))",
-  gap: 16,
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.18)",
-  borderRadius: 24,
-  padding: 20,
-  background:
-    "linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.026))",
-  boxShadow: "0 20px 70px rgba(0,0,0,.25)",
-  color: "white",
-};
-
-const chip: React.CSSProperties = {
-  color: "#e5e7eb",
-  border: "1px solid rgba(255,255,255,.14)",
-  background: "rgba(255,255,255,.055)",
-  borderRadius: 999,
-  padding: "8px 10px",
-  fontSize: 12,
-  fontWeight: 850,
-  display: "inline-flex",
-  margin: "0 8px 8px 0",
-};
-
-const muted: React.CSSProperties = {
-  color: "#cbd5e1",
-  lineHeight: 1.55,
-};
+const wrap: React.CSSProperties = { width: "min(1240px,100%)", margin: "0 auto" };
+const hero: React.CSSProperties = { border: "1px solid rgba(232,196,107,.28)", borderRadius: 30, padding: 24, background: "linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.026))", boxShadow: "0 28px 90px rgba(0,0,0,.38)", marginBottom: 16 };
+const eyebrow: React.CSSProperties = { color: "#e8c46b", fontSize: 12, letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, margin: "0 0 10px" };
+const title: React.CSSProperties = { fontSize: "clamp(44px,8vw,92px)", lineHeight: 0.88, margin: 0, letterSpacing: "-.06em" };
+const subtitle: React.CSSProperties = { color: "#cbd5e1", fontSize: 18, lineHeight: 1.55, maxWidth: 820, margin: "16px 0 0" };
+const actionRow: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 };
+const primaryAction: React.CSSProperties = { color: "#101010", textDecoration: "none", borderRadius: 15, padding: "12px 15px", minHeight: 45, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 950, background: "linear-gradient(135deg,#f8e7b0,#e8c46b)", border: "1px solid rgba(232,196,107,.7)", cursor: "pointer" };
+const secondaryAction: React.CSSProperties = { color: "#fff", textDecoration: "none", borderRadius: 15, padding: "12px 15px", minHeight: 45, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 850, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.055)", cursor: "pointer" };
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", minHeight: 54, borderRadius: 16, border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.07)", color: "white", padding: "0 16px", fontSize: 16, outline: "none" };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))", gap: 16 };
+const card: React.CSSProperties = { border: "1px solid rgba(232,196,107,.18)", borderRadius: 24, padding: 20, background: "linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.026))", boxShadow: "0 20px 70px rgba(0,0,0,.25)", color: "white" };
+const chip: React.CSSProperties = { color: "#e5e7eb", border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.055)", borderRadius: 999, padding: "8px 10px", fontSize: 12, fontWeight: 850, display: "inline-flex", margin: "0 8px 8px 0" };
+const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
 
 export default function PainFeedPage() {
   const [email, setEmail] = useState("");
@@ -390,16 +296,7 @@ export default function PainFeedPage() {
 
         if (!q) return true;
 
-        return [
-          titleOf(item),
-          noteOf(item),
-          marketOf(item),
-          priorityOf(item),
-          typeOf(item),
-          painIdOf(item),
-          signalIdOf(item),
-          ownerEmailOf(item),
-        ]
+        return [titleOf(item), noteOf(item), marketOf(item), priorityOf(item), typeOf(item), painIdOf(item), signalIdOf(item), ownerEmailOf(item)]
           .join(" ")
           .toLowerCase()
           .includes(q);
@@ -409,60 +306,35 @@ export default function PainFeedPage() {
 
   const urgent = items.filter((item) => priorityOf(item) === "urgent").length;
   const high = items.filter((item) => priorityOf(item) === "high").length;
-  const normal = Math.max(0, items.length - urgent - high);
-  const withOwner = items.filter((item) => ownerEmailOf(item) && ownerEmailOf(item) !== OWNER_EMAIL).length;
+  const withOwner = items.filter((item) => ownerEmailOf(item)).length;
   const withPhotos = items.filter((item) => imageOf(item)).length;
 
   return (
     <main style={page}>
       <style>{`
-        a:hover,
-        button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
-        input::placeholder {
-          color: rgba(255,255,255,.42);
-        }
-
+        a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
+        input::placeholder { color: rgba(255,255,255,.42); }
         @media (max-width: 820px) {
-          .vf-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 10px !important;
-          }
-
-          .vf-actions > * {
-            width: 100%;
-            box-sizing: border-box;
-            justify-content: center;
-            margin: 0 !important;
-          }
+          .vf-actions { display: grid !important; grid-template-columns: 1fr !important; gap: 10px !important; }
+          .vf-actions > * { width: 100%; box-sizing: border-box; justify-content: center; margin: 0 !important; }
         }
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav title="Pain Feed" subtitle="Submitted pain records converted into signal-ready operating cards." />
-
-        <VaultForgePulseStrip
-          items={[
-            { label: "PAIN", value: "LIVE", tone: "gold" },
-            { label: "SIGNALS", value: "READY", tone: "silver" },
-            { label: "OWNERS", value: withOwner, tone: "green" },
-            { label: "PHOTOS", value: withPhotos, tone: "blue" },
-          ]}
-        />
-
-        <VaultForgeSignalBar urgent={urgent} high={high} normal={normal} active={items.length} routed={0} messages={0} />
+        <nav style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+          <Link href="/dashboard" style={{ color: "#f8e7b0", textDecoration: "none", fontWeight: 950, letterSpacing: ".12em" }}>VAULTFORGE</Link>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Link href="/dashboard" style={secondaryAction}>Dashboard</Link>
+            <Link href="/signals" style={secondaryAction}>Signals</Link>
+            <Link href="/messages" style={secondaryAction}>Messages</Link>
+            <Link href="/routing-inbox" style={secondaryAction}>Routing</Link>
+          </div>
+        </nav>
 
         <section style={hero}>
           <p style={eyebrow}>VAULTFORGE PAIN COMMAND FEED</p>
           <h1 style={title}>Pain becomes signal.</h1>
-          <p style={subtitle}>
-            Pain records stay clean here, but the primary operating path is now Signal Room → Message → Routing → Execution.
-          </p>
+          <p style={subtitle}>Pain records stay clean here. Message Owner now passes the detected owner only; BCR is no longer hardcoded into the card link.</p>
 
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
@@ -470,13 +342,12 @@ export default function PainFeedPage() {
             <span style={chip}>Urgent: {urgent}</span>
             <span style={chip}>High: {high}</span>
             <span style={chip}>Owners detected: {withOwner}</span>
+            <span style={chip}>Photos: {withPhotos}</span>
             <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
           </div>
 
           <div className="vf-actions" style={actionRow}>
-            <button type="button" onClick={load} style={primaryAction}>
-              {loading ? "Refreshing..." : "Refresh Pain Feed"}
-            </button>
+            <button type="button" onClick={load} style={primaryAction}>{loading ? "Refreshing..." : "Refresh Pain Feed"}</button>
             <Link href="/pain" style={primaryAction}>Submit New Pain</Link>
             <Link href="/signals" style={secondaryAction}>Signals</Link>
             <Link href="/dashboard" style={secondaryAction}>Dashboard</Link>
@@ -487,18 +358,8 @@ export default function PainFeedPage() {
         <section style={hero}>
           <p style={eyebrow}>FILTER PAIN SIGNALS</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search title, market, owner, priority, signal id..."
-              style={input}
-            />
-
-            <select
-              value={priorityFilter}
-              onChange={(event) => setPriorityFilter(event.target.value)}
-              style={input}
-            >
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search title, market, owner, priority, signal id..." style={input} />
+            <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} style={input}>
               <option value="all" style={{ color: "#111" }}>All Priorities</option>
               <option value="urgent" style={{ color: "#111" }}>Urgent</option>
               <option value="high" style={{ color: "#111" }}>High</option>
@@ -508,20 +369,7 @@ export default function PainFeedPage() {
           </div>
         </section>
 
-        <VaultForgeStatGrid
-          stats={[
-            { label: "Pain Signals", value: items.length, detail: "Real saved pain records.", tone: "gold" },
-            { label: "Urgent", value: urgent, detail: "Pressure requiring attention.", tone: "red" },
-            { label: "Owners", value: withOwner, detail: "Records with detected submitter/owner.", tone: "green" },
-            { label: "Photos", value: withPhotos, detail: "Records with asset context.", tone: "blue" },
-          ]}
-        />
-
-        {status ? (
-          <section style={hero}>
-            <p style={{ ...muted, margin: 0 }}>{status}</p>
-          </section>
-        ) : null}
+        {status ? <section style={hero}><p style={{ ...muted, margin: 0 }}>{status}</p></section> : null}
 
         <section style={grid}>
           {filtered.map((item, index) => {
@@ -531,29 +379,16 @@ export default function PainFeedPage() {
             const priority = priorityOf(item);
             const tone = priorityTone(priority);
             const ownerEmail = ownerEmailOf(item);
-            const messageHref = `/messages/new?signal_id=${encodeURIComponent(signalId || "")}&item_id=${encodeURIComponent(painId || "")}&recipient=${encodeURIComponent(ownerEmail || OWNER_EMAIL)}&to=${encodeURIComponent(ownerEmail || OWNER_EMAIL)}&subject=${encodeURIComponent(`Pain follow-up: ${titleOf(item)}`)}`;
+            const href = messageHref(item);
 
             return (
               <article key={`${painId}-${signalId}-${index}`} style={{ ...card, borderColor: `${tone}66` }}>
-                <p style={{ ...eyebrow, color: tone }}>
-                  {priority || "medium"} · {typeOf(item)}
-                </p>
+                <p style={{ ...eyebrow, color: tone }}>{priority || "medium"} · {typeOf(item)}</p>
 
                 {image ? (
                   <Link href={signalHref(item)} style={{ display: "block", textDecoration: "none" }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={image}
-                      alt={titleOf(item)}
-                      style={{
-                        width: "100%",
-                        height: 190,
-                        objectFit: "cover",
-                        borderRadius: 18,
-                        border: "1px solid rgba(232,196,107,.18)",
-                        marginBottom: 14,
-                      }}
-                    />
+                    <img src={image} alt={titleOf(item)} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(232,196,107,.18)", marginBottom: 14 }} />
                   </Link>
                 ) : null}
 
@@ -565,27 +400,21 @@ export default function PainFeedPage() {
                   {marketOf(item) ? <span style={chip}>{marketOf(item)}</span> : null}
                   {painId ? <span style={chip}>Pain: {painId}</span> : null}
                   {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
-                  <span style={chip}>Owner: {ownerEmail || OWNER_EMAIL}</span>
+                  <span style={chip}>Owner: {ownerEmail || "missing"}</span>
                 </div>
 
                 <div className="vf-actions" style={actionRow}>
-                  <Link href={signalHref(item)} style={primaryAction}>Open Signal Room</Link>
-                  <Link href={messageHref} style={secondaryAction}>Message Owner</Link>
-                  <Link href={painRoomHref(item)} style={secondaryAction}>Pain Room Backup</Link>
+                  <Link href={painRoomHref(item)} style={primaryAction}>Open Pain Room</Link>
+                  <Link href={signalHref(item)} style={secondaryAction}>Open Signal</Link>
+                  {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={secondaryAction}>Routing Room</Link> : null}
+                  <Link href={href} style={{ ...secondaryAction, opacity: ownerEmail ? 1 : 0.55 }}>
+                    {ownerEmail ? "Message Owner" : "Owner Missing"}
+                  </Link>
                 </div>
               </article>
             );
           })}
         </section>
-
-        <section style={{ ...hero, marginTop: 18 }}>
-          <p style={eyebrow}>OPERATING RULE</p>
-          <p style={{ ...muted, fontSize: 18 }}>
-            Pain Feed remains the intake list. Signal Room is now the main operating room. Pain Room stays available as a backup path only.
-          </p>
-        </section>
-
-        <VaultForgeCommandFooter />
       </div>
     </main>
   );
