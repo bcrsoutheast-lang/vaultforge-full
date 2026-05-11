@@ -2,18 +2,93 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-const STATES = ["Georgia", "Florida", "North Carolina", "South Carolina", "Tennessee", "Alabama", "Texas"];
+const PROFILE_BUCKET = "profile-photo";
 
-const MEMBER_TYPES = ["Buyer", "Seller", "Lender", "Wholesaler", "Realtor", "Contractor", "Operator", "Attorney", "Property Manager", "Investor"];
-const STRATEGIES = ["Flips", "BRRRR", "Buy & Hold", "Funding", "Land", "Residential", "Commercial", "Creative Finance", "JV Equity", "Disposition"];
-const ASSET_FOCUS = ["SFR", "Multifamily", "Commercial", "Land", "Mobile Home Park", "Storage", "Mixed Use", "Distressed Property"];
-const NEEDS = [
+const STATE_OPTIONS = [
+  "Georgia",
+  "Florida",
+  "Tennessee",
+  "North Carolina",
+  "South Carolina",
+  "Alabama",
+  "Texas",
+];
+
+const MEMBER_TYPE_OPTIONS = [
+  "Buyer",
+  "Seller",
+  "Lender",
+  "Private Money",
+  "Hard Money Lender",
+  "Wholesaler",
+  "Contractor",
+  "Developer",
+  "Operator",
+  "Realtor",
+  "Broker",
+  "Property Manager",
+  "JV Partner",
+  "Investor",
+  "Deal Source",
+  "Title / Attorney",
+  "Insurance",
+  "Builder",
+  "Land Specialist",
+];
+
+const PROPERTY_TYPE_OPTIONS = [
+  "Residential",
+  "Commercial",
+  "Multifamily",
+  "Land",
+  "Industrial",
+  "Self Storage",
+  "Mobile Home Park",
+  "Mixed Use",
+  "Rental",
+  "Short-Term Rental",
+  "Builder Lot",
+  "RV Park",
+  "Raw Land",
+  "Office",
+  "Retail",
+];
+
+const STRATEGY_OPTIONS = [
+  "Fix & Flip",
+  "Buy & Hold",
+  "BRRRR",
+  "Wholesale",
+  "Development",
+  "Lending",
+  "Seller Finance",
+  "Subject-To",
+  "Lease Option",
+  "Airbnb",
+  "Distressed",
+  "Equity Play",
+  "Value Add",
+  "Ground Up",
+  "Subdivision",
+  "Entitlement",
+  "Builder Lot",
+  "Partner / JV",
+];
+
+const NEED_OPTIONS = [
+  "Funding",
+  "Funding needed",
   "Buyer Needed",
-  "Capital Needed",
-  "Private Lender Needed",
+  "Lender Needed",
+  "Private Capital Needed",
+  "Seller Leads",
   "Contractor Needed",
+  "Operator Needed",
+  "JV Partner",
+  "JV Partner Needed",
   "Wholesaler Needed",
   "Realtor Needed",
   "Title / Attorney Needed",
@@ -29,7 +104,8 @@ const NEEDS = [
   "Stalled Project Help",
   "Funding Gap Help",
 ];
-const CAN_PROVIDE = [
+
+const CAN_PROVIDE_OPTIONS = [
   "Cash Buyer",
   "Private Lending",
   "Hard Money",
@@ -52,7 +128,8 @@ const CAN_PROVIDE = [
   "Property Management",
   "Insurance Help",
 ];
-const PAIN_SIGNALS = [
+
+const DISTRESS_SIGNAL_OPTIONS = [
   "Behind Payments",
   "Inherited Property",
   "Vacant Property",
@@ -67,36 +144,139 @@ const PAIN_SIGNALS = [
   "Needs Fast Close",
 ];
 
-type FormState = {
-  full_name: string;
-  company: string;
-  phone: string;
-  profile_photo_url: string;
-  home_state: string;
-  deal_states: string[];
-  member_types: string[];
-  strategies: string[];
-  asset_focus: string[];
-  needs: string[];
-  can_provide: string[];
-  pain_signals: string[];
-  buy_box: string;
-  funding_capacity: string;
-  strategy_notes: string;
-  network_accepted: boolean;
+const ALERT_TYPE_OPTIONS = [
+  "Deal matches my buy box",
+  "New deal in my market",
+  "Buyer match",
+  "Funding match",
+  "Capital match",
+  "Lender match",
+  "Contractor/operator match",
+  "JV opportunity",
+  "Distressed opportunity",
+  "Pain signal",
+  "High-margin deal",
+  "Someone saves my deal",
+  "Someone messages me",
+  "Price drop or status change",
+  "AI opportunity signal",
+  "Routing notice",
+];
+
+const ALERT_FREQUENCIES = [
+  { label: "Instant", value: "instant" },
+  { label: "High Priority Only", value: "high_priority" },
+  { label: "Daily Digest", value: "daily_digest" },
+  { label: "Weekly Digest", value: "weekly_digest" },
+  { label: "Silent Mode", value: "off" },
+];
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at top right, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#030509,#071326 55%,#030509)",
+  color: "white",
+  padding: "28px 18px 90px",
+  fontFamily: "Arial, sans-serif",
 };
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
+const wrap: React.CSSProperties = { maxWidth: 1060, margin: "0 auto" };
 
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
-}
+const hero: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.30)",
+  background: "linear-gradient(135deg, rgba(255,255,255,.075), rgba(255,255,255,.025))",
+  borderRadius: 34,
+  padding: 26,
+  marginBottom: 22,
+  boxShadow: "0 30px 90px rgba(0,0,0,.38)",
+};
+
+const pane: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.13)",
+  background: "rgba(255,255,255,.04)",
+  borderRadius: 28,
+  padding: 22,
+  marginBottom: 18,
+};
+
+const goldPane: React.CSSProperties = {
+  ...pane,
+  border: "1px solid rgba(232,196,107,.28)",
+  background:
+    "linear-gradient(145deg, rgba(232,196,107,.08), rgba(255,255,255,.035))",
+};
+
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+  gap: 14,
+};
+
+const btn: React.CSSProperties = {
+  display: "inline-block",
+  background: "#f5d978",
+  color: "#06100a",
+  textDecoration: "none",
+  borderRadius: 999,
+  padding: "14px 20px",
+  fontWeight: 950,
+  border: "none",
+  margin: "7px 7px 0 0",
+  cursor: "pointer",
+};
+
+const ghost: React.CSSProperties = {
+  display: "inline-block",
+  color: "white",
+  textDecoration: "none",
+  borderRadius: 999,
+  padding: "14px 20px",
+  fontWeight: 900,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.04)",
+  margin: "7px 7px 0 0",
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.18)",
+  background: "rgba(255,255,255,.075)",
+  color: "white",
+  padding: 14,
+  fontSize: 16,
+};
+
+const label: React.CSSProperties = {
+  display: "block",
+  fontWeight: 900,
+  margin: "0 0 8px",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: 5,
+  fontWeight: 900,
+  fontSize: 12,
+  marginBottom: 12,
+  textTransform: "uppercase",
+};
+
+const muted: React.CSSProperties = {
+  color: "rgba(255,255,255,.70)",
+  lineHeight: 1.55,
+  fontSize: 17,
+};
+
+const chipWrap: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+};
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
-
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -113,275 +293,492 @@ function readCookie(name: string) {
 
 function getEmail() {
   if (typeof window === "undefined") return "";
-
-  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-
-  for (const key of keys) {
-    const localValue = cleanEmail(window.localStorage.getItem(key));
-    if (localValue.includes("@")) return localValue;
-
-    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
-    if (sessionValue.includes("@")) return sessionValue;
-  }
-
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+  return (
+    localStorage.getItem("vf_email") ||
+    sessionStorage.getItem("vf_email") ||
+    readCookie("vf_email") ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
 }
 
-async function safeJson(res: Response) {
+
+function localProfileKey(email: string) {
+  return `vf_profile_backup_${email.trim().toLowerCase()}`;
+}
+
+function loadLocalProfile(email: string) {
+  if (typeof window === "undefined" || !email) return null;
+
   try {
-    return await res.json();
+    const raw =
+      localStorage.getItem(localProfileKey(email)) ||
+      sessionStorage.getItem(localProfileKey(email));
+
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") return null;
+
+    return parsed;
   } catch {
-    return {};
+    return null;
   }
 }
 
-function arr(value: unknown) {
-  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
-  if (typeof value === "string") return value.split(",").map(clean).filter(Boolean);
+function saveLocalProfile(email: string, profile: Record<string, any>) {
+  if (typeof window === "undefined" || !email) return;
+
+  try {
+    const payload = JSON.stringify({
+      ...profile,
+      email,
+      _local_saved_at: new Date().toISOString(),
+    });
+
+    localStorage.setItem(localProfileKey(email), payload);
+    sessionStorage.setItem(localProfileKey(email), payload);
+  } catch {
+    // Local backup is best effort only.
+  }
+}
+
+function fieldIsBlank(value: any) {
+  if (Array.isArray(value)) return value.length === 0;
+  return !String(value || "").trim();
+}
+
+function mergeNoBlankOverwrite(remote: Record<string, any>, local: Record<string, any>) {
+  const next = { ...remote };
+
+  const keysToProtect = [
+    "email",
+    "full_name",
+    "phone",
+    "company",
+    "role",
+    "city",
+    "state",
+    "markets",
+    "buy_box",
+    "funding_capacity",
+    "strategy",
+    "profile_photo_url",
+    "member_types",
+    "buy_box_states",
+    "buy_box_types",
+    "buy_box_strategies",
+    "needs",
+    "can_provide",
+    "distress_signals",
+    "alert_types",
+    "alert_frequency",
+    "max_alerts_per_day",
+  ];
+
+  for (const key of keysToProtect) {
+    if (fieldIsBlank(next[key]) && !fieldIsBlank(local[key])) {
+      next[key] = local[key];
+    }
+  }
+
+  return next;
+}
+
+
+function normalizeChip(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/\s*-\s*/g, "-");
+}
+
+function aliasesFor(value: string) {
+  const normalized = normalizeChip(value);
+
+  const aliases: Record<string, string[]> = {
+    "fix & flip": ["flips", "flip", "fix and flip"],
+    flips: ["fix & flip", "flip", "fix and flip"],
+    funding: ["funding needed", "lender needed", "private capital needed", "capital match"],
+    "funding needed": ["funding", "lender needed", "private capital needed"],
+    lending: ["lender", "private lending", "hard money", "funding"],
+    lender: ["lending", "private lending", "hard money", "funding"],
+    "title/closing help": ["title / attorney needed", "title / attorney help"],
+    "title / attorney needed": ["title/closing help", "title / attorney help"],
+    "contractor/operator match": ["contractor needed", "operator needed"],
+  };
+
+  return [normalized, ...(aliases[normalized] || []).map(normalizeChip)];
+}
+
+function chipsMatch(a: string, b: string) {
+  const aAliases = aliasesFor(a);
+  const bAliases = aliasesFor(b);
+  return aAliases.some((item) => bAliases.includes(item));
+}
+
+function asArray(value: any): string[] {
+  if (Array.isArray(value)) return value.map(String).map((x) => x.trim()).filter(Boolean);
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String).map((x) => x.trim()).filter(Boolean);
+    } catch {
+      // continue
+    }
+
+    return value
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+
   return [];
 }
 
-function toggle(list: string[], value: string) {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+function uniqueList(values: string[]) {
+  const map = new Map<string, string>();
+
+  for (const value of values) {
+    const cleanValue = String(value || "").trim();
+    if (!cleanValue) continue;
+    map.set(normalizeChip(cleanValue), cleanValue);
+  }
+
+  return Array.from(map.values());
 }
 
-function onlyAllowedStates(values: unknown) {
-  const incoming = arr(values);
-  const filtered = incoming.filter((state) => STATES.includes(state));
-  return filtered.length ? filtered : ["Georgia"];
+function allowedStateList(values: any) {
+  const list = asArray(values).filter((state) => STATE_OPTIONS.includes(state));
+  return list.length ? list : ["Georgia"];
 }
 
-function uniq(values: string[]) {
-  return Array.from(new Set(values.map(clean).filter(Boolean)));
+function allowedStateValue(value: any) {
+  const text = String(value || "").trim();
+  return STATE_OPTIONS.includes(text) ? text : "Georgia";
 }
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.15), transparent 30%), radial-gradient(circle at 85% 10%, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
-  color: "white",
-  padding: "20px 16px 100px",
-  fontFamily: "Arial, sans-serif",
-};
+function firstNonEmpty(...values: any[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      if (value.length) return value;
+      continue;
+    }
 
-const wrap: React.CSSProperties = { width: "min(1100px,100%)", margin: "0 auto" };
+    const text = String(value || "").trim();
+    if (text) return value;
+  }
 
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 28,
-  padding: 24,
-  background: "rgba(255,255,255,.05)",
-  marginBottom: 18,
-  boxShadow: "0 24px 80px rgba(0,0,0,.25)",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.08)",
-  color: "white",
-  padding: 14,
-  fontSize: 16,
-  outline: "none",
-};
-
-const sectionTitle: React.CSSProperties = {
-  color: "#e8c46b",
-  fontWeight: 950,
-  fontSize: 18,
-  letterSpacing: ".22em",
-  marginBottom: 16,
-  textTransform: "uppercase",
-};
-
-const label: React.CSSProperties = {
-  color: "#e8c46b",
-  fontWeight: 950,
-  fontSize: 12,
-  letterSpacing: ".16em",
-  marginBottom: 8,
-  textTransform: "uppercase",
-};
-
-const button: React.CSSProperties = {
-  borderRadius: 999,
-  padding: "14px 20px",
-  border: 0,
-  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-  color: "#06100a",
-  fontWeight: 950,
-  cursor: "pointer",
-  textDecoration: "none",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  border: "1px solid rgba(255,255,255,.14)",
-  background: "rgba(255,255,255,.06)",
-  color: "white",
-};
-
-const chipBase: React.CSSProperties = {
-  borderRadius: 999,
-  padding: "10px 14px",
-  border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.06)",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-  margin: "0 8px 8px 0",
-};
-
-function Chip({ value, selected, onClick }: { value: string; selected: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        ...chipBase,
-        border: selected ? "1px solid rgba(157,243,191,.42)" : chipBase.border,
-        background: selected ? "rgba(157,243,191,.14)" : chipBase.background,
-        color: selected ? "#9df3bf" : "white",
-      }}
-    >
-      {value}
-    </button>
-  );
+  return "";
 }
 
-const defaultForm: FormState = {
+function arrayFirstNonEmpty(...values: any[]) {
+  for (const value of values) {
+    const list = asArray(value);
+    if (list.length) return list;
+  }
+
+  return [];
+}
+
+function joinList(value: any) {
+  return asArray(value).join(", ");
+}
+
+function completionScore(form: Record<string, any>) {
+  const required = ["email", "full_name", "phone", "role", "city", "state"];
+  const requiredDone = required.filter((key) => String(form[key] || "").trim()).length;
+
+  const intelligenceFields = [
+    asArray(form.member_types).length,
+    asArray(form.buy_box_states).length,
+    asArray(form.buy_box_types).length,
+    asArray(form.buy_box_strategies).length,
+    asArray(form.needs).length,
+    asArray(form.can_provide).length,
+  ];
+
+  const intelligenceDone = intelligenceFields.filter(Boolean).length;
+  const base = (requiredDone / required.length) * 70;
+  const smart = (intelligenceDone / intelligenceFields.length) * 30;
+
+  return Math.round(base + smart);
+}
+
+function safeFileName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function fileExtension(file: File) {
+  const name = file.name || "";
+  const ext = name.includes(".") ? name.split(".").pop() || "" : "";
+
+  if (ext) return ext.toLowerCase();
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
+  if (file.type === "image/gif") return "gif";
+
+  return "jpg";
+}
+
+function supabaseBrowserClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    "";
+
+  if (!url || !key) {
+    throw new Error("Supabase public environment values are missing.");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+function toggleInList(list: string[], value: string) {
+  const exists = list.some((item) => chipsMatch(item, value));
+
+  if (exists) return list.filter((item) => !chipsMatch(item, value));
+  return uniqueList([...list, value]);
+}
+
+function mergeOptions(base: string[], selected: string[]) {
+  return uniqueList([...base, ...selected]);
+}
+
+const EMPTY_FORM = {
+  email: "",
   full_name: "",
-  company: "",
   phone: "",
-  profile_photo_url: "",
-  home_state: "Georgia",
-  deal_states: ["Georgia"],
-  member_types: [],
-  strategies: [],
-  asset_focus: [],
-  needs: [],
-  can_provide: [],
-  pain_signals: [],
+  company: "",
+  role: "",
+  city: "",
+  state: "Georgia",
+  markets: "",
   buy_box: "",
   funding_capacity: "",
-  strategy_notes: "",
-  network_accepted: true,
+  strategy: "",
+  profile_photo_url: "",
+  alert_frequency: "daily_digest",
+  max_alerts_per_day: "10",
+  alert_types: ["Deal matches my buy box", "Someone messages me", "Funding match"],
+  member_types: ["Buyer"],
+  buy_box_states: ["Georgia"],
+  buy_box_types: [],
+  buy_box_strategies: [],
+  needs: [],
+  can_provide: [],
+  distress_signals: [],
 };
 
+function profileToForm(profile: Record<string, any>, email: string, current: Record<string, any>) {
+  const loadedMemberTypes = arrayFirstNonEmpty(
+    profile.member_types,
+    profile.memberTypes,
+    profile.role,
+    profile.member_role
+  );
+
+  const loadedStates = arrayFirstNonEmpty(
+    profile.buy_box_states,
+    profile.market_states,
+    profile.markets,
+    profile.state
+  );
+
+  const loadedTypes = arrayFirstNonEmpty(
+    profile.buy_box_types,
+    profile.property_types,
+    profile.asset_types,
+    current.buy_box_types
+  );
+
+  const loadedStrategies = arrayFirstNonEmpty(
+    profile.buy_box_strategies,
+    profile.strategies,
+    profile.strategy,
+    current.buy_box_strategies
+  );
+
+  const loadedNeeds = arrayFirstNonEmpty(
+    profile.needs,
+    profile.deal_needs,
+    profile.what_i_need,
+    current.needs
+  );
+
+  const loadedProvide = arrayFirstNonEmpty(
+    profile.can_provide,
+    profile.what_i_provide,
+    current.can_provide
+  );
+
+  const loadedDistress = arrayFirstNonEmpty(
+    profile.distress_signals,
+    profile.pain_signals,
+    profile.problem_signals,
+    current.distress_signals
+  );
+
+  const loadedAlerts = arrayFirstNonEmpty(
+    profile.alert_types,
+    current.alert_types
+  );
+
+  const profilePhoto = firstNonEmpty(
+    profile.profile_photo_url,
+    profile.profilePhotoUrl,
+    profile.avatar_url,
+    profile.photo_url,
+    current.profile_photo_url
+  ) as string;
+
+  return {
+    email: firstNonEmpty(profile.email, email, current.email) as string,
+    full_name: firstNonEmpty(profile.full_name, profile.fullName, profile.name, current.full_name) as string,
+    phone: firstNonEmpty(profile.phone, current.phone) as string,
+    company: firstNonEmpty(profile.company, current.company) as string,
+    role: firstNonEmpty(profile.role, profile.member_role, loadedMemberTypes[0], current.role) as string,
+    city: firstNonEmpty(profile.city, current.city) as string,
+    state: allowedStateValue(firstNonEmpty(profile.state, loadedStates[0], current.state, "Georgia")),
+    markets: firstNonEmpty(profile.markets, joinList(loadedStates), current.markets) as string,
+    member_types: loadedMemberTypes.length ? loadedMemberTypes : asArray(current.member_types).length ? asArray(current.member_types) : ["Buyer"],
+    buy_box: firstNonEmpty(profile.buy_box, profile.buyBox, current.buy_box) as string,
+    funding_capacity: firstNonEmpty(profile.funding_capacity, profile.fundingCapacity, current.funding_capacity) as string,
+    strategy: firstNonEmpty(profile.strategy, current.strategy) as string,
+    profile_photo_url: profilePhoto || "",
+    alert_frequency: firstNonEmpty(profile.alert_frequency, current.alert_frequency, "daily_digest") as string,
+    max_alerts_per_day: String(firstNonEmpty(profile.max_alerts_per_day, current.max_alerts_per_day, "10")),
+    alert_types: loadedAlerts.length ? loadedAlerts : ["Deal matches my buy box", "Someone messages me", "Funding match"],
+    buy_box_states: loadedStates.length ? allowedStateList(loadedStates) : allowedStateList(current.buy_box_states),
+    buy_box_types: loadedTypes,
+    buy_box_strategies: loadedStrategies,
+    needs: loadedNeeds,
+    can_provide: loadedProvide,
+    distress_signals: loadedDistress,
+  };
+}
+
 export default function ProfilePage() {
-  const [email, setEmail] = useState("");
+  const [form, setForm] = useState<Record<string, any>>(EMPTY_FORM);
   const [status, setStatus] = useState("Loading profile...");
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<FormState>(defaultForm);
+  const [complete, setComplete] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  const routingScore = useMemo(() => {
-    let score = 40;
-    if (form.full_name) score += 5;
-    if (form.company) score += 5;
-    if (form.profile_photo_url) score += 8;
-    if (form.home_state) score += 5;
-    if (form.deal_states.length) score += 8;
-    if (form.member_types.length) score += 8;
-    if (form.strategies.length) score += 8;
-    if (form.asset_focus.length) score += 6;
-    if (form.needs.length) score += 6;
-    if (form.can_provide.length) score += 8;
-    if (form.pain_signals.length) score += 5;
-    if (form.buy_box) score += 5;
-    if (form.network_accepted) score += 4;
-    return Math.min(100, score);
-  }, [form]);
+  const progress = useMemo(() => completionScore(form), [form]);
 
-  async function loadProfile() {
-    const currentEmail = getEmail();
-    setEmail(currentEmail);
+  function update(key: string, value: any) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
 
-    if (!currentEmail) {
-      setStatus("Login email not found. Please log in again.");
+  function toggle(key: string, value: string) {
+    setForm((current) => {
+      const currentList = asArray(current[key]);
+      return { ...current, [key]: toggleInList(currentList, value) };
+    });
+  }
+
+  async function uploadProfilePhoto(file: File) {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setStatus("Choose an image file for your profile photo.");
       return;
     }
 
+    const maxSize = 6 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      setStatus("Profile photo is too large. Use an image under 6MB.");
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setStatus("Uploading profile photo...");
+
     try {
-      const res = await fetch(`/api/profile?email=${encodeURIComponent(currentEmail)}`, {
-        cache: "no-store",
-        headers: { "x-vf-email": currentEmail },
-      });
+      const email = form.email || getEmail();
 
-      const data = await safeJson(res);
-      const profile = data.profile || data.data || {};
-      const metadata = typeof profile.metadata === "object" && profile.metadata ? profile.metadata : {};
+      if (!email || !email.includes("@")) {
+        throw new Error("Add your email before uploading a profile photo.");
+      }
 
-      const loadedStates = onlyAllowedStates(
-        profile.deal_states ||
-          profile.markets ||
-          profile.states ||
-          profile.operating_states ||
-          metadata.deal_states ||
-          metadata.markets
-      );
+      const supabase = supabaseBrowserClient();
+      const ext = fileExtension(file);
+      const cleanBase = safeFileName(email.split("@")[0] || "member");
+      const path = `${safeFileName(email)}/${cleanBase}-${Date.now()}.${ext}`;
 
-      const loadedHome = clean(
-        profile.home_state ||
-          profile.market_primary ||
-          profile.primary_market ||
-          metadata.home_state ||
-          metadata.market_primary ||
-          loadedStates[0] ||
-          "Georgia"
-      );
+      const { error } = await supabase.storage
+        .from(PROFILE_BUCKET)
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: file.type || `image/${ext}`,
+        });
 
-      setForm({
-        full_name: clean(profile.full_name || metadata.full_name),
-        company: clean(profile.company || profile.company_name || metadata.company),
-        phone: clean(profile.phone || metadata.phone),
-        profile_photo_url: clean(profile.profile_photo_url || profile.photo_url || profile.avatar_url || metadata.profile_photo_url),
-        home_state: STATES.includes(loadedHome) ? loadedHome : "Georgia",
-        deal_states: loadedStates,
-        member_types: arr(profile.member_types || profile.member_type || profile.roles || metadata.member_types),
-        strategies: arr(profile.strategies || profile.strategy || metadata.strategies),
-        asset_focus: arr(profile.asset_focus || metadata.asset_focus),
-        needs: arr(profile.needs || metadata.needs),
-        can_provide: arr(profile.can_provide || metadata.can_provide),
-        pain_signals: arr(profile.pain_signals || metadata.pain_signals),
-        buy_box: clean(profile.buy_box || profile.buy_box_focus || metadata.buy_box),
-        funding_capacity: clean(profile.funding_capacity || profile.capital_capacity || metadata.funding_capacity),
-        strategy_notes: clean(profile.strategy_notes || profile.notes || metadata.strategy_notes),
-        network_accepted: Boolean(profile.network_accepted ?? profile.accepted_to_network ?? profile.available_to_network ?? metadata.network_accepted ?? true),
-      });
+      if (error) {
+        throw new Error(error.message || "Profile photo upload failed.");
+      }
 
-      setStatus(data.ok === false ? clean(data.error || "Profile loaded with warnings.") : "Profile loaded.");
+      const { data } = supabase.storage.from(PROFILE_BUCKET).getPublicUrl(path);
+      const publicUrl = data?.publicUrl || "";
+
+      if (!publicUrl) {
+        throw new Error("Could not get public profile photo URL.");
+      }
+
+      update("profile_photo_url", publicUrl);
+      setStatus("Profile photo uploaded. Click Save Profile to lock it in.");
     } catch (error: any) {
-      setStatus(clean(error?.message || "Could not load profile."));
+      setStatus(error?.message || "Could not upload profile photo.");
+    } finally {
+      setUploadingPhoto(false);
     }
   }
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  async function loadProfile() {
+    setStatus("Loading profile...");
 
-  async function uploadFile(file: File) {
-    const body = new FormData();
-    body.append("file", file);
-    body.append("email", email);
+    try {
+      const email = getEmail();
+      const localBackup = loadLocalProfile(email);
 
-    const res = await fetch("/api/uploads/profile", {
-      method: "POST",
-      headers: { "x-vf-email": email },
-      body,
-    });
+      if (localBackup) {
+        setForm((current) => profileToForm(localBackup, email, current));
+      }
 
-    const data = await safeJson(res);
+      const res = await fetch(`/api/profile/me?email=${encodeURIComponent(email)}`, {
+        cache: "no-store",
+        headers: { "x-vf-email": email },
+      });
 
-    if (!res.ok || data.ok === false) {
-      throw new Error(clean(data.error || data.details || "Upload failed."));
+      const data = await res.json();
+      const remoteProfile = data?.profile || {};
+      const safeProfile = localBackup
+        ? mergeNoBlankOverwrite(remoteProfile, localBackup)
+        : remoteProfile;
+
+      setForm((current) => profileToForm(safeProfile, email, current));
+      setComplete(Boolean(safeProfile.profile_complete || data?.profile_complete));
+      setStatus("");
+    } catch (error: any) {
+      setStatus(error?.message || "Could not load profile.");
     }
-
-    return clean(data.profile_photo_url || data.photo_url || data.url || data.publicUrl || data.image_url);
   }
 
   async function saveProfile() {
@@ -389,302 +786,507 @@ export default function ProfilePage() {
     setStatus("Saving profile...");
 
     try {
-      const dealStates = onlyAllowedStates(form.deal_states);
+      const email = form.email || getEmail();
+      const primaryRole = asArray(form.member_types)[0] || form.role;
 
-      const res = await fetch("/api/profile", {
+      const payload = {
+        ...form,
+        email,
+        role: primaryRole,
+        member_role: primaryRole,
+        state: allowedStateValue(form.state || asArray(form.buy_box_states)[0] || "Georgia"),
+        markets: joinList(allowedStateList(form.buy_box_states)),
+        market_states: allowedStateList(form.buy_box_states),
+        member_types: asArray(form.member_types),
+        buy_box_states: allowedStateList(form.buy_box_states),
+        buy_box_types: asArray(form.buy_box_types),
+        property_types: asArray(form.buy_box_types),
+        asset_types: asArray(form.buy_box_types),
+        buy_box_strategies: asArray(form.buy_box_strategies),
+        strategies: asArray(form.buy_box_strategies),
+        needs: asArray(form.needs),
+        deal_needs: asArray(form.needs),
+        what_i_need: asArray(form.needs),
+        can_provide: asArray(form.can_provide),
+        what_i_provide: asArray(form.can_provide),
+        distress_signals: asArray(form.distress_signals),
+        pain_signals: asArray(form.distress_signals),
+        alert_types: asArray(form.alert_types),
+        max_alerts_per_day: Number(form.max_alerts_per_day || 10),
+      };
+
+      const res = await fetch("/api/profile/save", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-vf-email": email,
         },
-        body: JSON.stringify({
-          email,
-          full_name: form.full_name,
-          company: form.company,
-          company_name: form.company,
-          phone: form.phone,
-          profile_photo_url: form.profile_photo_url,
-          photo_url: form.profile_photo_url,
-          home_state: form.home_state,
-          market_primary: form.home_state,
-          primary_market: form.home_state,
-          deal_states: dealStates,
-          markets: uniq([form.home_state, ...dealStates]),
-          states: uniq([form.home_state, ...dealStates]),
-          operating_states: dealStates,
-          member_types: form.member_types,
-          roles: form.member_types,
-          strategies: form.strategies,
-          asset_focus: form.asset_focus,
-          needs: form.needs,
-          can_provide: form.can_provide,
-          pain_signals: form.pain_signals,
-          buy_box: form.buy_box,
-          funding_capacity: form.funding_capacity,
-          strategy_notes: form.strategy_notes,
-          network_accepted: form.network_accepted,
-          accepted_to_network: form.network_accepted,
-          available_to_network: form.network_accepted,
-          routing_score: routingScore,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await safeJson(res);
+      const data = await res.json();
 
-      if (!res.ok || data.ok === false) {
-        throw new Error(clean(data.error || data.message || "Profile save failed."));
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || data?.details || "Profile save failed.");
       }
 
-      setStatus("Profile saved.");
+      saveLocalProfile(email, {
+        ...payload,
+        profile_complete: Boolean(data?.profile_complete),
+        profile_photo_url: form.profile_photo_url,
+      });
+
+      setComplete(Boolean(data?.profile_complete));
+      setStatus(
+        data?.profile_complete
+          ? "Profile complete. Smart routing fields saved."
+          : "Profile saved. Complete required fields to unlock payment step."
+      );
+
       await loadProfile();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error: any) {
-      setStatus(clean(error?.message || "Could not save profile."));
+      setStatus(error?.message || "Could not save profile.");
     } finally {
       setSaving(false);
     }
   }
 
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
-  function chipSection(title: string, subtitle: string, values: string[], selected: string[], key: keyof FormState) {
-    return (
-      <section style={card}>
-        <div style={sectionTitle}>{title}</div>
-        {subtitle ? <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.5 }}>{subtitle}</p> : null}
-        <div>
-          {values.map((value) => (
-            <Chip key={value} value={value} selected={selected.includes(value)} onClick={() => update(key as any, toggle(selected, value) as any)} />
-          ))}
-        </div>
-      </section>
-    );
-  }
+  const memberTypeOptions = mergeOptions(MEMBER_TYPE_OPTIONS, asArray(form.member_types));
+  const stateOptions = STATE_OPTIONS;
+  const typeOptions = mergeOptions(PROPERTY_TYPE_OPTIONS, asArray(form.buy_box_types));
+  const strategyOptions = mergeOptions(STRATEGY_OPTIONS, asArray(form.buy_box_strategies));
+  const needOptions = mergeOptions(NEED_OPTIONS, asArray(form.needs));
+  const provideOptions = mergeOptions(CAN_PROVIDE_OPTIONS, asArray(form.can_provide));
+  const alertOptions = mergeOptions(ALERT_TYPE_OPTIONS, asArray(form.alert_types));
+  const distressOptions = mergeOptions(DISTRESS_SIGNAL_OPTIONS, asArray(form.distress_signals));
 
   return (
     <main style={page}>
-      <style>{`
-        button:hover, a:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
-        input::placeholder, textarea::placeholder {
-          color: rgba(255,255,255,.42);
-        }
-
-        @media (max-width: 760px) {
-          .vf-grid {
-            grid-template-columns: 1fr !important;
-          }
-
-          .vf-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 10px !important;
-          }
-
-          .vf-actions > * {
-            width: 100%;
-            box-sizing: border-box;
-            justify-content: center;
-          }
-        }
-      `}</style>
-
       <div style={wrap}>
-        <VaultForgeMemberNav title="Profile" subtitle="Network identity, state intelligence, and execution profile." active="profile" />
+        <VaultForgeMemberNav
+          title="Profile"
+          subtitle="Member intelligence profile, buy box, routing rules, alerts, and network identity."
+          active="profile"
+        />
 
-        <section style={card}>
-          <div style={sectionTitle}>Member Profile</div>
-
-          <h1 style={{ fontSize: "clamp(52px,9vw,96px)", lineHeight: .92, margin: "10px 0 18px", letterSpacing: "-.06em" }}>
-            Network identity.
+        <section style={hero}>
+          <div style={eyebrow}>Member Intelligence Profile</div>
+          <h1
+            style={{
+              fontSize: "clamp(54px, 12vw, 96px)",
+              lineHeight: 0.88,
+              margin: "0 0 18px",
+            }}
+          >
+            Train your VaultForge engine.
           </h1>
+          <p style={{ ...muted, fontSize: 20 }}>
+            Your profile powers smart alerts, member routing, deal matching, buy-box intelligence,
+            market signals, pain routing, and future AI recommendations.
+          </p>
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <Link href="/alerts" style={ghost}>Alerts</Link>
+          <Link href="/payment" style={ghost}>Payment</Link>
+          <Link href="/logout" style={ghost}>Logout</Link>
+        </section>
 
-          <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.5 }}>
-            Upload a real profile photo, set your home state, select where you deal, and keep your routing profile clean.
+        <section
+          style={{
+            ...pane,
+            borderColor: complete
+              ? "rgba(157,243,191,.45)"
+              : "rgba(232,196,107,.35)",
+          }}
+        >
+          <div style={eyebrow}>Profile Progress</div>
+          <h2 style={{ fontSize: 34, margin: "0 0 12px" }}>
+            {complete ? "Complete ✓" : `${progress}% complete`}
+          </h2>
+          <div
+            style={{
+              width: "100%",
+              height: 14,
+              borderRadius: 999,
+              background: "rgba(255,255,255,.08)",
+              overflow: "hidden",
+              marginBottom: 14,
+            }}
+          >
+            <div
+              style={{
+                width: `${progress}%`,
+                height: "100%",
+                background: complete ? "#9df3bf" : "#f5d978",
+              }}
+            />
+          </div>
+          {status && (
+            <p
+              style={{
+                margin: 0,
+                color: complete ? "#9df3bf" : "#e8c46b",
+                fontWeight: 900,
+              }}
+            >
+              {status}
+            </p>
+          )}
+          {complete && <Link href="/payment" style={btn}>Continue to Payment</Link>}
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Required Fields</div>
+          <p style={muted}>
+            Required to move into payment-ready status: name, phone, role, city, state, and email.
+          </p>
+          <div style={grid}>
+            <Field label="Email" value={form.email} onChange={(v) => update("email", v)} />
+            <Field label="Full Name" value={form.full_name} onChange={(v) => update("full_name", v)} />
+            <Field label="Phone" value={form.phone} onChange={(v) => update("phone", v)} />
+            <Field label="Company" value={form.company} onChange={(v) => update("company", v)} />
+            <Field
+              label="City"
+              value={form.city}
+              onChange={(v) => update("city", v)}
+              placeholder="Atlanta, Tampa, Nashville..."
+            />
+            <Select label="Home State" value={form.state} onChange={(v) => update("state", v)} options={STATE_OPTIONS} />
+          </div>
+        </section>
+
+        <section style={goldPane}>
+          <div style={eyebrow}>Who You Are</div>
+          <p style={muted}>
+            Choose every role that applies. This lets VaultForge route deals, capital, operators,
+            buyers, sellers, and opportunities to the right people.
+          </p>
+          <ChipGroup
+            values={form.member_types}
+            options={memberTypeOptions}
+            onToggle={(value) => toggle("member_types", value)}
+          />
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Markets / States</div>
+          <p style={muted}>
+            Select every state or region where you want alerts and routing signals.
+          </p>
+          <ChipGroup
+            values={form.buy_box_states}
+            options={stateOptions}
+            onToggle={(value) => toggle("buy_box_states", value)}
+          />
+          <div style={{ marginTop: 16 }}>
+            <Field
+              label="Specific Markets"
+              value={form.markets}
+              onChange={(v) => update("markets", v)}
+              placeholder="Atlanta, Cartersville, Tampa, Nashville..."
+            />
+          </div>
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Project Types</div>
+          <p style={muted}>
+            Tell VaultForge what assets you want to see or work on.
+          </p>
+          <ChipGroup
+            values={form.buy_box_types}
+            options={typeOptions}
+            onToggle={(value) => toggle("buy_box_types", value)}
+          />
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Strategies</div>
+          <p style={muted}>
+            Choose all strategies you buy, fund, operate, source, build, or want alerts for.
+          </p>
+          <ChipGroup
+            values={form.buy_box_strategies}
+            options={strategyOptions}
+            onToggle={(value) => toggle("buy_box_strategies", value)}
+          />
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>What You Need</div>
+          <p style={muted}>
+            These become routing signals. If a deal or member solves your pain, VaultForge can alert you.
+          </p>
+          <ChipGroup
+            values={form.needs}
+            options={needOptions}
+            onToggle={(value) => toggle("needs", value)}
+          />
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>What You Can Provide</div>
+          <p style={muted}>
+            This tells the network where you add value.
+          </p>
+          <ChipGroup
+            values={form.can_provide}
+            options={provideOptions}
+            onToggle={(value) => toggle("can_provide", value)}
+          />
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Pain / Distress Signals</div>
+          <p style={muted}>
+            Choose the pain signals you can help with or want to be alerted about.
+          </p>
+          <ChipGroup
+            values={form.distress_signals}
+            options={distressOptions}
+            onToggle={(value) => toggle("distress_signals", value)}
+          />
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Buy Box Details</div>
+          <div style={grid}>
+            <Field
+              label="Buy Box / Focus"
+              value={form.buy_box}
+              onChange={(v) => update("buy_box", v)}
+              placeholder="SFR flips, 70% ARV, vacant land, value-add commercial..."
+            />
+            <Field
+              label="Funding Capacity"
+              value={form.funding_capacity}
+              onChange={(v) => update("funding_capacity", v)}
+              placeholder="$250k cash, $1M private lending, JV equity..."
+            />
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <Text label="Strategy / Notes / What You Want VaultForge To Watch For" value={form.strategy} onChange={(v) => update("strategy", v)} />
+          </div>
+        </section>
+
+        <section style={pane}>
+          <div style={eyebrow}>Alert Preferences</div>
+          <p style={muted}>
+            Control how loud VaultForge gets. The smarter your selections, the smarter your alerts.
           </p>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
-            <div style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "8px 14px" }}>
-              Email: {email || "unknown"}
-            </div>
-
-            <div style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "8px 14px" }}>
-              Routing score: {routingScore}
-            </div>
-
-            <div style={{ border: "1px solid rgba(157,243,191,.22)", color: "#9df3bf", borderRadius: 999, padding: "8px 14px" }}>
-              Network: {form.network_accepted ? "Accepted" : "Not accepted"}
-            </div>
-          </div>
-        </section>
-
-        <section style={card}>
-          <h2 style={{ marginTop: 0 }}>{status}</h2>
-        </section>
-
-        <section style={card}>
-          <div style={sectionTitle}>Profile Basics</div>
-
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
-            <div>
-              <div style={label}>Name</div>
-              <input style={input} value={form.full_name} onChange={(e) => update("full_name", e.target.value)} />
-            </div>
-
-            <div>
-              <div style={label}>Company</div>
-              <input style={input} value={form.company} onChange={(e) => update("company", e.target.value)} />
-            </div>
-
-            <div>
-              <div style={label}>Phone</div>
-              <input style={input} value={form.phone} onChange={(e) => update("phone", e.target.value)} />
-            </div>
-
-            <div>
-              <div style={label}>Profile Photo</div>
-
-              <input
-                type="file"
-                accept="image/*"
-                style={input}
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-
-                  setStatus("Uploading profile photo...");
-
-                  try {
-                    const url = await uploadFile(file);
-                    if (!url) throw new Error("Upload failed.");
-
-                    update("profile_photo_url", url);
-                    setStatus("Photo uploaded. Hit Save Profile to lock it in.");
-                  } catch (error: any) {
-                    setStatus(error?.message || "Upload failed.");
-                  }
-                }}
-              />
-
-              <div style={{ color: "#cbd5e1", marginTop: 8 }}>
-                Use phone pictures or upload a file. No URL needed.
-              </div>
-            </div>
-          </div>
-
-          {form.profile_photo_url ? (
-            <div style={{ marginTop: 20 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={form.profile_photo_url}
-                alt="Profile"
-                style={{
-                  width: "100%",
-                  maxHeight: 420,
-                  objectFit: "cover",
-                  borderRadius: 22,
-                  border: "1px solid rgba(232,196,107,.20)",
-                }}
-              />
-            </div>
-          ) : null}
-        </section>
-
-        <section style={card}>
-          <div style={sectionTitle}>State Intelligence</div>
-
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
-            <div>
-              <div style={label}>Where are you from?</div>
-
-              <select style={input} value={form.home_state} onChange={(e) => update("home_state", e.target.value)}>
-                {STATES.map((state) => (
-                  <option key={state} value={state}>
-                    {state}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <div style={label}>Where do you deal?</div>
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                {STATES.map((state) => (
-                  <Chip key={state} value={state} selected={form.deal_states.includes(state)} onClick={() => update("deal_states", toggle(form.deal_states, state))} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {chipSection("I Am", "Pick every role that applies to you.", MEMBER_TYPES, form.member_types, "member_types")}
-        {chipSection("Strategies", "Tell VaultForge what kind of deals, capital, and execution routes fit you.", STRATEGIES, form.strategies, "strategies")}
-        {chipSection("Asset Focus", "What asset classes should the network route toward you?", ASSET_FOCUS, form.asset_focus, "asset_focus")}
-        {chipSection("What You Need", "This tells the network what problems or resources you want surfaced.", NEEDS, form.needs, "needs")}
-        {chipSection("What You Can Provide", "This tells the network where you add value.", CAN_PROVIDE, form.can_provide, "can_provide")}
-        {chipSection("Pain / Distress Signals", "Choose the pain signals you can help with or want to be alerted about.", PAIN_SIGNALS, form.pain_signals, "pain_signals")}
-
-        <section style={card}>
-          <div style={sectionTitle}>Buy Box Details</div>
-
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
-            <div>
-              <div style={label}>Buy Box / Focus</div>
-              <input style={input} value={form.buy_box} onChange={(e) => update("buy_box", e.target.value)} placeholder="SFR flips, 70% ARV, land, commercial..." />
-            </div>
-
-            <div>
-              <div style={label}>Funding Capacity</div>
-              <input style={input} value={form.funding_capacity} onChange={(e) => update("funding_capacity", e.target.value)} placeholder="5,000,000" />
-            </div>
+          <div style={grid}>
+            <Select
+              label="Alert Frequency"
+              value={form.alert_frequency}
+              onChange={(v) => update("alert_frequency", v)}
+              options={ALERT_FREQUENCIES.map((item) => item.value)}
+              labels={Object.fromEntries(ALERT_FREQUENCIES.map((item) => [item.value, item.label]))}
+            />
+            <Select
+              label="Max Alerts Per Day"
+              value={String(form.max_alerts_per_day)}
+              onChange={(v) => update("max_alerts_per_day", v)}
+              options={["0", "3", "5", "10", "25"]}
+            />
           </div>
 
           <div style={{ marginTop: 16 }}>
-            <div style={label}>Strategy / Notes / What You Want VaultForge To Watch For</div>
-            <textarea
-              style={{ ...input, minHeight: 160 }}
-              value={form.strategy_notes}
-              onChange={(e) => update("strategy_notes", e.target.value)}
-              placeholder="Flips, funding, land, residential, commercial..."
+            <div style={label}>Alert Types</div>
+            <ChipGroup
+              values={form.alert_types}
+              options={alertOptions}
+              onToggle={(value) => toggle("alert_types", value)}
             />
           </div>
         </section>
 
-        <section style={card}>
-          <div style={sectionTitle}>Network Acceptance</div>
-          <label style={{ display: "flex", gap: 12, alignItems: "flex-start", color: "#cbd5e1", lineHeight: 1.5 }}>
-            <input
-              type="checkbox"
-              checked={form.network_accepted}
-              onChange={(e) => update("network_accepted", e.target.checked)}
-              style={{ width: 22, height: 22, marginTop: 4 }}
-            />
-            I agree to be visible inside the VaultForge member network for controlled routing, introductions, and connection requests.
-          </label>
+        <section style={pane}>
+          <div style={eyebrow}>Profile Photo</div>
+          <p style={muted}>
+            Upload a profile photo from your device. After upload, click Save Profile to store it with your member profile.
+          </p>
+
+          {form.profile_photo_url && (
+            <div style={{ marginBottom: 16 }}>
+              <img
+                src={form.profile_photo_url}
+                alt="Profile preview"
+                style={{
+                  width: 150,
+                  height: 150,
+                  borderRadius: 999,
+                  objectFit: "cover",
+                  border: "2px solid rgba(157,243,191,.50)",
+                  display: "block",
+                  marginBottom: 12,
+                }}
+              />
+            </div>
+          )}
+
+          <input
+            type="file"
+            accept="image/*"
+            disabled={uploadingPhoto}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) uploadProfilePhoto(file);
+              event.currentTarget.value = "";
+            }}
+            style={{
+              ...input,
+              cursor: uploadingPhoto ? "not-allowed" : "pointer",
+              opacity: uploadingPhoto ? 0.7 : 1,
+            }}
+          />
+
+          <p style={{ ...muted, fontSize: 14, marginTop: 10 }}>
+            {uploadingPhoto ? "Uploading..." : "Accepted: JPG, PNG, WEBP, GIF under 6MB."}
+          </p>
         </section>
 
-        <section style={{ ...card, position: "sticky", bottom: 12, zIndex: 20, backdropFilter: "blur(16px)" }}>
-          <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-            <button type="button" style={button} disabled={saving} onClick={saveProfile}>
-              {saving ? "Saving..." : "Save Profile"}
-            </button>
-
-            <Link href="/members" style={ghost}>
-              Back to Members
-            </Link>
-
-            <button type="button" style={ghost} onClick={loadProfile}>
-              Reload Profile
-            </button>
-          </div>
-        </section>
+        <button
+          type="button"
+          onClick={saveProfile}
+          disabled={saving || uploadingPhoto}
+          style={{
+            ...btn,
+            width: "100%",
+            fontSize: 22,
+            padding: 18,
+            opacity: saving || uploadingPhoto ? 0.65 : 1,
+          }}
+        >
+          {saving ? "Saving Profile..." : uploadingPhoto ? "Uploading Photo..." : "Save Smart Profile"}
+        </button>
       </div>
     </main>
+  );
+}
+
+function ChipGroup({
+  values,
+  options,
+  onToggle,
+}: {
+  values: string[];
+  options: string[];
+  onToggle: (value: string) => void;
+}) {
+  const selected = asArray(values);
+
+  return (
+    <div style={chipWrap}>
+      {options.map((option) => {
+        const active = selected.some((item) => chipsMatch(item, option));
+
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onToggle(option)}
+            style={{
+              border: active
+                ? "1px solid rgba(157,243,191,.85)"
+                : "1px solid rgba(255,255,255,.16)",
+              background: active
+                ? "linear-gradient(135deg, rgba(157,243,191,.22), rgba(181,92,255,.14))"
+                : "rgba(255,255,255,.04)",
+              color: active ? "#9df3bf" : "white",
+              borderRadius: 999,
+              padding: "11px 14px",
+              fontWeight: 900,
+              cursor: "pointer",
+              boxShadow: active ? "0 0 0 1px rgba(157,243,191,.18) inset" : "none",
+            }}
+          >
+            {active ? "✓ " : ""}
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Field({
+  label: labelText,
+  value,
+  onChange,
+  placeholder = "",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label style={label}>{labelText}</label>
+      <input
+        style={input}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  );
+}
+
+function Select({
+  label: labelText,
+  value,
+  onChange,
+  options,
+  labels = {},
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  labels?: Record<string, string>;
+}) {
+  return (
+    <div>
+      <label style={label}>{labelText}</label>
+      <select
+        style={input}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="" style={{ color: "#111" }}>Select</option>
+        {options.map((option) => (
+          <option key={option} value={option} style={{ color: "#111" }}>
+            {labels[option] || option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function Text({
+  label: labelText,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label style={label}>{labelText}</label>
+      <textarea
+        style={{ ...input, minHeight: 150, resize: "vertical" }}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
   );
 }
