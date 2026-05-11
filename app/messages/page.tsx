@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
+type Message = Record<string, any>;
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
+type PageProps = {
+  params: Promise<{ threadId: string }> | { threadId: string };
+};
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -11,15 +17,6 @@ function clean(value: unknown) {
 
 function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
 }
 
 function readCookie(name: string) {
@@ -39,99 +36,31 @@ function readCookie(name: string) {
   }
 }
 
-function getLocalEmail() {
+function getStoredEmail() {
   if (typeof window === "undefined") return "";
 
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const from = cleanEmail(params.get("from") || params.get("email"));
-    if (from.includes("@")) return from;
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
 
-    const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-
-    for (const key of keys) {
-      const value = cleanEmail(window.localStorage.getItem(key) || window.sessionStorage.getItem(key));
-      if (value.includes("@")) return value;
-    }
-
-    return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
-  } catch {
-    return "";
-  }
-}
-
-function isOwnerEmail(email: string) {
-  return cleanEmail(email) === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
-}
-
-function param(params: URLSearchParams, names: string[]) {
-  for (const name of names) {
-    const value = clean(params.get(name));
-    if (value) return value;
-  }
-  return "";
-}
-
-function paramEmail(params: URLSearchParams) {
-  const names = [
-    "owner_email",
-    "created_by_email",
-    "submitted_by_email",
-    "creator_email",
-    "recipient",
-    "to",
-    "member_email",
-    "recipient_email",
-    "target_email",
-    "counterparty_email",
-    "sender_email",
-  ];
-
-  for (const name of names) {
-    const value = cleanEmail(params.get(name));
+  for (const key of keys) {
+    const value = cleanEmail(window.localStorage.getItem(key) || window.sessionStorage.getItem(key));
     if (value.includes("@")) return value;
   }
 
+  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+}
+
+function first(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value);
+    if (text) return text;
+  }
   return "";
 }
 
-function titleOf(row: any, fallback = "VaultForge signal/opportunity") {
-  return first(row?.title, row?.signal_title, row?.headline, row?.name, row?.pain_label, fallback);
-}
-
-function ownerOf(row: any) {
-  const candidates = [
-    row?.owner_email,
-    row?.created_by_email,
-    row?.submitted_by_email,
-    row?.creator_email,
-    row?.submitted_by,
-    row?.user_email,
-    row?.member_email,
-    row?.email,
-    row?.recipient_email,
-    row?.counterparty_email,
-    row?.metadata?.owner_email,
-    row?.metadata?.created_by_email,
-    row?.metadata?.submitted_by_email,
-    row?.metadata?.creator_email,
-    row?.metadata?.submitted_by,
-    row?.metadata?.user_email,
-    row?.metadata?.member_email,
-    row?.metadata?.email,
-  ]
-    .map(cleanEmail)
-    .filter((email) => email.includes("@"));
-
-  return candidates.find((email) => email !== OWNER_EMAIL) || candidates[0] || "";
-}
-
-async function safeJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
+function fmtDate(value: unknown) {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "Recent";
+  return date.toLocaleString();
 }
 
 const page: React.CSSProperties = {
@@ -144,226 +73,187 @@ const page: React.CSSProperties = {
     'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
 };
 
-const wrap: React.CSSProperties = { width: "min(1080px,100%)", margin: "0 auto" };
+const shell: React.CSSProperties = { width: "min(1080px,100%)", margin: "0 auto" };
 const card: React.CSSProperties = { border: "1px solid rgba(232,196,107,.28)", borderRadius: 30, padding: 24, background: "linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.026))", boxShadow: "0 28px 90px rgba(0,0,0,.38)", marginBottom: 16 };
 const eyebrow: React.CSSProperties = { color: "#e8c46b", fontSize: 12, letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, margin: "0 0 10px" };
 const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
-const chip: React.CSSProperties = { display: "inline-flex", border: "1px solid rgba(255,255,255,.14)", color: "#e5e7eb", background: "rgba(255,255,255,.055)", borderRadius: 999, padding: "8px 11px", fontWeight: 850, fontSize: 12, margin: "0 7px 7px 0" };
-const btn: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#101010", background: "linear-gradient(135deg,#f8e7b0,#e8c46b)", border: "1px solid rgba(232,196,107,.7)", textDecoration: "none", borderRadius: 15, padding: "12px 15px", fontWeight: 950, minHeight: 45, cursor: "pointer" };
-const ghost: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", color: "white", background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.14)", textDecoration: "none", borderRadius: 15, padding: "12px 15px", fontWeight: 850, minHeight: 45, cursor: "pointer" };
+const button: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", color: "white", background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.14)", textDecoration: "none", borderRadius: 15, padding: "12px 15px", fontWeight: 850, minHeight: 45, cursor: "pointer" };
+const goldButton: React.CSSProperties = { ...button, color: "#101010", background: "linear-gradient(135deg,#f8e7b0,#e8c46b)", border: "1px solid rgba(232,196,107,.7)", fontWeight: 950 };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", minHeight: 56, borderRadius: 16, border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.07)", color: "white", padding: "0 16px", fontSize: 16, outline: "none" };
 
-export default function NewMessagePage() {
-  const [fromEmail, setFromEmail] = useState("");
-  const [toEmail, setToEmail] = useState("");
-  const [recipientSource, setRecipientSource] = useState("Resolving recipient");
-  const [itemId, setItemId] = useState("");
-  const [signalId, setSignalId] = useState("");
-  const [subject, setSubject] = useState("VaultForge connection request");
-  const [body, setBody] = useState("I need more information about this VaultForge signal/opportunity.");
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("");
-  const [sent, setSent] = useState(false);
-  const [savedThreadId, setSavedThreadId] = useState("");
-  const [contextTitle, setContextTitle] = useState("VaultForge signal/opportunity");
+export default function MessageThreadPage({ params }: PageProps) {
+  const [threadId, setThreadId] = useState("");
+  const [email, setEmail] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [reply, setReply] = useState("");
+  const [toast, setToast] = useState("");
 
   useEffect(() => {
-    async function init() {
-      const params = new URLSearchParams(window.location.search);
-      const nextItemId = param(params, ["item_id", "deal_id", "project_id", "pain_id", "itemId"]);
-      const nextSignalId = param(params, ["signal_id", "alert_id", "signalId"]);
-      const urlRecipient = paramEmail(params);
-      const localEmail = getLocalEmail();
-      const urlSubject = clean(params.get("subject"));
-      const urlBody = clean(params.get("body") || params.get("message"));
+    Promise.resolve(params as any).then((resolved) => setThreadId(String(resolved?.threadId || "")));
+  }, [params]);
 
-      setFromEmail(localEmail);
-      setItemId(nextItemId);
-      setSignalId(nextSignalId);
+  const latest = useMemo(() => messages[messages.length - 1] || {}, [messages]);
 
-      if (urlSubject) setSubject(urlSubject);
-      else if (nextSignalId || nextItemId) setSubject("VaultForge signal follow-up");
+  const otherEmail = useMemo(() => {
+    const active = cleanEmail(email);
+    const found =
+      messages.find((message) => cleanEmail(message.from_email) && cleanEmail(message.from_email) !== active)?.from_email ||
+      messages.find((message) => cleanEmail(message.to_email) && cleanEmail(message.to_email) !== active)?.to_email ||
+      latest.to_email ||
+      latest.recipient_email ||
+      OWNER_EMAIL;
 
-      if (urlBody) setBody(urlBody);
+    return cleanEmail(found);
+  }, [messages, email, latest]);
 
-      if (urlRecipient) {
-        setToEmail(urlRecipient);
-        setRecipientSource("URL recipient");
-      }
+  async function load(activeThread = threadId, nextEmail = email) {
+    if (!activeThread) return;
 
-      if (nextSignalId) {
-        try {
-          const q = new URLSearchParams();
-          if (localEmail) q.set("email", localEmail);
-          if (isOwnerEmail(localEmail)) q.set("owner", "1");
-
-          const res = await fetch(`/api/signals/${encodeURIComponent(nextSignalId)}?${q.toString()}`, {
-            cache: "no-store",
-            headers: {
-              "x-vf-email": localEmail,
-              "x-vf-admin": isOwnerEmail(localEmail) ? "1" : "0",
-            },
-          });
-
-          const data = await safeJson(res);
-          const signal = data.signal || null;
-          const owner = ownerOf(signal);
-          const resolvedTitle = titleOf(signal, urlSubject || "VaultForge signal/opportunity");
-
-          setContextTitle(resolvedTitle);
-
-          if (owner) {
-            setToEmail(owner);
-            setRecipientSource(owner === OWNER_EMAIL ? "Admin fallback from Signal API" : "Signal/project owner");
-          } else if (!urlRecipient) {
-            setToEmail("");
-            setRecipientSource("Missing owner on signal");
-          }
-        } catch {
-          if (!urlRecipient) setRecipientSource("Signal lookup failed");
-        }
-      } else if (!urlRecipient) {
-        setRecipientSource("No signal or recipient provided");
-      }
-    }
-
-    init();
-  }, []);
-
-  const selfMessage = fromEmail && toEmail && cleanEmail(fromEmail) === cleanEmail(toEmail);
-
-  const canSend = useMemo(() => {
-    return fromEmail.includes("@") && toEmail.includes("@") && body.trim().length >= 2;
-  }, [fromEmail, toEmail, body]);
-
-  async function submit() {
-    if (busy) return;
-
-    setBusy(true);
-    setStatus("");
+    const activeEmail = cleanEmail(nextEmail || getStoredEmail());
+    setEmail(activeEmail);
+    setLoading(true);
+    setError("");
 
     try {
-      const sender = cleanEmail(fromEmail);
-      const recipient = cleanEmail(toEmail);
+      const owner = activeEmail === OWNER_EMAIL ? "&owner=1" : "";
+      const res = await fetch(`/api/messages/thread?thread_id=${encodeURIComponent(activeThread)}&threadId=${encodeURIComponent(activeThread)}&email=${encodeURIComponent(activeEmail)}${owner}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": activeEmail,
+          "x-vf-admin": activeEmail === OWNER_EMAIL ? "1" : "0",
+        },
+      });
 
-      if (!sender) throw new Error("Login email missing. Please log in again.");
-      if (!recipient) throw new Error("Missing recipient email.");
-      if (!clean(body)) throw new Error("Write a message before sending.");
+      const json = await res.json().catch(() => ({}));
 
-      const payload = {
-        from_email: sender,
-        sender_email: sender,
-        to_email: recipient,
-        recipient_email: recipient,
-        target_email: recipient,
-        owner_email: recipient,
-        subject: clean(subject) || "VaultForge connection request",
-        message: clean(body),
-        body: clean(body),
-        message_type: selfMessage ? "owner_note" : itemId || signalId ? "signal_connection_request" : "member_connection_request",
-        source: "messages_new_page",
-        item_id: itemId || null,
-        signal_id: signalId || null,
-        context_title: contextTitle,
-        recipient_source: recipientSource,
-      };
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json.error || json.details || "Thread load failed.");
+      }
 
+      setMessages(Array.isArray(json.messages) ? json.messages : []);
+    } catch (err: any) {
+      setError(err?.message || String(err));
+      setMessages([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (threadId) load(threadId, getStoredEmail());
+  }, [threadId]);
+
+  async function sendReply() {
+    const text = reply.trim();
+    if (!text || !threadId || !email) return;
+
+    setSending(true);
+    setToast("");
+
+    try {
       const res = await fetch("/api/messages/new", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-vf-email": sender,
-          "x-vf-recipient-email": recipient,
+          "x-vf-email": email,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          from_email: email,
+          to_email: otherEmail,
+          recipient_email: otherEmail,
+          subject: latest.subject || "VaultForge message reply",
+          body: text,
+          message: text,
+          thread_id: threadId,
+          signal_id: latest.signal_id || "",
+          item_id: latest.item_id || "",
+          source: "message_thread_reply",
+        }),
       });
 
-      const data = await safeJson(res);
+      const json = await res.json().catch(() => ({}));
 
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not save connection request.");
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json.error || json.details || "Reply could not be saved.");
       }
 
-      setSent(true);
-      setSavedThreadId(clean(data.thread_id));
-      setStatus(data?.note || data?.message || "Connection request saved.");
-    } catch (error: any) {
-      setStatus(error?.message || "Could not send message.");
+      setReply("");
+      setToast("Reply saved to thread.");
+      await load(threadId, email);
+    } catch (err: any) {
+      setToast(err?.message || String(err));
     } finally {
-      setBusy(false);
+      setSending(false);
     }
   }
+
+  const signalId = first(latest.signal_id, latest.metadata?.signal_id);
+  const itemId = first(latest.item_id, latest.metadata?.item_id);
 
   return (
     <main style={page}>
       <style>{`
         a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
-        textarea::placeholder, input::placeholder { color: rgba(255,255,255,.48); }
-        @media (max-width: 760px) { a, button { width: 100%; box-sizing: border-box; } }
+        textarea::placeholder { color: rgba(255,255,255,.48); }
+        @media (max-width: 760px) { a, button { width: 100%; box-sizing: border-box; justify-content: center; } }
       `}</style>
 
-      <div style={wrap}>
+      <div style={shell}>
         <section style={card}>
           <p style={eyebrow}>VaultForge Message Thread</p>
-          <h1 style={{ fontSize: "clamp(52px,12vw,94px)", lineHeight: 0.9, margin: "0 0 18px" }}>{selfMessage ? "Add owner note." : "Request connection."}</h1>
-          <p style={{ ...muted, fontSize: 20 }}>
-            {selfMessage
-              ? "You are the detected owner. This saves an owner note/thread instead of sending a request to yourself."
-              : "This sends a controlled VaultForge connection request to the actual owner/recipient when available."}
-          </p>
+          <h1 style={{ fontSize: "clamp(48px,10vw,84px)", lineHeight: .9, margin: "0 0 18px" }}>Execution conversation.</h1>
+          <p style={{ ...muted, maxWidth: 760, fontSize: 20 }}>Controlled thread for requests, owner replies, routing updates, and introductions before private contact details are released.</p>
 
-          <div>
-            <span style={chip}>From: {fromEmail || "unknown"}</span>
-            <span style={chip}>To: {toEmail || "missing"}</span>
-            <span style={chip}>Source: {recipientSource}</span>
-            {signalId && <span style={chip}>Signal: {signalId}</span>}
-            {itemId && <span style={chip}>Item: {itemId}</span>}
-            <span style={chip}>{sent ? "Saved" : "Draft"}</span>
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
-            {savedThreadId ? <Link href={`/messages/${encodeURIComponent(savedThreadId)}`} style={btn}>Open Thread</Link> : null}
-            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Back to Signal</Link> : null}
-            <Link href="/messages" style={ghost}>All Messages</Link>
-            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-            <Link href="/dashboard" style={ghost}>Dashboard</Link>
-            <Link href="/logout" style={{ ...ghost, color: "#fecaca", border: "1px solid rgba(239,68,68,.34)" }}>Logout</Link>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 22 }}>
+            <span style={button}>Signed in: {email || "not detected"}</span>
+            <span style={button}>Thread: {threadId || "loading"}</span>
+            <span style={button}>With: {otherEmail || "unknown"}</span>
+            <button style={goldButton} onClick={() => load(threadId, email)}>Refresh Thread</button>
+            <Link href="/messages" style={button}>All Messages</Link>
+            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={button}>Signal</Link> : null}
+            <Link href="/pain-feed" style={button}>Pain Feed</Link>
+            <Link href="/dashboard" style={button}>Dashboard</Link>
           </div>
         </section>
 
-        {status && <section style={{ ...card, color: status.toLowerCase().includes("could") || status.toLowerCase().includes("missing") ? "#ffd0d0" : "#bbf7d0" }}><strong>{status}</strong></section>}
+        {loading ? (
+          <section style={card}><p style={muted}>Loading thread...</p></section>
+        ) : error ? (
+          <section style={card}><h2 style={{ color: "#ffd0d0" }}>Thread failed to load.</h2><p style={muted}>{error}</p></section>
+        ) : messages.length === 0 ? (
+          <section style={card}><p style={muted}>No messages found in this thread yet.</p></section>
+        ) : (
+          <section style={card}>
+            <p style={eyebrow}>Thread Messages</p>
+            <div style={{ display: "grid", gap: 14, marginTop: 20 }}>
+              {messages.map((message, index) => {
+                const mine = cleanEmail(message.from_email) === cleanEmail(email);
+                return (
+                  <article key={`${message._source_table || "msg"}-${message.id || index}-${message.created_at || index}`} style={{ maxWidth: 760, justifySelf: mine ? "end" : "start", border: "1px solid rgba(255,255,255,.12)", borderRadius: 24, background: mine ? "rgba(232,196,107,.13)" : "rgba(255,255,255,.06)", padding: 20 }}>
+                    <strong>{message.subject || "VaultForge message"}</strong>
+                    <p style={{ ...muted, margin: "8px 0 12px", fontSize: 17 }}>{message.body || message.message || "No message body."}</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      <span style={{ ...button, minHeight: 32, padding: "0 10px", fontSize: 12 }}>From: {message.from_email || "unknown"}</span>
+                      <span style={{ ...button, minHeight: 32, padding: "0 10px", fontSize: 12 }}>To: {message.to_email || "unknown"}</span>
+                      <span style={{ ...button, minHeight: 32, padding: "0 10px", fontSize: 12 }}>{fmtDate(message.created_at)}</span>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <section style={card}>
-          <p style={eyebrow}>Connection Details</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16 }}>
-            <label>
-              <strong>Your Email</strong>
-              <input value={fromEmail} onChange={(event) => setFromEmail(cleanEmail(event.target.value))} placeholder="your@email.com" style={{ ...input, marginTop: 8 }} />
-            </label>
-            <label>
-              <strong>Recipient Email</strong>
-              <input value={toEmail} onChange={(event) => setToEmail(cleanEmail(event.target.value))} placeholder="member@email.com" style={{ ...input, marginTop: 8 }} />
-            </label>
+          <p style={eyebrow}>Reply</p>
+          <div style={{ display: "grid", gap: 14, marginTop: 18 }}>
+            <textarea style={{ ...input, minHeight: 160, padding: 18, resize: "vertical" }} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a controlled VaultForge reply..." />
+            <button style={goldButton} onClick={sendReply} disabled={sending || !reply.trim()}>{sending ? "Saving..." : "Send Reply"}</button>
+            {toast ? <p style={muted}>{toast}</p> : null}
           </div>
-
-          <label style={{ display: "block", marginTop: 18 }}>
-            <strong>Subject</strong>
-            <input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Connection request" style={{ ...input, marginTop: 8 }} />
-          </label>
-
-          <label style={{ display: "block", marginTop: 18 }}>
-            <strong>{selfMessage ? "Owner note / update" : "What information do you need?"}</strong>
-            <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Ask for price, access, photos, timeline, owner contact release, or capital need..." style={{ ...input, minHeight: 190, lineHeight: 1.5, padding: 16, marginTop: 8 }} />
-          </label>
-
-          <button type="button" onClick={submit} disabled={!canSend || busy || sent} style={{ ...btn, width: "100%", marginTop: 18, opacity: !canSend || busy || sent ? 0.58 : 1 }}>
-            {sent ? "Saved" : busy ? "Saving..." : selfMessage ? "Save Owner Note" : "Send Connection Request"}
-          </button>
-        </section>
-
-        <section style={card}>
-          <p style={eyebrow}>Safety Mode</p>
-          <p style={muted}>This records a controlled message request/thread. It does not automatically release private contact information.</p>
         </section>
       </div>
     </main>
