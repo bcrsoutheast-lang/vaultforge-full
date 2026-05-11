@@ -4,22 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-const STATES = [
-  "Georgia",
-  "Florida",
-  "North Carolina",
-  "South Carolina",
-  "Tennessee",
-  "Alabama",
-  "Texas",
-];
+const STATES = ["Georgia", "Florida", "North Carolina", "South Carolina", "Tennessee", "Alabama", "Texas"];
 
 const MEMBER_TYPES = ["Buyer", "Seller", "Lender", "Wholesaler", "Realtor", "Contractor", "Operator", "Attorney", "Property Manager", "Investor"];
-
 const STRATEGIES = ["Flips", "BRRRR", "Buy & Hold", "Funding", "Land", "Residential", "Commercial", "Creative Finance", "JV Equity", "Disposition"];
-
 const ASSET_FOCUS = ["SFR", "Multifamily", "Commercial", "Land", "Mobile Home Park", "Storage", "Mixed Use", "Distressed Property"];
-
 const NEEDS = [
   "Buyer Needed",
   "Capital Needed",
@@ -40,7 +29,6 @@ const NEEDS = [
   "Stalled Project Help",
   "Funding Gap Help",
 ];
-
 const CAN_PROVIDE = [
   "Cash Buyer",
   "Private Lending",
@@ -64,7 +52,6 @@ const CAN_PROVIDE = [
   "Property Management",
   "Insurance Help",
 ];
-
 const PAIN_SIGNALS = [
   "Behind Payments",
   "Inherited Property",
@@ -250,15 +237,7 @@ const chipBase: React.CSSProperties = {
   margin: "0 8px 8px 0",
 };
 
-function Chip({
-  value,
-  selected,
-  onClick,
-}: {
-  value: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
+function Chip({ value, selected, onClick }: { value: string; selected: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -469,18 +448,14 @@ export default function ProfilePage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function chipSection(title: string, values: string[], selected: string[], key: keyof FormState) {
+  function chipSection(title: string, subtitle: string, values: string[], selected: string[], key: keyof FormState) {
     return (
       <section style={card}>
         <div style={sectionTitle}>{title}</div>
+        {subtitle ? <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.5 }}>{subtitle}</p> : null}
         <div>
           {values.map((value) => (
-            <Chip
-              key={value}
-              value={value}
-              selected={selected.includes(value)}
-              onClick={() => update(key as any, toggle(selected, value) as any)}
-            />
+            <Chip key={value} value={value} selected={selected.includes(value)} onClick={() => update(key as any, toggle(selected, value) as any)} />
           ))}
         </div>
       </section>
@@ -520,11 +495,7 @@ export default function ProfilePage() {
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav
-          title="Profile"
-          subtitle="Network identity, state intelligence, and execution profile."
-          active="profile"
-        />
+        <VaultForgeMemberNav title="Profile" subtitle="Network identity, state intelligence, and execution profile." active="profile" />
 
         <section style={card}>
           <div style={sectionTitle}>Member Profile</div>
@@ -645,24 +616,19 @@ export default function ProfilePage() {
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 {STATES.map((state) => (
-                  <Chip
-                    key={state}
-                    value={state}
-                    selected={form.deal_states.includes(state)}
-                    onClick={() => update("deal_states", toggle(form.deal_states, state))}
-                  />
+                  <Chip key={state} value={state} selected={form.deal_states.includes(state)} onClick={() => update("deal_states", toggle(form.deal_states, state))} />
                 ))}
               </div>
             </div>
           </div>
         </section>
 
-        {chipSection("I Am", MEMBER_TYPES, form.member_types, "member_types")}
-        {chipSection("Strategies", STRATEGIES, form.strategies, "strategies")}
-        {chipSection("Asset Focus", ASSET_FOCUS, form.asset_focus, "asset_focus")}
-        {chipSection("What You Need", NEEDS, form.needs, "needs")}
-        {chipSection("What You Can Provide", CAN_PROVIDE, form.can_provide, "can_provide")}
-        {chipSection("Pain / Distress Signals", PAIN_SIGNALS, form.pain_signals, "pain_signals")}
+        {chipSection("I Am", "Pick every role that applies to you.", MEMBER_TYPES, form.member_types, "member_types")}
+        {chipSection("Strategies", "Tell VaultForge what kind of deals, capital, and execution routes fit you.", STRATEGIES, form.strategies, "strategies")}
+        {chipSection("Asset Focus", "What asset classes should the network route toward you?", ASSET_FOCUS, form.asset_focus, "asset_focus")}
+        {chipSection("What You Need", "This tells the network what problems or resources you want surfaced.", NEEDS, form.needs, "needs")}
+        {chipSection("What You Can Provide", "This tells the network where you add value.", CAN_PROVIDE, form.can_provide, "can_provide")}
+        {chipSection("Pain / Distress Signals", "Choose the pain signals you can help with or want to be alerted about.", PAIN_SIGNALS, form.pain_signals, "pain_signals")}
 
         <section style={card}>
           <div style={sectionTitle}>Buy Box Details</div>
