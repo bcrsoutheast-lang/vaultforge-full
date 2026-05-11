@@ -87,8 +87,94 @@ function first(...values: unknown[]) {
   return "";
 }
 
-function normalizeEvent(row: AnyRow, eventType: string, eventId: string) {
-  const metadata = typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+function metadataOf(row: AnyRow) {
+  return typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+}
+
+function resolveEmail(row: AnyRow, currentEmail = "") {
+  const metadata = metadataOf(row);
+
+  const canonical = [
+    row.recipient_email,
+    row.visible_to_email,
+    row.member_email,
+    row.intro_to_email,
+    row.responding_member_email,
+    row.counterparty_email,
+    row.owner_email,
+    row.created_by_email,
+    row.submitted_by_email,
+    row.creator_email,
+    row.sender_email,
+    row.from_email,
+    row.to_email,
+    row.email,
+    row.user_email,
+    row.submitted_by,
+    row.staged_by_email,
+    row.created_by,
+    metadata.recipient_email,
+    metadata.visible_to_email,
+    metadata.member_email,
+    metadata.intro_to_email,
+    metadata.responding_member_email,
+    metadata.counterparty_email,
+    metadata.owner_email,
+    metadata.created_by_email,
+    metadata.submitted_by_email,
+    metadata.creator_email,
+    metadata.sender_email,
+    metadata.from_email,
+    metadata.to_email,
+    metadata.email,
+    metadata.user_email,
+    metadata.submitted_by,
+    metadata.staged_by_email,
+    metadata.created_by,
+  ]
+    .map(cleanEmail)
+    .filter((email) => email.includes("@"));
+
+  const nonBcr = canonical.find((email) => email !== OWNER_EMAIL && email !== currentEmail);
+  if (nonBcr) return nonBcr;
+
+  const anyNonBcr = canonical.find((email) => email !== OWNER_EMAIL);
+  if (anyNonBcr) return anyNonBcr;
+
+  const any = canonical.find(Boolean);
+  return any || "";
+}
+
+function resolveOwnerEmail(row: AnyRow) {
+  const metadata = metadataOf(row);
+
+  const canonical = [
+    row.owner_email,
+    row.created_by_email,
+    row.submitted_by_email,
+    row.creator_email,
+    row.submitted_by,
+    row.user_email,
+    row.member_email,
+    row.email,
+    metadata.owner_email,
+    metadata.created_by_email,
+    metadata.submitted_by_email,
+    metadata.creator_email,
+    metadata.submitted_by,
+    metadata.user_email,
+    metadata.member_email,
+    metadata.email,
+  ]
+    .map(cleanEmail)
+    .filter((email) => email.includes("@"));
+
+  const nonBcr = canonical.find((email) => email !== OWNER_EMAIL);
+  return nonBcr || canonical[0] || "";
+}
+
+function normalizeEvent(row: AnyRow, eventType: string, eventId: string, currentEmail: string) {
+  const metadata = metadataOf(row);
 
   const signalId = first(
     row.signal_id,
@@ -111,25 +197,19 @@ function normalizeEvent(row: AnyRow, eventType: string, eventId: string) {
   );
 
   const memberEmail = cleanEmail(
-    row.member_email ||
-      row.email ||
-      row.sender_email ||
-      row.from_email ||
-      metadata.member_email ||
-      metadata.from_email ||
+    first(
+      row.member_email,
+      row.email,
+      row.sender_email,
+      row.from_email,
+      metadata.member_email,
+      metadata.from_email,
       metadata.email
+    )
   );
 
-  const recipientEmail = cleanEmail(
-    row.recipient_email ||
-      row.to_email ||
-      row.target_email ||
-      row.owner_email ||
-      metadata.recipient_email ||
-      metadata.to_email ||
-      metadata.target_email ||
-      OWNER_EMAIL
-  );
+  const ownerEmail = resolveOwnerEmail(row);
+  const recipientEmail = resolveEmail(row, currentEmail) || ownerEmail || "";
 
   return {
     ...row,
@@ -150,7 +230,9 @@ function normalizeEvent(row: AnyRow, eventType: string, eventId: string) {
     signal_id: signalId,
     item_id: itemId,
     member_email: memberEmail,
-    recipient_email: recipientEmail,
+    owner_email: ownerEmail || OWNER_EMAIL,
+    recipient_email: recipientEmail || ownerEmail || OWNER_EMAIL,
+    direct_reply_to: recipientEmail || ownerEmail || OWNER_EMAIL,
     created_at: first(row.created_at, row.updated_at, new Date().toISOString()),
     image_url: first(
       row.image_url,
@@ -172,7 +254,7 @@ function rowIdMatches(row: AnyRow, eventId: string) {
 }
 
 function rowRelatedMatches(row: AnyRow, eventId: string) {
-  const metadata = typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+  const metadata = metadataOf(row);
 
   return [
     row.id,
@@ -200,7 +282,7 @@ function rowRelatedMatches(row: AnyRow, eventId: string) {
 function canSee(row: AnyRow, email: string, owner: boolean) {
   if (owner) return true;
 
-  const metadata = typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+  const metadata = metadataOf(row);
   const candidates = [
     row.email,
     row.member_email,
@@ -210,12 +292,21 @@ function canSee(row: AnyRow, email: string, owner: boolean) {
     row.recipient_email,
     row.target_email,
     row.visible_to_email,
+    row.owner_email,
+    row.created_by_email,
+    row.submitted_by_email,
+    row.creator_email,
     metadata.email,
     metadata.member_email,
     metadata.from_email,
     metadata.to_email,
     metadata.recipient_email,
     metadata.target_email,
+    metadata.visible_to_email,
+    metadata.owner_email,
+    metadata.created_by_email,
+    metadata.submitted_by_email,
+    metadata.creator_email,
   ]
     .map(cleanEmail)
     .filter(Boolean);
@@ -229,12 +320,7 @@ async function selectById(supabase: any, table: string, eventId: string) {
 
   for (const column of columns) {
     try {
-      const { data, error } = await supabase
-        .from(table)
-        .select("*")
-        .eq(column, eventId)
-        .limit(1);
-
+      const { data, error } = await supabase.from(table).select("*").eq(column, eventId).limit(1);
       if (!error && Array.isArray(data) && data.length) return data[0];
     } catch {
       // Try next column.
@@ -249,15 +335,10 @@ async function selectRecent(supabase: any, table: string) {
 
   for (const column of orderColumns) {
     try {
-      const { data, error } = await supabase
-        .from(table)
-        .select("*")
-        .order(column, { ascending: false })
-        .limit(100);
-
+      const { data, error } = await supabase.from(table).select("*").order(column, { ascending: false }).limit(100);
       if (!error && Array.isArray(data)) return data;
     } catch {
-      // Try next order column.
+      // Try next column.
     }
   }
 
@@ -283,18 +364,13 @@ async function findEvent(supabase: any, eventType: string, eventId: string, emai
 
   for (const table of directTables) {
     const row = await selectById(supabase, table, eventId);
-    if (row && canSee(row, email, owner)) {
-      return { row, table };
-    }
+    if (row && canSee(row, email, owner)) return { row, table };
   }
 
   for (const table of directTables) {
     const rows = await selectRecent(supabase, table);
     const found = rows.find((row: AnyRow) => rowIdMatches(row, eventId) || rowRelatedMatches(row, eventId));
-
-    if (found && canSee(found, email, owner)) {
-      return { row: found, table };
-    }
+    if (found && canSee(found, email, owner)) return { row: found, table };
   }
 
   return { row: null, table: "" };
@@ -310,7 +386,7 @@ async function loadReplies(supabase: any, eventId: string, signalId: string, ite
     for (const row of rows) {
       if (!canSee(row, email, owner)) continue;
 
-      const metadata = typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+      const metadata = metadataOf(row);
       const values = [
         row.event_id,
         row.signal_id,
@@ -328,23 +404,15 @@ async function loadReplies(supabase: any, eventId: string, signalId: string, ite
         metadata.pain_id,
       ].map(clean);
 
-      const match =
-        values.includes(eventId) ||
-        (signalId && values.includes(signalId)) ||
-        (itemId && values.includes(itemId));
-
+      const match = values.includes(eventId) || (signalId && values.includes(signalId)) || (itemId && values.includes(itemId));
       const typeText = clean(row.message_type || row.event_type || row.type || row.source).toLowerCase();
-      const isReply =
-        typeText.includes("reply") ||
-        typeText.includes("message") ||
-        typeText.includes("connection") ||
-        typeText.includes("response");
+      const isReply = typeText.includes("reply") || typeText.includes("message") || typeText.includes("connection") || typeText.includes("response");
 
       if (match && isReply) {
         replies.push({
           ...row,
-          from_email: cleanEmail(row.from_email || row.sender_email || row.member_email || row.email || metadata.from_email || metadata.member_email),
-          to_email: cleanEmail(row.to_email || row.recipient_email || row.target_email || row.owner_email || metadata.to_email || metadata.recipient_email),
+          from_email: cleanEmail(first(row.from_email, row.sender_email, row.member_email, row.email, metadata.from_email, metadata.member_email)),
+          to_email: cleanEmail(first(row.to_email, row.recipient_email, row.target_email, row.owner_email, metadata.to_email, metadata.recipient_email)),
           message: first(row.message, row.body, row.note, row.event_description, metadata.message, metadata.note),
           created_at: first(row.created_at, row.updated_at),
           _source_table: table,
@@ -374,17 +442,11 @@ export async function GET(request: Request) {
     const eventId = clean(url.searchParams.get("event_id") || "");
 
     if (!email) {
-      return NextResponse.json(
-        { ok: false, error: "Login email required." },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
     }
 
     if (!eventId) {
-      return NextResponse.json(
-        { ok: false, error: "Event id required." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Event id required." }, { status: 400 });
     }
 
     const supabase = supabaseClient();
@@ -396,14 +458,12 @@ export async function GET(request: Request) {
         id: eventId,
         event_type: eventType,
         event_title: `${eventType} event`,
-        event_description:
-          "Exact source row was not found, but this event room can still hold operational replies.",
+        event_description: "Exact source row was not found, but this event room can still hold operational replies.",
         priority: "medium",
-        owner_email: OWNER_EMAIL,
         created_at: new Date().toISOString(),
       } as AnyRow);
 
-    const event = normalizeEvent(rawEvent, eventType, eventId);
+    const event = normalizeEvent(rawEvent, eventType, eventId, email);
     const replies = await loadReplies(supabase, eventId, event.signal_id, event.item_id, email, owner);
 
     return NextResponse.json({
@@ -411,9 +471,11 @@ export async function GET(request: Request) {
       event,
       replies,
       source_table: found.table || "fallback_event_room",
-      direct_reply_to: event.recipient_email || OWNER_EMAIL,
-      safety:
-        "This endpoint resolves event context and replies only. It does not release private contact information automatically.",
+      direct_reply_to: event.direct_reply_to,
+      owner_email: event.owner_email,
+      recipient_email: event.recipient_email,
+      resolver: "universal_recipient_first_non_bcr",
+      safety: "This endpoint resolves event context and replies only. It does not release private contact information automatically.",
     });
   } catch (error: any) {
     return NextResponse.json(
