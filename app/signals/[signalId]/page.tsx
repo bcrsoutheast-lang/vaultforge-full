@@ -1,139 +1,53 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-type Signal = Record<string, any>;
-type Action = Record<string, any>;
-type Match = Record<string, any>;
+type AnyRow = Record<string, any>;
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), radial-gradient(circle at bottom right, rgba(181,92,255,.18), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
-  color: "white",
-  padding: "28px 18px 100px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.34)",
-  background:
-    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
-  borderRadius: 34,
-  padding: 26,
-  marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.34)",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.13)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-  borderRadius: 28,
-  padding: 22,
-  boxShadow: "0 26px 80px rgba(0,0,0,.34)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
-  gap: 18,
-};
-
-const statGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 14,
-  marginBottom: 22,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
-};
-
-const btn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#06100a",
-  border: "none",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 950,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const ghost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.055)",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 900,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const danger: React.CSSProperties = {
-  ...ghost,
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.38)",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
-  color: "white",
-  padding: 14,
-  fontSize: 15,
-};
-
-const greenEyebrow: React.CSSProperties = {
-  color: "#9df3bf",
-  letterSpacing: 5,
-  fontWeight: 950,
-  fontSize: 12,
-  marginBottom: 12,
-  textTransform: "uppercase",
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.72)",
-  lineHeight: 1.55,
+type SignalApiState = {
+  ok?: boolean;
+  signal?: AnyRow | null;
+  routing_actions?: AnyRow[];
+  messages?: AnyRow[];
+  activity?: AnyRow[];
+  alerts?: AnyRow[];
+  score?: number;
+  counts?: Record<string, number>;
+  direct_links?: Record<string, string>;
+  error?: string;
+  details?: string;
 };
 
 function clean(value: unknown) {
   return String(value || "").trim();
 }
 
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function first(...values: unknown[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
+    }
+
+    const text = clean(value);
+    if (text) return text;
+  }
+
+  return "";
+}
+
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
+
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -148,407 +62,224 @@ function readCookie(name: string) {
   }
 }
 
-function getEmail() {
+function localEmail() {
   if (typeof window === "undefined") return "";
 
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    readCookie("vf_email") ||
-    readCookie("vf_admin_email") ||
-    ""
-  ).trim().toLowerCase();
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
+
+  for (const key of keys) {
+    const value = cleanEmail(window.localStorage.getItem(key) || window.sessionStorage.getItem(key));
+    if (value.includes("@")) return value;
+  }
+
+  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
-function isOwner(email: string) {
+function ownerView(email: string) {
   return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
 }
 
-async function safeJson(res: Response) {
+async function safeJson(response: Response) {
   try {
-    return await res.json();
+    return await response.json();
   } catch {
     return {};
   }
 }
 
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text) return text;
-  }
-  return "";
+function label(value: unknown, fallback = "Unassigned") {
+  const text = clean(value || fallback).replace(/_/g, " ").replace(/-/g, " ");
+  return text.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function label(value: string) {
-  const text = clean(value || "signal").replace(/_/g, " ");
-  return text.slice(0, 1).toUpperCase() + text.slice(1);
+function signalTitle(signal: AnyRow | null | undefined, signalId: string) {
+  return first(signal?.title, signal?.signal_title, signal?.headline, signal?.name, signal?.pain_label, `Signal ${signalId}`);
 }
 
-function priorityOf(signal: Signal | null) {
-  return first(signal?.priority, signal?.severity, signal?.alert_priority, "medium").toLowerCase();
+function signalNote(signal: AnyRow | null | undefined) {
+  return first(
+    signal?.note,
+    signal?.notes,
+    signal?.summary,
+    signal?.description,
+    signal?.message,
+    signal?.route_summary,
+    "Signal context is being organized for routing, messaging, and execution."
+  );
 }
 
-function toneOf(signal: Signal | null) {
-  const priority = priorityOf(signal);
-  if (priority === "urgent") return "#ffb3b3";
-  if (priority === "high") return "#f5d978";
-  return "#9df3bf";
+function priorityOf(signal: AnyRow | null | undefined) {
+  return first(signal?.priority, signal?.urgency, signal?.severity, "medium").toLowerCase();
 }
 
-function titleOf(signal: Signal | null, signalId: string) {
-  return first(signal?.title, signal?.name, signal?.headline, signal?.signal_title, signal?.alert_title, `Signal ${signalId}`);
+function toneForPriority(priority: string) {
+  if (priority.includes("urgent") || priority.includes("critical")) return "#ff6b5f";
+  if (priority.includes("high")) return "#f5d978";
+  if (priority.includes("low")) return "#94a3b8";
+  return "#e8c46b";
 }
 
-function noteOf(signal: Signal | null) {
-  return first(signal?.message, signal?.description, signal?.note, signal?.summary, signal?.reason, "Exact signal context and routing intelligence.");
+function marketOf(signal: AnyRow | null | undefined) {
+  return first(signal?.market, [signal?.city, signal?.state].filter(Boolean).join(", "), signal?.state, signal?.location);
 }
 
-function exactItemId(signal: Signal | null) {
-  return first(signal?.item_id, signal?.itemId, signal?.deal_id, signal?.project_id, signal?.property_id, signal?.pain_id);
+function ownerEmailOf(signal: AnyRow | null | undefined) {
+  return cleanEmail(
+    first(
+      signal?.owner_email,
+      signal?.submitted_by,
+      signal?.user_email,
+      signal?.member_email,
+      signal?.email,
+      signal?.metadata?.owner_email,
+      signal?.metadata?.submitted_by,
+      signal?.metadata?.user_email,
+      signal?.metadata?.member_email,
+      OWNER_EMAIL
+    )
+  );
 }
 
-function marketOf(signal: Signal | null) {
-  return first(signal?.market, signal?.state, signal?.location, [signal?.city, signal?.state].filter(Boolean).join(", "));
+function photosOf(signal: AnyRow | null | undefined) {
+  const fromPhotos = Array.isArray(signal?.photos)
+    ? signal?.photos
+        .map((photo: any) => first(photo?.url, photo?.publicUrl, photo?.public_url, photo?.data_url, photo?.dataUrl, photo))
+        .filter(Boolean)
+    : [];
+
+  const fromPhotoUrls = Array.isArray(signal?.photo_urls) ? signal?.photo_urls.map(clean).filter(Boolean) : [];
+  const single = first(signal?.image_url, signal?.photo_url, signal?.primary_photo_url);
+
+  return Array.from(new Set([single, ...fromPhotoUrls, ...fromPhotos].filter(Boolean)));
 }
 
-function strategyOf(signal: Signal | null) {
-  return first(signal?.strategy, signal?.asset_strategy, signal?.exit_strategy);
+function pct(value: number) {
+  return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 }
 
-function roleNeeded(signal: Signal | null) {
-  return first(signal?.role_needed, signal?.target_role, signal?.deal_need, "Buyer");
-}
+function scoreFrom(state: SignalApiState, signal: AnyRow | null | undefined) {
+  if (typeof state.score === "number" && Number.isFinite(state.score)) return Math.round(state.score);
+  const raw = Number(first(signal?.score, signal?.signal_score, signal?.confidence_score, signal?.match_score));
+  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
 
-function signalScore(signal: Signal | null, actions: Action[], matches: Match[]) {
   let score = 52;
   const priority = priorityOf(signal);
-
-  if (priority === "urgent") score += 18;
-  if (priority === "high") score += 10;
-  if (marketOf(signal)) score += 5;
-  if (strategyOf(signal)) score += 5;
-  if (exactItemId(signal)) score += 6;
-  if (actions.length > 0) score += 8;
-  if (matches.some((match) => clean(match.fit_level).toLowerCase() === "strong")) score += 8;
-
-  return Math.max(0, Math.min(100, Math.round(score)));
+  if (priority.includes("urgent")) score += 20;
+  if (priority.includes("high")) score += 12;
+  if (marketOf(signal)) score += 6;
+  if (ownerEmailOf(signal) && ownerEmailOf(signal) !== OWNER_EMAIL) score += 6;
+  if (photosOf(signal).length) score += 6;
+  return Math.max(0, Math.min(100, score));
 }
 
-function matchTone(level: string) {
-  const fit = clean(level).toLowerCase();
-  if (fit === "strong") return "#9df3bf";
-  if (fit === "possible") return "#f5d978";
-  return "#ffb3b3";
+function signalBars(state: SignalApiState, signal: AnyRow | null | undefined) {
+  const score = scoreFrom(state, signal);
+  const priority = priorityOf(signal);
+  const routingCount = Number(state.counts?.routing || state.routing_actions?.length || 0);
+  const messageCount = Number(state.counts?.messages || state.messages?.length || 0);
+  const photoCount = photosOf(signal).length;
+
+  return [
+    { label: "Signal strength", value: score, note: "Overall operating score" },
+    { label: "Urgency", value: priority.includes("urgent") ? 96 : priority.includes("high") ? 82 : priority.includes("low") ? 38 : 60, note: label(priority) },
+    { label: "Routing activity", value: Math.min(100, routingCount * 22), note: `${routingCount} routing action${routingCount === 1 ? "" : "s"}` },
+    { label: "Communication", value: Math.min(100, messageCount * 18), note: `${messageCount} message${messageCount === 1 ? "" : "s"}` },
+    { label: "Asset context", value: photoCount ? 76 : 34, note: photoCount ? `${photoCount} photo${photoCount === 1 ? "" : "s"}` : "No photos yet" },
+  ];
 }
 
-function actionOf(action: Action) {
-  return first(action.action, action.routing_action, "routing_action");
-}
+function Ticker({ signal, state }: { signal: AnyRow | null; state: SignalApiState }) {
+  const items = [
+    `Signal room opened: ${signalTitle(signal, "")}`,
+    `Owner path: ${ownerEmailOf(signal) || OWNER_EMAIL}`,
+    `Market: ${marketOf(signal) || "unassigned"}`,
+    `Routing records: ${state.routing_actions?.length || 0}`,
+    `Messages: ${state.messages?.length || 0}`,
+    `Priority: ${label(priorityOf(signal))}`,
+  ];
 
-function actionTitle(action: Action) {
-  return first(action.title, "Routing action");
-}
-
-function actionNote(action: Action) {
-  return first(action.urgency_reason, action.routing_reason, action.note, action.routing_summary, "Routing action generated for owner review.");
-}
-
-function actionScore(action: Action) {
-  const raw = Number(action.confidence_score || action.match_score || 0);
-  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
-  return 58;
-}
-
-function StatCard({
-  title,
-  value,
-  detail,
-  tone,
-}: {
-  title: string;
-  value: string | number;
-  detail: string;
-  tone?: string;
-}) {
   return (
-    <div style={{ ...card, borderColor: `${tone || "#9df3bf"}66` }}>
-      <div style={{ ...greenEyebrow, color: tone || "#9df3bf" }}>{title}</div>
-      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
-      <p style={{ ...muted, marginBottom: 0 }}>{detail}</p>
+    <div style={styles.tickerWrap}>
+      <div style={styles.tickerTrack}>
+        {[...items, ...items].map((item, index) => (
+          <span key={`${item}-${index}`} style={styles.tickerItem}>{item}</span>
+        ))}
+      </div>
     </div>
   );
 }
 
-async function loadSignals(currentEmail: string, owner: boolean) {
-  const headers = {
-    "x-vf-email": currentEmail,
-    "x-vf-admin": owner ? "1" : "0",
-  };
-
-  const [storedRes, feedRes] = await Promise.all([
-    fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
-      cache: "no-store",
-      headers,
-    }),
-    fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
-      cache: "no-store",
-      headers,
-    }),
-  ]);
-
-  const storedData = await safeJson(storedRes);
-  const feedData = await safeJson(feedRes);
-
-  const stored = Array.isArray(storedData?.alerts)
-    ? storedData.alerts
-    : Array.isArray(storedData?.signals)
-    ? storedData.signals
-    : [];
-
-  const generated = Array.isArray(feedData?.alerts)
-    ? feedData.alerts
-    : Array.isArray(feedData?.signals)
-    ? feedData.signals
-    : [];
-
-  return [...stored, ...generated];
+function SignalBar({ labelText, value, note, tone }: { labelText: string; value: number; note: string; tone: string }) {
+  return (
+    <div style={styles.signalBarCard}>
+      <div style={styles.signalBarTop}>
+        <span>{labelText}</span>
+        <strong>{pct(value)}</strong>
+      </div>
+      <div style={styles.barRail}>
+        <div style={{ ...styles.barFill, width: pct(value), background: `linear-gradient(90deg, ${tone}, #f8e7b0)` }} />
+      </div>
+      <small style={styles.mutedSmall}>{note}</small>
+    </div>
+  );
 }
 
-export default function SignalDetailPage() {
+function MiniList({ title, rows, empty }: { title: string; rows: AnyRow[]; empty: string }) {
+  return (
+    <section style={styles.panel}>
+      <h2 style={styles.panelTitle}>{title}</h2>
+      {rows.length ? (
+        <div style={styles.listStack}>
+          {rows.slice(0, 5).map((row, index) => (
+            <article key={first(row.id, row.thread_id, row.created_at, index)} style={styles.listItem}>
+              <strong>{first(row.title, row.subject, row.action, row.message, row.note, `${title} item`)}</strong>
+              <span>{first(row.status, row.priority, row.created_at, row.sender_email, row.recipient_email, "Active")}</span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p style={styles.muted}>{empty}</p>
+      )}
+    </section>
+  );
+}
+
+export default function SignalRoomPage() {
   const params = useParams();
   const signalId = decodeURIComponent(String(params?.signalId || ""));
 
+  const [state, setState] = useState<SignalApiState>({});
+  const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
-  const [owner, setOwner] = useState(false);
-  const [signal, setSignal] = useState<Signal | null>(null);
-  const [actions, setActions] = useState<Action[]>([]);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [status, setStatus] = useState("Loading exact signal...");
-  const [matchStatus, setMatchStatus] = useState("");
-  const [generateStatus, setGenerateStatus] = useState("");
-  const [introStatus, setIntroStatus] = useState("");
-  const [scoreBusy, setScoreBusy] = useState(false);
-  const [generateBusy, setGenerateBusy] = useState(false);
-  const [introBusyId, setIntroBusyId] = useState("");
-  const [introEmailByAction, setIntroEmailByAction] = useState<Record<string, string>>({});
+  const [isOwner, setIsOwner] = useState(false);
 
-  const [routeRole, setRouteRole] = useState("Buyer");
-  const [routePriority, setRoutePriority] = useState("medium");
-  const [routeNote, setRouteNote] = useState("");
+  async function load() {
+    setLoading(true);
 
-  async function loadRoutingActions(currentEmail: string, currentOwner: boolean) {
-    const res = await fetch(
-      `/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}&signal_id=${encodeURIComponent(signalId)}`,
-      {
+    const currentEmail = localEmail();
+    const currentOwner = ownerView(currentEmail);
+    setEmail(currentEmail);
+    setIsOwner(currentOwner);
+
+    try {
+      const query = new URLSearchParams();
+      if (currentEmail) query.set("email", currentEmail);
+      if (currentOwner) query.set("owner", "1");
+
+      const response = await fetch(`/api/signals/${encodeURIComponent(signalId)}?${query.toString()}`, {
         cache: "no-store",
         headers: {
           "x-vf-email": currentEmail,
           "x-vf-admin": currentOwner ? "1" : "0",
         },
-      }
-    );
-
-    const data = await safeJson(res);
-    const rows = Array.isArray(data?.actions) ? data.actions : [];
-    setActions(rows);
-  }
-
-  async function load() {
-    setStatus("Loading exact signal...");
-
-    try {
-      const currentEmail = getEmail();
-      const currentOwner = isOwner(currentEmail);
-
-      setEmail(currentEmail);
-      setOwner(currentOwner);
-
-      if (!currentEmail) {
-        setStatus("Login email not found. Please log in again.");
-        return;
-      }
-
-      const rows = await loadSignals(currentEmail, currentOwner);
-      const found =
-        rows.find((item: Signal) => first(item.signal_id, item.alert_id, item.id) === signalId) ||
-        rows.find((item: Signal) => clean(item.id) === signalId) ||
-        null;
-
-      setSignal(found);
-      await loadRoutingActions(currentEmail, currentOwner);
-
-      if (!found) {
-        setStatus("Exact signal source card was not found in the feed, but this signal room can still hold routing actions.");
-        return;
-      }
-
-      setRouteRole(roleNeeded(found));
-      setRoutePriority(priorityOf(found));
-      setStatus("");
-    } catch (error: any) {
-      setStatus(error?.message || "Could not load exact signal.");
-    }
-  }
-
-  async function runMatchScoring() {
-    setScoreBusy(true);
-    setMatchStatus("Scoring member fit for this signal...");
-
-    try {
-      const currentEmail = email || getEmail();
-      const currentOwner = owner || isOwner(currentEmail);
-
-      const res = await fetch("/api/member/match-score", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": currentEmail,
-          "x-vf-admin": currentOwner ? "1" : "0",
-        },
-        body: JSON.stringify({
-          signal_id: signalId,
-          item_id: exactItemId(signal),
-          state: first(signal?.state, signal?.market),
-          market: marketOf(signal),
-          city: signal?.city || "",
-          strategy: strategyOf(signal),
-          asset_type: first(signal?.property_type, signal?.asset_type, signal?.item_kind),
-          role_needed: roleNeeded(signal),
-          priority: priorityOf(signal),
-          title: titleOf(signal, signalId),
-          note: noteOf(signal),
-        }),
       });
 
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not score member matches.");
-      }
-
-      setMatches(Array.isArray(data?.top_matches) ? data.top_matches : []);
-      setMatchStatus(`Scored ${data?.counts?.members || 0} members. Strong matches: ${data?.counts?.strong || 0}.`);
+      const json = await safeJson(response);
+      setState(json);
     } catch (error: any) {
-      setMatchStatus(error?.message || "Could not score member matches.");
+      setState({ ok: false, error: "Could not load signal room.", details: error?.message || String(error) });
     } finally {
-      setScoreBusy(false);
-    }
-  }
-
-  async function stageIntroductionFromAction(action: Action) {
-    if (!owner) {
-      setIntroStatus("Owner/admin access required to stage introductions.");
-      return;
-    }
-
-    const actionId = clean(action.id);
-    const memberEmail = clean(introEmailByAction[actionId]).toLowerCase();
-
-    if (!memberEmail) {
-      setIntroStatus("Enter a member email before staging the introduction.");
-      return;
-    }
-
-    setIntroBusyId(actionId);
-    setIntroStatus("Staging controlled introduction...");
-
-    try {
-      const res = await fetch("/api/routing/introductions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-admin": "1",
-        },
-        body: JSON.stringify({
-          email,
-          admin_email: email,
-          owner: "1",
-          routing_action_id: actionId,
-          signal_id: first(action.signal_id, signalId),
-          item_id: first(action.item_id, itemId),
-          title: `Intro: ${first(action.title, titleOf(signal, signalId))}`,
-          note: first(action.urgency_reason, action.note, action.routing_summary, noteOf(signal)),
-          member_email: memberEmail,
-          visible_to_email: memberEmail,
-          recipient_email: memberEmail,
-          counterparty_email: email,
-          priority: first(action.priority, routePriority),
-          status: "staged",
-          intro_status: "staged",
-          source: "signal_detail_stage_intro",
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not stage introduction.");
-      }
-
-      setIntroStatus(data?.message || "Controlled introduction staged.");
-      setIntroEmailByAction((prev) => ({ ...prev, [actionId]: "" }));
-    } catch (error: any) {
-      setIntroStatus(error?.message || "Could not stage introduction.");
-    } finally {
-      setIntroBusyId("");
-    }
-  }
-
-  async function generateRoutingAction() {
-    if (!owner) {
-      setGenerateStatus("Owner/admin access required to generate routing actions.");
-      return;
-    }
-
-    setGenerateBusy(true);
-    setGenerateStatus("Generating routing action from this exact signal...");
-
-    try {
-      const currentEmail = email || getEmail();
-
-      const res = await fetch("/api/routing/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": currentEmail,
-          "x-vf-admin": "1",
-        },
-        body: JSON.stringify({
-          email: currentEmail,
-          admin_email: currentEmail,
-          owner: "1",
-          signal_id: signalId,
-          item_id: exactItemId(signal),
-          title: titleOf(signal, signalId),
-          note: routeNote || noteOf(signal),
-          state: first(signal?.state, signal?.market),
-          market: marketOf(signal),
-          city: signal?.city || "",
-          strategy: strategyOf(signal),
-          asset_type: first(signal?.property_type, signal?.asset_type, signal?.item_kind),
-          role_needed: routeRole,
-          priority: routePriority,
-          source: "signal_detail_generate",
-          source_table: signal?.source_table || "",
-          item_kind: signal?.item_kind || "",
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not generate routing action.");
-      }
-
-      setGenerateStatus(data?.message || "Routing action generated.");
-      setRouteNote("");
-      await loadRoutingActions(currentEmail, true);
-    } catch (error: any) {
-      setGenerateStatus(error?.message || "Could not generate routing action.");
-    } finally {
-      setGenerateBusy(false);
+      setLoading(false);
     }
   }
 
@@ -556,252 +287,219 @@ export default function SignalDetailPage() {
     load();
   }, [signalId]);
 
-  const tone = toneOf(signal);
-  const score = useMemo(() => signalScore(signal, actions, matches), [signal, actions, matches]);
-  const itemId = exactItemId(signal);
+  const signal = state.signal || null;
+  const priority = priorityOf(signal);
+  const tone = toneForPriority(priority);
+  const photos = photosOf(signal);
+  const ownerEmail = ownerEmailOf(signal);
+  const bars = useMemo(() => signalBars(state, signal), [state, signal]);
+  const messageHref = `/messages/new?signal_id=${encodeURIComponent(signalId)}&recipient=${encodeURIComponent(ownerEmail || OWNER_EMAIL)}&subject=${encodeURIComponent(`Request info: ${signalTitle(signal, signalId)}`)}`;
 
   return (
-    <main style={page}>
+    <main style={styles.page}>
       <style>{`
-        a:hover,
-        button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
+        @keyframes vfTickerMove {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
         }
 
-        @media (max-width: 760px) {
-          .vf-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 10px !important;
-          }
+        a:hover, button:hover {
+          transform: translateY(-1px);
+          filter: brightness(1.06);
+          transition: all .18s ease;
+        }
 
-          .vf-actions > * {
-            width: 100%;
-            margin: 0 !important;
-            box-sizing: border-box;
+        @media (max-width: 860px) {
+          .vf-hero-grid, .vf-two-grid, .vf-bars-grid, .vf-photo-grid {
+            grid-template-columns: 1fr !important;
           }
+          .vf-actions { display: grid !important; grid-template-columns: 1fr !important; }
+          .vf-actions > * { width: 100%; box-sizing: border-box; justify-content: center; }
         }
       `}</style>
 
-      <div style={wrap}>
-        <section style={{ ...hero, borderColor: `${tone}66` }}>
-          <div style={{ ...greenEyebrow, color: tone }}>
-            VaultForge Signal Detail · {owner ? "Owner View" : "Member View"}
+      <section style={styles.shell}>
+        <nav style={styles.topNav}>
+          <Link href="/dashboard" style={styles.brand}>VaultForge</Link>
+          <div style={styles.navLinks}>
+            <Link href="/dashboard" style={styles.navLink}>Dashboard</Link>
+            <Link href="/signals" style={styles.navLink}>Signals</Link>
+            <Link href="/pain-feed" style={styles.navLink}>Pain Feed</Link>
+            <Link href="/projects" style={styles.navLink}>Projects</Link>
+            <Link href="/messages" style={styles.navLink}>Messages</Link>
+            <Link href="/routing-inbox" style={styles.navLink}>Routing</Link>
+            <Link href="/members" style={styles.navLink}>Members</Link>
+            {isOwner ? <Link href="/admin" style={styles.ownerLink}>Admin</Link> : null}
           </div>
+        </nav>
 
-          <h1 style={{ fontSize: "clamp(54px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            {titleOf(signal, signalId)}
-          </h1>
+        <Ticker signal={signal} state={state} />
 
-          <p style={{ ...muted, fontSize: 22 }}>
-            {noteOf(signal)}
-          </p>
-
+        <section className="vf-hero-grid" style={{ ...styles.hero, borderColor: `${tone}66` }}>
           <div>
-            <span style={chip}>Signal: {signalId}</span>
-            {itemId && <span style={chip}>Item: {itemId}</span>}
-            <span style={chip}>Priority: {label(priorityOf(signal))}</span>
-            <span style={chip}>Score: {score}</span>
-            <span style={chip}>Market: {marketOf(signal) || "Unassigned"}</span>
-            <span style={chip}>Routes: {actions.length}</span>
-            <span style={chip}>Matches: {matches.length}</span>
-          </div>
+            <p style={{ ...styles.eyebrow, color: tone }}>VAULTFORGE SIGNAL ROOM</p>
+            <h1 style={styles.title}>{signalTitle(signal, signalId)}</h1>
+            <p style={styles.subtitle}>{signalNote(signal)}</p>
 
-          <div className="vf-actions" style={{ marginTop: 14 }}>
-            <button type="button" style={btn} onClick={load}>Refresh Signal</button>
-            <button type="button" style={btn} disabled={scoreBusy} onClick={runMatchScoring}>
-              {scoreBusy ? "Scoring..." : "Score Member Fits"}
-            </button>
-            <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link>
-            {itemId && <Link href={`/deal-room/${encodeURIComponent(itemId)}`} style={ghost}>Work Area</Link>}
-            <Link href="/activity" style={ghost}>Activity</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            <Link href="/intelligence" style={ghost}>Intelligence</Link>
-            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            {owner && <Link href="/admin-routing-confidence" style={ghost}>Routing Confidence</Link>}
-            <Link href="/logout" style={danger}>Logout</Link>
-          </div>
-
-          {status && (
-            <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {status}
-            </p>
-          )}
-
-          {matchStatus && (
-            <p style={{ color: matchStatus.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {matchStatus}
-            </p>
-          )}
-
-          {generateStatus && (
-            <p style={{ color: generateStatus.toLowerCase().includes("could not") || generateStatus.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {generateStatus}
-            </p>
-          )}
-
-          {introStatus && (
-            <p style={{ color: introStatus.toLowerCase().includes("could not") || introStatus.toLowerCase().includes("required") || introStatus.toLowerCase().includes("enter") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {introStatus}
-            </p>
-          )}
-        </section>
-
-        <section style={statGrid}>
-          <StatCard title="Signal Score" value={score} detail="Computed from signal priority, context, matches, and routing actions." tone={tone} />
-          <StatCard title="Routing Actions" value={actions.length} detail="Generated routing records tied to this signal." />
-          <StatCard title="Member Matches" value={matches.length} detail="Read-only member fit results." />
-          <StatCard title="Priority" value={label(priorityOf(signal))} detail="Signal urgency level." tone={tone} />
-          <StatCard title="Market" value={marketOf(signal) || "—"} detail="Best available market context." />
-        </section>
-
-        {owner && (
-          <section style={hero}>
-            <div style={greenEyebrow}>Owner Routing Generator</div>
-            <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-              Generate routing from this exact signal.
-            </h2>
-            <p style={{ ...muted, fontSize: 19 }}>
-              This creates a routing record only. It does not notify members, stage introductions, or auto-dispatch.
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
-              <select style={input} value={routeRole} onChange={(event) => setRouteRole(event.target.value)}>
-                <option value="Buyer" style={{ color: "#111" }}>Buyer</option>
-                <option value="Lender / Capital" style={{ color: "#111" }}>Lender / Capital</option>
-                <option value="Operator" style={{ color: "#111" }}>Operator</option>
-                <option value="Contractor" style={{ color: "#111" }}>Contractor</option>
-                <option value="Owner Review" style={{ color: "#111" }}>Owner Review</option>
-              </select>
-
-              <select style={input} value={routePriority} onChange={(event) => setRoutePriority(event.target.value)}>
-                <option value="medium" style={{ color: "#111" }}>Medium</option>
-                <option value="high" style={{ color: "#111" }}>High</option>
-                <option value="urgent" style={{ color: "#111" }}>Urgent</option>
-              </select>
+            <div style={styles.chipRow}>
+              <span style={styles.chip}>Signal: {signalId}</span>
+              <span style={styles.chip}>Priority: {label(priority)}</span>
+              <span style={styles.chip}>Market: {marketOf(signal) || "Unassigned"}</span>
+              <span style={styles.chip}>Owner: {ownerEmail || OWNER_EMAIL}</span>
             </div>
 
-            <textarea
-              style={{ ...input, minHeight: 120, marginTop: 14 }}
-              value={routeNote}
-              onChange={(event) => setRouteNote(event.target.value)}
-              placeholder="Why should this signal be routed? What pressure, member fit, capital need, or buyer/operator need exists?"
-            />
+            <div className="vf-actions" style={styles.actionRow}>
+              <Link href={messageHref} style={styles.primaryAction}>Message Owner</Link>
+              <Link href="/signals" style={styles.secondaryAction}>Back to Signals</Link>
+              <Link href="/dashboard" style={styles.secondaryAction}>Dashboard</Link>
+              <button type="button" onClick={load} style={styles.ghostButton}>{loading ? "Refreshing..." : "Refresh Room"}</button>
+            </div>
 
-            <button type="button" style={btn} disabled={generateBusy} onClick={generateRoutingAction}>
-              {generateBusy ? "Generating..." : "Generate Routing Action"}
-            </button>
-          </section>
-        )}
+            {state.ok === false && state.error ? (
+              <div style={styles.errorBox}>
+                <strong>{state.error}</strong>
+                {state.details ? <span>{state.details}</span> : null}
+              </div>
+            ) : null}
+          </div>
 
-        {actions.length > 0 && (
-          <section style={hero}>
-            <div style={greenEyebrow}>Generated Routing Actions</div>
-            <section style={grid}>
-              {actions.map((action, index) => (
-                <article key={action.id || index} style={card}>
-                  <div style={greenEyebrow}>{label(actionOf(action))}</div>
-                  <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>{actionTitle(action)}</h3>
-                  <p style={muted}>{actionNote(action)}</p>
-                  <span style={chip}>Confidence: {actionScore(action)}%</span>
-                  {action.role_match && <span style={chip}>Role: {action.role_match}</span>}
-                  {action.state_match && <span style={chip}>State: {action.state_match}</span>}
-                  {action.strategy_match && <span style={chip}>Strategy: {action.strategy_match}</span>}
-                  {owner && (
-                    <div style={{ marginTop: 14 }}>
-                      <input
-                        style={input}
-                        value={introEmailByAction[String(action.id || "")] || ""}
-                        onChange={(event) =>
-                          setIntroEmailByAction((prev) => ({
-                            ...prev,
-                            [String(action.id || "")]: event.target.value,
-                          }))
-                        }
-                        placeholder="Member email to stage intro..."
-                      />
-
-                      <button
-                        type="button"
-                        style={btn}
-                        disabled={introBusyId === String(action.id || "")}
-                        onClick={() => stageIntroductionFromAction(action)}
-                      >
-                        {introBusyId === String(action.id || "") ? "Staging..." : "Stage Controlled Intro"}
-                      </button>
-                    </div>
-                  )}
-
-                  <div>
-                    <Link href={`/routing-room/${encodeURIComponent(first(action.signal_id, signalId))}`} style={btn}>Routing Room</Link>
-                    {first(action.item_id, itemId) && <Link href={`/deal-room/${encodeURIComponent(first(action.item_id, itemId))}`} style={ghost}>Work Area</Link>}
-                    <Link href="/introductions" style={ghost}>Introductions</Link>
-                  </div>
-                </article>
-              ))}
-            </section>
-          </section>
-        )}
-
-        {matches.length > 0 && (
-          <section style={hero}>
-            <div style={greenEyebrow}>Member Match Scoring</div>
-            <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-              Strongest member fits.
-            </h2>
-            <p style={{ ...muted, fontSize: 19 }}>
-              Read-only scoring compares this signal context against member specialization. Nothing is routed or sent automatically.
-            </p>
-
-            <section style={grid}>
-              {matches.map((match, index) => {
-                const fitTone = matchTone(match.fit_level);
-
-                return (
-                  <article key={match.member_id || match.email || index} style={{ ...card, borderColor: `${fitTone}66` }}>
-                    <div style={{ ...greenEyebrow, color: fitTone }}>
-                      {label(match.fit_level || "weak")} Fit · {match.fit_score || 0}
-                    </div>
-
-                    <h3 style={{ fontSize: 28, margin: "0 0 10px" }}>
-                      {match.full_name || match.email || "Member"}
-                    </h3>
-
-                    <div style={{ marginBottom: 12 }}>
-                      {Array.isArray(match.roles) && match.roles.slice(0, 3).map((role: string) => (
-                        <span key={role} style={chip}>{role}</span>
-                      ))}
-                      {Array.isArray(match.markets) && match.markets.slice(0, 3).map((market: string) => (
-                        <span key={market} style={chip}>{market}</span>
-                      ))}
-                    </div>
-
-                    {Array.isArray(match.reasons) && match.reasons.slice(0, 4).map((reason: string) => (
-                      <p key={reason} style={{ ...muted, lineHeight: 1.45 }}>
-                        {reason}
-                      </p>
-                    ))}
-
-                    <Link href={`/member-intelligence/${encodeURIComponent(match.member_id || match.email || "")}`} style={btn}>
-                      Member Detail
-                    </Link>
-                  </article>
-                );
-              })}
-            </section>
-          </section>
-        )}
-
-        <section style={{ ...hero, marginTop: 22 }}>
-          <div style={greenEyebrow}>Current Safety Mode</div>
-          <p style={{ ...muted, fontSize: 19 }}>
-            Signal routing generation creates a routing record only. It does not auto-route, send notifications,
-            create introductions, expose extra private data, or mutate members.
-          </p>
+          <aside style={styles.ownerCard}>
+            <span style={styles.cardLabel}>Current viewer</span>
+            <strong style={styles.ownerEmail}>{email || "member session"}</strong>
+            <span style={styles.rolePill}>{isOwner ? "Owner/Admin View" : "Member View"}</span>
+            <div style={styles.ownerDivider} />
+            <span style={styles.cardLabel}>Item owner / submitter</span>
+            <strong style={styles.ownerEmail}>{ownerEmail || OWNER_EMAIL}</strong>
+            <small style={styles.mutedSmall}>Messages route here first. BCR is fallback only.</small>
+          </aside>
         </section>
-      </div>
+
+        <section className="vf-bars-grid" style={styles.barsGrid}>
+          {bars.map((bar) => (
+            <SignalBar key={bar.label} labelText={bar.label} value={bar.value} note={bar.note} tone={tone} />
+          ))}
+        </section>
+
+        <section className="vf-two-grid" style={styles.twoGrid}>
+          <section style={styles.panel}>
+            <h2 style={styles.panelTitle}>Signal Overview</h2>
+            <div style={styles.detailGrid}>
+              <div><span>Type</span><strong>{label(first(signal?.signal_type, signal?.item_kind, signal?.pain_type, "Signal"))}</strong></div>
+              <div><span>Status</span><strong>{label(first(signal?.status, "active"))}</strong></div>
+              <div><span>Asset</span><strong>{label(first(signal?.asset_type, signal?.property_type, "Unassigned"))}</strong></div>
+              <div><span>Strategy</span><strong>{label(first(signal?.strategy, signal?.exit_strategy, "Review"))}</strong></div>
+              <div><span>Created</span><strong>{first(signal?.created_at, "—")}</strong></div>
+              <div><span>Source</span><strong>{label(first(signal?._source_table, signal?.source_table, signal?.source, "VaultForge"))}</strong></div>
+            </div>
+          </section>
+
+          <section style={styles.panel}>
+            <h2 style={styles.panelTitle}>AI Summary</h2>
+            <p style={styles.muted}>
+              This room consolidates the signal into one operating view. The next AI layer should rank matching members,
+              explain why they fit, and recommend whether to route, request more info, or hold for owner review.
+            </p>
+            <div style={styles.chipRow}>
+              <span style={styles.goldChip}>Signal score: {scoreFrom(state, signal)}</span>
+              <span style={styles.goldChip}>Routing: {state.routing_actions?.length || 0}</span>
+              <span style={styles.goldChip}>Messages: {state.messages?.length || 0}</span>
+            </div>
+          </section>
+        </section>
+
+        {photos.length ? (
+          <section style={styles.panelWide}>
+            <h2 style={styles.panelTitle}>Photos / Asset Context</h2>
+            <div className="vf-photo-grid" style={styles.photoGrid}>
+              {photos.slice(0, 8).map((url) => (
+                <a key={url} href={url} target="_blank" rel="noreferrer" style={styles.photoLink}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="VaultForge signal asset" style={styles.photo} />
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="vf-two-grid" style={styles.twoGrid}>
+          <MiniList title="Routing Actions" rows={state.routing_actions || []} empty="No routing actions connected yet." />
+          <MiniList title="Messages" rows={state.messages || []} empty="No message thread connected yet. Use Message Owner to start one." />
+          <MiniList title="Activity" rows={state.activity || []} empty="No activity events connected yet." />
+          <MiniList title="Alerts" rows={state.alerts || []} empty="No alerts connected yet." />
+        </section>
+
+        {isOwner ? (
+          <section style={styles.ownerControls}>
+            <p style={styles.eyebrow}>OWNER CONTROL LAYER</p>
+            <h2 style={styles.panelTitle}>Advanced routing stays controlled.</h2>
+            <p style={styles.muted}>
+              Owner/admin orchestration should live in routing/admin pages. This room shows enough control context without
+              overwhelming the member view.
+            </p>
+            <div className="vf-actions" style={styles.actionRow}>
+              <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={styles.secondaryAction}>Open Routing Room</Link>
+              <Link href="/routing-inbox" style={styles.secondaryAction}>Routing Inbox</Link>
+              <Link href="/introductions" style={styles.secondaryAction}>Introductions</Link>
+              <Link href="/admin" style={styles.secondaryAction}>Admin Control</Link>
+            </div>
+          </section>
+        ) : null}
+      </section>
     </main>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 30%), radial-gradient(circle at bottom right, rgba(148,163,184,.12), transparent 32%), linear-gradient(180deg,#020303,#07090d 48%,#020303)",
+    color: "white",
+    padding: "22px 16px 80px",
+    fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  },
+  shell: { width: "min(1220px,100%)", margin: "0 auto" },
+  topNav: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 16 },
+  brand: { color: "#f8e7b0", textDecoration: "none", fontWeight: 950, letterSpacing: ".12em", textTransform: "uppercase" },
+  navLinks: { display: "flex", gap: 9, flexWrap: "wrap" },
+  navLink: { color: "#e5e7eb", textDecoration: "none", border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.045)", borderRadius: 999, padding: "9px 12px", fontSize: 13, fontWeight: 800 },
+  ownerLink: { color: "#101010", textDecoration: "none", border: "1px solid rgba(232,196,107,.75)", background: "linear-gradient(135deg,#f8e7b0,#e8c46b)", borderRadius: 999, padding: "9px 12px", fontSize: 13, fontWeight: 950 },
+  tickerWrap: { overflow: "hidden", border: "1px solid rgba(232,196,107,.18)", borderRadius: 999, background: "rgba(232,196,107,.055)", marginBottom: 16, whiteSpace: "nowrap" },
+  tickerTrack: { display: "inline-flex", gap: 28, padding: "10px 0", animation: "vfTickerMove 38s linear infinite", minWidth: "200%" },
+  tickerItem: { color: "#f8e7b0", fontSize: 12, letterSpacing: ".12em", textTransform: "uppercase", fontWeight: 900 },
+  hero: { display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(280px,360px)", gap: 18, border: "1px solid rgba(232,196,107,.3)", borderRadius: 30, padding: 24, background: "linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.028))", boxShadow: "0 28px 90px rgba(0,0,0,.38)", marginBottom: 16 },
+  eyebrow: { color: "#e8c46b", fontSize: 12, letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, margin: "0 0 10px" },
+  title: { fontSize: "clamp(42px,8vw,86px)", lineHeight: .88, margin: 0, letterSpacing: "-.06em" },
+  subtitle: { color: "#cbd5e1", fontSize: 18, lineHeight: 1.55, maxWidth: 820, margin: "16px 0 0" },
+  chipRow: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 },
+  chip: { color: "#e5e7eb", border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.055)", borderRadius: 999, padding: "8px 10px", fontSize: 12, fontWeight: 850 },
+  goldChip: { color: "#111", border: "1px solid rgba(232,196,107,.55)", background: "linear-gradient(135deg,#f8e7b0,#e8c46b)", borderRadius: 999, padding: "8px 10px", fontSize: 12, fontWeight: 950 },
+  actionRow: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 },
+  primaryAction: { color: "#101010", textDecoration: "none", borderRadius: 15, padding: "12px 15px", fontWeight: 950, background: "linear-gradient(135deg,#f8e7b0,#e8c46b)" },
+  secondaryAction: { color: "#fff", textDecoration: "none", borderRadius: 15, padding: "12px 15px", fontWeight: 850, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.055)" },
+  ghostButton: { color: "#fff", borderRadius: 15, padding: "12px 15px", fontWeight: 850, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.055)", cursor: "pointer" },
+  ownerCard: { border: "1px solid rgba(232,196,107,.2)", borderRadius: 24, padding: 18, background: "rgba(0,0,0,.32)", display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" },
+  cardLabel: { color: "#94a3b8", fontSize: 11, letterSpacing: ".13em", textTransform: "uppercase", fontWeight: 900 },
+  ownerEmail: { color: "#fff", fontSize: 15, wordBreak: "break-word" },
+  rolePill: { color: "#f8e7b0", fontWeight: 900, fontSize: 13 },
+  ownerDivider: { height: 1, background: "rgba(255,255,255,.12)", margin: "8px 0" },
+  mutedSmall: { color: "#94a3b8", lineHeight: 1.45 },
+  errorBox: { marginTop: 14, border: "1px solid rgba(239,68,68,.35)", background: "rgba(127,29,29,.22)", color: "#fee2e2", borderRadius: 16, padding: 14, display: "flex", flexDirection: "column", gap: 6 },
+  barsGrid: { display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 12, marginBottom: 16 },
+  signalBarCard: { border: "1px solid rgba(255,255,255,.12)", borderRadius: 20, padding: 14, background: "rgba(255,255,255,.045)" },
+  signalBarTop: { display: "flex", justifyContent: "space-between", gap: 8, color: "#e5e7eb", fontSize: 12, fontWeight: 900, marginBottom: 10 },
+  barRail: { height: 8, borderRadius: 999, background: "rgba(255,255,255,.09)", overflow: "hidden", marginBottom: 8 },
+  barFill: { height: "100%", borderRadius: 999 },
+  twoGrid: { display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 16, marginBottom: 16 },
+  panel: { border: "1px solid rgba(255,255,255,.12)", borderRadius: 24, padding: 20, background: "linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.028))", boxShadow: "0 20px 70px rgba(0,0,0,.25)" },
+  panelWide: { border: "1px solid rgba(255,255,255,.12)", borderRadius: 24, padding: 20, background: "linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.028))", boxShadow: "0 20px 70px rgba(0,0,0,.25)", marginBottom: 16 },
+  panelTitle: { margin: "0 0 14px", fontSize: 28, letterSpacing: "-.03em" },
+  muted: { color: "#cbd5e1", lineHeight: 1.55 },
+  detailGrid: { display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 12 },
+  listStack: { display: "grid", gap: 10 },
+  listItem: { border: "1px solid rgba(255,255,255,.1)", borderRadius: 16, padding: 13, background: "rgba(0,0,0,.2)", display: "flex", flexDirection: "column", gap: 6, color: "#cbd5e1" },
+  photoGrid: { display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12 },
+  photoLink: { display: "block", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(232,196,107,.22)", background: "rgba(0,0,0,.25)", minHeight: 180 },
+  photo: { width: "100%", height: 210, objectFit: "cover", display: "block" },
+  ownerControls: { border: "1px solid rgba(232,196,107,.2)", borderRadius: 24, padding: 20, background: "rgba(232,196,107,.055)" },
+};
