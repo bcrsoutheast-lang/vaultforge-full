@@ -51,7 +51,11 @@ function currentEmail() {
 
   if (!cookieMatch) return "";
 
-  return lower(decodeURIComponent(cookieMatch.split("=")[1] || ""));
+  try {
+    return lower(decodeURIComponent(cookieMatch.split("=")[1] || ""));
+  } catch {
+    return lower(cookieMatch.split("=")[1] || "");
+  }
 }
 
 function threadKeyOf(row: MessageRow) {
@@ -94,6 +98,9 @@ function laneOf(row: MessageRow) {
   if (text.includes("pain")) return "PAIN";
   if (text.includes("signal")) return "SIGNALS";
   if (text.includes("routing")) return "ROUTING";
+  if (text.includes("intro")) return "INTRO";
+  if (text.includes("project") || text.includes("deal")) return "PROJECTS";
+  if (text.includes("member") || text.includes("connect")) return "MEMBERS";
 
   return "GENERAL";
 }
@@ -126,9 +133,7 @@ export default function MessagesPage() {
         Use ONLY data.messages.
         data.threads duplicates the same records.
       */
-      const nextRows = Array.isArray(data.messages)
-        ? data.messages
-        : [];
+      const nextRows = Array.isArray(data.messages) ? data.messages : [];
 
       setRows(nextRows);
       setStatus(nextRows.length ? "" : "No conversations found.");
@@ -165,6 +170,7 @@ export default function MessagesPage() {
           row.from_email,
           row.to_email,
           row.thread_key,
+          laneOf(row),
         ].join(" ")
       );
 
@@ -195,6 +201,8 @@ export default function MessagesPage() {
       if (createdOf(row) > existing.latestAt) {
         existing.latestAt = createdOf(row);
         existing.latestMessage = bodyOf(row);
+        existing.title = titleOf(row);
+        existing.lane = laneOf(row);
       }
     });
 
@@ -206,13 +214,24 @@ export default function MessagesPage() {
   return (
     <main style={page}>
       <div style={wrap}>
+        <nav style={nav}>
+          <Link href="/dashboard" style={navButton}>Dashboard</Link>
+          <Link href="/alerts" style={navButton}>Alerts</Link>
+          <Link href="/pain-feed" style={navButton}>Pain Feed</Link>
+          <Link href="/projects" style={navButton}>Projects</Link>
+          <Link href="/routing-inbox" style={navButton}>Routing</Link>
+          <Link href="/network" style={navButton}>Network</Link>
+          <Link href="/members" style={navButton}>Members</Link>
+          <Link href="/messages" style={navButtonActive}>Messages</Link>
+        </nav>
+
         <section style={hero}>
           <div style={eyebrow}>VaultForge Messaging</div>
 
           <h1 style={heroTitle}>Conversation Command.</h1>
 
           <p style={lead}>
-            One card equals one real thread key conversation.
+            One card equals one real thread-key conversation.
           </p>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -227,32 +246,31 @@ export default function MessagesPage() {
             placeholder="Search conversations..."
             style={input}
           />
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <button type="button" onClick={load} style={button}>
+              Refresh Messages
+            </button>
+            <Link href="/dashboard" style={ghostButton}>Back to Dashboard</Link>
+          </div>
         </section>
 
         <section style={{ display: "grid", gap: 18 }}>
           {conversations.map((conversation) => {
-            const href = `/messages/${
-              encodeURIComponent(
-                conversation.threadId || conversation.threadKey
-              )
-            }?thread_key=${encodeURIComponent(conversation.threadKey)}`;
+            const href = `/messages/${encodeURIComponent(
+              conversation.threadId || conversation.threadKey
+            )}?thread_key=${encodeURIComponent(conversation.threadKey)}`;
 
             return (
               <article
                 key={conversation.threadKey || conversation.threadId}
                 style={card}
               >
-                <div style={laneChip}>
-                  {conversation.lane}
-                </div>
+                <div style={laneChip}>{conversation.lane}</div>
 
-                <div style={count}>
-                  {conversation.count}
-                </div>
+                <div style={count}>{conversation.count}</div>
 
-                <h2 style={title}>
-                  {conversation.title}
-                </h2>
+                <h2 style={title}>{conversation.title}</h2>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <span style={chip}>
@@ -272,7 +290,7 @@ export default function MessagesPage() {
                   {conversation.latestMessage || "No preview"}
                 </p>
 
-                <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
                   <Link href={href} style={button}>
                     Open Messages
                   </Link>
@@ -282,11 +300,7 @@ export default function MessagesPage() {
           })}
         </section>
 
-        {status ? (
-          <section style={hero}>
-            {status}
-          </section>
-        ) : null}
+        {status ? <section style={hero}>{status}</section> : null}
       </div>
     </main>
   );
@@ -304,6 +318,33 @@ const page: React.CSSProperties = {
 const wrap: React.CSSProperties = {
   width: "min(1100px,100%)",
   margin: "0 auto",
+};
+
+const nav: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  marginBottom: 18,
+};
+
+const navButton: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  borderRadius: 999,
+  padding: "12px 16px",
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.14)",
+  color: "white",
+  textDecoration: "none",
+  fontWeight: 800,
+};
+
+const navButtonActive: React.CSSProperties = {
+  ...navButton,
+  background: "rgba(232,196,107,.14)",
+  border: "1px solid rgba(232,196,107,.28)",
+  color: "#f8e7b0",
 };
 
 const hero: React.CSSProperties = {
@@ -331,6 +372,8 @@ const heroTitle: React.CSSProperties = {
 const lead: React.CSSProperties = {
   color: "#cbd5e1",
   marginBottom: 18,
+  fontSize: 18,
+  lineHeight: 1.5,
 };
 
 const input: React.CSSProperties = {
@@ -375,6 +418,7 @@ const title: React.CSSProperties = {
   fontSize: "clamp(30px,5vw,52px)",
   lineHeight: 1,
   margin: "18px 0 16px",
+  paddingRight: 74,
 };
 
 const messagePreview: React.CSSProperties = {
@@ -402,4 +446,13 @@ const button: React.CSSProperties = {
   color: "#06100a",
   textDecoration: "none",
   fontWeight: 900,
+  border: 0,
+  cursor: "pointer",
+};
+
+const ghostButton: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.14)",
+  color: "white",
 };
