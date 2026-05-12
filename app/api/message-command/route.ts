@@ -170,6 +170,59 @@ function isHidden(row: Row) {
   );
 }
 
+function cleanupThreadKey(row: Row) {
+  const m = meta(row);
+
+  return clean(
+    row.cleanup_thread_key ||
+      row.hidden_thread_key ||
+      m.cleanup_thread_key ||
+      m.hidden_thread_key
+  );
+}
+
+function isThreadCleanupMarker(row: Row) {
+  const m = meta(row);
+
+  return (
+    cleanupThreadKey(row) ||
+    row.kind === "thread_cleanup" ||
+    m.kind === "thread_cleanup" ||
+    m.action_scope === "thread"
+  );
+}
+
+function cleanupActionOf(row: Row) {
+  const m = meta(row);
+  return lower(row.cleanup_action || m.cleanup_action || row.status || m.status);
+}
+
+function buildSuppressedThreads(rows: Row[]) {
+  const archived = new Set<string>();
+  const deleted = new Set<string>();
+
+  for (const raw of rows) {
+    if (!isThreadCleanupMarker(raw)) continue;
+
+    const key = cleanupThreadKey(raw) || canonicalThreadKey(raw);
+    if (!key) continue;
+
+    const action = cleanupActionOf(raw);
+
+    if (action === "delete" || action === "deleted") {
+      deleted.add(key);
+      archived.delete(key);
+    } else if (action === "archive" || action === "archived") {
+      archived.add(key);
+    } else if (action === "restore" || action === "sent") {
+      archived.delete(key);
+      deleted.delete(key);
+    }
+  }
+
+  return { archived, deleted };
+}
+
 function idOf(row: Row) {
   const m = meta(row);
   return first(row.id, m.id);
@@ -509,7 +562,17 @@ export async function GET(request: Request) {
 
   const result = await readRows();
 
-  let rows = dedupe(result.rows)
+  const normalizedAllRows = dedupe(result.rows);
+  const suppressed = buildSuppressedThreads(normalizedAllRows);
+
+  let rows = normalizedAllRows
+    .filter((row) => !isThreadCleanupMarker(row))
+    .filter((row) => {
+      const key = row.canonical_thread_key || canonicalThreadKey(row);
+      if (suppressed.deleted.has(key)) return false;
+      if (!includeHidden && suppressed.archived.has(key)) return false;
+      return true;
+    })
     .filter((row) => includeHidden || !isHidden(row))
     .filter((row) => visibleTo(row, email));
 
@@ -613,12 +676,14 @@ export async function PATCH(request: Request) {
   }
 
   const action = lower(input.action);
+  const threadKey = clean(input.thread_key || input.threadKey);
+  const actionScope = lower(input.action_scope || input.scope);
   const ids = Array.isArray(input.ids) ? input.ids.map(clean).filter(Boolean) : [];
   const id = clean(input.id);
   if (id) ids.push(id);
 
-  if (!ids.length) {
-    return NextResponse.json({ ok: false, error: "Missing message ids." }, { status: 400 });
+  if (!ids.length && !threadKey) {
+    return NextResponse.json({ ok: false, error: "Missing message ids or thread_key." }, { status: 400 });
   }
 
   const patch: Row = {
@@ -647,24 +712,96 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, error: "Supabase client missing." }, { status: 500 });
   }
 
-  const { data, error } = await client
-    .from(COMMAND_TABLE)
-    .update(patch)
-    .in("id", ids)
-    .select("*");
+  let updated = 0;
+  let updateError = "";
 
-  if (error) {
+  if (ids.length) {
+    const { data, error } = await client
+      .from(COMMAND_TABLE)
+      .update(patch)
+      .in("id", ids)
+      .select("*");
+
+    if (error) {
+      updateError = error.message || String(error);
+    } else {
+      updated = Array.isArray(data) ? data.length : 0;
+    }
+  }
+
+  /*
+    Critical:
+    Legacy rows from vf_messages cannot always be updated from this new system.
+    For whole-thread cleanup we create a cleanup marker in the command table.
+    GET reads this marker and suppresses old legacy rows from counts/cards.
+  */
+  if (threadKey && (actionScope === "thread" || !ids.length || action === "archive" || action === "delete")) {
+    const now = new Date().toISOString();
+    const source = normalizeSource(threadKey);
+    const folder = folderForSource(source);
+
+    const marker = {
+      thread_id: `cleanup-${safePart(threadKey)}`,
+      thread_key: `cleanup:${safePart(threadKey)}:${Date.now()}`,
+      source,
+      folder,
+      folder_key: folder,
+      from_email: lower(input.email || input.viewer_email || "system@vaultforge.local"),
+      sender_email: lower(input.email || input.viewer_email || "system@vaultforge.local"),
+      to_email: lower(input.email || input.viewer_email || "system@vaultforge.local"),
+      recipient_email: lower(input.email || input.viewer_email || "system@vaultforge.local"),
+      target_email: lower(input.email || input.viewer_email || "system@vaultforge.local"),
+      owner_email: lower(input.email || input.viewer_email || "system@vaultforge.local"),
+      subject: `Thread ${action}`,
+      title: `Thread ${action}`,
+      message: `Thread ${threadKey} marked ${action}.`,
+      body: `Thread ${threadKey} marked ${action}.`,
+      note: `Thread ${threadKey} marked ${action}.`,
+      status: action === "restore" ? "sent" : action === "archive" ? "archived" : "deleted",
+      read: true,
+      archived: action === "archive",
+      is_archived: action === "archive",
+      is_deleted: action === "delete",
+      created_at: now,
+      updated_at: now,
+      metadata: {
+        kind: "thread_cleanup",
+        action_scope: "thread",
+        cleanup_action: action,
+        cleanup_thread_key: threadKey,
+        hidden_thread_key: threadKey,
+        created_at: now,
+        updated_at: now,
+      },
+    };
+
+    const { error } = await client.from(COMMAND_TABLE).insert(marker);
+
+    if (error) {
+      return NextResponse.json({
+        ok: false,
+        error: "Cleanup marker failed.",
+        details: error.message || String(error),
+        update_error: updateError,
+        thread_key: threadKey,
+      }, { status: 500 });
+    }
+  }
+
+  if (updateError && !threadKey) {
     return NextResponse.json({
       ok: false,
       error: "Cleanup failed.",
-      details: error.message || String(error),
+      details: updateError,
     }, { status: 500 });
   }
 
   return NextResponse.json({
     ok: true,
     table: COMMAND_TABLE,
-    updated: Array.isArray(data) ? data.length : 0,
-    messages: Array.isArray(data) ? data.map(normalize) : [],
+    action,
+    scope: threadKey ? "thread" : "message",
+    updated,
+    thread_key: threadKey,
   });
 }
