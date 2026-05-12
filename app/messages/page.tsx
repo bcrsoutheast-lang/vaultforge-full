@@ -6,6 +6,65 @@ import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Row = Record<string, any>;
 
+const MESSAGE_GROUPS = [
+  {
+    key: "alerts",
+    title: "Alerts",
+    subtitle: "Need more info, alert follow-ups, owner questions.",
+    href: "/alerts",
+    tone: "red",
+    match: ["alert", "need-more-info", "need_more_info"],
+  },
+  {
+    key: "pain",
+    title: "Pain",
+    subtitle: "Pain feed questions, owner contact, deal/problem requests.",
+    href: "/pain-feed",
+    tone: "gold",
+    match: ["pain", "distress", "problem"],
+  },
+  {
+    key: "activity",
+    title: "Activity",
+    subtitle: "Execution tape replies and movement follow-up.",
+    href: "/activity",
+    tone: "blue",
+    match: ["activity", "event", "execution"],
+  },
+  {
+    key: "routing",
+    title: "Routing",
+    subtitle: "Routing room, match review, and member-fit requests.",
+    href: "/routing-inbox",
+    tone: "green",
+    match: ["routing", "route", "match"],
+  },
+  {
+    key: "introductions",
+    title: "Introductions",
+    subtitle: "Controlled introductions and response follow-up.",
+    href: "/introductions",
+    tone: "gold",
+    match: ["intro", "introduction"],
+  },
+  {
+    key: "projects",
+    title: "Projects",
+    subtitle: "Project/workstation/deal room communication.",
+    href: "/projects",
+    tone: "blue",
+    match: ["project", "workstation", "deal"],
+  },
+  {
+    key: "members",
+    title: "Members",
+    subtitle: "Member profile connection requests.",
+    href: "/members",
+    tone: "green",
+    match: ["member", "profile", "connect"],
+  },
+];
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -109,9 +168,37 @@ function statusOf(row: Row) {
   return first(row.status, row.message_status, row.thread_status, m.status, m.message_status, m.thread_status, "Open");
 }
 
-function sourceOf(row: Row) {
+function sourceText(row: Row) {
   const m = meta(row);
-  return first(row.source, row.context_type, row.event_type, row.type, m.source, m.context_type, m.event_type, m.type, "Message");
+  return [
+    row.source,
+    row.context_type,
+    row.event_type,
+    row.type,
+    row.category,
+    m.source,
+    m.context_type,
+    m.event_type,
+    m.type,
+    m.category,
+    titleOf(row),
+    bodyOf(row),
+  ]
+    .map((v) => clean(v).toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function groupFor(row: Row) {
+  const source = sourceText(row);
+
+  for (const group of MESSAGE_GROUPS) {
+    if (group.match.some((term) => source.includes(term))) {
+      return group.key;
+    }
+  }
+
+  return "general";
 }
 
 const page: React.CSSProperties = {
@@ -123,7 +210,10 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
+const wrap: React.CSSProperties = {
+  width: "min(1220px,100%)",
+  margin: "0 auto",
+};
 
 const card: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
@@ -149,7 +239,10 @@ const eyebrow: React.CSSProperties = {
   fontSize: 12,
 };
 
-const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
+const muted: React.CSSProperties = {
+  color: "#cbd5e1",
+  lineHeight: 1.55,
+};
 
 const button: React.CSSProperties = {
   display: "inline-flex",
@@ -184,55 +277,109 @@ const chip: React.CSSProperties = {
   display: "inline-flex",
 };
 
-function Metric({ label, value, tone }: { label: string; value: string; tone: "blue" | "green" | "gold" | "red" }) {
-  const color = tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
-
-  return (
-    <section style={glass}>
-      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>{label}</div>
-      <div style={{ fontSize: 52, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
-    </section>
-  );
+function colorFor(tone: string) {
+  if (tone === "red") return "#f87171";
+  if (tone === "blue") return "#38bdf8";
+  if (tone === "green") return "#4ade80";
+  return "#e8c46b";
 }
 
-function MessageCard({ row, viewer }: { row: Row; viewer: string }) {
+function MessageRow({ row, viewer }: { row: Row; viewer: string }) {
   const signalId = signalIdOf(row);
   const itemId = itemIdOf(row);
-  const from = fromOf(row);
-  const to = toOf(row);
-  const source = sourceOf(row);
-
   const replyHref = signalId
     ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ""}`
     : "/messages/new";
 
   return (
-    <article style={glass}>
+    <div style={{ ...glass, padding: 16 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <span style={chip}>{source}</span>
-        <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.26)", background: "rgba(232,196,107,.08)" }}>
-          {statusOf(row)}
-        </span>
-        {signalId ? <span style={{ ...chip, color: "#8fd3ff", borderColor: "rgba(56,189,248,.28)", background: "rgba(56,189,248,.08)" }}>Signal Linked</span> : null}
+        <span style={chip}>{statusOf(row)}</span>
+        {signalId ? <span style={chip}>Signal Linked</span> : null}
       </div>
 
-      <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
-      <p style={muted}>{bodyOf(row)}</p>
+      <h4 style={{ margin: "12px 0 8px", fontSize: 22 }}>{titleOf(row)}</h4>
+      <p style={{ ...muted, margin: 0 }}>{bodyOf(row)}</p>
 
-      <div style={{ marginTop: 12 }}>
-        {from ? <span style={chip}>From: {from}</span> : null}
-        {to ? <span style={chip}>To: {to}</span> : null}
-        {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
-        {itemId ? <span style={chip}>Item: {itemId}</span> : null}
+      <div style={{ marginTop: 10 }}>
+        {fromOf(row) ? <span style={chip}>From: {fromOf(row)}</span> : null}
+        {toOf(row) ? <span style={chip}>To: {toOf(row)}</span> : null}
+      </div>
+
+      <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+        <Link href={replyHref} style={button}>Reply</Link>
+        {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Signal</Link> : null}
+        {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing</Link> : null}
+      </div>
+    </div>
+  );
+}
+
+function GroupCard({
+  group,
+  items,
+  viewer,
+}: {
+  group: { key: string; title: string; subtitle: string; href: string; tone: string };
+  items: Row[];
+  viewer: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const color = colorFor(group.tone);
+
+  return (
+    <section
+      style={{
+        ...card,
+        borderColor: items.length ? `${color}66` : "rgba(255,255,255,.12)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ ...eyebrow, color }}>{group.title}</div>
+          <h2 style={{ fontSize: 38, lineHeight: 1, margin: "10px 0 8px" }}>{group.title} Messages</h2>
+          <p style={{ ...muted, margin: 0 }}>{group.subtitle}</p>
+        </div>
+
+        <div
+          style={{
+            width: 86,
+            height: 86,
+            borderRadius: 22,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(255,255,255,.055)",
+            border: `1px solid ${color}66`,
+            color,
+            fontSize: 42,
+            fontWeight: 1000,
+          }}
+        >
+          {items.length}
+        </div>
       </div>
 
       <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-        <Link href={replyHref} style={button}>Reply / Continue</Link>
-        {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link> : null}
-        {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
-        <Link href="/activity" style={ghost}>Activity</Link>
+        <button type="button" onClick={() => setOpen((value) => !value)} style={button}>
+          {open ? "Hide" : "Open"} {group.title}
+        </button>
+        <Link href={group.href} style={ghost}>Go to {group.title}</Link>
       </div>
-    </article>
+
+      {open ? (
+        <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+          {items.length ? (
+            items.map((item, index) => (
+              <MessageRow key={clean(item.id) || `${signalIdOf(item)}-${index}`} row={item} viewer={viewer} />
+            ))
+          ) : (
+            <div style={glass}>
+              <p style={{ ...muted, margin: 0 }}>No {group.title.toLowerCase()} messages yet.</p>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -273,7 +420,7 @@ export default function MessagesPage() {
 
           collected.push(...list);
         } catch {
-          // Keep loading other message-compatible sources.
+          // keep page alive
         }
       }
 
@@ -296,13 +443,26 @@ export default function MessagesPage() {
     load();
   }, []);
 
-  const counts = useMemo(() => {
-    const linked = items.filter((item) => signalIdOf(item)).length;
-    const open = items.filter((item) => !statusOf(item).toLowerCase().includes("archiv") && !statusOf(item).toLowerCase().includes("closed")).length;
-    const ownerReady = items.filter((item) => toOf(item) || fromOf(item)).length;
+  const grouped = useMemo(() => {
+    const map: Record<string, Row[]> = {};
 
-    return { total: items.length, linked, open, ownerReady };
+    for (const group of MESSAGE_GROUPS) {
+      map[group.key] = [];
+    }
+
+    map.general = [];
+
+    for (const item of items) {
+      const key = groupFor(item);
+      if (!map[key]) map.general.push(item);
+      else map[key].push(item);
+    }
+
+    return map;
   }, [items]);
+
+  const openCount = items.filter((item) => !statusOf(item).toLowerCase().includes("closed") && !statusOf(item).toLowerCase().includes("archive")).length;
+  const linkedCount = items.filter((item) => signalIdOf(item)).length;
 
   return (
     <main style={page}>
@@ -336,65 +496,51 @@ export default function MessagesPage() {
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Messages"
-          subtitle="Controlled owner/member communication, replies, signal context, and execution follow-up."
+          subtitle="Organized message folders for alerts, pain, activity, routing, introductions, projects, and members."
           active="messages"
         />
 
         <section style={card}>
           <div style={eyebrow}>VaultForge Message Command</div>
           <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
-            Communication center.
+            Message folders.
           </h1>
           <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            Keep communication simple: message owner, reply, keep context tied to the signal, and move the deal or problem forward.
+            Every message has a place. Open the card for the page it came from, see the count, reply, and keep the context attached.
           </p>
 
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>Threads: {counts.total}</span>
-            <span style={chip}>Open: {counts.open}</span>
-            <span style={chip}>Signal Linked: {counts.linked}</span>
+            <span style={chip}>Total: {items.length}</span>
+            <span style={chip}>Open: {openCount}</span>
+            <span style={chip}>Signal Linked: {linkedCount}</span>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <Link href="/signals" style={ghost}>Signals</Link>
             <Link href="/activity" style={ghost}>Activity</Link>
-            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
             <button type="button" onClick={load} style={button}>Refresh</button>
           </div>
         </section>
 
-        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
-          <Metric label="Threads" value={String(counts.total)} tone="blue" />
-          <Metric label="Open" value={String(counts.open)} tone="green" />
-          <Metric label="Signal Linked" value={String(counts.linked)} tone="gold" />
-          <Metric label="Owner Ready" value={String(counts.ownerReady)} tone="red" />
-        </section>
+        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 }}>
+          {MESSAGE_GROUPS.map((group) => (
+            <GroupCard key={group.key} group={group} items={grouped[group.key] || []} viewer={email} />
+          ))}
 
-        <section style={card}>
-          <div style={eyebrow}>Message Queue</div>
-          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Keep it clean and actionable.</h2>
-
-          {items.length ? (
-            <div style={{ display: "grid", gap: 14 }}>
-              {items.map((item, index) => (
-                <MessageCard key={clean(item.id) || `${signalIdOf(item)}-${index}`} row={item} viewer={email} />
-              ))}
-            </div>
-          ) : (
-            <div style={glass}>
-              <h3 style={{ marginTop: 0 }}>No messages yet.</h3>
-              <p style={muted}>
-                Messages will appear here when a member contacts an owner, replies to a signal,
-                asks for more info, or responds to an introduction.
-              </p>
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-                <Link href="/signals" style={button}>Open Signals</Link>
-                <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-              </div>
-            </div>
-          )}
+          <GroupCard
+            group={{
+              key: "general",
+              title: "General",
+              subtitle: "Messages that are not tied to a specific folder yet.",
+              href: "/messages",
+              tone: "blue",
+              match: [],
+            }}
+            items={grouped.general || []}
+            viewer={email}
+          />
         </section>
 
         {status ? <section style={card}>{status}</section> : null}
