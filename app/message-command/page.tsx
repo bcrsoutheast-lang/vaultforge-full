@@ -6,6 +6,7 @@ import Link from "next/link";
 type Conversation = Record<string, any>;
 
 const LANES = [
+  { key: "saved", label: "SAVED", title: "Saved Bucket", note: "Saved conversations you want to keep visible and return to fast." },
   { key: "alerts", label: "ALERTS", title: "Alerts", note: "Alert follow-up, owner requests, and urgent message traffic." },
   { key: "pain", label: "PAIN", title: "Pain", note: "Pain signal conversations and problem-routing follow-up." },
   { key: "signals", label: "SIGNALS", title: "Signals", note: "Signal-room messages and intelligence follow-up." },
@@ -131,6 +132,11 @@ export default function MessageCommandPage() {
       const folder = clean(convo.folder || "general");
       if (!next[folder]) next[folder] = { conversations: 0, messages: 0 };
       next[folder].conversations += 1;
+
+      if (convo.is_saved === true) {
+        if (!next.saved) next.saved = { conversations: 0, messages: 0 };
+        next.saved.conversations += 1;
+      }
     }
 
     return next;
@@ -144,7 +150,11 @@ export default function MessageCommandPage() {
     return conversations.filter((item) => {
       const folder = clean(item.folder || "general");
 
-      if (folder !== openLane) return false;
+      if (openLane === "saved") {
+        if (item.is_saved !== true) return false;
+      } else if (folder !== openLane) {
+        return false;
+      }
 
       if (!q) return true;
 
@@ -189,16 +199,20 @@ export default function MessageCommandPage() {
     }
   }
 
-  async function cleanup(convo: Conversation, action: "archive" | "delete") {
+  async function cleanup(convo: Conversation, action: "archive" | "delete" | "save" | "unsave") {
     const ids = Array.isArray(convo.message_ids) ? convo.message_ids.filter(Boolean) : [];
 
-    if (!ids.length) {
+    if (!ids.length && (action === "archive" || action === "delete")) {
       setStatus("No message IDs found for cleanup.");
       return;
     }
 
     setBusyKey(`${action}:${convo.thread_key}`);
-    setStatus(action === "archive" ? "Archiving conversation..." : "Deleting conversation...");
+
+    if (action === "archive") setStatus("Archiving conversation...");
+    else if (action === "delete") setStatus("Deleting conversation...");
+    else if (action === "save") setStatus("Saving conversation...");
+    else setStatus("Removing from Saved Bucket...");
 
     try {
       const res = await fetch("/api/message-command", {
@@ -222,8 +236,24 @@ export default function MessageCommandPage() {
         throw new Error(data?.error || "Cleanup failed.");
       }
 
-      setConversations((current) => current.filter((item) => item.thread_key !== convo.thread_key));
-      setStatus(action === "archive" ? "Conversation archived." : "Conversation deleted.");
+      if (action === "archive" || action === "delete") {
+        setConversations((current) => current.filter((item) => item.thread_key !== convo.thread_key));
+        setStatus(action === "archive" ? "Conversation archived." : "Conversation deleted.");
+      } else if (action === "save") {
+        setConversations((current) =>
+          current.map((item) =>
+            item.thread_key === convo.thread_key ? { ...item, is_saved: true } : item
+          )
+        );
+        setStatus("Conversation saved.");
+      } else {
+        setConversations((current) =>
+          current.map((item) =>
+            item.thread_key === convo.thread_key ? { ...item, is_saved: false } : item
+          )
+        );
+        setStatus("Removed from Saved Bucket.");
+      }
     } catch (error: any) {
       setStatus(error?.message || "Cleanup failed.");
     } finally {
@@ -405,6 +435,21 @@ export default function MessageCommandPage() {
                         style={ghost}
                       >
                         {isCollapsed ? "Expand" : "Collapse"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => cleanup(convo, convo.is_saved ? "unsave" : "save")}
+                        disabled={!!busyKey}
+                        style={convo.is_saved ? savedButton : ghost}
+                      >
+                        {busyKey === `save:${convo.thread_key}`
+                          ? "Saving..."
+                          : busyKey === `unsave:${convo.thread_key}`
+                            ? "Removing..."
+                            : convo.is_saved
+                              ? "Unsave"
+                              : "Save"}
                       </button>
 
                       <button type="button" onClick={() => cleanup(convo, "archive")} disabled={!!busyKey} style={ghost}>
@@ -713,6 +758,13 @@ const ghost: React.CSSProperties = {
   background: "rgba(255,255,255,.06)",
   border: "1px solid rgba(255,255,255,.14)",
   color: "white",
+};
+
+const savedButton: React.CSSProperties = {
+  ...button,
+  background: "rgba(232,196,107,.14)",
+  border: "1px solid rgba(232,196,107,.35)",
+  color: "#f8e7b0",
 };
 
 const danger: React.CSSProperties = {
