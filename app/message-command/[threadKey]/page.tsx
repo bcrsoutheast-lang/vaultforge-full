@@ -99,8 +99,26 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
       });
 
       const data = await safeJson(res);
-      setMessages(Array.isArray(data.messages) ? data.messages : []);
+      const nextMessages = Array.isArray(data.messages) ? data.messages : [];
+      setMessages(nextMessages);
       setStatus("");
+
+      if (nextMessages.length) {
+        await fetch("/api/message-command", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-vf-email": viewer,
+          },
+          body: JSON.stringify({
+            action: "read",
+            ids: nextMessages.map((message: MessageRow) => clean(message.id)).filter(Boolean),
+            email: viewer,
+            thread_key: threadKey,
+            action_scope: "thread",
+          }),
+        });
+      }
     } catch (error: any) {
       setStatus(error?.message || "Could not load message room.");
     }
@@ -170,16 +188,19 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
     }
   }
 
-  async function cleanup(ids: string[], action: "archive" | "delete") {
+  async function cleanup(ids: string[], action: "archive" | "delete" | "save" | "unsave") {
     const cleanIds = ids.map(clean).filter(Boolean);
 
-    if (!cleanIds.length) {
+    if (!cleanIds.length && (action === "archive" || action === "delete")) {
       setStatus("No saved message IDs found.");
       return;
     }
 
     setBusyAction(action);
-    setStatus(action === "archive" ? "Archiving..." : "Deleting...");
+    if (action === "archive") setStatus("Archiving...");
+    else if (action === "delete") setStatus("Deleting...");
+    else if (action === "save") setStatus("Saving thread...");
+    else setStatus("Removing from Saved Bucket...");
 
     try {
       const res = await fetch("/api/message-command", {
@@ -192,8 +213,8 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
           action,
           ids: cleanIds,
           email,
-          thread_key: cleanIds.length === messages.length ? threadKey : "",
-          action_scope: cleanIds.length === messages.length ? "thread" : "message",
+          thread_key: (cleanIds.length === messages.length || action === "save" || action === "unsave") ? threadKey : "",
+          action_scope: (cleanIds.length === messages.length || action === "save" || action === "unsave") ? "thread" : "message",
         }),
       });
 
@@ -201,6 +222,16 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
 
       if (!res.ok || data?.ok === false) {
         throw new Error(data?.details || data?.error || "Cleanup failed.");
+      }
+
+      if (action === "save") {
+        setStatus("Thread saved.");
+        return;
+      }
+
+      if (action === "unsave") {
+        setStatus("Thread removed from Saved Bucket.");
+        return;
       }
 
       if (cleanIds.length === messages.length) {
@@ -251,6 +282,12 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
             <Link href={backHref} style={button}>Close / Back to Lane</Link>
             <button type="button" onClick={load} style={ghost}>Refresh</button>
+            <button type="button" onClick={() => cleanup([], "save")} disabled={!!busyAction} style={savedButton}>
+              {busyAction === "save" ? "Saving..." : "Save Thread"}
+            </button>
+            <button type="button" onClick={() => cleanup([], "unsave")} disabled={!!busyAction} style={ghost}>
+              {busyAction === "unsave" ? "Removing..." : "Unsave Thread"}
+            </button>
             <button type="button" onClick={() => cleanup(allIds, "archive")} disabled={!!busyAction || !allIds.length} style={ghost}>
               {busyAction === "archive" ? "Archiving..." : "Archive Thread"}
             </button>
@@ -318,4 +355,5 @@ const chip: React.CSSProperties = { borderRadius: 999, border: "1px solid rgba(2
 const textarea: React.CSSProperties = { width: "100%", boxSizing: "border-box", minHeight: 170, borderRadius: 18, background: "#081224", color: "white", padding: 16, border: "1px solid rgba(255,255,255,.12)", marginBottom: 16, outline: "none", fontSize: 16 };
 const button: React.CSSProperties = { display: "inline-flex", justifyContent: "center", alignItems: "center", borderRadius: 999, padding: "14px 20px", background: "linear-gradient(135deg,#f8e7b0,#e8c46b)", color: "#06100a", textDecoration: "none", fontWeight: 950, border: 0, cursor: "pointer" };
 const ghost: React.CSSProperties = { ...button, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.14)", color: "white" };
+const savedButton: React.CSSProperties = { ...button, background: "rgba(232,196,107,.14)", border: "1px solid rgba(232,196,107,.35)", color: "#f8e7b0" };
 const danger: React.CSSProperties = { ...button, background: "rgba(248,113,113,.12)", border: "1px solid rgba(248,113,113,.28)", color: "#fecaca" };
