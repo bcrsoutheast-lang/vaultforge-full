@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-
-type PainItem = Record<string, any>;
+type Row = Record<string, any>;
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -17,6 +16,7 @@ function cleanEmail(value: unknown) {
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
+
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -47,8 +47,16 @@ function getEmail() {
   return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
-function isOwner(email: string) {
-  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+
+function meta(row: Row) {
+  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function first(...values: unknown[]) {
@@ -66,297 +74,275 @@ function first(...values: unknown[]) {
   return "";
 }
 
-function titleOf(item: PainItem) {
-  return first(item.title, item.pain_label, item.name, item.headline, item.metadata?.title, "Pain Signal");
+function signalIdOf(row: Row) {
+  const m = meta(row);
+  return first(row.signal_id, row.signalId, m.signal_id);
 }
 
-function noteOf(item: PainItem) {
-  return first(
-    item.note,
-    item.notes,
-    item.description,
-    item.message,
-    item.route_summary,
-    item.help_requested,
-    item.metadata?.route_summary,
-    item.metadata?.help_requested,
-    "Pain signal routed into VaultForge."
+function painIdOf(row: Row) {
+  const m = meta(row);
+  return first(row.id, row.pain_id, row.item_id, row.itemId, m.pain_id, m.item_id);
+}
+
+function titleOf(row: Row) {
+  const m = meta(row);
+  return first(row.title, row.pain_title, row.signal_title, row.subject, m.title, m.pain_title, m.signal_title, "VaultForge Pain Signal");
+}
+
+function noteOf(row: Row) {
+  const m = meta(row);
+  return first(row.ai_summary, row.summary, row.description, row.notes, row.note, row.message, row.route_summary, m.ai_summary, m.summary, m.description, m.notes, m.note, m.message, "Pain record ready for review.");
+}
+
+function urgencyOf(row: Row) {
+  const m = meta(row);
+  return first(row.urgency, row.urgency_level, row.priority, m.urgency, m.urgency_level, m.priority, "Normal");
+}
+
+function statusOf(row: Row) {
+  const m = meta(row);
+  return first(row.status, row.routing_status, m.status, m.routing_status, "New");
+}
+
+function ownerOf(row: Row) {
+  const m = meta(row);
+  return cleanEmail(first(row.owner_email, row.member_email, row.user_email, row.submitted_by, row.submitted_by_email, row.created_by_email, m.owner_email, m.member_email, m.user_email, m.submitted_by, m.submitted_by_email, m.created_by_email));
+}
+
+function marketOf(row: Row) {
+  const m = meta(row);
+  const city = first(row.city, m.city);
+  const state = first(row.state, row.operating_state, row.market, m.state, m.operating_state, m.market);
+  return [city, state].filter(Boolean).join(", ") || state || first(row.location, m.location, "Market not listed");
+}
+
+function assetOf(row: Row) {
+  const m = meta(row);
+  return first(row.asset_type, m.asset_type, "Asset");
+}
+
+function photosOf(row: Row) {
+  const m = meta(row);
+  const values = [
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    m.image_url,
+    m.photo_url,
+    ...(Array.isArray(row.photo_urls) ? row.photo_urls : []),
+    ...(Array.isArray(row.photos) ? row.photos : []),
+    ...(Array.isArray(m.photo_urls) ? m.photo_urls : []),
+    ...(Array.isArray(m.photos) ? m.photos : []),
+  ];
+
+  return Array.from(
+    new Set(
+      values
+        .map((item: any) => {
+          if (typeof item === "string") return clean(item);
+          if (item && typeof item === "object") return clean(item.url || item.publicUrl || item.photo_url || item.image_url);
+          return "";
+        })
+        .filter((url) => url.startsWith("http"))
+    )
   );
 }
 
-function painIdOf(item: PainItem) {
-  return first(item.id, item.pain_id, item.uuid, item.item_id, item.metadata?.pain_id, item.metadata?.item_id);
+function scoreOf(row: Row) {
+  const m = meta(row);
+  let score = Number(row.priority_score || row.confidence_score || m.priority_score || m.confidence_score || 0);
+
+  if (!Number.isFinite(score) || score <= 0) score = 50;
+
+  const urgency = urgencyOf(row).toLowerCase();
+  if (urgency.includes("emergency")) score += 22;
+  else if (urgency.includes("high") || urgency.includes("urgent")) score += 14;
+
+  if (photosOf(row).length) score += 5;
+  if (ownerOf(row)) score += 5;
+  if (marketOf(row) !== "Market not listed") score += 5;
+
+  return Math.min(100, Math.max(0, Math.round(score)));
 }
 
-function signalIdOf(item: PainItem) {
-  const painId = painIdOf(item);
-  return first(
-    item.signal_id,
-    item.signalId,
-    item.related_alert_id,
-    item.alert_id,
-    item.routing_id,
-    item.metadata?.signal_id,
-    item.metadata?.alert_id,
-    painId
-  );
-}
-
-function priorityOf(item: PainItem) {
-  return first(item.priority, item.urgency, item.urgency_level, item.metadata?.priority, item.metadata?.urgency, "medium").toLowerCase();
-}
-
-function priorityTone(priority: string) {
-  if (priority.includes("urgent") || priority.includes("critical")) return "#ef4444";
-  if (priority.includes("high")) return "#e8c46b";
-  if (priority.includes("low")) return "#94a3b8";
-  return "#e8c46b";
-}
-
-function marketOf(item: PainItem) {
-  return first(item.market, [item.city, item.state].filter(Boolean).join(", "), item.location, item.state, item.metadata?.market);
-}
-
-function typeOf(item: PainItem) {
-  return first(item.pain_type, item.signal_type, item.asset_type, item.metadata?.pain_type, "Pain Signal");
-}
-
-function ownerEmailOf(item: PainItem) {
-  const candidates = [
-    item.owner_email,
-    item.created_by_email,
-    item.submitted_by_email,
-    item.creator_email,
-    item.submitted_by,
-    item.user_email,
-    item.member_email,
-    item.email,
-    item.metadata?.owner_email,
-    item.metadata?.created_by_email,
-    item.metadata?.submitted_by_email,
-    item.metadata?.creator_email,
-    item.metadata?.submitted_by,
-    item.metadata?.user_email,
-    item.metadata?.member_email,
-    item.metadata?.email,
-  ]
-    .map(cleanEmail)
-    .filter((email) => email.includes("@"));
-
-  return candidates.find((email) => email !== OWNER_EMAIL) || candidates[0] || "";
-}
-
-function imageOf(item: PainItem) {
-  const photos = Array.isArray(item.photos) ? item.photos : [];
-  const photoUrls = Array.isArray(item.photo_urls) ? item.photo_urls : [];
-  const metadataPhotoUrls = Array.isArray(item.metadata?.photo_urls) ? item.metadata.photo_urls : [];
-
-  return first(
-    item.image_url,
-    item.photo_url,
-    item.primary_photo_url,
-    item.metadata?.image_url,
-    item.metadata?.photo_url,
-    photoUrls[0],
-    metadataPhotoUrls[0],
-    photos[0]?.url,
-    photos[0]?.publicUrl,
-    photos[0]?.public_url,
-    photos[0]?.data_url,
-    photos[0]?.dataUrl,
-    photos[0]
-  );
-}
-
-function scoreOf(item: PainItem) {
-  const raw = Number(first(item.score, item.signal_score, item.confidence_score));
-  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
-
-  let score = 54;
-  const priority = priorityOf(item);
-  if (priority.includes("urgent")) score += 24;
-  if (priority.includes("high")) score += 14;
-  if (marketOf(item)) score += 6;
-  if (ownerEmailOf(item)) score += 8;
-  if (imageOf(item)) score += 6;
-  return Math.max(0, Math.min(100, score));
-}
-
-function signalHref(item: PainItem) {
-  const signalId = signalIdOf(item);
-  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/signals";
-}
-
-function painRoomHref(item: PainItem) {
-  const painId = painIdOf(item);
-  return painId ? `/pain-room/${encodeURIComponent(painId)}` : signalHref(item);
-}
-
-function routingHref(item: PainItem) {
-  const signalId = signalIdOf(item);
-  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
-}
-
-function connectHref(item: PainItem, viewerEmail: string) {
-  const signalId = signalIdOf(item);
-  const painId = painIdOf(item);
-
-  if (!signalId) return "/pain-feed";
-
-  const query = new URLSearchParams();
-  if (viewerEmail) query.set("email", viewerEmail);
-  if (painId) query.set("item_id", painId);
-
-  return `/connect/${encodeURIComponent(signalId)}?${query.toString()}`;
-}
-
-async function safeJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 30%), radial-gradient(circle at bottom right, rgba(148,163,184,.10), transparent 32%), linear-gradient(180deg,#020303,#07090d 50%,#020303)",
-    color: "white",
-    padding: "22px 16px 82px",
-    fontFamily: 'Inter, Arial, sans-serif',
-  },
-  wrap: { width: "min(1240px,100%)", margin: "0 auto" },
-  hero: {
-    border: "1px solid rgba(232,196,107,.28)",
-    borderRadius: 30,
-    padding: 24,
-    background: "linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.026))",
-    boxShadow: "0 28px 90px rgba(0,0,0,.38)",
-    marginBottom: 16,
-  },
-  eyebrow: {
-    color: "#e8c46b",
-    fontSize: 12,
-    letterSpacing: ".18em",
-    textTransform: "uppercase",
-    fontWeight: 950,
-    margin: "0 0 10px",
-  },
-  title: {
-    fontSize: "clamp(44px,8vw,92px)",
-    lineHeight: 0.88,
-    margin: 0,
-    letterSpacing: "-.06em",
-  },
-  muted: { color: "#cbd5e1", lineHeight: 1.55 },
-  actionRow: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 },
-  primary: {
-    color: "#101010",
-    textDecoration: "none",
-    borderRadius: 15,
-    padding: "12px 15px",
-    minHeight: 45,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 950,
-    background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-    border: "1px solid rgba(232,196,107,.7)",
-    cursor: "pointer",
-  },
-  secondary: {
-    color: "#fff",
-    textDecoration: "none",
-    borderRadius: 15,
-    padding: "12px 15px",
-    minHeight: 45,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 850,
-    border: "1px solid rgba(255,255,255,.14)",
-    background: "rgba(255,255,255,.055)",
-    cursor: "pointer",
-  },
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    minHeight: 54,
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,.16)",
-    background: "rgba(255,255,255,.07)",
-    color: "white",
-    padding: "0 16px",
-    fontSize: 16,
-    outline: "none",
-  },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))", gap: 16 },
-  card: {
-    border: "1px solid rgba(232,196,107,.18)",
-    borderRadius: 24,
-    padding: 20,
-    background: "linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.026))",
-    boxShadow: "0 20px 70px rgba(0,0,0,.25)",
-    color: "white",
-  },
-  chip: {
-    color: "#e5e7eb",
-    border: "1px solid rgba(255,255,255,.14)",
-    background: "rgba(255,255,255,.055)",
-    borderRadius: 999,
-    padding: "8px 10px",
-    fontSize: 12,
-    fontWeight: 850,
-    display: "inline-flex",
-    margin: "0 8px 8px 0",
-  },
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(56,189,248,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  color: "white",
+  padding: "22px 16px 96px",
+  fontFamily: "Arial, sans-serif",
 };
+
+const wrap: React.CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 24,
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
+
+const glass: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,.045)",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
+
+const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
+
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: 50,
+  borderRadius: 999,
+  padding: "12px 18px",
+  border: 0,
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.16)",
+  color: "white",
+};
+
+const chip: React.CSSProperties = {
+  border: "1px solid rgba(157,243,191,.22)",
+  borderRadius: 999,
+  padding: "7px 10px",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  margin: "0 7px 7px 0",
+  fontSize: 12,
+  fontWeight: 850,
+  display: "inline-flex",
+};
+
+function Metric({ label, value, tone }: { label: string; value: string; tone: "blue" | "red" | "gold" | "green" }) {
+  const color = tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
+
+  return (
+    <section style={glass}>
+      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>{label}</div>
+      <div style={{ fontSize: 52, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
+    </section>
+  );
+}
+
+function PainCard({ row, viewer }: { row: Row; viewer: string }) {
+  const signalId = signalIdOf(row);
+  const painId = painIdOf(row);
+  const photos = photosOf(row);
+  const owner = ownerOf(row);
+  const score = scoreOf(row);
+
+  const connectHref = signalId
+    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${painId ? `&item_id=${encodeURIComponent(painId)}` : ""}`
+    : "/messages";
+
+  return (
+    <article style={glass}>
+      <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 18 }}>
+        <div
+          style={{
+            borderRadius: 20,
+            overflow: "hidden",
+            border: "1px solid rgba(232,196,107,.18)",
+            background: "rgba(0,0,0,.20)",
+            minHeight: 150,
+          }}
+        >
+          {photos[0] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photos[0]} alt="Pain asset" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          ) : (
+            <div style={{ height: 150, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850 }}>
+              No photo
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={chip}>{assetOf(row)}</span>
+            <span style={{ ...chip, color: "#ffd0d0", borderColor: "rgba(248,113,113,.28)", background: "rgba(248,113,113,.08)" }}>
+              {urgencyOf(row)}
+            </span>
+            <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.26)", background: "rgba(232,196,107,.08)" }}>
+              Score {score}
+            </span>
+            <span style={{ ...chip, color: "#8fd3ff", borderColor: "rgba(56,189,248,.28)", background: "rgba(56,189,248,.08)" }}>
+              {statusOf(row)}
+            </span>
+          </div>
+
+          <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
+          <p style={muted}>{noteOf(row)}</p>
+
+          <div style={{ marginTop: 12 }}>
+            {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
+            {painId ? <span style={chip}>Pain: {painId}</span> : null}
+            <span style={chip}>Market: {marketOf(row)}</span>
+            {owner ? <span style={chip}>Owner: {owner}</span> : null}
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            <Link href={painId ? `/pain-room/${encodeURIComponent(painId)}` : "/pain-feed"} style={button}>Open Pain Room</Link>
+            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link> : null}
+            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
+            <Link href={connectHref} style={ghost}>Message Owner</Link>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
 
 export default function PainFeedPage() {
   const [email, setEmail] = useState("");
-  const [owner, setOwner] = useState(false);
-  const [items, setItems] = useState<PainItem[]>([]);
+  const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading pain feed...");
-  const [search, setSearch] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
 
   async function load() {
-    setLoading(true);
+    const viewer = getEmail();
+    setEmail(viewer);
     setStatus("Loading pain feed...");
 
     try {
-      const currentEmail = getEmail();
-      const currentOwner = isOwner(currentEmail);
-
-      setEmail(currentEmail);
-      setOwner(currentOwner);
-
-      if (!currentEmail) {
-        setStatus("Login email not found. Please log in again.");
-        setLoading(false);
-        return;
-      }
-
-      const res = await fetch(`/api/pain/feed?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`, {
+      const res = await fetch(`/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`, {
         cache: "no-store",
-        headers: { "x-vf-email": currentEmail, "x-vf-admin": currentOwner ? "1" : "0" },
+        headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
       });
 
       const data = await safeJson(res);
+      const list = [
+        ...(Array.isArray(data.pains) ? data.pains : []),
+        ...(Array.isArray(data.items) ? data.items : []),
+        ...(Array.isArray(data.signals) ? data.signals : []),
+        ...(Array.isArray(data.data) ? data.data : []),
+      ];
 
-      if (!res.ok || data?.ok === false) throw new Error(data?.error || data?.details || "Could not load pain feed.");
-
-      const realItems = Array.isArray(data.pains) ? data.pains : [];
-      setItems(realItems);
-      setStatus(realItems.length ? "" : "No real pain records found yet. Submit a new Pain Button item first.");
+      setItems(list);
+      setStatus(list.length ? "" : "No pain records connected yet.");
     } catch (error: any) {
-      setItems([]);
       setStatus(error?.message || "Could not load pain feed.");
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -364,146 +350,116 @@ export default function PainFeedPage() {
     load();
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  const counts = useMemo(() => {
+    const urgent = items.filter((item) => {
+      const u = urgencyOf(item).toLowerCase();
+      return u.includes("urgent") || u.includes("high") || u.includes("emergency");
+    }).length;
 
-    return items
-      .filter((item) => {
-        if (priorityFilter !== "all" && priorityOf(item) !== priorityFilter) return false;
-        if (!q) return true;
+    const withPhotos = items.filter((item) => photosOf(item).length).length;
+    const routed = items.filter((item) => signalIdOf(item)).length;
 
-        return [
-          titleOf(item),
-          noteOf(item),
-          marketOf(item),
-          priorityOf(item),
-          typeOf(item),
-          painIdOf(item),
-          signalIdOf(item),
-          ownerEmailOf(item),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(q);
-      })
-      .sort((a, b) => scoreOf(b) - scoreOf(a));
-  }, [items, search, priorityFilter]);
-
-  const urgent = items.filter((item) => priorityOf(item).includes("urgent")).length;
-  const high = items.filter((item) => priorityOf(item).includes("high")).length;
-  const withOwner = items.filter((item) => ownerEmailOf(item)).length;
+    return { total: items.length, urgent, withPhotos, routed };
+  }, [items]);
 
   return (
-    <main style={styles.page}>
+    <main style={page}>
       <style>{`
-        a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
-        input::placeholder { color: rgba(255,255,255,.42); }
+        a:hover, button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
         @media (max-width: 820px) {
-          .vf-actions { display: grid !important; grid-template-columns: 1fr !important; gap: 10px !important; }
-          .vf-actions > * { width: 100%; box-sizing: border-box; justify-content: center; margin: 0 !important; }
+          .vf-grid,
+          .vf-four,
+          .vf-actions {
+            grid-template-columns: 1fr !important;
+          }
+
+          .vf-actions {
+            display: grid !important;
+            gap: 10px !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+            justify-content: center;
+          }
+
+          article > div {
+            grid-template-columns: 1fr !important;
+          }
         }
       `}</style>
 
-      <div style={styles.wrap}>
-        <nav style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-          <Link href="/dashboard" style={{ color: "#f8e7b0", textDecoration: "none", fontWeight: 950, letterSpacing: ".12em" }}>
-            VAULTFORGE
-          </Link>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Link href="/dashboard" style={styles.secondary}>Dashboard</Link>
-            <Link href="/signals" style={styles.secondary}>Signals</Link>
-            <Link href="/messages" style={styles.secondary}>Messages</Link>
-            <Link href="/routing-inbox" style={styles.secondary}>Routing</Link>
-            <Link href="/alerts" style={styles.secondary}>Alerts</Link>
-          </div>
-        </nav>
+      <div style={wrap}>
+        <VaultForgeMemberNav
+          title="Pain Feed"
+          subtitle="Submitted pain records, opportunity pressure, photos, signals, routing, and owner contact."
+          active="pain-feed"
+        />
 
-        <section style={styles.hero}>
-          <p style={styles.eyebrow}>VaultForge Pain Feed</p>
-          <h1 style={styles.title}>Pain becomes signal.</h1>
-          <p style={{ ...styles.muted, maxWidth: 820, fontSize: 18, marginTop: 16 }}>
-            Message Owner now goes directly to the simple Connect system, not the old broken message route.
+        <section style={card}>
+          <div style={eyebrow}>VaultForge Pain Feed</div>
+          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+            Opportunity pressure.
+          </h1>
+          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
+            Pain records become the intake layer for signals, routing, messages, and execution movement.
           </p>
 
           <div style={{ marginTop: 16 }}>
-            <span style={styles.chip}>Signed in: {email || "unknown"}</span>
-            <span style={styles.chip}>Pain Signals: {items.length}</span>
-            <span style={styles.chip}>Urgent: {urgent}</span>
-            <span style={styles.chip}>High: {high}</span>
-            <span style={styles.chip}>Owners detected: {withOwner}</span>
-            <span style={styles.chip}>{owner ? "Owner View" : "Member View"}</span>
+            <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>Records: {counts.total}</span>
+            <span style={chip}>Urgent: {counts.urgent}</span>
+            <span style={chip}>With Photos: {counts.withPhotos}</span>
           </div>
 
-          <div className="vf-actions" style={styles.actionRow}>
-            <button type="button" onClick={load} style={styles.primary}>{loading ? "Refreshing..." : "Refresh Pain Feed"}</button>
-            <Link href="/pain" style={styles.primary}>Submit New Pain</Link>
-            <Link href="/messages" style={styles.secondary}>Messages</Link>
-            <Link href="/activity" style={styles.secondary}>Activity</Link>
-          </div>
-        </section>
-
-        <section style={styles.hero}>
-          <p style={styles.eyebrow}>Filter Pain Signals</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search title, market, owner, priority, signal id..." style={styles.input} />
-            <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} style={styles.input}>
-              <option value="all" style={{ color: "#111" }}>All Priorities</option>
-              <option value="urgent" style={{ color: "#111" }}>Urgent</option>
-              <option value="high" style={{ color: "#111" }}>High</option>
-              <option value="medium" style={{ color: "#111" }}>Medium</option>
-              <option value="low" style={{ color: "#111" }}>Low</option>
-            </select>
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/pain" style={button}>Submit Pain</Link>
+            <Link href="/signals" style={ghost}>Signals</Link>
+            <Link href="/messages" style={ghost}>Messages</Link>
+            <button type="button" onClick={load} style={ghost}>Refresh</button>
           </div>
         </section>
 
-        {status ? <section style={styles.hero}><p style={{ ...styles.muted, margin: 0 }}>{status}</p></section> : null}
-
-        <section style={styles.grid}>
-          {filtered.map((item, index) => {
-            const painId = painIdOf(item);
-            const signalId = signalIdOf(item);
-            const image = imageOf(item);
-            const priority = priorityOf(item);
-            const tone = priorityTone(priority);
-            const ownerEmail = ownerEmailOf(item);
-            const connect = connectHref(item, email);
-
-            return (
-              <article key={`${painId}-${signalId}-${index}`} style={{ ...styles.card, borderColor: `${tone}66` }}>
-                <p style={{ ...styles.eyebrow, color: tone }}>{priority || "medium"} · {typeOf(item)}</p>
-
-                {image ? (
-                  <Link href={signalHref(item)} style={{ display: "block", textDecoration: "none" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={image}
-                      alt={titleOf(item)}
-                      style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(232,196,107,.18)", marginBottom: 14 }}
-                    />
-                  </Link>
-                ) : null}
-
-                <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>{titleOf(item)}</h2>
-                <p style={{ ...styles.muted, fontSize: 16 }}>{noteOf(item)}</p>
-
-                <div style={{ marginTop: 12 }}>
-                  <span style={styles.chip}>Score: {scoreOf(item)}</span>
-                  {marketOf(item) ? <span style={styles.chip}>{marketOf(item)}</span> : null}
-                  {painId ? <span style={styles.chip}>Pain: {painId}</span> : null}
-                  {signalId ? <span style={styles.chip}>Signal: {signalId}</span> : null}
-                  <span style={styles.chip}>Owner: {ownerEmail || "resolved in Connect"}</span>
-                </div>
-
-                <div className="vf-actions" style={styles.actionRow}>
-                  <Link href={connect} style={styles.primary}>Message Owner</Link>
-                  <Link href={signalHref(item)} style={styles.secondary}>Open Signal</Link>
-                  <Link href={painRoomHref(item)} style={styles.secondary}>Pain Room</Link>
-                  <Link href={routingHref(item)} style={styles.secondary}>Routing Room</Link>
-                </div>
-              </article>
-            );
-          })}
+        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
+          <Metric label="Pain Records" value={String(counts.total)} tone="blue" />
+          <Metric label="Urgent" value={String(counts.urgent)} tone="red" />
+          <Metric label="Routed" value={String(counts.routed)} tone="gold" />
+          <Metric label="With Photos" value={String(counts.withPhotos)} tone="green" />
         </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Pain Queue</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Intake records ready for action.</h2>
+
+          {items.length ? (
+            <div style={{ display: "grid", gap: 14 }}>
+              {items.map((item, index) => (
+                <PainCard key={clean(item.id) || `${signalIdOf(item)}-${index}`} row={item} viewer={email} />
+              ))}
+            </div>
+          ) : (
+            <div style={glass}>
+              <h3 style={{ marginTop: 0 }}>No pain records yet.</h3>
+              <p style={muted}>
+                Submit a Pain item to create the first operational record, signal, routing room,
+                and owner contact path.
+              </p>
+              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                <Link href="/pain" style={button}>Submit Pain</Link>
+                <Link href="/dashboard" style={ghost}>Dashboard</Link>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {status ? <section style={card}>{status}</section> : null}
       </div>
     </main>
   );
