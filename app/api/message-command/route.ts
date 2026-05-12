@@ -54,7 +54,7 @@ function safePart(value: string) {
   return lower(value)
     .replace(/[^a-z0-9:_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 140);
+    .slice(0, 120);
 }
 
 function normalizeSource(value: unknown, row: Row = {}) {
@@ -86,7 +86,7 @@ function normalizeSource(value: unknown, row: Row = {}) {
   if (text.includes("member") || text.includes("connect")) return "member";
   if (text.includes("activity") || text.includes("event")) return "activity";
 
-  return lower(value) || "general";
+  return lower(value) || "message";
 }
 
 function folderForSource(source: string) {
@@ -195,10 +195,15 @@ function rawThreadKeyOf(row: Row) {
 }
 
 function inferIdentityFromOldThreadKey(raw: string) {
-  const value = clean(raw);
+  let value = clean(raw);
   if (!value) return "";
 
-  if (value.includes("__")) return value.split("__")[0];
+  if (value.includes("__")) value = value.split("__")[0];
+
+  if (value.includes(":")) {
+    const pieces = value.split(":").filter(Boolean);
+    value = pieces[pieces.length - 1] || value;
+  }
 
   return value;
 }
@@ -217,6 +222,11 @@ function stripRoutePrefix(value: string, source: string) {
     text = text.split("__")[0];
   }
 
+  if (text.includes(":")) {
+    const pieces = text.split(":").filter(Boolean);
+    text = pieces[pieces.length - 1] || text;
+  }
+
   return text;
 }
 
@@ -227,12 +237,7 @@ function canonicalThreadKey(row: Row) {
   const oldThreadKey = inferIdentityFromOldThreadKey(rawThreadKeyOf(row));
   const threadId = stripRoutePrefix(threadIdOf(row), source);
 
-  let identity = signalId || itemId || oldThreadKey || threadId || "general";
-
-  if (identity.includes(":")) {
-    const parts = identity.split(":").filter(Boolean);
-    identity = parts[parts.length - 1] || identity;
-  }
+  const identity = signalId || itemId || oldThreadKey || threadId || "general";
 
   return `${source}:${safePart(identity) || "general"}`;
 }
@@ -430,66 +435,124 @@ function folderCounts(conversations: any[]) {
   return counts;
 }
 
-function payloadToRow(input: Row) {
+function buildCanonicalInput(input: Row) {
   const source = normalizeSource(input.source || input.type || input.context || input.folder, input);
   const folder = folderForSource(source);
   const from = lower(first(input.from_email, input.sender_email, input.email, input.member_email, input.user_email));
   const to = lower(first(input.to_email, input.recipient_email, input.target_email, input.owner_email, input.reply_to_email, "bcrsoutheast@gmail.com"));
   const signalId = first(input.signal_id, input.signalId);
   const itemId = first(input.item_id, input.itemId, input.deal_id, input.project_id, input.pain_id);
-  const explicitThreadKey = first(input.thread_key, input.threadKey);
-  const baseIdentity = signalId || itemId || explicitThreadKey || first(input.thread_id, input.threadId) || "general";
-  const canonical = explicitThreadKey && !explicitThreadKey.includes("__")
-    ? explicitThreadKey
-    : `${source}:${safePart(baseIdentity.replace(`${source}:`, "")) || "general"}`;
+  const explicitThreadKey = inferIdentityFromOldThreadKey(first(input.thread_key, input.threadKey));
+  const threadIdIdentity = stripRoutePrefix(first(input.thread_id, input.threadId), source);
+  const identity = signalId || itemId || explicitThreadKey || threadIdIdentity || "general";
+  const canonical = `${source}:${safePart(identity.replace(`${source}:`, "")) || "general"}`;
 
   const now = new Date().toISOString();
-  const subject = clean(first(input.subject, input.title, laneLabel(source).replace("GENERAL", "VaultForge") + " message"));
+  const subject = clean(first(input.subject, input.title, `${laneLabel(source)} message`));
   const message = clean(first(input.message, input.body, input.note, input.content));
 
   return {
-    thread_id: first(input.thread_id, input.threadId) || safePart(canonical),
-    thread_key: canonical,
-    from_email: from,
-    sender_email: from,
-    to_email: to,
-    recipient_email: to,
-    target_email: to,
-    owner_email: to,
-    subject,
-    title: subject,
-    message,
-    body: message,
-    note: message,
     source,
-    origin: source,
-    message_type: source,
     folder,
-    folder_key: folder,
-    signal_id: signalId || null,
-    item_id: itemId || null,
-    deal_id: itemId || null,
+    from,
+    to,
+    signalId,
+    itemId,
+    canonical,
+    now,
+    subject,
+    message,
+  };
+}
+
+function fullInsertRow(input: Row) {
+  const built = buildCanonicalInput(input);
+
+  return {
+    thread_id: first(input.thread_id, input.threadId) || safePart(built.canonical),
+    thread_key: built.canonical,
+    from_email: built.from,
+    sender_email: built.from,
+    to_email: built.to,
+    recipient_email: built.to,
+    target_email: built.to,
+    owner_email: built.to,
+    subject: built.subject,
+    title: built.subject,
+    message: built.message,
+    body: built.message,
+    note: built.message,
+    source: built.source,
+    origin: built.source,
+    message_type: built.source,
+    folder: built.folder,
+    folder_key: built.folder,
+    signal_id: built.signalId || null,
+    item_id: built.itemId || null,
+    deal_id: built.itemId || null,
     status: "sent",
     read: false,
     archived: false,
     is_archived: false,
     is_deleted: false,
-    created_at: now,
-    updated_at: now,
+    created_at: built.now,
+    updated_at: built.now,
     metadata: {
-      canonical_thread_key: canonical,
-      thread_key: canonical,
-      source,
-      folder,
-      folder_key: folder,
-      signal_id: signalId || null,
-      item_id: itemId || null,
-      from_email: from,
-      to_email: to,
-      subject,
-      created_at: now,
-      updated_at: now,
+      canonical_thread_key: built.canonical,
+      thread_key: built.canonical,
+      source: built.source,
+      folder: built.folder,
+      folder_key: built.folder,
+      signal_id: built.signalId || null,
+      item_id: built.itemId || null,
+      from_email: built.from,
+      to_email: built.to,
+      subject: built.subject,
+      created_at: built.now,
+      updated_at: built.now,
     },
+  };
+}
+
+/*
+  Minimal row is the safety path.
+  If your existing vf_messages schema rejects any newer fields,
+  this row uses only the fields your live table has already shown.
+*/
+function minimalInsertRow(input: Row) {
+  const full = fullInsertRow(input);
+
+  return {
+    thread_id: full.thread_id,
+    thread_key: full.thread_key,
+    sender_email: full.sender_email,
+    recipient_email: full.recipient_email,
+    subject: full.subject,
+    message: full.message,
+    deal_id: full.deal_id,
+    read: false,
+    archived: false,
+    created_at: full.created_at,
+    read_at: null,
+    body: full.body,
+    status: "sent",
+    from_email: full.from_email,
+    to_email: full.to_email,
+    target_email: full.target_email,
+    owner_email: full.owner_email,
+    signal_id: full.signal_id,
+    item_id: full.item_id,
+    source: full.source,
+    origin: full.origin,
+    message_type: full.message_type,
+    folder: full.folder,
+    folder_key: full.folder_key,
+    title: full.title,
+    note: full.note,
+    is_archived: false,
+    is_deleted: false,
+    updated_at: full.updated_at,
+    metadata: full.metadata,
   };
 }
 
@@ -547,7 +610,7 @@ export async function POST(request: Request) {
     input = {};
   }
 
-  const row = payloadToRow(input);
+  const row = minimalInsertRow(input);
 
   if (!row.from_email) {
     return NextResponse.json({ ok: false, error: "Missing sender email." }, { status: 400 });
@@ -606,7 +669,9 @@ export async function POST(request: Request) {
     ok: false,
     error: "Message could not be saved.",
     details: lastError,
-    row,
+    attempted_thread_key: row.thread_key,
+    attempted_source: row.source,
+    attempted_folder: row.folder,
   }, { status: 500 });
 }
 
@@ -637,13 +702,11 @@ export async function PATCH(request: Request) {
     patch.is_archived = true;
     patch.status = "archived";
   } else if (action === "delete") {
-    patch.deleted = true;
     patch.is_deleted = true;
     patch.status = "deleted";
   } else if (action === "restore") {
     patch.archived = false;
     patch.is_archived = false;
-    patch.deleted = false;
     patch.is_deleted = false;
     patch.status = "sent";
   } else {
