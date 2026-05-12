@@ -1,8 +1,7 @@
-
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Row = Record<string, any>;
@@ -71,22 +70,13 @@ function first(...values: unknown[]) {
     const text = clean(value);
     if (text) return text;
   }
+
   return "";
-}
-
-function titleOf(row: Row) {
-  const m = meta(row);
-  return first(row.title, row.signal_title, row.event_title, row.alert_title, row.subject, row.name, m.title, m.signal_title, "VaultForge Record");
-}
-
-function noteOf(row: Row) {
-  const m = meta(row);
-  return first(row.note, row.notes, row.summary, row.description, row.message, row.body, row.route_summary, m.note, m.summary, m.description, m.message, "Live VaultForge operational record.");
 }
 
 function signalIdOf(row: Row) {
   const m = meta(row);
-  return first(row.signal_id, row.signalId, row.alert_id, row.id, m.signal_id, m.alert_id);
+  return first(row.signal_id, row.signalId, row.id, m.signal_id);
 }
 
 function itemIdOf(row: Row) {
@@ -94,51 +84,110 @@ function itemIdOf(row: Row) {
   return first(row.item_id, row.itemId, row.pain_id, row.deal_id, row.project_id, m.item_id, m.pain_id, m.deal_id, m.project_id);
 }
 
-function ownerEmailOf(row: Row) {
+function titleOf(row: Row) {
   const m = meta(row);
-  return cleanEmail(first(row.owner_email, row.submitted_by_email, row.created_by_email, row.member_email, row.target_email, row.recipient_email, m.owner_email, m.submitted_by_email, m.created_by_email, m.member_email, m.target_email, m.recipient_email));
+  return first(row.title, row.alert_title, row.signal_title, row.subject, m.title, m.alert_title, m.signal_title, "VaultForge Alert");
 }
 
-function imgOf(row: Row) {
+function noteOf(row: Row) {
   const m = meta(row);
-  const photos = Array.isArray(row.photos) ? row.photos : [];
-  const photoUrls = Array.isArray(row.photo_urls) ? row.photo_urls : [];
-  const mPhotos = Array.isArray(m.photos) ? m.photos : [];
-  const mPhotoUrls = Array.isArray(m.photo_urls) ? m.photo_urls : [];
-
-  return first(row.image_url, row.photo_url, row.primary_photo_url, m.image_url, m.photo_url, photoUrls[0], mPhotoUrls[0], photos[0]?.url, photos[0], mPhotos[0]?.url, mPhotos[0]);
+  return first(row.note, row.notes, row.summary, row.description, row.message, row.route_summary, m.note, m.notes, m.summary, m.description, m.message, m.route_summary, "Alert ready for review.");
 }
 
-function connectHref(row: Row, email: string) {
-  const signalId = signalIdOf(row);
-  if (!signalId) return "/messages";
+function urgencyOf(row: Row) {
+  const m = meta(row);
+  return first(row.urgency, row.priority, row.urgency_level, m.urgency, m.priority, m.urgency_level, "Normal");
+}
 
-  const query = new URLSearchParams();
-  if (email) query.set("email", email);
-  const itemId = itemIdOf(row);
-  if (itemId) query.set("item_id", itemId);
+function statusOf(row: Row) {
+  const m = meta(row);
+  return first(row.status, row.alert_status, row.routing_status, m.status, m.alert_status, m.routing_status, "Active");
+}
 
-  return `/connect/${encodeURIComponent(signalId)}?${query.toString()}`;
+function ownerOf(row: Row) {
+  const m = meta(row);
+  return cleanEmail(first(row.owner_email, row.member_email, row.submitted_by_email, row.created_by_email, row.recipient_email, row.target_email, m.owner_email, m.member_email, m.submitted_by_email, m.created_by_email, m.recipient_email, m.target_email));
+}
+
+function marketOf(row: Row) {
+  const m = meta(row);
+  const city = first(row.city, m.city);
+  const state = first(row.state, row.market, row.operating_state, m.state, m.market, m.operating_state);
+  return [city, state].filter(Boolean).join(", ") || state || first(row.location, m.location, "Market not listed");
+}
+
+function photosOf(row: Row) {
+  const m = meta(row);
+  const values = [
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    m.image_url,
+    m.photo_url,
+    ...(Array.isArray(row.photo_urls) ? row.photo_urls : []),
+    ...(Array.isArray(row.photos) ? row.photos : []),
+    ...(Array.isArray(m.photo_urls) ? m.photo_urls : []),
+    ...(Array.isArray(m.photos) ? m.photos : []),
+  ];
+
+  return Array.from(
+    new Set(
+      values
+        .map((item: any) => {
+          if (typeof item === "string") return clean(item);
+          if (item && typeof item === "object") return clean(item.url || item.publicUrl || item.photo_url || item.image_url);
+          return "";
+        })
+        .filter((url) => url.startsWith("http"))
+    )
+  );
+}
+
+function scoreOf(row: Row) {
+  const m = meta(row);
+  let score = Number(row.priority_score || row.confidence_score || row.match_score || m.priority_score || m.confidence_score || 0);
+
+  if (!Number.isFinite(score) || score <= 0) score = 55;
+
+  const urgency = urgencyOf(row).toLowerCase();
+  if (urgency.includes("emergency")) score += 20;
+  else if (urgency.includes("high") || urgency.includes("urgent")) score += 14;
+
+  if (ownerOf(row)) score += 5;
+  if (photosOf(row).length) score += 5;
+  if (marketOf(row) !== "Market not listed") score += 5;
+
+  return Math.min(100, Math.max(0, Math.round(score)));
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.15), transparent 30%), radial-gradient(circle at 85% 10%, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(248,113,113,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
-  padding: "22px 16px 92px",
+  padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { width: "min(1180px,100%)", margin: "0 auto" };
+const wrap: React.CSSProperties = {
+  width: "min(1220px,100%)",
+  margin: "0 auto",
+};
 
 const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.28)",
-  borderRadius: 28,
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
   padding: 24,
-  background: "rgba(255,255,255,.06)",
-  marginBottom: 16,
-  boxShadow: "0 24px 80px rgba(0,0,0,.26)",
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
+
+const glass: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,.045)",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -149,13 +198,16 @@ const eyebrow: React.CSSProperties = {
   fontSize: 12,
 };
 
-const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
+const muted: React.CSSProperties = {
+  color: "#cbd5e1",
+  lineHeight: 1.55,
+};
 
 const button: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  minHeight: 48,
+  minHeight: 50,
   borderRadius: 999,
   padding: "12px 18px",
   border: 0,
@@ -163,7 +215,6 @@ const button: React.CSSProperties = {
   color: "#06100a",
   fontWeight: 950,
   textDecoration: "none",
-  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -171,18 +222,6 @@ const ghost: React.CSSProperties = {
   background: "rgba(255,255,255,.06)",
   border: "1px solid rgba(255,255,255,.16)",
   color: "white",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.08)",
-  color: "white",
-  padding: 14,
-  fontSize: 16,
-  outline: "none",
 };
 
 const chip: React.CSSProperties = {
@@ -197,52 +236,91 @@ const chip: React.CSSProperties = {
   display: "inline-flex",
 };
 
-function RecordCard({ row, email, mode }: { row: Row; email: string; mode: "alerts" | "routing" | "introductions" | "signals" }) {
-  const signalId = signalIdOf(row);
-  const itemId = itemIdOf(row);
-  const image = imgOf(row);
-  const owner = ownerEmailOf(row);
-
-  const signalHref = signalId ? `/signals/${encodeURIComponent(signalId)}` : "/signals";
-  const routingHref = signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
-  const introHref = row.id ? `/introduction/${encodeURIComponent(String(row.id))}` : "/introductions";
-  const sourceHref = mode === "introductions" ? introHref : mode === "routing" ? routingHref : signalHref;
+function Metric({ label, value, tone }: { label: string; value: string; tone: "red" | "gold" | "green" | "blue" }) {
+  const color = tone === "red" ? "#f87171" : tone === "green" ? "#4ade80" : tone === "blue" ? "#38bdf8" : "#e8c46b";
 
   return (
-    <article style={card}>
-      {image ? (
-        <div style={{ borderRadius: 22, overflow: "hidden", border: "1px solid rgba(232,196,107,.22)", marginBottom: 16 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt={titleOf(row)} style={{ width: "100%", maxHeight: 260, objectFit: "cover", display: "block" }} />
-        </div>
-      ) : null}
-
-      <p style={eyebrow}>{mode} · operational card</p>
-      <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 10px" }}>{titleOf(row)}</h2>
-      <p style={{ ...muted, fontSize: 17 }}>{noteOf(row)}</p>
-
-      <div>
-        {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
-        {itemId ? <span style={chip}>Item: {itemId}</span> : null}
-        {owner ? <span style={chip}>Owner: {owner}</span> : null}
-        <span style={chip}>Source: {mode}</span>
+    <div style={glass}>
+      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>
+        {label}
       </div>
+      <div style={{ fontSize: 52, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
+    </div>
+  );
+}
 
-      <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-        <Link href="/dashboard" style={ghost}>Dashboard</Link>
-        <Link href={sourceHref} style={button}>Open</Link>
-        {signalId ? <Link href={connectHref(row, email)} style={ghost}>Message Owner</Link> : null}
-        {signalId ? <Link href={routingHref} style={ghost}>Routing Room</Link> : null}
+function AlertCard({ row, viewer }: { row: Row; viewer: string }) {
+  const signalId = signalIdOf(row);
+  const itemId = itemIdOf(row);
+  const owner = ownerOf(row);
+  const score = scoreOf(row);
+  const photos = photosOf(row);
+  const urgency = urgencyOf(row);
+  const connectHref = signalId
+    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ""}`
+    : "/messages";
+
+  return (
+    <article style={glass}>
+      <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 18 }}>
+        <div
+          style={{
+            borderRadius: 20,
+            overflow: "hidden",
+            border: "1px solid rgba(232,196,107,.18)",
+            background: "rgba(0,0,0,.20)",
+            minHeight: 140,
+          }}
+        >
+          {photos[0] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photos[0]} alt="Alert asset" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          ) : (
+            <div style={{ height: 140, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850 }}>
+              No photo
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ ...chip, color: "#ffd0d0", borderColor: "rgba(248,113,113,.28)", background: "rgba(248,113,113,.08)" }}>
+              {urgency}
+            </span>
+            <span style={chip}>Score {score}</span>
+            <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.26)", background: "rgba(232,196,107,.08)" }}>
+              {statusOf(row)}
+            </span>
+          </div>
+
+          <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
+          <p style={muted}>{noteOf(row)}</p>
+
+          <div style={{ marginTop: 12 }}>
+            {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
+            {itemId ? <span style={chip}>Item: {itemId}</span> : null}
+            <span style={chip}>Market: {marketOf(row)}</span>
+            {owner ? <span style={chip}>Owner: {owner}</span> : null}
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            <Link href={connectHref} style={button}>Message Owner</Link>
+            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link> : null}
+            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
+            <Link href={`/alert-action/need-more-info?signal=${encodeURIComponent(signalId || itemId || titleOf(row))}&title=${encodeURIComponent(titleOf(row))}`} style={ghost}>
+              Need More Info
+            </Link>
+          </div>
+        </div>
       </div>
     </article>
   );
 }
 
-export default function CommandPage() {
+export default function AlertsPage() {
   const [email, setEmail] = useState("");
-  const [rows, setRows] = useState<Row[]>([]);
+  const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading alerts...");
-  const [search, setSearch] = useState("");
 
   async function load() {
     const viewer = getEmail();
@@ -250,10 +328,8 @@ export default function CommandPage() {
     setStatus("Loading alerts...");
 
     try {
-      const collected: Row[] = [];
       const urls = [
         `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
-        `/api/intelligence/feed?email=${encodeURIComponent(viewer)}&owner=0`,
         `/api/routing/actions?email=${encodeURIComponent(viewer)}&owner=0`,
       ];
 
@@ -263,34 +339,28 @@ export default function CommandPage() {
             cache: "no-store",
             headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
           });
+
           const data = await safeJson(res);
-          const list = Array.isArray(data.alerts)
-            ? data.alerts
-            : Array.isArray(data.signals)
-            ? data.signals
-            : Array.isArray(data.pains)
-            ? data.pains
-            : Array.isArray(data.actions)
-            ? data.actions
-            : Array.isArray(data.data)
-            ? data.data
-            : [];
-          if (Array.isArray(list)) collected.push(...list);
+          const list = [
+            ...(Array.isArray(data.alerts) ? data.alerts : []),
+            ...(Array.isArray(data.signals) ? data.signals : []),
+            ...(Array.isArray(data.pains) ? data.pains : []),
+            ...(Array.isArray(data.actions) ? data.actions : []),
+            ...(Array.isArray(data.data) ? data.data : []),
+          ];
+
+          if (list.length) {
+            setItems(list);
+            setStatus("");
+            return;
+          }
         } catch {
-          // Keep page alive if one feed is unavailable.
+          // Try next source.
         }
       }
 
-      const seen = new Set<string>();
-      const unique = collected.filter((row) => {
-        const key = first(signalIdOf(row), itemIdOf(row), row.id, titleOf(row) + noteOf(row));
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      setRows(unique);
-      setStatus(unique.length ? "" : "No alerts records found yet.");
+      setItems([]);
+      setStatus("No alerts connected yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load alerts.");
     }
@@ -300,17 +370,22 @@ export default function CommandPage() {
     load();
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
+  const counts = useMemo(() => {
+    const urgent = items.filter((item) => {
+      const u = urgencyOf(item).toLowerCase();
+      return u.includes("urgent") || u.includes("high") || u.includes("emergency");
+    }).length;
 
-    return rows.filter((row) =>
-      [titleOf(row), noteOf(row), signalIdOf(row), itemIdOf(row), ownerEmailOf(row)]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [rows, search]);
+    const routed = items.filter((item) => statusOf(item).toLowerCase().includes("route")).length;
+    const withOwner = items.filter((item) => ownerOf(item)).length;
+
+    return {
+      total: items.length,
+      urgent,
+      routed,
+      withOwner,
+    };
+  }, [items]);
 
   return (
     <main style={page}>
@@ -320,63 +395,96 @@ export default function CommandPage() {
           transition: all .18s ease;
           filter: brightness(1.06);
         }
-        input::placeholder {
-          color: rgba(255,255,255,.42);
-        }
-        @media (max-width: 760px) {
-          .vf-grid {
+
+        @media (max-width: 820px) {
+          .vf-grid,
+          .vf-four,
+          .vf-actions {
             grid-template-columns: 1fr !important;
           }
+
           .vf-actions {
             display: grid !important;
-            grid-template-columns: 1fr !important;
             gap: 10px !important;
           }
+
           .vf-actions > * {
             width: 100%;
             box-sizing: border-box;
             justify-content: center;
           }
+
+          article > div {
+            grid-template-columns: 1fr !important;
+          }
         }
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav title="Alerts" subtitle="Alert intelligence with dashboard access, message routing, and operational cards." active="alerts" />
+        <VaultForgeMemberNav
+          title="Alerts"
+          subtitle="Urgent opportunities, signal pressure, next actions, and controlled owner follow-up."
+          active="alerts"
+        />
 
         <section style={card}>
-          <p style={eyebrow}>VaultForge Alerts</p>
-          <h1 style={{ fontSize: "clamp(50px,10vw,92px)", lineHeight: 0.88, margin: "10px 0 18px", letterSpacing: "-.06em" }}>
-            Alerts.
+          <div style={eyebrow}>VaultForge Alert Desk</div>
+          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+            Alert intelligence.
           </h1>
-          <p style={{ ...muted, fontSize: 18 }}>Alert intelligence with dashboard access, message routing, and operational cards.</p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
+            Alerts surface the records that need attention: urgent pain, buyer/capital requests,
+            routing movement, and owner/member follow-up.
+          </p>
+
+          <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>Records: {rows.length}</span>
+            <span style={chip}>Live Alerts: {counts.total}</span>
+            <span style={chip}>Urgent: {counts.urgent}</span>
+            <span style={chip}>Owner Ready: {counts.withOwner}</span>
           </div>
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <Link href="/dashboard" style={button}>Dashboard</Link>
-            <button type="button" onClick={load} style={ghost}>Refresh</button>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+            <Link href="/signals" style={ghost}>Signals</Link>
             <Link href="/messages" style={ghost}>Messages</Link>
+            <button type="button" onClick={load} style={button}>Refresh</button>
           </div>
         </section>
 
+        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
+          <Metric label="Active Alerts" value={String(counts.total)} tone="blue" />
+          <Metric label="Urgent" value={String(counts.urgent)} tone="red" />
+          <Metric label="Routed" value={String(counts.routed)} tone="gold" />
+          <Metric label="Owner Ready" value={String(counts.withOwner)} tone="green" />
+        </section>
+
         <section style={card}>
-          <p style={eyebrow}>Search</p>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search title, signal id, owner, note..."
-            style={input}
-          />
+          <div style={eyebrow}>Priority Queue</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Alerts needing action.</h2>
+
+          {items.length ? (
+            <div style={{ display: "grid", gap: 14 }}>
+              {items.map((item, index) => (
+                <AlertCard key={clean(item.id) || `${signalIdOf(item)}-${index}`} row={item} viewer={email} />
+              ))}
+            </div>
+          ) : (
+            <div style={glass}>
+              <h3 style={{ marginTop: 0 }}>No live alerts yet.</h3>
+              <p style={muted}>
+                When pain submissions, signals, or routing pressure need action, they will appear here.
+              </p>
+              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                <Link href="/pain" style={button}>Submit Pain</Link>
+                <Link href="/signals" style={ghost}>Open Signals</Link>
+              </div>
+            </div>
+          )}
         </section>
 
         {status ? <section style={card}>{status}</section> : null}
-
-        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))", gap: 16 }}>
-          {filtered.map((row, index) => (
-            <RecordCard key={`${signalIdOf(row)}-${itemIdOf(row)}-${row.id || index}`} row={row} email={email} mode="alerts" />
-          ))}
-        </section>
       </div>
     </main>
   );
