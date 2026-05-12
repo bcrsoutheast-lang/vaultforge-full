@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../../components/VaultForgeMemberNav";
 
@@ -66,7 +66,7 @@ function readLocalMessages() {
 
 function writeLocalMessage(row: Row) {
   const existing = readLocalMessages();
-  window.localStorage.setItem(LOCAL_KEY, JSON.stringify([row, ...existing].slice(0, 300)));
+  window.localStorage.setItem(LOCAL_KEY, JSON.stringify([row, ...existing].slice(0, 500)));
 }
 
 async function safeJson(res: Response) {
@@ -90,13 +90,8 @@ function first(...values: unknown[]) {
   return "";
 }
 
-function field(row: Row, ...names: string[]) {
-  for (const name of names) {
-    const value = first(row[name], meta(row)[name]);
-    if (value) return value;
-  }
-
-  return "";
+function threadOf(row: Row) {
+  return first(row.thread_id, row.threadId, meta(row).thread_id, row.id);
 }
 
 function subjectOf(row: Row) {
@@ -125,6 +120,14 @@ function signalOf(row: Row) {
 
 function itemOf(row: Row) {
   return first(row.item_id, row.itemId, meta(row).item_id);
+}
+
+function createdOf(row: Row) {
+  return first(row.created_at, row.updated_at, meta(row).created_at);
+}
+
+function normalizeSubject(value: string) {
+  return clean(value).replace(/^(re:\s*)+/gi, "").replace(/\s+/g, " ") || "VaultForge message";
 }
 
 function label(source: string) {
@@ -157,74 +160,19 @@ function defaultBody(source: string) {
   return "I need more information about this VaultForge opportunity.";
 }
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(74,222,128,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
-  color: "white",
-  padding: "22px 16px 96px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const wrap: React.CSSProperties = { width: "min(980px,100%)", margin: "0 auto" };
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 30,
-  padding: 24,
-  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
-  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
-  marginBottom: 18,
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.08)",
-  color: "white",
-  padding: 14,
-  fontSize: 16,
-  outline: "none",
-};
-
-const chip: React.CSSProperties = {
-  border: "1px solid rgba(157,243,191,.22)",
-  borderRadius: 999,
-  padding: "7px 10px",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  margin: "0 7px 7px 0",
-  fontSize: 12,
-  fontWeight: 850,
-  display: "inline-flex",
-};
-
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: 50,
-  borderRadius: 999,
-  padding: "12px 18px",
-  border: 0,
-  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-  color: "#06100a",
-  fontWeight: 950,
-  textDecoration: "none",
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.16)",
-  color: "white",
-};
+function rowKey(row: Row) {
+  return [
+    threadOf(row),
+    fromOf(row),
+    toOf(row),
+    normalizeSubject(subjectOf(row)),
+    bodyOf(row),
+    createdOf(row).slice(0, 19),
+  ].join("|");
+}
 
 export default function ThreadPage({ params }: { params: { threadId: string } }) {
-  const threadId = decodeURIComponent(params.threadId || "");
+  const primaryThreadId = decodeURIComponent(params.threadId || "");
 
   const [email, setEmail] = useState("");
   const [messages, setMessages] = useState<Row[]>([]);
@@ -235,6 +183,7 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
   const [toEmail, setToEmail] = useState("");
   const [status, setStatus] = useState("Loading thread...");
   const [busy, setBusy] = useState(false);
+  const [threadIds, setThreadIds] = useState<string[]>([primaryThreadId]);
 
   function applyUrlContext() {
     const params = new URLSearchParams(window.location.search || "");
@@ -243,7 +192,15 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
     const nextItem = first(params.get("item_id"), params.get("itemId"), "");
     const nextTo = cleanEmail(first(params.get("to"), params.get("recipient_email"), params.get("owner_email"), "owner@vaultforge.local"));
     const nextMessage = first(params.get("message"), params.get("body"), params.get("note"), "");
+    const relatedThreads = first(params.get("threads"), "");
 
+    const ids = relatedThreads
+      ? relatedThreads.split(",").map((item) => decodeURIComponent(clean(item))).filter(Boolean)
+      : [primaryThreadId];
+
+    if (!ids.includes(primaryThreadId)) ids.unshift(primaryThreadId);
+
+    setThreadIds(Array.from(new Set(ids)));
     setSource(nextSource);
     setSignalId(nextSignal);
     setItemId(nextItem);
@@ -259,32 +216,46 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
     applyUrlContext();
     setStatus("Loading thread...");
 
-    const localRows = readLocalMessages().filter((row) => first(row.thread_id, meta(row).thread_id) === threadId);
+    const params = new URLSearchParams(window.location.search || "");
+    const relatedThreads = first(params.get("threads"), "");
+    const ids = relatedThreads
+      ? relatedThreads.split(",").map((item) => decodeURIComponent(clean(item))).filter(Boolean)
+      : [primaryThreadId];
+
+    if (!ids.includes(primaryThreadId)) ids.unshift(primaryThreadId);
+
+    const idSet = new Set(ids);
+
+    const localRows = readLocalMessages().filter((row) => idSet.has(threadOf(row)));
 
     let apiRows: Row[] = [];
 
-    try {
-      const res = await fetch(`/api/simple-messages?thread_id=${encodeURIComponent(threadId)}&email=${encodeURIComponent(viewer)}`, {
-        cache: "no-store",
-        headers: { "x-vf-email": viewer },
-      });
+    for (const id of ids) {
+      try {
+        const res = await fetch(`/api/simple-messages?thread_id=${encodeURIComponent(id)}&email=${encodeURIComponent(viewer)}`, {
+          cache: "no-store",
+          headers: { "x-vf-email": viewer },
+        });
 
-      const data = await safeJson(res);
+        const data = await safeJson(res);
 
-      apiRows = [
-        ...(Array.isArray(data.messages) ? data.messages : []),
-        ...(Array.isArray(data.threads) ? data.threads : []),
-        ...(Array.isArray(data.data) ? data.data : []),
-      ].filter((row: Row) => first(row.thread_id, meta(row).thread_id) === threadId);
-    } catch {
-      apiRows = [];
+        const nextRows = [
+          ...(Array.isArray(data.messages) ? data.messages : []),
+          ...(Array.isArray(data.threads) ? data.threads : []),
+          ...(Array.isArray(data.data) ? data.data : []),
+        ].filter((row: Row) => idSet.has(threadOf(row)));
+
+        apiRows = [...apiRows, ...nextRows];
+      } catch {
+        apiRows = [];
+      }
     }
 
     const rows = [...localRows, ...apiRows];
 
     const seen = new Set<string>();
     const unique = rows.filter((row) => {
-      const key = `${first(row.id, row.created_at)}-${bodyOf(row)}`;
+      const key = rowKey(row);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -298,7 +269,9 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
 
   useEffect(() => {
     load();
-  }, [threadId]);
+  }, [primaryThreadId]);
+
+  const firstMessage = useMemo(() => messages[0] || {}, [messages]);
 
   async function sendMessage() {
     if (busy) return;
@@ -311,17 +284,16 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
       if (!viewer.includes("@")) throw new Error("Missing sender email.");
       if (!clean(reply)) throw new Error("Write a message first.");
 
-      const firstMessage = messages[0] || {};
       const finalTo = toEmail || (fromOf(firstMessage) === viewer ? toOf(firstMessage) : fromOf(firstMessage)) || "owner@vaultforge.local";
       const finalSource = source || sourceOf(firstMessage) || "message";
       const finalSignal = signalId || signalOf(firstMessage) || null;
       const finalItem = itemId || itemOf(firstMessage) || null;
-      const finalSubject = label(finalSource);
+      const finalSubject = normalizeSubject(subjectOf(firstMessage) || label(finalSource));
       const now = new Date().toISOString();
 
       const row = {
         id: `local-${Date.now()}`,
-        thread_id: threadId,
+        thread_id: primaryThreadId,
         from_email: viewer,
         sender_email: viewer,
         to_email: finalTo,
@@ -341,7 +313,7 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
         created_at: now,
         updated_at: now,
         metadata: {
-          thread_id: threadId,
+          thread_id: primaryThreadId,
           signal_id: finalSignal,
           item_id: finalItem,
           source: finalSource,
@@ -403,22 +375,17 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav title="Message Thread" subtitle="Owner/member communication." active="messages" />
+        <VaultForgeMemberNav title="Message Thread" subtitle="Related conversation messages." active="messages" />
 
         <section style={card}>
-          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 12 }}>
-            VaultForge Thread
-          </div>
-          <h1 style={{ fontSize: "clamp(52px,10vw,92px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
-            Conversation room.
-          </h1>
+          <div style={eyebrow}>VaultForge Conversation</div>
+          <h1 style={heroTitle}>Message room.</h1>
 
-          <div>
-            <span style={chip}>Thread: {threadId}</span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={chip}>Primary thread: {primaryThreadId}</span>
+            <span style={chip}>Related threads: {threadIds.length}</span>
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>Messages: {messages.length}</span>
-            {source ? <span style={chip}>Type: {source}</span> : null}
-            {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
@@ -429,25 +396,18 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
         </section>
 
         <section style={card}>
-          <h2 style={{ marginTop: 0 }}>Messages</h2>
+          <h2 style={{ marginTop: 0 }}>Messages in this conversation</h2>
 
           <div style={{ display: "grid", gap: 12 }}>
             {messages.length ? (
               messages.map((row, index) => (
-                <article
-                  key={`${clean(row.id)}-${index}`}
-                  style={{
-                    border: "1px solid rgba(255,255,255,.12)",
-                    borderRadius: 22,
-                    padding: 16,
-                    background: "rgba(255,255,255,.045)",
-                  }}
-                >
-                  <h3 style={{ margin: "0 0 8px" }}>{subjectOf(row)}</h3>
-                  <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>{bodyOf(row)}</p>
-                  <div>
+                <article key={`${rowKey(row)}-${index}`} style={messageCard}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: 24 }}>{normalizeSubject(subjectOf(row))}</h3>
+                  <p style={{ color: "#cbd5e1", lineHeight: 1.55, fontSize: 18 }}>{bodyOf(row)}</p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {fromOf(row) ? <span style={chip}>From: {fromOf(row)}</span> : null}
                     {toOf(row) ? <span style={chip}>To: {toOf(row)}</span> : null}
+                    {threadOf(row) ? <span style={chip}>Thread: {threadOf(row)}</span> : null}
                     {signalOf(row) ? <span style={chip}>Signal: {signalOf(row)}</span> : null}
                     {itemOf(row) ? <span style={chip}>Item: {itemOf(row)}</span> : null}
                   </div>
@@ -455,7 +415,7 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
               ))
             ) : (
               <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>
-                No messages in this thread yet. Write the first message below.
+                No messages in this conversation yet. Write the first message below.
               </p>
             )}
           </div>
@@ -485,3 +445,90 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
     </main>
   );
 }
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  color: "white",
+  padding: "22px 16px 96px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const wrap: React.CSSProperties = { width: "min(980px,100%)", margin: "0 auto" };
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 24,
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
+
+const messageCard: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 22,
+  padding: 16,
+  background: "rgba(255,255,255,.045)",
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.16)",
+  background: "rgba(255,255,255,.08)",
+  color: "white",
+  padding: 14,
+  fontSize: 16,
+  outline: "none",
+};
+
+const chip: React.CSSProperties = {
+  border: "1px solid rgba(157,243,191,.22)",
+  borderRadius: 999,
+  padding: "7px 10px",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  fontSize: 12,
+  fontWeight: 850,
+  display: "inline-flex",
+};
+
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: 50,
+  borderRadius: 999,
+  padding: "12px 18px",
+  border: 0,
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+  cursor: "pointer",
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.16)",
+  color: "white",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
+
+const heroTitle: React.CSSProperties = {
+  fontSize: "clamp(52px,10vw,92px)",
+  lineHeight: .88,
+  letterSpacing: "-.07em",
+  margin: "12px 0 18px",
+};
