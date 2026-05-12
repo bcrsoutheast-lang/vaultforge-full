@@ -12,8 +12,21 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function cleanEmail(value: unknown) {
+function lower(value: unknown) {
   return clean(value).toLowerCase();
+}
+
+function first(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value);
+    if (text) return text;
+  }
+
+  return "";
+}
+
+function meta(row: Row) {
+  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function readCookie(name: string) {
@@ -37,20 +50,20 @@ function currentEmail() {
   if (typeof window === "undefined") return "";
 
   const params = new URLSearchParams(window.location.search || "");
-  const queryEmail = cleanEmail(params.get("email") || params.get("from") || params.get("from_email"));
+  const queryEmail = lower(params.get("email") || params.get("from") || params.get("from_email"));
   if (queryEmail.includes("@")) return queryEmail;
 
   const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
 
   for (const key of keys) {
-    const local = cleanEmail(window.localStorage.getItem(key));
+    const local = lower(window.localStorage.getItem(key));
     if (local.includes("@")) return local;
 
-    const session = cleanEmail(window.sessionStorage.getItem(key));
+    const session = lower(window.sessionStorage.getItem(key));
     if (session.includes("@")) return session;
   }
 
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+  return lower(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
 function readLocalMessages() {
@@ -66,7 +79,55 @@ function readLocalMessages() {
 
 function writeLocalMessage(row: Row) {
   const existing = readLocalMessages();
-  window.localStorage.setItem(LOCAL_KEY, JSON.stringify([row, ...existing].slice(0, 500)));
+  window.localStorage.setItem(LOCAL_KEY, JSON.stringify([row, ...existing].slice(0, 600)));
+}
+
+function threadIdOf(row: Row) {
+  return first(row.thread_id, row.threadId, meta(row).thread_id);
+}
+
+function threadKeyOf(row: Row) {
+  return first(row.thread_key, meta(row).thread_key);
+}
+
+function titleOf(row: Row) {
+  return (
+    first(row.subject, row.title, meta(row).subject, "VaultForge message")
+      .replace(/^(re:\s*)+/gi, "")
+      .replace(/\s+/g, " ")
+      .trim() || "VaultForge message"
+  );
+}
+
+function bodyOf(row: Row) {
+  return first(row.message, row.body, row.note, row.content, meta(row).message, "");
+}
+
+function fromOf(row: Row) {
+  return lower(first(row.from_email, row.sender_email, row.member_email, meta(row).from_email));
+}
+
+function toOf(row: Row) {
+  return lower(first(row.to_email, row.recipient_email, row.target_email, row.owner_email, meta(row).to_email));
+}
+
+function sourceOf(row: Row) {
+  return lower(first(row.source, row.message_type, row.type, meta(row).source, "message"));
+}
+
+function itemOf(row: Row) {
+  return first(row.item_id, row.itemId, row.deal_id, meta(row).item_id);
+}
+
+function createdOf(row: Row) {
+  return first(row.created_at, row.updated_at, meta(row).created_at);
+}
+
+function rowKey(row: Row) {
+  const id = first(row.id, meta(row).id);
+  if (id) return id;
+
+  return [threadKeyOf(row), threadIdOf(row), fromOf(row), toOf(row), bodyOf(row), createdOf(row)].join("|");
 }
 
 async function safeJson(res: Response) {
@@ -77,137 +138,27 @@ async function safeJson(res: Response) {
   }
 }
 
-function meta(row: Row) {
-  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
-}
-
-function threadOf(row: Row) {
-  return first(row.thread_id, row.threadId, meta(row).thread_id, row.id);
-}
-
-function subjectOf(row: Row) {
-  return first(row.subject, row.title, meta(row).subject, "VaultForge message");
-}
-
-function bodyOf(row: Row) {
-  return first(row.message, row.body, row.note, meta(row).message, "");
-}
-
-function fromOf(row: Row) {
-  return cleanEmail(first(row.from_email, row.sender_email, row.member_email, meta(row).from_email));
-}
-
-function toOf(row: Row) {
-  return cleanEmail(first(row.to_email, row.recipient_email, row.target_email, row.owner_email, meta(row).to_email));
-}
-
-function sourceOf(row: Row) {
-  return first(row.source, row.message_type, row.type, meta(row).source, "message");
-}
-
-function signalOf(row: Row) {
-  return first(row.signal_id, row.signalId, meta(row).signal_id);
-}
-
-function itemOf(row: Row) {
-  return first(row.item_id, row.itemId, meta(row).item_id);
-}
-
-function createdOf(row: Row) {
-  return first(row.created_at, row.updated_at, meta(row).created_at);
-}
-
-function normalizeSubject(value: string) {
-  return clean(value).replace(/^(re:\s*)+/gi, "").replace(/\s+/g, " ") || "VaultForge message";
-}
-
-function label(source: string) {
-  const s = source.toLowerCase();
-
-  if (s.includes("alert")) return "Alert message";
-  if (s.includes("pain")) return "Pain message";
-  if (s.includes("activity")) return "Activity message";
-  if (s.includes("routing")) return "Routing message";
-  if (s.includes("intro")) return "Introduction message";
-  if (s.includes("project")) return "Project message";
-  if (s.includes("member")) return "Member message";
-  if (s.includes("signal")) return "Signal message";
-
-  return "VaultForge message";
-}
-
-function defaultBody(source: string) {
-  const s = source.toLowerCase();
-
-  if (s.includes("alert")) return "I need more information about this VaultForge alert.";
-  if (s.includes("pain")) return "I need more information about this pain request or opportunity.";
-  if (s.includes("activity")) return "I am following up on this VaultForge activity item.";
-  if (s.includes("routing")) return "I am following up on this routing opportunity.";
-  if (s.includes("intro")) return "I am responding to this controlled introduction.";
-  if (s.includes("project")) return "I need more information about this project or deal room.";
-  if (s.includes("member")) return "I saw this member profile and would like to connect.";
-  if (s.includes("signal")) return "I need more information about this VaultForge signal.";
-
-  return "I need more information about this VaultForge opportunity.";
-}
-
-function rowKey(row: Row) {
-  return [
-    threadOf(row),
-    fromOf(row),
-    toOf(row),
-    normalizeSubject(subjectOf(row)),
-    bodyOf(row),
-    createdOf(row).slice(0, 19),
-  ].join("|");
-}
-
 export default function ThreadPage({ params }: { params: { threadId: string } }) {
-  const primaryThreadId = decodeURIComponent(params.threadId || "");
+  const routeThreadId = decodeURIComponent(params.threadId || "");
 
   const [email, setEmail] = useState("");
   const [messages, setMessages] = useState<Row[]>([]);
   const [reply, setReply] = useState("");
-  const [source, setSource] = useState("message");
-  const [signalId, setSignalId] = useState("");
-  const [itemId, setItemId] = useState("");
-  const [toEmail, setToEmail] = useState("");
   const [status, setStatus] = useState("Loading thread...");
   const [busy, setBusy] = useState(false);
-  const [threadIds, setThreadIds] = useState<string[]>([primaryThreadId]);
+  const [threadKey, setThreadKey] = useState("");
+  const [toEmail, setToEmail] = useState("");
+  const [source, setSource] = useState("message");
 
   function applyUrlContext() {
     const params = new URLSearchParams(window.location.search || "");
-    const nextSource = first(params.get("source"), "message");
-    const nextSignal = first(params.get("signal_id"), params.get("signalId"), "");
-    const nextItem = first(params.get("item_id"), params.get("itemId"), "");
-    const nextTo = cleanEmail(first(params.get("to"), params.get("recipient_email"), params.get("owner_email"), "owner@vaultforge.local"));
+
+    setThreadKey(first(params.get("thread_key"), ""));
+    setToEmail(lower(first(params.get("to"), params.get("recipient_email"), params.get("owner_email"), "")));
+    setSource(first(params.get("source"), "message"));
+
     const nextMessage = first(params.get("message"), params.get("body"), params.get("note"), "");
-    const relatedThreads = first(params.get("threads"), "");
-
-    const ids = relatedThreads
-      ? relatedThreads.split(",").map((item) => decodeURIComponent(clean(item))).filter(Boolean)
-      : [primaryThreadId];
-
-    if (!ids.includes(primaryThreadId)) ids.unshift(primaryThreadId);
-
-    setThreadIds(Array.from(new Set(ids)));
-    setSource(nextSource);
-    setSignalId(nextSignal);
-    setItemId(nextItem);
-    setToEmail(nextTo);
-
     if (nextMessage && !reply) setReply(nextMessage);
-    if (!nextMessage && !reply) setReply(defaultBody(nextSource));
   }
 
   async function load() {
@@ -217,59 +168,50 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
     setStatus("Loading thread...");
 
     const params = new URLSearchParams(window.location.search || "");
-    const relatedThreads = first(params.get("threads"), "");
-    const ids = relatedThreads
-      ? relatedThreads.split(",").map((item) => decodeURIComponent(clean(item))).filter(Boolean)
-      : [primaryThreadId];
+    const activeThreadKey = first(params.get("thread_key"), "");
+    const activeThreadId = routeThreadId;
 
-    if (!ids.includes(primaryThreadId)) ids.unshift(primaryThreadId);
-
-    const idSet = new Set(ids);
-
-    const localRows = readLocalMessages().filter((row) => idSet.has(threadOf(row)));
+    const localRows = readLocalMessages().filter((row) => {
+      if (activeThreadKey) return threadKeyOf(row) === activeThreadKey;
+      return threadIdOf(row) === activeThreadId;
+    });
 
     let apiRows: Row[] = [];
 
-    for (const id of ids) {
-      try {
-        const res = await fetch(`/api/simple-messages?thread_id=${encodeURIComponent(id)}&email=${encodeURIComponent(viewer)}`, {
-          cache: "no-store",
-          headers: { "x-vf-email": viewer },
-        });
+    try {
+      const res = await fetch(`/api/simple-messages?email=${encodeURIComponent(viewer)}`, {
+        cache: "no-store",
+        headers: { "x-vf-email": viewer },
+      });
 
-        const data = await safeJson(res);
+      const data = await safeJson(res);
+      const rows = Array.isArray(data.messages) ? data.messages : [];
 
-        const nextRows = [
-          ...(Array.isArray(data.messages) ? data.messages : []),
-          ...(Array.isArray(data.threads) ? data.threads : []),
-          ...(Array.isArray(data.data) ? data.data : []),
-        ].filter((row: Row) => idSet.has(threadOf(row)));
-
-        apiRows = [...apiRows, ...nextRows];
-      } catch {
-        apiRows = [];
-      }
+      apiRows = rows.filter((row: Row) => {
+        if (activeThreadKey) return threadKeyOf(row) === activeThreadKey;
+        return threadIdOf(row) === activeThreadId;
+      });
+    } catch {
+      apiRows = [];
     }
 
-    const rows = [...localRows, ...apiRows];
-
     const seen = new Set<string>();
-    const unique = rows.filter((row) => {
+    const unique = [...localRows, ...apiRows].filter((row) => {
       const key = rowKey(row);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
-    unique.sort((a, b) => first(a.created_at, "").localeCompare(first(b.created_at, "")));
+    unique.sort((a, b) => clean(createdOf(a)).localeCompare(clean(createdOf(b))));
 
     setMessages(unique);
-    setStatus(unique.length ? "" : "No messages in this thread yet. Write and send below.");
+    setStatus(unique.length ? "" : "No messages in this conversation yet. Write and send below.");
   }
 
   useEffect(() => {
     load();
-  }, [primaryThreadId]);
+  }, [routeThreadId]);
 
   const firstMessage = useMemo(() => messages[0] || {}, [messages]);
 
@@ -286,14 +228,15 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
 
       const finalTo = toEmail || (fromOf(firstMessage) === viewer ? toOf(firstMessage) : fromOf(firstMessage)) || "owner@vaultforge.local";
       const finalSource = source || sourceOf(firstMessage) || "message";
-      const finalSignal = signalId || signalOf(firstMessage) || null;
-      const finalItem = itemId || itemOf(firstMessage) || null;
-      const finalSubject = normalizeSubject(subjectOf(firstMessage) || label(finalSource));
+      const finalSubject = titleOf(firstMessage);
+      const finalThreadKey = threadKey || threadKeyOf(firstMessage);
+      const finalItem = itemOf(firstMessage) || null;
       const now = new Date().toISOString();
 
       const row = {
         id: `local-${Date.now()}`,
-        thread_id: primaryThreadId,
+        thread_id: routeThreadId,
+        thread_key: finalThreadKey,
         from_email: viewer,
         sender_email: viewer,
         to_email: finalTo,
@@ -306,19 +249,25 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
         body: reply,
         note: reply,
         source: finalSource,
+        origin: finalSource,
         message_type: finalSource,
-        signal_id: finalSignal,
+        folder: finalSource === "pain" ? "pain" : "general",
+        folder_key: finalSource === "pain" ? "pain" : "general",
         item_id: finalItem,
-        status: "open",
+        deal_id: finalItem,
+        status: "sent",
         created_at: now,
         updated_at: now,
         metadata: {
-          thread_id: primaryThreadId,
-          signal_id: finalSignal,
+          thread_id: routeThreadId,
+          thread_key: finalThreadKey,
           item_id: finalItem,
           source: finalSource,
           from_email: viewer,
           to_email: finalTo,
+          subject: finalSubject,
+          created_at: now,
+          updated_at: now,
         },
       };
 
@@ -334,7 +283,7 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
           body: JSON.stringify(row),
         });
       } catch {
-        // Local visible message still works.
+        // Local visible fallback.
       }
 
       setReply("");
@@ -382,8 +331,8 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
           <h1 style={heroTitle}>Message room.</h1>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span style={chip}>Primary thread: {primaryThreadId}</span>
-            <span style={chip}>Related threads: {threadIds.length}</span>
+            <span style={chip}>Thread ID: {routeThreadId}</span>
+            {threadKey ? <span style={chip}>Thread Key: {threadKey}</span> : null}
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>Messages: {messages.length}</span>
           </div>
@@ -402,14 +351,12 @@ export default function ThreadPage({ params }: { params: { threadId: string } })
             {messages.length ? (
               messages.map((row, index) => (
                 <article key={`${rowKey(row)}-${index}`} style={messageCard}>
-                  <h3 style={{ margin: "0 0 8px", fontSize: 24 }}>{normalizeSubject(subjectOf(row))}</h3>
+                  <h3 style={{ margin: "0 0 8px", fontSize: 24 }}>{titleOf(row)}</h3>
                   <p style={{ color: "#cbd5e1", lineHeight: 1.55, fontSize: 18 }}>{bodyOf(row)}</p>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {fromOf(row) ? <span style={chip}>From: {fromOf(row)}</span> : null}
                     {toOf(row) ? <span style={chip}>To: {toOf(row)}</span> : null}
-                    {threadOf(row) ? <span style={chip}>Thread: {threadOf(row)}</span> : null}
-                    {signalOf(row) ? <span style={chip}>Signal: {signalOf(row)}</span> : null}
-                    {itemOf(row) ? <span style={chip}>Item: {itemOf(row)}</span> : null}
+                    {createdOf(row) ? <span style={chip}>{createdOf(row).slice(0, 19).replace("T", " ")}</span> : null}
                   </div>
                 </article>
               ))
