@@ -64,6 +64,41 @@ async function safeJson(res: Response) {
   }
 }
 
+function labelFromSource(source: string) {
+  const lower = source.toLowerCase();
+
+  if (lower.includes("alert")) return "Alert message";
+  if (lower.includes("pain")) return "Pain message";
+  if (lower.includes("activity")) return "Activity message";
+  if (lower.includes("routing")) return "Routing message";
+  if (lower.includes("intro")) return "Introduction message";
+  if (lower.includes("project")) return "Project message";
+  if (lower.includes("member")) return "Member message";
+  if (lower.includes("signal")) return "Signal message";
+
+  return "VaultForge message";
+}
+
+function defaultSubject(source: string) {
+  const label = labelFromSource(source);
+  return label === "VaultForge message" ? "VaultForge follow-up" : label;
+}
+
+function defaultBody(source: string) {
+  const lower = source.toLowerCase();
+
+  if (lower.includes("alert")) return "I need more information about this VaultForge alert.";
+  if (lower.includes("pain")) return "I need more information about this pain request or opportunity.";
+  if (lower.includes("activity")) return "I am following up on this VaultForge activity item.";
+  if (lower.includes("routing")) return "I am following up on this routing opportunity.";
+  if (lower.includes("intro")) return "I am responding to this controlled introduction.";
+  if (lower.includes("project")) return "I need more information about this project or deal room.";
+  if (lower.includes("member")) return "I saw this member profile and would like to connect.";
+  if (lower.includes("signal")) return "I need more information about this VaultForge signal.";
+
+  return "I need more information about this VaultForge opportunity.";
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -87,6 +122,13 @@ const card: React.CSSProperties = {
   marginBottom: 18,
 };
 
+const glass: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 24,
+  padding: 20,
+  background: "rgba(255,255,255,.045)",
+};
+
 const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
@@ -107,19 +149,21 @@ const label: React.CSSProperties = {
 };
 
 const eyebrow: React.CSSProperties = {
-  color: "#9df3bf",
-  letterSpacing: ".22em",
+  color: "#e8c46b",
+  letterSpacing: ".18em",
   textTransform: "uppercase",
   fontWeight: 950,
   fontSize: 12,
 };
 
-const goldEyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: ".22em",
-  textTransform: "uppercase",
-  fontWeight: 950,
-  fontSize: 12,
+const greenEyebrow: React.CSSProperties = {
+  ...eyebrow,
+  color: "#9df3bf",
+};
+
+const muted: React.CSSProperties = {
+  color: "#cbd5e1",
+  lineHeight: 1.55,
 };
 
 const button: React.CSSProperties = {
@@ -158,17 +202,22 @@ const chip: React.CSSProperties = {
 
 export default function ConnectPage({ params }: { params: { signalId: string } }) {
   const decodedSignalId = decodeURIComponent(params.signalId || "");
+
   const [email, setEmail] = useState("");
   const [recipient, setRecipient] = useState("");
-  const [subject, setSubject] = useState("VaultForge connection request");
-  const [message, setMessage] = useState("I saw this VaultForge opportunity/member profile and would like to connect.");
+  const [subject, setSubject] = useState("VaultForge follow-up");
+  const [message, setMessage] = useState("I need more information about this VaultForge opportunity.");
+  const [source, setSource] = useState("message");
+  const [itemId, setItemId] = useState("");
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SaveResult | null>(null);
 
   useEffect(() => {
     const viewer = getEmail();
-    const to =
+
+    const querySource = clean(param("source") || param("type") || "message");
+    const queryRecipient =
       cleanEmail(param("to")) ||
       cleanEmail(param("recipient")) ||
       cleanEmail(param("recipient_email")) ||
@@ -177,23 +226,24 @@ export default function ConnectPage({ params }: { params: { signalId: string } }
 
     const querySubject = clean(param("subject"));
     const queryMessage = clean(param("message") || param("body") || param("note"));
+    const queryItem = clean(param("item_id") || param("itemId") || param("pain_id") || param("project_id"));
 
     setEmail(viewer);
-    setRecipient(to);
-
-    if (querySubject) setSubject(querySubject);
-    if (queryMessage) setMessage(queryMessage);
+    setRecipient(queryRecipient);
+    setSource(querySource);
+    setItemId(queryItem);
+    setSubject(querySubject || defaultSubject(querySource));
+    setMessage(queryMessage || defaultBody(querySource));
   }, []);
 
-  const itemId = useMemo(() => clean(param("item_id") || param("itemId") || param("pain_id") || param("project_id")), []);
-  const source = useMemo(() => clean(param("source") || param("type") || "connect"), []);
+  const pageTitle = useMemo(() => labelFromSource(source), [source]);
 
   async function submit() {
     setSaving(true);
-    setStatus("Saving controlled connection request...");
+    setStatus("Saving message...");
     setResult(null);
 
-    const fallbackRecipient = recipient || email;
+    const finalRecipient = cleanEmail(recipient) || "owner@vaultforge.local";
 
     try {
       const payload = {
@@ -201,26 +251,32 @@ export default function ConnectPage({ params }: { params: { signalId: string } }
         sender_email: email,
         email,
         member_email: email,
-        to_email: fallbackRecipient,
-        recipient_email: fallbackRecipient,
-        target_email: fallbackRecipient,
-        owner_email: fallbackRecipient,
+
+        to_email: finalRecipient,
+        recipient_email: finalRecipient,
+        target_email: finalRecipient,
+        owner_email: finalRecipient,
+
         signal_id: decodedSignalId,
         item_id: itemId,
         source,
+
         subject,
         title: subject,
         message,
         body: message,
         note: message,
+
         status: "open",
+
         metadata: {
           signal_id: decodedSignalId,
           item_id: itemId,
           source,
           from_email: email,
-          to_email: fallbackRecipient,
+          to_email: finalRecipient,
           subject,
+          message,
         },
       };
 
@@ -244,7 +300,7 @@ export default function ConnectPage({ params }: { params: { signalId: string } }
 
           if (res.ok && data.ok !== false) {
             setResult(data);
-            setStatus("Connection request saved.");
+            setStatus("Message saved.");
             return;
           }
         } catch (error: any) {
@@ -253,10 +309,10 @@ export default function ConnectPage({ params }: { params: { signalId: string } }
       }
 
       setResult(last);
-      setStatus("Connection request could not be saved.");
+      setStatus("Message could not be saved.");
     } catch (error: any) {
-      setResult({ ok: false, error: error?.message || "Connection request could not be saved." });
-      setStatus(error?.message || "Connection request could not be saved.");
+      setResult({ ok: false, error: error?.message || "Message could not be saved." });
+      setStatus(error?.message || "Message could not be saved.");
     } finally {
       setSaving(false);
     }
@@ -296,54 +352,53 @@ export default function ConnectPage({ params }: { params: { signalId: string } }
 
       <div style={wrap}>
         <VaultForgeMemberNav
-          title="Messages"
+          title="Message"
           subtitle="Controlled owner/member communication."
           active="messages"
         />
 
         <section style={card}>
-          <p style={eyebrow}>VaultForge Message Thread</p>
-          <h1 style={{ fontSize: "clamp(54px,11vw,102px)", lineHeight: 0.88, margin: "10px 0 18px", letterSpacing: "-.07em" }}>
-            Request connection.
+          <div style={greenEyebrow}>VaultForge Communication Window</div>
+          <h1 style={{ fontSize: "clamp(52px,10vw,92px)", lineHeight: 0.88, margin: "12px 0 18px", letterSpacing: "-.07em" }}>
+            {pageTitle}.
           </h1>
-          <p style={{ color: "#cbd5e1", fontSize: 20, lineHeight: 1.5 }}>
-            This records a controlled VaultForge connection request. It does not expose private contact details outside the platform.
+          <p style={{ ...muted, fontSize: 20 }}>
+            Send one clean controlled message. VaultForge keeps the request tied to the signal, page, or member profile.
           </p>
 
           <div style={{ marginTop: 18 }}>
             <span style={chip}>From: {email || "missing"}</span>
-            <span style={chip}>To: {recipient || "owner/member fallback"}</span>
+            <span style={chip}>Type: {source || "message"}</span>
             {decodedSignalId ? <span style={chip}>Signal: {decodedSignalId}</span> : null}
             {itemId ? <span style={chip}>Item: {itemId}</span> : null}
-            <span style={chip}>Draft</span>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
-            <Link href="/members" style={ghost}>Back to Members</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            <Link href="/messages" style={ghost}>All Messages</Link>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/messages" style={ghost}>All Messages</Link>
+            <Link href="/signals" style={ghost}>Signals</Link>
+            <Link href="/members" style={ghost}>Members</Link>
           </div>
         </section>
 
         {status ? (
-          <section style={card}>
+          <section style={{ ...card, borderColor: status.includes("saved") ? "rgba(157,243,191,.42)" : "rgba(248,113,113,.34)" }}>
             <h2 style={{ margin: 0, color: status.includes("saved") ? "#9df3bf" : "#ffd0d0" }}>{status}</h2>
           </section>
         ) : null}
 
         <section style={card}>
-          <p style={goldEyebrow}>Connection Details</p>
+          <div style={eyebrow}>Message Details</div>
 
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 18 }}>
             <div>
               <label style={label}>Your Email</label>
               <input style={input} value={email} onChange={(e) => setEmail(cleanEmail(e.target.value))} placeholder="your@email.com" />
             </div>
 
             <div>
-              <label style={label}>Recipient Email</label>
-              <input style={input} value={recipient} onChange={(e) => setRecipient(cleanEmail(e.target.value))} placeholder="owner/member email, optional fallback" />
+              <label style={label}>Send To</label>
+              <input style={input} value={recipient} onChange={(e) => setRecipient(cleanEmail(e.target.value))} placeholder="Owner/member email if known" />
             </div>
           </div>
 
@@ -353,29 +408,31 @@ export default function ConnectPage({ params }: { params: { signalId: string } }
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <label style={label}>What information do you need?</label>
+            <label style={label}>Message</label>
             <textarea
-              style={{ ...input, minHeight: 170, resize: "vertical" }}
+              style={{ ...input, minHeight: 180, resize: "vertical" }}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
             />
           </div>
 
           <button type="button" onClick={submit} disabled={saving} style={{ ...button, width: "100%", marginTop: 22, opacity: saving ? 0.65 : 1 }}>
-            {saving ? "Saving..." : "Send Connection Request"}
+            {saving ? "Saving..." : "Send Message"}
           </button>
         </section>
 
         <section style={card}>
-          <p style={goldEyebrow}>Current Safety Mode</p>
-          <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.5 }}>
-            This page records a controlled message request. It does not automatically release private contact information.
-          </p>
+          <div style={eyebrow}>Current Safety Mode</div>
+          <div style={glass}>
+            <p style={{ ...muted, margin: 0, fontSize: 18 }}>
+              This records the request inside VaultForge. It does not automatically release private contact information.
+            </p>
+          </div>
         </section>
 
         {result ? (
           <section style={card}>
-            <p style={goldEyebrow}>System Output</p>
+            <div style={eyebrow}>System Output</div>
             <pre style={{ whiteSpace: "pre-wrap", color: "#cbd5e1", fontSize: 13, overflowX: "auto" }}>
               {JSON.stringify(result, null, 2)}
             </pre>
