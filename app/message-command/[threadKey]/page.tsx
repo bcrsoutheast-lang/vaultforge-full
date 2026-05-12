@@ -13,15 +13,6 @@ function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
-}
-
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
   const match = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
@@ -73,6 +64,10 @@ function folderForSource(source: string) {
   return "general";
 }
 
+function routeFromFolder(folder: string) {
+  return folder || "general";
+}
+
 export default function MessageThreadPage({ params }: { params: { threadKey: string } }) {
   const threadKey = decodeURIComponent(params.threadKey || "");
   const source = sourceOfThread(threadKey);
@@ -83,11 +78,14 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
   const [reply, setReply] = useState("");
   const [status, setStatus] = useState("Loading message room...");
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState("");
 
   const title = useMemo(() => {
     if (typeof window === "undefined") return "Message Room";
     return clean(new URLSearchParams(window.location.search).get("title") || "Message Room");
   }, []);
+
+  const backHref = `/message-command?route=${encodeURIComponent(routeFromFolder(folder))}`;
 
   async function load() {
     const viewer = currentEmail();
@@ -128,10 +126,9 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
     }
 
     const latest = messages[messages.length - 1] || {};
-    const toEmail =
-      lower(latest.from_email) && lower(latest.from_email) !== viewer
-        ? lower(latest.from_email)
-        : lower(latest.to_email || latest.owner_email || "bcrsoutheast@gmail.com");
+    const latestFrom = lower(latest.from_email);
+    const latestTo = lower(latest.to_email || latest.owner_email);
+    const toEmail = latestFrom && latestFrom !== viewer ? latestFrom : latestTo || "bcrsoutheast@gmail.com";
 
     setBusy(true);
     setStatus("Sending reply...");
@@ -160,7 +157,7 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
       const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || "Message could not be sent.");
+        throw new Error(data?.details || data?.error || "Message could not be sent.");
       }
 
       setReply("");
@@ -173,8 +170,16 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
     }
   }
 
-  async function cleanup(id: string, action: "archive" | "delete") {
-    setStatus(action === "archive" ? "Archiving message..." : "Deleting message...");
+  async function cleanup(ids: string[], action: "archive" | "delete") {
+    const cleanIds = ids.map(clean).filter(Boolean);
+
+    if (!cleanIds.length) {
+      setStatus("No saved message IDs found.");
+      return;
+    }
+
+    setBusyAction(action);
+    setStatus(action === "archive" ? "Archiving..." : "Deleting...");
 
     try {
       const res = await fetch("/api/message-command", {
@@ -183,21 +188,30 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
           "Content-Type": "application/json",
           "x-vf-email": email,
         },
-        body: JSON.stringify({ action, ids: [id], email }),
+        body: JSON.stringify({ action, ids: cleanIds, email }),
       });
 
       const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || "Cleanup failed.");
+        throw new Error(data?.details || data?.error || "Cleanup failed.");
       }
 
-      setMessages((current) => current.filter((row) => row.id !== id));
-      setStatus(action === "archive" ? "Message archived." : "Message deleted.");
+      if (cleanIds.length === messages.length) {
+        window.location.href = backHref;
+        return;
+      }
+
+      setMessages((current) => current.filter((row) => !cleanIds.includes(clean(row.id))));
+      setStatus(action === "archive" ? "Archived." : "Deleted.");
     } catch (error: any) {
       setStatus(error?.message || "Cleanup failed.");
+    } finally {
+      setBusyAction("");
     }
   }
+
+  const allIds = messages.map((message) => clean(message.id)).filter(Boolean);
 
   return (
     <main style={page}>
@@ -212,7 +226,8 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
 
       <div style={wrap}>
         <nav style={nav}>
-          <Link href="/message-command" style={navButtonActive}>Message Command</Link>
+          <Link href={backHref} style={navButtonActive}>Back to {folder}</Link>
+          <Link href="/message-command" style={navButton}>All Cards</Link>
           <Link href="/dashboard" style={navButton}>Dashboard</Link>
           <Link href="/alerts" style={navButton}>Alerts</Link>
           <Link href="/pain-feed" style={navButton}>Pain Feed</Link>
@@ -225,6 +240,17 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
             <span style={chip}>Thread: {threadKey}</span>
             <span style={chip}>Lane: {folder}</span>
             <span style={chip}>Messages: {messages.length}</span>
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            <Link href={backHref} style={button}>Close / Back to Lane</Link>
+            <button type="button" onClick={load} style={ghost}>Refresh</button>
+            <button type="button" onClick={() => cleanup(allIds, "archive")} disabled={!!busyAction || !allIds.length} style={ghost}>
+              {busyAction === "archive" ? "Archiving..." : "Archive Thread"}
+            </button>
+            <button type="button" onClick={() => cleanup(allIds, "delete")} disabled={!!busyAction || !allIds.length} style={danger}>
+              {busyAction === "delete" ? "Deleting..." : "Delete Thread"}
+            </button>
           </div>
         </section>
 
@@ -242,8 +268,8 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
 
               {message.id ? (
                 <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                  <button type="button" onClick={() => cleanup(message.id, "archive")} style={ghost}>Archive</button>
-                  <button type="button" onClick={() => cleanup(message.id, "delete")} style={danger}>Delete</button>
+                  <button type="button" onClick={() => cleanup([message.id], "archive")} disabled={!!busyAction} style={ghost}>Archive Message</button>
+                  <button type="button" onClick={() => cleanup([message.id], "delete")} disabled={!!busyAction} style={danger}>Delete Message</button>
                 </div>
               ) : null}
             </article>
