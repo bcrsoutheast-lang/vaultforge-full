@@ -200,6 +200,7 @@ function cleanupActionOf(row: Row) {
 function buildSuppressedThreads(rows: Row[]) {
   const archived = new Set<string>();
   const deleted = new Set<string>();
+  const saved = new Set<string>();
 
   for (const raw of rows) {
     if (!isThreadCleanupMarker(raw)) continue;
@@ -212,15 +213,20 @@ function buildSuppressedThreads(rows: Row[]) {
     if (action === "delete" || action === "deleted") {
       deleted.add(key);
       archived.delete(key);
+      saved.delete(key);
     } else if (action === "archive" || action === "archived") {
       archived.add(key);
+    } else if (action === "save" || action === "saved") {
+      saved.add(key);
+    } else if (action === "unsave" || action === "unsaved") {
+      saved.delete(key);
     } else if (action === "restore" || action === "sent") {
       archived.delete(key);
       deleted.delete(key);
     }
   }
 
-  return { archived, deleted };
+  return { archived, deleted, saved };
 }
 
 function idOf(row: Row) {
@@ -482,10 +488,15 @@ function folderCounts(conversations: any[]) {
     members: 0,
     activity: 0,
     general: 0,
+    saved: 0,
   };
 
   for (const convo of conversations) {
     counts[convo.folder || "general"] = (counts[convo.folder || "general"] || 0) + Number(convo.count || 0);
+
+    if (convo.is_saved === true) {
+      counts.saved += Number(convo.count || 0);
+    }
   }
 
   return counts;
@@ -595,7 +606,10 @@ export async function GET(request: Request) {
     });
   }
 
-  const conversations = groupConversations(rows);
+  const conversations = groupConversations(rows).map((conversation) => ({
+    ...conversation,
+    is_saved: suppressed.saved.has(conversation.thread_key),
+  }));
 
   return NextResponse.json({
     ok: true,
@@ -702,6 +716,8 @@ export async function PATCH(request: Request) {
     patch.is_archived = false;
     patch.is_deleted = false;
     patch.status = "sent";
+  } else if (action === "save" || action === "unsave") {
+    patch.status = "sent";
   } else {
     return NextResponse.json({ ok: false, error: "Unknown action." }, { status: 400 });
   }
@@ -735,7 +751,7 @@ export async function PATCH(request: Request) {
     For whole-thread cleanup we create a cleanup marker in the command table.
     GET reads this marker and suppresses old legacy rows from counts/cards.
   */
-  if (threadKey && (actionScope === "thread" || !ids.length || action === "archive" || action === "delete")) {
+  if (threadKey && (actionScope === "thread" || !ids.length || action === "archive" || action === "delete" || action === "save" || action === "unsave")) {
     const now = new Date().toISOString();
     const source = normalizeSource(threadKey);
     const folder = folderForSource(source);
