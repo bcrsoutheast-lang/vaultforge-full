@@ -21,11 +21,25 @@ function first(...values: unknown[]) {
 function currentEmail() {
   if (typeof window === "undefined") return "";
 
-  return (
+  const local =
     window.localStorage.getItem("vf_email") ||
     window.localStorage.getItem("email") ||
-    ""
-  );
+    "";
+
+  if (local.includes("@")) return local.toLowerCase();
+
+  const cookieMatch = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("vf_email="));
+
+  if (!cookieMatch) return "";
+
+  try {
+    return decodeURIComponent(cookieMatch.split("=")[1] || "").toLowerCase();
+  } catch {
+    return (cookieMatch.split("=")[1] || "").toLowerCase();
+  }
 }
 
 function threadKeyOf(row: MessageRow) {
@@ -64,9 +78,7 @@ export default function ThreadPage({
   const threadKey = useMemo(() => {
     if (typeof window === "undefined") return "";
 
-    return (
-      new URLSearchParams(window.location.search).get("thread_key") || ""
-    );
+    return new URLSearchParams(window.location.search).get("thread_key") || "";
   }, []);
 
   async function load() {
@@ -85,18 +97,18 @@ export default function ThreadPage({
 
       const data = await response.json();
 
-      const rows = Array.isArray(data.messages)
-        ? data.messages
-        : [];
+      /*
+        IMPORTANT:
+        Use ONLY data.messages. data.threads duplicates rows.
+      */
+      const rows = Array.isArray(data.messages) ? data.messages : [];
 
       const filtered = rows.filter((row: MessageRow) => {
         if (threadKey) {
           return threadKeyOf(row) === threadKey;
         }
 
-        return (
-          threadIdOf(row) === decodeURIComponent(params.threadId || "")
-        );
+        return threadIdOf(row) === decodeURIComponent(params.threadId || "");
       });
 
       filtered.sort((a: MessageRow, b: MessageRow) =>
@@ -118,43 +130,43 @@ export default function ThreadPage({
   return (
     <main style={page}>
       <div style={wrap}>
+        <nav style={nav}>
+          <Link href="/dashboard" style={navButton}>Dashboard</Link>
+          <Link href="/alerts" style={navButton}>Alerts</Link>
+          <Link href="/pain-feed" style={navButton}>Pain Feed</Link>
+          <Link href="/projects" style={navButton}>Projects</Link>
+          <Link href="/routing-inbox" style={navButton}>Routing</Link>
+          <Link href="/network" style={navButton}>Network</Link>
+          <Link href="/members" style={navButton}>Members</Link>
+          <Link href="/messages" style={navButtonActive}>Messages</Link>
+        </nav>
+
         <section style={hero}>
           <div style={eyebrow}>VaultForge Thread</div>
 
-          <h1 style={heroTitle}>
-            Message Room.
-          </h1>
+          <h1 style={heroTitle}>Message Room.</h1>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span style={chip}>
-              Thread Key: {threadKey || "none"}
-            </span>
-
-            <span style={chip}>
-              Messages: {messages.length}
-            </span>
+            <span style={chip}>Thread Key: {threadKey || "none"}</span>
+            <span style={chip}>Messages: {messages.length}</span>
           </div>
 
-          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
             <Link href="/messages" style={button}>
               Back to Messages
             </Link>
+            <button type="button" onClick={load} style={ghostButton}>
+              Refresh
+            </button>
           </div>
         </section>
 
         <section style={{ display: "grid", gap: 16 }}>
           {messages.map((message, index) => (
-            <article
-              key={`${threadIdOf(message)}-${index}`}
-              style={card}
-            >
-              <h2 style={title}>
-                {titleOf(message)}
-              </h2>
+            <article key={`${threadIdOf(message)}-${index}`} style={card}>
+              <h2 style={title}>{titleOf(message)}</h2>
 
-              <p style={body}>
-                {bodyOf(message)}
-              </p>
+              <p style={body}>{bodyOf(message)}</p>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <span style={chip}>
@@ -165,9 +177,7 @@ export default function ThreadPage({
                   To: {first(message.to_email, message.recipient_email)}
                 </span>
 
-                <span style={chip}>
-                  {createdOf(message)}
-                </span>
+                <span style={chip}>{createdOf(message)}</span>
               </div>
             </article>
           ))}
@@ -183,16 +193,12 @@ export default function ThreadPage({
             style={textarea}
           />
 
-          <button style={button}>
+          <button type="button" style={button}>
             Send Reply
           </button>
         </section>
 
-        {status ? (
-          <section style={hero}>
-            {status}
-          </section>
-        ) : null}
+        {status ? <section style={hero}>{status}</section> : null}
       </div>
     </main>
   );
@@ -210,6 +216,33 @@ const page: React.CSSProperties = {
 const wrap: React.CSSProperties = {
   width: "min(980px,100%)",
   margin: "0 auto",
+};
+
+const nav: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  marginBottom: 18,
+};
+
+const navButton: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  borderRadius: 999,
+  padding: "12px 16px",
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.14)",
+  color: "white",
+  textDecoration: "none",
+  fontWeight: 800,
+};
+
+const navButtonActive: React.CSSProperties = {
+  ...navButton,
+  background: "rgba(232,196,107,.14)",
+  border: "1px solid rgba(232,196,107,.28)",
+  color: "#f8e7b0",
 };
 
 const hero: React.CSSProperties = {
@@ -283,4 +316,12 @@ const button: React.CSSProperties = {
   textDecoration: "none",
   fontWeight: 900,
   border: 0,
+  cursor: "pointer",
+};
+
+const ghostButton: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.14)",
+  color: "white",
 };
