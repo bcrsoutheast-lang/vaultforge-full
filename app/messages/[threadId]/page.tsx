@@ -9,6 +9,10 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
+function lower(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
 function first(...values: unknown[]) {
   for (const value of values) {
     const text = clean(value);
@@ -18,28 +22,42 @@ function first(...values: unknown[]) {
   return "";
 }
 
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
 function currentEmail() {
   if (typeof window === "undefined") return "";
 
-  const local =
-    window.localStorage.getItem("vf_email") ||
-    window.localStorage.getItem("email") ||
-    "";
+  const params = new URLSearchParams(window.location.search || "");
+  const queryEmail = lower(params.get("email") || params.get("from") || params.get("from_email"));
 
-  if (local.includes("@")) return local.toLowerCase();
+  if (queryEmail.includes("@")) return queryEmail;
 
-  const cookieMatch = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith("vf_email="));
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
 
-  if (!cookieMatch) return "";
+  for (const key of keys) {
+    const local = lower(window.localStorage.getItem(key));
+    if (local.includes("@")) return local;
 
-  try {
-    return decodeURIComponent(cookieMatch.split("=")[1] || "").toLowerCase();
-  } catch {
-    return (cookieMatch.split("=")[1] || "").toLowerCase();
+    const session = lower(window.sessionStorage.getItem(key));
+    if (session.includes("@")) return session;
   }
+
+  return lower(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
 function threadKeyOf(row: MessageRow) {
@@ -59,11 +77,85 @@ function titleOf(row: MessageRow) {
 }
 
 function bodyOf(row: MessageRow) {
-  return first(row.message, row.body, row.note);
+  return first(row.message, row.body, row.note, row.content);
 }
 
 function createdOf(row: MessageRow) {
   return first(row.created_at, row.updated_at);
+}
+
+function fromOf(row: MessageRow) {
+  return lower(first(row.from_email, row.sender_email, row.member_email));
+}
+
+function toOf(row: MessageRow) {
+  return lower(first(row.to_email, row.recipient_email, row.target_email, row.owner_email));
+}
+
+function sourceOf(row: MessageRow) {
+  return lower(first(row.source, row.origin, row.message_type, "message"));
+}
+
+function folderOf(row: MessageRow) {
+  return lower(first(row.folder, row.folder_key));
+}
+
+function itemOf(row: MessageRow) {
+  return first(row.item_id, row.itemId, row.deal_id, row.metadata?.item_id);
+}
+
+function signalOf(row: MessageRow) {
+  return first(row.signal_id, row.signalId, row.metadata?.signal_id);
+}
+
+function laneFolder(source: string) {
+  const s = lower(source);
+
+  if (s.includes("alert")) return "alerts";
+  if (s.includes("pain")) return "pain";
+  if (s.includes("signal")) return "signals";
+  if (s.includes("routing") || s.includes("route")) return "routing";
+  if (s.includes("intro")) return "introductions";
+  if (s.includes("project") || s.includes("deal")) return "projects";
+  if (s.includes("member") || s.includes("connect")) return "members";
+
+  return "general";
+}
+
+function defaultReply(source: string) {
+  const s = lower(source);
+
+  if (s.includes("alert")) return "I need more information about this alert.";
+  if (s.includes("pain")) return "I need more information about this pain signal.";
+  if (s.includes("signal")) return "I need more information about this signal.";
+  if (s.includes("routing")) return "I am following up on this routing item.";
+  if (s.includes("project") || s.includes("deal")) return "I need more information about this project.";
+  if (s.includes("member")) return "I would like to connect.";
+
+  return "";
+}
+
+function rowKey(row: MessageRow) {
+  const id = first(row.id);
+  if (id) return id;
+
+  return [
+    threadKeyOf(row),
+    threadIdOf(row),
+    fromOf(row),
+    toOf(row),
+    titleOf(row),
+    bodyOf(row),
+    createdOf(row),
+  ].join("|");
+}
+
+async function safeJson(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
 }
 
 export default function ThreadPage({
@@ -71,31 +163,54 @@ export default function ThreadPage({
 }: {
   params: { threadId: string };
 }) {
+  const routeThreadId = decodeURIComponent(params.threadId || "");
+
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [reply, setReply] = useState("");
   const [status, setStatus] = useState("Loading thread...");
+  const [busy, setBusy] = useState(false);
+  const [viewer, setViewer] = useState("");
 
-  const threadKey = useMemo(() => {
-    if (typeof window === "undefined") return "";
+  const urlContext = useMemo(() => {
+    if (typeof window === "undefined") {
+      return {
+        threadKey: "",
+        source: "message",
+        to: "",
+        subject: "",
+        message: "",
+        itemId: "",
+        signalId: "",
+      };
+    }
 
-    return new URLSearchParams(window.location.search).get("thread_key") || "";
+    const search = new URLSearchParams(window.location.search || "");
+
+    return {
+      threadKey: clean(search.get("thread_key") || ""),
+      source: clean(search.get("source") || search.get("type") || search.get("context") || "message"),
+      to: lower(search.get("to") || search.get("recipient_email") || search.get("owner_email") || ""),
+      subject: clean(search.get("subject") || search.get("title") || ""),
+      message: clean(search.get("message") || search.get("body") || search.get("note") || ""),
+      itemId: clean(search.get("item_id") || search.get("itemId") || search.get("deal_id") || search.get("project_id") || ""),
+      signalId: clean(search.get("signal_id") || search.get("signalId") || ""),
+    };
   }, []);
 
   async function load() {
+    const email = currentEmail();
+    setViewer(email);
+    setStatus("Loading thread...");
+
     try {
-      const email = currentEmail();
+      const response = await fetch(`/api/simple-messages?email=${encodeURIComponent(email)}`, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": email,
+        },
+      });
 
-      const response = await fetch(
-        `/api/simple-messages?email=${encodeURIComponent(email)}`,
-        {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": email,
-          },
-        }
-      );
-
-      const data = await response.json();
+      const data = await safeJson(response);
 
       /*
         IMPORTANT:
@@ -104,19 +219,31 @@ export default function ThreadPage({
       const rows = Array.isArray(data.messages) ? data.messages : [];
 
       const filtered = rows.filter((row: MessageRow) => {
-        if (threadKey) {
-          return threadKeyOf(row) === threadKey;
+        if (urlContext.threadKey) {
+          return threadKeyOf(row) === urlContext.threadKey;
         }
 
-        return threadIdOf(row) === decodeURIComponent(params.threadId || "");
+        return threadIdOf(row) === routeThreadId;
       });
 
-      filtered.sort((a: MessageRow, b: MessageRow) =>
-        createdOf(a).localeCompare(createdOf(b))
-      );
+      const seen = new Set<string>();
+      const unique = filtered.filter((row: MessageRow) => {
+        const key = rowKey(row);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
-      setMessages(filtered);
-      setStatus(filtered.length ? "" : "No messages.");
+      unique.sort((a: MessageRow, b: MessageRow) => createdOf(a).localeCompare(createdOf(b)));
+
+      setMessages(unique);
+      setStatus(unique.length ? "" : "No messages in this conversation yet.");
+
+      if (!reply) {
+        const existing = unique[0];
+        const starter = urlContext.message || defaultReply(urlContext.source || sourceOf(existing || {}));
+        if (starter) setReply(starter);
+      }
     } catch (error) {
       console.error(error);
       setStatus("Could not load thread.");
@@ -125,10 +252,143 @@ export default function ThreadPage({
 
   useEffect(() => {
     load();
-  }, [params.threadId, threadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeThreadId, urlContext.threadKey]);
+
+  const firstMessage = messages[0] || {};
+  const latestMessage = messages[messages.length - 1] || firstMessage || {};
+
+  async function sendReply() {
+    if (busy) return;
+
+    const text = clean(reply);
+
+    if (!text) {
+      setStatus("Write a message first.");
+      return;
+    }
+
+    const email = viewer || currentEmail();
+
+    if (!email.includes("@")) {
+      setStatus("Missing signed-in email.");
+      return;
+    }
+
+    setBusy(true);
+    setStatus("Sending message...");
+
+    try {
+      const source = urlContext.source || sourceOf(firstMessage) || "message";
+      const folder = folderOf(firstMessage) || laneFolder(source);
+      const threadKey = urlContext.threadKey || threadKeyOf(firstMessage);
+      const threadId = routeThreadId || threadIdOf(firstMessage);
+      const toEmail =
+        urlContext.to ||
+        (fromOf(latestMessage) === email ? toOf(latestMessage) : fromOf(latestMessage)) ||
+        toOf(firstMessage) ||
+        "owner@vaultforge.local";
+
+      const title = urlContext.subject || titleOf(firstMessage) || "VaultForge message";
+      const itemId = urlContext.itemId || itemOf(firstMessage) || null;
+      const signalId = urlContext.signalId || signalOf(firstMessage) || null;
+      const now = new Date().toISOString();
+
+      const payload = {
+        thread_id: threadId,
+        thread_key: threadKey,
+        from_email: email,
+        sender_email: email,
+        to_email: toEmail,
+        recipient_email: toEmail,
+        target_email: toEmail,
+        owner_email: toEmail,
+        subject: title,
+        title,
+        message: text,
+        body: text,
+        note: text,
+        source,
+        origin: source,
+        message_type: source,
+        folder,
+        folder_key: folder,
+        signal_id: signalId,
+        item_id: itemId,
+        deal_id: itemId,
+        status: "sent",
+        created_at: now,
+        updated_at: now,
+        metadata: {
+          thread_id: threadId,
+          thread_key: threadKey,
+          source,
+          origin: source,
+          folder,
+          folder_key: folder,
+          signal_id: signalId,
+          item_id: itemId,
+          from_email: email,
+          to_email: toEmail,
+          subject: title,
+          created_at: now,
+          updated_at: now,
+        },
+      };
+
+      const response = await fetch("/api/simple-messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await safeJson(response);
+
+      if (!response.ok || result?.ok === false) {
+        throw new Error(result?.error || "Message could not be saved.");
+      }
+
+      setReply("");
+      await load();
+      setStatus("Message sent.");
+    } catch (error: any) {
+      console.error(error);
+      setStatus(error?.message || "Message could not be sent.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <main style={page}>
+      <style>{`
+        a:hover, button:hover {
+          transform: translateY(-1px);
+          filter: brightness(1.06);
+          transition: all .18s ease;
+        }
+
+        textarea::placeholder {
+          color: rgba(255,255,255,.45);
+        }
+
+        @media (max-width: 760px) {
+          .vf-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+            justify-content: center;
+          }
+        }
+      `}</style>
+
       <div style={wrap}>
         <nav style={nav}>
           <Link href="/dashboard" style={navButton}>Dashboard</Link>
@@ -147,36 +407,27 @@ export default function ThreadPage({
           <h1 style={heroTitle}>Message Room.</h1>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span style={chip}>Thread Key: {threadKey || "none"}</span>
+            <span style={chip}>Signed in: {viewer || "unknown"}</span>
+            <span style={chip}>Thread Key: {urlContext.threadKey || threadKeyOf(firstMessage) || "none"}</span>
             <span style={chip}>Messages: {messages.length}</span>
           </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <Link href="/messages" style={button}>
-              Back to Messages
-            </Link>
-            <button type="button" onClick={load} style={ghostButton}>
-              Refresh
-            </button>
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            <Link href="/messages" style={button}>Back to Messages</Link>
+            <button type="button" onClick={load} style={ghostButton}>Refresh</button>
           </div>
         </section>
 
         <section style={{ display: "grid", gap: 16 }}>
           {messages.map((message, index) => (
-            <article key={`${threadIdOf(message)}-${index}`} style={card}>
+            <article key={`${rowKey(message)}-${index}`} style={card}>
               <h2 style={title}>{titleOf(message)}</h2>
 
               <p style={body}>{bodyOf(message)}</p>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <span style={chip}>
-                  From: {first(message.from_email, message.sender_email)}
-                </span>
-
-                <span style={chip}>
-                  To: {first(message.to_email, message.recipient_email)}
-                </span>
-
+                <span style={chip}>From: {fromOf(message) || "unknown"}</span>
+                <span style={chip}>To: {toOf(message) || "unknown"}</span>
                 <span style={chip}>{createdOf(message)}</span>
               </div>
             </article>
@@ -184,17 +435,17 @@ export default function ThreadPage({
         </section>
 
         <section style={hero}>
-          <h2>Reply</h2>
+          <h2 style={{ marginTop: 0 }}>Reply</h2>
 
           <textarea
             value={reply}
             onChange={(event) => setReply(event.target.value)}
-            placeholder="Reply UI only for now."
+            placeholder="Write your message..."
             style={textarea}
           />
 
-          <button type="button" style={button}>
-            Send Reply
+          <button type="button" onClick={sendReply} disabled={busy} style={{ ...button, opacity: busy ? 0.65 : 1 }}>
+            {busy ? "Sending..." : "Send Message"}
           </button>
         </section>
 
@@ -207,7 +458,7 @@ export default function ThreadPage({
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
   padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
@@ -291,6 +542,7 @@ const chip: React.CSSProperties = {
   padding: "8px 12px",
   fontSize: 12,
   color: "#dbeafe",
+  display: "inline-flex",
 };
 
 const textarea: React.CSSProperties = {
@@ -303,6 +555,8 @@ const textarea: React.CSSProperties = {
   padding: 16,
   border: "1px solid rgba(255,255,255,.12)",
   marginBottom: 16,
+  outline: "none",
+  fontSize: 16,
 };
 
 const button: React.CSSProperties = {
