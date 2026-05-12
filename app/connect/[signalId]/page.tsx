@@ -1,21 +1,67 @@
-"use client";
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import VaultForgeMemberNav from "../../components/VaultForgeMemberNav";
-type Result = Record<string, any>;
-function clean(v: unknown){return String(v||"").trim()} function cleanEmail(v: unknown){return clean(v).toLowerCase()}
-function readCookie(name:string){if(typeof document==="undefined")return"";const m=document.cookie.split(";").map(x=>x.trim()).find(x=>x.startsWith(`${name}=`));if(!m)return"";try{return decodeURIComponent(m.slice(name.length+1))}catch{return m.slice(name.length+1)}}
-function currentEmail(){if(typeof window==="undefined")return"";const p=new URLSearchParams(window.location.search||"");const q=cleanEmail(p.get("email")||p.get("from")||p.get("from_email"));if(q.includes("@"))return q;for(const k of ["vf_email","vf_member_email","vf_admin_email","email","memberEmail"]){const l=cleanEmail(localStorage.getItem(k));if(l.includes("@"))return l;const s=cleanEmail(sessionStorage.getItem(k));if(s.includes("@"))return s}return cleanEmail(readCookie("vf_email")||readCookie("vf_member_email")||readCookie("vf_admin_email"))}
-function param(p:URLSearchParams,names:string[]){for(const n of names){const v=clean(p.get(n));if(v)return v}return""}
-function label(s:string){const x=s.toLowerCase(); if(x.includes("alert"))return"Alert message"; if(x.includes("pain"))return"Pain message"; if(x.includes("activity"))return"Activity message"; if(x.includes("routing"))return"Routing message"; if(x.includes("intro"))return"Introduction message"; if(x.includes("project"))return"Project message"; if(x.includes("member"))return"Member message"; if(x.includes("signal"))return"Signal message"; return"VaultForge message"}
-function defaultBody(s:string){const x=s.toLowerCase(); if(x.includes("alert"))return"I need more information about this VaultForge alert."; if(x.includes("pain"))return"I need more information about this pain request or opportunity."; if(x.includes("activity"))return"I am following up on this VaultForge activity item."; if(x.includes("routing"))return"I am following up on this routing opportunity."; if(x.includes("intro"))return"I am responding to this controlled introduction."; if(x.includes("project"))return"I need more information about this project or deal room."; if(x.includes("member"))return"I saw this member profile and would like to connect."; if(x.includes("signal"))return"I need more information about this VaultForge signal."; return"I need more information about this VaultForge opportunity."}
-async function safeJson(res:Response){try{return await res.json()}catch{return{}}}
-const page:React.CSSProperties={minHeight:"100vh",background:"radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%),radial-gradient(circle at 88% 10%, rgba(74,222,128,.10), transparent 26%),linear-gradient(180deg,#020303,#071326 55%,#020303)",color:"white",padding:"22px 16px 96px",fontFamily:"Arial, sans-serif"};
-const wrap:React.CSSProperties={width:"min(980px,100%)",margin:"0 auto"}; const card:React.CSSProperties={border:"1px solid rgba(232,196,107,.24)",borderRadius:30,padding:24,background:"linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",boxShadow:"0 28px 86px rgba(0,0,0,.30)",marginBottom:18};
-const input:React.CSSProperties={width:"100%",boxSizing:"border-box",borderRadius:18,border:"1px solid rgba(255,255,255,.16)",background:"rgba(255,255,255,.08)",color:"white",padding:14,fontSize:16,outline:"none"};
-const chip:React.CSSProperties={display:"inline-flex",border:"1px solid rgba(157,243,191,.25)",background:"rgba(157,243,191,.08)",color:"#9df3bf",borderRadius:999,padding:"8px 11px",fontWeight:850,margin:"0 7px 7px 0",fontSize:12};
-const button:React.CSSProperties={display:"inline-flex",justifyContent:"center",alignItems:"center",minHeight:52,borderRadius:999,padding:"13px 18px",border:0,background:"linear-gradient(135deg,#f8e7b0,#9df3bf,#b55cff)",color:"#06100a",fontWeight:950,textDecoration:"none",cursor:"pointer"}; const ghost:React.CSSProperties={...button,background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.16)",color:"white"};
-export default function ConnectPage({params}:{params:{signalId:string}}){const signalId=decodeURIComponent(params.signalId||"general-message");const[fromEmail,setFromEmail]=useState("");const[toEmail,setToEmail]=useState("");const[source,setSource]=useState("message");const[itemId,setItemId]=useState("");const[subject,setSubject]=useState("VaultForge follow-up");const[message,setMessage]=useState("I need more information about this VaultForge opportunity.");const[status,setStatus]=useState("");const[result,setResult]=useState<Result|null>(null);const[busy,setBusy]=useState(false);
-useEffect(()=>{const p=new URLSearchParams(window.location.search||"");const src=param(p,["source","type","context"])||"message";setFromEmail(currentEmail());setToEmail(cleanEmail(param(p,["to","recipient","recipient_email","target_email","owner_email"])));setSource(src);setItemId(param(p,["item_id","itemId","pain_id","project_id","deal_id"]));setSubject(param(p,["subject","title"])||label(src));setMessage(param(p,["message","body","note"])||defaultBody(src))},[]); const pageTitle=useMemo(()=>label(source),[source]);
-async function submit(){if(busy)return;setBusy(true);setStatus("Saving message...");setResult(null);try{if(!fromEmail.includes("@"))throw new Error("Missing sender email. Please log in again.");if(!clean(message))throw new Error("Write a message first.");const recipient=cleanEmail(toEmail)||"owner@vaultforge.local";const payload={from_email:fromEmail,sender_email:fromEmail,email:fromEmail,member_email:fromEmail,to_email:recipient,recipient_email:recipient,target_email:recipient,owner_email:recipient,signal_id:signalId,item_id:itemId,source,subject,title:subject,message,body:message,note:message,status:"open"};const res=await fetch("/api/simple-messages",{method:"POST",headers:{"Content-Type":"application/json","x-vf-email":fromEmail},body:JSON.stringify(payload)});const data=await safeJson(res);if(!res.ok||data?.ok===false)throw new Error(data?.error||data?.details||"Message could not be saved.");setResult(data);setStatus("Message saved.")}catch(e:any){setStatus(e?.message||"Message could not be saved.")}finally{setBusy(false)}} const threadId=clean(result?.thread_id||result?.row?.thread_id||"");
-return <main style={page}><style>{`a:hover,button:hover{transform:translateY(-1px);transition:all .18s ease;filter:brightness(1.06)}input::placeholder,textarea::placeholder{color:rgba(255,255,255,.42)}@media(max-width:760px){.vf-grid,.vf-actions{grid-template-columns:1fr!important}.vf-actions{display:grid!important;gap:10px!important}.vf-actions>*{width:100%;box-sizing:border-box;justify-content:center}}`}</style><div style={wrap}><VaultForgeMemberNav title="Message" subtitle="Controlled owner/member communication." active="messages"/><section style={card}><div style={{color:"#9df3bf",letterSpacing:".18em",textTransform:"uppercase",fontWeight:950,fontSize:12}}>VaultForge Communication</div><h1 style={{fontSize:"clamp(52px,10vw,92px)",lineHeight:.88,margin:"12px 0 18px",letterSpacing:"-.07em"}}>{pageTitle}.</h1><p style={{color:"#cbd5e1",fontSize:20,lineHeight:1.55}}>Send one controlled message. VaultForge keeps it tied to the right signal, item, source, and thread.</p><div style={{marginTop:18}}><span style={chip}>From: {fromEmail||"missing"}</span><span style={chip}>Type: {source}</span><span style={chip}>Signal: {signalId}</span>{itemId?<span style={chip}>Item: {itemId}</span>:null}</div><div className="vf-actions" style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:22}}><Link href="/dashboard" style={ghost}>Dashboard</Link><Link href="/messages" style={ghost}>All Messages</Link><Link href="/signals" style={ghost}>Signals</Link><Link href="/members" style={ghost}>Members</Link></div></section>{status?<section style={{...card,borderColor:status.includes("saved")?"rgba(157,243,191,.42)":"rgba(248,113,113,.34)"}}><h2 style={{margin:0,color:status.includes("saved")?"#9df3bf":"#ffd0d0"}}>{status}</h2>{threadId?<div style={{marginTop:14}}><Link href={`/messages/${encodeURIComponent(threadId)}`} style={button}>Open Thread</Link></div>:null}</section>:null}<section style={card}><div style={{color:"#e8c46b",letterSpacing:".18em",textTransform:"uppercase",fontWeight:950,fontSize:12}}>Message Details</div><div className="vf-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:18}}><div><label style={{display:"block",fontWeight:900,marginBottom:8}}>Your Email</label><input style={input} value={fromEmail} onChange={e=>setFromEmail(cleanEmail(e.target.value))}/></div><div><label style={{display:"block",fontWeight:900,marginBottom:8}}>Send To</label><input style={input} value={toEmail} onChange={e=>setToEmail(cleanEmail(e.target.value))} placeholder="Owner/member email if known"/></div></div><div style={{marginTop:18}}><label style={{display:"block",fontWeight:900,marginBottom:8}}>Subject</label><input style={input} value={subject} onChange={e=>setSubject(e.target.value)}/></div><div style={{marginTop:18}}><label style={{display:"block",fontWeight:900,marginBottom:8}}>Message</label><textarea style={{...input,minHeight:180,resize:"vertical"}} value={message} onChange={e=>setMessage(e.target.value)}/></div><button type="button" onClick={submit} disabled={busy} style={{...button,width:"100%",marginTop:22,opacity:busy?.65:1}}>{busy?"Saving...":"Send Message"}</button></section><section style={card}><div style={{color:"#e8c46b",letterSpacing:".18em",textTransform:"uppercase",fontWeight:950,fontSize:12}}>Safety Mode</div><p style={{color:"#cbd5e1",lineHeight:1.55,marginBottom:0}}>This records the request inside VaultForge. It does not automatically release private contact information.</p></section></div></main>}
+import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
+
+function safePart(value: string) {
+  return clean(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90);
+}
+
+function firstParam(
+  params: Record<string, string | string[] | undefined>,
+  names: string[]
+) {
+  for (const name of names) {
+    const raw = params[name];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    const text = clean(value);
+    if (text) return text;
+  }
+
+  return "";
+}
+
+function buildThreadUrl(
+  signalId: string,
+  params: Record<string, string | string[] | undefined>
+) {
+  const source = firstParam(params, ["source", "type", "context"]) || "message";
+  const itemId = firstParam(params, ["item_id", "itemId", "pain_id", "project_id", "deal_id"]);
+  const to = firstParam(params, ["to", "recipient", "recipient_email", "target_email", "owner_email"]);
+  const email = firstParam(params, ["email", "from", "from_email", "member_email"]);
+  const subject = firstParam(params, ["subject", "title"]);
+  const message = firstParam(params, ["message", "body", "note"]);
+
+  const threadBase = safePart(`${source}-${signalId || itemId || "general-message"}`) || "general-message";
+
+  const next = new URLSearchParams();
+  next.set("source", source);
+  next.set("signal_id", signalId || "general-message");
+
+  if (itemId) next.set("item_id", itemId);
+  if (to) next.set("to", to);
+  if (email) next.set("email", email);
+  if (subject) next.set("subject", subject);
+  if (message) next.set("message", message);
+
+  return `/messages/${encodeURIComponent(threadBase)}?${next.toString()}`;
+}
+
+export default function ConnectRedirectPage({
+  params,
+  searchParams,
+}: {
+  params: { signalId: string };
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
+  const signalId = decodeURIComponent(params.signalId || "general-message");
+  redirect(buildThreadUrl(signalId, searchParams || {}));
+}
