@@ -1,314 +1,476 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import ProjectsClient from "./ProjectsClient";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-type Access = {
-  email: string;
-  owner: boolean;
-  profile_complete: boolean;
-  payment_status: string;
-  access_status: string;
-  paid: boolean;
-  unlocked: boolean;
-  next_step: string;
-};
+type Row = Record<string, any>;
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
-  color: "white",
-  padding: "28px 18px 90px",
-  fontFamily: "Arial, sans-serif",
-};
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
 
-const openPage: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
-  color: "white",
-  padding: "28px 18px 0",
-  fontFamily: "Arial, sans-serif",
-};
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1100,
-  margin: "0 auto",
-};
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
 
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.28)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
-  borderRadius: 34,
-  padding: 26,
-  marginBottom: 22,
-};
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
 
-const btn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#061120",
-  borderRadius: 999,
-  padding: "14px 22px",
-  fontWeight: 950,
-  textDecoration: "none",
-  margin: "7px 7px 0 0",
-  border: 0,
-};
+  if (!match) return "";
 
-const ghost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "linear-gradient(135deg, rgba(181,92,255,.20), rgba(255,255,255,.05))",
-  borderRadius: 999,
-  padding: "14px 22px",
-  fontWeight: 900,
-  textDecoration: "none",
-  margin: "7px 7px 0 0",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#9df3bf",
-  letterSpacing: 5,
-  fontWeight: 950,
-  fontSize: 12,
-  marginBottom: 12,
-  textTransform: "uppercase",
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.70)",
-  lineHeight: 1.55,
-  fontSize: 18,
-};
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
 
 function getEmail() {
   if (typeof window === "undefined") return "";
 
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    ""
-  )
-    .trim()
-    .toLowerCase();
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
+
+  for (const key of keys) {
+    const localValue = cleanEmail(window.localStorage.getItem(key));
+    if (localValue.includes("@")) return localValue;
+
+    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
+    if (sessionValue.includes("@")) return sessionValue;
+  }
+
+  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
-function LockedScreen({
-  reason,
-}: {
-  reason: "loading" | "login" | "profile" | "payment";
-}) {
+async function safeJson(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+
+function meta(row: Row) {
+  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
+}
+
+function first(...values: unknown[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
+    }
+
+    const text = clean(value);
+    if (text) return text;
+  }
+
+  return "";
+}
+
+function idOf(row: Row) {
+  const m = meta(row);
+  return first(row.id, row.project_id, row.item_id, row.itemId, m.id, m.project_id, m.item_id);
+}
+
+function signalIdOf(row: Row) {
+  const m = meta(row);
+  return first(row.signal_id, row.signalId, m.signal_id);
+}
+
+function titleOf(row: Row) {
+  const m = meta(row);
+  return first(row.title, row.project_title, row.name, row.address, m.title, m.project_title, m.name, m.address, "VaultForge Project");
+}
+
+function noteOf(row: Row) {
+  const m = meta(row);
+  return first(row.summary, row.description, row.notes, row.note, row.strategy_notes, row.message, m.summary, m.description, m.notes, m.note, m.strategy_notes, "Project workspace ready for review.");
+}
+
+function statusOf(row: Row) {
+  const m = meta(row);
+  return first(row.status, row.project_status, row.stage, m.status, m.project_status, m.stage, "Open");
+}
+
+function assetOf(row: Row) {
+  const m = meta(row);
+  return first(row.asset_type, row.property_type, m.asset_type, m.property_type, "Asset");
+}
+
+function marketOf(row: Row) {
+  const m = meta(row);
+  const city = first(row.city, m.city);
+  const state = first(row.state, row.market, row.operating_state, m.state, m.market, m.operating_state);
+  return [city, state].filter(Boolean).join(", ") || state || first(row.location, m.location, "Market not listed");
+}
+
+function ownerOf(row: Row) {
+  const m = meta(row);
+  return cleanEmail(first(row.owner_email, row.member_email, row.user_email, row.submitted_by_email, row.created_by_email, m.owner_email, m.member_email, m.user_email, m.submitted_by_email, m.created_by_email));
+}
+
+function photosOf(row: Row) {
+  const m = meta(row);
+  const values = [
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    m.image_url,
+    m.photo_url,
+    ...(Array.isArray(row.photo_urls) ? row.photo_urls : []),
+    ...(Array.isArray(row.photos) ? row.photos : []),
+    ...(Array.isArray(m.photo_urls) ? m.photo_urls : []),
+    ...(Array.isArray(m.photos) ? m.photos : []),
+  ];
+
+  return Array.from(
+    new Set(
+      values
+        .map((item: any) => {
+          if (typeof item === "string") return clean(item);
+          if (item && typeof item === "object") return clean(item.url || item.publicUrl || item.photo_url || item.image_url);
+          return "";
+        })
+        .filter((url) => url.startsWith("http"))
+    )
+  );
+}
+
+function scoreOf(row: Row) {
+  const m = meta(row);
+  let score = Number(row.priority_score || row.execution_score || row.confidence_score || m.priority_score || m.execution_score || m.confidence_score || 0);
+
+  if (!Number.isFinite(score) || score <= 0) score = 55;
+
+  if (photosOf(row).length) score += 5;
+  if (ownerOf(row)) score += 5;
+  if (marketOf(row) !== "Market not listed") score += 5;
+  if (statusOf(row).toLowerCase().includes("active")) score += 8;
+
+  return Math.min(100, Math.max(0, Math.round(score)));
+}
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(56,189,248,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  color: "white",
+  padding: "22px 16px 96px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const wrap: React.CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 24,
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
+
+const glass: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,.045)",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
+
+const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
+
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: 50,
+  borderRadius: 999,
+  padding: "12px 18px",
+  border: 0,
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.16)",
+  color: "white",
+};
+
+const chip: React.CSSProperties = {
+  border: "1px solid rgba(157,243,191,.22)",
+  borderRadius: 999,
+  padding: "7px 10px",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  margin: "0 7px 7px 0",
+  fontSize: 12,
+  fontWeight: 850,
+  display: "inline-flex",
+};
+
+function Metric({ label, value, tone }: { label: string; value: string; tone: "blue" | "green" | "gold" | "red" }) {
+  const color = tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
+
   return (
-    <main style={page}>
-      <style>{`
-        a:hover,
-        button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
+    <section style={glass}>
+      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>{label}</div>
+      <div style={{ fontSize: 52, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
+    </section>
+  );
+}
 
-        @media (max-width: 760px) {
-          a,
-          button {
-            box-sizing: border-box;
-          }
-        }
-      `}</style>
-      <div style={wrap}>
-        <VaultForgeMemberNav
-          title="Projects"
-          subtitle="Deal rooms, saved targets, and project review tools"
-        />
+function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
+  const projectId = idOf(row);
+  const signalId = signalIdOf(row);
+  const photos = photosOf(row);
+  const owner = ownerOf(row);
+  const score = scoreOf(row);
 
-        <section style={hero}>
-          <div style={eyebrow}>VAULTFORGE DEAL ROOMS</div>
+  const contactHref = signalId
+    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${projectId ? `&item_id=${encodeURIComponent(projectId)}` : ""}`
+    : `/messages/new?email=${encodeURIComponent(viewer)}${projectId ? `&item_id=${encodeURIComponent(projectId)}` : ""}`;
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginBottom: 16,
-            }}
-          >
-            <span
-              style={{
-                border: "1px solid rgba(181,92,255,.36)",
-                color: "#dcb8ff",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(181,92,255,.12)",
-              }}
-            >
-              Live Opportunity Network
+  const projectHref = projectId ? `/project-room/${encodeURIComponent(projectId)}` : "/projects";
+
+  return (
+    <article style={glass}>
+      <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 18 }}>
+        <div
+          style={{
+            borderRadius: 20,
+            overflow: "hidden",
+            border: "1px solid rgba(232,196,107,.18)",
+            background: "rgba(0,0,0,.20)",
+            minHeight: 150,
+          }}
+        >
+          {photos[0] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photos[0]} alt="Project asset" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          ) : (
+            <div style={{ height: 150, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850 }}>
+              No photo
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={chip}>{assetOf(row)}</span>
+            <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.26)", background: "rgba(232,196,107,.08)" }}>
+              Score {score}
             </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(157,243,191,.36)",
-                color: "#9df3bf",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(157,243,191,.10)",
-              }}
-            >
-              Private Deal Intelligence
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(245,217,120,.36)",
-                color: "#f5d978",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(245,217,120,.10)",
-              }}
-            >
-              Bloomberg-Style Command Flow
+            <span style={{ ...chip, color: "#8fd3ff", borderColor: "rgba(56,189,248,.28)", background: "rgba(56,189,248,.08)" }}>
+              {statusOf(row)}
             </span>
           </div>
 
-          <h1
-            style={{
-              fontSize: "clamp(54px,12vw,96px)",
-              lineHeight: 0.88,
-              margin: "0 0 18px",
-              letterSpacing: -3,
-            }}
-          >
-            {reason === "loading"
-              ? "Checking access..."
-              : reason === "login"
-              ? "Create member access first."
-              : reason === "profile"
-              ? "Complete your profile first."
-              : "Activate member access first."}
-          </h1>
+          <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
+          <p style={muted}>{noteOf(row)}</p>
 
-          <p style={muted}>
-            {reason === "loading"
-              ? "VaultForge is checking your member access before opening deal rooms."
-              : reason === "login"
-              ? "Log in or create member access before reviewing live deal rooms."
-              : reason === "profile"
-              ? "Your AI profile trains the routing engine before deal room access unlocks."
-              : "Your profile is complete. Activate membership to unlock deal rooms, saved targets, and project review tools."}
-          </p>
+          <div style={{ marginTop: 12 }}>
+            {projectId ? <span style={chip}>Project: {projectId}</span> : null}
+            {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
+            <span style={chip}>Market: {marketOf(row)}</span>
+            {owner ? <span style={chip}>Owner: {owner}</span> : null}
+          </div>
 
-          {reason === "login" && (
-            <Link href="/login" style={btn}>
-              Login / Create Access
-            </Link>
-          )}
-
-          {reason === "profile" && (
-            <Link href="/profile" style={btn}>
-              Complete Profile
-            </Link>
-          )}
-
-          {reason === "payment" && (
-            <Link href="/payment" style={btn}>
-              Activate Access
-            </Link>
-          )}
-
-          <Link href="/dashboard" style={ghost}>
-            Dashboard
-          </Link>
-
-          <Link href="/" style={ghost}>
-            Home
-          </Link>
-        </section>
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            <Link href={projectHref} style={button}>Open Workstation</Link>
+            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link> : null}
+            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
+            <Link href={contactHref} style={ghost}>Message Owner</Link>
+          </div>
+        </div>
       </div>
-    </main>
+    </article>
   );
 }
 
 export default function ProjectsPage() {
-  const [lockReason, setLockReason] = useState<
-    "loading" | "login" | "profile" | "payment" | "open"
-  >("loading");
+  const [email, setEmail] = useState("");
+  const [items, setItems] = useState<Row[]>([]);
+  const [status, setStatus] = useState("Loading projects...");
 
-  useEffect(() => {
-    async function checkAccess() {
-      try {
-        const email = getEmail();
+  async function load() {
+    const viewer = getEmail();
+    setEmail(viewer);
+    setStatus("Loading projects...");
 
-        if (!email) {
-          setLockReason("login");
-          return;
-        }
+    try {
+      const urls = [
+        `/api/projects?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
+      ];
 
-        const res = await fetch(
-          `/api/member/access?email=${encodeURIComponent(email)}`,
-          {
+      const collected: Row[] = [];
+
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, {
             cache: "no-store",
-            headers: {
-              "x-vf-email": email,
-            },
-          }
-        );
+            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
+          });
 
-        const data: Access = await res.json();
+          const data = await safeJson(res);
+          const list = [
+            ...(Array.isArray(data.projects) ? data.projects : []),
+            ...(Array.isArray(data.items) ? data.items : []),
+            ...(Array.isArray(data.pains) ? data.pains : []),
+            ...(Array.isArray(data.data) ? data.data : []),
+          ];
 
-        if (!data?.owner && !data?.profile_complete) {
-          setLockReason("profile");
-          return;
+          collected.push(...list);
+        } catch {
+          // Keep fallback page alive.
         }
-
-        if (!data?.owner && !data?.paid && !data?.unlocked) {
-          setLockReason("payment");
-          return;
-        }
-
-        setLockReason("open");
-      } catch {
-        setLockReason("login");
       }
+
+      const seen = new Set<string>();
+      const unique = collected.filter((item) => {
+        const key = first(idOf(item), signalIdOf(item), item.id, titleOf(item) + noteOf(item));
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      setItems(unique);
+      setStatus(unique.length ? "" : "No project workstations connected yet.");
+    } catch (error: any) {
+      setStatus(error?.message || "Could not load projects.");
     }
-
-    checkAccess();
-  }, []);
-
-  if (lockReason !== "open") {
-    return <LockedScreen reason={lockReason} />;
   }
 
+  useEffect(() => {
+    load();
+  }, []);
+
+  const counts = useMemo(() => {
+    const active = items.filter((item) => !statusOf(item).toLowerCase().includes("archive") && !statusOf(item).toLowerCase().includes("closed")).length;
+    const withPhotos = items.filter((item) => photosOf(item).length).length;
+    const signalLinked = items.filter((item) => signalIdOf(item)).length;
+
+    return { total: items.length, active, withPhotos, signalLinked };
+  }, [items]);
+
   return (
-    <main style={openPage}>
+    <main style={page}>
       <style>{`
-        a:hover,
-        button:hover {
+        a:hover, button:hover {
           transform: translateY(-1px);
           transition: all .18s ease;
           filter: brightness(1.06);
+        }
+
+        @media (max-width: 820px) {
+          .vf-grid,
+          .vf-four,
+          .vf-actions {
+            grid-template-columns: 1fr !important;
+          }
+
+          .vf-actions {
+            display: grid !important;
+            gap: 10px !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+            justify-content: center;
+          }
+
+          article > div {
+            grid-template-columns: 1fr !important;
+          }
         }
       `}</style>
 
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Projects"
-          subtitle="Deal rooms, saved targets, and project review tools"
+          subtitle="Project workstations, saved targets, deal rooms, execution status, and owner communication."
+          active="projects"
         />
-      </div>
 
-      <ProjectsClient />
+        <section style={card}>
+          <div style={eyebrow}>VaultForge Project Desk</div>
+          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+            Workstations.
+          </h1>
+          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
+            Keep project/deal work areas clean: each project should have its place, owner contact,
+            signal context, photos, and next action.
+          </p>
+
+          <div style={{ marginTop: 16 }}>
+            <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>Projects: {counts.total}</span>
+            <span style={chip}>Active: {counts.active}</span>
+            <span style={chip}>Signal Linked: {counts.signalLinked}</span>
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/pain" style={button}>Submit Pain</Link>
+            <Link href="/signals" style={ghost}>Signals</Link>
+            <Link href="/messages" style={ghost}>Messages</Link>
+            <button type="button" onClick={load} style={ghost}>Refresh</button>
+          </div>
+        </section>
+
+        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
+          <Metric label="Workstations" value={String(counts.total)} tone="blue" />
+          <Metric label="Active" value={String(counts.active)} tone="green" />
+          <Metric label="Signal Linked" value={String(counts.signalLinked)} tone="gold" />
+          <Metric label="With Photos" value={String(counts.withPhotos)} tone="red" />
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Project Queue</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Clean workstations.</h2>
+
+          {items.length ? (
+            <div style={{ display: "grid", gap: 14 }}>
+              {items.map((item, index) => (
+                <ProjectCard key={clean(item.id) || `${idOf(item)}-${index}`} row={item} viewer={email} />
+              ))}
+            </div>
+          ) : (
+            <div style={glass}>
+              <h3 style={{ marginTop: 0 }}>No workstations connected yet.</h3>
+              <p style={muted}>
+                Projects will appear here when project records or related pain/signal records are connected.
+              </p>
+              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                <Link href="/pain" style={button}>Submit Pain</Link>
+                <Link href="/signals" style={ghost}>Open Signals</Link>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {status ? <section style={card}>{status}</section> : null}
+      </div>
     </main>
   );
 }
