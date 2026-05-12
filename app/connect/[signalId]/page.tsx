@@ -50,7 +50,11 @@ function currentEmail(params: URLSearchParams) {
     if (session.includes("@")) return session;
   }
 
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+  return cleanEmail(
+    readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("vf_admin_email")
+  );
 }
 
 function firstParam(params: URLSearchParams, names: string[]) {
@@ -129,7 +133,7 @@ function fireAndForgetApiSave(row: Record<string, any>) {
     },
     body: JSON.stringify(row),
   }).catch(() => {
-    // Local visible inbox copy already exists.
+    // Local inbox copy already exists.
   });
 }
 
@@ -156,9 +160,9 @@ const button: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  minHeight: 50,
+  minHeight: 56,
   borderRadius: 999,
-  padding: "12px 18px",
+  padding: "13px 22px",
   border: 0,
   background: "linear-gradient(135deg,#f8e7b0,#9df3bf,#b55cff)",
   color: "#06100a",
@@ -173,89 +177,103 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
-export default function ConnectFastRedirectPage({ params }: { params: { signalId: string } }) {
+const chip: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid rgba(157,243,191,.24)",
+  background: "rgba(157,243,191,.08)",
+  color: "#9df3bf",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 850,
+  margin: "0 7px 7px 0",
+  fontSize: 12,
+};
+
+export default function ConnectNoAutoRedirectPage({ params }: { params: { signalId: string } }) {
   const rawSignalId = decodeURIComponent(params.signalId || "");
-  const [status, setStatus] = useState("Saving message and opening inbox...");
   const startedRef = useRef(false);
+
+  const [status, setStatus] = useState("Saving message...");
+  const [threadId, setThreadId] = useState("");
+  const [sourceLabel, setSourceLabel] = useState("message");
+  const [signalLabel, setSignalLabel] = useState("");
+  const [fromLabel, setFromLabel] = useState("");
 
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
 
-    function run() {
-      try {
-        const search = new URLSearchParams(window.location.search || "");
-        const source = firstParam(search, ["source", "type", "context"]) || "message";
+    try {
+      const search = new URLSearchParams(window.location.search || "");
+      const source = firstParam(search, ["source", "type", "context"]) || "message";
 
-        const signalId =
-          clean(rawSignalId) ||
-          firstParam(search, ["signal_id", "signalId", "alert_id", "routing_id", "id"]) ||
-          firstParam(search, ["item_id", "itemId", "pain_id", "project_id", "deal_id"]) ||
-          "general-message";
+      const signalId =
+        clean(rawSignalId) ||
+        firstParam(search, ["signal_id", "signalId", "alert_id", "routing_id", "id"]) ||
+        firstParam(search, ["item_id", "itemId", "pain_id", "project_id", "deal_id"]) ||
+        "general-message";
 
-        const itemId = firstParam(search, ["item_id", "itemId", "pain_id", "project_id", "deal_id"]);
-        const fromEmail = currentEmail(search);
-        const toEmail =
-          cleanEmail(firstParam(search, ["to", "recipient", "recipient_email", "target_email", "owner_email"])) ||
-          "owner@vaultforge.local";
+      const itemId = firstParam(search, ["item_id", "itemId", "pain_id", "project_id", "deal_id"]);
+      const fromEmail = currentEmail(search);
+      const toEmail =
+        cleanEmail(firstParam(search, ["to", "recipient", "recipient_email", "target_email", "owner_email"])) ||
+        "owner@vaultforge.local";
 
-        const subject = firstParam(search, ["subject", "title"]) || label(source);
-        const message = firstParam(search, ["message", "body", "note"]) || defaultBody(source);
-        const threadId = safePart(`${source}-${signalId || itemId || "general-message"}`) || "general-message";
+      const subject = firstParam(search, ["subject", "title"]) || label(source);
+      const message = firstParam(search, ["message", "body", "note"]) || defaultBody(source);
+      const nextThreadId = safePart(`${source}-${signalId || itemId || "general-message"}`) || "general-message";
 
-        if (!fromEmail.includes("@")) {
-          setStatus("Missing login email. Go to Dashboard, then click Message Owner again.");
-          return;
-        }
+      setSourceLabel(source);
+      setSignalLabel(signalId);
+      setFromLabel(fromEmail);
+      setThreadId(nextThreadId);
 
-        const now = new Date().toISOString();
+      if (!fromEmail.includes("@")) {
+        setStatus("Missing login email. Go to Dashboard, then click Message Owner again.");
+        return;
+      }
 
-        const row = {
-          id: `local-${Date.now()}`,
-          thread_id: threadId,
-          from_email: fromEmail,
-          sender_email: fromEmail,
-          to_email: toEmail,
-          recipient_email: toEmail,
-          target_email: toEmail,
-          owner_email: toEmail,
+      const now = new Date().toISOString();
+
+      const row = {
+        id: `local-${Date.now()}`,
+        thread_id: nextThreadId,
+        from_email: fromEmail,
+        sender_email: fromEmail,
+        to_email: toEmail,
+        recipient_email: toEmail,
+        target_email: toEmail,
+        owner_email: toEmail,
+        signal_id: signalId,
+        item_id: itemId || null,
+        source,
+        message_type: source,
+        subject,
+        title: subject,
+        message,
+        body: message,
+        note: message,
+        status: "open",
+        created_at: now,
+        updated_at: now,
+        metadata: {
+          thread_id: nextThreadId,
           signal_id: signalId,
           item_id: itemId || null,
           source,
-          message_type: source,
+          from_email: fromEmail,
+          to_email: toEmail,
           subject,
-          title: subject,
-          message,
-          body: message,
-          note: message,
-          status: "open",
-          created_at: now,
-          updated_at: now,
-          metadata: {
-            thread_id: threadId,
-            signal_id: signalId,
-            item_id: itemId || null,
-            source,
-            from_email: fromEmail,
-            to_email: toEmail,
-            subject,
-          },
-        };
+        },
+      };
 
-        writeLocalMessage(row);
-        fireAndForgetApiSave(row);
+      writeLocalMessage(row);
+      fireAndForgetApiSave(row);
 
-        setStatus("Message saved. Opening inbox now...");
-
-        window.setTimeout(() => {
-          window.location.href = "/messages";
-        }, 250);
-      } catch (error: any) {
-        setStatus(error?.message || "Could not create message. Use Open Messages below.");
-      }
+      setStatus("Message saved. Open Messages to view it.");
+    } catch (error: any) {
+      setStatus(error?.message || "Could not create message. Use Open Messages below.");
     }
-
-    run();
   }, [rawSignalId]);
 
   return (
@@ -282,19 +300,34 @@ export default function ConnectFastRedirectPage({ params }: { params: { signalId
             margin: "0 0 18px",
           }}
         >
-          Opening inbox.
+          Message saved.
         </h1>
 
         <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.55 }}>
           {status}
         </p>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
+        <div style={{ marginTop: 18 }}>
+          {fromLabel ? <span style={chip}>From: {fromLabel}</span> : null}
+          {sourceLabel ? <span style={chip}>Type: {sourceLabel}</span> : null}
+          {signalLabel ? <span style={chip}>Signal: {signalLabel}</span> : null}
+          {threadId ? <span style={chip}>Thread: {threadId}</span> : null}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 24 }}>
           <Link href="/messages" style={button}>
             Open Messages
           </Link>
+          {threadId ? (
+            <Link href={`/messages/${encodeURIComponent(threadId)}`} style={ghost}>
+              Open Thread
+            </Link>
+          ) : null}
           <Link href="/dashboard" style={ghost}>
             Dashboard
+          </Link>
+          <Link href="/alerts" style={ghost}>
+            Alerts
           </Link>
         </div>
       </section>
