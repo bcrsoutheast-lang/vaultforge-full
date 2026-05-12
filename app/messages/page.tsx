@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -82,104 +81,60 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
-function RedirectBody() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const target = useMemo(() => {
-    return buildConnectUrl(new URLSearchParams(searchParams.toString()));
-  }, [searchParams]);
+export default function NewMessageRedirectPage() {
+  const [target, setTarget] = useState("/connect/general-message?source=message");
 
   useEffect(() => {
-    router.replace(target);
-  }, [router, target]);
+    const params = new URLSearchParams(window.location.search || "");
+    const nextTarget = buildConnectUrl(params);
+    setTarget(nextTarget);
+    window.location.replace(nextTarget);
+  }, []);
 
-  return (
-    <section style={card}>
-      <div
-        style={{
-          color: "#e8c46b",
-          letterSpacing: ".18em",
-          textTransform: "uppercase",
-          fontWeight: 950,
-          fontSize: 12,
-          marginBottom: 12,
-        }}
-      >
-        VaultForge Message Redirect
-      </div>
-
-      <h1
-        style={{
-          fontSize: "clamp(46px,10vw,82px)",
-          lineHeight: 0.9,
-          letterSpacing: "-.06em",
-          margin: "0 0 18px",
-        }}
-      >
-        Opening message window.
-      </h1>
-
-      <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.55 }}>
-        The old new-message form has been retired. VaultForge is opening the shared
-        controlled message window instead.
-      </p>
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
-        <Link href={target} style={button}>
-          Open Message Window
-        </Link>
-        <Link href="/messages" style={ghost}>
-          Message Center
-        </Link>
-        <Link href="/dashboard" style={ghost}>
-          Dashboard
-        </Link>
-      </div>
-    </section>
-  );
-}
-
-function LoadingBody() {
-  return (
-    <section style={card}>
-      <div
-        style={{
-          color: "#e8c46b",
-          letterSpacing: ".18em",
-          textTransform: "uppercase",
-          fontWeight: 950,
-          fontSize: 12,
-          marginBottom: 12,
-        }}
-      >
-        VaultForge Message Redirect
-      </div>
-
-      <h1
-        style={{
-          fontSize: "clamp(46px,10vw,82px)",
-          lineHeight: 0.9,
-          letterSpacing: "-.06em",
-          margin: "0 0 18px",
-        }}
-      >
-        Opening message window.
-      </h1>
-
-      <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.55 }}>
-        Loading message context...
-      </p>
-    </section>
-  );
-}
-
-export default function NewMessageRedirectPage() {
   return (
     <main style={page}>
-      <Suspense fallback={<LoadingBody />}>
-        <RedirectBody />
-      </Suspense>
+      <section style={card}>
+        <div
+          style={{
+            color: "#e8c46b",
+            letterSpacing: ".18em",
+            textTransform: "uppercase",
+            fontWeight: 950,
+            fontSize: 12,
+            marginBottom: 12,
+          }}
+        >
+          VaultForge Message Redirect
+        </div>
+
+        <h1
+          style={{
+            fontSize: "clamp(46px,10vw,82px)",
+            lineHeight: 0.9,
+            letterSpacing: "-.06em",
+            margin: "0 0 18px",
+          }}
+        >
+          Opening message window.
+        </h1>
+
+        <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.55 }}>
+          The legacy new-message form is retired. VaultForge is opening the shared
+          controlled message window instead.
+        </p>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
+          <Link href={target} style={button}>
+            Open Message Window
+          </Link>
+          <Link href="/messages" style={ghost}>
+            Message Center
+          </Link>
+          <Link href="/dashboard" style={ghost}>
+            Dashboard
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }
