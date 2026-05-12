@@ -50,7 +50,7 @@ function getEmail() {
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.15), transparent 30%), radial-gradient(circle at 85% 10%, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 8%, rgba(56,189,248,.10), transparent 26%), radial-gradient(circle at 60% 52%, rgba(157,243,191,.07), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
   padding: "22px 16px 100px",
   fontFamily: "Arial, sans-serif",
@@ -71,60 +71,13 @@ const section: React.CSSProperties = {
   boxShadow: "0 28px 86px rgba(0,0,0,.30)",
 };
 
-const buttonGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))",
-  gap: 14,
-};
-
-const navButton: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.14)",
-  borderRadius: 20,
-  background: "rgba(255,255,255,.055)",
-  color: "white",
-  minHeight: 76,
-  padding: "18px 20px",
-  textDecoration: "none",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  fontWeight: 950,
-  fontSize: 18,
-};
-
-const goldButton: React.CSSProperties = {
-  ...navButton,
-  background: "linear-gradient(135deg,#f8e7b0,#9df3bf,#b55cff)",
-  color: "#06100a",
-  border: "1px solid rgba(232,196,107,.70)",
-};
-
-const metricGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))",
-  gap: 16,
-};
-
-const metricCard: React.CSSProperties = {
+const glass: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.12)",
   borderRadius: 24,
-  padding: 22,
+  padding: 20,
   background:
-    "linear-gradient(180deg, rgba(255,255,255,.050), rgba(255,255,255,.020))",
-  minHeight: 214,
-  position: "relative",
-  overflow: "hidden",
-};
-
-const chipBase: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  borderRadius: 999,
-  padding: "6px 10px",
-  fontSize: 12,
-  fontWeight: 950,
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
+    "linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.020))",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,.06)",
 };
 
 const muted: React.CSSProperties = {
@@ -144,69 +97,156 @@ const pill: React.CSSProperties = {
   margin: "0 8px 8px 0",
 };
 
-function MetricCard({
+const goldButton: React.CSSProperties = {
+  minHeight: 54,
+  borderRadius: 999,
+  padding: "14px 20px",
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const ghostButton: React.CSSProperties = {
+  ...goldButton,
+  border: "1px solid rgba(255,255,255,.14)",
+  background: "rgba(255,255,255,.060)",
+  color: "white",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
+
+function Metric({
   label,
-  number,
-  title,
-  text,
-  href,
-  linkLabel,
-  tone,
+  value,
+  sub,
+  tone = "gold",
 }: {
   label: string;
-  number: string;
-  title: string;
-  text: string;
-  href: string;
-  linkLabel: string;
-  tone: "blue" | "green" | "gold" | "red";
+  value: string;
+  sub: string;
+  tone?: "gold" | "blue" | "green" | "red";
 }) {
-  const colors =
-    tone === "blue"
-      ? { color: "#38bdf8", border: "rgba(56,189,248,.35)", bg: "rgba(56,189,248,.08)" }
-      : tone === "green"
-      ? { color: "#4ade80", border: "rgba(74,222,128,.35)", bg: "rgba(74,222,128,.08)" }
-      : tone === "red"
-      ? { color: "#f87171", border: "rgba(248,113,113,.35)", bg: "rgba(248,113,113,.08)" }
-      : { color: "#e8c46b", border: "rgba(232,196,107,.35)", bg: "rgba(232,196,107,.08)" };
+  const color =
+    tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
 
   return (
-    <article style={metricCard}>
+    <div style={glass}>
       <div
         style={{
-          ...chipBase,
-          border: `1px solid ${colors.border}`,
-          color: colors.color,
-          background: colors.bg,
+          color,
+          fontWeight: 950,
+          letterSpacing: ".14em",
+          textTransform: "uppercase",
+          fontSize: 12,
         }}
       >
         {label}
       </div>
-
-      <div style={{ fontSize: 64, fontWeight: 1000, marginTop: 18, color: "#f8fafc" }}>
-        {number}
+      <div style={{ fontSize: 56, fontWeight: 1000, lineHeight: 1, marginTop: 14 }}>
+        {value}
       </div>
+      <div style={{ ...muted, marginTop: 10 }}>{sub}</div>
+    </div>
+  );
+}
 
-      <h3 style={{ fontSize: 30, lineHeight: 1.02, fontWeight: 950, margin: "8px 0 10px" }}>
-        {title}
-      </h3>
+function QueueCard({
+  title,
+  body,
+  href,
+  tag,
+  tone = "gold",
+}: {
+  title: string;
+  body: string;
+  href: string;
+  tag: string;
+  tone?: "gold" | "blue" | "green" | "red";
+}) {
+  const color =
+    tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
 
-      <p style={{ ...muted, marginBottom: 48 }}>{text}</p>
-
-      <Link
-        href={href}
+  return (
+    <Link
+      href={href}
+      style={{
+        ...glass,
+        minHeight: 172,
+        textDecoration: "none",
+        color: "white",
+        display: "block",
+        borderColor: `color-mix(in srgb, ${color} 40%, rgba(255,255,255,.12))`,
+      }}
+    >
+      <div
         style={{
-          position: "absolute",
-          bottom: 20,
-          left: 22,
-          color: "white",
+          display: "inline-flex",
+          border: `1px solid ${color}`,
+          color,
+          background: "rgba(255,255,255,.04)",
+          borderRadius: 999,
+          padding: "6px 10px",
+          fontSize: 11,
           fontWeight: 950,
-          textDecoration: "none",
+          letterSpacing: ".10em",
+          textTransform: "uppercase",
+          marginBottom: 14,
         }}
       >
-        {linkLabel} →
-      </Link>
-    </article>
+        {tag}
+      </div>
+
+      <h3 style={{ margin: "0 0 10px", fontSize: 26, lineHeight: 1.05 }}>{title}</h3>
+      <p style={{ ...muted, margin: 0 }}>{body}</p>
+      <div style={{ marginTop: 18, fontWeight: 950 }}>Open →</div>
+    </Link>
+  );
+}
+
+function Bar({
+  label,
+  value,
+  right,
+}: {
+  label: string;
+  value: number;
+  right: string;
+}) {
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, color: "#cbd5e1", fontWeight: 850 }}>
+        <span>{label}</span>
+        <span>{right}</span>
+      </div>
+      <div
+        style={{
+          height: 14,
+          borderRadius: 999,
+          background: "rgba(255,255,255,.14)",
+          overflow: "hidden",
+          marginTop: 8,
+          border: "1px solid rgba(255,255,255,.08)",
+        }}
+      >
+        <div
+          style={{
+            width: `${value}%`,
+            height: "100%",
+            background: "linear-gradient(90deg,#ff4d4d,#e8c46b,#4ade80,#38bdf8)",
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -228,8 +268,21 @@ export default function DashboardPage() {
 
         @media (max-width: 760px) {
           .vf-grid,
+          .vf-two,
+          .vf-three,
+          .vf-four,
           .vf-actions {
             grid-template-columns: 1fr !important;
+          }
+
+          .vf-actions {
+            display: grid !important;
+            gap: 10px !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
           }
         }
       `}</style>
@@ -242,251 +295,152 @@ export default function DashboardPage() {
         />
 
         <section style={section}>
-          <div
-            style={{
-              color: "#e8c46b",
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
-              fontWeight: 950,
-              fontSize: 12,
-              marginBottom: 10,
-            }}
-          >
-            VaultForge Command Center
-          </div>
+          <div className="vf-two" style={{ display: "grid", gridTemplateColumns: "1.25fr .75fr", gap: 20, alignItems: "stretch" }}>
+            <div>
+              <div style={eyebrow}>VaultForge Command Center</div>
+              <h1
+                style={{
+                  fontSize: "clamp(54px,10vw,104px)",
+                  lineHeight: 0.88,
+                  letterSpacing: "-.07em",
+                  margin: "12px 0 18px",
+                }}
+              >
+                Member intelligence desk.
+              </h1>
 
-          <h1
-            style={{
-              fontSize: "clamp(52px,10vw,96px)",
-              lineHeight: 0.88,
-              letterSpacing: "-.06em",
-              margin: "0 0 18px",
-            }}
-          >
-            Everything starts here.
-          </h1>
+              <p style={{ ...muted, fontSize: 20, maxWidth: 860 }}>
+                One clean operating view for live signals, member communication, routing pressure,
+                introductions, projects, and execution movement.
+              </p>
 
-          <p style={{ ...muted, fontSize: 18, maxWidth: 980 }}>
-            One clean operating view for intelligence, pain, projects, routing, messages, alerts,
-            members, and execution.
-          </p>
+              <div style={{ marginTop: 18 }}>
+                <span style={pill}>Signed in: {email || "unknown"}</span>
+                <span style={pill}>Member View</span>
+                <span style={pill}>Live OS</span>
+                <span style={pill}>Private Network</span>
+              </div>
 
-          <div style={{ marginTop: 16 }}>
-            <span style={pill}>Signed in: {email || "unknown"}</span>
-            <span style={pill}>Member View</span>
-            <span style={pill}>Signals: 5</span>
-            <span style={pill}>Messages: 9</span>
-            <span style={pill}>Routing: 1</span>
-          </div>
-
-          <div className="vf-grid" style={{ ...buttonGrid, marginTop: 22 }}>
-            <Link href="/pain" style={goldButton}>
-              <span>Pain Button</span>
-              <span>FORM</span>
-            </Link>
-            <Link href="/pain-feed" style={navButton}>
-              <span>Pain Feed</span>
-              <span>FEED</span>
-            </Link>
-            <Link href="/signals" style={navButton}>
-              <span>Signals</span>
-              <span>SIG</span>
-            </Link>
-            <Link href="/activity" style={navButton}>
-              <span>Activity</span>
-              <span>LIVE</span>
-            </Link>
-            <Link href="/alerts" style={navButton}>
-              <span>Alerts</span>
-              <span>ALERT</span>
-            </Link>
-            <Link href="/routing-inbox" style={navButton}>
-              <span>Routing</span>
-              <span>FLOW</span>
-            </Link>
-            <Link href="/introductions" style={navButton}>
-              <span>Introductions</span>
-              <span>INTRO</span>
-            </Link>
-            <Link href="/messages" style={navButton}>
-              <span>Messages</span>
-              <span>MSG</span>
-            </Link>
-            <Link href="/members" style={navButton}>
-              <span>Members</span>
-              <span>NET</span>
-            </Link>
-            <Link href="/projects" style={navButton}>
-              <span>Projects</span>
-              <span>DEAL</span>
-            </Link>
-            <Link href="/profile" style={navButton}>
-              <span>Profile</span>
-              <span>ID</span>
-            </Link>
-            <Link href="/logout" style={{ ...navButton, color: "#ffd0d0", borderColor: "rgba(255,120,120,.24)" }}>
-              <span>Logout</span>
-              <span>EXIT</span>
-            </Link>
-          </div>
-        </section>
-
-        <section style={section}>
-          <div
-            style={{
-              color: "#e8c46b",
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
-              fontWeight: 950,
-              fontSize: 12,
-              marginBottom: 10,
-            }}
-          >
-            Live Pressure
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <h2 style={{ fontSize: 34, lineHeight: 1, margin: 0 }}>Signal bars</h2>
-            <span
-              style={{
-                borderRadius: 999,
-                background: "#f8e7b0",
-                color: "#06100a",
-                padding: "10px 16px",
-                fontWeight: 950,
-              }}
-            >
-              Operational
-            </span>
-          </div>
-
-          <div style={{ marginTop: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", color: "#cbd5e1", fontWeight: 850 }}>
-              <span>Priority pressure</span>
-              <span>81 urgent · 6 high · 43 normal</span>
+              <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 22 }}>
+                <Link href="/pain" style={goldButton}>Submit Pain Signal</Link>
+                <Link href="/signals" style={ghostButton}>Open Signals</Link>
+                <Link href="/messages" style={ghostButton}>Messages</Link>
+                <Link href="/profile" style={ghostButton}>Profile</Link>
+              </div>
             </div>
-            <div style={{ height: 14, borderRadius: 999, background: "rgba(255,255,255,.14)", overflow: "hidden", marginTop: 8 }}>
-              <div style={{ width: "64%", height: "100%", background: "#ff4d4d", float: "left" }} />
-              <div style={{ width: "10%", height: "100%", background: "#e8c46b", float: "left" }} />
-              <div style={{ width: "26%", height: "100%", background: "#cbd5e1", float: "left" }} />
-            </div>
-          </div>
 
-          <div style={{ marginTop: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", color: "#cbd5e1", fontWeight: 850 }}>
-              <span>Execution movement</span>
-              <span>130 active · 1 routed · 9 messages</span>
-            </div>
-            <div style={{ height: 14, borderRadius: 999, background: "rgba(255,255,255,.14)", overflow: "hidden", marginTop: 8 }}>
-              <div style={{ width: "86%", height: "100%", background: "#e8c46b", float: "left" }} />
-              <div style={{ width: "2%", height: "100%", background: "#4ade80", float: "left" }} />
-              <div style={{ width: "12%", height: "100%", background: "#38bdf8", float: "left" }} />
+            <div style={{ ...glass, background: "rgba(0,0,0,.20)" }}>
+              <div style={eyebrow}>Today’s Operating Tape</div>
+              <div style={{ display: "grid", gap: 13, marginTop: 16 }}>
+                {[
+                  ["Signals", "5 active records"],
+                  ["Messages", "9 communication threads"],
+                  ["Routing", "1 routed path"],
+                  ["Alerts", "81 active alerts"],
+                  ["Introductions", "ready for controlled routing"],
+                ].map(([left, right]) => (
+                  <div
+                    key={left}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      borderBottom: "1px solid rgba(255,255,255,.08)",
+                      paddingBottom: 12,
+                      color: "#cbd5e1",
+                      fontWeight: 850,
+                    }}
+                  >
+                    <span style={{ color: "white" }}>{left}</span>
+                    <span>{right}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
-        <section style={section}>
-          <div
-            style={{
-              color: "#e8c46b",
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
-              fontWeight: 950,
-              fontSize: 12,
-              marginBottom: 10,
-            }}
-          >
-            Member Execution Layer
-          </div>
+        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 20 }}>
+          <Metric label="Signals" value="5" sub="Active opportunities, pain, and deal signals." tone="blue" />
+          <Metric label="Messages" value="9" sub="Controlled conversations and replies." tone="green" />
+          <Metric label="Routing" value="1" sub="Member-fit execution path generated." tone="gold" />
+          <Metric label="Alerts" value="81" sub="Live network pressure and movement." tone="red" />
+        </section>
 
+        <section style={section}>
+          <div style={eyebrow}>Live Pressure Board</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 8px", letterSpacing: "-.04em" }}>
+            Market movement and execution pressure.
+          </h2>
+          <Bar label="Priority pressure" value={81} right="81 urgent · 6 high · 43 normal" />
+          <Bar label="Execution movement" value={72} right="130 active · 1 routed · 9 messages" />
+          <Bar label="Member response velocity" value={58} right="messages, intros, and routing activity" />
+        </section>
+
+        <section style={section}>
+          <div style={eyebrow}>Member Execution Layer</div>
           <h2
             style={{
               fontSize: "clamp(42px,7vw,72px)",
               lineHeight: 0.94,
               letterSpacing: "-.06em",
-              margin: "0 0 14px",
+              margin: "10px 0 14px",
             }}
           >
-            Live execution queue.
+            Everything has a place.
           </h2>
 
           <p style={{ ...muted, fontSize: 18, maxWidth: 980 }}>
-            One operating layer for signals, communication, routing, introductions, and execution
-            pressure across the VaultForge network.
+            Your dashboard is not a duplicate menu. It is the operating desk: what needs attention,
+            where to go next, and what is moving inside the network.
           </p>
 
-          <div className="vf-grid" style={{ ...metricGrid, marginTop: 22 }}>
-            <MetricCard
-              label="Active"
-              number="5"
+          <div className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginTop: 22 }}>
+            <QueueCard
+              tag="Active"
               title="Active Signals"
-              text="New distress signals, capital requests, and active opportunities entering your network."
+              body="Distress, capital, buyer, operator, land, commercial, and residential opportunities."
               href="/signals"
-              linkLabel="Open Signals"
               tone="blue"
             />
-            <MetricCard
-              label="Communication"
-              number="9"
+            <QueueCard
+              tag="Communication"
               title="Conversations"
-              text="Member communication, owner replies, and operational follow-up activity."
+              body="Owner/member communication, follow-up, and controlled request threads."
               href="/messages"
-              linkLabel="Open Messages"
               tone="green"
             />
-            <MetricCard
-              label="Routing"
-              number="1"
+            <QueueCard
+              tag="Routing"
               title="Introductions"
-              text="Controlled introductions, routing actions, and member-fit execution paths."
+              body="Controlled introductions, member-fit routing, and next-step execution paths."
               href="/introductions"
-              linkLabel="Open Introductions"
               tone="gold"
             />
-            <MetricCard
-              label="Priority"
-              number="4"
+            <QueueCard
+              tag="Priority"
               title="Execution Queue"
-              text="Urgent follow-up, pending replies, and operational items waiting on action."
+              body="Urgent follow-up, pending replies, and operational items waiting on action."
               href="/activity"
-              linkLabel="Open Activity"
               tone="red"
             />
           </div>
         </section>
 
         <section style={section}>
-          <div
-            style={{
-              color: "#e8c46b",
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
-              fontWeight: 950,
-              fontSize: 12,
-              marginBottom: 10,
-            }}
-          >
-            Operating Map
-          </div>
+          <div style={eyebrow}>Operating Map</div>
+          <h2 style={{ fontSize: 36, lineHeight: 1, margin: "10px 0 18px", letterSpacing: "-.035em" }}>
+            Pain → Signal → Routing → Intro → Message → Execution.
+          </h2>
 
-          <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 18px" }}>Clean execution path.</h2>
-
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 14 }}>
+          <div className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14 }}>
             {[
-              ["1. Submit", "Pain form and Create form feed the signal engine."],
-              ["2. Signal", "Pain, projects, alerts, and routing open the clean Signal Room first."],
-              ["3. Communicate", "Message Owner routes to the real owner/submitter with admin fallback only."],
-              ["4. Execute", "Routing, intros, messages, and activity move the deal/problem toward resolution."],
+              ["1. Submit", "Pain and project records feed the signal engine."],
+              ["2. Signal", "Signals become clean rooms with photos, summary, risks, and route suggestions."],
+              ["3. Communicate", "Message Owner keeps communication controlled and tied to the record."],
+              ["4. Execute", "Routing, intros, messages, and activity move work toward resolution."],
             ].map(([title, text]) => (
-              <div
-                key={title}
-                style={{
-                  border: "1px solid rgba(255,255,255,.12)",
-                  borderRadius: 20,
-                  padding: 18,
-                  background: "rgba(0,0,0,.18)",
-                }}
-              >
+              <div key={title} style={glass}>
                 <strong style={{ color: "#f8e7b0" }}>{title}</strong>
                 <p style={muted}>{text}</p>
               </div>
