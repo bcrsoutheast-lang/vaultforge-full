@@ -3,131 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
-import {
-  VaultForgePulseStrip,
-  VaultForgeSignalBar,
-  VaultForgeCommandFooter,
-} from "../components/VaultForgeVisualLayer";
 
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-
-type SignalCard = Record<string, any>;
-
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), radial-gradient(circle at bottom right, rgba(181,92,255,.18), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
-  color: "white",
-  padding: "28px 18px 100px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.34)",
-  background:
-    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
-  borderRadius: 34,
-  padding: 26,
-  marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.34)",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.13)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-  borderRadius: 28,
-  padding: 22,
-  boxShadow: "0 26px 80px rgba(0,0,0,.34)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
-  gap: 18,
-};
-
-const statGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 14,
-  marginBottom: 22,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
-};
-
-const btn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#06100a",
-  border: "none",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 950,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const ghost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.055)",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 900,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const danger: React.CSSProperties = {
-  ...ghost,
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.38)",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
-  color: "white",
-  padding: 14,
-  fontSize: 15,
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.72)",
-  lineHeight: 1.55,
-};
+type Row = Record<string, any>;
 
 function clean(value: unknown) {
   return String(value || "").trim();
 }
 
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
+
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -145,17 +34,17 @@ function readCookie(name: string) {
 function getEmail() {
   if (typeof window === "undefined") return "";
 
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    readCookie("vf_email") ||
-    readCookie("vf_admin_email") ||
-    ""
-  ).trim().toLowerCase();
-}
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
 
-function isOwner(email: string) {
-  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
+  for (const key of keys) {
+    const localValue = cleanEmail(window.localStorage.getItem(key));
+    if (localValue.includes("@")) return localValue;
+
+    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
+    if (sessionValue.includes("@")) return sessionValue;
+  }
+
+  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
 async function safeJson(res: Response) {
@@ -166,244 +55,326 @@ async function safeJson(res: Response) {
   }
 }
 
-function label(value: string) {
-  const text = clean(value || "signal").replace(/_/g, " ");
-  return text.slice(0, 1).toUpperCase() + text.slice(1);
+function meta(row: Row) {
+  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function first(...values: unknown[]) {
   for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
+    }
+
     const text = clean(value);
     if (text) return text;
   }
+
   return "";
 }
 
-function exactSignalId(item: SignalCard) {
-  return first(
-    item.signal_id,
-    item.signalId,
-    item.alert_id,
-    item.alertId,
-    item.id
+function signalIdOf(row: Row) {
+  const m = meta(row);
+  return first(row.signal_id, row.signalId, row.id, m.signal_id);
+}
+
+function itemIdOf(row: Row) {
+  const m = meta(row);
+  return first(row.item_id, row.itemId, row.pain_id, row.deal_id, row.project_id, m.item_id, m.pain_id, m.deal_id, m.project_id);
+}
+
+function titleOf(row: Row) {
+  const m = meta(row);
+  return first(row.title, row.signal_title, row.pain_title, row.alert_title, row.subject, m.title, m.signal_title, m.pain_title, "VaultForge Intelligence");
+}
+
+function noteOf(row: Row) {
+  const m = meta(row);
+  return first(row.ai_summary, row.summary, row.note, row.notes, row.description, row.message, row.route_summary, m.ai_summary, m.summary, m.note, m.notes, m.description, m.message, m.route_summary, "Intelligence record ready for review.");
+}
+
+function urgencyOf(row: Row) {
+  const m = meta(row);
+  return first(row.urgency, row.urgency_level, row.priority, m.urgency, m.urgency_level, m.priority, "Normal");
+}
+
+function marketOf(row: Row) {
+  const m = meta(row);
+  const city = first(row.city, m.city);
+  const state = first(row.state, row.operating_state, row.market, m.state, m.operating_state, m.market);
+  return [city, state].filter(Boolean).join(", ") || state || first(row.location, m.location, "Market not listed");
+}
+
+function assetOf(row: Row) {
+  const m = meta(row);
+  return first(row.asset_type, row.property_type, m.asset_type, m.property_type, "Asset");
+}
+
+function sourceOf(row: Row) {
+  const m = meta(row);
+  return first(row.source, row.source_table, row.event_type, row.type, m.source, m.source_table, m.event_type, m.type, "Signal");
+}
+
+function ownerOf(row: Row) {
+  const m = meta(row);
+  return cleanEmail(first(row.owner_email, row.member_email, row.submitted_by_email, row.created_by_email, m.owner_email, m.member_email, m.submitted_by_email, m.created_by_email));
+}
+
+function photosOf(row: Row) {
+  const m = meta(row);
+  const values = [
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    m.image_url,
+    m.photo_url,
+    ...(Array.isArray(row.photo_urls) ? row.photo_urls : []),
+    ...(Array.isArray(row.photos) ? row.photos : []),
+    ...(Array.isArray(m.photo_urls) ? m.photo_urls : []),
+    ...(Array.isArray(m.photos) ? m.photos : []),
+  ];
+
+  return Array.from(
+    new Set(
+      values
+        .map((item: any) => {
+          if (typeof item === "string") return clean(item);
+          if (item && typeof item === "object") return clean(item.url || item.publicUrl || item.photo_url || item.image_url);
+          return "";
+        })
+        .filter((url) => url.startsWith("http"))
+    )
   );
 }
 
-function exactItemId(item: SignalCard) {
-  return first(
-    item.item_id,
-    item.itemId,
-    item.deal_id,
-    item.dealId,
-    item.project_id,
-    item.projectId,
-    item.property_id,
-    item.propertyId,
-    item.pain_id,
-    item.painId
-  );
+function scoreOf(row: Row) {
+  const m = meta(row);
+  let score = Number(row.priority_score || row.confidence_score || row.match_score || m.priority_score || m.confidence_score || m.match_score || 0);
+
+  if (!Number.isFinite(score) || score <= 0) score = 56;
+
+  const urgency = urgencyOf(row).toLowerCase();
+  if (urgency.includes("emergency")) score += 22;
+  else if (urgency.includes("urgent") || urgency.includes("high")) score += 14;
+
+  if (photosOf(row).length) score += 5;
+  if (ownerOf(row)) score += 5;
+  if (marketOf(row) !== "Market not listed") score += 5;
+
+  return Math.min(100, Math.max(0, Math.round(score)));
 }
 
-function exactSignalHref(item: SignalCard) {
-  const signalId = exactSignalId(item);
-  return signalId ? `/signals/${encodeURIComponent(signalId)}` : "/intelligence";
-}
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(56,189,248,.12), transparent 26%), radial-gradient(circle at 52% 45%, rgba(157,243,191,.07), transparent 24%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  color: "white",
+  padding: "22px 16px 96px",
+  fontFamily: "Arial, sans-serif",
+};
 
-function exactWorkHref(item: SignalCard) {
-  const itemId = exactItemId(item);
-  if (itemId) return `/deal-room/${encodeURIComponent(itemId)}`;
-  return exactSignalHref(item);
-}
+const wrap: React.CSSProperties = {
+  width: "min(1220px,100%)",
+  margin: "0 auto",
+};
 
-function exactRoutingHref(item: SignalCard) {
-  const signalId = exactSignalId(item);
-  return signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
-}
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 24,
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
 
-function priorityOf(item: SignalCard) {
-  return first(item.priority, item.severity, item.alert_priority, item.urgency, "medium").toLowerCase();
-}
+const glass: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,.045)",
+};
 
-function priorityTone(item: SignalCard) {
-  const priority = priorityOf(item);
-  if (priority === "urgent") return "#ffb3b3";
-  if (priority === "high") return "#f5d978";
-  return "#9df3bf";
-}
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
 
-function titleOf(item: SignalCard) {
-  return first(item.title, item.name, item.headline, item.signal_title, item.alert_title, "VaultForge Signal");
-}
+const muted: React.CSSProperties = {
+  color: "#cbd5e1",
+  lineHeight: 1.55,
+};
 
-function messageOf(item: SignalCard) {
-  return first(item.message, item.description, item.note, item.summary, item.reason, "Signal context ready for exact routing.");
-}
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: 50,
+  borderRadius: 999,
+  padding: "12px 18px",
+  border: 0,
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+};
 
-function marketOf(item: SignalCard) {
-  return first(item.market, item.state, item.location, [item.city, item.state].filter(Boolean).join(", "));
-}
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.16)",
+  color: "white",
+};
 
-function typeOf(item: SignalCard) {
-  return first(item.alert_type, item.type, item.category, item.signal_type, item.source, "signal");
-}
+const chip: React.CSSProperties = {
+  border: "1px solid rgba(157,243,191,.22)",
+  borderRadius: 999,
+  padding: "7px 10px",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  margin: "0 7px 7px 0",
+  fontSize: 12,
+  fontWeight: 850,
+  display: "inline-flex",
+};
 
-function scoreOf(item: SignalCard) {
-  const raw = Number(item.score || item.confidence_score || item.match_score || 0);
-  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
-  const priority = priorityOf(item);
-  if (priority === "urgent") return 84;
-  if (priority === "high") return 72;
-  return 58;
-}
+function Metric({ label, value, tone }: { label: string; value: string; tone: "blue" | "green" | "gold" | "red" }) {
+  const color = tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
 
-async function loadSignals(currentEmail: string, owner: boolean) {
-  const headers = {
-    "x-vf-email": currentEmail,
-    "x-vf-admin": owner ? "1" : "0",
-  };
-
-  const [storedRes, feedRes] = await Promise.all([
-    fetch(`/api/intelligence/stored?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
-      cache: "no-store",
-      headers,
-    }),
-    fetch(`/api/intelligence/feed?email=${encodeURIComponent(currentEmail)}&owner=${owner ? "1" : "0"}`, {
-      cache: "no-store",
-      headers,
-    }),
-  ]);
-
-  const storedData = await safeJson(storedRes);
-  const feedData = await safeJson(feedRes);
-
-  const stored = Array.isArray(storedData?.alerts)
-    ? storedData.alerts
-    : Array.isArray(storedData?.signals)
-    ? storedData.signals
-    : [];
-
-  const generated = Array.isArray(feedData?.alerts)
-    ? feedData.alerts
-    : Array.isArray(feedData?.signals)
-    ? feedData.signals
-    : [];
-
-  const map = new Map<string, SignalCard>();
-
-  for (const item of [...stored, ...generated]) {
-    const signalId = exactSignalId(item) || `${titleOf(item)}-${messageOf(item)}`;
-    map.set(signalId, item);
-  }
-
-  return Array.from(map.values());
-}
-
-function StatCard({
-  title,
-  value,
-  detail,
-}: {
-  title: string;
-  value: string | number;
-  detail: string;
-}) {
   return (
-    <div style={card}>
-      <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
-        {title}
+    <section style={glass}>
+      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>{label}</div>
+      <div style={{ fontSize: 52, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
+    </section>
+  );
+}
+
+function IntelligenceCard({ row, viewer }: { row: Row; viewer: string }) {
+  const signalId = signalIdOf(row);
+  const itemId = itemIdOf(row);
+  const photos = photosOf(row);
+  const owner = ownerOf(row);
+  const score = scoreOf(row);
+
+  const messageHref = signalId
+    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=intelligence`
+    : "/messages";
+
+  return (
+    <article style={glass}>
+      <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 18 }}>
+        <div
+          style={{
+            borderRadius: 20,
+            overflow: "hidden",
+            border: "1px solid rgba(232,196,107,.18)",
+            background: "rgba(0,0,0,.20)",
+            minHeight: 150,
+          }}
+        >
+          {photos[0] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photos[0]} alt="Intelligence asset" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          ) : (
+            <div style={{ height: 150, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850, textAlign: "center" }}>
+              Intelligence<br />Record
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={chip}>{sourceOf(row)}</span>
+            <span style={{ ...chip, color: "#ffd0d0", borderColor: "rgba(248,113,113,.28)", background: "rgba(248,113,113,.08)" }}>
+              {urgencyOf(row)}
+            </span>
+            <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.26)", background: "rgba(232,196,107,.08)" }}>
+              Score {score}
+            </span>
+            <span style={{ ...chip, color: "#8fd3ff", borderColor: "rgba(56,189,248,.28)", background: "rgba(56,189,248,.08)" }}>
+              {assetOf(row)}
+            </span>
+          </div>
+
+          <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
+          <p style={muted}>{noteOf(row)}</p>
+
+          <div style={{ marginTop: 12 }}>
+            {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
+            {itemId ? <span style={chip}>Item: {itemId}</span> : null}
+            <span style={chip}>Market: {marketOf(row)}</span>
+            {owner ? <span style={chip}>Owner: {owner}</span> : null}
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={button}>Open Signal</Link> : null}
+            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
+            <Link href={messageHref} style={ghost}>Message Owner</Link>
+            <Link href="/activity" style={ghost}>Activity</Link>
+          </div>
+        </div>
       </div>
-      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
-      <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>{detail}</p>
-    </div>
+    </article>
   );
 }
 
 export default function IntelligencePage() {
   const [email, setEmail] = useState("");
-  const [owner, setOwner] = useState(false);
-  const [signals, setSignals] = useState<SignalCard[]>([]);
-  const [status, setStatus] = useState("Loading intelligence map...");
-  const [search, setSearch] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [generateStatus, setGenerateStatus] = useState("");
-  const [generatingId, setGeneratingId] = useState("");
+  const [items, setItems] = useState<Row[]>([]);
+  const [status, setStatus] = useState("Loading intelligence desk...");
 
   async function load() {
-    setStatus("Loading intelligence map...");
+    const viewer = getEmail();
+    setEmail(viewer);
+    setStatus("Loading intelligence desk...");
 
     try {
-      const currentEmail = getEmail();
-      const currentOwner = isOwner(currentEmail);
+      const urls = [
+        `/api/intelligence/feed?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/routing/actions?email=${encodeURIComponent(viewer)}&owner=0`,
+      ];
 
-      setEmail(currentEmail);
-      setOwner(currentOwner);
+      const collected: Row[] = [];
 
-      if (!currentEmail) {
-        setStatus("Login email not found. Please log in again.");
-        return;
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, {
+            cache: "no-store",
+            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
+          });
+
+          const data = await safeJson(res);
+          const list = [
+            ...(Array.isArray(data.intelligence) ? data.intelligence : []),
+            ...(Array.isArray(data.signals) ? data.signals : []),
+            ...(Array.isArray(data.pains) ? data.pains : []),
+            ...(Array.isArray(data.actions) ? data.actions : []),
+            ...(Array.isArray(data.items) ? data.items : []),
+            ...(Array.isArray(data.data) ? data.data : []),
+          ];
+
+          collected.push(...list);
+        } catch {
+          // keep other feeds loading
+        }
       }
 
-      const rows = await loadSignals(currentEmail, currentOwner);
-      setSignals(rows);
-      setStatus(rows.length ? "" : "No intelligence signals available yet.");
-    } catch (error: any) {
-      setStatus(error?.message || "Could not load intelligence.");
-    }
-  }
-
-  async function generateRoutingFromCard(item: SignalCard) {
-    if (!owner) {
-      setGenerateStatus("Owner/admin access required to generate routing actions.");
-      return;
-    }
-
-    const signalId = exactSignalId(item);
-    const itemId = exactItemId(item);
-    const activeId = signalId || itemId || titleOf(item);
-
-    setGeneratingId(activeId);
-    setGenerateStatus("Generating routing action from exact card...");
-
-    try {
-      const res = await fetch("/api/routing/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-admin": "1",
-        },
-        body: JSON.stringify({
-          email,
-          admin_email: email,
-          owner: "1",
-          signal_id: signalId,
-          item_id: itemId,
-          title: titleOf(item),
-          note: messageOf(item),
-          state: item?.state || item?.market || item?.location || "",
-          market: item?.market || item?.state || item?.location || "",
-          city: item?.city || "",
-          strategy: item?.strategy || item?.asset_strategy || item?.exit_strategy || "",
-          asset_type: item?.property_type || item?.asset_type || item?.item_kind || "",
-          role_needed: item?.role_needed || item?.target_role || item?.deal_need || "",
-          priority: priorityOf(item),
-          source: "exact_card_generate",
-          source_table: item?.source_table || "",
-          item_kind: item?.item_kind || typeOf(item),
-        }),
+      const seen = new Set<string>();
+      const unique = collected.filter((item) => {
+        const key = first(signalIdOf(item), itemIdOf(item), item.id, titleOf(item) + noteOf(item));
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
 
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not generate routing action.");
-      }
-
-      setGenerateStatus(data?.message || "Routing action generated from exact card.");
+      setItems(unique);
+      setStatus(unique.length ? "" : "No intelligence records connected yet.");
     } catch (error: any) {
-      setGenerateStatus(error?.message || "Could not generate routing action.");
-    } finally {
-      setGeneratingId("");
+      setStatus(error?.message || "Could not load intelligence desk.");
     }
   }
 
@@ -411,221 +382,113 @@ export default function IntelligencePage() {
     load();
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  const counts = useMemo(() => {
+    const urgent = items.filter((item) => {
+      const u = urgencyOf(item).toLowerCase();
+      return u.includes("urgent") || u.includes("high") || u.includes("emergency");
+    }).length;
 
-    return signals
-      .filter((item) => {
-        if (priorityFilter !== "all" && priorityOf(item) !== priorityFilter) return false;
+    const routed = items.filter((item) => sourceOf(item).toLowerCase().includes("routing") || sourceOf(item).toLowerCase().includes("route")).length;
+    const withPhotos = items.filter((item) => photosOf(item).length).length;
 
-        if (!q) return true;
-
-        return [
-          titleOf(item),
-          messageOf(item),
-          marketOf(item),
-          typeOf(item),
-          priorityOf(item),
-          exactSignalId(item),
-          exactItemId(item),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(q);
-      })
-      .sort((a, b) => scoreOf(b) - scoreOf(a));
-  }, [signals, search, priorityFilter]);
-
-  const exactSignals = signals.filter((item) => exactSignalId(item)).length;
-  const exactItems = signals.filter((item) => exactItemId(item)).length;
-  const urgent = signals.filter((item) => priorityOf(item) === "urgent").length;
+    return { total: items.length, urgent, routed, withPhotos };
+  }, [items]);
 
   return (
     <main style={page}>
       <style>{`
-        a:hover,
-        button:hover {
+        a:hover, button:hover {
           transform: translateY(-1px);
           transition: all .18s ease;
           filter: brightness(1.06);
         }
 
-        @media (max-width: 760px) {
+        @media (max-width: 820px) {
+          .vf-grid,
+          .vf-four,
+          .vf-actions,
+          article > div {
+            grid-template-columns: 1fr !important;
+          }
+
           .vf-actions {
             display: grid !important;
-            grid-template-columns: 1fr !important;
             gap: 10px !important;
           }
 
           .vf-actions > * {
             width: 100%;
-            margin: 0 !important;
             box-sizing: border-box;
+            justify-content: center;
           }
         }
       `}</style>
 
       <div style={wrap}>
         <VaultForgeMemberNav
-          title="Intelligence Map"
-          subtitle="Exact routing intelligence and signal infrastructure"
+          title="Intelligence"
+          subtitle="Private real estate intelligence desk for signals, pressure, routing, pain, and execution."
+          active="intelligence"
         />
 
-        <VaultForgePulseStrip
-          items={[
-            { label: "INTELLIGENCE", value: "LIVE", tone: "gold" },
-            { label: "SIGNALS", value: "TRACKING", tone: "green" },
-            { label: "ROUTING", value: "ACTIVE", tone: "purple" },
-            { label: "PRESSURE", value: "WATCHING", tone: "red" },
-          ]}
-        />
-
-        <VaultForgeSignalBar
-          urgent={urgent}
-          high={signals.filter((item) => priorityOf(item) === "high").length}
-          normal={Math.max(0, signals.length - urgent - signals.filter((item) => priorityOf(item) === "high").length)}
-        />
-
-        <section style={hero}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            VaultForge Intelligence Map
-          </div>
-
-          <h1 style={{ fontSize: "clamp(56px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            Exact intelligence.
+        <section style={card}>
+          <div style={eyebrow}>VaultForge Intelligence Desk</div>
+          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+            Market command.
           </h1>
-
-          <p style={{ ...muted, fontSize: 22 }}>
-            Intelligence cards now preserve exact IDs so every click opens the correct signal, routing room, or deal/work area.
+          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
+            This is the intelligence layer: active pressure, pain signals, routing movement,
+            owner contact, member fit, and execution opportunity.
           </p>
 
-          <div>
-            <span style={chip}>Signals: {signals.length}</span>
-            <span style={chip}>Exact Signals: {exactSignals}</span>
-            <span style={chip}>Exact Items: {exactItems}</span>
-            <span style={chip}>Urgent: {urgent}</span>
-            <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
+          <div style={{ marginTop: 16 }}>
+            <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>Records: {counts.total}</span>
+            <span style={chip}>Urgent: {counts.urgent}</span>
+            <span style={chip}>Routed: {counts.routed}</span>
           </div>
 
-          <div className="vf-actions" style={{ marginTop: 14 }}>
-            <button type="button" style={btn} onClick={load}>Refresh Intelligence</button>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            <Link href="/activity" style={ghost}>Activity</Link>
-            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            <Link href="/introductions" style={ghost}>Introductions</Link>
-            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
-            {owner && <Link href="/admin-intelligence" style={ghost}>Owner Intelligence</Link>}
-            <Link href="/logout" style={danger}>Logout</Link>
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/signals" style={button}>Signals</Link>
+            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+            <Link href="/routing-inbox" style={ghost}>Routing</Link>
+            <button type="button" onClick={load} style={ghost}>Refresh</button>
           </div>
+        </section>
 
-          {status && (
-            <p style={{ color: status.toLowerCase().includes("could not") || status.toLowerCase().includes("not found") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {status}
-            </p>
+        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
+          <Metric label="Records" value={String(counts.total)} tone="blue" />
+          <Metric label="Urgent" value={String(counts.urgent)} tone="red" />
+          <Metric label="Routed" value={String(counts.routed)} tone="gold" />
+          <Metric label="With Photos" value={String(counts.withPhotos)} tone="green" />
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Intelligence Queue</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>What the network should watch.</h2>
+
+          {items.length ? (
+            <div style={{ display: "grid", gap: 14 }}>
+              {items.map((item, index) => (
+                <IntelligenceCard key={clean(item.id) || `${signalIdOf(item)}-${index}`} row={item} viewer={email} />
+              ))}
+            </div>
+          ) : (
+            <div style={glass}>
+              <h3 style={{ marginTop: 0 }}>No intelligence records yet.</h3>
+              <p style={muted}>
+                Submit Pain, create signals, route records, or open activity to feed this command layer.
+              </p>
+              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                <Link href="/pain" style={button}>Submit Pain</Link>
+                <Link href="/signals" style={ghost}>Signals</Link>
+              </div>
+            </div>
           )}
-
-          {generateStatus && (
-            <p style={{ color: generateStatus.toLowerCase().includes("could not") || generateStatus.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {generateStatus}
-            </p>
-          )}
         </section>
 
-        <section style={statGrid}>
-          <StatCard title="Signals" value={signals.length} detail="Total intelligence cards loaded." />
-          <StatCard title="Exact Signals" value={exactSignals} detail="Cards with exact signal detail links." />
-          <StatCard title="Exact Items" value={exactItems} detail="Cards with exact deal/work area links." />
-          <StatCard title="Urgent" value={urgent} detail="Urgent intelligence pressure." />
-        </section>
-
-        <section style={hero}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            Filters
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
-            <input
-              style={input}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search signal title, market, priority, ID..."
-            />
-
-            <select
-              style={input}
-              value={priorityFilter}
-              onChange={(event) => setPriorityFilter(event.target.value)}
-            >
-              <option value="all" style={{ color: "#111" }}>All Priorities</option>
-              <option value="urgent" style={{ color: "#111" }}>Urgent</option>
-              <option value="high" style={{ color: "#111" }}>High</option>
-              <option value="medium" style={{ color: "#111" }}>Medium</option>
-            </select>
-          </div>
-        </section>
-
-        {filtered.length === 0 ? (
-          <section style={hero}>
-            <strong>No intelligence cards match this view.</strong>
-          </section>
-        ) : (
-          <section style={grid}>
-            {filtered.map((item, index) => {
-              const tone = priorityTone(item);
-              const signalId = exactSignalId(item);
-              const itemId = exactItemId(item);
-
-              return (
-                <article key={signalId || itemId || index} style={{ ...card, borderColor: `${tone}66` }}>
-                  <div style={{ color: tone, letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
-                    {label(priorityOf(item))} · {label(typeOf(item))}
-                  </div>
-
-                  <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>
-                    {titleOf(item)}
-                  </h2>
-
-                  <p style={{ ...muted, fontSize: 18 }}>
-                    {messageOf(item)}
-                  </p>
-
-                  <div style={{ margin: "12px 0" }}>
-                    <span style={chip}>Score: {scoreOf(item)}</span>
-                    {marketOf(item) && <span style={chip}>{marketOf(item)}</span>}
-                    {signalId && <span style={chip}>Signal: {signalId}</span>}
-                    {itemId && <span style={chip}>Item: {itemId}</span>}
-                  </div>
-
-                  <div className="vf-actions">
-                    <Link href={exactSignalHref(item)} style={btn}>Open Exact Signal</Link>
-                    <Link href={exactRoutingHref(item)} style={ghost}>Routing Room</Link>
-                    {owner && (
-                      <button
-                        type="button"
-                        style={ghost}
-                        disabled={generatingId === (signalId || itemId || titleOf(item))}
-                        onClick={() => generateRoutingFromCard(item)}
-                      >
-                        {generatingId === (signalId || itemId || titleOf(item)) ? "Generating..." : "Generate Routing"}
-                      </button>
-                    )}
-                    <Link href={exactWorkHref(item)} style={ghost}>Open Exact Work Area</Link>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        )}
-
-        <section style={{ ...hero, marginTop: 22 }}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            Current Safety Mode
-          </div>
-          <p style={{ ...muted, fontSize: 19 }}>
-            This page only fixes exact navigation. It does not auto-route, notify, create introductions, or mutate records.
-          </p>
-        </section>
-        <VaultForgeCommandFooter />
+        {status ? <section style={card}>{status}</section> : null}
       </div>
     </main>
   );
