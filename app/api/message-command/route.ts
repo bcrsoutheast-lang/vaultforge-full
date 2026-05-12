@@ -197,12 +197,42 @@ function cleanupActionOf(row: Row) {
   return lower(row.cleanup_action || m.cleanup_action || row.status || m.status);
 }
 
+function readThreadKey(row: Row) {
+  const m = meta(row);
+
+  return clean(
+    row.read_thread_key ||
+      m.read_thread_key ||
+      row.cleanup_thread_key ||
+      m.cleanup_thread_key
+  );
+}
+
+function isReadMarker(row: Row) {
+  const m = meta(row);
+
+  return (
+    readThreadKey(row) &&
+    (row.kind === "thread_read" ||
+      m.kind === "thread_read" ||
+      m.read_scope === "thread" ||
+      m.action_scope === "read")
+  );
+}
+
 function buildSuppressedThreads(rows: Row[]) {
   const archived = new Set<string>();
   const deleted = new Set<string>();
   const saved = new Set<string>();
+  const read = new Set<string>();
 
   for (const raw of rows) {
+    if (isReadMarker(raw)) {
+      const readKey = readThreadKey(raw);
+      if (readKey) read.add(readKey);
+      continue;
+    }
+
     if (!isThreadCleanupMarker(raw)) continue;
 
     const key = cleanupThreadKey(raw) || canonicalThreadKey(raw);
@@ -214,19 +244,24 @@ function buildSuppressedThreads(rows: Row[]) {
       deleted.add(key);
       archived.delete(key);
       saved.delete(key);
+      read.delete(key);
     } else if (action === "archive" || action === "archived") {
       archived.add(key);
     } else if (action === "save" || action === "saved") {
       saved.add(key);
     } else if (action === "unsave" || action === "unsaved") {
       saved.delete(key);
+    } else if (action === "read" || action === "mark_read") {
+      read.add(key);
+    } else if (action === "unread" || action === "mark_unread") {
+      read.delete(key);
     } else if (action === "restore" || action === "sent") {
       archived.delete(key);
       deleted.delete(key);
     }
   }
 
-  return { archived, deleted, saved };
+  return { archived, deleted, saved, read };
 }
 
 function idOf(row: Row) {
@@ -452,6 +487,8 @@ function groupConversations(rows: Row[]) {
         to_email: row.to_email,
         participants: Array.from(new Set([row.from_email, row.to_email].filter(Boolean))),
         message_ids: row.id ? [row.id] : [],
+        unread_count: row.read === true ? 0 : 1,
+        last_activity_at: row.updated_at || row.created_at,
       });
 
       continue;
@@ -459,6 +496,7 @@ function groupConversations(rows: Row[]) {
 
     existing.count += 1;
     if (row.id) existing.message_ids.push(row.id);
+    if (row.read !== true) existing.unread_count += 1;
 
     existing.participants = Array.from(
       new Set([...existing.participants, row.from_email, row.to_email].filter(Boolean))
@@ -491,15 +529,31 @@ function folderCounts(conversations: any[]) {
     saved: 0,
   };
 
+  const unread: Record<string, number> = {
+    alerts: 0,
+    pain: 0,
+    signals: 0,
+    routing: 0,
+    introductions: 0,
+    projects: 0,
+    members: 0,
+    activity: 0,
+    general: 0,
+    saved: 0,
+  };
+
   for (const convo of conversations) {
-    counts[convo.folder || "general"] = (counts[convo.folder || "general"] || 0) + Number(convo.count || 0);
+    const folder = convo.folder || "general";
+    counts[folder] = (counts[folder] || 0) + Number(convo.count || 0);
+    unread[folder] = (unread[folder] || 0) + Number(convo.unread_count || 0);
 
     if (convo.is_saved === true) {
       counts.saved += Number(convo.count || 0);
+      unread.saved += Number(convo.unread_count || 0);
     }
   }
 
-  return counts;
+  return { counts, unread };
 }
 
 function buildMessageRow(input: Row) {
@@ -609,7 +663,13 @@ export async function GET(request: Request) {
   const conversations = groupConversations(rows).map((conversation) => ({
     ...conversation,
     is_saved: suppressed.saved.has(conversation.thread_key),
+    unread_count: suppressed.read.has(conversation.thread_key)
+      ? 0
+      : Number(conversation.unread_count || 0),
+    is_read: suppressed.read.has(conversation.thread_key),
   }));
+
+  const countData = folderCounts(conversations);
 
   return NextResponse.json({
     ok: true,
@@ -617,7 +677,8 @@ export async function GET(request: Request) {
     mode: "list",
     messages: rows,
     conversations,
-    counts: folderCounts(conversations),
+    counts: countData.counts,
+    unread_counts: countData.unread,
     count: rows.length,
     read_error: result.error || "",
   });
@@ -716,8 +777,10 @@ export async function PATCH(request: Request) {
     patch.is_archived = false;
     patch.is_deleted = false;
     patch.status = "sent";
-  } else if (action === "save" || action === "unsave") {
+  } else if (action === "save" || action === "unsave" || action === "read" || action === "unread") {
     patch.status = "sent";
+    if (action === "read") patch.read = true;
+    if (action === "unread") patch.read = false;
   } else {
     return NextResponse.json({ ok: false, error: "Unknown action." }, { status: 400 });
   }
@@ -751,7 +814,7 @@ export async function PATCH(request: Request) {
     For whole-thread cleanup we create a cleanup marker in the command table.
     GET reads this marker and suppresses old legacy rows from counts/cards.
   */
-  if (threadKey && (actionScope === "thread" || !ids.length || action === "archive" || action === "delete" || action === "save" || action === "unsave")) {
+  if (threadKey && (actionScope === "thread" || !ids.length || action === "archive" || action === "delete" || action === "save" || action === "unsave" || action === "read" || action === "unread")) {
     const now = new Date().toISOString();
     const source = normalizeSource(threadKey);
     const folder = folderForSource(source);
@@ -781,11 +844,13 @@ export async function PATCH(request: Request) {
       created_at: now,
       updated_at: now,
       metadata: {
-        kind: "thread_cleanup",
-        action_scope: "thread",
+        kind: action === "read" || action === "unread" ? "thread_read" : "thread_cleanup",
+        action_scope: action === "read" || action === "unread" ? "read" : "thread",
+        read_scope: action === "read" || action === "unread" ? "thread" : "",
         cleanup_action: action,
         cleanup_thread_key: threadKey,
         hidden_thread_key: threadKey,
+        read_thread_key: threadKey,
         created_at: now,
         updated_at: now,
       },
