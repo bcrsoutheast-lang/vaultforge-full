@@ -2,30 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-type Message = Record<string, any>;
-
-type BucketKey =
-  | "all"
-  | "pain"
-  | "alerts"
-  | "activity"
-  | "projects"
-  | "routing"
-  | "introductions"
-  | "general"
-  | "archived";
-
-type Bucket = {
-  key: BucketKey;
-  title: string;
-  label: string;
-  subtitle: string;
-  mission: string;
-  href: string;
-  threads: Message[];
-  accent: string;
-};
+type Row = Record<string, any>;
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -76,148 +55,90 @@ async function safeJson(res: Response) {
   }
 }
 
-function fmt(value: unknown) {
-  const date = new Date(String(value || ""));
-  if (Number.isNaN(date.getTime())) return "Recent";
-  return date.toLocaleString();
+function meta(row: Row) {
+  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
-function metadataOf(thread: Message) {
-  return typeof thread?.metadata === "object" && thread.metadata ? thread.metadata : {};
-}
+function first(...values: unknown[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
+    }
 
-function textBlob(thread: Message) {
-  const metadata = metadataOf(thread);
-
-  return [
-    thread.subject,
-    thread.body,
-    thread.message,
-    thread.thread_id,
-    thread.signal_id,
-    thread.item_id,
-    thread.status,
-    thread.source,
-    metadata.source,
-    metadata.source_page,
-    metadata.source_table,
-    metadata.context_title,
-    metadata.signal_id,
-    metadata.item_id,
-  ]
-    .join(" ")
-    .toLowerCase();
-}
-
-function threadCategory(thread: Message): BucketKey {
-  if (thread.status === "archived") return "archived";
-
-  const blob = textBlob(thread);
-
-  if (blob.includes("pain") || blob.includes("vf_pain") || blob.includes("pain-room") || blob.includes("pain feed")) return "pain";
-  if (blob.includes("alert") || blob.includes("need more info")) return "alerts";
-  if (blob.includes("activity") || blob.includes("event")) return "activity";
-  if (blob.includes("project") || blob.includes("deal-room") || blob.includes("deal room") || blob.includes("property")) return "projects";
-  if (blob.includes("routing") || blob.includes("route")) return "routing";
-  if (blob.includes("intro") || blob.includes("introduction")) return "introductions";
-
-  return "general";
-}
-
-function latestThread(threads: Message[]) {
-  if (!threads.length) return null;
-
-  return [...threads].sort(
-    (a, b) =>
-      new Date(String(b.created_at || b.updated_at || 0)).getTime() -
-      new Date(String(a.created_at || a.updated_at || 0)).getTime()
-  )[0];
-}
-
-function latestPreview(threads: Message[]) {
-  const latest = latestThread(threads);
-  if (!latest) return "No conversations in this station.";
-  return clean(latest.body || latest.message || latest.subject || "Open latest conversation.");
-}
-
-function latestTime(threads: Message[]) {
-  const latest = latestThread(threads);
-  if (!latest) return "—";
-  return fmt(latest.created_at || latest.updated_at);
-}
-
-function unreadCount(threads: Message[], email: string) {
-  const viewer = cleanEmail(email);
-
-  return threads.filter((thread) => {
-    const incoming = cleanEmail(thread.to_email) === viewer;
-    return incoming && !thread.is_read && thread.status !== "archived" && thread.status !== "deleted";
-  }).length;
-}
-
-function sourcePathForBucket(key: BucketKey) {
-  if (key === "pain") return "/pain-feed";
-  if (key === "alerts") return "/alerts";
-  if (key === "activity") return "/activity";
-  if (key === "projects") return "/projects";
-  if (key === "routing") return "/routing-inbox";
-  if (key === "introductions") return "/introductions";
-  return "/messages";
-}
-
-function sourcePathForThread(thread: Message) {
-  const category = threadCategory(thread);
-
-  if (thread.signal_id && category !== "projects") {
-    return `/signals/${encodeURIComponent(thread.signal_id)}`;
+    const text = clean(value);
+    if (text) return text;
   }
 
-  return sourcePathForBucket(category);
+  return "";
+}
+
+function signalIdOf(row: Row) {
+  const m = meta(row);
+  return first(row.signal_id, row.signalId, row.thread_signal_id, m.signal_id, m.thread_signal_id);
+}
+
+function itemIdOf(row: Row) {
+  const m = meta(row);
+  return first(row.item_id, row.itemId, row.pain_id, row.deal_id, row.project_id, m.item_id, m.pain_id, m.deal_id, m.project_id);
+}
+
+function titleOf(row: Row) {
+  const m = meta(row);
+  return first(row.title, row.subject, row.thread_title, row.signal_title, m.title, m.subject, m.thread_title, m.signal_title, "VaultForge Message");
+}
+
+function bodyOf(row: Row) {
+  const m = meta(row);
+  return first(row.body, row.message, row.note, row.notes, row.summary, row.preview, m.body, m.message, m.note, m.notes, m.summary, "Message thread ready for review.");
+}
+
+function fromOf(row: Row) {
+  const m = meta(row);
+  return cleanEmail(first(row.from_email, row.sender_email, row.created_by_email, row.member_email, m.from_email, m.sender_email, m.created_by_email, m.member_email));
+}
+
+function toOf(row: Row) {
+  const m = meta(row);
+  return cleanEmail(first(row.to_email, row.recipient_email, row.target_email, row.owner_email, m.to_email, m.recipient_email, m.target_email, m.owner_email));
+}
+
+function statusOf(row: Row) {
+  const m = meta(row);
+  return first(row.status, row.message_status, row.thread_status, m.status, m.message_status, m.thread_status, "Open");
+}
+
+function sourceOf(row: Row) {
+  const m = meta(row);
+  return first(row.source, row.context_type, row.event_type, row.type, m.source, m.context_type, m.event_type, m.type, "Message");
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at 85% 10%, rgba(157,243,191,.12), transparent 26%), radial-gradient(circle at 90% 85%, rgba(181,92,255,.14), transparent 30%), linear-gradient(180deg,#020303 0%,#071326 48%,#020303 100%)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(74,222,128,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
-  padding: "22px 16px 92px",
+  padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { width: "min(1240px,100%)", margin: "0 auto" };
+const wrap: React.CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 24,
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
 
 const glass: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.28)",
-  borderRadius: 32,
-  padding: 24,
-  background:
-    "linear-gradient(145deg,rgba(255,255,255,.092),rgba(255,255,255,.034)), linear-gradient(135deg,rgba(232,196,107,.08),rgba(157,243,191,.035))",
-  marginBottom: 16,
-  boxShadow: "0 34px 110px rgba(0,0,0,.34)",
-  backdropFilter: "blur(14px)",
-};
-
-const stationCard: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.22)",
-  borderRadius: 28,
-  padding: 22,
-  background: "linear-gradient(145deg,rgba(255,255,255,.086),rgba(255,255,255,.032))",
-  color: "white",
-  textDecoration: "none",
-  display: "block",
-  boxShadow: "0 20px 70px rgba(0,0,0,.28)",
-  cursor: "pointer",
-  textAlign: "left",
-  minHeight: 260,
-};
-
-const threadCard: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 28,
-  padding: 22,
-  background: "linear-gradient(145deg,rgba(255,255,255,.072),rgba(255,255,255,.026))",
-  marginBottom: 14,
-  boxShadow: "0 20px 70px rgba(0,0,0,.24)",
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,.045)",
 };
 
 const eyebrow: React.CSSProperties = {
@@ -234,15 +155,14 @@ const button: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  minHeight: 46,
+  minHeight: 50,
   borderRadius: 999,
-  padding: "12px 16px",
+  padding: "12px 18px",
   border: 0,
   background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
   fontWeight: 950,
   textDecoration: "none",
-  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -252,26 +172,7 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
-const danger: React.CSSProperties = {
-  ...ghost,
-  border: "1px solid rgba(255,120,120,.35)",
-  color: "#ffd0d0",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.08)",
-  color: "white",
-  padding: "15px 16px",
-  fontSize: 16,
-  outline: "none",
-};
-
 const chip: React.CSSProperties = {
-  display: "inline-flex",
   border: "1px solid rgba(157,243,191,.22)",
   borderRadius: 999,
   padding: "7px 10px",
@@ -280,252 +181,128 @@ const chip: React.CSSProperties = {
   margin: "0 7px 7px 0",
   fontSize: 12,
   fontWeight: 850,
+  display: "inline-flex",
 };
 
-const softChip: React.CSSProperties = {
-  ...chip,
-  color: "#e5e7eb",
-  border: "1px solid rgba(255,255,255,.14)",
-  background: "rgba(255,255,255,.055)",
-};
+function Metric({ label, value, tone }: { label: string; value: string; tone: "blue" | "green" | "gold" | "red" }) {
+  const color = tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
 
-export default function MessagesCommandCenter() {
+  return (
+    <section style={glass}>
+      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>{label}</div>
+      <div style={{ fontSize: 52, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
+    </section>
+  );
+}
+
+function MessageCard({ row, viewer }: { row: Row; viewer: string }) {
+  const signalId = signalIdOf(row);
+  const itemId = itemIdOf(row);
+  const from = fromOf(row);
+  const to = toOf(row);
+  const source = sourceOf(row);
+
+  const replyHref = signalId
+    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ""}`
+    : "/messages/new";
+
+  return (
+    <article style={glass}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <span style={chip}>{source}</span>
+        <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.26)", background: "rgba(232,196,107,.08)" }}>
+          {statusOf(row)}
+        </span>
+        {signalId ? <span style={{ ...chip, color: "#8fd3ff", borderColor: "rgba(56,189,248,.28)", background: "rgba(56,189,248,.08)" }}>Signal Linked</span> : null}
+      </div>
+
+      <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
+      <p style={muted}>{bodyOf(row)}</p>
+
+      <div style={{ marginTop: 12 }}>
+        {from ? <span style={chip}>From: {from}</span> : null}
+        {to ? <span style={chip}>To: {to}</span> : null}
+        {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
+        {itemId ? <span style={chip}>Item: {itemId}</span> : null}
+      </div>
+
+      <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+        <Link href={replyHref} style={button}>Reply / Continue</Link>
+        {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link> : null}
+        {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
+        <Link href="/activity" style={ghost}>Activity</Link>
+      </div>
+    </article>
+  );
+}
+
+export default function MessagesPage() {
   const [email, setEmail] = useState("");
-  const [threads, setThreads] = useState<Message[]>([]);
+  const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading messages...");
-  const [busyThread, setBusyThread] = useState("");
-  const [showArchived, setShowArchived] = useState(false);
-  const [search, setSearch] = useState("");
-  const [activeBucket, setActiveBucket] = useState<BucketKey>("all");
 
-  async function load(nextShowArchived = showArchived) {
+  async function load() {
     const viewer = getEmail();
     setEmail(viewer);
     setStatus("Loading messages...");
 
-    if (!viewer) {
-      setThreads([]);
-      setStatus("Login email not found. Please log in again.");
-      return;
-    }
-
     try {
-      const query = new URLSearchParams();
-      query.set("email", viewer);
-      if (nextShowArchived) query.set("include_archived", "1");
+      const urls = [
+        `/api/messages?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/pain/messages?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/routing/introductions?email=${encodeURIComponent(viewer)}&owner=0`,
+      ];
 
-      const res = await fetch(`/api/simple-messages?${query.toString()}`, {
-        cache: "no-store",
-        headers: { "x-vf-email": viewer },
+      const collected: Row[] = [];
+
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, {
+            cache: "no-store",
+            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
+          });
+
+          const data = await safeJson(res);
+          const list = [
+            ...(Array.isArray(data.messages) ? data.messages : []),
+            ...(Array.isArray(data.threads) ? data.threads : []),
+            ...(Array.isArray(data.items) ? data.items : []),
+            ...(Array.isArray(data.introductions) ? data.introductions : []),
+            ...(Array.isArray(data.data) ? data.data : []),
+          ];
+
+          collected.push(...list);
+        } catch {
+          // Keep loading other message-compatible sources.
+        }
+      }
+
+      const seen = new Set<string>();
+      const unique = collected.filter((item) => {
+        const key = first(item.id, signalIdOf(item), itemIdOf(item), titleOf(item) + bodyOf(item));
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
 
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) throw new Error(data?.error || "Could not load messages.");
-
-      setThreads(Array.isArray(data.threads) ? data.threads : []);
-      setStatus("");
+      setItems(unique);
+      setStatus(unique.length ? "" : "No messages connected yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load messages.");
     }
   }
 
-  async function cleanup(threadId: string, action: "archive" | "restore" | "delete") {
-    if (!threadId) return;
-
-    setBusyThread(threadId);
-    setStatus("");
-
-    try {
-      const endpoint =
-        action === "delete"
-          ? `/api/simple-messages?thread_id=${encodeURIComponent(threadId)}`
-          : "/api/simple-messages";
-
-      const res = await fetch(endpoint, {
-        method: action === "delete" ? "DELETE" : "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-        },
-        body: JSON.stringify({
-          email,
-          thread_id: threadId,
-          action,
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) throw new Error(data?.error || `Could not ${action} thread.`);
-
-      await load(showArchived);
-    } catch (error: any) {
-      setStatus(error?.message || `Could not ${action} thread.`);
-    } finally {
-      setBusyThread("");
-    }
-  }
-
   useEffect(() => {
-    load(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    load();
   }, []);
 
-  const buckets = useMemo<Bucket[]>(() => {
-    const activeThreads = threads.filter((thread) => thread.status !== "deleted");
-    const nonArchived = activeThreads.filter((thread) => thread.status !== "archived");
-    const archived = activeThreads.filter((thread) => thread.status === "archived");
+  const counts = useMemo(() => {
+    const linked = items.filter((item) => signalIdOf(item)).length;
+    const open = items.filter((item) => !statusOf(item).toLowerCase().includes("archiv") && !statusOf(item).toLowerCase().includes("closed")).length;
+    const ownerReady = items.filter((item) => toOf(item) || fromOf(item)).length;
 
-    const bucketMap: Record<BucketKey, Message[]> = {
-      all: nonArchived,
-      pain: [],
-      alerts: [],
-      activity: [],
-      projects: [],
-      routing: [],
-      introductions: [],
-      general: [],
-      archived,
-    };
-
-    for (const thread of nonArchived) {
-      const category = threadCategory(thread);
-      if (category === "archived") bucketMap.archived.push(thread);
-      else bucketMap[category].push(thread);
-    }
-
-    return [
-      {
-        key: "all",
-        title: "All Messages",
-        label: "Command",
-        subtitle: "Everything active.",
-        mission: "One clean view across the whole network.",
-        href: "/messages",
-        threads: bucketMap.all,
-        accent: "#e8c46b",
-      },
-      {
-        key: "pain",
-        title: "Pain",
-        label: "Intake",
-        subtitle: "Pain feed and problem requests.",
-        mission: "Problems that need action, routing, or owner contact.",
-        href: "/pain-feed",
-        threads: bucketMap.pain,
-        accent: "#ef4444",
-      },
-      {
-        key: "alerts",
-        title: "Alerts",
-        label: "Signals",
-        subtitle: "Need More Info and alert responses.",
-        mission: "High-signal follow-ups from intelligence windows.",
-        href: "/alerts",
-        threads: bucketMap.alerts,
-        accent: "#f59e0b",
-      },
-      {
-        key: "activity",
-        title: "Activity",
-        label: "Events",
-        subtitle: "Activity stream and event replies.",
-        mission: "Operational movement from the live activity board.",
-        href: "/activity",
-        threads: bucketMap.activity,
-        accent: "#38bdf8",
-      },
-      {
-        key: "projects",
-        title: "Projects",
-        label: "Deals",
-        subtitle: "Deal rooms and property work.",
-        mission: "Project, property, and deal-room conversations.",
-        href: "/projects",
-        threads: bucketMap.projects,
-        accent: "#9df3bf",
-      },
-      {
-        key: "routing",
-        title: "Routing",
-        label: "Flow",
-        subtitle: "Routing action conversations.",
-        mission: "Member fit, routing, and execution movement.",
-        href: "/routing-inbox",
-        threads: bucketMap.routing,
-        accent: "#b55cff",
-      },
-      {
-        key: "introductions",
-        title: "Introductions",
-        label: "Network",
-        subtitle: "Controlled intro conversations.",
-        mission: "Warm introductions and connection control.",
-        href: "/introductions",
-        threads: bucketMap.introductions,
-        accent: "#fb7185",
-      },
-      {
-        key: "general",
-        title: "General",
-        label: "Inbox",
-        subtitle: "Unsorted conversations.",
-        mission: "Everything useful that has not been assigned a source yet.",
-        href: "/messages",
-        threads: bucketMap.general,
-        accent: "#94a3b8",
-      },
-      {
-        key: "archived",
-        title: "Archived",
-        label: "Cleaned",
-        subtitle: "Stored for review.",
-        mission: "Closed or cleaned conversations kept out of the way.",
-        href: "/messages",
-        threads: bucketMap.archived,
-        accent: "#64748b",
-      },
-    ];
-  }, [threads]);
-
-  const activeBucketData = buckets.find((bucket) => bucket.key === activeBucket) || buckets[0];
-
-  const activeThreads = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const bucket = buckets.find((item) => item.key === activeBucket);
-    let source = bucket ? bucket.threads : threads;
-
-    if (activeBucket === "archived") {
-      source = source.filter((thread) => thread.status === "archived");
-    }
-
-    if (!q) return source;
-
-    return source.filter((thread) =>
-      [
-        thread.subject,
-        thread.body,
-        thread.from_email,
-        thread.to_email,
-        thread.thread_id,
-        thread.signal_id,
-        thread.item_id,
-        thread.status,
-        textBlob(thread),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [threads, buckets, activeBucket, search]);
-
-  const totalActive = buckets.find((bucket) => bucket.key === "all")?.threads.length || 0;
-  const totalArchived = buckets.find((bucket) => bucket.key === "archived")?.threads.length || 0;
-  const totalUnread = unreadCount(threads, email);
-  const highPriorityCount =
-    buckets.find((bucket) => bucket.key === "pain")?.threads.length ||
-    0 + (buckets.find((bucket) => bucket.key === "alerts")?.threads.length || 0);
+    return { total: items.length, linked, open, ownerReady };
+  }, [items]);
 
   return (
     <main style={page}>
@@ -533,17 +310,18 @@ export default function MessagesCommandCenter() {
         a:hover, button:hover {
           transform: translateY(-1px);
           transition: all .18s ease;
-          filter: brightness(1.07);
+          filter: brightness(1.06);
         }
 
-        input::placeholder {
-          color: rgba(255,255,255,.42);
-        }
+        @media (max-width: 820px) {
+          .vf-grid,
+          .vf-four,
+          .vf-actions {
+            grid-template-columns: 1fr !important;
+          }
 
-        @media (max-width: 860px) {
           .vf-actions {
             display: grid !important;
-            grid-template-columns: 1fr !important;
             gap: 10px !important;
           }
 
@@ -551,236 +329,75 @@ export default function MessagesCommandCenter() {
             width: 100%;
             box-sizing: border-box;
             justify-content: center;
-            margin: 0 !important;
-          }
-
-          .vf-stations {
-            grid-template-columns: 1fr !important;
-          }
-
-          .vf-metrics {
-            grid-template-columns: 1fr 1fr !important;
-          }
-        }
-
-        @media (max-width: 540px) {
-          .vf-metrics {
-            grid-template-columns: 1fr !important;
           }
         }
       `}</style>
 
       <div style={wrap}>
-        <nav style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-          <Link href="/dashboard" style={{ color: "#f8e7b0", textDecoration: "none", fontWeight: 950, letterSpacing: ".12em" }}>
-            VAULTFORGE
-          </Link>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            <Link href="/activity" style={ghost}>Activity</Link>
-            <Link href="/routing-inbox" style={ghost}>Routing</Link>
-          </div>
-        </nav>
+        <VaultForgeMemberNav
+          title="Messages"
+          subtitle="Controlled owner/member communication, replies, signal context, and execution follow-up."
+          active="messages"
+        />
 
-        <section style={glass}>
-          <p style={eyebrow}>VaultForge Communications OS</p>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.5fr) minmax(260px,.8fr)", gap: 18, alignItems: "end" }}>
-            <div>
-              <h1 style={{ fontSize: "clamp(54px,11vw,104px)", lineHeight: 0.84, margin: "10px 0 18px", letterSpacing: "-.07em" }}>
-                Message command center.
-              </h1>
-              <p style={{ ...muted, fontSize: 19, maxWidth: 760 }}>
-                Every conversation has a station. Pain, alerts, projects, routing, introductions, and activity stay organized so operators know exactly where to work.
-              </p>
-            </div>
-            <div style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 24, padding: 16, background: "rgba(0,0,0,.18)" }}>
-              <p style={{ ...eyebrow, color: "#9df3bf" }}>Operator View</p>
-              <p style={{ ...muted, margin: "0 0 8px" }}>Signed in</p>
-              <strong style={{ overflowWrap: "anywhere" }}>{email || "unknown"}</strong>
-            </div>
+        <section style={card}>
+          <div style={eyebrow}>VaultForge Message Command</div>
+          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+            Communication center.
+          </h1>
+          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
+            Keep communication simple: message owner, reply, keep context tied to the signal, and move the deal or problem forward.
+          </p>
+
+          <div style={{ marginTop: 16 }}>
+            <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>Threads: {counts.total}</span>
+            <span style={chip}>Open: {counts.open}</span>
+            <span style={chip}>Signal Linked: {counts.linked}</span>
           </div>
 
-          <div className="vf-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 20 }}>
-            <div style={{ border: "1px solid rgba(232,196,107,.24)", borderRadius: 22, padding: 16, background: "rgba(232,196,107,.08)" }}>
-              <p style={eyebrow}>Active</p>
-              <strong style={{ fontSize: 42 }}>{totalActive}</strong>
-            </div>
-            <div style={{ border: "1px solid rgba(157,243,191,.24)", borderRadius: 22, padding: 16, background: "rgba(157,243,191,.07)" }}>
-              <p style={{ ...eyebrow, color: "#9df3bf" }}>Unread</p>
-              <strong style={{ fontSize: 42 }}>{totalUnread}</strong>
-            </div>
-            <div style={{ border: "1px solid rgba(239,68,68,.24)", borderRadius: 22, padding: 16, background: "rgba(239,68,68,.07)" }}>
-              <p style={{ ...eyebrow, color: "#fecaca" }}>Pressure</p>
-              <strong style={{ fontSize: 42 }}>{highPriorityCount}</strong>
-            </div>
-            <div style={{ border: "1px solid rgba(148,163,184,.22)", borderRadius: 22, padding: 16, background: "rgba(148,163,184,.07)" }}>
-              <p style={{ ...eyebrow, color: "#cbd5e1" }}>Archived</p>
-              <strong style={{ fontSize: 42 }}>{totalArchived}</strong>
-            </div>
-          </div>
-
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <button type="button" onClick={() => load(showArchived)} style={button}>
-              Refresh Command
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const next = !showArchived;
-                setShowArchived(next);
-                load(next);
-                if (next) setActiveBucket("archived");
-                else if (activeBucket === "archived") setActiveBucket("all");
-              }}
-              style={ghost}
-            >
-              {showArchived ? "Hide Archived" : "Load Archived"}
-            </button>
-            <Link href="/messages" style={ghost}>Inbox</Link>
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/signals" style={ghost}>Signals</Link>
+            <Link href="/activity" style={ghost}>Activity</Link>
+            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+            <button type="button" onClick={load} style={button}>Refresh</button>
           </div>
         </section>
 
-        <section className="vf-stations" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(255px,1fr))", gap: 14, marginBottom: 16 }}>
-          {buckets.map((bucket) => {
-            if (bucket.key === "archived" && !showArchived) return null;
-
-            const count = bucket.threads.length;
-            const unread = unreadCount(bucket.threads, email);
-            const active = activeBucket === bucket.key;
-
-            return (
-              <button
-                key={bucket.key}
-                type="button"
-                onClick={() => setActiveBucket(bucket.key)}
-                style={{
-                  ...stationCard,
-                  borderColor: active ? bucket.accent : "rgba(232,196,107,.22)",
-                  background: active
-                    ? `linear-gradient(145deg,${bucket.accent}28,rgba(255,255,255,.055))`
-                    : stationCard.background,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                  <div>
-                    <p style={{ ...eyebrow, color: bucket.accent }}>{bucket.label}</p>
-                    <h2 style={{ fontSize: 30, lineHeight: 1, margin: "0 0 10px" }}>{bucket.title}</h2>
-                  </div>
-                  <div style={{ width: 54, height: 54, borderRadius: 18, display: "grid", placeItems: "center", border: `1px solid ${bucket.accent}66`, color: bucket.accent, background: `${bucket.accent}12`, fontWeight: 950 }}>
-                    {count}
-                  </div>
-                </div>
-
-                <p style={{ ...muted, minHeight: 42, marginTop: 4 }}>{bucket.subtitle}</p>
-                <p style={{ color: "#94a3b8", fontSize: 13, minHeight: 40, lineHeight: 1.35 }}>
-                  {bucket.mission}
-                </p>
-
-                <div style={{ marginTop: 12 }}>
-                  <span style={chip}>{count} total</span>
-                  <span style={unread ? chip : softChip}>{unread} unread</span>
-                </div>
-
-                <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 12, marginTop: 12 }}>
-                  <p style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 1.4, margin: 0 }}>
-                    {latestPreview(bucket.threads).slice(0, 108)}
-                  </p>
-                  <p style={{ color: "#94a3b8", fontSize: 12, margin: "8px 0 0" }}>{latestTime(bucket.threads)}</p>
-                </div>
-              </button>
-            );
-          })}
+        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
+          <Metric label="Threads" value={String(counts.total)} tone="blue" />
+          <Metric label="Open" value={String(counts.open)} tone="green" />
+          <Metric label="Signal Linked" value={String(counts.linked)} tone="gold" />
+          <Metric label="Owner Ready" value={String(counts.ownerReady)} tone="red" />
         </section>
 
-        <section style={glass}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
-            <div>
-              <p style={{ ...eyebrow, color: activeBucketData.accent }}>{activeBucketData.label} Station</p>
-              <h2 style={{ fontSize: 36, lineHeight: 1, margin: "0 0 8px" }}>{activeBucketData.title}</h2>
-              <p style={{ ...muted, margin: 0 }}>{activeBucketData.mission}</p>
+        <section style={card}>
+          <div style={eyebrow}>Message Queue</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Keep it clean and actionable.</h2>
+
+          {items.length ? (
+            <div style={{ display: "grid", gap: 14 }}>
+              {items.map((item, index) => (
+                <MessageCard key={clean(item.id) || `${signalIdOf(item)}-${index}`} row={item} viewer={email} />
+              ))}
             </div>
-            <Link href={activeBucketData.href} style={ghost}>
-              Open Source Page
-            </Link>
-          </div>
-
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search sender, owner, subject, signal id, thread id..."
-            style={input}
-          />
+          ) : (
+            <div style={glass}>
+              <h3 style={{ marginTop: 0 }}>No messages yet.</h3>
+              <p style={muted}>
+                Messages will appear here when a member contacts an owner, replies to a signal,
+                asks for more info, or responds to an introduction.
+              </p>
+              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                <Link href="/signals" style={button}>Open Signals</Link>
+                <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+              </div>
+            </div>
+          )}
         </section>
 
-        {status ? <section style={glass}>{status}</section> : null}
-
-        {activeThreads.length === 0 && !status ? (
-          <section style={glass}>No conversations in this station yet.</section>
-        ) : null}
-
-        {activeThreads.map((thread) => {
-          const archived = thread.status === "archived";
-          const threadId = clean(thread.thread_id);
-          const busy = busyThread === threadId;
-          const category = threadCategory(thread);
-          const bucket = buckets.find((item) => item.key === category) || buckets[0];
-
-          return (
-            <article
-              key={threadId}
-              style={{
-                ...threadCard,
-                opacity: archived ? 0.72 : 1,
-                borderColor: archived ? "rgba(148,163,184,.32)" : `${bucket.accent}77`,
-              }}
-            >
-              <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 14, alignItems: "start" }}>
-                <div>
-                  <p style={{ ...eyebrow, color: bucket.accent }}>{archived ? "Archived Thread" : `${bucket.title} Thread`}</p>
-                  <h2 style={{ margin: "0 0 8px", fontSize: 28 }}>{thread.subject || "VaultForge message"}</h2>
-                  <p style={{ ...muted, margin: "0 0 12px" }}>{thread.body || "Open conversation."}</p>
-                </div>
-                <div style={{ border: `1px solid ${bucket.accent}55`, borderRadius: 16, padding: "9px 11px", color: bucket.accent, background: `${bucket.accent}12`, fontWeight: 950 }}>
-                  {category.toUpperCase()}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
-                <span style={softChip}>From: {thread.from_email}</span>
-                <span style={softChip}>To: {thread.to_email}</span>
-                <span style={softChip}>Status: {thread.status || "open"}</span>
-                <span style={softChip}>{fmt(thread.created_at)}</span>
-                {thread.signal_id ? <span style={softChip}>Signal: {thread.signal_id}</span> : null}
-              </div>
-
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                <Link href={`/messages/${encodeURIComponent(threadId)}?email=${encodeURIComponent(email)}`} style={button}>
-                  Open Thread
-                </Link>
-
-                <Link href={sourcePathForThread(thread)} style={ghost}>
-                  Open Source
-                </Link>
-
-                {archived ? (
-                  <button type="button" disabled={busy} onClick={() => cleanup(threadId, "restore")} style={ghost}>
-                    {busy ? "Working..." : "Restore"}
-                  </button>
-                ) : (
-                  <button type="button" disabled={busy} onClick={() => cleanup(threadId, "archive")} style={ghost}>
-                    {busy ? "Working..." : "Archive"}
-                  </button>
-                )}
-
-                <button type="button" disabled={busy} onClick={() => cleanup(threadId, "delete")} style={danger}>
-                  {busy ? "Working..." : "Delete"}
-                </button>
-              </div>
-            </article>
-          );
-        })}
+        {status ? <section style={card}>{status}</section> : null}
       </div>
     </main>
   );
