@@ -1,21 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
-type Conversation = Record<string, any>;
-
-const LANES = [
-  { key: "saved", label: "SAVED", title: "Saved Bucket", note: "Saved conversations you want to keep visible and return to fast." },
-  { key: "alerts", label: "ALERTS", title: "Alerts", note: "Alert follow-up, owner requests, and urgent message traffic." },
-  { key: "pain", label: "PAIN", title: "Pain", note: "Pain signal conversations and problem-routing follow-up." },
-  { key: "signals", label: "SIGNALS", title: "Signals", note: "Signal-room messages and intelligence follow-up." },
-  { key: "routing", label: "ROUTING", title: "Routing", note: "Routing requests, member-fit paths, and execution handoffs." },
-  { key: "introductions", label: "INTRO", title: "Introductions", note: "Controlled introduction conversations." },
-  { key: "projects", label: "PROJECTS", title: "Projects", note: "Project and deal-room communication." },
-  { key: "members", label: "MEMBERS", title: "Members", note: "Member-to-member and private network messages." },
-  { key: "general", label: "GENERAL", title: "General", note: "Messages not tied to a specific route yet." },
-];
+type MessageRow = Record<string, any>;
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -45,7 +33,9 @@ function readCookie(name: string) {
 function currentEmail() {
   if (typeof window === "undefined") return "";
 
-  for (const key of ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"]) {
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
+
+  for (const key of keys) {
     const local = lower(window.localStorage.getItem(key));
     if (local.includes("@")) return local;
 
@@ -56,174 +46,197 @@ function currentEmail() {
   return lower(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
-async function safeJson(res: Response) {
+async function safeJson(response: Response) {
   try {
-    return await res.json();
+    return await response.json();
   } catch {
     return {};
   }
 }
 
-function laneMeta(key: string) {
-  return LANES.find((lane) => lane.key === key) || LANES[LANES.length - 1];
+function titleOf(row: MessageRow) {
+  return clean(row.title || row.subject || "VaultForge message").replace(/^(re:\s*)+/gi, "");
 }
 
-function safeTitle(value: unknown) {
-  return clean(value || "VaultForge message")
-    .replace(/^(re:\s*)+/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function bodyOf(row: MessageRow) {
+  return clean(row.message || row.body || row.note || "");
 }
 
-export default function MessageCommandPage() {
+function sourceOfThread(threadKey: string) {
+  const key = lower(threadKey);
+  if (key.includes(":")) return key.split(":")[0] || "message";
+  return "message";
+}
+
+function folderForSource(source: string) {
+  if (source === "alert") return "alerts";
+  if (source === "pain") return "pain";
+  if (source === "signal") return "signals";
+  if (source === "routing") return "routing";
+  if (source === "introduction") return "introductions";
+  if (source === "project") return "projects";
+  if (source === "member") return "members";
+  if (source === "activity") return "activity";
+  if (source === "saved") return "saved";
+  return "general";
+}
+
+export default function MessageThreadPage({
+  params,
+}: {
+  params: { threadKey: string };
+}) {
+  const threadKey = decodeURIComponent(params.threadKey || "");
+  const source = sourceOfThread(threadKey);
+  const folder = folderForSource(source);
+
   const [email, setEmail] = useState("");
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [openLane, setOpenLane] = useState<string>("");
-  const [query, setQuery] = useState("");
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [status, setStatus] = useState("Loading message command...");
-  const [busyKey, setBusyKey] = useState("");
+  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [reply, setReply] = useState("");
+  const [status, setStatus] = useState("Loading message room...");
+  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState("");
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const params = new URLSearchParams(window.location.search || "");
-    const route = lower(params.get("route") || params.get("folder") || params.get("lane"));
-
-    if (route && LANES.some((lane) => lane.key === route)) {
-      setOpenLane(route);
-    }
+  const title = useMemo(() => {
+    if (typeof window === "undefined") return "Message Room";
+    return clean(new URLSearchParams(window.location.search).get("title") || "Message Room");
   }, []);
+
+  const backHref = `/message-command?route=${encodeURIComponent(folder)}`;
+
+  async function markThreadRead(viewer: string, nextMessages: MessageRow[]) {
+    if (!nextMessages.length) return;
+
+    try {
+      await fetch("/api/message-command", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": viewer,
+        },
+        body: JSON.stringify({
+          action: "read",
+          ids: nextMessages.map((message) => clean(message.id)).filter(Boolean),
+          email: viewer,
+          thread_key: threadKey,
+          action_scope: "thread",
+        }),
+      });
+    } catch {
+      // Do not block room loading if read marker fails.
+    }
+  }
 
   async function load() {
     const viewer = currentEmail();
     setEmail(viewer);
-    setStatus("Loading message command...");
+    setStatus("Loading message room...");
 
     try {
-      const res = await fetch(`/api/message-command?email=${encodeURIComponent(viewer)}`, {
-        cache: "no-store",
-        headers: { "x-vf-email": viewer },
-      });
+      const response = await fetch(
+        `/api/message-command?mode=thread&thread_key=${encodeURIComponent(threadKey)}&email=${encodeURIComponent(viewer)}`,
+        {
+          cache: "no-store",
+          headers: { "x-vf-email": viewer },
+        }
+      );
 
-      const data = await safeJson(res);
+      const data = await safeJson(response);
+      const nextMessages = Array.isArray(data.messages) ? data.messages : [];
 
-      setConversations(Array.isArray(data.conversations) ? data.conversations : []);
-      setCounts(data.counts || {});
-      setUnreadCounts(data.unread_counts || {});
+      setMessages(nextMessages);
       setStatus("");
+
+      await markThreadRead(viewer, nextMessages);
     } catch (error: any) {
-      setStatus(error?.message || "Could not load message command.");
+      setStatus(error?.message || "Could not load message room.");
     }
   }
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadKey]);
 
-  const laneTotals = useMemo(() => {
-    const next: Record<string, { conversations: number; messages: number; unread: number }> = {};
+  async function sendReply() {
+    const text = clean(reply);
 
-    for (const lane of LANES) {
-      next[lane.key] = {
-        conversations: 0,
-        messages: Number(counts[lane.key] || 0),
-        unread: Number(unreadCounts[lane.key] || 0),
-      };
-    }
-
-    for (const convo of conversations) {
-      const folder = clean(convo.folder || "general");
-      if (!next[folder]) next[folder] = { conversations: 0, messages: 0 };
-      next[folder].conversations += 1;
-
-      if (convo.is_saved === true) {
-        if (!next.saved) next.saved = { conversations: 0, messages: 0, unread: 0 };
-        next.saved.conversations += 1;
-      }
-    }
-
-    return next;
-  }, [conversations, counts, unreadCounts]);
-
-  const visible = useMemo(() => {
-    const q = lower(query);
-
-    if (!openLane) return [];
-
-    return conversations.filter((item) => {
-      const folder = clean(item.folder || "general");
-
-      if (openLane === "saved") {
-        if (item.is_saved !== true) return false;
-      } else if (folder !== openLane) {
-        return false;
-      }
-
-      if (!q) return true;
-
-      return lower(
-        [
-          item.title,
-          item.latest_message,
-          item.from_email,
-          item.to_email,
-          item.thread_key,
-          item.folder,
-          item.lane_label,
-        ].join(" ")
-      ).includes(q);
-    });
-  }, [conversations, query, openLane]);
-
-  const totalMessages = conversations.reduce((sum, item) => sum + Number(item.count || 0), 0);
-  const activeMeta = openLane ? laneMeta(openLane) : null;
-  const activeCount = openLane ? Number(counts[openLane] || 0) : totalMessages;
-
-  function openRoute(lane: string) {
-    setOpenLane(lane);
-
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("route", lane);
-      window.history.replaceState(null, "", url.toString());
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }
-
-  function closeRoute() {
-    setOpenLane("");
-    setQuery("");
-
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("route");
-      window.history.replaceState(null, "", url.toString());
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }
-
-  async function cleanup(convo: Conversation, action: "archive" | "delete" | "save" | "unsave" | "read" | "unread") {
-    const ids = Array.isArray(convo.message_ids) ? convo.message_ids.filter(Boolean) : [];
-
-    if (!ids.length && (action === "archive" || action === "delete")) {
-      setStatus("No message IDs found for cleanup.");
+    if (!text) {
+      setStatus("Write a message first.");
       return;
     }
 
-    setBusyKey(`${action}:${convo.thread_key}`);
+    const viewer = email || currentEmail();
 
-    if (action === "archive") setStatus("Archiving conversation...");
-    else if (action === "delete") setStatus("Deleting conversation...");
-    else if (action === "save") setStatus("Saving conversation...");
-    else if (action === "unsave") setStatus("Removing from Saved Bucket...");
-    else if (action === "read") setStatus("Marking conversation read...");
-    else setStatus("Marking conversation unread...");
+    if (!viewer.includes("@")) {
+      setStatus("Missing signed-in email.");
+      return;
+    }
+
+    const latest = messages[messages.length - 1] || {};
+    const latestFrom = lower(latest.from_email);
+    const latestTo = lower(latest.to_email || latest.owner_email);
+    const toEmail = latestFrom && latestFrom !== viewer ? latestFrom : latestTo || "bcrsoutheast@gmail.com";
+
+    setBusy(true);
+    setStatus("Sending reply...");
 
     try {
-      const res = await fetch("/api/message-command", {
+      const response = await fetch("/api/message-command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": viewer,
+        },
+        body: JSON.stringify({
+          thread_key: threadKey,
+          source,
+          folder,
+          from_email: viewer,
+          to_email: toEmail,
+          subject: titleOf(latest) || title,
+          title: titleOf(latest) || title,
+          message: text,
+          body: text,
+          note: text,
+        }),
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok || data?.ok === false) {
+        throw new Error(data?.details || data?.error || "Message could not be sent.");
+      }
+
+      setReply("");
+      await load();
+      setStatus("Reply sent.");
+    } catch (error: any) {
+      setStatus(error?.message || "Message could not be sent.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cleanup(ids: string[], action: "archive" | "delete" | "save" | "unsave" | "read" | "unread") {
+    const cleanIds = ids.map(clean).filter(Boolean);
+
+    if (!cleanIds.length && (action === "archive" || action === "delete")) {
+      setStatus("No saved message IDs found.");
+      return;
+    }
+
+    setBusyAction(action);
+
+    if (action === "archive") setStatus("Archiving...");
+    else if (action === "delete") setStatus("Deleting...");
+    else if (action === "save") setStatus("Saving thread...");
+    else if (action === "unsave") setStatus("Removing from Saved Bucket...");
+    else if (action === "read") setStatus("Marking read...");
+    else setStatus("Marking unread...");
+
+    try {
+      const response = await fetch("/api/message-command", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -231,113 +244,73 @@ export default function MessageCommandPage() {
         },
         body: JSON.stringify({
           action,
-          ids,
+          ids: cleanIds,
           email,
-          thread_key: convo.thread_key,
-          action_scope: "thread",
+          thread_key:
+            cleanIds.length === messages.length ||
+            action === "save" ||
+            action === "unsave" ||
+            action === "read" ||
+            action === "unread"
+              ? threadKey
+              : "",
+          action_scope:
+            cleanIds.length === messages.length ||
+            action === "save" ||
+            action === "unsave" ||
+            action === "read" ||
+            action === "unread"
+              ? "thread"
+              : "message",
         }),
       });
 
-      const data = await safeJson(res);
+      const data = await safeJson(response);
 
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || "Cleanup failed.");
+      if (!response.ok || data?.ok === false) {
+        throw new Error(data?.details || data?.error || "Cleanup failed.");
       }
 
-      if (action === "archive" || action === "delete") {
-        setConversations((current) => current.filter((item) => item.thread_key !== convo.thread_key));
-        setStatus(action === "archive" ? "Conversation archived." : "Conversation deleted.");
-      } else if (action === "save") {
-        setConversations((current) =>
-          current.map((item) =>
-            item.thread_key === convo.thread_key ? { ...item, is_saved: true } : item
-          )
-        );
-        setStatus("Conversation saved.");
-      } else if (action === "unsave") {
-        setConversations((current) =>
-          current.map((item) =>
-            item.thread_key === convo.thread_key ? { ...item, is_saved: false } : item
-          )
-        );
-        setStatus("Removed from Saved Bucket.");
-      } else if (action === "read") {
-        setConversations((current) =>
-          current.map((item) =>
-            item.thread_key === convo.thread_key ? { ...item, unread_count: 0, is_read: true } : item
-          )
-        );
-        setStatus("Conversation marked read.");
-      } else {
-        setConversations((current) =>
-          current.map((item) =>
-            item.thread_key === convo.thread_key ? { ...item, unread_count: Number(item.count || 1), is_read: false } : item
-          )
-        );
-        setStatus("Conversation marked unread.");
+      if (action === "save") {
+        setStatus("Thread saved.");
+        return;
       }
+
+      if (action === "unsave") {
+        setStatus("Thread removed from Saved Bucket.");
+        return;
+      }
+
+      if (action === "read") {
+        setMessages((current) => current.map((row) => ({ ...row, read: true })));
+        setStatus("Thread marked read.");
+        return;
+      }
+
+      if (action === "unread") {
+        setMessages((current) => current.map((row) => ({ ...row, read: false })));
+        setStatus("Thread marked unread.");
+        return;
+      }
+
+      if (cleanIds.length === messages.length) {
+        window.location.href = backHref;
+        return;
+      }
+
+      setMessages((current) => current.filter((row) => !cleanIds.includes(clean(row.id))));
+      setStatus(action === "archive" ? "Archived." : "Deleted.");
     } catch (error: any) {
       setStatus(error?.message || "Cleanup failed.");
     } finally {
-      setBusyKey("");
+      setBusyAction("");
     }
   }
 
-
-  async function markLaneRead() {
-    if (!openLane) return;
-
-    const laneConvos = visible.filter((convo) => Number(convo.unread_count || 0) > 0);
-
-    if (!laneConvos.length) {
-      setStatus("No unread messages in this lane.");
-      return;
-    }
-
-    setBusyKey(`read-lane:${openLane}`);
-    setStatus("Marking lane read...");
-
-    try {
-      for (const convo of laneConvos) {
-        await fetch("/api/message-command", {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "x-vf-email": email,
-          },
-          body: JSON.stringify({
-            action: "read",
-            ids: Array.isArray(convo.message_ids) ? convo.message_ids.filter(Boolean) : [],
-            email,
-            thread_key: convo.thread_key,
-            action_scope: "thread",
-          }),
-        });
-      }
-
-      setConversations((current) =>
-        current.map((item) =>
-          openLane === "saved"
-            ? item.is_saved === true
-              ? { ...item, unread_count: 0, is_read: true }
-              : item
-            : item.folder === openLane
-              ? { ...item, unread_count: 0, is_read: true }
-              : item
-        )
-      );
-
-      setUnreadCounts((current) => ({ ...current, [openLane]: 0 }));
-      setStatus("Lane marked read.");
-    } catch (error: any) {
-      setStatus(error?.message || "Could not mark lane read.");
-    } finally {
-      setBusyKey("");
-    }
-  }
+  const allIds = messages.map((message) => clean(message.id)).filter(Boolean);
 
   return (
-    <main style={page}>
+    <main style={styles.page}>
       <style>{`
         a:hover, button:hover {
           transform: translateY(-1px);
@@ -345,15 +318,11 @@ export default function MessageCommandPage() {
           transition: all .16s ease;
         }
 
-        input::placeholder {
+        textarea::placeholder {
           color: rgba(255,255,255,.45);
         }
 
-        @media (max-width: 880px) {
-          .vf-card-grid {
-            grid-template-columns: 1fr !important;
-          }
-
+        @media (max-width: 760px) {
           .vf-actions {
             display: grid !important;
             grid-template-columns: 1fr !important;
@@ -367,516 +336,289 @@ export default function MessageCommandPage() {
         }
       `}</style>
 
-      <div style={wrap}>
-        <nav style={nav}>
-          <Link href="/dashboard" style={navButton}>Dashboard</Link>
-          <Link href="/alerts" style={navButton}>Alerts</Link>
-          <Link href="/pain-feed" style={navButton}>Pain Feed</Link>
-          <Link href="/projects" style={navButton}>Projects</Link>
-          <Link href="/routing-inbox" style={navButton}>Routing</Link>
-          <Link href="/message-command" style={navButtonActive}>Message Command</Link>
+      <div style={styles.wrap}>
+        <nav style={styles.nav}>
+          <Link href={backHref} style={styles.navButtonActive}>
+            Back to {folder}
+          </Link>
+          <Link href="/message-command" style={styles.navButton}>
+            All Cards
+          </Link>
+          <Link href="/dashboard" style={styles.navButton}>
+            Dashboard
+          </Link>
+          <Link href="/alerts" style={styles.navButton}>
+            Alerts
+          </Link>
+          <Link href="/pain-feed" style={styles.navButton}>
+            Pain Feed
+          </Link>
         </nav>
 
-        <section style={hero}>
-          <div style={eyebrow}>VaultForge Message OS</div>
-          <h1 style={heroTitle}>{openLane ? `${activeMeta?.title} messages.` : "Message command center."}</h1>
-          <p style={lead}>
-            {openLane
-              ? `${activeMeta?.note || "Selected route messages."} Use Close to collapse this lane back into the card overview.`
-              : "Every message route starts as a clean card. Tap a card to expose that lane’s conversations, then close it to return to overview."}
-          </p>
+        <section style={styles.hero}>
+          <div style={styles.eyebrow}>VaultForge Message Room</div>
+          <h1 style={styles.heroTitle}>{title}</h1>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>Total conversations: {conversations.length}</span>
-            <span style={chip}>Total messages: {totalMessages}</span>
-            {openLane ? <span style={chip}>Open lane: {activeMeta?.title}</span> : null}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={styles.chip}>Thread: {threadKey}</span>
+            <span style={styles.chip}>Lane: {folder}</span>
+            <span style={styles.chip}>Messages: {messages.length}</span>
           </div>
 
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
-            <button type="button" onClick={load} style={button}>Refresh</button>
-            {openLane ? <button type="button" onClick={closeRoute} style={danger}>Close Lane / Back to Cards</button> : null}
+          <div className="vf-actions" style={styles.actionRow}>
+            <Link href={backHref} style={styles.button}>
+              Close / Back to Lane
+            </Link>
+
+            <button type="button" onClick={load} style={styles.ghost}>
+              Refresh
+            </button>
+
+            <button type="button" onClick={() => cleanup([], "save")} disabled={!!busyAction} style={styles.savedButton}>
+              {busyAction === "save" ? "Saving..." : "Save Thread"}
+            </button>
+
+            <button type="button" onClick={() => cleanup([], "unsave")} disabled={!!busyAction} style={styles.ghost}>
+              {busyAction === "unsave" ? "Removing..." : "Unsave Thread"}
+            </button>
+
+            <button type="button" onClick={() => cleanup(allIds, "read")} disabled={!!busyAction} style={styles.ghost}>
+              {busyAction === "read" ? "Marking..." : "Mark Read"}
+            </button>
+
+            <button type="button" onClick={() => cleanup(allIds, "unread")} disabled={!!busyAction} style={styles.ghost}>
+              {busyAction === "unread" ? "Marking..." : "Mark Unread"}
+            </button>
+
+            <button type="button" onClick={() => cleanup(allIds, "archive")} disabled={!!busyAction || !allIds.length} style={styles.ghost}>
+              {busyAction === "archive" ? "Archiving..." : "Archive Thread"}
+            </button>
+
+            <button type="button" onClick={() => cleanup(allIds, "delete")} disabled={!!busyAction || !allIds.length} style={styles.danger}>
+              {busyAction === "delete" ? "Deleting..." : "Delete Thread"}
+            </button>
           </div>
         </section>
 
-        {!openLane ? (
-          <>
-            <section style={sectionTop}>
-              <div>
-                <div style={eyebrow}>Message Route Cards</div>
-                <h2 style={sectionTitle}>Everything has a lane.</h2>
+        <section style={{ display: "grid", gap: 16 }}>
+          {messages.map((message) => (
+            <article key={clean(message.id) || `${message.created_at}-${message.message}`} style={styles.card}>
+              <h2 style={styles.msgTitle}>{titleOf(message)}</h2>
+              <p style={styles.body}>{bodyOf(message)}</p>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span style={styles.chip}>From: {message.from_email || "unknown"}</span>
+                <span style={styles.chip}>To: {message.to_email || "unknown"}</span>
+                <span style={styles.chip}>{message.created_at || ""}</span>
+                <span style={message.read === true ? styles.chip : styles.unreadChip}>
+                  {message.read === true ? "Read" : "Unread"}
+                </span>
               </div>
-            </section>
 
-            <section className="vf-card-grid" style={cardGrid}>
-              {LANES.map((lane) => {
-                const totals = laneTotals[lane.key] || { conversations: 0, messages: 0 };
-
-                return (
-                  <button
-                    key={lane.key}
-                    type="button"
-                    onClick={() => openRoute(lane.key)}
-                    style={routeCard}
-                  >
-                    <div style={routeLabel}>{lane.label}</div>
-                    <div style={routeNumber}>{totals.messages}</div>
-                    <h3 style={routeTitle}>{lane.title}</h3>
-                    <p style={muted}>{lane.note}</p>
-
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
-                      <span style={smallPill}>{totals.conversations} conversations</span>
-                      <span style={smallPill}>{totals.messages} messages</span>
-                      <span style={totals.unread ? unreadPill : smallPill}>{totals.unread || 0} unread</span>
-                    </div>
-
-                    <div style={openHint}>Open →</div>
+              {message.id ? (
+                <div className="vf-actions" style={styles.messageActions}>
+                  <button type="button" onClick={() => cleanup([message.id], "archive")} disabled={!!busyAction} style={styles.ghost}>
+                    Archive Message
                   </button>
-                );
-              })}
-            </section>
-          </>
-        ) : (
-          <>
-            <section style={laneOpenPanel}>
-              <div>
-                <div style={eyebrow}>Open Route</div>
-                <h2 style={sectionTitle}>{activeMeta?.title}</h2>
-                <p style={muted}>{activeMeta?.note}</p>
-              </div>
 
-              <div style={laneStats}>
-                <div style={statBox}>
-                  <strong style={statNumber}>{visible.length}</strong>
-                  <span>conversations</span>
+                  <button type="button" onClick={() => cleanup([message.id], "delete")} disabled={!!busyAction} style={styles.danger}>
+                    Delete Message
+                  </button>
                 </div>
-                <div style={statBox}>
-                  <strong style={statNumber}>{activeCount}</strong>
-                  <span>messages</span>
-                </div>
-              </div>
+              ) : null}
+            </article>
+          ))}
+        </section>
 
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", width: "100%" }}>
-                <button type="button" onClick={markLaneRead} disabled={!!busyKey} style={ghost}>
-                  {busyKey === `read-lane:${openLane}` ? "Marking..." : "Mark Lane Read"}
-                </button>
-                <button type="button" onClick={closeRoute} style={danger}>Close / Back to Cards</button>
-                <Link href="/message-command" style={ghost}>Overview Link</Link>
-              </div>
-            </section>
+        <section style={styles.hero}>
+          <h2 style={{ marginTop: 0 }}>Reply</h2>
 
-            <section style={searchPanel}>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={`Search ${activeMeta?.title || "route"} messages...`}
-                style={input}
-              />
-            </section>
+          <textarea
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+            placeholder="Write your reply..."
+            style={styles.textarea}
+          />
 
-            <section style={{ display: "grid", gap: 16 }}>
-              {visible.map((convo) => {
-                const isCollapsed = collapsed[convo.thread_key] === true;
-                const href = `/message-command/${encodeURIComponent(convo.thread_key)}?title=${encodeURIComponent(convo.title || "Message Room")}&route=${encodeURIComponent(openLane)}`;
-                const archiving = busyKey === `archive:${convo.thread_key}`;
-                const deleting = busyKey === `delete:${convo.thread_key}`;
+          <button type="button" onClick={sendReply} disabled={busy} style={{ ...styles.button, opacity: busy ? 0.65 : 1 }}>
+            {busy ? "Sending..." : "Send Reply"}
+          </button>
+        </section>
 
-                return (
-                  <article key={convo.thread_key} style={conversation}>
-                    <div style={countBadge}>{convo.count}</div>
-
-                    <div style={laneChip}>{convo.lane_label || activeMeta?.label}</div>
-
-                    <h2 style={conversationTitle}>{safeTitle(convo.title)}</h2>
-
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <span style={chip}>Route: {activeMeta?.title}</span>
-                      <span style={chip}>From: {convo.from_email || "unknown"}</span>
-                      <span style={chip}>To: {convo.to_email || "unknown"}</span>
-                      <span style={chip}>Messages: {convo.count}</span>
-                      <span style={Number(convo.unread_count || 0) ? unreadPill : chip}>
-                        {Number(convo.unread_count || 0)} unread
-                      </span>
-                    </div>
-
-                    {!isCollapsed ? (
-                      <p style={preview}>{convo.latest_message || "No preview available."}</p>
-                    ) : null}
-
-                    <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-                      <Link href={href} style={button}>Open Messages</Link>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCollapsed((old) => ({
-                            ...old,
-                            [convo.thread_key]: !isCollapsed,
-                          }))
-                        }
-                        style={ghost}
-                      >
-                        {isCollapsed ? "Expand" : "Collapse"}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => cleanup(convo, Number(convo.unread_count || 0) ? "read" : "unread")}
-                        disabled={!!busyKey}
-                        style={Number(convo.unread_count || 0) ? ghost : savedButton}
-                      >
-                        {Number(convo.unread_count || 0) ? "Mark Read" : "Mark Unread"}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => cleanup(convo, convo.is_saved ? "unsave" : "save")}
-                        disabled={!!busyKey}
-                        style={convo.is_saved ? savedButton : ghost}
-                      >
-                        {busyKey === `save:${convo.thread_key}`
-                          ? "Saving..."
-                          : busyKey === `unsave:${convo.thread_key}`
-                            ? "Removing..."
-                            : convo.is_saved
-                              ? "Unsave"
-                              : "Save"}
-                      </button>
-
-                      <button type="button" onClick={() => cleanup(convo, "archive")} disabled={!!busyKey} style={ghost}>
-                        {archiving ? "Archiving..." : "Archive"}
-                      </button>
-
-                      <button type="button" onClick={() => cleanup(convo, "delete")} disabled={!!busyKey} style={danger}>
-                        {deleting ? "Deleting..." : "Delete"}
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </section>
-
-            {!visible.length ? (
-              <section style={emptyPanel}>
-                <h3 style={{ marginTop: 0 }}>No messages in {activeMeta?.title} yet.</h3>
-                <p style={muted}>
-                  When conversations are routed to this lane, they will expose here.
-                  Close this lane to return to the card overview.
-                </p>
-                <button type="button" onClick={closeRoute} style={button}>Back to Cards</button>
-              </section>
-            ) : null}
-          </>
-        )}
-
-        {status ? <section style={emptyPanel}>{status}</section> : null}
+        {status ? <section style={styles.hero}>{status}</section> : null}
       </div>
     </main>
   );
 }
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
-  color: "white",
-  padding: "22px 16px 96px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const wrap: React.CSSProperties = {
-  width: "min(1260px,100%)",
-  margin: "0 auto",
-};
-
-const nav: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  marginBottom: 18,
-};
-
-const navButton: React.CSSProperties = {
-  display: "inline-flex",
-  justifyContent: "center",
-  alignItems: "center",
-  borderRadius: 999,
-  padding: "12px 16px",
-  background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.14)",
-  color: "white",
-  textDecoration: "none",
-  fontWeight: 800,
-};
-
-const navButtonActive: React.CSSProperties = {
-  ...navButton,
-  background: "rgba(232,196,107,.14)",
-  border: "1px solid rgba(232,196,107,.28)",
-  color: "#f8e7b0",
-};
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.22)",
-  borderRadius: 30,
-  padding: 28,
-  marginBottom: 24,
-  background: "linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.025))",
-  boxShadow: "0 30px 90px rgba(0,0,0,.34)",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: ".18em",
-  textTransform: "uppercase",
-  fontWeight: 950,
-  fontSize: 12,
-};
-
-const heroTitle: React.CSSProperties = {
-  fontSize: "clamp(52px,10vw,98px)",
-  lineHeight: .86,
-  letterSpacing: "-.075em",
-  margin: "12px 0 20px",
-};
-
-const lead: React.CSSProperties = {
-  color: "#cbd5e1",
-  fontSize: 20,
-  lineHeight: 1.55,
-  maxWidth: 920,
-};
-
-const sectionTop: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 16,
-  flexWrap: "wrap",
-  margin: "26px 0 14px",
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: "clamp(36px,6vw,58px)",
-  lineHeight: 1,
-  letterSpacing: "-.055em",
-  margin: "8px 0 8px",
-};
-
-const cardGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-  gap: 16,
-};
-
-const routeCard: React.CSSProperties = {
-  position: "relative",
-  minHeight: 235,
-  border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 30,
-  padding: 24,
-  background: "linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.025))",
-  color: "white",
-  textAlign: "left",
-  cursor: "pointer",
-  overflow: "hidden",
-};
-
-const routeLabel: React.CSSProperties = {
-  color: "#38bdf8",
-  letterSpacing: ".18em",
-  textTransform: "uppercase",
-  fontWeight: 950,
-  fontSize: 13,
-};
-
-const routeNumber: React.CSSProperties = {
-  position: "absolute",
-  top: 24,
-  right: 24,
-  color: "#f8e7b0",
-  fontSize: 64,
-  fontWeight: 1000,
-  lineHeight: 1,
-};
-
-const routeTitle: React.CSSProperties = {
-  fontSize: 38,
-  lineHeight: 1,
-  letterSpacing: "-.045em",
-  margin: "56px 0 12px",
-};
-
-const smallPill: React.CSSProperties = {
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,.12)",
-  padding: "8px 10px",
-  color: "#dbeafe",
-  fontSize: 12,
-};
-
-const unreadPill: React.CSSProperties = {
-  ...smallPill,
-  color: "#fecaca",
-  border: "1px solid rgba(248,113,113,.32)",
-  background: "rgba(248,113,113,.10)",
-  fontWeight: 950,
-};
-
-const openHint: React.CSSProperties = {
-  marginTop: 18,
-  fontWeight: 950,
-  color: "#f8e7b0",
-};
-
-const laneOpenPanel: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 18,
-  flexWrap: "wrap",
-  border: "1px solid rgba(232,196,107,.22)",
-  borderRadius: 30,
-  padding: 24,
-  marginBottom: 18,
-  background: "linear-gradient(145deg,rgba(232,196,107,.10),rgba(255,255,255,.035))",
-};
-
-const laneStats: React.CSSProperties = {
-  display: "flex",
-  gap: 12,
-  flexWrap: "wrap",
-};
-
-const statBox: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 22,
-  padding: 16,
-  minWidth: 145,
-  background: "rgba(0,0,0,.16)",
-};
-
-const statNumber: React.CSSProperties = {
-  display: "block",
-  fontSize: 34,
-  lineHeight: 1,
-  color: "#f8e7b0",
-};
-
-const searchPanel: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.10)",
-  borderRadius: 24,
-  padding: 16,
-  marginBottom: 18,
-  background: "rgba(255,255,255,.025)",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.14)",
-  background: "#081224",
-  color: "white",
-  padding: 16,
-  fontSize: 16,
-  outline: "none",
-};
-
-const conversation: React.CSSProperties = {
-  position: "relative",
-  border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 28,
-  padding: 24,
-  background: "rgba(255,255,255,.035)",
-};
-
-const countBadge: React.CSSProperties = {
-  position: "absolute",
-  top: 24,
-  right: 24,
-  fontSize: 58,
-  fontWeight: 1000,
-  color: "#f8e7b0",
-  lineHeight: 1,
-};
-
-const laneChip: React.CSSProperties = {
-  display: "inline-flex",
-  borderRadius: 999,
-  border: "1px solid rgba(232,196,107,.24)",
-  color: "#f8e7b0",
-  padding: "8px 12px",
-  fontSize: 12,
-  fontWeight: 900,
-};
-
-const conversationTitle: React.CSSProperties = {
-  fontSize: "clamp(30px,5vw,52px)",
-  lineHeight: 1,
-  margin: "18px 74px 16px 0",
-};
-
-const preview: React.CSSProperties = {
-  color: "#dbeafe",
-  fontSize: 21,
-  lineHeight: 1.5,
-  marginTop: 18,
-};
-
-const muted: React.CSSProperties = {
-  color: "#cbd5e1",
-  lineHeight: 1.5,
-  margin: 0,
-};
-
-const chip: React.CSSProperties = {
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,.12)",
-  padding: "8px 12px",
-  fontSize: 12,
-  color: "#dbeafe",
-  display: "inline-flex",
-};
-
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  justifyContent: "center",
-  alignItems: "center",
-  borderRadius: 999,
-  padding: "14px 20px",
-  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-  color: "#06100a",
-  textDecoration: "none",
-  fontWeight: 950,
-  border: 0,
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.14)",
-  color: "white",
-};
-
-const savedButton: React.CSSProperties = {
-  ...button,
-  background: "rgba(232,196,107,.14)",
-  border: "1px solid rgba(232,196,107,.35)",
-  color: "#f8e7b0",
-};
-
-const danger: React.CSSProperties = {
-  ...button,
-  background: "rgba(248,113,113,.12)",
-  border: "1px solid rgba(248,113,113,.28)",
-  color: "#fecaca",
-};
-
-const emptyPanel: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.18)",
-  borderRadius: 28,
-  padding: 22,
-  marginTop: 18,
-  background: "rgba(255,255,255,.035)",
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    color: "white",
+    padding: "22px 16px 96px",
+    fontFamily: "Arial, sans-serif",
+  },
+  wrap: {
+    width: "min(980px,100%)",
+    margin: "0 auto",
+  },
+  nav: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginBottom: 18,
+  },
+  navButton: {
+    display: "inline-flex",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "12px 16px",
+    background: "rgba(255,255,255,.06)",
+    border: "1px solid rgba(255,255,255,.14)",
+    color: "white",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
+  navButtonActive: {
+    display: "inline-flex",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "12px 16px",
+    background: "rgba(232,196,107,.14)",
+    border: "1px solid rgba(232,196,107,.28)",
+    color: "#f8e7b0",
+    textDecoration: "none",
+    fontWeight: 800,
+  },
+  hero: {
+    border: "1px solid rgba(232,196,107,.22)",
+    borderRadius: 30,
+    padding: 24,
+    marginBottom: 18,
+    background: "linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.025))",
+  },
+  eyebrow: {
+    color: "#e8c46b",
+    letterSpacing: ".18em",
+    textTransform: "uppercase",
+    fontWeight: 950,
+    fontSize: 12,
+  },
+  heroTitle: {
+    fontSize: "clamp(48px,10vw,92px)",
+    lineHeight: 0.88,
+    letterSpacing: "-.07em",
+    margin: "12px 0 18px",
+  },
+  chip: {
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,.12)",
+    padding: "8px 12px",
+    fontSize: 12,
+    color: "#dbeafe",
+    display: "inline-flex",
+  },
+  unreadChip: {
+    borderRadius: 999,
+    border: "1px solid rgba(248,113,113,.32)",
+    background: "rgba(248,113,113,.10)",
+    padding: "8px 12px",
+    fontSize: 12,
+    color: "#fecaca",
+    display: "inline-flex",
+    fontWeight: 900,
+  },
+  actionRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 18,
+  },
+  card: {
+    border: "1px solid rgba(255,255,255,.12)",
+    borderRadius: 24,
+    padding: 20,
+    background: "rgba(255,255,255,.035)",
+  },
+  msgTitle: {
+    fontSize: 28,
+    margin: "0 0 12px",
+  },
+  body: {
+    color: "#dbeafe",
+    fontSize: 19,
+    lineHeight: 1.55,
+  },
+  messageActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 14,
+  },
+  textarea: {
+    width: "100%",
+    boxSizing: "border-box",
+    minHeight: 170,
+    borderRadius: 18,
+    background: "#081224",
+    color: "white",
+    padding: 16,
+    border: "1px solid rgba(255,255,255,.12)",
+    marginBottom: 16,
+    outline: "none",
+    fontSize: 16,
+  },
+  button: {
+    display: "inline-flex",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "14px 20px",
+    background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+    color: "#06100a",
+    textDecoration: "none",
+    fontWeight: 950,
+    border: 0,
+    cursor: "pointer",
+  },
+  ghost: {
+    display: "inline-flex",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "14px 20px",
+    background: "rgba(255,255,255,.06)",
+    border: "1px solid rgba(255,255,255,.14)",
+    color: "white",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+  savedButton: {
+    display: "inline-flex",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "14px 20px",
+    background: "rgba(232,196,107,.14)",
+    border: "1px solid rgba(232,196,107,.35)",
+    color: "#f8e7b0",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+  danger: {
+    display: "inline-flex",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "14px 20px",
+    background: "rgba(248,113,113,.12)",
+    border: "1px solid rgba(248,113,113,.28)",
+    color: "#fecaca",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
 };
