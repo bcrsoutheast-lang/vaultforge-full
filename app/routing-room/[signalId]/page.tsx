@@ -2,127 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import VaultForgeMemberNav from "../../components/VaultForgeMemberNav";
 
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-
-type Action = Record<string, any>;
-
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), radial-gradient(circle at bottom right, rgba(181,92,255,.18), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
-  color: "white",
-  padding: "28px 18px 100px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const wrap: React.CSSProperties = { maxWidth: 1240, margin: "0 auto" };
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.34)",
-  background:
-    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
-  borderRadius: 34,
-  padding: 26,
-  marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.34)",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.13)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-  borderRadius: 28,
-  padding: 22,
-  boxShadow: "0 26px 80px rgba(0,0,0,.34)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
-  gap: 18,
-};
-
-const statGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 14,
-  marginBottom: 22,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
-};
-
-const btn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#06100a",
-  border: "none",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 950,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const ghost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.055)",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 900,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const danger: React.CSSProperties = {
-  ...ghost,
-  color: "#ffd0d0",
-  border: "1px solid rgba(255,120,120,.38)",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
-  color: "white",
-  padding: 14,
-  fontSize: 15,
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.72)",
-  lineHeight: 1.55,
-};
+type Row = Record<string, any>;
 
 function clean(value: unknown) {
   return String(value || "").trim();
 }
 
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
+
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
@@ -140,17 +34,17 @@ function readCookie(name: string) {
 function getEmail() {
   if (typeof window === "undefined") return "";
 
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    readCookie("vf_email") ||
-    readCookie("vf_admin_email") ||
-    ""
-  ).trim().toLowerCase();
-}
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
 
-function isOwner(email: string) {
-  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
+  for (const key of keys) {
+    const localValue = cleanEmail(window.localStorage.getItem(key));
+    if (localValue.includes("@")) return localValue;
+
+    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
+    if (sessionValue.includes("@")) return sessionValue;
+  }
+
+  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
 async function safeJson(res: Response) {
@@ -161,238 +55,329 @@ async function safeJson(res: Response) {
   }
 }
 
-function label(value: string) {
-  const text = clean(value || "item").replace(/_/g, " ");
-  return text.slice(0, 1).toUpperCase() + text.slice(1);
+function meta(row: Row) {
+  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function first(...values: unknown[]) {
   for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
+    }
+
     const text = clean(value);
     if (text) return text;
   }
+
   return "";
 }
 
-function exactItemId(item: Action) {
-  return first(item.item_id, item.itemId, item.deal_id, item.project_id, item.property_id, item.pain_id);
+function arr(value: unknown) {
+  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+  if (typeof value === "string") return value.split(/[,\n|]/).map(clean).filter(Boolean);
+  return [];
 }
 
-function exactWorkHref(item: Action) {
-  const itemId = exactItemId(item);
-  return itemId ? `/deal-room/${encodeURIComponent(itemId)}` : "";
+function signalIdOf(row: Row, fallback = "") {
+  const m = meta(row);
+  return first(row.signal_id, row.signalId, row.id, m.signal_id, fallback);
 }
 
-function priorityOf(item: Action) {
-  return first(item.priority, "medium").toLowerCase();
+function itemIdOf(row: Row) {
+  const m = meta(row);
+  return first(row.item_id, row.itemId, row.pain_id, row.deal_id, row.project_id, m.item_id, m.pain_id, m.deal_id, m.project_id);
 }
 
-function toneOf(item: Action) {
-  const priority = priorityOf(item);
-  if (priority === "urgent") return "#ffb3b3";
-  if (priority === "high") return "#f5d978";
-  return "#9df3bf";
+function titleOf(row: Row) {
+  const m = meta(row);
+  return first(row.title, row.signal_title, row.event_title, row.alert_title, row.subject, m.title, m.signal_title, "Routing Room");
 }
 
-function scoreOf(item: Action) {
-  const raw = Number(item.confidence_score || item.match_score || item.score || 0);
-  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
-  return 58;
+function summaryOf(row: Row) {
+  const m = meta(row);
+  return first(
+    row.route_summary,
+    row.routing_summary,
+    row.summary,
+    row.note,
+    row.notes,
+    row.description,
+    m.route_summary,
+    m.routing_summary,
+    m.ai_summary,
+    m.summary,
+    m.note,
+    "Routing room is ready for owner/member review."
+  );
 }
 
-function titleOf(item: Action) {
-  return first(item.title, item.name, item.headline, "Routing action");
+function ownerEmailOf(row: Row) {
+  const m = meta(row);
+  return cleanEmail(
+    first(
+      row.owner_email,
+      row.submitted_by_email,
+      row.created_by_email,
+      row.member_email,
+      row.target_email,
+      row.recipient_email,
+      m.owner_email,
+      m.submitted_by_email,
+      m.created_by_email,
+      m.member_email,
+      m.target_email,
+      m.recipient_email
+    )
+  );
 }
 
-function noteOf(item: Action) {
-  return first(item.urgency_reason, item.routing_reason, item.note, item.notes, item.reason, "Routing action generated for owner review.");
+function photosOf(row: Row) {
+  const m = meta(row);
+  const values = [
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    m.image_url,
+    m.photo_url,
+    ...(Array.isArray(row.photo_urls) ? row.photo_urls : []),
+    ...(Array.isArray(row.photos) ? row.photos : []),
+    ...(Array.isArray(m.photo_urls) ? m.photo_urls : []),
+    ...(Array.isArray(m.photos) ? m.photos : []),
+  ];
+
+  return Array.from(
+    new Set(
+      values
+        .map((item: any) => {
+          if (typeof item === "string") return clean(item);
+          if (item && typeof item === "object") return clean(item.url || item.publicUrl || item.photo_url || item.image_url);
+          return "";
+        })
+        .filter((url) => url.startsWith("http"))
+    )
+  );
 }
 
-function actionOf(item: Action) {
-  return first(item.action, item.routing_action, "routing_action");
+function derive(row: Row, fallbackSignalId: string) {
+  const m = meta(row);
+  const signalId = signalIdOf(row, fallbackSignalId);
+  const itemId = itemIdOf(row);
+  const assetType = first(row.asset_type, m.asset_type, "Asset");
+  const state = first(row.state, row.market, row.operating_state, m.state, m.market, m.operating_state);
+  const city = first(row.city, m.city);
+  const urgency = first(row.priority, row.urgency, m.urgency, m.urgency_level, "Normal");
+  const roleNeeded = first(row.role_needed, row.target_role, m.role_needed, m.target_role);
+  const suggestedRoutes = arr(row.suggested_routes || m.suggested_routes || row.ai_tags || m.ai_tags || roleNeeded);
+  const owner = ownerEmailOf(row);
+  const scoreRaw = Number(row.confidence_score || row.match_score || row.priority_score || m.confidence_score || m.priority_score || 0);
+  let score = Number.isFinite(scoreRaw) && scoreRaw > 0 ? scoreRaw : 62;
+
+  if (urgency.toLowerCase().includes("high")) score += 12;
+  if (urgency.toLowerCase().includes("emergency")) score += 20;
+  if (owner) score += 5;
+  if (state) score += 5;
+  score = Math.min(100, Math.max(0, Math.round(score)));
+
+  const lower = `${titleOf(row)} ${summaryOf(row)} ${roleNeeded} ${suggestedRoutes.join(" ")}`.toLowerCase();
+  const routes = new Set(suggestedRoutes);
+
+  if (lower.includes("buyer")) routes.add("Buyer");
+  if (lower.includes("capital") || lower.includes("fund") || lower.includes("lender")) routes.add("Lender / Capital");
+  if (lower.includes("contractor") || lower.includes("repair")) routes.add("Contractor / Operator");
+  if (assetType.toLowerCase().includes("commercial")) routes.add("Commercial Buyer / Operator");
+  if (assetType.toLowerCase().includes("land")) routes.add("Builder / Land Buyer");
+  if (!routes.size) routes.add("Owner Review");
+
+  const nextSteps = [
+    "Confirm the signal details before exposing private contact information.",
+    "Route only to members who match state, asset type, need, and execution capacity.",
+    "Use controlled message first; release direct contact only after owner review.",
+  ];
+
+  if (routes.has("Buyer")) nextSteps.push("Send to buyer-fit members for acquisition interest.");
+  if (routes.has("Lender / Capital")) nextSteps.push("Send to capital/lender members for funding review.");
+  if (routes.has("Contractor / Operator")) nextSteps.push("Send to contractor/operator members for scope and execution review.");
+
+  return {
+    signalId,
+    itemId,
+    title: titleOf(row),
+    summary: summaryOf(row),
+    owner,
+    assetType,
+    state,
+    city,
+    location: [city, state].filter(Boolean).join(", ") || state || "Market not listed",
+    urgency,
+    score,
+    status: first(row.routing_status, row.status, m.routing_status, m.status, "Generated"),
+    roleNeeded: roleNeeded || Array.from(routes).join(", "),
+    routes: Array.from(routes).slice(0, 7),
+    nextSteps: Array.from(new Set(nextSteps)).slice(0, 7),
+    photos: photosOf(row),
+  };
 }
 
-function StatCard({ title, value, detail }: { title: string; value: string | number; detail: string }) {
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(56,189,248,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  color: "white",
+  padding: "22px 16px 96px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const wrap: React.CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 24,
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
+
+const glass: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,.045)",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
+
+const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
+
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: 50,
+  borderRadius: 999,
+  padding: "12px 18px",
+  border: 0,
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.16)",
+  color: "white",
+};
+
+const chip: React.CSSProperties = {
+  border: "1px solid rgba(157,243,191,.22)",
+  borderRadius: 999,
+  padding: "7px 10px",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  margin: "0 7px 7px 0",
+  fontSize: 12,
+  fontWeight: 850,
+  display: "inline-flex",
+};
+
+function Info({ label, value }: { label: string; value: unknown }) {
+  const text = clean(value);
+  if (!text) return null;
+
   return (
-    <div style={card}>
-      <div style={{ color: "#9df3bf", letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
-        {title}
-      </div>
-      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>{value}</div>
-      <p style={{ color: "rgba(255,255,255,.68)", lineHeight: 1.45, marginBottom: 0 }}>{detail}</p>
+    <div style={{ borderBottom: "1px solid rgba(255,255,255,.08)", padding: "10px 0" }}>
+      <div style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 900 }}>{label}</div>
+      <div style={{ marginTop: 4, fontSize: 17, fontWeight: 850, overflowWrap: "anywhere" }}>{text}</div>
     </div>
   );
 }
 
-export default function RoutingRoomPage() {
-  const params = useParams();
-  const signalId = decodeURIComponent(String(params?.signalId || ""));
+function Gauge({ score }: { score: number }) {
+  return (
+    <div>
+      <div style={{ height: 14, borderRadius: 999, background: "rgba(255,255,255,.14)", overflow: "hidden", border: "1px solid rgba(255,255,255,.10)" }}>
+        <div style={{ width: `${score}%`, height: "100%", background: "linear-gradient(90deg,#ff4d4d,#f8e7b0,#9df3bf,#38bdf8)" }} />
+      </div>
+    </div>
+  );
+}
 
+export default function RoutingRoomPage({ params }: { params: { signalId: string } }) {
   const [email, setEmail] = useState("");
-  const [owner, setOwner] = useState(false);
-  const [actions, setActions] = useState<Action[]>([]);
+  const [row, setRow] = useState<Row | null>(null);
   const [status, setStatus] = useState("Loading routing room...");
-  const [generateStatus, setGenerateStatus] = useState("");
-  const [introStatus, setIntroStatus] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [introBusyId, setIntroBusyId] = useState("");
-  const [introEmailByAction, setIntroEmailByAction] = useState<Record<string, string>>({});
 
-  const [title, setTitle] = useState("");
-  const [itemId, setItemId] = useState("");
-  const [stateMatch, setStateMatch] = useState("");
-  const [strategyMatch, setStrategyMatch] = useState("");
-  const [roleNeeded, setRoleNeeded] = useState("Buyer");
-  const [priority, setPriority] = useState("medium");
-  const [note, setNote] = useState("");
+  const signalId = decodeURIComponent(params.signalId || "");
 
   async function load() {
+    const viewer = getEmail();
+    setEmail(viewer);
     setStatus("Loading routing room...");
 
     try {
-      const currentEmail = getEmail();
-      const currentOwner = isOwner(currentEmail);
+      const urls = [
+        `/api/routing/actions?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/signals/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}`,
+        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
+      ];
 
-      setEmail(currentEmail);
-      setOwner(currentOwner);
+      for (const url of urls) {
+        try {
+          const res = await fetch(url, {
+            cache: "no-store",
+            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
+          });
+          const data = await safeJson(res);
 
-      if (!currentEmail) {
-        setStatus("Login email not found. Please log in again.");
-        return;
-      }
+          const direct = data.action || data.signal || data.pain || data.record || data.data;
+          const lists = [
+            ...(Array.isArray(data.actions) ? data.actions : []),
+            ...(Array.isArray(data.signals) ? data.signals : []),
+            ...(Array.isArray(data.pains) ? data.pains : []),
+            ...(Array.isArray(data.data) ? data.data : []),
+          ];
 
-      const res = await fetch(
-        `/api/routing/actions?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}&signal_id=${encodeURIComponent(signalId)}`,
-        {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": currentOwner ? "1" : "0",
-          },
+          const candidates = direct && !Array.isArray(direct) ? [direct, ...lists] : lists;
+
+          const match = candidates.find((item: Row) => {
+            return (
+              signalIdOf(item) === signalId ||
+              itemIdOf(item) === signalId ||
+              clean(item.id) === signalId ||
+              clean(meta(item).signal_id) === signalId
+            );
+          });
+
+          if (match) {
+            setRow(match);
+            setStatus("");
+            return;
+          }
+        } catch {
+          // Try next source.
         }
-      );
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not load routing actions.");
       }
 
-      const rows = Array.isArray(data?.actions) ? data.actions : [];
-      setActions(rows);
-      setStatus(rows.length ? "" : "No routing actions found for this signal yet.");
+      setRow({
+        signal_id: signalId,
+        title: "Routing Room",
+        route_summary: "Routing room is open, but the connected routing record was not returned yet.",
+        status: "pending",
+        metadata: {},
+      });
+      setStatus("Routing source not found yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load routing room.");
-    }
-  }
-
-  async function generateRoutingAction() {
-    if (!owner) {
-      setGenerateStatus("Owner/admin access required to generate routing actions.");
-      return;
-    }
-
-    setBusy(true);
-    setGenerateStatus("Generating routing action...");
-
-    try {
-      const res = await fetch("/api/routing/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-admin": "1",
-        },
-        body: JSON.stringify({
-          email,
-          admin_email: email,
-          owner: "1",
-          signal_id: signalId,
-          item_id: itemId,
-          title: title || `Routing action for ${signalId}`,
-          note,
-          state: stateMatch,
-          strategy: strategyMatch,
-          role_needed: roleNeeded,
-          priority,
-          source: "routing_room_manual_generate",
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not generate routing action.");
-      }
-
-      setGenerateStatus(data?.message || "Routing action generated.");
-      setTitle("");
-      setNote("");
-      await load();
-    } catch (error: any) {
-      setGenerateStatus(error?.message || "Could not generate routing action.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function stageIntroductionFromAction(action: Action) {
-    if (!owner) {
-      setIntroStatus("Owner/admin access required to stage introductions.");
-      return;
-    }
-
-    const actionId = clean(action.id);
-    const memberEmail = clean(introEmailByAction[actionId]).toLowerCase();
-
-    if (!memberEmail) {
-      setIntroStatus("Enter a member email before staging the introduction.");
-      return;
-    }
-
-    setIntroBusyId(actionId);
-    setIntroStatus("Staging controlled introduction...");
-
-    try {
-      const res = await fetch("/api/routing/introductions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-          "x-vf-admin": "1",
-        },
-        body: JSON.stringify({
-          email,
-          admin_email: email,
-          owner: "1",
-          routing_action_id: actionId,
-          signal_id: first(action.signal_id, signalId),
-          item_id: exactItemId(action),
-          title: `Intro: ${titleOf(action)}`,
-          note: noteOf(action),
-          member_email: memberEmail,
-          visible_to_email: memberEmail,
-          recipient_email: memberEmail,
-          counterparty_email: email,
-          priority: priorityOf(action),
-          status: "staged",
-          intro_status: "staged",
-          source: "routing_room_stage_intro",
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.details || "Could not stage introduction.");
-      }
-
-      setIntroStatus(data?.message || "Controlled introduction staged.");
-      setIntroEmailByAction((prev) => ({ ...prev, [actionId]: "" }));
-    } catch (error: any) {
-      setIntroStatus(error?.message || "Could not stage introduction.");
-    } finally {
-      setIntroBusyId("");
     }
   }
 
@@ -400,226 +385,158 @@ export default function RoutingRoomPage() {
     load();
   }, [signalId]);
 
-  const urgent = actions.filter((item) => priorityOf(item) === "urgent").length;
-  const high = actions.filter((item) => priorityOf(item) === "high").length;
-  const buyer = actions.filter((item) => actionOf(item).includes("buyer")).length;
-  const lender = actions.filter((item) => actionOf(item).includes("lender")).length;
-  const operator = actions.filter((item) => actionOf(item).includes("operator")).length;
+  const data = useMemo(() => derive(row || { signal_id: signalId }, signalId), [row, signalId]);
+
+  const connectHref = data.signalId
+    ? `/connect/${encodeURIComponent(data.signalId)}?email=${encodeURIComponent(email)}${data.itemId ? `&item_id=${encodeURIComponent(data.itemId)}` : ""}`
+    : "/messages";
 
   return (
     <main style={page}>
       <style>{`
-        a:hover,
-        button:hover {
+        a:hover, button:hover {
           transform: translateY(-1px);
           transition: all .18s ease;
           filter: brightness(1.06);
         }
 
         @media (max-width: 760px) {
+          .vf-grid,
+          .vf-two,
+          .vf-three,
+          .vf-actions {
+            grid-template-columns: 1fr !important;
+          }
+
           .vf-actions {
             display: grid !important;
-            grid-template-columns: 1fr !important;
             gap: 10px !important;
           }
 
           .vf-actions > * {
             width: 100%;
-            margin: 0 !important;
             box-sizing: border-box;
+            justify-content: center;
           }
         }
       `}</style>
 
       <div style={wrap}>
-        <section style={hero}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            VaultForge Routing Intelligence
+        <VaultForgeMemberNav
+          title="Routing Room"
+          subtitle="Member-fit routing, controlled communication, and next execution step."
+          active="routing"
+        />
+
+        <section style={card}>
+          <div className="vf-two" style={{ display: "grid", gridTemplateColumns: "1.25fr .75fr", gap: 20, alignItems: "start" }}>
+            <div>
+              <div style={eyebrow}>VaultForge Routing Intelligence</div>
+              <h1 style={{ fontSize: "clamp(50px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+                Route with control.
+              </h1>
+              <h2 style={{ margin: "0 0 12px", fontSize: 34 }}>{data.title}</h2>
+              <p style={{ ...muted, fontSize: 20 }}>{data.summary}</p>
+
+              <div style={{ marginTop: 16 }}>
+                <span style={chip}>Signal: {data.signalId || "pending"}</span>
+                {data.itemId ? <span style={chip}>Item: {data.itemId}</span> : null}
+                <span style={chip}>Status: {data.status}</span>
+                <span style={chip}>Market: {data.location}</span>
+              </div>
+            </div>
+
+            <div style={{ ...glass, background: "rgba(0,0,0,.20)" }}>
+              <div style={eyebrow}>Routing Confidence</div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 14 }}>
+                <div style={{ fontSize: 72, lineHeight: 1, fontWeight: 1000, color: "#f8e7b0" }}>{data.score}</div>
+                <div style={{ color: "#cbd5e1", marginBottom: 10, fontWeight: 850 }}>/ 100</div>
+              </div>
+              <Gauge score={data.score} />
+              <p style={{ ...muted, marginBottom: 0 }}>Based on urgency, route context, owner connection, market, and record completeness.</p>
+            </div>
           </div>
 
-          <h1 style={{ fontSize: "clamp(56px,11vw,104px)", lineHeight: 0.86, margin: "0 0 18px" }}>
-            Routing room.
-          </h1>
-
-          <p style={{ ...muted, fontSize: 22 }}>
-            Exact signal room with owner-controlled routing action generation.
-          </p>
-
-          <div>
-            <span style={chip}>Signal: {signalId}</span>
-            <span style={chip}>Actions: {actions.length}</span>
-            <span style={chip}>Urgent: {urgent}</span>
-            <span style={chip}>{owner ? "Owner Controls" : "Member Read-only"}</span>
-          </div>
-
-          <div className="vf-actions" style={{ marginTop: 14 }}>
-            <button type="button" style={btn} onClick={load}>Refresh Routing</button>
-            <Link href="/activity" style={ghost}>Activity</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
+          <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 20 }}>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href={connectHref} style={button}>Message Owner</Link>
+            <Link href={`/signals/${encodeURIComponent(data.signalId || signalId)}`} style={ghost}>Open Signal</Link>
             <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            <Link href="/intelligence" style={ghost}>Intelligence</Link>
-            <Link href="/member-intelligence" style={ghost}>Member Intelligence</Link>
-            {owner && <Link href="/admin-routing-confidence" style={ghost}>Routing Confidence</Link>}
-            <Link href="/logout" style={danger}>Logout</Link>
+            <button type="button" onClick={load} style={ghost}>Refresh</button>
           </div>
-
-          {status && (
-            <p style={{ color: status.toLowerCase().includes("could not") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {status}
-            </p>
-          )}
-
-          {introStatus && (
-            <p style={{ color: introStatus.toLowerCase().includes("could not") || introStatus.toLowerCase().includes("required") || introStatus.toLowerCase().includes("enter") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-              {introStatus}
-            </p>
-          )}
         </section>
 
-        <section style={statGrid}>
-          <StatCard title="Actions" value={actions.length} detail="Routing actions tied to this exact signal." />
-          <StatCard title="Urgent" value={urgent} detail="Urgent routing pressure." />
-          <StatCard title="High" value={high} detail="High-priority routing actions." />
-          <StatCard title="Buyer" value={buyer} detail="Buyer-directed routes." />
-          <StatCard title="Lender" value={lender} detail="Capital/lender-directed routes." />
-          <StatCard title="Operator" value={operator} detail="Operator-directed routes." />
+        <section className="vf-three" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 18 }}>
+          <section style={card}>
+            <h2 style={{ marginTop: 0 }}>Suggested Member Type</h2>
+            <div style={{ display: "grid", gap: 10 }}>
+              {data.routes.map((route) => (
+                <div key={route} style={{ ...glass, color: "#9df3bf", borderColor: "rgba(157,243,191,.22)" }}>
+                  {route}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section style={card}>
+            <h2 style={{ marginTop: 0 }}>Routing Reason</h2>
+            <p style={{ ...muted, fontSize: 18 }}>
+              Route is based on asset type, urgency, requested help, state/market fit, and member execution capability.
+            </p>
+            <Info label="Role Needed" value={data.roleNeeded} />
+            <Info label="Urgency" value={data.urgency} />
+            <Info label="Asset" value={data.assetType} />
+          </section>
+
+          <section style={card}>
+            <h2 style={{ marginTop: 0 }}>Route Status</h2>
+            <Info label="Current Status" value={data.status} />
+            <Info label="Owner" value={data.owner || "Owner/submitter fallback"} />
+            <Info label="Location" value={data.location} />
+          </section>
         </section>
 
-        {owner && (
-          <section style={hero}>
-            <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-              Owner Routing Generator
-            </div>
+        <section style={card}>
+          <div style={eyebrow}>Execution Next Step</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 16px" }}>Move without exposing private contact too early.</h2>
 
-            <h2 style={{ fontSize: 42, lineHeight: 1, margin: "0 0 14px" }}>
-              Generate a real routing action.
-            </h2>
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 14 }}>
+            {data.nextSteps.map((step, index) => (
+              <div key={step} style={glass}>
+                <strong style={{ color: "#f8e7b0" }}>{index + 1}. Step</strong>
+                <p style={muted}>{step}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-            <p style={{ ...muted, fontSize: 19 }}>
-              This creates a routing record only. It does not notify members, create introductions, or auto-dispatch.
-            </p>
+        <section className="vf-two" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <section style={card}>
+            <h2 style={{ marginTop: 0 }}>Signal Context</h2>
+            <Info label="Signal ID" value={data.signalId} />
+            <Info label="Item ID" value={data.itemId} />
+            <Info label="Asset Type" value={data.assetType} />
+            <Info label="Market" value={data.location} />
+          </section>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
-              <input style={input} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Routing title" />
-              <input style={input} value={itemId} onChange={(event) => setItemId(event.target.value)} placeholder="Optional exact item/deal/project ID" />
-              <input style={input} value={stateMatch} onChange={(event) => setStateMatch(event.target.value)} placeholder="State / market match" />
-              <input style={input} value={strategyMatch} onChange={(event) => setStrategyMatch(event.target.value)} placeholder="Strategy match" />
-
-              <select style={input} value={roleNeeded} onChange={(event) => setRoleNeeded(event.target.value)}>
-                <option value="Buyer" style={{ color: "#111" }}>Buyer</option>
-                <option value="Lender / Capital" style={{ color: "#111" }}>Lender / Capital</option>
-                <option value="Operator" style={{ color: "#111" }}>Operator</option>
-                <option value="Contractor" style={{ color: "#111" }}>Contractor</option>
-                <option value="Owner Review" style={{ color: "#111" }}>Owner Review</option>
-              </select>
-
-              <select style={input} value={priority} onChange={(event) => setPriority(event.target.value)}>
-                <option value="medium" style={{ color: "#111" }}>Medium</option>
-                <option value="high" style={{ color: "#111" }}>High</option>
-                <option value="urgent" style={{ color: "#111" }}>Urgent</option>
-              </select>
-            </div>
-
-            <textarea
-              style={{ ...input, minHeight: 120, marginTop: 14 }}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Why should this signal be routed? What opportunity, pressure, or fit created it?"
-            />
-
-            <button type="button" style={btn} disabled={busy} onClick={generateRoutingAction}>
-              {busy ? "Generating..." : "Generate Routing Action"}
-            </button>
-
-            {generateStatus && (
-              <p style={{ color: generateStatus.toLowerCase().includes("could not") || generateStatus.toLowerCase().includes("required") ? "#ffd0d0" : "#9df3bf", fontWeight: 900 }}>
-                {generateStatus}
-              </p>
+          <section style={card}>
+            <h2 style={{ marginTop: 0 }}>Photos</h2>
+            {data.photos.length ? (
+              <div style={{ display: "grid", gap: 12 }}>
+                {data.photos.slice(0, 2).map((url, index) => (
+                  <div key={url} style={{ borderRadius: 20, overflow: "hidden", border: "1px solid rgba(232,196,107,.22)" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`Routing asset ${index + 1}`} style={{ width: "100%", height: 220, objectFit: "cover", display: "block" }} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={muted}>No valid photos connected yet.</p>
             )}
           </section>
-        )}
-
-        {actions.length > 0 ? (
-          <section style={grid}>
-            {actions.map((item, index) => {
-              const tone = toneOf(item);
-              const workHref = exactWorkHref(item);
-
-              return (
-                <article key={item.id || index} style={{ ...card, borderColor: `${tone}66` }}>
-                  <div style={{ color: tone, letterSpacing: 4, fontWeight: 900, fontSize: 11, marginBottom: 10, textTransform: "uppercase" }}>
-                    {label(priorityOf(item))} · {label(actionOf(item))}
-                  </div>
-
-                  <h2 style={{ fontSize: 30, lineHeight: 1.05, margin: "0 0 10px" }}>
-                    {titleOf(item)}
-                  </h2>
-
-                  <p style={{ ...muted, fontSize: 18 }}>
-                    {noteOf(item)}
-                  </p>
-
-                  <div style={{ margin: "12px 0" }}>
-                    <span style={chip}>Confidence: {scoreOf(item)}%</span>
-                    {item.state_match && <span style={chip}>State: {item.state_match}</span>}
-                    {item.strategy_match && <span style={chip}>Strategy: {item.strategy_match}</span>}
-                    {item.role_match && <span style={chip}>Role: {item.role_match}</span>}
-                    {exactItemId(item) && <span style={chip}>Item: {exactItemId(item)}</span>}
-                  </div>
-
-                  {owner && (
-                    <div style={{ marginTop: 14 }}>
-                      <input
-                        style={input}
-                        value={introEmailByAction[String(item.id || "")] || ""}
-                        onChange={(event) =>
-                          setIntroEmailByAction((prev) => ({
-                            ...prev,
-                            [String(item.id || "")]: event.target.value,
-                          }))
-                        }
-                        placeholder="Member email to stage intro..."
-                      />
-
-                      <button
-                        type="button"
-                        style={btn}
-                        disabled={introBusyId === String(item.id || "")}
-                        onClick={() => stageIntroductionFromAction(item)}
-                      >
-                        {introBusyId === String(item.id || "") ? "Staging..." : "Stage Controlled Intro"}
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="vf-actions">
-                    <Link href={`/signals/${encodeURIComponent(signalId)}`} style={btn}>Signal Detail</Link>
-                    {workHref && <Link href={workHref} style={ghost}>Exact Work Area</Link>}
-                    <Link href="/activity" style={ghost}>Activity</Link>
-                    <Link href="/introductions" style={ghost}>Introductions</Link>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        ) : (
-          <section style={hero}>
-            <strong>No routing actions found for this signal yet.</strong>
-            <p style={{ ...muted }}>
-              Member view stays empty until owner/admin generates or logs a routing action.
-            </p>
-          </section>
-        )}
-
-        <section style={{ ...hero, marginTop: 22 }}>
-          <div style={{ color: "#9df3bf", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 12, textTransform: "uppercase" }}>
-            Current Routing Mode
-          </div>
-          <p style={{ ...muted, fontSize: 19 }}>
-            Routing intelligence is controlled. Owner can generate a routing record, but the platform does not auto-contact,
-            auto-route, create introductions, or autonomously execute.
-          </p>
         </section>
+
+        {status ? <section style={card}>{status}</section> : null}
       </div>
     </main>
   );
