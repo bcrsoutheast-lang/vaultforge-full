@@ -6,6 +6,8 @@ import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Row = Record<string, any>;
 
+const LOCAL_KEY = "vf_simple_messages_local_v1";
+
 const GROUPS = [
   { key: "pain", title: "Pain", href: "/pain-feed", terms: ["pain", "distress", "problem"] },
   { key: "alerts", title: "Alerts", href: "/alerts", terms: ["alert", "need-more-info", "need_more_info"] },
@@ -18,55 +20,41 @@ const GROUPS = [
   { key: "general", title: "General", href: "/messages", terms: [] },
 ];
 
-const LOCAL_KEY = "vf_simple_messages_local_v1";
-
-function clean(value: unknown) {
-  return String(value || "").trim();
+function clean(v: unknown) {
+  return String(v || "").trim();
 }
 
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
+function email(v: unknown) {
+  return clean(v).toLowerCase();
 }
 
-function readCookie(name: string) {
+function cookie(name: string) {
   if (typeof document === "undefined") return "";
-
-  const match = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-
-  if (!match) return "";
-
+  const row = document.cookie.split(";").map((x) => x.trim()).find((x) => x.startsWith(name + "="));
+  if (!row) return "";
   try {
-    return decodeURIComponent(match.slice(name.length + 1));
+    return decodeURIComponent(row.slice(name.length + 1));
   } catch {
-    return match.slice(name.length + 1);
+    return row.slice(name.length + 1);
   }
 }
 
-function currentEmail() {
+function viewer() {
   if (typeof window === "undefined") return "";
-
   const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-
   for (const key of keys) {
-    const local = cleanEmail(window.localStorage.getItem(key));
+    const local = email(window.localStorage.getItem(key));
     if (local.includes("@")) return local;
-
-    const session = cleanEmail(window.sessionStorage.getItem(key));
+    const session = email(window.sessionStorage.getItem(key));
     if (session.includes("@")) return session;
   }
-
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+  return email(cookie("vf_email") || cookie("vf_member_email") || cookie("vf_admin_email"));
 }
 
-function readLocalMessages() {
-  if (typeof window === "undefined") return [];
-
+function localRows() {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
+    const rows = JSON.parse(window.localStorage.getItem(LOCAL_KEY) || "[]");
+    return Array.isArray(rows) ? rows : [];
   } catch {
     return [];
   }
@@ -81,7 +69,7 @@ async function safeJson(res: Response) {
 }
 
 function meta(row: Row) {
-  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
+  return typeof row.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function first(...values: unknown[]) {
@@ -109,11 +97,11 @@ function body(row: Row) {
 }
 
 function from(row: Row) {
-  return cleanEmail(first(row.from_email, row.sender_email, row.member_email, meta(row).from_email));
+  return email(first(row.from_email, row.sender_email, row.member_email, meta(row).from_email));
 }
 
 function to(row: Row) {
-  return cleanEmail(first(row.to_email, row.recipient_email, row.target_email, row.owner_email, meta(row).to_email));
+  return email(first(row.to_email, row.recipient_email, row.target_email, row.owner_email, meta(row).to_email));
 }
 
 function signal(row: Row) {
@@ -126,19 +114,15 @@ function created(row: Row) {
 
 function groupKey(row: Row) {
   const text = `${source(row)} ${title(row)} ${body(row)}`.toLowerCase();
-
   for (const group of GROUPS) {
-    if (group.key === "general") continue;
-    if (group.terms.some((term) => text.includes(term))) return group.key;
+    if (group.key !== "general" && group.terms.some((term) => text.includes(term))) return group.key;
   }
-
   return "general";
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(74,222,128,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  background: "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
   padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
@@ -197,7 +181,6 @@ const ghost: React.CSSProperties = {
 
 function ThreadRow({ row }: { row: Row }) {
   const id = threadId(row);
-
   return (
     <article style={glass}>
       <div>
@@ -205,15 +188,12 @@ function ThreadRow({ row }: { row: Row }) {
         {signal(row) ? <span style={chip}>Signal: {signal(row)}</span> : null}
         {created(row) ? <span style={chip}>{created(row).slice(0, 19).replace("T", " ")}</span> : null}
       </div>
-
       <h3 style={{ fontSize: 24, margin: "10px 0 8px" }}>{title(row)}</h3>
       <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>{body(row)}</p>
-
       <div>
         {from(row) ? <span style={chip}>From: {from(row)}</span> : null}
         {to(row) ? <span style={chip}>To: {to(row)}</span> : null}
       </div>
-
       <div style={{ marginTop: 14 }}>
         <Link href={`/messages/${encodeURIComponent(id)}`} style={button}>Open Thread</Link>
       </div>
@@ -223,91 +203,53 @@ function ThreadRow({ row }: { row: Row }) {
 
 function Folder({ title, href, items }: { title: string; href: string; items: Row[] }) {
   const [open, setOpen] = useState(false);
-
   return (
     <section style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
         <div>
-          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 12 }}>
-            {title}
-          </div>
+          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 12 }}>{title}</div>
           <h2 style={{ fontSize: 36, margin: "8px 0 0" }}>{title} Messages</h2>
         </div>
-
         <div style={{ fontSize: 44, fontWeight: 1000, color: "#f8e7b0" }}>{items.length}</div>
       </div>
-
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-        <button type="button" onClick={() => setOpen((value) => !value)} style={button}>
-          {open ? "Hide" : "Open"} Folder
-        </button>
+        <button type="button" onClick={() => setOpen((value) => !value)} style={button}>{open ? "Hide" : "Open"} Folder</button>
         <Link href={href} style={ghost}>Go to {title}</Link>
       </div>
-
-      {open ? (
-        <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
-          {items.length ? (
-            items.map((row, index) => <ThreadRow key={`${threadId(row)}-${index}`} row={row} />)
-          ) : (
-            <div style={glass}>No {title.toLowerCase()} messages yet.</div>
-          )}
-        </div>
-      ) : null}
+      {open ? <div style={{ display: "grid", gap: 12, marginTop: 16 }}>{items.length ? items.map((row, index) => <ThreadRow key={`${threadId(row)}-${index}`} row={row} />) : <div style={glass}>No {title.toLowerCase()} messages yet.</div>}</div> : null}
     </section>
   );
 }
 
 export default function MessagesPage() {
-  const [email, setEmail] = useState("");
+  const [emailValue, setEmailValue] = useState("");
   const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading messages...");
 
   async function load() {
-    const viewer = currentEmail();
-    setEmail(viewer);
-    setStatus("Loading messages...");
-
-    const localRows = readLocalMessages();
+    const v = viewer();
+    setEmailValue(v);
 
     let apiRows: Row[] = [];
-
     try {
-      const res = await fetch(`/api/simple-messages?email=${encodeURIComponent(viewer)}`, {
-        cache: "no-store",
-        headers: { "x-vf-email": viewer },
-      });
-
+      const res = await fetch(`/api/simple-messages?email=${encodeURIComponent(v)}`, { cache: "no-store", headers: { "x-vf-email": v } });
       const data = await safeJson(res);
-
       apiRows = [
         ...(Array.isArray(data.messages) ? data.messages : []),
         ...(Array.isArray(data.threads) ? data.threads : []),
         ...(Array.isArray(data.items) ? data.items : []),
         ...(Array.isArray(data.data) ? data.data : []),
       ];
-    } catch {
-      apiRows = [];
-    }
+    } catch {}
 
-    const rows = [...localRows, ...apiRows].filter((row) => {
-      const deleted = row?.is_deleted === true || String(row?.status || "").toLowerCase() === "deleted";
-      if (deleted) return false;
-
-      if (!viewer) return true;
-
-      const rowFrom = from(row);
-      const rowTo = to(row);
-
-      return (
-        rowFrom === viewer ||
-        rowTo === viewer ||
-        rowTo === "owner@vaultforge.local" ||
-        cleanEmail(first(row.visible_to_email, row.email)) === viewer
-      );
+    const rows = [...localRows(), ...apiRows].filter((row) => {
+      if (row?.is_deleted === true || String(row?.status || "").toLowerCase() === "deleted") return false;
+      if (!v) return true;
+      return from(row) === v || to(row) === v || to(row) === "owner@vaultforge.local" || email(first(row.visible_to_email, row.email)) === v;
     });
 
     const seen = new Set<string>();
-    const unique = rows.filter((row: Row) => {
+    const unique = rows.filter((row) => {
       const key = `${threadId(row)}-${first(row.id, row.created_at, body(row))}`;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -315,7 +257,6 @@ export default function MessagesPage() {
     });
 
     unique.sort((a, b) => clean(created(b)).localeCompare(clean(created(a))));
-
     setItems(unique);
     setStatus(unique.length ? "" : "No messages yet.");
   }
@@ -326,76 +267,42 @@ export default function MessagesPage() {
 
   const grouped = useMemo(() => {
     const map: Record<string, Row[]> = {};
-    for (const group of GROUPS) map[group.key] = [];
-
-    for (const row of items) {
+    GROUPS.forEach((g) => (map[g.key] = []));
+    items.forEach((row) => {
       const key = groupKey(row);
       map[key] = map[key] || [];
       map[key].push(row);
-    }
-
+    });
     return map;
   }, [items]);
 
   return (
     <main style={page}>
       <style>{`
-        a:hover, button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
+        a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
         @media (max-width: 820px) {
-          .vf-grid, .vf-actions {
-            grid-template-columns: 1fr !important;
-          }
-
-          .vf-actions {
-            display: grid !important;
-            gap: 10px !important;
-          }
-
-          .vf-actions > * {
-            width: 100%;
-            box-sizing: border-box;
-            justify-content: center;
-          }
+          .vf-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
-
       <div style={wrap}>
         <VaultForgeMemberNav title="Messages" subtitle="Simple owner/member message center." active="messages" />
-
         <section style={card}>
-          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 12 }}>
-            VaultForge Message Command
-          </div>
-          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
-            Message folders.
-          </h1>
-          <p style={{ color: "#cbd5e1", fontSize: 20, lineHeight: 1.55 }}>
-            Every contact request gets a visible folder and thread room.
-          </p>
-
+          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 12 }}>VaultForge Message Command</div>
+          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>Message folders.</h1>
+          <p style={{ color: "#cbd5e1", fontSize: 20, lineHeight: 1.55 }}>Every contact request gets a visible folder and thread room.</p>
           <div style={{ marginTop: 16 }}>
-            <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>Signed in: {emailValue || "unknown"}</span>
             <span style={chip}>Messages: {items.length}</span>
           </div>
-
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
             <button type="button" onClick={load} style={button}>Refresh</button>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <Link href="/signals" style={ghost}>Signals</Link>
           </div>
         </section>
-
         <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 }}>
-          {GROUPS.map((group) => (
-            <Folder key={group.key} title={group.title} href={group.href} items={grouped[group.key] || []} />
-          ))}
+          {GROUPS.map((group) => <Folder key={group.key} title={group.title} href={group.href} items={grouped[group.key] || []} />)}
         </section>
-
         {status ? <section style={card}>{status}</section> : null}
       </div>
     </main>
