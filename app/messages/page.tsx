@@ -10,20 +10,20 @@ const LOCAL_KEY = "vf_simple_messages_local_v1";
 
 const FOLDERS = [
   {
+    key: "alerts",
+    title: "Alerts",
+    label: "ALERT",
+    href: "/alerts",
+    terms: ["alert", "need-more-info", "need_more_info", "urgent", "priority"],
+    description: "Alert follow-up, Need More Info, Message Owner, and owner/member alert responses.",
+  },
+  {
     key: "pain",
     title: "Pain",
     label: "PAIN",
     href: "/pain-feed",
     terms: ["pain", "distress", "problem", "seller", "funding gap"],
     description: "Pain requests, distress signals, urgent help, and opportunity follow-up.",
-  },
-  {
-    key: "alerts",
-    title: "Alerts",
-    label: "ALERT",
-    href: "/alerts",
-    terms: ["alert", "need-more-info", "need_more_info", "urgent", "priority"],
-    description: "Alert follow-up, need-more-info messages, and owner/member responses.",
   },
   {
     key: "activity",
@@ -71,7 +71,7 @@ const FOLDERS = [
     label: "SIG",
     href: "/signals",
     terms: ["signal"],
-    description: "Signal-specific messages connected to cards and rooms.",
+    description: "Only explicit signal-room messages. Alert messages with signal IDs stay under Alerts.",
   },
   {
     key: "general",
@@ -79,7 +79,7 @@ const FOLDERS = [
     label: "MSG",
     href: "/messages",
     terms: [],
-    description: "General VaultForge messages that are not tied to a specific folder.",
+    description: "General/member-to-member messages not tied to a specific operational lane.",
   },
 ];
 
@@ -139,6 +139,11 @@ function readLocalMessages() {
   }
 }
 
+function writeLocalMessages(rows: Row[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_KEY, JSON.stringify(rows.slice(0, 400)));
+}
+
 function meta(row: Row) {
   return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
@@ -157,7 +162,7 @@ function threadId(row: Row) {
 }
 
 function sourceOf(row: Row) {
-  return first(row.source, row.message_type, row.type, meta(row).source, "general");
+  return first(row.source, row.message_type, row.type, meta(row).source, "general").toLowerCase();
 }
 
 function subjectOf(row: Row) {
@@ -188,12 +193,68 @@ function createdOf(row: Row) {
   return first(row.created_at, row.updated_at, meta(row).created_at);
 }
 
-function groupKey(row: Row) {
-  const text = `${sourceOf(row)} ${subjectOf(row)} ${bodyOf(row)} ${signalOf(row)}`.toLowerCase();
+function rowKey(row: Row) {
+  return `${threadId(row)}-${first(row.id, row.created_at, bodyOf(row))}`;
+}
 
-  for (const folder of FOLDERS) {
-    if (folder.key === "general") continue;
-    if (folder.terms.some((term) => text.includes(term))) return folder.key;
+function folderOverride(row: Row) {
+  return first(row.folder, row.folder_key, meta(row).folder, meta(row).folder_key).toLowerCase();
+}
+
+function isArchivedOrDeleted(row: Row) {
+  const status = first(row.status, meta(row).status).toLowerCase();
+  return row?.is_deleted === true || row?.is_archived === true || status === "deleted" || status === "archived";
+}
+
+function groupKey(row: Row) {
+  const override = folderOverride(row);
+  if (override && FOLDERS.some((folder) => folder.key === override)) return override;
+
+  const source = sourceOf(row);
+  const subject = subjectOf(row).toLowerCase();
+  const body = bodyOf(row).toLowerCase();
+  const thread = threadId(row).toLowerCase();
+
+  if (source.includes("alert") || thread.includes("alert") || subject.includes("alert") || subject.includes("need more") || body.includes("alert")) {
+    return "alerts";
+  }
+
+  if (source.includes("pain") || thread.includes("pain") || subject.includes("pain") || body.includes("pain")) {
+    return "pain";
+  }
+
+  if (source.includes("activity") || thread.includes("activity")) {
+    return "activity";
+  }
+
+  if (source.includes("routing") || source.includes("route") || thread.includes("routing") || thread.includes("route")) {
+    return "routing";
+  }
+
+  if (source.includes("intro") || thread.includes("intro")) {
+    return "introductions";
+  }
+
+  if (source.includes("project") || source.includes("deal") || thread.includes("project") || thread.includes("deal")) {
+    return "projects";
+  }
+
+  if (source.includes("member") || source.includes("connect") || thread.includes("member") || subject.includes("connect")) {
+    return "members";
+  }
+
+  if (source.includes("signal") || thread.startsWith("signal-")) {
+    return "signals";
+  }
+
+  /*
+    Important:
+    Generic Message Owner clicks from alert cards often carry a signal_id but not source=alert.
+    Those should not go to Signals just because a signal_id exists.
+    Generic source + signal_id is treated as Alerts/owner follow-up, not Signal-room messaging.
+  */
+  if ((source === "message" || source === "general") && signalOf(row)) {
+    return "alerts";
   }
 
   return "general";
@@ -268,14 +329,15 @@ const button: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  minHeight: 50,
+  minHeight: 46,
   borderRadius: 999,
-  padding: "12px 18px",
+  padding: "10px 15px",
   border: 0,
   background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
   fontWeight: 950,
   textDecoration: "none",
+  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -285,13 +347,32 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
-function ThreadRow({ row }: { row: Row }) {
+const danger: React.CSSProperties = {
+  ...button,
+  background: "rgba(248,113,113,.12)",
+  border: "1px solid rgba(248,113,113,.28)",
+  color: "#fecaca",
+};
+
+function ThreadRow({
+  row,
+  onMove,
+  onArchive,
+  onDelete,
+}: {
+  row: Row;
+  onMove: (row: Row, folder: string) => void;
+  onArchive: (row: Row) => void;
+  onDelete: (row: Row) => void;
+}) {
   const id = threadId(row);
+  const folder = groupKey(row);
 
   return (
     <article style={threadCard}>
       <div>
-        <span style={goldChip}>{sourceOf(row)}</span>
+        <span style={goldChip}>{folder.toUpperCase()}</span>
+        <span style={chip}>{sourceOf(row)}</span>
         {signalOf(row) ? <span style={chip}>Signal: {signalOf(row)}</span> : null}
         {itemOf(row) ? <span style={chip}>Item: {itemOf(row)}</span> : null}
       </div>
@@ -312,10 +393,25 @@ function ThreadRow({ row }: { row: Row }) {
         ) : null}
       </div>
 
-      <div style={{ marginTop: 14 }}>
+      <div className="vf-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
         <Link href={`/messages/${encodeURIComponent(id)}`} style={button}>
           Open Thread
         </Link>
+        <button type="button" onClick={() => onMove(row, "alerts")} style={ghost}>
+          Move Alerts
+        </button>
+        <button type="button" onClick={() => onMove(row, "signals")} style={ghost}>
+          Move Signals
+        </button>
+        <button type="button" onClick={() => onMove(row, "general")} style={ghost}>
+          Move General
+        </button>
+        <button type="button" onClick={() => onArchive(row)} style={ghost}>
+          Archive
+        </button>
+        <button type="button" onClick={() => onDelete(row)} style={danger}>
+          Delete
+        </button>
       </div>
     </article>
   );
@@ -324,11 +420,21 @@ function ThreadRow({ row }: { row: Row }) {
 function FolderBlock({
   folder,
   items,
+  onMove,
+  onArchive,
+  onDelete,
 }: {
   folder: (typeof FOLDERS)[number];
   items: Row[];
+  onMove: (row: Row, folder: string) => void;
+  onArchive: (row: Row) => void;
+  onDelete: (row: Row) => void;
 }) {
   const [open, setOpen] = useState(items.length > 0);
+
+  useEffect(() => {
+    if (items.length > 0) setOpen(true);
+  }, [items.length]);
 
   return (
     <section style={folderCard}>
@@ -378,7 +484,13 @@ function FolderBlock({
         <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
           {items.length ? (
             items.map((row, index) => (
-              <ThreadRow key={`${threadId(row)}-${index}`} row={row} />
+              <ThreadRow
+                key={`${rowKey(row)}-${index}`}
+                row={row}
+                onMove={onMove}
+                onArchive={onArchive}
+                onDelete={onDelete}
+              />
             ))
           ) : (
             <div style={threadCard}>No {folder.title.toLowerCase()} messages yet.</div>
@@ -421,8 +533,7 @@ export default function MessagesPage() {
     }
 
     const rows = [...readLocalMessages(), ...apiRows].filter((row) => {
-      const deleted = row?.is_deleted === true || String(row?.status || "").toLowerCase() === "deleted";
-      if (deleted) return false;
+      if (isArchivedOrDeleted(row)) return false;
 
       if (!viewer) return true;
 
@@ -440,7 +551,7 @@ export default function MessagesPage() {
 
     const seen = new Set<string>();
     const unique = rows.filter((row) => {
-      const key = `${threadId(row)}-${first(row.id, row.created_at, bodyOf(row))}`;
+      const key = rowKey(row);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -456,6 +567,69 @@ export default function MessagesPage() {
     load();
   }, []);
 
+  function saveRows(nextRows: Row[]) {
+    setItems(nextRows.filter((row) => !isArchivedOrDeleted(row)));
+    writeLocalMessages(nextRows);
+  }
+
+  function updateRow(row: Row, patch: Row) {
+    const key = rowKey(row);
+    const local = readLocalMessages();
+
+    const exists = local.some((item) => rowKey(item) === key);
+    const updated = {
+      ...row,
+      ...patch,
+      metadata: {
+        ...meta(row),
+        ...meta(patch),
+      },
+      updated_at: new Date().toISOString(),
+    };
+
+    const next = exists
+      ? local.map((item) => (rowKey(item) === key ? updated : item))
+      : [updated, ...local];
+
+    saveRows(next);
+  }
+
+  function moveRow(row: Row, folder: string) {
+    updateRow(row, {
+      folder,
+      folder_key: folder,
+      source: folder === "general" ? "general" : folder,
+      metadata: {
+        ...meta(row),
+        folder,
+        folder_key: folder,
+        source: folder === "general" ? "general" : folder,
+      },
+    });
+  }
+
+  function archiveRow(row: Row) {
+    updateRow(row, {
+      is_archived: true,
+      status: "archived",
+      metadata: {
+        ...meta(row),
+        status: "archived",
+      },
+    });
+  }
+
+  function deleteRow(row: Row) {
+    updateRow(row, {
+      is_deleted: true,
+      status: "deleted",
+      metadata: {
+        ...meta(row),
+        status: "deleted",
+      },
+    });
+  }
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
@@ -470,6 +644,7 @@ export default function MessagesPage() {
         toOf(row),
         signalOf(row),
         itemOf(row),
+        groupKey(row),
       ]
         .join(" ")
         .toLowerCase();
@@ -557,15 +732,18 @@ export default function MessagesPage() {
           </h1>
 
           <p style={{ color: "#cbd5e1", fontSize: 20, lineHeight: 1.55 }}>
-            One clean command center for every contact request and thread. Messages are
-            separated by Pain, Alerts, Activity, Routing, Introductions, Projects,
-            Members, Signals, and General.
+            Alert messages stay in Alerts. Signal messages stay in Signals. General is
+            for general/member-to-member messages. Use cleanup buttons to move, archive,
+            or delete threads.
           </p>
 
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {viewerEmail || "unknown"}</span>
             <span style={chip}>Messages: {activeCount}</span>
             <span style={chip}>Active folders: {foldersWithMessages}</span>
+            <span style={goldChip}>Alerts: {(grouped.alerts || []).length}</span>
+            <span style={goldChip}>Signals: {(grouped.signals || []).length}</span>
+            <span style={goldChip}>General: {(grouped.general || []).length}</span>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
@@ -622,6 +800,9 @@ export default function MessagesPage() {
               key={folder.key}
               folder={folder}
               items={grouped[folder.key] || []}
+              onMove={moveRow}
+              onArchive={archiveRow}
+              onDelete={deleteRow}
             />
           ))}
         </section>
