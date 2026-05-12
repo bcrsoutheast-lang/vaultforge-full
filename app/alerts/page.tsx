@@ -256,9 +256,16 @@ function AlertCard({ row, viewer }: { row: Row; viewer: string }) {
   const score = scoreOf(row);
   const photos = photosOf(row);
   const urgency = urgencyOf(row);
+  const alertIdentity = signalId || itemId || titleOf(row);
+
+  /*
+    Critical fix:
+    Alert messages must pass source/folder/type/thread_key into the messaging pipeline.
+    Without these params, the message saves as general and never lands in the Alerts inbox lane.
+  */
   const connectHref = signalId
-    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ""}`
-    : "/messages";
+    ? `/connect/${encodeURIComponent(signalId)}?source=alert&type=alert&folder=alerts&folder_key=alerts&email=${encodeURIComponent(viewer)}${owner ? `&to=${encodeURIComponent(owner)}` : ""}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ""}&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}&thread_key=${encodeURIComponent(`alert:${alertIdentity}__${owner || "bcrsoutheast@gmail.com"}__${viewer || "member@vaultforge.local"}`)}`
+    : `/messages/new?source=alert&type=alert&folder=alerts&folder_key=alerts&email=${encodeURIComponent(viewer)}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}&thread_key=${encodeURIComponent(`alert:${alertIdentity}__${owner || "bcrsoutheast@gmail.com"}__${viewer || "member@vaultforge.local"}`)}`;
 
   return (
     <article style={glass}>
@@ -307,7 +314,10 @@ function AlertCard({ row, viewer }: { row: Row; viewer: string }) {
             <Link href={connectHref} style={button}>Message Owner</Link>
             {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link> : null}
             {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
-            <Link href={`/alert-action/need-more-info?signal=${encodeURIComponent(signalId || itemId || titleOf(row))}&title=${encodeURIComponent(titleOf(row))}`} style={ghost}>
+            <Link
+              href={`/alert-action/need-more-info?source=alert&type=alert&folder=alerts&folder_key=alerts&signal=${encodeURIComponent(signalId || itemId || titleOf(row))}&title=${encodeURIComponent(titleOf(row))}&thread_key=${encodeURIComponent(`alert:${alertIdentity}__${owner || "bcrsoutheast@gmail.com"}__${viewer || "member@vaultforge.local"}`)}`}
+              style={ghost}
+            >
               Need More Info
             </Link>
           </div>
