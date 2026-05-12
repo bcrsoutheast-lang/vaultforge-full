@@ -1,4 +1,3 @@
-// FULL REPLACEMENT FILE
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,15 +9,15 @@ type Row = Record<string, any>;
 const LOCAL_KEY = "vf_simple_messages_local_v1";
 
 const FOLDERS = [
-  { key: "alerts", title: "Alerts", label: "ALERT", href: "/alerts", description: "Alert follow-up and owner/member alert responses." },
-  { key: "pain", title: "Pain", label: "PAIN", href: "/pain-feed", description: "Pain requests and distress signals." },
-  { key: "activity", title: "Activity", label: "LIVE", href: "/activity", description: "Execution activity and follow-up windows." },
-  { key: "routing", title: "Routing", label: "ROUTE", href: "/routing-inbox", description: "Routing actions and match follow-up." },
-  { key: "introductions", title: "Introductions", label: "INTRO", href: "/introductions", description: "Controlled introductions." },
-  { key: "projects", title: "Projects", label: "DEAL", href: "/projects", description: "Project/deal-room communication." },
-  { key: "members", title: "Members", label: "NET", href: "/members", description: "Member-to-member conversations." },
-  { key: "signals", title: "Signals", label: "SIG", href: "/signals", description: "Signal-room messages only." },
-  { key: "general", title: "General", label: "MSG", href: "/messages", description: "General messages." },
+  { key: "alerts", title: "Alerts" },
+  { key: "pain", title: "Pain" },
+  { key: "activity", title: "Activity" },
+  { key: "routing", title: "Routing" },
+  { key: "introductions", title: "Introductions" },
+  { key: "projects", title: "Projects" },
+  { key: "members", title: "Members" },
+  { key: "signals", title: "Signals" },
+  { key: "general", title: "General" },
 ];
 
 function clean(value: unknown) {
@@ -49,20 +48,9 @@ function readCookie(name: string) {
 function currentEmail() {
   if (typeof window === "undefined") return "";
 
-  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-
-  for (const key of keys) {
-    const local = cleanEmail(window.localStorage.getItem(key));
-    if (local.includes("@")) return local;
-
-    const session = cleanEmail(window.sessionStorage.getItem(key));
-    if (session.includes("@")) return session;
-  }
-
   return cleanEmail(
-    readCookie("vf_email") ||
-      readCookie("vf_member_email") ||
-      readCookie("vf_admin_email")
+    window.localStorage.getItem("vf_email") ||
+    readCookie("vf_email")
   );
 }
 
@@ -91,16 +79,15 @@ function first(...values: unknown[]) {
     const text = clean(value);
     if (text) return text;
   }
-
   return "";
 }
 
 function threadId(row: Row) {
-  return first(row.thread_id, row.threadId, meta(row).thread_id, row.id, "general");
+  return first(row.thread_id, meta(row).thread_id, row.id, "general");
 }
 
 function sourceOf(row: Row) {
-  return first(row.source, row.message_type, row.type, meta(row).source, "general").toLowerCase();
+  return first(row.source, row.message_type, meta(row).source, "general").toLowerCase();
 }
 
 function subjectOf(row: Row) {
@@ -108,46 +95,22 @@ function subjectOf(row: Row) {
 }
 
 function bodyOf(row: Row) {
-  return first(row.message, row.body, row.note, meta(row).message, "Message thread ready.");
+  return first(row.message, row.body, row.note, meta(row).message, "");
 }
 
 function fromOf(row: Row) {
-  return cleanEmail(first(row.from_email, row.sender_email, row.member_email, meta(row).from_email));
+  return cleanEmail(first(row.from_email, row.sender_email, meta(row).from_email));
 }
 
 function toOf(row: Row) {
-  return cleanEmail(first(row.to_email, row.recipient_email, row.target_email, row.owner_email, meta(row).to_email));
-}
-
-function signalOf(row: Row) {
-  return first(row.signal_id, row.signalId, meta(row).signal_id);
-}
-
-function itemOf(row: Row) {
-  return first(row.item_id, row.itemId, meta(row).item_id);
+  return cleanEmail(first(row.to_email, row.recipient_email, meta(row).to_email));
 }
 
 function createdOf(row: Row) {
   return first(row.created_at, row.updated_at, meta(row).created_at);
 }
 
-function rowKey(row: Row) {
-  return `${threadId(row)}-${first(row.id, row.created_at, bodyOf(row))}`;
-}
-
-function folderOverride(row: Row) {
-  return first(row.folder, row.folder_key, meta(row).folder, meta(row).folder_key).toLowerCase();
-}
-
-function isArchivedOrDeleted(row: Row) {
-  const status = first(row.status, meta(row).status).toLowerCase();
-  return row?.is_deleted === true || row?.is_archived === true || status === "deleted" || status === "archived";
-}
-
-function groupKey(row: Row) {
-  const override = folderOverride(row);
-  if (override && FOLDERS.some((folder) => folder.key === override)) return override;
-
+function folderOf(row: Row) {
   const source = sourceOf(row);
 
   if (source.includes("alert")) return "alerts";
@@ -155,202 +118,334 @@ function groupKey(row: Row) {
   if (source.includes("activity")) return "activity";
   if (source.includes("routing")) return "routing";
   if (source.includes("intro")) return "introductions";
-  if (source.includes("project") || source.includes("deal")) return "projects";
-  if (source.includes("member") || source.includes("connect")) return "members";
+  if (source.includes("project")) return "projects";
+  if (source.includes("member")) return "members";
   if (source.includes("signal")) return "signals";
-
-  if ((source === "message" || source === "general") && signalOf(row)) {
-    return "alerts";
-  }
 
   return "general";
 }
 
-async function safeJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
-
 export default function MessagesPage() {
-  const [viewerEmail, setViewerEmail] = useState("");
-  const [items, setItems] = useState<Row[]>([]);
-  const [status, setStatus] = useState("Loading messages...");
+  const [rows, setRows] = useState<Row[]>([]);
+  const [viewer, setViewer] = useState("");
   const [query, setQuery] = useState("");
 
   async function load() {
-    const viewer = currentEmail();
-    setViewerEmail(viewer);
-    setStatus("Loading messages...");
+    const email = currentEmail();
+    setViewer(email);
 
     let apiRows: Row[] = [];
 
     try {
-      const res = await fetch(`/api/simple-messages?email=${encodeURIComponent(viewer)}`, {
+      const res = await fetch(`/api/simple-messages?email=${encodeURIComponent(email)}`, {
         cache: "no-store",
-        headers: { "x-vf-email": viewer },
+        headers: {
+          "x-vf-email": email,
+        },
       });
 
-      const data = await safeJson(res);
+      const data = await res.json();
 
       apiRows = [
         ...(Array.isArray(data.messages) ? data.messages : []),
         ...(Array.isArray(data.threads) ? data.threads : []),
-        ...(Array.isArray(data.items) ? data.items : []),
-        ...(Array.isArray(data.data) ? data.data : []),
       ];
     } catch {
       apiRows = [];
     }
 
-    const rows = [...readLocalMessages(), ...apiRows].filter((row) => {
-      if (isArchivedOrDeleted(row)) return false;
-
-      if (!viewer) return true;
-
-      const rowFrom = fromOf(row);
-      const rowTo = toOf(row);
-      const visible = cleanEmail(
-        (row as any)?.visible_to_email ||
-        (row as any)?.email
-      );
-
-      return (
-        rowFrom === viewer ||
-        rowTo === viewer ||
-        visible === viewer ||
-        rowTo === "owner@vaultforge.local"
-      );
-    });
+    const merged = [...readLocalMessages(), ...apiRows];
 
     const seen = new Set<string>();
-    const unique = rows.filter((row) => {
-      const key = rowKey(row);
+
+    const unique = merged.filter((row) => {
+      const key = `${threadId(row)}-${bodyOf(row)}`;
+
       if (seen.has(key)) return false;
+
       seen.add(key);
       return true;
     });
 
-    unique.sort((a, b) => clean(createdOf(b)).localeCompare(clean(createdOf(a))));
+    unique.sort((a, b) => {
+      return clean(createdOf(b)).localeCompare(clean(createdOf(a)));
+    });
 
-    setItems(unique);
-    setStatus(unique.length ? "" : "No messages yet.");
+    setRows(unique);
   }
 
   useEffect(() => {
     load();
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
+  function updateRow(thread: string, patch: Row) {
+    const next = rows.map((row) => {
+      if (threadId(row) !== thread) return row;
 
-    return items.filter((row) => {
+      return {
+        ...row,
+        ...patch,
+      };
+    });
+
+    setRows(next);
+    writeLocalMessages(next);
+  }
+
+  function archiveThread(thread: string) {
+    updateRow(thread, {
+      is_archived: true,
+      status: "archived",
+    });
+  }
+
+  function deleteThread(thread: string) {
+    updateRow(thread, {
+      is_deleted: true,
+      status: "deleted",
+    });
+  }
+
+  const filtered = useMemo(() => {
+    return rows.filter((row) => {
+      if (row?.is_archived || row?.is_deleted) return false;
+
       const text = [
-        threadId(row),
-        sourceOf(row),
         subjectOf(row),
         bodyOf(row),
+        fromOf(row),
+        toOf(row),
       ]
         .join(" ")
         .toLowerCase();
 
-      return text.includes(q);
+      return text.includes(query.toLowerCase());
     });
-  }, [items, query]);
-
-  const grouped = useMemo(() => {
-    const map: Record<string, Row[]> = {};
-    FOLDERS.forEach((folder) => (map[folder.key] = []));
-
-    filtered.forEach((row) => {
-      const key = groupKey(row);
-      map[key] = map[key] || [];
-      map[key].push(row);
-    });
-
-    return map;
-  }, [filtered]);
+  }, [rows, query]);
 
   return (
-    <main style={{ minHeight: "100vh", background: "#020303", color: "white", padding: 20 }}>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#020303",
+        color: "white",
+        padding: "24px 16px 90px",
+      }}
+    >
       <div style={{ width: "min(1200px,100%)", margin: "0 auto" }}>
         <VaultForgeMemberNav
           title="Messages"
-          subtitle="All owner, member, alert, pain, signal, activity, and project conversations."
+          subtitle="VaultForge communication command center."
           active="messages"
         />
 
-        <div style={{ marginBottom: 20 }}>
+        <section
+          style={{
+            border: "1px solid rgba(255,255,255,.12)",
+            borderRadius: 26,
+            padding: 24,
+            background: "rgba(255,255,255,.03)",
+            marginBottom: 20,
+          }}
+        >
+          <h1
+            style={{
+              fontSize: "clamp(48px,10vw,88px)",
+              lineHeight: .9,
+              marginBottom: 16,
+            }}
+          >
+            Message command.
+          </h1>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              marginBottom: 18,
+            }}
+          >
+            <div style={chip}>Viewer: {viewer || "unknown"}</div>
+            <div style={chip}>Threads: {filtered.length}</div>
+          </div>
+
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search messages..."
             style={{
               width: "100%",
-              padding: 14,
-              borderRadius: 14,
+              padding: 16,
+              borderRadius: 16,
               background: "#111827",
+              border: "1px solid rgba(255,255,255,.12)",
               color: "white",
-              border: "1px solid rgba(255,255,255,.12)"
+              boxSizing: "border-box",
             }}
           />
-        </div>
+        </section>
 
-        {FOLDERS.map((folder) => (
-          <section
-            key={folder.key}
-            style={{
-              border: "1px solid rgba(255,255,255,.12)",
-              borderRadius: 20,
-              padding: 20,
-              marginBottom: 18,
-              background: "rgba(255,255,255,.03)"
-            }}
-          >
-            <h2>{folder.title}</h2>
+        <section
+          style={{
+            display: "grid",
+            gap: 16,
+          }}
+        >
+          {filtered.map((row, index) => {
+            const thread = threadId(row);
 
-            {(grouped[folder.key] || []).length ? (
-              grouped[folder.key].map((row, index) => (
-                <article
-                  key={`${rowKey(row)}-${index}`}
+            return (
+              <article
+                key={`${thread}-${index}`}
+                style={{
+                  border: "1px solid rgba(255,255,255,.12)",
+                  borderRadius: 24,
+                  padding: 20,
+                  background: "rgba(255,255,255,.04)",
+                }}
+              >
+                <div
                   style={{
-                    border: "1px solid rgba(255,255,255,.08)",
-                    borderRadius: 14,
-                    padding: 14,
-                    marginBottom: 12
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 16,
+                    flexWrap: "wrap",
                   }}
                 >
-                  <h3>{subjectOf(row)}</h3>
-                  <p>{bodyOf(row)}</p>
+                  <div>
+                    <div style={goldChip}>
+                      {folderOf(row).toUpperCase()}
+                    </div>
 
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <Link
-                      href={`/messages/${encodeURIComponent(threadId(row))}`}
+                    <h2
                       style={{
-                        padding: "10px 14px",
-                        borderRadius: 999,
-                        background: "#e8c46b",
-                        color: "#000",
-                        textDecoration: "none",
-                        fontWeight: 700
+                        margin: "10px 0 10px",
+                        fontSize: 28,
                       }}
                     >
-                      Open Thread
-                    </Link>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p>No {folder.title.toLowerCase()} messages.</p>
-            )}
-          </section>
-        ))}
+                      {subjectOf(row)}
+                    </h2>
 
-        {status ? <div>{status}</div> : null}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        marginBottom: 10,
+                      }}
+                    >
+                      <div style={chip}>
+                        From: {fromOf(row) || "unknown"}
+                      </div>
+
+                      <div style={chip}>
+                        To: {toOf(row) || "unknown"}
+                      </div>
+
+                      <div style={chip}>
+                        Thread: {thread}
+                      </div>
+                    </div>
+
+                    <p
+                      style={{
+                        color: "#cbd5e1",
+                        lineHeight: 1.6,
+                        marginTop: 0,
+                      }}
+                    >
+                      {bodyOf(row)}
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 42,
+                      fontWeight: 900,
+                      color: "#e8c46b",
+                    }}
+                  >
+                    {index + 1}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    marginTop: 18,
+                  }}
+                >
+                  <Link href={`/messages/${encodeURIComponent(thread)}`} style={button}>
+                    Open Messages
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => archiveThread(thread)}
+                    style={ghost}
+                  >
+                    Archive
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => deleteThread(thread)}
+                    style={danger}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
       </div>
     </main>
   );
 }
+
+const chip: React.CSSProperties = {
+  padding: "7px 10px",
+  borderRadius: 999,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.12)",
+  fontSize: 12,
+  fontWeight: 800,
+};
+
+const goldChip: React.CSSProperties = {
+  ...chip,
+  background: "rgba(232,196,107,.10)",
+  border: "1px solid rgba(232,196,107,.22)",
+  color: "#f8e7b0",
+};
+
+const button: React.CSSProperties = {
+  padding: "12px 16px",
+  borderRadius: 999,
+  border: 0,
+  background: "#e8c46b",
+  color: "#000",
+  fontWeight: 800,
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.12)",
+  color: "white",
+};
+
+const danger: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,80,80,.12)",
+  border: "1px solid rgba(255,80,80,.22)",
+  color: "#fecaca",
+};
