@@ -6,7 +6,16 @@ import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Row = Record<string, any>;
 
-const MESSAGE_GROUPS = [
+type MessageGroup = {
+  key: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  tone: "red" | "gold" | "blue" | "green";
+  match?: string[];
+};
+
+const MESSAGE_GROUPS: MessageGroup[] = [
   {
     key: "alerts",
     title: "Alerts",
@@ -193,7 +202,7 @@ function groupFor(row: Row) {
   const source = sourceText(row);
 
   for (const group of MESSAGE_GROUPS) {
-    if (group.match.some((term) => source.includes(term))) {
+    if ((group.match || []).some((term) => source.includes(term))) {
       return group.key;
     }
   }
@@ -320,7 +329,7 @@ function GroupCard({
   items,
   viewer,
 }: {
-  group: { key: string; title: string; subtitle: string; href: string; tone: string };
+  group: MessageGroup;
   items: Row[];
   viewer: string;
 }) {
@@ -464,6 +473,14 @@ export default function MessagesPage() {
   const openCount = items.filter((item) => !statusOf(item).toLowerCase().includes("closed") && !statusOf(item).toLowerCase().includes("archive")).length;
   const linkedCount = items.filter((item) => signalIdOf(item)).length;
 
+  const generalGroup: MessageGroup = {
+    key: "general",
+    title: "General",
+    subtitle: "Messages that are not tied to a specific folder yet.",
+    href: "/messages",
+    tone: "blue",
+  };
+
   return (
     <main style={page}>
       <style>{`
@@ -530,14 +547,7 @@ export default function MessagesPage() {
           ))}
 
           <GroupCard
-            group={{
-              key: "general",
-              title: "General",
-              subtitle: "Messages that are not tied to a specific folder yet.",
-              href: "/messages",
-              tone: "blue",
-              match: [],
-            }}
+            group={generalGroup}
             items={grouped.general || []}
             viewer={email}
           />
