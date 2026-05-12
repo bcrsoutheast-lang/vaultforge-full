@@ -82,6 +82,7 @@ export default function MessageCommandPage() {
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState("Loading message command...");
+  const [busyKey, setBusyKey] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -189,13 +190,14 @@ export default function MessageCommandPage() {
   }
 
   async function cleanup(convo: Conversation, action: "archive" | "delete") {
-    const ids = Array.isArray(convo.message_ids) ? convo.message_ids : [];
+    const ids = Array.isArray(convo.message_ids) ? convo.message_ids.filter(Boolean) : [];
 
     if (!ids.length) {
       setStatus("No message IDs found for cleanup.");
       return;
     }
 
+    setBusyKey(`${action}:${convo.thread_key}`);
     setStatus(action === "archive" ? "Archiving conversation..." : "Deleting conversation...");
 
     try {
@@ -218,6 +220,8 @@ export default function MessageCommandPage() {
       setStatus(action === "archive" ? "Conversation archived." : "Conversation deleted.");
     } catch (error: any) {
       setStatus(error?.message || "Cleanup failed.");
+    } finally {
+      setBusyKey("");
     }
   }
 
@@ -267,7 +271,7 @@ export default function MessageCommandPage() {
           <h1 style={heroTitle}>{openLane ? `${activeMeta?.title} messages.` : "Message command center."}</h1>
           <p style={lead}>
             {openLane
-              ? `${activeMeta?.note || "Selected route messages."} Close this lane to collapse back into the card overview.`
+              ? `${activeMeta?.note || "Selected route messages."} Use Close to collapse this lane back into the card overview.`
               : "Every message route starts as a clean card. Tap a card to expose that lane’s conversations, then close it to return to overview."}
           </p>
 
@@ -331,11 +335,11 @@ export default function MessageCommandPage() {
 
               <div style={laneStats}>
                 <div style={statBox}>
-                  <strong>{visible.length}</strong>
+                  <strong style={statNumber}>{visible.length}</strong>
                   <span>conversations</span>
                 </div>
                 <div style={statBox}>
-                  <strong>{activeCount}</strong>
+                  <strong style={statNumber}>{activeCount}</strong>
                   <span>messages</span>
                 </div>
               </div>
@@ -358,7 +362,9 @@ export default function MessageCommandPage() {
             <section style={{ display: "grid", gap: 16 }}>
               {visible.map((convo) => {
                 const isCollapsed = collapsed[convo.thread_key] === true;
-                const href = `/message-command/${encodeURIComponent(convo.thread_key)}?title=${encodeURIComponent(convo.title || "Message Room")}`;
+                const href = `/message-command/${encodeURIComponent(convo.thread_key)}?title=${encodeURIComponent(convo.title || "Message Room")}&route=${encodeURIComponent(openLane)}`;
+                const archiving = busyKey === `archive:${convo.thread_key}`;
+                const deleting = busyKey === `delete:${convo.thread_key}`;
 
                 return (
                   <article key={convo.thread_key} style={conversation}>
@@ -395,12 +401,12 @@ export default function MessageCommandPage() {
                         {isCollapsed ? "Expand" : "Collapse"}
                       </button>
 
-                      <button type="button" onClick={() => cleanup(convo, "archive")} style={ghost}>
-                        Archive
+                      <button type="button" onClick={() => cleanup(convo, "archive")} disabled={!!busyKey} style={ghost}>
+                        {archiving ? "Archiving..." : "Archive"}
                       </button>
 
-                      <button type="button" onClick={() => cleanup(convo, "delete")} style={danger}>
-                        Delete
+                      <button type="button" onClick={() => cleanup(convo, "delete")} disabled={!!busyKey} style={danger}>
+                        {deleting ? "Deleting..." : "Delete"}
                       </button>
                     </div>
                   </article>
@@ -597,6 +603,13 @@ const statBox: React.CSSProperties = {
   padding: 16,
   minWidth: 145,
   background: "rgba(0,0,0,.16)",
+};
+
+const statNumber: React.CSSProperties = {
+  display: "block",
+  fontSize: 34,
+  lineHeight: 1,
+  color: "#f8e7b0",
 };
 
 const searchPanel: React.CSSProperties = {
