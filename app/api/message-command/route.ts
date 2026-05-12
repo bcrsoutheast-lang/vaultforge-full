@@ -6,7 +6,8 @@ export const revalidate = 0;
 
 type Row = Record<string, any>;
 
-const TABLES = ["vf_messages", "simple_messages", "messages"];
+const COMMAND_TABLE = "vf_message_command_messages";
+const LEGACY_READ_TABLES = ["vf_messages", "simple_messages", "messages"];
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -54,7 +55,7 @@ function safePart(value: string) {
   return lower(value)
     .replace(/[^a-z0-9:_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 120);
+    .slice(0, 140);
 }
 
 function normalizeSource(value: unknown, row: Row = {}) {
@@ -244,7 +245,7 @@ function canonicalThreadKey(row: Row) {
 
 function normalize(row: Row) {
   const source = normalizeSource(row.source || row.message_type || row.folder, row);
-  const folder = folderForSource(source);
+  const folder = clean(row.folder || row.folder_key || folderForSource(source));
   const threadKey = canonicalThreadKey(row);
   const from = fromOf(row);
   const to = toOf(row);
@@ -336,36 +337,38 @@ function dedupe(rows: Row[]) {
   return out;
 }
 
-async function readRows(tableFilter?: string) {
+async function selectFromTable(client: NonNullable<ReturnType<typeof db>>, table: string) {
+  const { data, error } = await client
+    .from(table)
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(900);
+
+  if (error) return { rows: [] as Row[], error: error.message || String(error) };
+  return { rows: Array.isArray(data) ? data : [], error: "" };
+}
+
+async function readRows() {
   const client = db();
 
   if (!client) {
-    return { table: "", rows: [] as Row[], error: "No Supabase client" };
+    return { rows: [] as Row[], error: "No Supabase client" };
   }
 
-  const tables = tableFilter ? [tableFilter] : TABLES;
+  let rows: Row[] = [];
   let lastError = "";
 
-  for (const table of tables) {
-    try {
-      const { data, error } = await client
-        .from(table)
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(900);
+  const command = await selectFromTable(client, COMMAND_TABLE);
+  rows = rows.concat(command.rows);
+  if (command.error) lastError = command.error;
 
-      if (error) {
-        lastError = error.message || String(error);
-        continue;
-      }
-
-      return { table, rows: Array.isArray(data) ? data : [], error: "" };
-    } catch (error: any) {
-      lastError = error?.message || String(error);
-    }
+  for (const table of LEGACY_READ_TABLES) {
+    const result = await selectFromTable(client, table);
+    rows = rows.concat(result.rows);
+    if (result.error) lastError = result.error;
   }
 
-  return { table: "", rows: [] as Row[], error: lastError };
+  return { rows, error: lastError };
 }
 
 function groupConversations(rows: Row[]) {
@@ -435,9 +438,9 @@ function folderCounts(conversations: any[]) {
   return counts;
 }
 
-function buildCanonicalInput(input: Row) {
+function buildMessageRow(input: Row) {
   const source = normalizeSource(input.source || input.type || input.context || input.folder, input);
-  const folder = folderForSource(source);
+  const folder = clean(input.folder || input.folder_key || folderForSource(source));
   const from = lower(first(input.from_email, input.sender_email, input.email, input.member_email, input.user_email));
   const to = lower(first(input.to_email, input.recipient_email, input.target_email, input.owner_email, input.reply_to_email, "bcrsoutheast@gmail.com"));
   const signalId = first(input.signal_id, input.signalId);
@@ -446,113 +449,53 @@ function buildCanonicalInput(input: Row) {
   const threadIdIdentity = stripRoutePrefix(first(input.thread_id, input.threadId), source);
   const identity = signalId || itemId || explicitThreadKey || threadIdIdentity || "general";
   const canonical = `${source}:${safePart(identity.replace(`${source}:`, "")) || "general"}`;
-
   const now = new Date().toISOString();
   const subject = clean(first(input.subject, input.title, `${laneLabel(source)} message`));
   const message = clean(first(input.message, input.body, input.note, input.content));
 
   return {
+    thread_id: first(input.thread_id, input.threadId) || safePart(canonical),
+    thread_key: canonical,
     source,
     folder,
-    from,
-    to,
-    signalId,
-    itemId,
-    canonical,
-    now,
+    folder_key: folder,
+    from_email: from,
+    sender_email: from,
+    to_email: to,
+    recipient_email: to,
+    target_email: to,
+    owner_email: to,
     subject,
+    title: subject,
     message,
-  };
-}
-
-function fullInsertRow(input: Row) {
-  const built = buildCanonicalInput(input);
-
-  return {
-    thread_id: first(input.thread_id, input.threadId) || safePart(built.canonical),
-    thread_key: built.canonical,
-    from_email: built.from,
-    sender_email: built.from,
-    to_email: built.to,
-    recipient_email: built.to,
-    target_email: built.to,
-    owner_email: built.to,
-    subject: built.subject,
-    title: built.subject,
-    message: built.message,
-    body: built.message,
-    note: built.message,
-    source: built.source,
-    origin: built.source,
-    message_type: built.source,
-    folder: built.folder,
-    folder_key: built.folder,
-    signal_id: built.signalId || null,
-    item_id: built.itemId || null,
-    deal_id: built.itemId || null,
+    body: message,
+    note: message,
+    signal_id: signalId || null,
+    item_id: itemId || null,
+    deal_id: itemId || null,
+    project_id: first(input.project_id) || null,
+    pain_id: first(input.pain_id) || null,
     status: "sent",
     read: false,
     archived: false,
     is_archived: false,
     is_deleted: false,
-    created_at: built.now,
-    updated_at: built.now,
+    created_at: now,
+    updated_at: now,
     metadata: {
-      canonical_thread_key: built.canonical,
-      thread_key: built.canonical,
-      source: built.source,
-      folder: built.folder,
-      folder_key: built.folder,
-      signal_id: built.signalId || null,
-      item_id: built.itemId || null,
-      from_email: built.from,
-      to_email: built.to,
-      subject: built.subject,
-      created_at: built.now,
-      updated_at: built.now,
+      canonical_thread_key: canonical,
+      thread_key: canonical,
+      source,
+      folder,
+      folder_key: folder,
+      signal_id: signalId || null,
+      item_id: itemId || null,
+      from_email: from,
+      to_email: to,
+      subject,
+      created_at: now,
+      updated_at: now,
     },
-  };
-}
-
-/*
-  Minimal row is the safety path.
-  If your existing vf_messages schema rejects any newer fields,
-  this row uses only the fields your live table has already shown.
-*/
-function minimalInsertRow(input: Row) {
-  const full = fullInsertRow(input);
-
-  return {
-    thread_id: full.thread_id,
-    thread_key: full.thread_key,
-    sender_email: full.sender_email,
-    recipient_email: full.recipient_email,
-    subject: full.subject,
-    message: full.message,
-    deal_id: full.deal_id,
-    read: false,
-    archived: false,
-    created_at: full.created_at,
-    read_at: null,
-    body: full.body,
-    status: "sent",
-    from_email: full.from_email,
-    to_email: full.to_email,
-    target_email: full.target_email,
-    owner_email: full.owner_email,
-    signal_id: full.signal_id,
-    item_id: full.item_id,
-    source: full.source,
-    origin: full.origin,
-    message_type: full.message_type,
-    folder: full.folder,
-    folder_key: full.folder_key,
-    title: full.title,
-    note: full.note,
-    is_archived: false,
-    is_deleted: false,
-    updated_at: full.updated_at,
-    metadata: full.metadata,
   };
 }
 
@@ -580,11 +523,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      table: result.table,
+      table: COMMAND_TABLE,
       mode: "thread",
       thread_key: key,
       messages: rows,
       count: rows.length,
+      read_error: result.error || "",
     });
   }
 
@@ -592,12 +536,13 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    table: result.table,
+    table: COMMAND_TABLE,
     mode: "list",
     messages: rows,
     conversations,
     counts: folderCounts(conversations),
     count: rows.length,
+    read_error: result.error || "",
   });
 }
 
@@ -610,7 +555,7 @@ export async function POST(request: Request) {
     input = {};
   }
 
-  const row = minimalInsertRow(input);
+  const row = buildMessageRow(input);
 
   if (!row.from_email) {
     return NextResponse.json({ ok: false, error: "Missing sender email." }, { status: 400 });
@@ -628,126 +573,34 @@ export async function POST(request: Request) {
 
   if (!client) {
     return NextResponse.json({
-      ok: true,
-      saved: false,
-      fallback: true,
-      row: normalize(row),
+      ok: false,
+      error: "Supabase client missing.",
       thread_key: row.thread_key,
-    });
+    }, { status: 500 });
   }
 
-  /*
-    CRITICAL FIX:
-    Do NOT use .select().single() after insert.
-    Some Supabase policies allow insert but block return/select.
-    That makes the UI say "could not be saved" even when the row shape is close.
-  */
-  const insertAttempts: Row[] = [
-    row,
+  const { error } = await client.from(COMMAND_TABLE).insert(row);
 
-    {
-      thread_id: row.thread_id,
-      thread_key: row.thread_key,
-      sender_email: row.sender_email,
-      recipient_email: row.recipient_email,
-      subject: row.subject,
-      message: row.message,
-      read: false,
-      archived: false,
-      created_at: row.created_at,
-      body: row.body,
-      status: "sent",
-      from_email: row.from_email,
-      to_email: row.to_email,
-      target_email: row.target_email,
-      owner_email: row.owner_email,
-      source: row.source,
-      origin: row.origin,
-      message_type: row.message_type,
-      folder: row.folder,
-      folder_key: row.folder_key,
-      title: row.title,
-      note: row.note,
-      is_archived: false,
-      is_deleted: false,
-      updated_at: row.updated_at,
-      metadata: row.metadata,
-    },
-
-    {
-      thread_id: row.thread_id,
-      thread_key: row.thread_key,
-      sender_email: row.sender_email,
-      recipient_email: row.recipient_email,
-      subject: row.subject,
-      message: row.message,
-      read: false,
-      archived: false,
-      created_at: row.created_at,
-      body: row.body,
-      status: "sent",
-      from_email: row.from_email,
-      to_email: row.to_email,
-      source: row.source,
-      folder: row.folder,
-      title: row.title,
-      updated_at: row.updated_at,
-      metadata: row.metadata,
-    },
-
-    {
-      thread_id: row.thread_id,
-      thread_key: row.thread_key,
-      sender_email: row.sender_email,
-      recipient_email: row.recipient_email,
-      subject: row.subject,
-      message: row.message,
-      created_at: row.created_at,
-      body: row.body,
-      status: "sent",
-      from_email: row.from_email,
-      to_email: row.to_email,
-    },
-  ];
-
-  let lastError = "";
-
-  for (const table of TABLES) {
-    for (const attempt of insertAttempts) {
-      try {
-        const { error } = await client.from(table).insert(attempt);
-
-        if (!error) {
-          const saved = normalize({
-            ...row,
-            ...attempt,
-          });
-
-          return NextResponse.json({
-            ok: true,
-            table,
-            saved: true,
-            row: saved,
-            data: saved,
-            thread_key: saved.canonical_thread_key,
-          });
-        }
-
-        lastError = error.message || String(error);
-      } catch (error: any) {
-        lastError = error?.message || String(error);
-      }
-    }
+  if (error) {
+    return NextResponse.json({
+      ok: false,
+      error: "Message could not be saved.",
+      details: error.message || String(error),
+      table: COMMAND_TABLE,
+      attempted_thread_key: row.thread_key,
+      attempted_source: row.source,
+      attempted_folder: row.folder,
+    }, { status: 500 });
   }
 
   return NextResponse.json({
-    ok: false,
-    error: "Message could not be saved.",
-    details: lastError,
-    attempted_thread_key: row.thread_key,
-    attempted_source: row.source,
-    attempted_folder: row.folder,
-  }, { status: 500 });
+    ok: true,
+    saved: true,
+    table: COMMAND_TABLE,
+    row: normalize(row),
+    data: normalize(row),
+    thread_key: row.thread_key,
+  });
 }
 
 export async function PATCH(request: Request) {
@@ -791,37 +644,27 @@ export async function PATCH(request: Request) {
   const client = db();
 
   if (!client) {
-    return NextResponse.json({ ok: true, saved: false, fallback: true, patch, ids });
+    return NextResponse.json({ ok: false, error: "Supabase client missing." }, { status: 500 });
   }
 
-  let lastError = "";
+  const { data, error } = await client
+    .from(COMMAND_TABLE)
+    .update(patch)
+    .in("id", ids)
+    .select("*");
 
-  for (const table of TABLES) {
-    try {
-      const { data, error } = await client
-        .from(table)
-        .update(patch)
-        .in("id", ids)
-        .select("*");
-
-      if (!error) {
-        return NextResponse.json({
-          ok: true,
-          table,
-          updated: Array.isArray(data) ? data.length : 0,
-          messages: Array.isArray(data) ? data.map(normalize) : [],
-        });
-      }
-
-      lastError = error.message || String(error);
-    } catch (error: any) {
-      lastError = error?.message || String(error);
-    }
+  if (error) {
+    return NextResponse.json({
+      ok: false,
+      error: "Cleanup failed.",
+      details: error.message || String(error),
+    }, { status: 500 });
   }
 
   return NextResponse.json({
-    ok: false,
-    error: "Cleanup failed.",
-    details: lastError,
-  }, { status: 500 });
+    ok: true,
+    table: COMMAND_TABLE,
+    updated: Array.isArray(data) ? data.length : 0,
+    messages: Array.isArray(data) ? data.map(normalize) : [],
+  });
 }
