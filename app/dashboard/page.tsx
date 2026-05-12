@@ -179,18 +179,28 @@ function QueueCard({
   return (
     <Link
       href={href}
+      className="vf-queue-card"
       style={{
         ...glass,
-        minHeight: 172,
+        minHeight: 184,
         textDecoration: "none",
         color: "white",
-        display: "block",
-        borderColor: `color-mix(in srgb, ${color} 40%, rgba(255,255,255,.12))`,
+        display: "flex",
+        flexDirection: "column",
+        borderColor:
+          tone === "blue"
+            ? "rgba(56,189,248,.40)"
+            : tone === "green"
+            ? "rgba(74,222,128,.40)"
+            : tone === "red"
+            ? "rgba(248,113,113,.40)"
+            : "rgba(232,196,107,.40)",
       }}
     >
       <div
         style={{
           display: "inline-flex",
+          alignSelf: "flex-start",
           border: `1px solid ${color}`,
           color,
           background: "rgba(255,255,255,.04)",
@@ -201,13 +211,16 @@ function QueueCard({
           letterSpacing: ".10em",
           textTransform: "uppercase",
           marginBottom: 14,
+          whiteSpace: "nowrap",
         }}
       >
         {tag}
       </div>
 
-      <h3 style={{ margin: "0 0 10px", fontSize: 26, lineHeight: 1.05 }}>{title}</h3>
-      <p style={{ ...muted, margin: 0 }}>{body}</p>
+      <h3 className="vf-queue-title" style={{ margin: "0 0 10px", fontSize: 26, lineHeight: 1.05 }}>
+        {title}
+      </h3>
+      <p style={{ ...muted, margin: 0, flex: 1 }}>{body}</p>
       <div style={{ marginTop: 18, fontWeight: 950 }}>Open →</div>
     </Link>
   );
@@ -266,7 +279,25 @@ export default function DashboardPage() {
           filter: brightness(1.06);
         }
 
-        @media (max-width: 760px) {
+        .vf-four {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+          gap: 16px;
+        }
+
+        .vf-queue-title {
+          overflow-wrap: normal;
+          word-break: normal;
+          hyphens: none;
+        }
+
+        @media (max-width: 980px) {
+          .vf-four {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (max-width: 620px) {
           .vf-grid,
           .vf-two,
           .vf-three,
@@ -283,6 +314,15 @@ export default function DashboardPage() {
           .vf-actions > * {
             width: 100%;
             box-sizing: border-box;
+          }
+
+          .vf-queue-card {
+            min-height: auto !important;
+          }
+
+          .vf-queue-title {
+            font-size: 30px !important;
+            line-height: 1.02 !important;
           }
         }
       `}</style>
@@ -360,7 +400,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 20 }}>
+        <section className="vf-four" style={{ marginBottom: 20 }}>
           <Metric label="Signals" value="5" sub="Active opportunities, pain, and deal signals." tone="blue" />
           <Metric label="Messages" value="9" sub="Controlled conversations and replies." tone="green" />
           <Metric label="Routing" value="1" sub="Member-fit execution path generated." tone="gold" />
@@ -391,11 +431,11 @@ export default function DashboardPage() {
           </h2>
 
           <p style={{ ...muted, fontSize: 18, maxWidth: 980 }}>
-            Your dashboard is not a duplicate menu. It is the operating desk: what needs attention,
-            where to go next, and what is moving inside the network.
+            Your dashboard is the operating desk: what needs attention, where to go next,
+            and what is moving inside the network.
           </p>
 
-          <div className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginTop: 22 }}>
+          <div className="vf-four" style={{ marginTop: 22 }}>
             <QueueCard
               tag="Active"
               title="Active Signals"
@@ -433,7 +473,7 @@ export default function DashboardPage() {
             Pain → Signal → Routing → Intro → Message → Execution.
           </h2>
 
-          <div className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14 }}>
+          <div className="vf-four">
             {[
               ["1. Submit", "Pain and project records feed the signal engine."],
               ["2. Signal", "Signals become clean rooms with photos, summary, risks, and route suggestions."],
