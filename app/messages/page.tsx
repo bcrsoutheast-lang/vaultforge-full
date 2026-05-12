@@ -1,22 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import VaultForgeMemberNav from "../../components/VaultForgeMemberNav";
 
 type Row = Record<string, any>;
-
-const GROUPS = [
-  { key: "pain", title: "Pain", href: "/pain-feed", terms: ["pain", "distress", "problem"] },
-  { key: "alerts", title: "Alerts", href: "/alerts", terms: ["alert", "need-more-info", "need_more_info"] },
-  { key: "activity", title: "Activity", href: "/activity", terms: ["activity", "event", "execution"] },
-  { key: "routing", title: "Routing", href: "/routing-inbox", terms: ["routing", "route", "match"] },
-  { key: "introductions", title: "Introductions", href: "/introductions", terms: ["intro", "introduction"] },
-  { key: "projects", title: "Projects", href: "/projects", terms: ["project", "deal", "workstation"] },
-  { key: "members", title: "Members", href: "/members", terms: ["member", "profile", "connect"] },
-  { key: "signals", title: "Signals", href: "/signals", terms: ["signal"] },
-  { key: "general", title: "General", href: "/messages", terms: [] },
-];
 
 const LOCAL_KEY = "vf_simple_messages_local_v1";
 
@@ -71,6 +59,14 @@ function readLocalMessages() {
   }
 }
 
+function writeLocalMessage(row: Row) {
+  if (typeof window === "undefined") return;
+
+  const existing = readLocalMessages();
+  const next = [row, ...existing].slice(0, 250);
+  window.localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
+}
+
 async function safeJson(res: Response) {
   try {
     return await res.json();
@@ -79,32 +75,25 @@ async function safeJson(res: Response) {
   }
 }
 
-function meta(row: Row) {
-  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
-}
-
 function first(...values: unknown[]) {
   for (const value of values) {
     const text = clean(value);
     if (text) return text;
   }
+
   return "";
 }
 
-function threadId(row: Row) {
-  return first(row.thread_id, row.threadId, meta(row).thread_id, row.id, "general");
+function meta(row: Row) {
+  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
-function source(row: Row) {
-  return first(row.source, row.message_type, row.type, meta(row).source, "general");
-}
-
-function title(row: Row) {
-  return first(row.subject, row.title, meta(row).subject, "VaultForge message");
+function subject(row: Row) {
+  return first(row.subject, row.title, meta(row).subject, "VaultForge thread");
 }
 
 function body(row: Row) {
-  return first(row.message, row.body, row.note, meta(row).message, "Message thread ready.");
+  return first(row.message, row.body, row.note, meta(row).message, "Message ready.");
 }
 
 function from(row: Row) {
@@ -119,19 +108,21 @@ function signal(row: Row) {
   return first(row.signal_id, row.signalId, meta(row).signal_id);
 }
 
+function item(row: Row) {
+  return first(row.item_id, row.itemId, meta(row).item_id);
+}
+
+function source(row: Row) {
+  return first(row.source, row.message_type, row.type, meta(row).source, "message");
+}
+
 function created(row: Row) {
   return first(row.created_at, row.updated_at, meta(row).created_at);
 }
 
-function groupKey(row: Row) {
-  const text = `${source(row)} ${title(row)} ${body(row)}`.toLowerCase();
-
-  for (const group of GROUPS) {
-    if (group.key === "general") continue;
-    if (group.terms.some((term) => text.includes(term))) return group.key;
-  }
-
-  return "general";
+function param(name: string) {
+  if (typeof window === "undefined") return "";
+  return clean(new URLSearchParams(window.location.search || "").get(name));
 }
 
 const page: React.CSSProperties = {
@@ -143,7 +134,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
+const wrap: React.CSSProperties = { width: "min(980px,100%)", margin: "0 auto" };
 
 const card: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
@@ -154,11 +145,16 @@ const card: React.CSSProperties = {
   marginBottom: 18,
 };
 
-const glass: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 22,
-  padding: 18,
-  background: "rgba(255,255,255,.045)",
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.16)",
+  background: "rgba(255,255,255,.08)",
+  color: "white",
+  padding: 14,
+  fontSize: 16,
+  outline: "none",
 };
 
 const chip: React.CSSProperties = {
@@ -185,6 +181,7 @@ const button: React.CSSProperties = {
   color: "#06100a",
   fontWeight: 950,
   textDecoration: "none",
+  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -194,84 +191,59 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
-function ThreadRow({ row }: { row: Row }) {
-  const id = threadId(row);
-
-  return (
-    <article style={glass}>
-      <div>
-        <span style={chip}>{source(row)}</span>
-        {signal(row) ? <span style={chip}>Signal: {signal(row)}</span> : null}
-        {created(row) ? <span style={chip}>{created(row).slice(0, 19).replace("T", " ")}</span> : null}
-      </div>
-
-      <h3 style={{ fontSize: 24, margin: "10px 0 8px" }}>{title(row)}</h3>
-      <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>{body(row)}</p>
-
-      <div>
-        {from(row) ? <span style={chip}>From: {from(row)}</span> : null}
-        {to(row) ? <span style={chip}>To: {to(row)}</span> : null}
-      </div>
-
-      <div style={{ marginTop: 14 }}>
-        <Link href={`/messages/${encodeURIComponent(id)}`} style={button}>Open Thread</Link>
-      </div>
-    </article>
-  );
-}
-
-function Folder({ title, href, items }: { title: string; href: string; items: Row[] }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <section style={card}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
-        <div>
-          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 12 }}>
-            {title}
-          </div>
-          <h2 style={{ fontSize: 36, margin: "8px 0 0" }}>{title} Messages</h2>
-        </div>
-
-        <div style={{ fontSize: 44, fontWeight: 1000, color: "#f8e7b0" }}>{items.length}</div>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-        <button type="button" onClick={() => setOpen((value) => !value)} style={button}>
-          {open ? "Hide" : "Open"} Folder
-        </button>
-        <Link href={href} style={ghost}>Go to {title}</Link>
-      </div>
-
-      {open ? (
-        <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
-          {items.length ? (
-            items.map((row, index) => <ThreadRow key={`${threadId(row)}-${index}`} row={row} />)
-          ) : (
-            <div style={glass}>No {title.toLowerCase()} messages yet.</div>
-          )}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-export default function MessagesPage() {
+export default function ThreadPage({ params }: { params: { threadId: string } }) {
+  const threadId = decodeURIComponent(params.threadId || "");
   const [email, setEmail] = useState("");
-  const [items, setItems] = useState<Row[]>([]);
-  const [status, setStatus] = useState("Loading messages...");
+  const [messages, setMessages] = useState<Row[]>([]);
+  const [reply, setReply] = useState("");
+  const [status, setStatus] = useState("Loading thread...");
+  const [busy, setBusy] = useState(false);
+
+  function seedFromUrl(viewer: string) {
+    const urlSignal = param("signal_id");
+    const urlItem = param("item_id");
+    const urlSource = param("source") || "message";
+    const urlTo = cleanEmail(param("to")) || "owner@vaultforge.local";
+    const urlSubject = param("subject") || `${urlSource} message`;
+    const urlMessage = param("message");
+
+    if (!urlSignal && !urlItem && !urlMessage) return null;
+
+    return {
+      id: `local-seed-${threadId}`,
+      thread_id: threadId,
+      from_email: viewer,
+      to_email: urlTo,
+      subject: urlSubject,
+      title: urlSubject,
+      message: urlMessage || "Message thread opened.",
+      body: urlMessage || "Message thread opened.",
+      source: urlSource,
+      message_type: urlSource,
+      signal_id: urlSignal || null,
+      item_id: urlItem || null,
+      status: "open",
+      created_at: new Date().toISOString(),
+      metadata: {
+        thread_id: threadId,
+        signal_id: urlSignal || null,
+        item_id: urlItem || null,
+        source: urlSource,
+      },
+    };
+  }
 
   async function load() {
     const viewer = currentEmail();
     setEmail(viewer);
-    setStatus("Loading messages...");
+    setStatus("Loading thread...");
 
-    const localRows = readLocalMessages();
+    const localRows = readLocalMessages().filter((row) => first(row.thread_id, meta(row).thread_id) === threadId);
 
     let apiRows: Row[] = [];
 
     try {
-      const res = await fetch(`/api/simple-messages?email=${encodeURIComponent(viewer)}`, {
+      const res = await fetch(`/api/simple-messages?thread_id=${encodeURIComponent(threadId)}&email=${encodeURIComponent(viewer)}`, {
         cache: "no-store",
         headers: { "x-vf-email": viewer },
       });
@@ -281,60 +253,99 @@ export default function MessagesPage() {
       apiRows = [
         ...(Array.isArray(data.messages) ? data.messages : []),
         ...(Array.isArray(data.threads) ? data.threads : []),
-        ...(Array.isArray(data.items) ? data.items : []),
         ...(Array.isArray(data.data) ? data.data : []),
-      ];
+      ].filter((row: Row) => first(row.thread_id, meta(row).thread_id) === threadId);
     } catch {
       apiRows = [];
     }
 
-    const rows = [...localRows, ...apiRows].filter((row) => {
-      const deleted = row?.is_deleted === true || String(row?.status || "").toLowerCase() === "deleted";
-      if (deleted) return false;
-
-      if (!viewer) return true;
-
-      const rowFrom = from(row);
-      const rowTo = to(row);
-
-      return (
-        rowFrom === viewer ||
-        rowTo === viewer ||
-        rowTo === "owner@vaultforge.local" ||
-        cleanEmail(first(row.visible_to_email, row.email)) === viewer
-      );
-    });
+    const seed = seedFromUrl(viewer);
+    const rows = [...(seed ? [seed] : []), ...localRows, ...apiRows];
 
     const seen = new Set<string>();
-    const unique = rows.filter((row: Row) => {
-      const key = `${threadId(row)}-${first(row.id, row.created_at, body(row))}`;
+    const unique = rows.filter((row) => {
+      const key = `${first(row.id, row.created_at)}-${body(row)}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
-    unique.sort((a, b) => clean(created(b)).localeCompare(clean(created(a))));
+    unique.sort((a, b) => clean(created(a)).localeCompare(clean(created(b))));
 
-    setItems(unique);
-    setStatus(unique.length ? "" : "No messages yet.");
+    setMessages(unique);
+    setStatus(unique.length ? "" : "No messages in this thread yet.");
   }
 
   useEffect(() => {
     load();
-  }, []);
+  }, [threadId]);
 
-  const grouped = useMemo(() => {
-    const map: Record<string, Row[]> = {};
-    for (const group of GROUPS) map[group.key] = [];
+  async function sendReply() {
+    if (busy) return;
 
-    for (const row of items) {
-      const key = groupKey(row);
-      map[key] = map[key] || [];
-      map[key].push(row);
+    setBusy(true);
+    setStatus("Saving message...");
+
+    try {
+      const viewer = email || currentEmail();
+
+      if (!viewer.includes("@")) throw new Error("Missing sender email.");
+      if (!clean(reply)) throw new Error("Write a message first.");
+
+      const firstMessage = messages[0] || seedFromUrl(viewer) || {};
+      const otherEmail = from(firstMessage) === viewer ? to(firstMessage) : from(firstMessage);
+
+      const payload = {
+        id: `local-${Date.now()}`,
+        thread_id: threadId,
+        from_email: viewer,
+        sender_email: viewer,
+        to_email: otherEmail || "owner@vaultforge.local",
+        recipient_email: otherEmail || "owner@vaultforge.local",
+        subject: `Re: ${subject(firstMessage)}`,
+        title: `Re: ${subject(firstMessage)}`,
+        message: reply,
+        body: reply,
+        note: reply,
+        source: source(firstMessage),
+        message_type: source(firstMessage),
+        signal_id: signal(firstMessage) || null,
+        item_id: item(firstMessage) || null,
+        status: "open",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        metadata: {
+          thread_id: threadId,
+          signal_id: signal(firstMessage) || null,
+          item_id: item(firstMessage) || null,
+          source: source(firstMessage),
+        },
+      };
+
+      writeLocalMessage(payload);
+
+      try {
+        await fetch("/api/simple-messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-vf-email": viewer,
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        // Local visible message still works.
+      }
+
+      setReply("");
+      await load();
+      setStatus("Message saved.");
+    } catch (error: any) {
+      setStatus(error?.message || "Message could not be saved.");
+    } finally {
+      setBusy(false);
     }
-
-    return map;
-  }, [items]);
+  }
 
   return (
     <main style={page}>
@@ -345,11 +356,7 @@ export default function MessagesPage() {
           filter: brightness(1.06);
         }
 
-        @media (max-width: 820px) {
-          .vf-grid, .vf-actions {
-            grid-template-columns: 1fr !important;
-          }
-
+        @media (max-width: 760px) {
           .vf-actions {
             display: grid !important;
             gap: 10px !important;
@@ -364,35 +371,74 @@ export default function MessagesPage() {
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav title="Messages" subtitle="Simple owner/member message center." active="messages" />
+        <VaultForgeMemberNav title="Message Thread" subtitle="Owner/member replies." active="messages" />
 
         <section style={card}>
           <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 12 }}>
-            VaultForge Message Command
+            VaultForge Thread
           </div>
-          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
-            Message folders.
+          <h1 style={{ fontSize: "clamp(52px,10vw,92px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+            Conversation room.
           </h1>
-          <p style={{ color: "#cbd5e1", fontSize: 20, lineHeight: 1.55 }}>
-            Every contact request gets a visible folder and thread room.
-          </p>
 
-          <div style={{ marginTop: 16 }}>
+          <div>
+            <span style={chip}>Thread: {threadId}</span>
             <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>Messages: {items.length}</span>
+            <span style={chip}>Messages: {messages.length}</span>
           </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
-            <button type="button" onClick={load} style={button}>Refresh</button>
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            <Link href="/messages" style={ghost}>All Messages</Link>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
-            <Link href="/signals" style={ghost}>Signals</Link>
+            <button type="button" onClick={load} style={button}>Refresh</button>
           </div>
         </section>
 
-        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 }}>
-          {GROUPS.map((group) => (
-            <Folder key={group.key} title={group.title} href={group.href} items={grouped[group.key] || []} />
-          ))}
+        <section style={card}>
+          <h2 style={{ marginTop: 0 }}>Messages</h2>
+
+          <div style={{ display: "grid", gap: 12 }}>
+            {messages.map((row, index) => (
+              <article
+                key={`${clean(row.id)}-${index}`}
+                style={{
+                  border: "1px solid rgba(255,255,255,.12)",
+                  borderRadius: 22,
+                  padding: 16,
+                  background: "rgba(255,255,255,.045)",
+                }}
+              >
+                <h3 style={{ margin: "0 0 8px" }}>{subject(row)}</h3>
+                <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>{body(row)}</p>
+
+                <div>
+                  {from(row) ? <span style={chip}>From: {from(row)}</span> : null}
+                  {to(row) ? <span style={chip}>To: {to(row)}</span> : null}
+                  {signal(row) ? <span style={chip}>Signal: {signal(row)}</span> : null}
+                  {item(row) ? <span style={chip}>Item: {item(row)}</span> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section style={card}>
+          <h2 style={{ marginTop: 0 }}>Reply / Message</h2>
+          <textarea
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+            placeholder="Write a message..."
+            style={{ ...input, minHeight: 160, resize: "vertical" }}
+          />
+
+          <button
+            type="button"
+            onClick={sendReply}
+            disabled={busy}
+            style={{ ...button, width: "100%", marginTop: 16, opacity: busy ? 0.65 : 1 }}
+          >
+            {busy ? "Saving..." : "Send Message"}
+          </button>
         </section>
 
         {status ? <section style={card}>{status}</section> : null}
