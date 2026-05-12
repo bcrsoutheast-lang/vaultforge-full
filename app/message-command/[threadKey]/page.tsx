@@ -188,7 +188,13 @@ export default function MessageThreadPage({ params }: { params: { threadKey: str
           "Content-Type": "application/json",
           "x-vf-email": email,
         },
-        body: JSON.stringify({ action, ids: cleanIds, email }),
+        body: JSON.stringify({
+          action,
+          ids: cleanIds,
+          email,
+          thread_key: cleanIds.length === messages.length ? threadKey : "",
+          action_scope: cleanIds.length === messages.length ? "thread" : "message",
+        }),
       });
 
       const data = await safeJson(res);
