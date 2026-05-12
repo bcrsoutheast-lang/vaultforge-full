@@ -79,6 +79,7 @@ export default function MessageCommandPage() {
   const [email, setEmail] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [openLane, setOpenLane] = useState<string>("");
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -111,6 +112,7 @@ export default function MessageCommandPage() {
 
       setConversations(Array.isArray(data.conversations) ? data.conversations : []);
       setCounts(data.counts || {});
+      setUnreadCounts(data.unread_counts || {});
       setStatus("");
     } catch (error: any) {
       setStatus(error?.message || "Could not load message command.");
@@ -122,10 +124,14 @@ export default function MessageCommandPage() {
   }, []);
 
   const laneTotals = useMemo(() => {
-    const next: Record<string, { conversations: number; messages: number }> = {};
+    const next: Record<string, { conversations: number; messages: number; unread: number }> = {};
 
     for (const lane of LANES) {
-      next[lane.key] = { conversations: 0, messages: Number(counts[lane.key] || 0) };
+      next[lane.key] = {
+        conversations: 0,
+        messages: Number(counts[lane.key] || 0),
+        unread: Number(unreadCounts[lane.key] || 0),
+      };
     }
 
     for (const convo of conversations) {
@@ -134,13 +140,13 @@ export default function MessageCommandPage() {
       next[folder].conversations += 1;
 
       if (convo.is_saved === true) {
-        if (!next.saved) next.saved = { conversations: 0, messages: 0 };
+        if (!next.saved) next.saved = { conversations: 0, messages: 0, unread: 0 };
         next.saved.conversations += 1;
       }
     }
 
     return next;
-  }, [conversations, counts]);
+  }, [conversations, counts, unreadCounts]);
 
   const visible = useMemo(() => {
     const q = lower(query);
@@ -199,7 +205,7 @@ export default function MessageCommandPage() {
     }
   }
 
-  async function cleanup(convo: Conversation, action: "archive" | "delete" | "save" | "unsave") {
+  async function cleanup(convo: Conversation, action: "archive" | "delete" | "save" | "unsave" | "read" | "unread") {
     const ids = Array.isArray(convo.message_ids) ? convo.message_ids.filter(Boolean) : [];
 
     if (!ids.length && (action === "archive" || action === "delete")) {
@@ -212,7 +218,9 @@ export default function MessageCommandPage() {
     if (action === "archive") setStatus("Archiving conversation...");
     else if (action === "delete") setStatus("Deleting conversation...");
     else if (action === "save") setStatus("Saving conversation...");
-    else setStatus("Removing from Saved Bucket...");
+    else if (action === "unsave") setStatus("Removing from Saved Bucket...");
+    else if (action === "read") setStatus("Marking conversation read...");
+    else setStatus("Marking conversation unread...");
 
     try {
       const res = await fetch("/api/message-command", {
@@ -246,16 +254,83 @@ export default function MessageCommandPage() {
           )
         );
         setStatus("Conversation saved.");
-      } else {
+      } else if (action === "unsave") {
         setConversations((current) =>
           current.map((item) =>
             item.thread_key === convo.thread_key ? { ...item, is_saved: false } : item
           )
         );
         setStatus("Removed from Saved Bucket.");
+      } else if (action === "read") {
+        setConversations((current) =>
+          current.map((item) =>
+            item.thread_key === convo.thread_key ? { ...item, unread_count: 0, is_read: true } : item
+          )
+        );
+        setStatus("Conversation marked read.");
+      } else {
+        setConversations((current) =>
+          current.map((item) =>
+            item.thread_key === convo.thread_key ? { ...item, unread_count: Number(item.count || 1), is_read: false } : item
+          )
+        );
+        setStatus("Conversation marked unread.");
       }
     } catch (error: any) {
       setStatus(error?.message || "Cleanup failed.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+
+  async function markLaneRead() {
+    if (!openLane) return;
+
+    const laneConvos = visible.filter((convo) => Number(convo.unread_count || 0) > 0);
+
+    if (!laneConvos.length) {
+      setStatus("No unread messages in this lane.");
+      return;
+    }
+
+    setBusyKey(`read-lane:${openLane}`);
+    setStatus("Marking lane read...");
+
+    try {
+      for (const convo of laneConvos) {
+        await fetch("/api/message-command", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-vf-email": email,
+          },
+          body: JSON.stringify({
+            action: "read",
+            ids: Array.isArray(convo.message_ids) ? convo.message_ids.filter(Boolean) : [],
+            email,
+            thread_key: convo.thread_key,
+            action_scope: "thread",
+          }),
+        });
+      }
+
+      setConversations((current) =>
+        current.map((item) =>
+          openLane === "saved"
+            ? item.is_saved === true
+              ? { ...item, unread_count: 0, is_read: true }
+              : item
+            : item.folder === openLane
+              ? { ...item, unread_count: 0, is_read: true }
+              : item
+        )
+      );
+
+      setUnreadCounts((current) => ({ ...current, [openLane]: 0 }));
+      setStatus("Lane marked read.");
+    } catch (error: any) {
+      setStatus(error?.message || "Could not mark lane read.");
     } finally {
       setBusyKey("");
     }
@@ -352,6 +427,7 @@ export default function MessageCommandPage() {
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
                       <span style={smallPill}>{totals.conversations} conversations</span>
                       <span style={smallPill}>{totals.messages} messages</span>
+                      <span style={totals.unread ? unreadPill : smallPill}>{totals.unread || 0} unread</span>
                     </div>
 
                     <div style={openHint}>Open →</div>
@@ -381,6 +457,9 @@ export default function MessageCommandPage() {
               </div>
 
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", width: "100%" }}>
+                <button type="button" onClick={markLaneRead} disabled={!!busyKey} style={ghost}>
+                  {busyKey === `read-lane:${openLane}` ? "Marking..." : "Mark Lane Read"}
+                </button>
                 <button type="button" onClick={closeRoute} style={danger}>Close / Back to Cards</button>
                 <Link href="/message-command" style={ghost}>Overview Link</Link>
               </div>
@@ -415,6 +494,9 @@ export default function MessageCommandPage() {
                       <span style={chip}>From: {convo.from_email || "unknown"}</span>
                       <span style={chip}>To: {convo.to_email || "unknown"}</span>
                       <span style={chip}>Messages: {convo.count}</span>
+                      <span style={Number(convo.unread_count || 0) ? unreadPill : chip}>
+                        {Number(convo.unread_count || 0)} unread
+                      </span>
                     </div>
 
                     {!isCollapsed ? (
@@ -435,6 +517,15 @@ export default function MessageCommandPage() {
                         style={ghost}
                       >
                         {isCollapsed ? "Expand" : "Collapse"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => cleanup(convo, Number(convo.unread_count || 0) ? "read" : "unread")}
+                        disabled={!!busyKey}
+                        style={Number(convo.unread_count || 0) ? ghost : savedButton}
+                      >
+                        {Number(convo.unread_count || 0) ? "Mark Read" : "Mark Unread"}
                       </button>
 
                       <button
@@ -622,6 +713,14 @@ const smallPill: React.CSSProperties = {
   padding: "8px 10px",
   color: "#dbeafe",
   fontSize: 12,
+};
+
+const unreadPill: React.CSSProperties = {
+  ...smallPill,
+  color: "#fecaca",
+  border: "1px solid rgba(248,113,113,.32)",
+  background: "rgba(248,113,113,.10)",
+  fontWeight: 950,
 };
 
 const openHint: React.CSSProperties = {
