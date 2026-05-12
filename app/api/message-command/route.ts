@@ -636,32 +636,107 @@ export async function POST(request: Request) {
     });
   }
 
+  /*
+    CRITICAL FIX:
+    Do NOT use .select().single() after insert.
+    Some Supabase policies allow insert but block return/select.
+    That makes the UI say "could not be saved" even when the row shape is close.
+  */
+  const insertAttempts: Row[] = [
+    row,
+
+    {
+      thread_id: row.thread_id,
+      thread_key: row.thread_key,
+      sender_email: row.sender_email,
+      recipient_email: row.recipient_email,
+      subject: row.subject,
+      message: row.message,
+      read: false,
+      archived: false,
+      created_at: row.created_at,
+      body: row.body,
+      status: "sent",
+      from_email: row.from_email,
+      to_email: row.to_email,
+      target_email: row.target_email,
+      owner_email: row.owner_email,
+      source: row.source,
+      origin: row.origin,
+      message_type: row.message_type,
+      folder: row.folder,
+      folder_key: row.folder_key,
+      title: row.title,
+      note: row.note,
+      is_archived: false,
+      is_deleted: false,
+      updated_at: row.updated_at,
+      metadata: row.metadata,
+    },
+
+    {
+      thread_id: row.thread_id,
+      thread_key: row.thread_key,
+      sender_email: row.sender_email,
+      recipient_email: row.recipient_email,
+      subject: row.subject,
+      message: row.message,
+      read: false,
+      archived: false,
+      created_at: row.created_at,
+      body: row.body,
+      status: "sent",
+      from_email: row.from_email,
+      to_email: row.to_email,
+      source: row.source,
+      folder: row.folder,
+      title: row.title,
+      updated_at: row.updated_at,
+      metadata: row.metadata,
+    },
+
+    {
+      thread_id: row.thread_id,
+      thread_key: row.thread_key,
+      sender_email: row.sender_email,
+      recipient_email: row.recipient_email,
+      subject: row.subject,
+      message: row.message,
+      created_at: row.created_at,
+      body: row.body,
+      status: "sent",
+      from_email: row.from_email,
+      to_email: row.to_email,
+    },
+  ];
+
   let lastError = "";
 
   for (const table of TABLES) {
-    try {
-      const { data, error } = await client
-        .from(table)
-        .insert(row)
-        .select("*")
-        .single();
+    for (const attempt of insertAttempts) {
+      try {
+        const { error } = await client.from(table).insert(attempt);
 
-      if (!error) {
-        const saved = normalize(data || row);
+        if (!error) {
+          const saved = normalize({
+            ...row,
+            ...attempt,
+          });
 
-        return NextResponse.json({
-          ok: true,
-          table,
-          saved: true,
-          row: saved,
-          data: saved,
-          thread_key: saved.canonical_thread_key,
-        });
+          return NextResponse.json({
+            ok: true,
+            table,
+            saved: true,
+            row: saved,
+            data: saved,
+            thread_key: saved.canonical_thread_key,
+          });
+        }
+
+        lastError = error.message || String(error);
+      } catch (error: any) {
+        lastError = error?.message || String(error);
       }
-
-      lastError = error.message || String(error);
-    } catch (error: any) {
-      lastError = error?.message || String(error);
     }
   }
 
