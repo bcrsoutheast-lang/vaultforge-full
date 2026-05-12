@@ -6,17 +6,18 @@ import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Row = Record<string, any>;
 
-type Card = {
+type ConversationCard = {
   key: string;
+  threadId: string;
+  threadKey: string;
   lane: string;
   title: string;
   from: string;
   to: string;
   latest: string;
-  updated: string;
+  latestAt: string;
   count: number;
   rows: Row[];
-  threadIds: string[];
 };
 
 const LOCAL_KEY = "vf_simple_messages_local_v1";
@@ -31,13 +32,6 @@ function lower(value: unknown) {
 
 function compact(value: unknown) {
   return lower(value).replace(/\s+/g, " ");
-}
-
-function safeKey(value: string) {
-  return compact(value)
-    .replace(/[^a-z0-9@._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 160);
 }
 
 function first(...values: unknown[]) {
@@ -83,7 +77,11 @@ function currentEmail() {
     if (session.includes("@")) return session;
   }
 
-  return lower(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+  return lower(
+    readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("vf_admin_email")
+  );
 }
 
 function readLocalMessages() {
@@ -107,43 +105,24 @@ function idOf(row: Row) {
 }
 
 function threadIdOf(row: Row) {
-  return first(row.thread_id, row.threadId, meta(row).thread_id, row.thread_key, meta(row).thread_key);
+  return first(row.thread_id, row.threadId, meta(row).thread_id);
 }
 
 function threadKeyOf(row: Row) {
   return first(row.thread_key, meta(row).thread_key);
 }
 
-function dealIdOf(row: Row) {
-  return first(row.deal_id, row.item_id, row.itemId, meta(row).deal_id, meta(row).item_id);
-}
-
-function signalIdOf(row: Row) {
-  return first(row.signal_id, row.signalId, meta(row).signal_id);
-}
-
-function sourceOf(row: Row) {
-  return compact(first(row.source, row.origin, row.message_type, row.type, meta(row).source, meta(row).origin));
-}
-
-function folderOf(row: Row) {
-  return compact(first(row.folder, row.folder_key, meta(row).folder, meta(row).folder_key));
-}
-
 function rawSubjectOf(row: Row) {
   return first(row.subject, row.title, meta(row).subject, "VaultForge message");
 }
 
-function subjectOf(row: Row) {
-  return clean(rawSubjectOf(row))
-    .replace(/^(re:\s*)+/gi, "")
-    .replace(/\s+/g, " ")
-    .trim() || "VaultForge message";
-}
-
-function isGenericSubject(row: Row) {
-  const s = compact(subjectOf(row));
-  return s === "vaultforge message" || s === "message" || s === "vaultforge";
+function titleOf(row: Row) {
+  return (
+    clean(rawSubjectOf(row))
+      .replace(/^(re:\s*)+/gi, "")
+      .replace(/\s+/g, " ")
+      .trim() || "VaultForge message"
+  );
 }
 
 function bodyOf(row: Row) {
@@ -162,29 +141,19 @@ function createdOf(row: Row) {
   return first(row.updated_at, row.created_at, meta(row).updated_at, meta(row).created_at);
 }
 
-function isArchivedOrDeleted(row: Row) {
-  const status = compact(first(row.status, meta(row).status));
-  return row?.archived === true || row?.deleted === true || row?.is_archived === true || row?.is_deleted === true || status === "archived" || status === "deleted";
+function statusOf(row: Row) {
+  return compact(first(row.status, meta(row).status));
 }
 
-function laneOf(row: Row) {
-  const folder = folderOf(row);
-  const source = sourceOf(row);
-  const thread = compact(threadIdOf(row));
-  const subject = compact(subjectOf(row));
-
-  const text = [folder, source, thread, subject].join(" ");
-
-  if (text.includes("alert")) return "ALERTS";
-  if (text.includes("pain")) return "PAIN";
-  if (text.includes("activity")) return "ACTIVITY";
-  if (text.includes("routing") || text.includes("route")) return "ROUTING";
-  if (text.includes("intro")) return "INTRODUCTIONS";
-  if (text.includes("project") || text.includes("deal")) return "PROJECTS";
-  if (text.includes("member") || text.includes("connect")) return "MEMBERS";
-  if (text.includes("signal") || signalIdOf(row)) return "SIGNALS";
-
-  return "GENERAL";
+function isArchivedOrDeleted(row: Row) {
+  return (
+    row?.archived === true ||
+    row?.deleted === true ||
+    row?.is_archived === true ||
+    row?.is_deleted === true ||
+    statusOf(row) === "archived" ||
+    statusOf(row) === "deleted"
+  );
 }
 
 function visibleToViewer(row: Row, viewer: string) {
@@ -194,62 +163,74 @@ function visibleToViewer(row: Row, viewer: string) {
   const to = toOf(row);
   const visible = lower(first((row as any).visible_to_email, (row as any).email, meta(row).visible_to_email));
 
-  return from === viewer || to === viewer || visible === viewer || to === "owner@vaultforge.local" || to === "bcrsoutheast@gmail.com";
-}
-
-function messageKey(row: Row) {
-  return safeKey(
-    [
-      idOf(row),
-      threadIdOf(row),
-      fromOf(row),
-      toOf(row),
-      subjectOf(row),
-      bodyOf(row),
-      createdOf(row).slice(0, 19),
-    ].join("|")
+  return (
+    from === viewer ||
+    to === viewer ||
+    visible === viewer ||
+    to === "owner@vaultforge.local" ||
+    to === "bcrsoutheast@gmail.com"
   );
 }
 
-function conversationKey(row: Row) {
-  const lane = laneOf(row);
-  const deal = dealIdOf(row);
-  const threadKey = threadKeyOf(row);
-  const threadId = threadIdOf(row);
-  const subject = subjectOf(row);
-  const from = fromOf(row);
-  const to = toOf(row);
+function laneOf(row: Row) {
+  const text = compact(
+    [
+      row.folder,
+      row.folder_key,
+      row.source,
+      row.origin,
+      row.message_type,
+      row.thread_id,
+      row.thread_key,
+      row.subject,
+      meta(row).folder,
+      meta(row).source,
+    ].join(" ")
+  );
 
-  if (deal) return safeKey([lane, "deal", deal, from, to].join("|"));
-  if (threadKey) return safeKey([lane, "thread-key", threadKey, from, to].join("|"));
+  if (text.includes("alert")) return "ALERTS";
+  if (text.includes("pain")) return "PAIN";
+  if (text.includes("activity")) return "ACTIVITY";
+  if (text.includes("routing") || text.includes("route")) return "ROUTING";
+  if (text.includes("intro")) return "INTRODUCTIONS";
+  if (text.includes("project") || text.includes("deal")) return "PROJECTS";
+  if (text.includes("member") || text.includes("connect")) return "MEMBERS";
+  if (text.includes("signal")) return "SIGNALS";
 
-  /*
-    Critical:
-    Generic "VaultForge message" rows are not safe to group by subject + participants.
-    Many unrelated records share that title. For generic rows, use actual thread_id.
-  */
-  if (isGenericSubject(row) && threadId) {
-    return safeKey([lane, "thread-id", threadId, from, to].join("|"));
-  }
-
-  return safeKey([lane, "subject", subject, from, to].join("|"));
+  return "GENERAL";
 }
 
-function cardTitle(row: Row) {
-  const subject = subjectOf(row);
-  if (!isGenericSubject(row)) return subject;
+function rowDedupeKey(row: Row) {
+  const id = idOf(row);
+  if (id) return `id:${id}`;
 
-  const lane = laneOf(row);
-  const deal = dealIdOf(row);
-  const signal = signalIdOf(row);
+  return [
+    threadKeyOf(row),
+    threadIdOf(row),
+    fromOf(row),
+    toOf(row),
+    titleOf(row),
+    bodyOf(row),
+    createdOf(row),
+  ]
+    .join("|")
+    .toLowerCase();
+}
 
-  if (lane === "SIGNALS" && signal) return `Signal conversation`;
-  if (lane === "SIGNALS") return "Signal message";
-  if (lane === "ALERTS") return "Alert message";
-  if (lane === "PAIN") return "Pain message";
-  if (deal) return "Deal message";
+function conversationKey(row: Row) {
+  /*
+    Source of truth:
+    1) thread_key when present
+    2) thread_id fallback
+    3) subject + participants only if no thread identity exists
+  */
+  const threadKey = threadKeyOf(row);
+  if (threadKey) return `thread_key:${threadKey}`;
 
-  return subject;
+  const threadId = threadIdOf(row);
+  if (threadId) return `thread_id:${threadId}`;
+
+  return `fallback:${titleOf(row)}|${fromOf(row)}|${toOf(row)}`.toLowerCase();
 }
 
 async function safeJson(res: Response) {
@@ -280,12 +261,13 @@ export default function MessagesPage() {
       });
 
       const data = await safeJson(res);
-      apiRows = [
-        ...(Array.isArray(data.messages) ? data.messages : []),
-        ...(Array.isArray(data.threads) ? data.threads : []),
-        ...(Array.isArray(data.items) ? data.items : []),
-        ...(Array.isArray(data.data) ? data.data : []),
-      ];
+
+      /*
+        Important:
+        API returns data.messages and data.threads with the same rows.
+        Use messages only so counts do not double.
+      */
+      apiRows = Array.isArray(data.messages) ? data.messages : [];
     } catch {
       apiRows = [];
     }
@@ -294,14 +276,14 @@ export default function MessagesPage() {
       .filter((row) => !isArchivedOrDeleted(row))
       .filter((row) => visibleToViewer(row, viewer));
 
-    const map = new Map<string, Row>();
+    const deduped = new Map<string, Row>();
 
     merged.forEach((row) => {
-      const key = messageKey(row);
-      if (!map.has(key)) map.set(key, row);
+      const key = rowDedupeKey(row);
+      if (!deduped.has(key)) deduped.set(key, row);
     });
 
-    const nextRows = Array.from(map.values()).sort((a, b) =>
+    const nextRows = Array.from(deduped.values()).sort((a, b) =>
       clean(createdOf(b)).localeCompare(clean(createdOf(a)))
     );
 
@@ -313,11 +295,11 @@ export default function MessagesPage() {
     load();
   }, []);
 
-  function cleanupCard(card: Card, patch: Row) {
+  function cleanupCard(card: ConversationCard, patch: Row) {
     const now = new Date().toISOString();
-    const cardKeys = new Set(card.rows.map((row) => messageKey(row)));
+    const keys = new Set(card.rows.map((row) => rowDedupeKey(row)));
 
-    const patchedCardRows = card.rows.map((row) => ({
+    const patchedRows = card.rows.map((row) => ({
       ...row,
       ...patch,
       updated_at: now,
@@ -328,15 +310,13 @@ export default function MessagesPage() {
     }));
 
     const local = readLocalMessages();
-    const keptLocal = local.filter((row) => !cardKeys.has(messageKey(row)));
-    const nextLocal = [...patchedCardRows, ...keptLocal];
-
-    writeLocalMessages(nextLocal);
+    const keptLocal = local.filter((row) => !keys.has(rowDedupeKey(row)));
+    writeLocalMessages([...patchedRows, ...keptLocal]);
 
     setRows((current) =>
       current
         .map((row) => {
-          if (!cardKeys.has(messageKey(row))) return row;
+          if (!keys.has(rowDedupeKey(row))) return row;
 
           return {
             ...row,
@@ -352,7 +332,7 @@ export default function MessagesPage() {
     );
   }
 
-  function archiveCard(card: Card) {
+  function archiveCard(card: ConversationCard) {
     cleanupCard(card, {
       archived: true,
       is_archived: true,
@@ -361,7 +341,7 @@ export default function MessagesPage() {
     });
   }
 
-  function deleteCard(card: Card) {
+  function deleteCard(card: ConversationCard) {
     cleanupCard(card, {
       deleted: true,
       is_deleted: true,
@@ -371,47 +351,47 @@ export default function MessagesPage() {
   }
 
   const cards = useMemo(() => {
-    const q = compact(query);
+    const search = compact(query);
+
     const filtered = rows.filter((row) => {
-      if (!q) return true;
+      if (!search) return true;
 
       const text = compact(
         [
-          laneOf(row),
-          subjectOf(row),
+          titleOf(row),
           bodyOf(row),
           fromOf(row),
           toOf(row),
-          dealIdOf(row),
+          laneOf(row),
           threadKeyOf(row),
           threadIdOf(row),
-          signalIdOf(row),
         ].join(" ")
       );
 
-      return text.includes(q);
+      return text.includes(search);
     });
 
-    const grouped = new Map<string, Card>();
+    const grouped = new Map<string, ConversationCard>();
 
     filtered.forEach((row) => {
       const key = conversationKey(row);
-      const thread = threadIdOf(row);
-      const created = createdOf(row);
       const existing = grouped.get(key);
+      const updated = createdOf(row);
+      const threadId = threadIdOf(row);
 
       if (!existing) {
         grouped.set(key, {
           key,
+          threadId,
+          threadKey: threadKeyOf(row),
           lane: laneOf(row),
-          title: cardTitle(row),
+          title: titleOf(row),
           from: fromOf(row),
           to: toOf(row),
           latest: bodyOf(row),
-          updated: created,
+          latestAt: updated,
           count: 1,
           rows: [row],
-          threadIds: thread ? [thread] : [],
         });
         return;
       }
@@ -419,20 +399,21 @@ export default function MessagesPage() {
       existing.rows.push(row);
       existing.count += 1;
 
-      if (thread && !existing.threadIds.includes(thread)) {
-        existing.threadIds.push(thread);
-      }
+      if (threadId && !existing.threadId) existing.threadId = threadId;
+      if (threadKeyOf(row) && !existing.threadKey) existing.threadKey = threadKeyOf(row);
 
-      if (clean(created).localeCompare(clean(existing.updated)) > 0) {
+      if (clean(updated).localeCompare(clean(existing.latestAt)) > 0) {
         existing.latest = bodyOf(row);
-        existing.updated = created;
-        existing.title = cardTitle(row);
+        existing.latestAt = updated;
+        existing.title = titleOf(row);
         existing.lane = laneOf(row);
+        existing.from = fromOf(row);
+        existing.to = toOf(row);
       }
     });
 
     return Array.from(grouped.values()).sort((a, b) =>
-      clean(b.updated).localeCompare(clean(a.updated))
+      clean(b.latestAt).localeCompare(clean(a.latestAt))
     );
   }, [rows, query]);
 
@@ -444,14 +425,17 @@ export default function MessagesPage() {
           filter: brightness(1.06);
           transition: all .18s ease;
         }
+
         input::placeholder {
-          color: rgba(255,255,255,.45);
+          color: rgba(255,255,255,.44);
         }
+
         @media (max-width: 760px) {
           .vf-actions {
             display: grid !important;
             grid-template-columns: 1fr !important;
           }
+
           .vf-actions > * {
             width: 100%;
             box-sizing: border-box;
@@ -463,16 +447,16 @@ export default function MessagesPage() {
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Messages"
-          subtitle="Clean conversation cards grouped by real deal ID, thread key, or thread ID."
+          subtitle="Clean conversation cards grouped by thread key."
           active="messages"
         />
 
         <section style={hero}>
           <div style={eyebrow}>VaultForge Message Command</div>
-          <h1 style={title}>Conversation cards.</h1>
+          <h1 style={heroTitle}>Conversation cards.</h1>
 
           <p style={lead}>
-            One card equals one real conversation. Generic messages no longer collapse together.
+            One card per real conversation. Counts use messages only, not duplicate thread rows.
           </p>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
@@ -489,7 +473,9 @@ export default function MessagesPage() {
           />
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-            <button type="button" onClick={load} style={button}>Refresh</button>
+            <button type="button" onClick={load} style={button}>
+              Refresh
+            </button>
             <Link href="/alerts" style={ghost}>Alerts</Link>
             <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
@@ -498,32 +484,31 @@ export default function MessagesPage() {
 
         <section style={{ display: "grid", gap: 18 }}>
           {cards.map((card) => {
-            const openId = card.threadIds[0] || card.key;
-            const threads = card.threadIds.join(",");
+            const openId = card.threadId || card.key;
+            const href = `/messages/${encodeURIComponent(openId)}?thread_key=${encodeURIComponent(card.threadKey)}&conversation_key=${encodeURIComponent(card.key)}`;
 
             return (
-              <article key={card.key} style={cardStyle}>
+              <article key={card.key} style={conversationCard}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 18 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={laneChip}>{card.lane}</div>
 
-                    <h2 style={subject}>{card.title}</h2>
+                    <h2 style={cardTitle}>{card.title}</h2>
 
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
                       <span style={chip}>From: {card.from || "unknown"}</span>
                       <span style={chip}>To: {card.to || "unknown"}</span>
                       <span style={chip}>Messages: {card.count}</span>
-                      <span style={chip}>Threads: {card.threadIds.length || 1}</span>
                     </div>
 
                     <p style={preview}>{card.latest || "No preview."}</p>
                   </div>
 
-                  <div style={count}>{card.count}</div>
+                  <div style={countBadge}>{card.count}</div>
                 </div>
 
                 <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-                  <Link href={`/messages/${encodeURIComponent(openId)}?threads=${encodeURIComponent(threads)}`} style={button}>
+                  <Link href={href} style={button}>
                     Open Messages
                   </Link>
 
@@ -548,7 +533,8 @@ export default function MessagesPage() {
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
-  background: "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
   padding: "22px 16px 100px",
   fontFamily: "Arial, sans-serif",
@@ -576,7 +562,7 @@ const eyebrow: React.CSSProperties = {
   fontSize: 12,
 };
 
-const title: React.CSSProperties = {
+const heroTitle: React.CSSProperties = {
   fontSize: "clamp(52px,10vw,96px)",
   lineHeight: .88,
   letterSpacing: "-.075em",
@@ -601,7 +587,7 @@ const input: React.CSSProperties = {
   outline: "none",
 };
 
-const cardStyle: React.CSSProperties = {
+const conversationCard: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.12)",
   borderRadius: 30,
   padding: 24,
@@ -621,7 +607,7 @@ const laneChip: React.CSSProperties = {
   letterSpacing: ".09em",
 };
 
-const subject: React.CSSProperties = {
+const cardTitle: React.CSSProperties = {
   fontSize: "clamp(30px,6vw,48px)",
   lineHeight: 1,
   letterSpacing: "-.045em",
@@ -635,7 +621,7 @@ const preview: React.CSSProperties = {
   margin: 0,
 };
 
-const count: React.CSSProperties = {
+const countBadge: React.CSSProperties = {
   minWidth: 58,
   textAlign: "right",
   fontSize: 58,
