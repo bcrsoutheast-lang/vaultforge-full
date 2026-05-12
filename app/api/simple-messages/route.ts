@@ -131,18 +131,45 @@ function labelForSource(source: string) {
 
 function makeThreadKey(payload: Payload) {
   const m = meta(payload);
-  const existing = clean(payload.thread_key || payload.threadKey || m.thread_key);
+
+  const existing = clean(
+    payload.thread_key ||
+      payload.threadKey ||
+      m.thread_key
+  );
+
   if (existing) return existing;
 
-  const fromEmail = cleanEmail(payload.from_email || payload.sender_email || payload.email || payload.member_email || payload.user_email || m.from_email);
-  const toEmail = cleanEmail(payload.to_email || payload.recipient_email || payload.target_email || payload.owner_email || payload.reply_to_email || m.to_email);
-  const signalId = clean(payload.signal_id || payload.signalId || m.signal_id);
-  const itemId = clean(payload.item_id || payload.itemId || payload.pain_id || payload.project_id || payload.deal_id || m.item_id);
-  const threadId = clean(payload.thread_id || payload.threadId || m.thread_id);
   const source = normalizeSource(payload);
-  const identity = signalId || itemId || threadId || "general";
 
-  return `${source}:${identity}__${toEmail || "owner@vaultforge.local"}__${fromEmail || "member@vaultforge.local"}`;
+  const signalId = clean(
+    payload.signal_id ||
+      payload.signalId ||
+      m.signal_id
+  );
+
+  const itemId = clean(
+    payload.item_id ||
+      payload.itemId ||
+      payload.pain_id ||
+      payload.project_id ||
+      payload.deal_id ||
+      m.item_id
+  );
+
+  const threadId = clean(
+    payload.thread_id ||
+      payload.threadId ||
+      m.thread_id
+  );
+
+  const identity =
+    signalId ||
+    itemId ||
+    threadId ||
+    "general";
+
+  return `${source}:${identity}`;
 }
 
 function makeThreadId(payload: Payload) {
