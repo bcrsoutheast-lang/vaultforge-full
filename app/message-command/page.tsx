@@ -207,7 +207,13 @@ export default function MessageCommandPage() {
           "Content-Type": "application/json",
           "x-vf-email": email,
         },
-        body: JSON.stringify({ action, ids, email }),
+        body: JSON.stringify({
+          action,
+          ids,
+          email,
+          thread_key: convo.thread_key,
+          action_scope: "thread",
+        }),
       });
 
       const data = await safeJson(res);
