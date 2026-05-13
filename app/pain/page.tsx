@@ -100,6 +100,20 @@ async function safeJson(res: Response) {
   }
 }
 
+function firstSavedLink(data: Record<string, any>) {
+  const links = data?.direct_links || data?.links || {};
+  const painId = clean(data?.pain_id || data?.id || data?.item_id || data?.pain?.id || "");
+
+  return {
+    pain_room:
+      clean(links.pain_room) ||
+      clean(data?.pain_room) ||
+      (painId ? `/pain-room/${encodeURIComponent(painId)}` : ""),
+    dashboard: clean(links.dashboard) || "/dashboard",
+    pain_feed: clean(links.pain_feed) || "/pain-feed",
+  };
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -311,8 +325,10 @@ export default function PainPage() {
         throw new Error(clean(data.error || data.details || "Pain signal could not be created."));
       }
 
-      setLinks(data.direct_links || data.links || {});
-      setStatus("Saved. Pain signal created and routed into VaultForge. Use the buttons below to open where it was saved.");
+      const savedLinks = firstSavedLink(data);
+
+      setLinks(savedLinks);
+      setStatus("Saved to Pain Room. VaultForge will use this pain record to alert and match the right members in the background.");
 
       previewUrls.forEach((url) => URL.revokeObjectURL(url));
       setForm(defaultForm);
@@ -366,7 +382,7 @@ export default function PainPage() {
             Signal the network.
           </h1>
           <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.5 }}>
-            This creates a structured Pain record, a Signal Room, AI-style summary, best actions, risk flags, and routing context.
+            This creates one visible Pain Room. VaultForge uses the problem details to alert and match the right members in the background.
           </p>
           <div style={{ marginTop: 14 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
@@ -378,14 +394,16 @@ export default function PainPage() {
 
         {status ? (
           <section style={card}>
+            <p style={goldEyebrow}>Saved Destination</p>
             <h2 style={{ marginTop: 0 }}>{status}</h2>
+            <p style={{ color: "#cbd5e1", fontSize: 17, lineHeight: 1.5 }}>
+              Pain is the visible source of truth. Alerts/member matching can happen behind the scenes,
+              but the owner should open the Pain Room to review and work the problem.
+            </p>
             <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {links.pain_room ? <Link href={links.pain_room} style={button}>Open Pain Room</Link> : null}
-              {links.signal_room ? <Link href={links.signal_room} style={ghost}>Open Signal Room</Link> : null}
-              {links.pain_feed ? <Link href={links.pain_feed} style={ghost}>Pain Feed</Link> : <Link href="/pain-feed" style={ghost}>Pain Feed</Link>}
-              {links.routing_room ? <Link href={links.routing_room} style={ghost}>Routing Room</Link> : null}
-              <Link href="/projects" style={ghost}>Projects</Link>
-              <Link href="/dashboard" style={ghost}>Dashboard</Link>
+              <Link href={links.dashboard || "/dashboard"} style={ghost}>Dashboard</Link>
+              <Link href={links.pain_feed || "/pain-feed"} style={ghost}>Pain Feed</Link>
             </div>
           </section>
         ) : null}
@@ -575,9 +593,8 @@ export default function PainPage() {
         <section style={{ ...card, position: "sticky", bottom: 12, zIndex: 20, backdropFilter: "blur(16px)" }}>
           <div className="vf-actions" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button type="button" disabled={submitting} onClick={submitPain} style={{ ...button, opacity: submitting ? 0.6 : 1 }}>
-              {submitting ? "Creating Signal..." : "Submit Pain Signal"}
+              {submitting ? "Saving Pain Room..." : "Submit Pain Room"}
             </button>
-            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
           </div>
         </section>
