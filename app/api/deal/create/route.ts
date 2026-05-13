@@ -5,7 +5,6 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const DEAL_TABLE = "vf_deals";
-const MAX_SCHEMA_RETRIES = 24;
 
 type Row = Record<string, any>;
 
@@ -39,14 +38,13 @@ function cleanEmail(value: unknown) {
 }
 
 function cleanNumber(value: unknown) {
-  const raw = clean(value);
-  if (!raw) return null;
-
-  const n = Number(raw.replace(/[^\d.-]/g, ""));
+  const text = clean(value);
+  if (!text) return null;
+  const n = Number(text.replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 
-function cleanTextOrNull(value: unknown) {
+function nullable(value: unknown) {
   const text = clean(value);
   return text ? text : null;
 }
@@ -56,7 +54,6 @@ function first(...values: unknown[]) {
     const text = clean(value);
     if (text) return text;
   }
-
   return "";
 }
 
@@ -70,7 +67,7 @@ function photoArray(value: unknown): string[] {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
   } catch {
-    // Use as one value.
+    // Use as one URL.
   }
 
   return [text];
@@ -78,12 +75,9 @@ function photoArray(value: unknown): string[] {
 
 function removeUndefined(row: Row) {
   const cleaned: Row = {};
-
   for (const [key, value] of Object.entries(row)) {
-    if (value === undefined) continue;
-    cleaned[key] = value;
+    if (value !== undefined) cleaned[key] = value;
   }
-
   return cleaned;
 }
 
@@ -106,7 +100,6 @@ function missingColumnFromError(error: any) {
 
 function isMissingColumnError(error: any) {
   const text = `${error?.code || ""} ${error?.message || ""} ${error?.details || ""}`.toLowerCase();
-
   return (
     error?.code === "42703" ||
     (text.includes("column") && text.includes("does not exist")) ||
@@ -115,7 +108,7 @@ function isMissingColumnError(error: any) {
   );
 }
 
-function inferPrimaryRole(body: Row) {
+function routingRole(body: Row) {
   const text = [
     body.routing_needs,
     body.deal_needs,
@@ -124,37 +117,35 @@ function inferPrimaryRole(body: Row) {
     body.route_summary,
     body.description,
     body.seller_situation,
+    body.distress_signals,
   ]
     .map(clean)
     .join(" ")
     .toLowerCase();
 
   if (text.includes("lender") || text.includes("capital") || text.includes("fund")) return "Lender / Capital";
-  if (text.includes("operator") || text.includes("jv") || text.includes("partner")) return "Operator";
+  if (text.includes("operator") || text.includes("jv") || text.includes("partner")) return "Operator / JV";
   if (text.includes("contractor") || text.includes("repair") || text.includes("construction")) return "Contractor";
   if (text.includes("buyer") || text.includes("acquisition")) return "Buyer";
 
   return "Owner Review";
 }
 
-function inferRoutingAction(role: string) {
+function routingAction(role: string) {
   const text = role.toLowerCase();
-
   if (text.includes("lender") || text.includes("capital")) return "route_to_lender";
-  if (text.includes("operator")) return "route_to_operator";
+  if (text.includes("operator") || text.includes("jv")) return "route_to_operator";
   if (text.includes("contractor")) return "route_to_contractor";
   if (text.includes("buyer")) return "route_to_buyer";
-
   return "needs_review";
 }
 
-function inferPriority(body: Row) {
+function priority(body: Row) {
   const text = [
     body.urgency_level,
     body.distress_signals,
     body.description,
     body.seller_situation,
-    body.ai_route_summary,
     body.route_summary,
   ]
     .map(clean)
@@ -189,8 +180,8 @@ function buildRouteSummary(body: Row) {
     body.route_summary,
     [
       `Type: ${first(body.property_type, body.deal_type, body.asset_type, "Deal")}`,
-      `Strategy: ${first(body.strategy, body.exit_strategy) || "Not listed"}`,
-      `Exit: ${first(body.exit_strategy, body.strategy) || "Not listed"}`,
+      `Strategy: ${first(body.strategy, body.exit_strategy, "Not listed")}`,
+      `Exit: ${first(body.exit_strategy, body.strategy, "Not listed")}`,
       `Market: ${[first(body.city), first(body.state)].filter(Boolean).join(", ") || "Not listed"}`,
       first(body.routing_needs, body.deal_needs, body.needs) ? `Needs: ${first(body.routing_needs, body.deal_needs, body.needs)}` : "",
       first(body.distress_signals) ? `Signals: ${first(body.distress_signals)}` : "",
@@ -198,7 +189,9 @@ function buildRouteSummary(body: Row) {
       first(body.capital_needed) ? `Capital: ${first(body.capital_needed)}` : "",
       first(body.contractor_scope) ? `Contractor Scope: ${first(body.contractor_scope)}` : "",
       first(body.operator_scope) ? `Operator Scope: ${first(body.operator_scope)}` : "",
-    ].filter(Boolean).join(" | ")
+    ]
+      .filter(Boolean)
+      .join(" | ")
   );
 }
 
@@ -207,20 +200,20 @@ function buildRows(body: Row, email: string) {
   const propertyType = first(body.property_type, body.deal_type, body.asset_type, "Deal");
   const strategy = first(body.strategy, body.exit_strategy, "Strategy Needed");
   const exitStrategy = first(body.exit_strategy, body.strategy);
-  const askingPrice = cleanNumber(body.asking_price ?? body.price);
+  const asking = cleanNumber(body.asking_price ?? body.price);
   const arv = cleanNumber(body.arv ?? body.arv_value ?? body.estimated_value);
   const repairs = cleanNumber(body.repair_estimate ?? body.repairs_needed ?? body.estimated_repairs);
   const squareFeet = first(body.square_feet, body.sqft, body.building_sqft);
   const acres = first(body.acres, body.land_acres);
-  const routeSummary = buildRouteSummary(body);
   const routingNeeds = first(body.routing_needs, body.deal_needs, body.needs);
   const distressSignals = first(body.distress_signals);
   const sellerSituation = [body.seller_situation, distressSignals].map(clean).filter(Boolean).join(" | ");
+  const summary = buildRouteSummary(body);
   const now = new Date().toISOString();
 
-  const fullMetadata = removeUndefined({
+  const metadata = removeUndefined({
     ...body,
-    source: "api_deal_create_full_field_persistence",
+    source: "api_deal_create_signal_route_fix",
     owner_email: email,
     member_email: email,
     property_type: propertyType,
@@ -228,16 +221,17 @@ function buildRows(body: Row, email: string) {
     asset_type: propertyType,
     strategy,
     exit_strategy: exitStrategy,
-    asking_price: askingPrice,
-    price: askingPrice,
+    asking_price: asking,
+    price: asking,
     arv,
     arv_value: arv,
     repair_estimate: repairs,
     repairs_needed: repairs,
     photo_urls: photos,
     main_photo_url: photos[0] || first(body.main_photo_url),
-    route_summary: routeSummary,
-    ai_route_summary: routeSummary,
+    route_summary: summary,
+    ai_route_summary: summary,
+    routing_summary: summary,
     routing_needs: routingNeeds,
     deal_needs: first(body.deal_needs, routingNeeds),
     needs: first(body.needs, routingNeeds),
@@ -277,21 +271,23 @@ function buildRows(body: Row, email: string) {
     strategy,
     city: first(body.city, "Unknown City"),
     state: first(body.state, "Unknown State"),
-    address: cleanTextOrNull(body.address),
-    asking_price: askingPrice,
+    address: nullable(body.address),
+    asking_price: asking,
     arv,
     repair_estimate: repairs,
-    description: cleanTextOrNull(body.description),
+    description: nullable(body.description),
     status: first(body.status, "active"),
     photo_urls: photos,
-    main_photo_url: photos[0] || cleanTextOrNull(body.main_photo_url),
-    route_summary: routeSummary,
-    ai_route_summary: routeSummary,
+    main_photo_url: photos[0] || nullable(body.main_photo_url),
+    route_summary: summary,
+    ai_route_summary: summary,
+    routing_summary: summary,
     routing_needs: routingNeeds,
     deal_needs: first(body.deal_needs, routingNeeds),
+    needs: routingNeeds,
     distress_signals: distressSignals,
     seller_situation: sellerSituation,
-    metadata: fullMetadata,
+    metadata,
     created_at: now,
     updated_at: now,
   });
@@ -301,42 +297,32 @@ function buildRows(body: Row, email: string) {
     deal_type: propertyType,
     asset_type: propertyType,
     exit_strategy: exitStrategy,
-    price: askingPrice,
-    beds: cleanTextOrNull(body.beds ?? body.bedrooms),
-    baths: cleanTextOrNull(body.baths ?? body.bathrooms),
-    bedrooms: cleanTextOrNull(body.bedrooms ?? body.beds),
-    bathrooms: cleanTextOrNull(body.bathrooms ?? body.baths),
-    square_feet: cleanTextOrNull(squareFeet),
-    sqft: cleanTextOrNull(squareFeet),
-    building_sqft: cleanTextOrNull(squareFeet),
-    year_built: cleanTextOrNull(body.year_built),
-    occupancy: cleanTextOrNull(body.occupancy),
-    zoning: cleanTextOrNull(body.zoning),
-    acres: cleanTextOrNull(acres),
-    land_acres: cleanTextOrNull(acres),
-    utilities: cleanTextOrNull(body.utilities ?? body.access_notes),
-    road_access: cleanTextOrNull(body.road_access ?? body.occupancy),
-    noi: cleanTextOrNull(body.noi),
-    cap_rate: cleanTextOrNull(body.cap_rate),
-    target_buyer: cleanTextOrNull(body.target_buyer),
-    capital_needed: cleanTextOrNull(body.capital_needed),
-    ideal_lender: cleanTextOrNull(body.ideal_lender),
-    contractor_scope: cleanTextOrNull(body.contractor_scope),
-    operator_scope: cleanTextOrNull(body.operator_scope),
-    jv_structure: cleanTextOrNull(body.jv_structure),
-    title_issue: cleanTextOrNull(body.title_issue),
-    needs: cleanTextOrNull(routingNeeds),
-    private_notes: cleanTextOrNull(body.private_notes ?? body.access_notes),
-    access_notes: cleanTextOrNull(body.access_notes),
-    owner_name: cleanTextOrNull(body.owner_name ?? body.contact_name ?? body.seller_name),
-    contact_name: cleanTextOrNull(body.contact_name ?? body.owner_name ?? body.seller_name),
-    seller_name: cleanTextOrNull(body.seller_name ?? body.owner_name ?? body.contact_name),
-    owner_phone: cleanTextOrNull(body.owner_phone ?? body.contact_phone ?? body.seller_phone),
-    contact_phone: cleanTextOrNull(body.contact_phone ?? body.owner_phone ?? body.seller_phone),
-    seller_phone: cleanTextOrNull(body.seller_phone ?? body.owner_phone ?? body.contact_phone),
-    owner_contact_email: cleanTextOrNull(body.owner_contact_email ?? body.contact_email ?? body.seller_email),
-    contact_email: cleanTextOrNull(body.contact_email ?? body.owner_contact_email ?? body.seller_email),
-    seller_email: cleanTextOrNull(body.seller_email ?? body.owner_contact_email ?? body.contact_email),
+    price: asking,
+    beds: nullable(body.beds ?? body.bedrooms),
+    baths: nullable(body.baths ?? body.bathrooms),
+    bedrooms: nullable(body.bedrooms ?? body.beds),
+    bathrooms: nullable(body.bathrooms ?? body.baths),
+    square_feet: nullable(squareFeet),
+    sqft: nullable(squareFeet),
+    building_sqft: nullable(squareFeet),
+    year_built: nullable(body.year_built),
+    occupancy: nullable(body.occupancy),
+    zoning: nullable(body.zoning),
+    acres: nullable(acres),
+    land_acres: nullable(acres),
+    utilities: nullable(body.utilities ?? body.access_notes),
+    road_access: nullable(body.road_access ?? body.occupancy),
+    noi: nullable(body.noi),
+    cap_rate: nullable(body.cap_rate),
+    target_buyer: nullable(body.target_buyer),
+    capital_needed: nullable(body.capital_needed),
+    ideal_lender: nullable(body.ideal_lender),
+    contractor_scope: nullable(body.contractor_scope),
+    operator_scope: nullable(body.operator_scope),
+    jv_structure: nullable(body.jv_structure),
+    title_issue: nullable(body.title_issue),
+    private_notes: nullable(body.private_notes ?? body.access_notes),
+    access_notes: nullable(body.access_notes),
   });
 
   const minimalWithMetadata = removeUndefined({
@@ -348,307 +334,275 @@ function buildRows(body: Row, email: string) {
     city: core.city,
     state: core.state,
     address: core.address,
-    asking_price: askingPrice,
+    asking_price: asking,
     arv,
     repair_estimate: repairs,
     description: core.description,
     status: core.status,
     photo_urls: photos,
     main_photo_url: core.main_photo_url,
-    metadata: fullMetadata,
+    metadata,
     created_at: now,
     updated_at: now,
   });
 
-  const minimalNoMetadata = removeUndefined({
-    owner_email: email,
-    member_email: email,
-    title: core.title,
-    property_type: propertyType,
-    strategy,
-    city: core.city,
-    state: core.state,
-    address: core.address,
-    asking_price: askingPrice,
-    arv,
-    repair_estimate: repairs,
-    description: core.description,
-    status: core.status,
-    photo_urls: photos,
-    main_photo_url: core.main_photo_url,
-    created_at: now,
-    updated_at: now,
-  });
-
-  return {
-    core,
-    expanded,
-    minimalWithMetadata,
-    minimalNoMetadata,
-    metadata: fullMetadata,
-  };
+  return { expanded, core, minimalWithMetadata };
 }
 
 async function adaptiveInsert(supabase: any, candidates: Row[]) {
-  const attempts: Row[] = [];
+  const errors: string[] = [];
 
   for (const candidate of candidates) {
     let row = { ...candidate };
-    const removedColumns: string[] = [];
 
-    for (let attempt = 0; attempt < MAX_SCHEMA_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
       const { data, error } = await supabase.from(DEAL_TABLE).insert(row).select("*").single();
 
-      attempts.push({
-        ok: !error,
-        error: error?.message || null,
-        keys: Object.keys(row),
-        removedColumns: [...removedColumns],
-      });
+      if (!error && data) return { data, error: null };
 
-      if (!error) {
-        return { data, error: null, removedColumns, attempts };
-      }
+      if (error?.message) errors.push(error.message);
 
       if (!isMissingColumnError(error)) break;
 
       const missing = missingColumnFromError(error);
 
-      if (missing && Object.prototype.hasOwnProperty.call(row, missing)) {
-        delete row[missing];
-        removedColumns.push(missing);
-        continue;
-      }
+      if (!missing || !Object.prototype.hasOwnProperty.call(row, missing)) break;
 
-      break;
+      delete row[missing];
     }
   }
 
   return {
     data: null,
-    error: { message: "Could not create deal after compatible schema attempts." },
-    removedColumns: [],
-    attempts,
+    error: { message: errors[0] || "Could not create deal." },
   };
 }
 
-async function findAssignedMemberEmail(supabase: any, ownerEmail: string) {
-  const tables = ["vf_profiles", "profiles", "member_profiles"];
+async function insertAdaptive(supabase: any, table: string, variants: Row[]) {
+  const errors: string[] = [];
 
-  for (const table of tables) {
-    try {
-      const { data, error } = await supabase.from(table).select("*").limit(50);
-      if (error || !Array.isArray(data)) continue;
+  for (const original of variants) {
+    let row = { ...original };
 
-      const liveMembers = data
-        .map((row: Row) => ({
-          email: cleanEmail(row.email || row.member_email || row.user_email),
-          row,
-        }))
-        .filter((item) => {
-          if (!item.email || !item.email.includes("@")) return false;
-          if (item.email === ownerEmail) return false;
-          if (item.email === "bcrsoutheast@gmail.com") return false;
-          if (item.email.endsWith("@example.com")) return false;
-          if (item.email === "test@test.com") return false;
+    for (let attempt = 0; attempt < 18; attempt += 1) {
+      try {
+        const { data, error } = await supabase.from(table).insert(row).select("*").single();
 
-          const status = clean(item.row.access_status || item.row.member_status || item.row.status).toLowerCase();
-          return !["deleted", "removed", "suspended", "disabled"].includes(status);
-        });
+        if (!error && data) return { ok: true, data };
 
-      if (liveMembers.length > 0) return liveMembers[0].email;
-    } catch {
-      // Try next.
+        if (error?.message) errors.push(error.message);
+
+        if (!isMissingColumnError(error)) break;
+
+        const missing = missingColumnFromError(error);
+        if (!missing || !Object.prototype.hasOwnProperty.call(row, missing)) break;
+        delete row[missing];
+      } catch (error: any) {
+        if (error?.message) errors.push(error.message);
+        break;
+      }
     }
   }
 
-  return "";
+  return { ok: false, error: errors[0] || `${table} insert failed.` };
 }
 
-async function createRoutingActionForDeal(supabase: any, deal: Row, body: Row, ownerEmail: string) {
-  const assignedMemberEmail = await findAssignedMemberEmail(supabase, ownerEmail);
-  const dealId = clean(deal.id || deal.deal_id || deal.project_id || deal.property_id);
-  const role = inferPrimaryRole(body);
-  const action = inferRoutingAction(role);
-  const priority = inferPriority(body);
-  const summary = buildRouteSummary(body);
+async function createDealSignal(supabase: any, deal: Row, body: Row, email: string) {
+  const dealId = first(deal.id, deal.deal_id, deal.project_id, deal.item_id);
   const signalId = `deal-${dealId || crypto.randomUUID()}`;
+  const role = routingRole(body);
+  const action = routingAction(role);
+  const summary = buildRouteSummary(body);
+  const p = priority(body);
   const now = new Date().toISOString();
 
-  const payload = {
+  const metadata = removeUndefined({
+    owner_email: email,
+    member_email: email,
+    deal_id: dealId,
+    item_id: dealId,
     signal_id: signalId,
-    alert_id: signalId,
+    source: "deal_create_signal",
+    property_type: first(body.property_type, body.deal_type, body.asset_type),
+    strategy: first(body.strategy, body.exit_strategy),
+    market: [first(body.city), first(body.state)].filter(Boolean).join(", "),
+    routing_needs: first(body.routing_needs, body.deal_needs, body.needs),
+    distress_signals: first(body.distress_signals),
+    route_summary: summary,
+    asking_price: cleanNumber(body.asking_price ?? body.price),
+    arv: cleanNumber(body.arv ?? body.arv_value),
+    repair_estimate: cleanNumber(body.repair_estimate ?? body.repairs_needed),
+  });
+
+  const signalPayload = {
+    signal_id: signalId,
     item_id: dealId || null,
     deal_id: dealId || null,
-    title: first(deal.title, body.title, "New VaultForge Deal"),
-    note: summary || "New deal created and routed for member review.",
-    notes: summary || "New deal created and routed for member review.",
-    reason: summary || "New deal created and routed for member review.",
+    title: first(body.title, deal.title, "New Deal Signal"),
+    signal_type: "Deal Signal",
+    type: "deal",
+    priority: p,
+    urgency: p,
+    status: "active",
+    market: [first(body.city), first(body.state)].filter(Boolean).join(", "),
+    city: first(body.city),
+    state: first(body.state),
+    asset_type: first(body.property_type, body.asset_type, body.deal_type),
+    property_type: first(body.property_type, body.asset_type, body.deal_type),
+    note: summary,
+    notes: summary,
+    description: summary,
     route_summary: summary,
     routing_summary: summary,
-    action,
-    routing_action: action,
-    priority,
-    status: "generated",
-    routing_status: "generated",
-    state_match: first(body.state, deal.state) || null,
-    market_match: first(body.state, deal.state, body.city, deal.city) || null,
-    strategy_match: first(body.strategy, body.exit_strategy, deal.strategy) || null,
-    role_match: role,
-    target_role: role,
-    urgency_reason: summary || `Deal created with routing need: ${role}.`,
-    routing_reason: summary || `Deal created with routing need: ${role}.`,
-    confidence_score: 72,
-    match_score: 72,
-    target_email: assignedMemberEmail || null,
-    target_member_email: assignedMemberEmail || null,
-    member_email: assignedMemberEmail || null,
+    ai_route_summary: summary,
+    owner_email: email,
+    member_email: email,
+    created_by_email: email,
+    submitted_by_email: email,
     source: "deal_create_pipeline",
     source_table: DEAL_TABLE,
-    metadata: {
-      generated_by: "deal_create_pipeline",
-      owner_email: ownerEmail,
-      created_from: "api_deal_create",
-      assigned_member_email: assignedMemberEmail || null,
-      routing_needs: body.routing_needs || null,
-      distress_signals: body.distress_signals || null,
-      deal_id: dealId || null,
-      signal_id: signalId,
-    },
-    created_by: ownerEmail,
-    routed_by_email: ownerEmail,
-    owner_email: ownerEmail,
-    admin_email: ownerEmail,
+    metadata,
     created_at: now,
     updated_at: now,
   };
 
-  const variants = [
-    payload,
+  const signalResult = await insertAdaptive(supabase, "vf_intelligence_signals", [
+    signalPayload,
     {
-      signal_id: payload.signal_id,
-      item_id: payload.item_id,
-      deal_id: payload.deal_id,
-      title: payload.title,
-      note: payload.note,
-      action: payload.action,
-      priority: payload.priority,
-      role_match: payload.role_match,
-      target_role: payload.target_role,
-      target_email: payload.target_email,
-      target_member_email: payload.target_member_email,
-      member_email: payload.member_email,
-      routing_status: payload.routing_status,
-      source: payload.source,
-      source_table: payload.source_table,
-      owner_email: payload.owner_email,
-      metadata: payload.metadata,
-      created_at: payload.created_at,
-      updated_at: payload.updated_at,
+      signal_id: signalPayload.signal_id,
+      item_id: signalPayload.item_id,
+      title: signalPayload.title,
+      signal_type: signalPayload.signal_type,
+      priority: signalPayload.priority,
+      status: signalPayload.status,
+      market: signalPayload.market,
+      note: signalPayload.note,
+      owner_email: signalPayload.owner_email,
+      member_email: signalPayload.member_email,
+      source: signalPayload.source,
+      metadata: signalPayload.metadata,
+      created_at: signalPayload.created_at,
+      updated_at: signalPayload.updated_at,
     },
     {
-      signal_id: payload.signal_id,
-      item_id: payload.item_id,
-      title: payload.title,
-      note: payload.note,
-      action: payload.action,
-      priority: payload.priority,
-      member_email: payload.member_email,
-      target_email: payload.target_email,
-      routing_status: payload.routing_status,
-      created_by: payload.created_by,
-      created_at: payload.created_at,
-      updated_at: payload.updated_at,
+      signal_id: signalPayload.signal_id,
+      title: signalPayload.title,
+      note: signalPayload.note,
+      owner_email: signalPayload.owner_email,
+      metadata: signalPayload.metadata,
+      created_at: signalPayload.created_at,
     },
-  ];
+  ]);
 
-  const errors: string[] = [];
+  const routingPayload = {
+    signal_id: signalId,
+    alert_id: signalId,
+    item_id: dealId || null,
+    deal_id: dealId || null,
+    title: first(body.title, deal.title, "New Deal Routing"),
+    note: summary || "New deal created and routed for review.",
+    notes: summary || "New deal created and routed for review.",
+    reason: summary || "New deal created and routed for review.",
+    route_summary: summary,
+    routing_summary: summary,
+    action,
+    routing_action: action,
+    priority: p,
+    status: "generated",
+    routing_status: "generated",
+    state_match: first(body.state, deal.state) || null,
+    market_match: first(body.city, deal.city, body.state, deal.state) || null,
+    strategy_match: first(body.strategy, body.exit_strategy, deal.strategy) || null,
+    role_match: role,
+    target_role: role,
+    confidence_score: 72,
+    match_score: 72,
+    owner_email: email,
+    admin_email: email,
+    created_by: email,
+    routed_by_email: email,
+    source: "deal_create_pipeline",
+    source_table: DEAL_TABLE,
+    metadata,
+    created_at: now,
+    updated_at: now,
+  };
 
-  for (const variant of variants) {
-    try {
-      const { data, error } = await supabase.from("vf_routing_actions").insert(variant).select("*").single();
+  const routingResult = await insertAdaptive(supabase, "vf_routing_actions", [
+    routingPayload,
+    {
+      signal_id: routingPayload.signal_id,
+      item_id: routingPayload.item_id,
+      deal_id: routingPayload.deal_id,
+      title: routingPayload.title,
+      note: routingPayload.note,
+      action: routingPayload.action,
+      priority: routingPayload.priority,
+      role_match: routingPayload.role_match,
+      target_role: routingPayload.target_role,
+      routing_status: routingPayload.routing_status,
+      owner_email: routingPayload.owner_email,
+      source: routingPayload.source,
+      metadata: routingPayload.metadata,
+      created_at: routingPayload.created_at,
+      updated_at: routingPayload.updated_at,
+    },
+    {
+      signal_id: routingPayload.signal_id,
+      item_id: routingPayload.item_id,
+      title: routingPayload.title,
+      note: routingPayload.note,
+      action: routingPayload.action,
+      priority: routingPayload.priority,
+      owner_email: routingPayload.owner_email,
+      metadata: routingPayload.metadata,
+      created_at: routingPayload.created_at,
+    },
+  ]);
 
-      if (!error && data) {
-        return {
-          ok: true,
-          action: data,
-          assigned_member_email: assignedMemberEmail || null,
-          signal_id: payload.signal_id,
-        };
-      }
+  const activityPayload = {
+    event_type: "deal_created",
+    event_title: first(body.title, deal.title, "New Deal Created"),
+    title: first(body.title, deal.title, "New Deal Created"),
+    event_description: summary,
+    note: summary,
+    message: summary,
+    member_email: email,
+    owner_email: email,
+    related_deal_id: dealId || null,
+    item_id: dealId || null,
+    signal_id: signalId,
+    visibility: "owner",
+    metadata,
+    created_at: now,
+    updated_at: now,
+  };
 
-      if (error?.message) errors.push(error.message);
-    } catch (error: any) {
-      if (error?.message) errors.push(error.message);
-    }
-  }
+  const activityResult = await insertAdaptive(supabase, "vf_activity_events", [
+    activityPayload,
+    {
+      event_type: activityPayload.event_type,
+      event_title: activityPayload.event_title,
+      event_description: activityPayload.event_description,
+      member_email: activityPayload.member_email,
+      related_deal_id: activityPayload.related_deal_id,
+      metadata: activityPayload.metadata,
+      created_at: activityPayload.created_at,
+    },
+    {
+      event_type: activityPayload.event_type,
+      event_title: activityPayload.event_title,
+      event_description: activityPayload.event_description,
+      member_email: activityPayload.member_email,
+    },
+  ]);
 
   return {
-    ok: false,
-    error: errors[0] || "Routing action insert failed.",
-    assigned_member_email: assignedMemberEmail || null,
-    signal_id: payload.signal_id,
+    signal_id: signalId,
+    signal: signalResult,
+    routing: routingResult,
+    activity: activityResult,
   };
-}
-
-async function createActivityForDeal(supabase: any, deal: Row, body: Row, ownerEmail: string, assignedMemberEmail: string | null) {
-  const dealId = clean(deal.id || deal.deal_id || deal.project_id || deal.property_id);
-  const title = first(deal.title, body.title, "New deal created");
-  const summary = buildRouteSummary(body);
-
-  const variants = [
-    {
-      event_type: "deal_created",
-      event_title: title,
-      title,
-      event_description: summary || "A new VaultForge deal was created and moved into routing review.",
-      note: summary,
-      message: summary,
-      member_email: assignedMemberEmail || ownerEmail,
-      owner_email: ownerEmail,
-      related_deal_id: dealId || null,
-      item_id: dealId || null,
-      visibility: assignedMemberEmail ? "member" : "owner",
-      metadata: {
-        deal_id: dealId || null,
-        source_table: DEAL_TABLE,
-        assigned_member_email: assignedMemberEmail || null,
-        created_from: "api_deal_create",
-      },
-    },
-    {
-      event_type: "deal_created",
-      event_title: title,
-      event_description: summary,
-      member_email: assignedMemberEmail || ownerEmail,
-      related_deal_id: dealId || null,
-      metadata: { deal_id: dealId || null },
-    },
-    {
-      event_type: "deal_created",
-      event_title: title,
-      event_description: summary,
-      member_email: assignedMemberEmail || ownerEmail,
-    },
-  ];
-
-  const errors: string[] = [];
-
-  for (const variant of variants) {
-    try {
-      const { data, error } = await supabase.from("vf_activity_events").insert(variant).select("*").single();
-
-      if (!error && data) {
-        return { ok: true, activity: data };
-      }
-
-      if (error?.message) errors.push(error.message);
-    } catch (error: any) {
-      if (error?.message) errors.push(error.message);
-    }
-  }
-
-  return { ok: false, error: errors[0] || "Activity insert failed." };
 }
 
 export async function POST(request: Request) {
@@ -665,7 +619,6 @@ export async function POST(request: Request) {
         {
           ok: false,
           error: "Login required to create a deal.",
-          details: "No VaultForge member email was found.",
         },
         { status: 401 }
       );
@@ -682,58 +635,46 @@ export async function POST(request: Request) {
     }
 
     const supabase = supabaseClient();
-    const result = await adaptiveInsert(supabase, [
-      rows.expanded,
-      rows.core,
-      rows.minimalWithMetadata,
-      rows.minimalNoMetadata,
-    ]);
+    const result = await adaptiveInsert(supabase, [rows.expanded, rows.core, rows.minimalWithMetadata]);
 
     if (result.error || !result.data) {
       return NextResponse.json(
         {
           ok: false,
           error: result.error?.message || "Could not create deal.",
-          details: result.error,
-          attempts: result.attempts,
         },
         { status: 500 }
       );
     }
 
-    const routingResult = await createRoutingActionForDeal(supabase, result.data, body, email);
-    const activityResult = await createActivityForDeal(
-      supabase,
-      result.data,
-      body,
-      email,
-      routingResult.assigned_member_email || null
-    );
-
-    const dealId = clean(result.data.id || result.data.deal_id || result.data.project_id || result.data.item_id);
+    const pipeline = await createDealSignal(supabase, result.data, body, email);
+    const dealId = first(result.data.id, result.data.deal_id, result.data.project_id, result.data.item_id);
 
     return NextResponse.json({
       ok: true,
       deal: result.data,
       deal_id: dealId,
       id: dealId,
-      removed_schema_columns: result.removedColumns,
-      routing: routingResult,
-      activity: activityResult,
+      signal_id: pipeline.signal_id,
+      signal: pipeline.signal,
+      routing: pipeline.routing,
+      activity: pipeline.activity,
       direct_links: {
         deal_detail: dealId ? `/deal/detail?id=${encodeURIComponent(dealId)}` : "",
         projects: "/projects",
         dashboard: "/dashboard",
-        routing_room: routingResult.signal_id ? `/routing-room/${encodeURIComponent(routingResult.signal_id)}` : "",
+        signal_room: pipeline.signal_id ? `/signals/${encodeURIComponent(pipeline.signal_id)}` : "",
+        routing_room: pipeline.signal_id ? `/routing-room/${encodeURIComponent(pipeline.signal_id)}` : "",
         activity: "/activity",
       },
       saved_to: {
         deal_table: DEAL_TABLE,
         deal_detail: Boolean(dealId),
-        routing_action: Boolean(routingResult.ok),
-        activity_event: Boolean(activityResult.ok),
+        intelligence_signal: Boolean(pipeline.signal.ok),
+        routing_action: Boolean(pipeline.routing.ok),
+        activity_event: Boolean(pipeline.activity.ok),
       },
-      message: "Deal created. Open Deal Detail or Projects to review the saved record.",
+      message: "Deal created, signal generated, and routing action created.",
     });
   } catch (error: any) {
     return NextResponse.json(
