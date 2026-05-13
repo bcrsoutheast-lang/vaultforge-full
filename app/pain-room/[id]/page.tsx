@@ -66,6 +66,52 @@ function field(row: Row | null, ...keys: string[]) {
   return first(...values);
 }
 
+function money(value: unknown) {
+  const text = clean(value);
+  if (!text) return "Not listed";
+
+  const number = Number(text.replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(number)) return text;
+
+  return number.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
+function assetClass(row: Row | null) {
+  const raw = field(row, "asset_class", "asset_type", "property_type", "deal_type", "pain_type", "problem_type");
+  const lower = raw.toLowerCase();
+
+  if (lower.includes("multi")) return "Multifamily";
+  if (lower.includes("commercial")) return "Commercial";
+  if (lower.includes("land") || lower.includes("acre")) return "Land";
+  if (lower.includes("residential") || lower.includes("house") || lower.includes("single")) return "Residential";
+
+  return raw || "Not listed";
+}
+
+function ownerGoal(row: Row | null) {
+  return field(row, "owner_goal", "goal", "desired_outcome", "exit_strategy", "strategy", "what_do_you_want", "requested_help", "help_requested") || "Not listed";
+}
+
+function whoShouldSee(row: Row | null) {
+  const text = `${problemText(row)} ${field(row, "requested_help", "help_requested", "routing_needs", "needs")} ${field(row, "distress_signals")}`.toLowerCase();
+  const stack: string[] = [];
+
+  if (text.includes("buyer") || text.includes("sell") || text.includes("fast close")) stack.push("Buyer");
+  if (text.includes("funding") || text.includes("capital") || text.includes("lender")) stack.push("Lender");
+  if (text.includes("contractor") || text.includes("repair") || text.includes("construction")) stack.push("Contractor");
+  if (text.includes("jv") || text.includes("partner") || text.includes("operator")) stack.push("Operator / JV Partner");
+  if (text.includes("tenant") || text.includes("permit") || text.includes("city") || text.includes("code")) stack.push("Local Operator");
+  if (text.includes("attorney") || text.includes("probate") || text.includes("title")) stack.push("Attorney / Title");
+
+  if (!stack.length) stack.push("Owner Review", "Operator", "Buyer");
+
+  return Array.from(new Set(stack));
+}
+
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
 
@@ -644,6 +690,62 @@ export default function PainRoomPage() {
                 </div>
               </section>
             ) : null}
+
+
+            <section style={card}>
+              <div style={label}>Asset Snapshot</div>
+
+              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
+                <Info labelText="Asset Class" value={assetClass(pain)} />
+                <Info labelText="Market / Address" value={field(pain, "address", "property_address", "location") || marketOf(pain)} />
+                <Info labelText="Beds / Baths" value={[field(pain, "beds", "bedrooms"), field(pain, "baths", "bathrooms")].filter(Boolean).join(" / ") || "Not listed"} />
+                <Info labelText="Sqft / Acres" value={field(pain, "square_feet", "sqft", "building_sqft", "acres", "land_acres")} />
+                <Info labelText="Occupancy" value={field(pain, "occupancy", "tenant_status", "vacancy_status")} />
+                <Info labelText="Zoning" value={field(pain, "zoning", "land_use")} />
+                <Info labelText="Year Built" value={field(pain, "year_built")} />
+                <Info labelText="Access / Utilities" value={field(pain, "access_notes", "road_access", "utilities")} />
+              </div>
+            </section>
+
+            <section style={card}>
+              <div style={label}>Numbers Snapshot</div>
+
+              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
+                <Info labelText="Asking / Target" value={money(field(pain, "asking_price", "price", "target_price"))} />
+                <Info labelText="ARV / Value" value={money(field(pain, "arv", "arv_value", "estimated_value", "property_value"))} />
+                <Info labelText="Repairs / Scope" value={money(field(pain, "repair_estimate", "repairs_needed", "estimated_repairs", "repair_budget"))} />
+                <Info labelText="Capital Needed" value={money(field(pain, "capital_needed", "funding_needed", "gap_amount"))} />
+                <Info labelText="Debt / Payoff" value={money(field(pain, "loan_balance", "payoff", "debt", "mortgage_balance"))} />
+                <Info labelText="NOI / Rent" value={field(pain, "noi", "rent", "monthly_rent", "income")} />
+                <Info labelText="Timeline" value={field(pain, "timeline", "deadline", "desired_timeline", "urgency_level", "urgency")} />
+                <Info labelText="Owner Goal" value={ownerGoal(pain)} />
+              </div>
+            </section>
+
+            <section style={card}>
+              <div style={label}>Problem Snapshot</div>
+
+              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
+                <Info labelText="Problem Type" value={assetOf(pain)} />
+                <Info labelText="Primary Bottleneck" value={primaryBottleneck(pain)} />
+                <Info labelText="Urgency" value={urgencyOf(pain)} />
+              </div>
+
+              <div style={{ marginTop: 14, border: "1px solid rgba(248,113,113,.25)", borderRadius: 18, padding: 14, background: "rgba(248,113,113,.075)" }}>
+                <div style={{ ...label, color: "#fecaca" }}>Pain Details</div>
+                <p style={{ ...muted, margin: "8px 0 0", fontSize: 17 }}>{problemText(pain)}</p>
+              </div>
+            </section>
+
+            <section style={card}>
+              <div style={label}>Who Should See This</div>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                {whoShouldSee(pain).map((item) => (
+                  <span key={item} style={chip}>{item}</span>
+                ))}
+              </div>
+            </section>
 
             <section style={card}>
               <div style={label}>AI Problem Solver Summary</div>
