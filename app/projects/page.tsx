@@ -6,6 +6,8 @@ import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type Row = Record<string, any>;
 
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -317,9 +319,12 @@ export default function ProjectsPage() {
     setStatus("Loading projects...");
 
     try {
+      const owner = viewer === OWNER_EMAIL;
+      const ownerFlag = owner ? "1" : "0";
+
       const urls = [
-        `/api/projects?email=${encodeURIComponent(viewer)}&owner=0`,
-        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/projects?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
+        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
       ];
 
       const collected: Row[] = [];
@@ -328,7 +333,11 @@ export default function ProjectsPage() {
         try {
           const res = await fetch(url, {
             cache: "no-store",
-            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
+            credentials: "include",
+            headers: {
+              "x-vf-email": viewer || "",
+              "x-vf-admin": ownerFlag,
+            },
           });
 
           const data = await safeJson(res);
@@ -424,6 +433,7 @@ export default function ProjectsPage() {
 
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>{email === OWNER_EMAIL ? "Owner View" : "Member View"}</span>
             <span style={chip}>Projects: {counts.total}</span>
             <span style={chip}>Active: {counts.active}</span>
             <span style={chip}>Signal Linked: {counts.signalLinked}</span>
