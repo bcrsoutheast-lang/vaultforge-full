@@ -329,7 +329,7 @@ function routingSummary(row: Row) {
 
   return parts.length
     ? parts.join(" • ")
-    : "This deal needs a routing summary. Useful AI context would include buyer type, lender need, contractor scope, timeline, seller pressure, and next best action.";
+    : "AI routing summary pending.";
 }
 
 function missingInfo(row: Row) {
@@ -546,14 +546,16 @@ function WorkstationCard({
             {isArchived ? <span style={{ ...chip, color: "#cbd5e1", borderColor: "rgba(148,163,184,.24)", background: "rgba(148,163,184,.07)" }}>Archived</span> : null}
           </div>
 
-          <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
-          <p style={muted}>{noteOf(row)}</p>
+          <h3 style={{ fontSize: 24, lineHeight: 1.05, margin: "12px 0 8px", letterSpacing: "-.02em" }}>{titleOf(row)}</h3>
+          <p style={{ ...muted, fontSize: 14, lineHeight: 1.5 }}>{marketOf(row)} • {field(row, "strategy", "exit_strategy", "deal_strategy") || "Strategy not listed"} • {assetOf(row)}</p>
 
           {source === "deal" ? <DetailGrid row={row} /> : null}
 
           <section style={{ marginTop: 14, border: "1px solid rgba(232,196,107,.16)", borderRadius: 18, padding: 14, background: "rgba(232,196,107,.055)" }}>
-            <div style={{ ...label, fontSize: 11 }}>Routing Summary</div>
-            <p style={{ ...muted, margin: "8px 0 0" }}>{routingSummary(row)}</p>
+            <div style={{ ...label, fontSize: 11 }}>AI Routing Insight</div>
+            <p style={{ ...muted, margin: "8px 0 0", fontSize: 14, lineHeight: 1.6 }}>
+              {routingSummary(row)}
+            </p>
 
             <div style={{ marginTop: 12, border: `1px solid ${pressure.border}`, background: pressure.background, borderRadius: 16, padding: 12 }}>
               <div style={{ color: pressure.color, fontSize: 11, textTransform: "uppercase", letterSpacing: ".14em", fontWeight: 950 }}>
@@ -566,7 +568,7 @@ function WorkstationCard({
 
             {missing.length ? (
               <p style={{ color: "#f8e7b0", margin: "10px 0 0", fontWeight: 850 }}>
-                Add for stronger AI routing: {missing.join(", ")}.
+                Missing intelligence: {missing.join(", ")}.
               </p>
             ) : null}
           </section>
@@ -578,15 +580,38 @@ function WorkstationCard({
             {owner ? <span style={chip}>Owner: {owner}</span> : null}
           </div>
 
-          <div style={{ marginTop: 12 }}>
-            {field(row, "routing_needs", "deal_needs", "needs") ? <span style={chip}>Needs: {field(row, "routing_needs", "deal_needs", "needs")}</span> : null}
+          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {field(row, "routing_needs", "deal_needs", "needs") ? <span style={chip}>Execution: {field(row, "routing_needs", "deal_needs", "needs")}</span> : null}
           </div>
 
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+          <section
+            style={{
+              marginTop: 12,
+              border: "1px solid rgba(148,163,184,.12)",
+              borderRadius: 16,
+              padding: 12,
+              background: "rgba(255,255,255,.02)",
+            }}
+          >
+            <div style={{ ...label, fontSize: 11 }}>Suggested Operators</div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              <span style={chip}>Buyer</span>
+              <span style={chip}>Contractor</span>
+              {field(row, "routing_needs", "deal_needs", "needs")?.toLowerCase().includes("jv") ? (
+                <span style={chip}>JV Partner</span>
+              ) : null}
+              {(field(row, "distress_signals") || "").toLowerCase().includes("funding") ? (
+                <span style={chip}>Lender</span>
+              ) : null}
+            </div>
+          </section>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
             <Link href={contactHref} style={button}>Contact Owner</Link>
           </div>
 
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+          <div className="vf-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, opacity: .88 }}>
             {!isSaved ? (
               <button type="button" onClick={onSave} style={ghost}>Save to Project Folder</button>
             ) : (
@@ -817,9 +842,9 @@ export default function ProjectsPage() {
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-            <button type="button" onClick={() => setFolder("active")} style={folder === "active" ? button : ghost}>Active Projects</button>
-            <button type="button" onClick={() => setFolder("saved")} style={folder === "saved" ? button : ghost}>Saved Folder</button>
-            <button type="button" onClick={() => setFolder("archived")} style={folder === "archived" ? button : ghost}>Archived / Cleaned Up</button>
+            <button type="button" onClick={() => setFolder("active")} style={folder === "active" ? button : ghost}>Active</button>
+            <button type="button" onClick={() => setFolder("saved")} style={folder === "saved" ? button : ghost}>Saved</button>
+            <button type="button" onClick={() => setFolder("archived")} style={folder === "archived" ? button : ghost}>Archive</button>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
