@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Row = Record<string, any>;
-type FolderMode = "active" | "saved" | "archived";
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -42,10 +41,7 @@ function parseArray(value: unknown): string[] {
     // Continue.
   }
 
-  return text
-    .split(/[,\n|;]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return text.split(/[,\n|;]/).map((item) => item.trim()).filter(Boolean);
 }
 
 function meta(row: Row | null) {
@@ -80,36 +76,39 @@ function money(value: unknown) {
   });
 }
 
-function assetClass(row: Row | null) {
-  const raw = field(row, "asset_class", "asset_type", "property_type", "deal_type", "pain_type", "problem_type");
-  const lower = raw.toLowerCase();
+function photoUrl(item: any) {
+  if (typeof item === "string") return clean(item);
 
-  if (lower.includes("multi")) return "Multifamily";
-  if (lower.includes("commercial")) return "Commercial";
-  if (lower.includes("land") || lower.includes("acre")) return "Land";
-  if (lower.includes("residential") || lower.includes("house") || lower.includes("single")) return "Residential";
+  if (item && typeof item === "object") {
+    return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url || item.main_photo_url || item.src);
+  }
 
-  return raw || "Not listed";
+  return "";
 }
 
-function ownerGoal(row: Row | null) {
-  return field(row, "owner_goal", "goal", "desired_outcome", "exit_strategy", "strategy", "what_do_you_want", "requested_help", "help_requested") || "Not listed";
-}
+function photosOf(row: Row | null) {
+  if (!row) return [];
 
-function whoShouldSee(row: Row | null) {
-  const text = `${problemText(row)} ${field(row, "requested_help", "help_requested", "routing_needs", "needs")} ${field(row, "distress_signals")}`.toLowerCase();
-  const stack: string[] = [];
+  const m = meta(row);
 
-  if (text.includes("buyer") || text.includes("sell") || text.includes("fast close")) stack.push("Buyer");
-  if (text.includes("funding") || text.includes("capital") || text.includes("lender")) stack.push("Lender");
-  if (text.includes("contractor") || text.includes("repair") || text.includes("construction")) stack.push("Contractor");
-  if (text.includes("jv") || text.includes("partner") || text.includes("operator")) stack.push("Operator / JV Partner");
-  if (text.includes("tenant") || text.includes("permit") || text.includes("city") || text.includes("code")) stack.push("Local Operator");
-  if (text.includes("attorney") || text.includes("probate") || text.includes("title")) stack.push("Attorney / Title");
+  const values = [
+    row.main_photo_url,
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    m.main_photo_url,
+    m.image_url,
+    m.photo_url,
+    m.primary_photo_url,
+    ...parseArray(row.photo_urls),
+    ...parseArray(row.photos),
+    ...parseArray(row.files),
+    ...parseArray(m.photo_urls),
+    ...parseArray(m.photos),
+    ...parseArray(m.files),
+  ];
 
-  if (!stack.length) stack.push("Owner Review", "Operator", "Buyer");
-
-  return Array.from(new Set(stack));
+  return Array.from(new Set(values.map(photoUrl).filter((url) => url.startsWith("http"))));
 }
 
 function readCookie(name: string) {
@@ -158,17 +157,7 @@ function titleOf(row: Row | null) {
 }
 
 function ownerOf(row: Row | null) {
-  return cleanEmail(
-    field(
-      row,
-      "owner_email",
-      "member_email",
-      "user_email",
-      "submitted_by_email",
-      "created_by_email",
-      "email"
-    )
-  );
+  return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email", "email"));
 }
 
 function marketOf(row: Row | null) {
@@ -178,8 +167,20 @@ function marketOf(row: Row | null) {
   return [city, state].filter(Boolean).join(", ") || field(row, "location", "address") || "Market not listed";
 }
 
+function assetClass(row: Row | null) {
+  const raw = field(row, "asset_class", "asset_type", "property_type", "deal_type", "pain_type", "problem_type");
+  const lower = raw.toLowerCase();
+
+  if (lower.includes("multi")) return "Multifamily";
+  if (lower.includes("commercial")) return "Commercial";
+  if (lower.includes("land") || lower.includes("acre")) return "Land";
+  if (lower.includes("residential") || lower.includes("house") || lower.includes("single")) return "Residential";
+
+  return raw || "Not listed";
+}
+
 function assetOf(row: Row | null) {
-  return field(row, "asset_type", "property_type", "deal_type", "pain_type", "problem_type") || "Problem";
+  return field(row, "pain_type", "problem_type", "asset_type", "property_type", "deal_type") || "Problem";
 }
 
 function urgencyOf(row: Row | null) {
@@ -190,6 +191,10 @@ function statusOf(row: Row | null) {
   return field(row, "status", "pain_status", "routing_status", "stage") || "Open";
 }
 
+function ownerGoal(row: Row | null) {
+  return field(row, "owner_goal", "goal", "desired_outcome", "exit_strategy", "strategy", "what_do_you_want", "requested_help", "help_requested") || "Not listed";
+}
+
 function problemText(row: Row | null) {
   return (
     field(
@@ -198,6 +203,7 @@ function problemText(row: Row | null) {
       "pain_description",
       "description",
       "summary",
+      "ai_summary",
       "note",
       "notes",
       "message",
@@ -207,60 +213,6 @@ function problemText(row: Row | null) {
       "ai_route_summary",
       "routing_summary"
     ) || "Problem details are pending."
-  );
-}
-
-function photosOf(row: Row | null) {
-  if (!row) return [];
-
-  const m = meta(row);
-
-  const values = [
-    row.main_photo_url,
-    row.image_url,
-    row.photo_url,
-    row.primary_photo_url,
-    m.main_photo_url,
-    m.image_url,
-    m.photo_url,
-    m.primary_photo_url,
-    ...parseArray(row.photo_urls),
-    ...parseArray(row.photos),
-    ...parseArray(m.photo_urls),
-    ...parseArray(m.photos),
-  ];
-
-  return Array.from(
-    new Set(
-      values
-        .map((item: any) => {
-          if (typeof item === "string") return clean(item);
-          if (item && typeof item === "object") {
-            return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url);
-          }
-          return "";
-        })
-        .filter((url) => url.startsWith("http"))
-    )
-  );
-}
-
-function normalized(value: unknown) {
-  return clean(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function canonicalKey(row: Row | null) {
-  return (
-    field(row, "canonical_event_id") ||
-    field(row, "pain_id") ||
-    field(row, "request_id") ||
-    field(row, "item_id") ||
-    field(row, "signal_id") ||
-    field(row, "id") ||
-    `${normalized(titleOf(row))}-${normalized(marketOf(row))}-${normalized(ownerOf(row))}`
   );
 }
 
@@ -297,19 +249,6 @@ function resolutionScore(row: Row | null) {
   return clamp(score);
 }
 
-function timelineRisk(row: Row | null) {
-  const text = `${problemText(row)} ${urgencyOf(row)} ${field(row, "timeline", "deadline", "desired_timeline")}`.toLowerCase();
-  let score = 30;
-
-  if (text.includes("today") || text.includes("asap")) score += 35;
-  if (text.includes("week")) score += 20;
-  if (text.includes("deadline")) score += 25;
-  if (text.includes("urgent")) score += 20;
-  if (text.includes("normal")) score -= 10;
-
-  return clamp(score);
-}
-
 function primaryBottleneck(row: Row | null) {
   const text = `${problemText(row)} ${field(row, "requested_help", "help_requested", "routing_needs", "needs")} ${field(row, "distress_signals")}`.toLowerCase();
 
@@ -336,20 +275,20 @@ function fastestPath(row: Row | null) {
   return "Clarify missing details, then route to the best operator type.";
 }
 
-function suggestedStack(row: Row | null) {
+function whoShouldSee(row: Row | null) {
   const text = `${problemText(row)} ${field(row, "requested_help", "help_requested", "routing_needs", "needs")} ${field(row, "distress_signals")}`.toLowerCase();
   const stack: string[] = [];
 
   if (text.includes("buyer") || text.includes("sell") || text.includes("fast close")) stack.push("Buyer");
   if (text.includes("funding") || text.includes("capital") || text.includes("lender")) stack.push("Lender");
   if (text.includes("contractor") || text.includes("repair") || text.includes("construction")) stack.push("Contractor");
-  if (text.includes("jv") || text.includes("partner") || text.includes("operator")) stack.push("Operator / JV");
+  if (text.includes("jv") || text.includes("partner") || text.includes("operator")) stack.push("Operator / JV Partner");
   if (text.includes("tenant") || text.includes("permit") || text.includes("city") || text.includes("code")) stack.push("Local Operator");
   if (text.includes("attorney") || text.includes("probate") || text.includes("title")) stack.push("Attorney / Title");
 
-  if (!stack.length) stack.push("Owner Review", "Buyer", "Operator");
+  if (!stack.length) stack.push("Owner Review", "Operator", "Buyer");
 
-  return Array.from(new Set(stack)).slice(0, 6);
+  return Array.from(new Set(stack));
 }
 
 function missingInfo(row: Row | null) {
@@ -369,7 +308,7 @@ function aiProblemSummary(row: Row | null) {
   return [
     `Primary bottleneck: ${primaryBottleneck(row)}`,
     `Fastest path: ${fastestPath(row)}`,
-    `Resolution stack: ${suggestedStack(row).join(", ")}`,
+    `Who should see this: ${whoShouldSee(row).join(", ")}`,
     missingInfo(row).length ? `Missing: ${missingInfo(row).join(", ")}` : "Record has enough detail for first-pass routing",
   ].join(" • ");
 }
@@ -457,11 +396,9 @@ function ScoreBar({ labelText, value, caption }: { labelText: string; value: num
         <span>{labelText}</span>
         <span>{value}%</span>
       </div>
-
       <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 10 }}>
         <div style={{ width: `${value}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)" }} />
       </div>
-
       <p style={{ ...muted, margin: "8px 0 0", fontSize: 13 }}>{caption}</p>
     </div>
   );
@@ -480,8 +417,6 @@ export default function PainRoomPage() {
   const [email, setEmail] = useState("");
   const [pain, setPain] = useState<Row | null>(null);
   const [status, setStatus] = useState("Loading Pain Room...");
-  const [saved, setSaved] = useState(false);
-  const [archived, setArchived] = useState(false);
 
   async function load() {
     const viewer = getEmail();
@@ -499,7 +434,7 @@ export default function PainRoomPage() {
       const owner = viewer === "bcrsoutheast@gmail.com";
       const ownerFlag = owner ? "1" : "0";
 
-      const response = await fetch(`/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`, {
+      const response = await fetch(`/api/pain/feed?id=${encodeURIComponent(id)}&email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`, {
         cache: "no-store",
         credentials: "include",
         headers: {
@@ -509,26 +444,12 @@ export default function PainRoomPage() {
       });
 
       const data = await response.json().catch(() => ({}));
-      const rows = [
-        ...(Array.isArray(data.pains) ? data.pains : []),
-        ...(Array.isArray(data.signals) ? data.signals : []),
-        ...(Array.isArray(data.items) ? data.items : []),
-        ...(Array.isArray(data.data) ? data.data : []),
-      ];
 
-      const found =
-        rows.find((row) =>
-          [
-            idOf(row),
-            signalIdOf(row),
-            field(row, "pain_id"),
-            field(row, "request_id"),
-            field(row, "item_id"),
-            field(row, "id"),
-          ]
-            .map(clean)
-            .includes(id)
-        ) || rows[0] || null;
+      if (!response.ok || data?.ok === false) {
+        throw new Error(data?.error || "Pain record not found.");
+      }
+
+      const found = data.pain || (Array.isArray(data.pains) ? data.pains[0] : null) || null;
 
       if (!found) {
         setStatus("Pain record not found.");
@@ -537,12 +458,6 @@ export default function PainRoomPage() {
 
       setPain(found);
       setStatus("");
-
-      const key = canonicalKey(found);
-      const savedSet = readLocalSet("vf_pain_saved_ids");
-      const archivedSet = readLocalSet("vf_pain_archived_ids");
-      setSaved(savedSet.has(key));
-      setArchived(archivedSet.has(key));
     } catch (error: any) {
       setStatus(error?.message || "Could not load Pain Room.");
     }
@@ -551,60 +466,6 @@ export default function PainRoomPage() {
   useEffect(() => {
     load();
   }, []);
-
-  function readLocalSet(key: string) {
-    if (typeof window === "undefined") return new Set<string>();
-
-    try {
-      const raw = window.localStorage.getItem(key);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return new Set(Array.isArray(parsed) ? parsed.map(clean).filter(Boolean) : []);
-    } catch {
-      return new Set<string>();
-    }
-  }
-
-  function writeLocalSet(key: string, value: Set<string>) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(key, JSON.stringify(Array.from(value)));
-  }
-
-  function savePain() {
-    if (!pain) return;
-    const key = canonicalKey(pain);
-    const next = readLocalSet("vf_pain_saved_ids");
-    next.add(key);
-    writeLocalSet("vf_pain_saved_ids", next);
-    setSaved(true);
-  }
-
-  function removeSaved() {
-    if (!pain) return;
-    const key = canonicalKey(pain);
-    const next = readLocalSet("vf_pain_saved_ids");
-    next.delete(key);
-    writeLocalSet("vf_pain_saved_ids", next);
-    setSaved(false);
-  }
-
-  function archivePain() {
-    if (!pain) return;
-    const key = canonicalKey(pain);
-    const next = readLocalSet("vf_pain_archived_ids");
-    next.add(key);
-    writeLocalSet("vf_pain_archived_ids", next);
-    setArchived(true);
-    removeSaved();
-  }
-
-  function restorePain() {
-    if (!pain) return;
-    const key = canonicalKey(pain);
-    const next = readLocalSet("vf_pain_archived_ids");
-    next.delete(key);
-    writeLocalSet("vf_pain_archived_ids", next);
-    setArchived(false);
-  }
 
   const photos = useMemo(() => photosOf(pain), [pain]);
   const signalId = signalIdOf(pain);
@@ -622,12 +483,10 @@ export default function PainRoomPage() {
           .vf-photo-grid {
             grid-template-columns: 1fr !important;
           }
-
           .vf-actions {
             display: grid !important;
             gap: 10px !important;
           }
-
           .vf-actions > * {
             width: 100%;
             box-sizing: border-box;
@@ -639,7 +498,6 @@ export default function PainRoomPage() {
       <div style={wrap}>
         <section style={card}>
           <div style={label}>VaultForge Problem Solver Intelligence</div>
-
           <h1 style={{ fontSize: "clamp(48px,10vw,92px)", lineHeight: 0.9, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
             {pain ? titleOf(pain) : "Pain Room"}
           </h1>
@@ -648,23 +506,19 @@ export default function PainRoomPage() {
 
           {pain ? (
             <>
-              <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-                {problemText(pain)}
-              </p>
+              <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>{problemText(pain)}</p>
 
               <div style={{ marginTop: 14 }}>
                 <span style={chip}>Status: {statusOf(pain)}</span>
                 <span style={chip}>Urgency: {urgencyOf(pain)}</span>
                 <span style={chip}>Problem: {assetOf(pain)}</span>
                 <span style={chip}>Market: {marketOf(pain)}</span>
-                {saved ? <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.34)", background: "rgba(232,196,107,.10)" }}>Saved</span> : null}
-                {archived ? <span style={{ ...chip, color: "#cbd5e1", borderColor: "rgba(148,163,184,.24)", background: "rgba(148,163,184,.07)" }}>Archived</span> : null}
               </div>
 
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
                 <Link href={contactHref} style={button}>Contact Owner</Link>
                 <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-                <Link href="/projects" style={ghost}>Projects</Link>
+                <button type="button" onClick={load} style={ghost}>Refresh</button>
               </div>
             </>
           ) : null}
@@ -675,14 +529,13 @@ export default function PainRoomPage() {
             <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
               <ScoreBar labelText="Pressure" value={pressureScore(pain)} caption="Urgency, distress, timeline, and problem severity." />
               <ScoreBar labelText="Resolution Readiness" value={resolutionScore(pain)} caption="How much info exists to route the problem." />
-              <ScoreBar labelText="Timeline Risk" value={timelineRisk(pain)} caption={urgencyOf(pain)} />
               <ScoreBar labelText="Asset Context" value={photos.length ? 76 : 42} caption={`${photos.length} photo${photos.length === 1 ? "" : "s"} connected.`} />
+              <ScoreBar labelText="Execution Risk" value={missingInfo(pain).length ? 72 : 38} caption={missingInfo(pain).length ? `Missing: ${missingInfo(pain).join(", ")}` : "Ready for first-pass routing."} />
             </section>
 
             {photos.length ? (
               <section style={card}>
                 <div style={label}>Photos / Problem Context</div>
-
                 <div className="vf-photo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12, marginTop: 14 }}>
                   {photos.map((url) => (
                     <img key={url} src={url} alt="Pain context" style={{ width: "100%", height: 230, objectFit: "cover", borderRadius: 20, border: "1px solid rgba(232,196,107,.20)" }} />
@@ -691,10 +544,8 @@ export default function PainRoomPage() {
               </section>
             ) : null}
 
-
             <section style={card}>
               <div style={label}>Asset Snapshot</div>
-
               <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
                 <Info labelText="Asset Class" value={assetClass(pain)} />
                 <Info labelText="Market / Address" value={field(pain, "address", "property_address", "location") || marketOf(pain)} />
@@ -709,7 +560,6 @@ export default function PainRoomPage() {
 
             <section style={card}>
               <div style={label}>Numbers Snapshot</div>
-
               <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
                 <Info labelText="Asking / Target" value={money(field(pain, "asking_price", "price", "target_price"))} />
                 <Info labelText="ARV / Value" value={money(field(pain, "arv", "arv_value", "estimated_value", "property_value"))} />
@@ -724,26 +574,14 @@ export default function PainRoomPage() {
 
             <section style={card}>
               <div style={label}>Problem Snapshot</div>
-
               <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
                 <Info labelText="Problem Type" value={assetOf(pain)} />
                 <Info labelText="Primary Bottleneck" value={primaryBottleneck(pain)} />
                 <Info labelText="Urgency" value={urgencyOf(pain)} />
               </div>
-
               <div style={{ marginTop: 14, border: "1px solid rgba(248,113,113,.25)", borderRadius: 18, padding: 14, background: "rgba(248,113,113,.075)" }}>
                 <div style={{ ...label, color: "#fecaca" }}>Pain Details</div>
                 <p style={{ ...muted, margin: "8px 0 0", fontSize: 17 }}>{problemText(pain)}</p>
-              </div>
-            </section>
-
-            <section style={card}>
-              <div style={label}>Who Should See This</div>
-
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                {whoShouldSee(pain).map((item) => (
-                  <span key={item} style={chip}>{item}</span>
-                ))}
               </div>
             </section>
 
@@ -759,37 +597,11 @@ export default function PainRoomPage() {
             </section>
 
             <section style={card}>
-              <div style={label}>Resolution Stack</div>
-
+              <div style={label}>Who Should See This</div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                {suggestedStack(pain).map((item) => (
+                {whoShouldSee(pain).map((item) => (
                   <span key={item} style={chip}>{item}</span>
                 ))}
-              </div>
-            </section>
-
-            <section style={card}>
-              <div style={label}>What The Owner Needs Next</div>
-
-              <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-                <div style={glass}>
-                  <strong>48-Hour Move:</strong>
-                  <p style={{ ...muted, marginBottom: 0 }}>{fastestPath(pain)}</p>
-                </div>
-
-                <div style={glass}>
-                  <strong>Missing Intelligence:</strong>
-                  <p style={{ ...muted, marginBottom: 0 }}>
-                    {missingInfo(pain).length ? missingInfo(pain).join(", ") : "No major missing fields for first-pass routing."}
-                  </p>
-                </div>
-
-                <div style={glass}>
-                  <strong>VaultForge Role:</strong>
-                  <p style={{ ...muted, marginBottom: 0 }}>
-                    Stabilize the situation, identify the right operator/member type, protect private info, and move the problem toward a controlled resolution.
-                  </p>
-                </div>
               </div>
             </section>
 
@@ -797,24 +609,6 @@ export default function PainRoomPage() {
               <Info labelText="Pain ID" value={idOf(pain)} />
               <Info labelText="Signal ID" value={signalId || "Not linked"} />
               <Info labelText="Submitted By" value={owner || email || "Not listed"} />
-            </section>
-
-            <section style={card}>
-              <div style={label}>Room Controls</div>
-
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                {!saved ? (
-                  <button type="button" onClick={savePain} style={ghost}>Save Pain Room</button>
-                ) : (
-                  <button type="button" onClick={removeSaved} style={ghost}>Remove Saved</button>
-                )}
-
-                {!archived ? (
-                  <button type="button" onClick={archivePain} style={ghost}>Archive / Clean Up</button>
-                ) : (
-                  <button type="button" onClick={restorePain} style={ghost}>Restore Active</button>
-                )}
-              </div>
             </section>
           </>
         ) : null}
