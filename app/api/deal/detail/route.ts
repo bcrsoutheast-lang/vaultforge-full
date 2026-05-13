@@ -4,6 +4,10 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const TABLE = "vf_deals";
+
+type Row = Record<string, any>;
+
 function supabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
@@ -17,111 +21,200 @@ function supabaseClient() {
   }
 
   return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
   });
 }
 
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
 
-function normalizePhotos(value: any): string[] {
-  if (Array.isArray(value)) return value.map(String).filter(Boolean);
-
-  if (typeof value === "string" && value.trim()) {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-    } catch {
-      return [value.trim()];
+function first(...values: unknown[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
     }
 
-    return [value.trim()];
+    const text = clean(value);
+    if (text) return text;
   }
 
-  return [];
+  return "";
 }
 
-function firstDefined(...values: any[]) {
-  for (const value of values) {
-    if (value !== null && value !== undefined && value !== "") return value;
+function parseArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+
+  const text = clean(value);
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
+  } catch {
+    // Continue.
   }
-  return null;
+
+  return text
+    .split(/[,\n|;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
-function normalizeDeal(row: any) {
-  if (!row) return null;
+function photoUrls(row: Row) {
+  const values = [
+    row.main_photo_url,
+    row.image_url,
+    row.photo_url,
+    row.primary_photo_url,
+    ...parseArray(row.photo_urls),
+    ...parseArray(row.photos),
+  ];
 
-  const photos = normalizePhotos(row.photo_urls);
-  const main = String(row.main_photo_url || photos[0] || "").trim();
+  return Array.from(new Set(values.map(clean).filter((url) => url.startsWith("http"))));
+}
 
-  const price = firstDefined(row.price, row.asking_price);
-  const askingPrice = firstDefined(row.asking_price, row.price);
-  const propertyType = firstDefined(row.property_type, row.deal_type, "Deal");
-  const dealType = firstDefined(row.deal_type, row.property_type, "Deal");
-  const bedrooms = firstDefined(row.bedrooms, row.beds);
-  const bathrooms = firstDefined(row.bathrooms, row.baths);
-  const buildingSqft = firstDefined(row.building_sqft, row.sqft);
-  const ownerName = firstDefined(row.owner_name, row.contact_name, row.seller_name, "");
-  const ownerPhone = firstDefined(row.owner_phone, row.contact_phone, row.seller_phone, "");
-  const ownerContactEmail = firstDefined(
-    row.owner_contact_email,
-    row.contact_email,
-    row.seller_email,
-    row.owner_email,
-    row.member_email,
-    ""
+function normalizeDeal(row: Row) {
+  const photos = photoUrls(row);
+  const id = first(row.id, row.deal_id, row.project_id, row.item_id);
+  const asking = first(row.asking_price, row.price);
+  const arv = first(row.arv, row.arv_value, row.estimated_value);
+  const repairs = first(row.repair_estimate, row.repairs_needed, row.estimated_repairs);
+  const propertyType = first(row.property_type, row.deal_type, row.asset_type, "Deal");
+  const strategy = first(row.strategy, row.exit_strategy);
+  const routingNeeds = first(row.routing_needs, row.deal_needs, row.needs);
+  const distress = first(row.distress_signals, row.seller_situation);
+  const routeSummary = first(
+    row.ai_route_summary,
+    row.route_summary,
+    row.routing_summary,
+    row.urgency_reason,
+    row.routing_reason,
+    row.description,
+    row.seller_situation
   );
 
   return {
     ...row,
+    id,
+    deal_id: first(row.deal_id, id),
+    item_id: first(row.item_id, id),
+    project_id: first(row.project_id, id),
 
-    price,
-    asking_price: askingPrice,
+    title: first(row.title, row.deal_title, row.name, row.address, "VaultForge Deal"),
+    status: first(row.status, row.project_status, row.routing_status, "active"),
 
     property_type: propertyType,
-    deal_type: dealType,
+    deal_type: first(row.deal_type, propertyType),
+    asset_type: first(row.asset_type, propertyType),
 
-    bedrooms,
-    bathrooms,
-    beds: firstDefined(row.beds, row.bedrooms),
-    baths: firstDefined(row.baths, row.bathrooms),
-    building_sqft: buildingSqft,
-    sqft: firstDefined(row.sqft, row.building_sqft),
+    city: first(row.city),
+    state: first(row.state, row.market),
+    market: [first(row.city), first(row.state, row.market)].filter(Boolean).join(", ") || first(row.location, row.address),
 
-    photo_urls: main && !photos.includes(main) ? [main, ...photos] : photos,
-    main_photo_url: main || photos[0] || "",
+    asking_price: asking,
+    price: first(row.price, asking),
+    arv,
+    arv_value: first(row.arv_value, arv),
+    repair_estimate: repairs,
+    repairs_needed: first(row.repairs_needed, repairs),
 
-    owner_name: ownerName,
-    owner_phone: ownerPhone,
-    owner_contact_email: ownerContactEmail,
+    strategy,
+    exit_strategy: first(row.exit_strategy, strategy),
+
+    routing_needs: routingNeeds,
+    deal_needs: first(row.deal_needs, routingNeeds),
+    needs: first(row.needs, routingNeeds),
+
+    distress_signals: first(row.distress_signals, distress),
+    seller_situation: first(row.seller_situation, distress),
+
+    ai_route_summary: first(row.ai_route_summary, routeSummary),
+    route_summary: first(row.route_summary, routeSummary),
+    routing_summary: first(row.routing_summary, routeSummary),
+
+    beds: first(row.beds, row.bedrooms),
+    bedrooms: first(row.bedrooms, row.beds),
+    baths: first(row.baths, row.bathrooms),
+    bathrooms: first(row.bathrooms, row.baths),
+    square_feet: first(row.square_feet, row.sqft, row.building_sqft),
+    sqft: first(row.sqft, row.square_feet, row.building_sqft),
+    building_sqft: first(row.building_sqft, row.square_feet, row.sqft),
+
+    photo_urls: photos,
+    main_photo_url: first(row.main_photo_url, photos[0]),
+    source_table: TABLE,
   };
 }
 
+async function findDeal(supabase: any, id: string) {
+  const columns = ["id", "deal_id", "project_id", "item_id"];
+
+  for (const column of columns) {
+    try {
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select("*")
+        .eq(column, id)
+        .maybeSingle();
+
+      if (!error && data) return data;
+    } catch {
+      // Column may not exist.
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("*")
+      .limit(250);
+
+    if (!error && Array.isArray(data)) {
+      return data.find((row: Row) =>
+        [row.id, row.deal_id, row.project_id, row.item_id].map(clean).includes(id)
+      ) || null;
+    }
+  } catch {
+    // Fail below.
+  }
+
+  return null;
+}
 
 export async function GET(request: Request) {
   try {
-    const id = new URL(request.url).searchParams.get("id") || "";
+    const id = clean(new URL(request.url).searchParams.get("id") || "");
 
     if (!id) {
-      return NextResponse.json({ error: "Missing deal id." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Missing deal id." }, { status: 400 });
     }
 
-    const { data, error } = await supabaseClient()
-      .from("vf_deals")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
+    const supabase = supabaseClient();
+    const deal = await findDeal(supabase, id);
 
-    if (error) {
-      return NextResponse.json({ error: error.message, details: error }, { status: 500 });
+    if (!deal) {
+      return NextResponse.json({ ok: false, error: "Deal not found." }, { status: 404 });
     }
 
-    if (!data) {
-      return NextResponse.json({ error: "Deal not found." }, { status: 404 });
-    }
-
-    return NextResponse.json({ ok: true, deal: normalizeDeal(data) });
+    return NextResponse.json({
+      ok: true,
+      deal: normalizeDeal(deal),
+      source: "api/deal/detail",
+    });
   } catch (error: any) {
     return NextResponse.json(
-      { error: "Could not load deal.", details: error?.message || String(error) },
+      {
+        ok: false,
+        error: "Could not load deal.",
+        details: error?.message || String(error),
+      },
       { status: 500 }
     );
   }
