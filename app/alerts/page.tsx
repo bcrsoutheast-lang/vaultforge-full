@@ -334,43 +334,88 @@ export default function AlertsPage() {
 
   async function load() {
     const viewer = getEmail();
+    const owner = viewer === "bcrsoutheast@gmail.com";
+    const ownerFlag = owner ? "1" : "0";
+
     setEmail(viewer);
     setStatus("Loading alerts...");
 
     try {
       const urls = [
-        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
-        `/api/routing/actions?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/deal/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
+        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
+        `/api/routing/actions?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
       ];
+
+      const collected: Row[] = [];
 
       for (const url of urls) {
         try {
           const res = await fetch(url, {
             cache: "no-store",
-            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
+            credentials: "include",
+            headers: { "x-vf-email": viewer || "", "x-vf-admin": ownerFlag },
           });
 
           const data = await safeJson(res);
-          const list = [
+          collected.push(
+            ...(Array.isArray(data.deals) ? data.deals : []),
+            ...(Array.isArray(data.projects) ? data.projects : []),
+            ...(Array.isArray(data.items) ? data.items : []),
             ...(Array.isArray(data.alerts) ? data.alerts : []),
             ...(Array.isArray(data.signals) ? data.signals : []),
             ...(Array.isArray(data.pains) ? data.pains : []),
             ...(Array.isArray(data.actions) ? data.actions : []),
-            ...(Array.isArray(data.data) ? data.data : []),
-          ];
-
-          if (list.length) {
-            setItems(list);
-            setStatus("");
-            return;
-          }
+            ...(Array.isArray(data.data) ? data.data : [])
+          );
         } catch {
           // Try next source.
         }
       }
 
-      setItems([]);
-      setStatus("No alerts connected yet.");
+      const byKey = new Map<string, Row>();
+
+      for (const item of collected) {
+        const m = meta(item);
+        const canonical =
+          first(
+            item.canonical_event_id,
+            m.canonical_event_id,
+            item.signal_id,
+            m.signal_id,
+            item.deal_id,
+            m.deal_id,
+            item.pain_id,
+            m.pain_id,
+            item.item_id,
+            m.item_id,
+            titleOf(item)
+          ) || titleOf(item);
+
+        const existing = byKey.get(canonical);
+
+        if (!existing) {
+          byKey.set(canonical, item);
+          continue;
+        }
+
+        const existingScore =
+          (existing.source_table === "vf_deals" || existing._source_table === "vf_deals" ? 100 : 0) +
+          (noteOf(existing) !== "Alert ready for review." ? 10 : 0) +
+          (photosOf(existing).length ? 5 : 0);
+
+        const itemScore =
+          (item.source_table === "vf_deals" || item._source_table === "vf_deals" ? 100 : 0) +
+          (noteOf(item) !== "Alert ready for review." ? 10 : 0) +
+          (photosOf(item).length ? 5 : 0);
+
+        byKey.set(canonical, itemScore > existingScore ? item : existing);
+      }
+
+      const unique = Array.from(byKey.values());
+
+      setItems(unique);
+      setStatus(unique.length ? "" : "No alerts connected yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load alerts.");
     }
