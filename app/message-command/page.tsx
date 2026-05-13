@@ -1,42 +1,692 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+
 import Link from "next/link";
-type Conversation = Record<string, any>; type LaneTotals = { conversations:number; messages:number; unread:number };
-const LANES = [
-{key:"saved",label:"SAVED",title:"Saved Bucket",note:"Saved conversations you want to return to fast."},
-{key:"alerts",label:"ALERTS",title:"Alerts",note:"Alert follow-up and urgent message traffic."},
-{key:"pain",label:"PAIN",title:"Pain",note:"Pain signal conversations and problem-routing."},
-{key:"signals",label:"SIGNALS",title:"Signals",note:"Signal-room messages and intelligence follow-up."},
-{key:"routing",label:"ROUTING",title:"Routing",note:"Routing requests and execution handoffs."},
-{key:"introductions",label:"INTRO",title:"Introductions",note:"Controlled introduction conversations."},
-{key:"projects",label:"PROJECTS",title:"Projects",note:"Project and deal-room communication."},
-{key:"members",label:"MEMBERS",title:"Members",note:"Member-to-member network messages."},
-{key:"general",label:"GENERAL",title:"General",note:"Messages not tied to a route yet."},
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+export const dynamic = "force-dynamic";
+
+type LaneKey =
+  | "saved"
+  | "alerts"
+  | "pain"
+  | "signals"
+  | "routing"
+  | "introductions"
+  | "projects"
+  | "members"
+  | "general";
+
+type Conversation = {
+  id?: string;
+  thread_key?: string;
+  threadKey?: string;
+  lane?: string;
+  route_lane?: string;
+  source?: string;
+  title?: string;
+  subject?: string;
+  body?: string;
+  message?: string;
+  preview?: string;
+  sender_email?: string;
+  recipient_email?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_message_at?: string;
+  unread_count?: number;
+  count?: number;
+  is_saved?: boolean;
+  is_archived?: boolean;
+  is_deleted?: boolean;
+  [key: string]: unknown;
+};
+
+type Toast = {
+  type: "success" | "error" | "info";
+  text: string;
+};
+
+const LANES: Array<{
+  key: LaneKey;
+  title: string;
+  subtitle: string;
+}> = [
+  {
+    key: "saved",
+    title: "Saved Bucket",
+    subtitle: "Pinned conversations and saved requests.",
+  },
+  {
+    key: "alerts",
+    title: "Alerts",
+    subtitle: "Alert-driven outreach and responses.",
+  },
+  {
+    key: "pain",
+    title: "Pain",
+    subtitle: "Pain requests, owner questions, and execution follow-up.",
+  },
+  {
+    key: "signals",
+    title: "Signals",
+    subtitle: "Signal-room message threads and source intelligence.",
+  },
+  {
+    key: "routing",
+    title: "Routing",
+    subtitle: "Routing action conversations and match context.",
+  },
+  {
+    key: "introductions",
+    title: "Introductions",
+    subtitle: "Controlled introductions and response tracking.",
+  },
+  {
+    key: "projects",
+    title: "Projects",
+    subtitle: "Project-room and deal execution messages.",
+  },
+  {
+    key: "members",
+    title: "Members",
+    subtitle: "Member-to-member network conversations.",
+  },
+  {
+    key: "general",
+    title: "General",
+    subtitle: "Direct platform messages and uncategorized threads.",
+  },
 ];
-function clean(v:unknown){return String(v||"").trim()} function lower(v:unknown){return clean(v).toLowerCase()}
-function readCookie(n:string){if(typeof document==="undefined")return"";const m=document.cookie.split(";").map(p=>p.trim()).find(p=>p.startsWith(`${n}=`));if(!m)return"";try{return decodeURIComponent(m.slice(n.length+1))}catch{return m.slice(n.length+1)}}
-function currentEmail(){if(typeof window==="undefined")return"";for(const k of["vf_email","vf_member_email","vf_admin_email","email","memberEmail"]){const l=lower(window.localStorage.getItem(k));if(l.includes("@"))return l;const s=lower(window.sessionStorage.getItem(k));if(s.includes("@"))return s}return lower(readCookie("vf_email")||readCookie("vf_member_email")||readCookie("vf_admin_email"))}
-async function safeJson(r:Response){try{return await r.json()}catch{return {}}}
-function laneMeta(k:string){return LANES.find(l=>l.key===k)||LANES[LANES.length-1]}
-function safeTitle(v:unknown){return clean(v||"VaultForge message").replace(/^(re:\s*)+/gi,"").replace(/\s+/g," ").trim(){
-export default function MessageCommandPage(){
-const [email,setEmail]=useState(""); const [conversations,setConversations]=useState<Conversation[]>([]); const [counts,setCounts]=useState<Record<string,number>>({}); const [unreadCounts,setUnreadCounts]=useState<Record<string,number>>({}); const [openLane,setOpenLane]=useState(""); const [query,setQuery]=useState(""); const [collapsed,setCollapsed]=useState<Record<string,boolean>>({}); const [status,setStatus]=useState("Loading message command..."); const [busyKey,setBusyKey]=useState("");
-useEffect(()=>{if(typeof window==="undefined")return;const p=new URLSearchParams(window.location.search||"");const r=lower(p.get("route")||p.get("folder")||p.get("lane"));if(r&&LANES.some(l=>l.key===r))setOpenLane(r)},[]);
-async function load(){const viewer=currentEmail();setEmail(viewer);setStatus("Loading message command...");try{const res=await fetch(`/api/message-command?email=${encodeURIComponent(viewer)}`,{cache:"no-store",headers:{"x-vf-email":viewer}});const data=await safeJson(res);setConversations(Array.isArray(data.conversations)?data.conversations:[]);setCounts(data.counts||{});setUnreadCounts(data.unread_counts||{});setStatus("")}catch(e:any){setStatus(e?.message||"Could not load message command.")}}
-useEffect(()=>{load()},[]);
-const laneTotals=useMemo(()=>{const next:Record<string,LaneTotals>={};for(const lane of LANES)next[lane.key]={conversations:0,messages:Number(counts[lane.key]||0),unread:Number(unreadCounts[lane.key]||0)};for(const c of conversations){const f=clean(c.folder||"general");if(!next[f])next[f]={conversations:0,messages:0,unread:0};next[f].conversations+=1;if(c.is_saved===true&&next.saved)next.saved.conversations+=1}return next},[conversations,counts,unreadCounts]);
-const visible=useMemo(()=>{const q=lower(query);if(!openLane)return[];return conversations.filter(c=>{const f=clean(c.folder||"general");if(openLane==="saved"){if(c.is_saved!==true)return false}else if(f!==openLane)return false;if(!q)return true;return lower([c.title,c.latest_message,c.from_email,c.to_email,c.thread_key,c.folder].join(" ")).includes(q)})},[conversations,query,openLane]);
-const totalMessages=conversations.reduce((s,c)=>s+Number(c.count||0),0); const activeMeta=openLane?laneMeta(openLane):null; const activeCount=openLane?Number(counts[openLane]||0):totalMessages;
-function openRoute(lane:string){setOpenLane(lane);if(typeof window!=="undefined"){const url=new URL(window.location.href);url.searchParams.set("route",lane);window.history.replaceState(null,"",url.toString());window.scrollTo({top:0,behavior:"smooth"})}}
-function closeRoute(){setOpenLane("");setQuery("");if(typeof window!=="undefined"){const url=new URL(window.location.href);url.searchParams.delete("route");window.history.replaceState(null,"",url.toString());window.scrollTo({top:0,behavior:"smooth"})}}
-async function actionOnThread(c:Conversation,action:"archive"|"delete"|"save"|"unsave"|"read"|"unread"){setBusyKey(`${action}:${c.thread_key}`);setStatus(`${action}...`);try{const res=await fetch("/api/message-command",{method:"PATCH",headers:{"Content-Type":"application/json","x-vf-email":email},body:JSON.stringify({action,ids:Array.isArray(c.message_ids)?c.message_ids.filter(Boolean):[],email,thread_key:c.thread_key,action_scope:"thread"})});const data=await safeJson(res);if(!res.ok||data?.ok===false)throw new Error(data?.details||data?.error||"Action failed.");await load();setStatus(`${action} complete.`)}catch(e:any){setStatus(e?.message||"Action failed.")}finally{setBusyKey("")}}
-async function markLaneRead(){if(!openLane)return;setBusyKey(`read-lane:${openLane}`);setStatus("Marking lane read...");try{for(const c of visible){if(Number(c.unread_count||0)>0)await fetch("/api/message-command",{method:"PATCH",headers:{"Content-Type":"application/json","x-vf-email":email},body:JSON.stringify({action:"read",ids:Array.isArray(c.message_ids)?c.message_ids.filter(Boolean):[],email,thread_key:c.thread_key,action_scope:"thread"})})}await load();setStatus("Lane marked read.")}catch(e:any){setStatus(e?.message||"Could not mark lane read.")}finally{setBusyKey("")}}
-return <main style={page}><style>{`a:hover,button:hover{transform:translateY(-1px);filter:brightness(1.06);transition:all .16s ease}input::placeholder{color:rgba(255,255,255,.45)}@media(max-width:880px){.vf-card-grid{grid-template-columns:1fr!important}.vf-actions{display:grid!important;grid-template-columns:1fr!important}.vf-actions>*{width:100%;box-sizing:border-box;justify-content:center}}`}</style><div style={wrap}>
-<nav style={nav}><Link href="/dashboard" style={navButton}>Dashboard</Link><Link href="/alerts" style={navButton}>Alerts</Link><Link href="/pain-feed" style={navButton}>Pain Feed</Link><Link href="/projects" style={navButton}>Projects</Link><Link href="/routing-inbox" style={navButton}>Routing</Link><Link href="/message-command" style={navButtonActive}>Message Command</Link></nav>
-<section style={hero}><div style={eyebrow}>VaultForge Message OS</div><h1 style={heroTitle}>{openLane?`${activeMeta?.title} messages.`:"Message command center."}</h1><p style={lead}>{openLane?`${activeMeta?.note||"Selected route messages."} Use Close to return to the cards.`:"Every route starts as a card. Tap a card to expose that lane’s conversations."}</p><div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}><span style={chip}>Signed in: {email||"unknown"}</span><span style={chip}>Conversations: {conversations.length}</span><span style={chip}>Messages: {totalMessages}</span></div><div className="vf-actions" style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:22}}><button type="button" onClick={load} style={button}>Refresh</button>{openLane?<button type="button" onClick={closeRoute} style={danger}>Close Lane / Back to Cards</button>:null}</div></section>
-{!openLane?<><section style={sectionTop}><div><div style={eyebrow}>Message Route Cards</div><h2 style={sectionTitle}>Everything has a lane.</h2></div></section><section className="vf-card-grid" style={cardGrid}>{LANES.map(l=>{const t=laneTotals[l.key]||{conversations:0,messages:0,unread:0};return <button key={l.key} type="button" onClick={()=>openRoute(l.key)} style={routeCard}><div style={routeLabel}>{l.label}</div><div style={routeNumber}>{t.messages}</div><h3 style={routeTitle}>{l.title}</h3><p style={muted}>{l.note}</p><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:18}}><span style={smallPill}>{t.conversations} conversations</span><span style={smallPill}>{t.messages} messages</span><span style={t.unread?unreadPill:smallPill}>{t.unread||0} unread</span></div><div style={openHint}>Open →</div></button>})}</section></>:<>
-<section style={laneOpenPanel}><div><div style={eyebrow}>Open Route</div><h2 style={sectionTitle}>{activeMeta?.title}</h2><p style={muted}>{activeMeta?.note}</p></div><div style={laneStats}><div style={statBox}><strong style={statNumber}>{visible.length}</strong><span>conversations</span></div><div style={statBox}><strong style={statNumber}>{activeCount}</strong><span>messages</span></div></div><div className="vf-actions" style={{display:"flex",gap:10,flexWrap:"wrap",width:"100%"}}><button type="button" onClick={markLaneRead} disabled={!!busyKey} style={ghost}>{busyKey===`read-lane:${openLane}`?"Marking...":"Mark Lane Read"}</button><button type="button" onClick={closeRoute} style={danger}>Close / Back to Cards</button></div></section>
-<section style={searchPanel}><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={`Search ${activeMeta?.title||"route"} messages...`} style={input}/></section>
-<section style={{display:"grid",gap:16}}>{visible.map(c=>{const isCollapsed=collapsed[c.thread_key]===true;const href=`/message-command/${encodeURIComponent(c.thread_key)}?title=${encodeURIComponent(c.title||"Message Room")}&route=${encodeURIComponent(openLane)}`;return <article key={c.thread_key} style={conversation}><div style={countBadge}>{c.count}</div><div style={laneChip}>{c.lane_label||activeMeta?.label}</div><h2 style={conversationTitle}>{safeTitle(c.title)}</h2><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><span style={chip}>Route: {activeMeta?.title}</span><span style={chip}>From: {c.from_email||"unknown"}</span><span style={chip}>To: {c.to_email||"unknown"}</span><span style={chip}>Messages: {c.count}</span><span style={Number(c.unread_count||0)?unreadPill:chip}>{Number(c.unread_count||0)} unread</span></div>{!isCollapsed?<p style={preview}>{c.latest_message||"No preview available."}</p>:null}<div className="vf-actions" style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:18}}><Link href={href} style={button}>Open Messages</Link><button type="button" onClick={()=>setCollapsed(o=>({...o,[c.thread_key]:!isCollapsed}))} style={ghost}>{isCollapsed?"Expand":"Collapse"}</button><button type="button" onClick={()=>actionOnThread(c,Number(c.unread_count||0)?"read":"unread")} disabled={!!busyKey} style={ghost}>{Number(c.unread_count||0)?"Mark Read":"Mark Unread"}</button><button type="button" onClick={()=>actionOnThread(c,c.is_saved?"unsave":"save")} disabled={!!busyKey} style={c.is_saved?savedButton:ghost}>{c.is_saved?"Unsave":"Save"}</button><button type="button" onClick={()=>actionOnThread(c,"archive")} disabled={!!busyKey} style={ghost}>Archive</button><button type="button" onClick={()=>actionOnThread(c,"delete")} disabled={!!busyKey} style={danger}>Delete</button></div></article>})}</section>{!visible.length?<section style={emptyPanel}><h3 style={{marginTop:0}}>No messages in {activeMeta?.title} yet.</h3><p style={muted}>When conversations are routed to this lane, they will show here.</p><button type="button" onClick={closeRoute} style={button}>Back to Cards</button></section>:null}</>}
-{status?<section style={emptyPanel}>{status}</section>:null}</div></main>}
-const page:React.CSSProperties={minHeight:"100vh",background:"radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",color:"white",padding:"22px 16px 96px",fontFamily:"Arial, sans-serif"};const wrap:React.CSSProperties={width:"min(1260px,100%)",margin:"0 auto"};const nav:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",marginBottom:18};const navButton:React.CSSProperties={display:"inline-flex",justifyContent:"center",alignItems:"center",borderRadius:999,padding:"12px 16px",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",color:"white",textDecoration:"none",fontWeight:800};const navButtonActive:React.CSSProperties={...navButton,background:"rgba(232,196,107,.14)",border:"1px solid rgba(232,196,107,.28)",color:"#f8e7b0"};const hero:React.CSSProperties={border:"1px solid rgba(232,196,107,.22)",borderRadius:30,padding:28,marginBottom:24,background:"linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.025))",boxShadow:"0 30px 90px rgba(0,0,0,.34)"};const eyebrow:React.CSSProperties={color:"#e8c46b",letterSpacing:".18em",textTransform:"uppercase",fontWeight:950,fontSize:12};const heroTitle:React.CSSProperties={fontSize:"clamp(52px,10vw,98px)",lineHeight:.86,letterSpacing:"-.075em",margin:"12px 0 20px"};const lead:React.CSSProperties={color:"#cbd5e1",fontSize:20,lineHeight:1.55,maxWidth:920};const sectionTop:React.CSSProperties={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",margin:"26px 0 14px"};const sectionTitle:React.CSSProperties={fontSize:"clamp(36px,6vw,58px)",lineHeight:1,letterSpacing:"-.055em",margin:"8px 0 8px"};const cardGrid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16};const routeCard:React.CSSProperties={position:"relative",minHeight:235,border:"1px solid rgba(255,255,255,.12)",borderRadius:30,padding:24,background:"linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.025))",color:"white",textAlign:"left",cursor:"pointer",overflow:"hidden"};const routeLabel:React.CSSProperties={color:"#38bdf8",letterSpacing:".18em",textTransform:"uppercase",fontWeight:950,fontSize:13};const routeNumber:React.CSSProperties={position:"absolute",top:24,right:24,color:"#f8e7b0",fontSize:64,fontWeight:1000,lineHeight:1};const routeTitle:React.CSSProperties={fontSize:38,lineHeight:1,letterSpacing:"-.045em",margin:"56px 0 12px"};const smallPill:React.CSSProperties={borderRadius:999,border:"1px solid rgba(255,255,255,.12)",padding:"8px 10px",color:"#dbeafe",fontSize:12};const unreadPill:React.CSSProperties={...smallPill,color:"#fecaca",border:"1px solid rgba(248,113,113,.32)",background:"rgba(248,113,113,.10)",fontWeight:950};const openHint:React.CSSProperties={marginTop:18,fontWeight:950,color:"#f8e7b0"};const laneOpenPanel:React.CSSProperties={display:"flex",justifyContent:"space-between",gap:18,flexWrap:"wrap",border:"1px solid rgba(232,196,107,.22)",borderRadius:30,padding:24,marginBottom:18,background:"linear-gradient(145deg,rgba(232,196,107,.10),rgba(255,255,255,.035))"};const laneStats:React.CSSProperties={display:"flex",gap:12,flexWrap:"wrap"};const statBox:React.CSSProperties={border:"1px solid rgba(255,255,255,.12)",borderRadius:22,padding:16,minWidth:145,background:"rgba(0,0,0,.16)"};const statNumber:React.CSSProperties={display:"block",fontSize:34,lineHeight:1,color:"#f8e7b0"};const searchPanel:React.CSSProperties={border:"1px solid rgba(255,255,255,.10)",borderRadius:24,padding:16,marginBottom:18,background:"rgba(255,255,255,.025)"};const input:React.CSSProperties={width:"100%",boxSizing:"border-box",borderRadius:18,border:"1px solid rgba(255,255,255,.14)",background:"#081224",color:"white",padding:16,fontSize:16,outline:"none"};const conversation:React.CSSProperties={position:"relative",border:"1px solid rgba(255,255,255,.12)",borderRadius:28,padding:24,background:"rgba(255,255,255,.035)"};const countBadge:React.CSSProperties={position:"absolute",top:24,right:24,fontSize:58,fontWeight:1000,color:"#f8e7b0",lineHeight:1};const laneChip:React.CSSProperties={display:"inline-flex",borderRadius:999,border:"1px solid rgba(232,196,107,.24)",color:"#f8e7b0",padding:"8px 12px",fontSize:12,fontWeight:900};const conversationTitle:React.CSSProperties={fontSize:"clamp(30px,5vw,52px)",lineHeight:1,margin:"18px 74px 16px 0"};const preview:React.CSSProperties={color:"#dbeafe",fontSize:21,lineHeight:1.5,marginTop:18};const muted:React.CSSProperties={color:"#cbd5e1",lineHeight:1.5,margin:0};const chip:React.CSSProperties={borderRadius:999,border:"1px solid rgba(255,255,255,.12)",padding:"8px 12px",fontSize:12,color:"#dbeafe",display:"inline-flex"};const button:React.CSSProperties={display:"inline-flex",justifyContent:"center",alignItems:"center",borderRadius:999,padding:"14px 20px",background:"linear-gradient(135deg,#f8e7b0,#e8c46b)",color:"#06100a",textDecoration:"none",fontWeight:950,border:0,cursor:"pointer"};const ghost:React.CSSProperties={...button,background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",color:"white"};const savedButton:React.CSSProperties={...button,background:"rgba(232,196,107,.14)",border:"1px solid rgba(232,196,107,.35)",color:"#f8e7b0"};const danger:React.CSSProperties={...button,background:"rgba(248,113,113,.12)",border:"1px solid rgba(248,113,113,.28)",color:"#fecaca"};const emptyPanel:React.CSSProperties={border:"1px solid rgba(232,196,107,.18)",borderRadius:28,padding:22,marginTop:18,background:"rgba(255,255,255,.035)"};
+
+function currentEmail() {
+  if (typeof window === "undefined") return "";
+
+  const keys = ["vf_email", "vaultforge_email", "email", "memberEmail"];
+  for (const key of keys) {
+    const value = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
+    if (value) return value.trim().toLowerCase();
+  }
+
+  const cookieMatch = document.cookie.match(/(?:^|;\s*)vf_email=([^;]+)/);
+  if (cookieMatch?.[1]) {
+    return decodeURIComponent(cookieMatch[1]).trim().toLowerCase();
+  }
+
+  return "";
+}
+
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
+
+function cleanLower(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function safeTitle(value: unknown) {
+  const text = clean(value);
+  return text || "VaultForge message thread";
+}
+
+function safePreview(row: Conversation) {
+  return clean(row.preview || row.body || row.message || row.subject || "No preview available yet.");
+}
+
+function getThreadKey(row: Conversation) {
+  return clean(row.thread_key || row.threadKey || row.id || "");
+}
+
+function normalizeLane(value: unknown): LaneKey {
+  const raw = cleanLower(value);
+
+  if (raw.includes("save") || raw.includes("bucket")) return "saved";
+  if (raw.includes("alert")) return "alerts";
+  if (raw.includes("pain")) return "pain";
+  if (raw.includes("signal")) return "signals";
+  if (raw.includes("route")) return "routing";
+  if (raw.includes("intro")) return "introductions";
+  if (raw.includes("project") || raw.includes("deal")) return "projects";
+  if (raw.includes("member") || raw.includes("network")) return "members";
+
+  return "general";
+}
+
+function inferLane(row: Conversation): LaneKey {
+  if (row.is_saved) return "saved";
+
+  const explicit = normalizeLane(row.lane || row.route_lane || row.source);
+  if (explicit !== "general") return explicit;
+
+  const threadKey = cleanLower(getThreadKey(row));
+  if (threadKey.startsWith("saved:")) return "saved";
+  if (threadKey.startsWith("alert:")) return "alerts";
+  if (threadKey.startsWith("pain:")) return "pain";
+  if (threadKey.startsWith("signal:")) return "signals";
+  if (threadKey.startsWith("routing:")) return "routing";
+  if (threadKey.startsWith("intro:") || threadKey.startsWith("introduction:")) return "introductions";
+  if (threadKey.startsWith("project:") || threadKey.startsWith("deal:")) return "projects";
+  if (threadKey.startsWith("member:")) return "members";
+
+  return "general";
+}
+
+function formatDate(value: unknown) {
+  const raw = clean(value);
+  if (!raw) return "No timestamp";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+async function readJson(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function getConversations(payload: unknown): Conversation[] {
+  if (Array.isArray(payload)) return payload as Conversation[];
+
+  const data = payload as Record<string, unknown> | null;
+  if (!data) return [];
+
+  if (Array.isArray(data.conversations)) return data.conversations as Conversation[];
+  if (Array.isArray(data.threads)) return data.threads as Conversation[];
+  if (Array.isArray(data.messages)) return data.messages as Conversation[];
+  if (Array.isArray(data.rows)) return data.rows as Conversation[];
+  if (Array.isArray(data.data)) return data.data as Conversation[];
+
+  return [];
+}
+
+export default function MessageCommandPage() {
+  const [email, setEmail] = useState("");
+  const [activeLane, setActiveLane] = useState<LaneKey | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyKey, setBusyKey] = useState("");
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const showToast = useCallback((type: Toast["type"], text: string) => {
+    setToast({ type, text });
+    window.setTimeout(() => setToast(null), 3200);
+  }, []);
+
+  const loadConversations = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const me = currentEmail();
+      setEmail(me);
+
+      const params = new URLSearchParams();
+      if (me) params.set("email", me);
+      params.set("mode", "list");
+
+      const response = await fetch(`/api/message-command?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const payload = await readJson(response);
+      if (!response.ok) {
+        throw new Error(clean((payload as Record<string, unknown> | null)?.error) || "Message Command failed to load.");
+      }
+
+      setConversations(getConversations(payload));
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Message Command failed to load.");
+      setConversations([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    void loadConversations();
+  }, [loadConversations]);
+
+  const visibleConversations = useMemo(() => {
+    return conversations.filter((row) => !row.is_archived && !row.is_deleted && getThreadKey(row));
+  }, [conversations]);
+
+  const lanes = useMemo(() => {
+    return LANES.map((lane) => {
+      const rows = visibleConversations.filter((row) => inferLane(row) === lane.key);
+      const unread = rows.reduce((total, row) => total + Number(row.unread_count || 0), 0);
+
+      return {
+        ...lane,
+        count: rows.length,
+        unread,
+        rows,
+      };
+    });
+  }, [visibleConversations]);
+
+  const activeLaneData = lanes.find((lane) => lane.key === activeLane) || null;
+
+  async function runThreadAction(threadKey: string, action: string) {
+    if (!threadKey) return;
+
+    setBusyKey(`${action}:${threadKey}`);
+
+    try {
+      const response = await fetch("/api/message-command", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          thread_key: threadKey,
+          threadKey,
+          email: email || currentEmail(),
+        }),
+      });
+
+      const payload = await readJson(response);
+      if (!response.ok) {
+        throw new Error(clean((payload as Record<string, unknown> | null)?.error) || `Unable to ${action}.`);
+      }
+
+      showToast("success", `Thread ${action.replace(/_/g, " ")} saved.`);
+      await loadConversations();
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : `Unable to ${action}.`);
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+  async function markLaneRead(laneKey: LaneKey) {
+    setBusyKey(`mark_lane_read:${laneKey}`);
+
+    try {
+      const rows = visibleConversations.filter((row) => inferLane(row) === laneKey);
+      await Promise.all(rows.map((row) => runThreadAction(getThreadKey(row), "read")));
+      showToast("success", "Lane marked read.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+  return (
+    <main style={styles.page}>
+      <section style={styles.shell}>
+        <header style={styles.header}>
+          <div>
+            <p style={styles.eyebrow}>VaultForge Message Command</p>
+            <h1 style={styles.title}>Message Command</h1>
+            <p style={styles.subtitle}>
+              Secure command hub for saved requests, alerts, pain, signals, routing, introductions, projects, members, and general messages.
+            </p>
+          </div>
+
+          <div style={styles.headerActions}>
+            <button type="button" onClick={() => void loadConversations()} style={styles.secondaryButton}>
+              Refresh
+            </button>
+            <Link href="/members" style={styles.secondaryLink}>
+              Members
+            </Link>
+          </div>
+        </header>
+
+        {toast ? <div style={toast.type === "error" ? styles.toastError : styles.toast}>{toast.text}</div> : null}
+
+        <div style={styles.statusBar}>
+          <span>Signed context: {email || "browser session"}</span>
+          <span>{visibleConversations.length} active thread{visibleConversations.length === 1 ? "" : "s"}</span>
+        </div>
+
+        {!activeLane ? (
+          <section style={styles.grid}>
+            {lanes.map((lane) => (
+              <button key={lane.key} type="button" onClick={() => setActiveLane(lane.key)} style={styles.card}>
+                <span style={styles.cardTopline}>{lane.title}</span>
+                <strong style={styles.cardCount}>{loading ? "…" : lane.count}</strong>
+                <span style={styles.cardSubtitle}>{lane.subtitle}</span>
+                <span style={styles.cardFooter}>{lane.unread > 0 ? `${lane.unread} unread` : "No unread"}</span>
+              </button>
+            ))}
+          </section>
+        ) : (
+          <section style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <div>
+                <p style={styles.eyebrow}>Lane</p>
+                <h2 style={styles.panelTitle}>{activeLaneData?.title || "Messages"}</h2>
+                <p style={styles.panelSubtitle}>{activeLaneData?.subtitle || "Conversation lane."}</p>
+              </div>
+
+              <div style={styles.headerActions}>
+                <button type="button" onClick={() => void markLaneRead(activeLane)} style={styles.secondaryButton} disabled={busyKey.startsWith("mark_lane_read") || loading}>
+                  Mark Lane Read
+                </button>
+                <button type="button" onClick={() => setActiveLane(null)} style={styles.goldButton}>
+                  Back to Cards
+                </button>
+              </div>
+            </div>
+
+            {loading ? <div style={styles.empty}>Loading Message Command…</div> : null}
+
+            {!loading && activeLaneData && activeLaneData.rows.length === 0 ? (
+              <div style={styles.empty}>No conversations in this lane yet.</div>
+            ) : null}
+
+            <div style={styles.list}>
+              {(activeLaneData?.rows || []).map((row) => {
+                const threadKey = getThreadKey(row);
+                const busy = busyKey.endsWith(threadKey);
+
+                return (
+                  <article key={threadKey} style={styles.threadCard}>
+                    <div style={styles.threadMain}>
+                      <p style={styles.threadMeta}>{formatDate(row.last_message_at || row.updated_at || row.created_at)}</p>
+                      <h3 style={styles.threadTitle}>{safeTitle(row.title || row.subject || threadKey)}</h3>
+                      <p style={styles.threadPreview}>{safePreview(row)}</p>
+                      <p style={styles.threadSubline}>
+                        {clean(row.sender_email) || "VaultForge"} {clean(row.recipient_email) ? `→ ${clean(row.recipient_email)}` : ""}
+                      </p>
+                    </div>
+
+                    <div style={styles.threadActions}>
+                      <Link href={`/message-command/${encodeURIComponent(threadKey)}`} style={styles.openLink}>
+                        Open Messages
+                      </Link>
+                      <button type="button" style={styles.smallButton} disabled={busy} onClick={() => void runThreadAction(threadKey, row.is_saved ? "unsave" : "save")}>
+                        {row.is_saved ? "Unsave" : "Save"}
+                      </button>
+                      <button type="button" style={styles.smallButton} disabled={busy} onClick={() => void runThreadAction(threadKey, "read")}>
+                        Mark Read
+                      </button>
+                      <button type="button" style={styles.smallButton} disabled={busy} onClick={() => void runThreadAction(threadKey, "unread")}>
+                        Mark Unread
+                      </button>
+                      <button type="button" style={styles.dangerButton} disabled={busy} onClick={() => void runThreadAction(threadKey, "archive")}>
+                        Archive
+                      </button>
+                      <button type="button" style={styles.dangerButton} disabled={busy} onClick={() => void runThreadAction(threadKey, "delete")}>
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </section>
+    </main>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "radial-gradient(circle at top left, rgba(220, 38, 38, 0.16), transparent 28%), radial-gradient(circle at top right, rgba(234, 179, 8, 0.14), transparent 26%), linear-gradient(180deg, #030509 0%, #07111f 48%, #020308 100%)",
+    color: "#f8fafc",
+    padding: "28px 16px 88px",
+    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  },
+  shell: {
+    width: "min(1180px, 100%)",
+    margin: "0 auto",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 18,
+    flexWrap: "wrap",
+    padding: "22px",
+    border: "1px solid rgba(234,179,8,0.25)",
+    borderRadius: 24,
+    background: "rgba(2,6,23,0.72)",
+    boxShadow: "0 24px 80px rgba(0,0,0,0.32)",
+  },
+  eyebrow: {
+    margin: 0,
+    color: "#facc15",
+    fontSize: 12,
+    fontWeight: 800,
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+  },
+  title: {
+    margin: "8px 0 8px",
+    fontSize: "clamp(34px, 7vw, 76px)",
+    lineHeight: 0.92,
+    letterSpacing: "-0.06em",
+  },
+  subtitle: {
+    margin: 0,
+    maxWidth: 760,
+    color: "#cbd5e1",
+    fontSize: 16,
+    lineHeight: 1.6,
+  },
+  headerActions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  secondaryButton: {
+    border: "1px solid rgba(148,163,184,0.28)",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.78)",
+    color: "#e2e8f0",
+    padding: "11px 15px",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  secondaryLink: {
+    border: "1px solid rgba(148,163,184,0.28)",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.78)",
+    color: "#e2e8f0",
+    padding: "11px 15px",
+    fontWeight: 800,
+    textDecoration: "none",
+  },
+  goldButton: {
+    border: "1px solid rgba(250,204,21,0.58)",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #facc15, #b45309)",
+    color: "#111827",
+    padding: "11px 15px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  toast: {
+    marginTop: 14,
+    padding: "12px 14px",
+    borderRadius: 16,
+    border: "1px solid rgba(34,197,94,0.35)",
+    background: "rgba(22,101,52,0.22)",
+    color: "#dcfce7",
+    fontWeight: 800,
+  },
+  toastError: {
+    marginTop: 14,
+    padding: "12px 14px",
+    borderRadius: 16,
+    border: "1px solid rgba(248,113,113,0.35)",
+    background: "rgba(127,29,29,0.28)",
+    color: "#fee2e2",
+    fontWeight: 800,
+  },
+  statusBar: {
+    marginTop: 14,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+    color: "#94a3b8",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  grid: {
+    marginTop: 20,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+    gap: 14,
+  },
+  card: {
+    textAlign: "left",
+    border: "1px solid rgba(234,179,8,0.22)",
+    borderRadius: 22,
+    padding: 18,
+    minHeight: 190,
+    background: "linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.86))",
+    color: "#f8fafc",
+    cursor: "pointer",
+    boxShadow: "0 18px 55px rgba(0,0,0,0.28)",
+  },
+  cardTopline: {
+    display: "block",
+    color: "#facc15",
+    fontSize: 13,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  cardCount: {
+    display: "block",
+    marginTop: 16,
+    fontSize: 48,
+    lineHeight: 1,
+    letterSpacing: "-0.06em",
+  },
+  cardSubtitle: {
+    display: "block",
+    marginTop: 10,
+    color: "#cbd5e1",
+    lineHeight: 1.45,
+  },
+  cardFooter: {
+    display: "inline-block",
+    marginTop: 16,
+    border: "1px solid rgba(248,113,113,0.28)",
+    borderRadius: 999,
+    padding: "7px 10px",
+    color: "#fecaca",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+  panel: {
+    marginTop: 20,
+    border: "1px solid rgba(234,179,8,0.22)",
+    borderRadius: 24,
+    padding: 18,
+    background: "rgba(2,6,23,0.78)",
+  },
+  panelHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    borderBottom: "1px solid rgba(148,163,184,0.16)",
+    paddingBottom: 16,
+  },
+  panelTitle: {
+    margin: "6px 0",
+    fontSize: 32,
+    letterSpacing: "-0.04em",
+  },
+  panelSubtitle: {
+    margin: 0,
+    color: "#cbd5e1",
+    lineHeight: 1.5,
+  },
+  empty: {
+    marginTop: 16,
+    padding: 18,
+    border: "1px dashed rgba(148,163,184,0.28)",
+    borderRadius: 18,
+    color: "#cbd5e1",
+  },
+  list: {
+    display: "grid",
+    gap: 12,
+    marginTop: 16,
+  },
+  threadCard: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: 16,
+    border: "1px solid rgba(148,163,184,0.18)",
+    borderRadius: 20,
+    padding: 16,
+    background: "rgba(15,23,42,0.72)",
+  },
+  threadMain: {
+    minWidth: 0,
+  },
+  threadMeta: {
+    margin: 0,
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  threadTitle: {
+    margin: "6px 0",
+    fontSize: 20,
+    letterSpacing: "-0.03em",
+  },
+  threadPreview: {
+    margin: 0,
+    color: "#cbd5e1",
+    lineHeight: 1.5,
+  },
+  threadSubline: {
+    margin: "9px 0 0",
+    color: "#94a3b8",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  threadActions: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    minWidth: 150,
+  },
+  openLink: {
+    textAlign: "center",
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #facc15, #b45309)",
+    color: "#111827",
+    padding: "10px 12px",
+    fontWeight: 900,
+    textDecoration: "none",
+  },
+  smallButton: {
+    border: "1px solid rgba(148,163,184,0.24)",
+    borderRadius: 999,
+    background: "rgba(15,23,42,0.86)",
+    color: "#e2e8f0",
+    padding: "9px 11px",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  dangerButton: {
+    border: "1px solid rgba(248,113,113,0.26)",
+    borderRadius: 999,
+    background: "rgba(127,29,29,0.24)",
+    color: "#fecaca",
+    padding: "9px 11px",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+};
