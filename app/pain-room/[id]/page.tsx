@@ -5,6 +5,9 @@ import Link from "next/link";
 
 type Row = Record<string, any>;
 
+const PAYLOAD_START = "VF_PAIN_PAYLOAD_START";
+const PAYLOAD_END = "VF_PAIN_PAYLOAD_END";
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -44,8 +47,44 @@ function parseArray(value: unknown): string[] {
   return text.split(/[,\n|;]/).map((item) => item.trim()).filter(Boolean);
 }
 
+function extractEmbeddedPayload(row: Row | null) {
+  if (!row) return {};
+
+  const sources = [
+    row.summary,
+    row.description,
+    row.notes,
+    row.ai_summary,
+    row.route_summary,
+    row.routing_summary,
+    row.metadata?.summary,
+    row.metadata?.description,
+    row.metadata?.notes,
+  ].map(clean);
+
+  for (const source of sources) {
+    const start = source.indexOf(PAYLOAD_START);
+    const end = source.indexOf(PAYLOAD_END);
+
+    if (start === -1 || end === -1 || end <= start) continue;
+
+    const raw = source.slice(start + PAYLOAD_START.length, end).trim();
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") return parsed as Row;
+    } catch {
+      // Try next.
+    }
+  }
+
+  return {};
+}
+
 function meta(row: Row | null) {
-  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+  const m = row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+  const embedded = extractEmbeddedPayload(row);
+  return { ...m, ...embedded };
 }
 
 function field(row: Row | null, ...keys: string[]) {
@@ -55,11 +94,18 @@ function field(row: Row | null, ...keys: string[]) {
   const values: unknown[] = [];
 
   for (const key of keys) {
-    values.push(row[key]);
     values.push(m[key]);
+    values.push(row[key]);
   }
 
   return first(...values);
+}
+
+function cleanDisplayText(value: unknown) {
+  let text = clean(value);
+  const start = text.indexOf(PAYLOAD_START);
+  if (start !== -1) text = text.slice(0, start).trim();
+  return text;
 }
 
 function money(value: unknown) {
@@ -196,7 +242,7 @@ function ownerGoal(row: Row | null) {
 }
 
 function problemText(row: Row | null) {
-  return (
+  return cleanDisplayText(
     field(
       row,
       "problem_description",
@@ -212,8 +258,8 @@ function problemText(row: Row | null) {
       "route_summary",
       "ai_route_summary",
       "routing_summary"
-    ) || "Problem details are pending."
-  );
+    )
+  ) || "Problem details are pending.";
 }
 
 function clamp(value: number) {
@@ -250,32 +296,18 @@ function resolutionScore(row: Row | null) {
 }
 
 function primaryBottleneck(row: Row | null) {
-  const text = `${problemText(row)} ${field(row, "requested_help", "help_requested", "routing_needs", "needs")} ${field(row, "distress_signals")}`.toLowerCase();
-
-  if (text.includes("funding") || text.includes("capital") || text.includes("lender")) return "Capital / Funding Gap";
-  if (text.includes("contractor") || text.includes("repair") || text.includes("construction")) return "Contractor / Execution Gap";
-  if (text.includes("buyer") || text.includes("sell") || text.includes("disposition")) return "Buyer / Exit Gap";
-  if (text.includes("tenant") || text.includes("occupancy")) return "Tenant / Occupancy Issue";
-  if (text.includes("permit") || text.includes("city") || text.includes("code")) return "Permit / City Issue";
-  if (text.includes("partner") || text.includes("jv")) return "Partner / Operator Gap";
-
-  return "Owner Review Needed";
+  return field(row, "primary_bottleneck") || "Owner Review Needed";
 }
 
 function fastestPath(row: Row | null) {
-  const bottleneck = primaryBottleneck(row);
-
-  if (bottleneck.includes("Capital")) return "Verify numbers, confirm capital need, route to private lender or JV capital.";
-  if (bottleneck.includes("Contractor")) return "Collect photos/scope, estimate repairs, route to contractor/operator.";
-  if (bottleneck.includes("Buyer")) return "Package asset facts, confirm price/timeline, route to qualified buyer.";
-  if (bottleneck.includes("Tenant")) return "Clarify occupancy, lease status, access, and legal constraints before routing.";
-  if (bottleneck.includes("Permit")) return "Identify municipality, violation/permit status, and route to local operator.";
-  if (bottleneck.includes("Partner")) return "Define role, capital, control, and profit split before introduction.";
-
-  return "Clarify missing details, then route to the best operator type.";
+  return field(row, "fastest_path") || "Clarify missing details, then route to the best operator type.";
 }
 
 function whoShouldSee(row: Row | null) {
+  const raw = meta(row).who_should_see || meta(row).suggested_resolution_stack;
+
+  if (Array.isArray(raw)) return raw.map(clean).filter(Boolean);
+
   const text = `${problemText(row)} ${field(row, "requested_help", "help_requested", "routing_needs", "needs")} ${field(row, "distress_signals")}`.toLowerCase();
   const stack: string[] = [];
 
@@ -304,7 +336,6 @@ function missingInfo(row: Row | null) {
   return missing;
 }
 
-
 function executiveRead(row: Row | null) {
   const asset = assetClass(row);
   const market = marketOf(row);
@@ -316,28 +347,18 @@ function executiveRead(row: Row | null) {
   const repairs = money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "repair_budget"));
   const capital = money(field(row, "capital_needed", "funding_needed", "gap_amount"));
 
-  return `VaultForge reads this as a ${asset} ${problem.toLowerCase()} issue in ${market}. Urgency is ${urgency}. The main blocker is ${bottleneck.toLowerCase()}. Numbers on file: ask/target ${ask}, ARV/value ${arv}, repair/scope ${repairs}, capital need ${capital}. This should be worked as a problem-resolution room, not a generic listing.`;
-}
-
-function nextBestMove(row: Row | null) {
-  const bottleneck = primaryBottleneck(row);
-  const viewers = whoShouldSee(row).join(", ");
-
-  return `Next move: ${fastestPath(row)} Put this first in front of: ${viewers}. Before broad routing, confirm the missing details and keep owner contact controlled inside VaultForge.`;
-}
-
-function riskRead(row: Row | null) {
-  const missing = missingInfo(row);
-
-  if (missing.length) {
-    return `Risk: routing quality is limited until these are added: ${missing.join(", ")}. Without them, members may understand the problem but not know how to act.`;
-  }
-
-  return "Risk: enough information exists for first-pass routing. Next risk is execution follow-through: buyer/capital/operator needs to be confirmed quickly.";
+  return `VaultForge reads this as a ${asset} ${problem.toLowerCase()} issue in ${market}. Urgency is ${urgency}. The main blocker is ${bottleneck.toLowerCase()}. Numbers on file: ask/target ${ask}, ARV/value ${arv}, repair/scope ${repairs}, capital need ${capital}.`;
 }
 
 function aiProblemSummary(row: Row | null) {
-  return [executiveRead(row), nextBestMove(row), riskRead(row)].join(" ");
+  const parts = [
+    executiveRead(row),
+    `Next move: ${fastestPath(row)}`,
+    `Who should see this: ${whoShouldSee(row).join(", ")}.`,
+    missingInfo(row).length ? `Missing: ${missingInfo(row).join(", ")}.` : "Ready for first-pass routing.",
+  ];
+
+  return parts.join(" ");
 }
 
 const page: React.CSSProperties = {
@@ -545,6 +566,7 @@ export default function PainRoomPage() {
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
                 <Link href={contactHref} style={button}>Contact Owner</Link>
                 <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+                <Link href="/dashboard" style={ghost}>Dashboard</Link>
                 <button type="button" onClick={load} style={ghost}>Refresh</button>
               </div>
             </>
