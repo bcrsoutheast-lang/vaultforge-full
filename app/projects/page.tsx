@@ -224,16 +224,43 @@ function money(value: unknown) {
   });
 }
 
+function normalizedKey(value: unknown) {
+  return clean(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function canonicalKey(row: Row) {
-  return (
+  const direct =
     field(row, "canonical_event_id") ||
     field(row, "deal_id") ||
     field(row, "project_id") ||
-    field(row, "item_id") ||
-    field(row, "signal_id") ||
-    field(row, "id") ||
-    `${titleOf(row)}-${marketOf(row)}`
-  );
+    field(row, "item_id");
+
+  if (direct) return `id:${normalizedKey(direct)}`;
+
+  const signal = field(row, "signal_id", "alert_id", "routing_id");
+
+  if (signal) return `signal:${normalizedKey(signal)}`;
+
+  const title = normalizedKey(titleOf(row));
+  const market = normalizedKey(marketOf(row));
+  const owner = normalizedKey(ownerOf(row));
+  const asset = normalizedKey(assetOf(row));
+
+  return `fuzzy:${[title, market, owner, asset].filter(Boolean).join(":")}`;
+}
+
+function duplicateFamilyKey(row: Row) {
+  const title = normalizedKey(titleOf(row));
+  const market = normalizedKey(marketOf(row));
+  const owner = normalizedKey(ownerOf(row));
+  const asset = normalizedKey(assetOf(row));
+  const ask = normalizedKey(field(row, "asking_price", "price"));
+  const arv = normalizedKey(field(row, "arv", "arv_value", "estimated_value"));
+
+  return `family:${[title, market, owner, asset, ask, arv].filter(Boolean).join(":")}`;
 }
 
 function completenessScore(row: Row) {
@@ -681,15 +708,21 @@ export default function ProjectsPage() {
       }
 
       const byKey = new Map<string, Row>();
+      const familyToKey = new Map<string, string>();
 
       for (const item of collected) {
-        const key = canonicalKey(item);
+        const directKey = canonicalKey(item);
+        const familyKey = duplicateFamilyKey(item);
+        const knownKey = familyToKey.get(familyKey);
+        const key = knownKey || directKey;
+
         if (!key) continue;
 
         const existing = byKey.get(key);
 
         if (!existing) {
           byKey.set(key, item);
+          familyToKey.set(familyKey, key);
           continue;
         }
 
@@ -700,9 +733,30 @@ export default function ProjectsPage() {
         const secondary = itemScore >= existingScore ? existing : item;
 
         byKey.set(key, mergeRows(primary, secondary));
+        familyToKey.set(familyKey, key);
       }
 
-      const unique = Array.from(byKey.values());
+      const secondPass = new Map<string, Row>();
+
+      for (const item of byKey.values()) {
+        const key = duplicateFamilyKey(item);
+        const existing = secondPass.get(key);
+
+        if (!existing) {
+          secondPass.set(key, item);
+          continue;
+        }
+
+        const itemScore = completenessScore(item);
+        const existingScore = completenessScore(existing);
+
+        const primary = itemScore >= existingScore ? item : existing;
+        const secondary = itemScore >= existingScore ? existing : item;
+
+        secondPass.set(key, mergeRows(primary, secondary));
+      }
+
+      const unique = Array.from(secondPass.values());
 
       setItems(unique);
       setStatus(unique.length ? "" : "No deal or pain workstations found yet.");
