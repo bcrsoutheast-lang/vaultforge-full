@@ -14,6 +14,9 @@ const PAIN_TABLES = [
   "pain_signals",
 ];
 
+const PAYLOAD_START = "VF_PAIN_PAYLOAD_START";
+const PAYLOAD_END = "VF_PAIN_PAYLOAD_END";
+
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const key =
@@ -46,7 +49,6 @@ function first(...values: unknown[]) {
     const text = clean(value);
     if (text) return text;
   }
-
   return "";
 }
 
@@ -141,24 +143,19 @@ async function adaptiveInsert(client: any, table: string, variants: AnyRecord[])
     let payload: AnyRecord = { ...variant };
     const removedColumns: string[] = [];
 
-    for (let i = 0; i < 40; i += 1) {
+    for (let i = 0; i < 60; i += 1) {
       const { data, error } = await client.from(table).insert(payload).select("*").single();
 
       attempts.push({
         table,
         ok: !error,
         error: error?.message || null,
+        kept_columns: Object.keys(payload),
         removed_columns: [...removedColumns],
       });
 
       if (!error && data) {
-        return {
-          ok: true,
-          table,
-          data,
-          error: null,
-          attempts,
-        };
+        return { ok: true, table, data, error: null, attempts };
       }
 
       if (!isMissingColumnError(error)) break;
@@ -188,18 +185,9 @@ async function insertIntoPainTable(client: any, variants: AnyRecord[]) {
       const result = await adaptiveInsert(client, table, variants);
       allAttempts.push(...(result.attempts || []));
 
-      if (result.ok) {
-        return {
-          ...result,
-          allAttempts,
-        };
-      }
+      if (result.ok) return { ...result, allAttempts };
     } catch (error: any) {
-      allAttempts.push({
-        table,
-        ok: false,
-        error: error?.message || String(error),
-      });
+      allAttempts.push({ table, ok: false, error: error?.message || String(error) });
     }
   }
 
@@ -212,16 +200,10 @@ async function insertIntoPainTable(client: any, variants: AnyRecord[]) {
   };
 }
 
-function normalizeAssetSpecific(body: AnyRecord) {
-  if (body.asset_specific && typeof body.asset_specific === "object") {
-    return body.asset_specific as AnyRecord;
-  }
-
-  return {};
-}
-
-function buildProblemType(body: AnyRecord) {
-  return first(body.problem_type, body.pain_type, body.asset_type, body.property_type);
+function assetSpecific(body: AnyRecord) {
+  return body.asset_specific && typeof body.asset_specific === "object"
+    ? (body.asset_specific as AnyRecord)
+    : {};
 }
 
 function buildAssetClass(body: AnyRecord) {
@@ -234,6 +216,46 @@ function buildAssetClass(body: AnyRecord) {
   if (lower.includes("residential") || lower.includes("house") || lower.includes("single")) return "Residential";
 
   return raw || "Not listed";
+}
+
+function buildBottleneck(body: AnyRecord) {
+  const text = [
+    body.help_requested,
+    body.requested_help,
+    body.routing_needs,
+    body.needs,
+    body.notes,
+    body.description,
+    body.pain_type,
+    body.problem_type,
+    body.distress_signals,
+    body.capital_needed,
+    body.repairs_needed,
+    body.repair_scope,
+  ]
+    .map(clean)
+    .join(" ")
+    .toLowerCase();
+
+  if (text.includes("capital") || text.includes("fund") || text.includes("lender") || text.includes("gap")) return "Capital / Funding Gap";
+  if (text.includes("contractor") || text.includes("repair") || text.includes("roof") || text.includes("construction")) return "Contractor / Execution Gap";
+  if (text.includes("buyer") || text.includes("sell") || text.includes("exit") || text.includes("disposition")) return "Buyer / Exit Gap";
+  if (text.includes("tenant") || text.includes("occupancy")) return "Tenant / Occupancy Issue";
+  if (text.includes("permit") || text.includes("city") || text.includes("code")) return "Permit / City Issue";
+  if (text.includes("partner") || text.includes("jv")) return "Partner / Operator Gap";
+
+  return "Owner Review Needed";
+}
+
+function buildFastestPath(bottleneck: string) {
+  if (bottleneck.includes("Capital")) return "Verify the numbers, confirm the exact funding gap, then route to private lender or JV capital.";
+  if (bottleneck.includes("Contractor")) return "Confirm scope/photos, price the repair work, then route to contractor or operator.";
+  if (bottleneck.includes("Buyer")) return "Package the asset facts, confirm seller timeline, then route to qualified buyer.";
+  if (bottleneck.includes("Tenant")) return "Clarify occupancy, lease, access, and legal constraints before routing.";
+  if (bottleneck.includes("Permit")) return "Identify municipality, permit/code issue, timeline, then route to local operator.";
+  if (bottleneck.includes("Partner")) return "Define role, capital, control, and profit split before introduction.";
+
+  return "Clarify missing details, then route to the best operator type.";
 }
 
 function buildWhoShouldSee(body: AnyRecord) {
@@ -249,6 +271,7 @@ function buildWhoShouldSee(body: AnyRecord) {
     body.distress_signals,
     body.capital_needed,
     body.repairs_needed,
+    body.repair_scope,
   ]
     .map(clean)
     .join(" ")
@@ -268,96 +291,9 @@ function buildWhoShouldSee(body: AnyRecord) {
   return Array.from(new Set(stack));
 }
 
-function buildBottleneck(body: AnyRecord) {
-  const text = [
-    body.help_requested,
-    body.requested_help,
-    body.routing_needs,
-    body.needs,
-    body.notes,
-    body.description,
-    body.pain_type,
-    body.problem_type,
-    body.distress_signals,
-    body.capital_needed,
-    body.repairs_needed,
-  ]
-    .map(clean)
-    .join(" ")
-    .toLowerCase();
-
-  if (text.includes("capital") || text.includes("fund") || text.includes("lender") || text.includes("gap")) return "Capital / Funding Gap";
-  if (text.includes("contractor") || text.includes("repair") || text.includes("roof") || text.includes("construction")) return "Contractor / Execution Gap";
-  if (text.includes("buyer") || text.includes("sell") || text.includes("exit") || text.includes("disposition")) return "Buyer / Exit Gap";
-  if (text.includes("tenant") || text.includes("occupancy")) return "Tenant / Occupancy Issue";
-  if (text.includes("permit") || text.includes("city") || text.includes("code")) return "Permit / City Issue";
-  if (text.includes("partner") || text.includes("jv")) return "Partner / Operator Gap";
-
-  return "Owner Review Needed";
-}
-
-function buildFastestPath(bottleneck: string) {
-  if (bottleneck.includes("Capital")) return "Verify numbers, confirm capital need, route to private lender or JV capital.";
-  if (bottleneck.includes("Contractor")) return "Collect photos/scope, estimate repairs, route to contractor/operator.";
-  if (bottleneck.includes("Buyer")) return "Package asset facts, confirm price/timeline, route to qualified buyer.";
-  if (bottleneck.includes("Tenant")) return "Clarify occupancy, lease status, access, and legal constraints before routing.";
-  if (bottleneck.includes("Permit")) return "Identify municipality, violation/permit status, and route to local operator.";
-  if (bottleneck.includes("Partner")) return "Define role, capital, control, and profit split before introduction.";
-
-  return "Clarify missing details, then route to the best operator type.";
-}
-
-function buildSummary(body: AnyRecord, extra: AnyRecord) {
-  const supplied = first(
-    body.ai_summary,
-    body.ai_route_summary,
-    body.route_summary,
-    body.routing_summary,
-    body.summary
-  );
-
-  if (supplied) return supplied;
-
-  const title = first(body.title, body.pain_title, body.problem_title, body.headline, "Pain Request");
-  const type = first(extra.problem_type, body.pain_type, body.problem_type, body.asset_type, body.property_type, "Problem");
-  const market =
-    [first(body.city), first(body.operating_state, body.state)].filter(Boolean).join(", ") ||
-    first(body.market, body.location, "Market not listed");
-  const urgency = first(body.urgency, body.urgency_level, body.priority, "Not listed");
-  const help = first(body.requested_help, body.help_requested, body.routing_needs, body.needs);
-  const details = first(
-    body.problem_description,
-    body.pain_description,
-    body.description,
-    body.notes,
-    body.note,
-    body.message
-  );
-  const capital = first(body.capital_needed, body.funding_needed, body.gap_amount);
-  const repairs = first(body.repair_estimate, body.repairs_needed, body.repair_budget, body.repair_scope);
-  const timeline = first(body.timeline, body.deadline, body.desired_timeline);
-
-  return [
-    `Pain: ${title}`,
-    `Type: ${type}`,
-    `Asset: ${extra.asset_class || "Not listed"}`,
-    `Market: ${market}`,
-    `Urgency: ${urgency}`,
-    help ? `Help Needed: ${help}` : "",
-    capital ? `Capital Needed: ${capital}` : "",
-    repairs ? `Repairs/Scope: ${repairs}` : "",
-    timeline ? `Timeline: ${timeline}` : "",
-    details ? `Details: ${details}` : "",
-    extra.primary_bottleneck ? `Primary Bottleneck: ${extra.primary_bottleneck}` : "",
-    extra.fastest_path ? `Fastest Path: ${extra.fastest_path}` : "",
-  ]
-    .filter(Boolean)
-    .join(" | ");
-}
-
-function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
+function buildRows(body: AnyRecord, email: string, baseUrl: string) {
   const now = new Date().toISOString();
-  const assetSpecific = normalizeAssetSpecific(body);
+  const a = assetSpecific(body);
 
   const painId = first(body.pain_id, body.id, body.item_id) || makeId("pain");
   const signalId = first(body.signal_id, body.signalId) || `pain_signal_${painId}`;
@@ -375,22 +311,11 @@ function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
 
   const mainPhoto = first(body.main_photo_url, body.image_url, body.photo_url, photoUrls[0]);
 
-  const primaryBottleneck = buildBottleneck(body);
-  const fastestPath = buildFastestPath(primaryBottleneck);
-  const whoShouldSee = buildWhoShouldSee(body);
   const assetClass = buildAssetClass(body);
-  const problemType = buildProblemType(body);
-
-  const extra = {
-    asset_class: assetClass,
-    problem_type: problemType,
-    primary_bottleneck: primaryBottleneck,
-    fastest_path: fastestPath,
-    who_should_see: whoShouldSee,
-  };
-
-  const summary = buildSummary(body, extra);
-
+  const problemType = first(body.problem_type, body.pain_type, body.asset_type, body.property_type, assetClass);
+  const bottleneck = buildBottleneck(body);
+  const fastestPath = buildFastestPath(bottleneck);
+  const whoShouldSee = buildWhoShouldSee(body);
   const city = first(body.city);
   const state = first(body.state, body.operating_state);
   const market = [city, state].filter(Boolean).join(", ") || first(body.market, body.location);
@@ -401,7 +326,7 @@ function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
     dashboard: `${baseUrl}/dashboard`,
   };
 
-  const common: AnyRecord = {
+  const canonical: AnyRecord = {
     pain_id: painId,
     item_id: painId,
     request_id: painId,
@@ -419,41 +344,12 @@ function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
     pain_title: title,
     problem_title: title,
     headline: title,
-    description: first(body.problem_description, body.pain_description, body.description, body.notes, body.note, body.message) || summary,
-    problem_description: first(body.problem_description, body.description, body.notes, body.note, body.message) || summary,
-    pain_description: first(body.pain_description, body.description, body.notes, body.note, body.message) || summary,
-    notes: first(body.notes, body.note, body.description, body.message),
-    note: first(body.note, body.notes, body.description, body.message),
-    message: first(body.message, body.notes, body.description),
-
-    summary,
-    ai_summary: summary,
-    route_summary: summary,
-    ai_route_summary: summary,
-    routing_summary: summary,
-
-    status: "new",
-    pain_status: "new",
-    priority: first(body.priority, body.urgency, body.urgency_level, "new"),
-    urgency: first(body.urgency, body.urgency_level, body.priority),
-    urgency_level: first(body.urgency_level, body.urgency, body.priority),
 
     pain_type: first(body.pain_type, problemType),
     problem_type: problemType,
     asset_type: first(body.asset_type, body.property_type, assetClass),
     asset_class: assetClass,
     property_type: first(body.property_type, body.asset_type, assetClass),
-
-    requested_help: first(body.requested_help, body.help_requested, body.routing_needs, body.needs),
-    help_requested: first(body.help_requested, body.requested_help, body.routing_needs, body.needs),
-    routing_needs: first(body.routing_needs, body.needs, body.requested_help, body.help_requested),
-    needs: first(body.needs, body.routing_needs, body.requested_help, body.help_requested),
-
-    primary_bottleneck: primaryBottleneck,
-    fastest_path: fastestPath,
-    who_should_see: whoShouldSee,
-    suggested_resolution_stack: whoShouldSee,
-    ai_problem_summary: summary,
 
     city,
     state,
@@ -464,55 +360,79 @@ function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
     location: first(body.location, body.address, body.property_address),
     confidentiality: first(body.confidentiality),
 
+    urgency: first(body.urgency, body.urgency_level, body.priority),
+    urgency_level: first(body.urgency_level, body.urgency, body.priority),
+    priority: first(body.priority, body.urgency, body.urgency_level, "new"),
+    status: "new",
+    pain_status: "new",
+
+    help_requested: first(body.help_requested, body.requested_help, body.routing_needs, body.needs),
+    requested_help: first(body.requested_help, body.help_requested, body.routing_needs, body.needs),
+    routing_needs: first(body.routing_needs, body.needs, body.help_requested, body.requested_help),
+    needs: first(body.needs, body.routing_needs, body.help_requested, body.requested_help),
+
+    notes: first(body.notes, body.note, body.description, body.message),
+    note: first(body.note, body.notes, body.description, body.message),
+    message: first(body.message, body.notes, body.description),
+    description: first(body.problem_description, body.pain_description, body.description, body.notes, body.note, body.message),
+    problem_description: first(body.problem_description, body.description, body.notes, body.note, body.message),
+    pain_description: first(body.pain_description, body.description, body.notes, body.note, body.message),
+
     asking_price: first(body.asking_price, body.price, body.target_price),
     price: first(body.price, body.asking_price, body.target_price),
     target_price: first(body.target_price, body.asking_price, body.price),
     arv: first(body.arv, body.arv_value, body.estimated_value, body.property_value),
     arv_value: first(body.arv_value, body.arv, body.estimated_value, body.property_value),
     estimated_value: first(body.estimated_value, body.arv_value, body.arv, body.property_value),
-    repair_estimate: first(body.repair_estimate, body.repairs_needed, body.estimated_repairs, body.repair_budget, body.repair_scope),
-    repairs_needed: first(body.repairs_needed, body.repair_estimate, body.estimated_repairs, body.repair_budget, body.repair_scope),
-    repair_scope: first(body.repair_scope, body.repairs_needed, body.repair_estimate),
+    repairs_needed: first(body.repairs_needed, body.repair_estimate, body.estimated_repairs, body.repair_budget, body.repair_scope, a.repair_scope),
+    repair_estimate: first(body.repair_estimate, body.repairs_needed, body.estimated_repairs, body.repair_budget, body.repair_scope, a.repair_scope),
+    repair_scope: first(body.repair_scope, body.repairs_needed, body.repair_estimate, a.repair_scope),
     capital_needed: first(body.capital_needed, body.funding_needed, body.gap_amount),
     funding_needed: first(body.funding_needed, body.capital_needed, body.gap_amount),
     gap_amount: first(body.gap_amount, body.capital_needed, body.funding_needed),
 
-    beds: first(body.beds, body.bedrooms, assetSpecific.beds),
-    bedrooms: first(body.bedrooms, body.beds, assetSpecific.beds),
-    baths: first(body.baths, body.bathrooms, assetSpecific.baths),
-    bathrooms: first(body.bathrooms, body.baths, assetSpecific.baths),
-    sqft: first(body.sqft, body.square_feet, body.building_sqft, assetSpecific.sqft, assetSpecific.units_or_sqft),
-    square_feet: first(body.square_feet, body.sqft, body.building_sqft, assetSpecific.sqft, assetSpecific.units_or_sqft),
-    building_sqft: first(body.building_sqft, body.square_feet, body.sqft, assetSpecific.sqft, assetSpecific.units_or_sqft),
-    units_or_sqft: first(body.units_or_sqft, assetSpecific.units_or_sqft),
-    acres: first(body.acres, body.land_acres, assetSpecific.acres),
-    land_acres: first(body.land_acres, body.acres, assetSpecific.acres),
-    year_built: first(body.year_built, assetSpecific.year_built),
-    occupancy: first(body.occupancy, body.tenant_status, body.vacancy_status, assetSpecific.occupancy, assetSpecific.tenant_status),
-    tenant_status: first(body.tenant_status, assetSpecific.tenant_status, body.occupancy),
-    zoning: first(body.zoning, body.land_use, assetSpecific.zoning),
-    land_use: first(body.land_use, body.zoning, assetSpecific.zoning),
-    utilities: first(body.utilities, assetSpecific.utilities),
-    road_access: first(body.road_access, assetSpecific.road_access),
-    access_status: first(body.access_status, assetSpecific.access_status),
-    access_notes: first(body.access_notes, body.access_status, assetSpecific.access_status),
+    beds: first(body.beds, body.bedrooms, a.beds),
+    bedrooms: first(body.bedrooms, body.beds, a.beds),
+    baths: first(body.baths, body.bathrooms, a.baths),
+    bathrooms: first(body.bathrooms, body.baths, a.baths),
+    sqft: first(body.sqft, body.square_feet, body.building_sqft, a.sqft, a.units_or_sqft),
+    square_feet: first(body.square_feet, body.sqft, body.building_sqft, a.sqft, a.units_or_sqft),
+    building_sqft: first(body.building_sqft, body.square_feet, body.sqft, a.sqft, a.units_or_sqft),
+    units_or_sqft: first(body.units_or_sqft, a.units_or_sqft),
+    acres: first(body.acres, body.land_acres, a.acres),
+    land_acres: first(body.land_acres, body.acres, a.acres),
+    year_built: first(body.year_built, a.year_built),
+    occupancy: first(body.occupancy, body.tenant_status, body.vacancy_status, a.occupancy, a.tenant_status),
+    tenant_status: first(body.tenant_status, a.tenant_status, body.occupancy),
+    zoning: first(body.zoning, body.land_use, a.zoning),
+    land_use: first(body.land_use, body.zoning, a.zoning),
+    utilities: first(body.utilities, a.utilities),
+    road_access: first(body.road_access, a.road_access),
+    access_status: first(body.access_status, a.access_status),
+    access_notes: first(body.access_notes, body.access_status, a.access_status),
     timeline: first(body.timeline, body.deadline, body.desired_timeline),
     deadline: first(body.deadline, body.timeline, body.desired_timeline),
     desired_timeline: first(body.desired_timeline, body.timeline, body.deadline),
     owner_goal: first(body.owner_goal, body.goal, body.desired_outcome, body.exit_strategy, body.strategy, body.help_requested),
-    exit_strategy: first(body.exit_strategy, body.strategy, assetSpecific.exit_strategy),
-    strategy: first(body.strategy, body.exit_strategy, assetSpecific.exit_strategy),
+    exit_strategy: first(body.exit_strategy, body.strategy, a.exit_strategy),
+    strategy: first(body.strategy, body.exit_strategy, a.exit_strategy),
 
-    commercial_property_type: first(body.commercial_property_type, assetSpecific.commercial_property_type),
-    noi: first(body.noi, body.noi_or_rent, assetSpecific.noi_or_rent),
-    rent: first(body.rent, body.noi_or_rent, assetSpecific.noi_or_rent),
-    monthly_rent: first(body.monthly_rent, body.noi_or_rent, assetSpecific.noi_or_rent),
-    cap_rate: first(body.cap_rate, assetSpecific.cap_rate),
-    lease_status: first(body.lease_status, assetSpecific.lease_status),
-    parking_access: first(body.parking_access, assetSpecific.parking_access),
-    entitlement_status: first(body.entitlement_status, assetSpecific.entitlement_status),
-    topography: first(body.topography, assetSpecific.topography),
-    frontage: first(body.frontage, assetSpecific.frontage),
+    commercial_property_type: first(body.commercial_property_type, a.commercial_property_type),
+    noi: first(body.noi, body.noi_or_rent, a.noi_or_rent),
+    rent: first(body.rent, body.noi_or_rent, a.noi_or_rent),
+    monthly_rent: first(body.monthly_rent, body.noi_or_rent, a.noi_or_rent),
+    cap_rate: first(body.cap_rate, a.cap_rate),
+    lease_status: first(body.lease_status, a.lease_status),
+    parking_access: first(body.parking_access, a.parking_access),
+    entitlement_status: first(body.entitlement_status, a.entitlement_status),
+    topography: first(body.topography, a.topography),
+    frontage: first(body.frontage, a.frontage),
+
+    primary_bottleneck: bottleneck,
+    fastest_path: fastestPath,
+    who_should_see: whoShouldSee,
+    suggested_resolution_stack: whoShouldSee,
+    asset_specific: a,
 
     image_url: mainPhoto,
     photo_url: mainPhoto,
@@ -522,8 +442,9 @@ function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
     photos: photoUrls.map((url) => ({ url })),
     files: photoUrls.map((url) => ({ url })),
     uploads: photoUrls.map((url) => ({ url })),
+    photo_upload_warning: first(body.photo_upload_warning),
+    photo_upload_failed_count: first(body.photo_upload_failed_count),
 
-    asset_specific: assetSpecific,
     direct_links: directLinks,
     archived: false,
     deleted: false,
@@ -531,18 +452,54 @@ function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
     updated_at: now,
   };
 
+  const summaryParts = [
+    `Pain: ${title}`,
+    `Type: ${canonical.problem_type}`,
+    `Asset: ${canonical.asset_class}`,
+    `Market: ${canonical.market || "Market not listed"}`,
+    `Urgency: ${canonical.urgency || "Not listed"}`,
+    canonical.help_requested ? `Help Needed: ${canonical.help_requested}` : "",
+    canonical.asking_price ? `Asking/Target: ${canonical.asking_price}` : "",
+    canonical.arv_value || canonical.arv ? `ARV/Value: ${canonical.arv_value || canonical.arv}` : "",
+    canonical.repairs_needed ? `Repairs/Scope: ${canonical.repairs_needed}` : "",
+    canonical.capital_needed ? `Capital Needed: ${canonical.capital_needed}` : "",
+    canonical.timeline ? `Timeline: ${canonical.timeline}` : "",
+    canonical.notes ? `Details: ${canonical.notes}` : canonical.description ? `Details: ${canonical.description}` : "",
+    `Primary Bottleneck: ${bottleneck}`,
+    `Fastest Path: ${fastestPath}`,
+    `Who Should See This: ${whoShouldSee.join(", ")}`,
+  ].filter(Boolean);
+
+  const summary = summaryParts.join(" | ");
+
+  canonical.summary = summary;
+  canonical.ai_summary = summary;
+  canonical.route_summary = summary;
+  canonical.ai_route_summary = summary;
+  canonical.routing_summary = summary;
+  canonical.ai_problem_summary = summary;
+  canonical.description = canonical.description || summary;
+  canonical.problem_description = canonical.problem_description || summary;
+  canonical.pain_description = canonical.pain_description || summary;
+  canonical.notes = canonical.notes || summary;
+
+  const embeddedPayload = `${PAYLOAD_START}\n${JSON.stringify(canonical)}\n${PAYLOAD_END}`;
+
   const metadata: AnyRecord = {
     ...body,
-    ...common,
+    ...canonical,
     canonical_kind: "pain",
-    source: "pain_create_canonical_metadata_fix",
+    source: "pain_payload_hard_fix",
     source_table: PAIN_TABLES[0],
   };
 
   const full: AnyRecord = {
     id: painId,
-    ...common,
+    ...canonical,
     metadata,
+    summary: `${summary}\n\n${embeddedPayload}`,
+    description: `${canonical.description}\n\n${embeddedPayload}`,
+    notes: `${canonical.notes}\n\n${embeddedPayload}`,
   };
 
   const core: AnyRecord = {
@@ -554,19 +511,19 @@ function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
     user_email: email,
     title,
     pain_title: title,
-    description: common.description,
-    summary,
-    ai_summary: summary,
+    description: `${canonical.description}\n\n${embeddedPayload}`,
+    summary: `${summary}\n\n${embeddedPayload}`,
+    ai_summary: `${summary}\n\n${embeddedPayload}`,
     status: "new",
     pain_status: "new",
-    pain_type: common.pain_type,
-    problem_type: common.problem_type,
-    asset_type: common.asset_type,
-    asset_class: common.asset_class,
-    urgency: common.urgency,
-    urgency_level: common.urgency_level,
-    requested_help: common.requested_help,
-    help_requested: common.help_requested,
+    pain_type: canonical.pain_type,
+    problem_type: canonical.problem_type,
+    asset_type: canonical.asset_type,
+    asset_class: canonical.asset_class,
+    urgency: canonical.urgency,
+    urgency_level: canonical.urgency_level,
+    requested_help: canonical.requested_help,
+    help_requested: canonical.help_requested,
     city,
     state,
     market,
@@ -587,30 +544,24 @@ function buildPainRows(body: AnyRecord, email: string, baseUrl: string) {
     owner_email: email,
     member_email: email,
     title,
-    summary,
-    ai_summary: summary,
+    summary: `${summary}\n\n${embeddedPayload}`,
+    ai_summary: `${summary}\n\n${embeddedPayload}`,
+    description: `${canonical.description}\n\n${embeddedPayload}`,
     status: "new",
     metadata,
     created_at: now,
     updated_at: now,
   };
 
-  return {
-    painId,
-    signalId,
-    directLinks,
-    full,
-    core,
-    minimal,
-  };
+  return { painId, signalId, directLinks, full, core, minimal };
 }
 
 export async function GET() {
   return json({
     ok: true,
     route: "/api/pain/create",
+    mode: "payload_hard_fix",
     writes_to: PAIN_TABLES,
-    mode: "canonical_metadata_fix",
   });
 }
 
@@ -645,7 +596,7 @@ export async function POST(request: Request) {
     return json({ ok: false, error: "Pain title is required." }, 400);
   }
 
-  const built = buildPainRows(body, email, baseUrl);
+  const built = buildRows(body, email, baseUrl);
   const result = await insertIntoPainTable(client, [built.full, built.core, built.minimal]);
 
   if (!result.ok || !result.data) {
