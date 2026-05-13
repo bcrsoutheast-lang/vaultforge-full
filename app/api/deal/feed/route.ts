@@ -221,7 +221,17 @@ function canSee(row: AnyRow, email: string, owner: boolean) {
 
 function dealIdOf(row: AnyRow) {
   const metadata = metadataOf(row);
-  return first(row.deal_id, row.project_id, row.item_id, row.related_deal_id, metadata.deal_id, metadata.project_id, metadata.item_id, metadata.related_deal_id, row.id);
+  return first(
+    row.deal_id,
+    row.project_id,
+    row.item_id,
+    row.related_deal_id,
+    metadata.deal_id,
+    metadata.project_id,
+    metadata.item_id,
+    metadata.related_deal_id,
+    row.id
+  );
 }
 
 function signalIdOf(row: AnyRow) {
@@ -234,8 +244,12 @@ function canonicalKeyOf(row: AnyRow) {
   return first(
     row.canonical_event_id,
     metadata.canonical_event_id,
-    signalIdOf(row),
-    dealIdOf(row)
+    metadata.signal_id,
+    row.signal_id,
+    metadata.deal_id,
+    row.deal_id,
+    row.item_id,
+    row.id
   );
 }
 
@@ -304,6 +318,18 @@ function sourceRank(table: string) {
   return 9;
 }
 
+function field(row: AnyRow, ...keys: string[]) {
+  const metadata = metadataOf(row);
+  const values: unknown[] = [];
+
+  for (const key of keys) {
+    values.push(row[key]);
+    values.push(metadata[key]);
+  }
+
+  return first(...values);
+}
+
 function normalizeDeal(row: AnyRow, table: string) {
   const metadata = metadataOf(row);
   const photoData = photosFrom(row);
@@ -311,90 +337,98 @@ function normalizeDeal(row: AnyRow, table: string) {
   const dealId = dealIdOf(row);
   const signalId = signalIdOf(row);
   const canonicalKey = canonicalKeyOf(row) || signalId || dealId;
+  const routeSummary = first(
+    row.route_summary,
+    row.routing_summary,
+    row.ai_route_summary,
+    metadata.route_summary,
+    metadata.routing_summary,
+    metadata.ai_route_summary,
+    noteOf(row)
+  );
 
-  const askingPrice = first(row.asking_price, row.price, metadata.asking_price, metadata.price);
-  const arv = first(row.arv, row.arv_value, row.estimated_value, metadata.arv, metadata.arv_value, metadata.estimated_value);
-  const repairs = first(row.repair_estimate, row.repairs_needed, row.estimated_repairs, metadata.repair_estimate, metadata.repairs_needed, metadata.estimated_repairs);
-  const propertyType = first(row.property_type, row.deal_type, row.asset_type, metadata.property_type, metadata.deal_type, metadata.asset_type, "Deal");
-  const routeSummary = first(row.route_summary, row.routing_summary, row.ai_route_summary, metadata.route_summary, metadata.routing_summary, metadata.ai_route_summary, noteOf(row));
+  const propertyType = field(row, "property_type", "deal_type", "asset_type") || "Deal";
+  const askingPrice = field(row, "asking_price", "price");
+  const arv = field(row, "arv", "arv_value", "estimated_value");
+  const repairs = field(row, "repair_estimate", "repairs_needed", "estimated_repairs");
 
   return {
     ...metadata,
     ...row,
     id: dealId || canonicalKey,
     deal_id: dealId || canonicalKey,
-    project_id: first(row.project_id, metadata.project_id, dealId),
-    item_id: first(row.item_id, metadata.item_id, dealId),
+    project_id: field(row, "project_id") || dealId || canonicalKey,
+    item_id: field(row, "item_id") || dealId || canonicalKey,
     signal_id: signalId || canonicalKey,
-    routing_id: first(row.routing_id, metadata.routing_id, signalId),
+    routing_id: field(row, "routing_id") || signalId || canonicalKey,
     canonical_event_id: canonicalKey,
 
     title: titleOf(row),
-    deal_label: first(row.deal_label, metadata.deal_label, propertyType, "Deal Signal"),
-    signal_type: first(row.signal_type, metadata.signal_type, "deal"),
+    deal_label: field(row, "deal_label") || propertyType || "Deal Signal",
+    signal_type: field(row, "signal_type") || "deal",
     source_kind: "deal",
 
     note: noteOf(row),
     route_summary: routeSummary,
-    routing_summary: first(row.routing_summary, metadata.routing_summary, routeSummary),
-    ai_route_summary: first(row.ai_route_summary, metadata.ai_route_summary, routeSummary),
+    routing_summary: field(row, "routing_summary") || routeSummary,
+    ai_route_summary: field(row, "ai_route_summary") || routeSummary,
 
-    state: first(row.state, metadata.state),
-    city: first(row.city, metadata.city),
+    state: field(row, "state"),
+    city: field(row, "city"),
     market: marketOf(row),
 
-    priority: first(row.priority, row.urgency, row.urgency_level, metadata.priority, metadata.urgency, "medium"),
-    urgency: first(row.urgency, row.urgency_level, metadata.urgency, metadata.urgency_level, row.priority, "medium"),
-    status: first(row.status, row.routing_status, metadata.status, metadata.routing_status, "new"),
-    routing_status: first(row.routing_status, metadata.routing_status, row.status, "new"),
+    priority: field(row, "priority", "urgency", "urgency_level") || "medium",
+    urgency: field(row, "urgency", "urgency_level", "priority") || "medium",
+    status: field(row, "status", "routing_status") || "new",
+    routing_status: field(row, "routing_status", "status") || "new",
 
     asset_type: propertyType,
     property_type: propertyType,
-    deal_type: first(row.deal_type, metadata.deal_type, propertyType),
-    strategy: first(row.strategy, metadata.strategy),
-    exit_strategy: first(row.exit_strategy, metadata.exit_strategy, row.strategy, metadata.strategy),
+    deal_type: field(row, "deal_type") || propertyType,
+    strategy: field(row, "strategy"),
+    exit_strategy: field(row, "exit_strategy", "strategy"),
 
     asking_price: askingPrice,
-    price: first(row.price, metadata.price, askingPrice),
+    price: field(row, "price") || askingPrice,
     arv,
-    arv_value: first(row.arv_value, metadata.arv_value, arv),
+    arv_value: field(row, "arv_value") || arv,
     repair_estimate: repairs,
-    repairs_needed: first(row.repairs_needed, metadata.repairs_needed, repairs),
+    repairs_needed: field(row, "repairs_needed") || repairs,
 
-    beds: first(row.beds, row.bedrooms, metadata.beds, metadata.bedrooms),
-    bedrooms: first(row.bedrooms, row.beds, metadata.bedrooms, metadata.beds),
-    baths: first(row.baths, row.bathrooms, metadata.baths, metadata.bathrooms),
-    bathrooms: first(row.bathrooms, row.baths, metadata.bathrooms, metadata.baths),
-    square_feet: first(row.square_feet, row.sqft, row.building_sqft, metadata.square_feet, metadata.sqft, metadata.building_sqft),
-    sqft: first(row.sqft, row.square_feet, row.building_sqft, metadata.sqft, metadata.square_feet, metadata.building_sqft),
-    building_sqft: first(row.building_sqft, row.square_feet, row.sqft, metadata.building_sqft, metadata.square_feet, metadata.sqft),
-    year_built: first(row.year_built, metadata.year_built),
-    occupancy: first(row.occupancy, metadata.occupancy),
-    zoning: first(row.zoning, metadata.zoning),
-    acres: first(row.acres, row.land_acres, metadata.acres, metadata.land_acres),
-    land_acres: first(row.land_acres, row.acres, metadata.land_acres, metadata.acres),
-    utilities: first(row.utilities, metadata.utilities),
-    road_access: first(row.road_access, metadata.road_access),
-    noi: first(row.noi, metadata.noi),
-    cap_rate: first(row.cap_rate, metadata.cap_rate),
+    beds: field(row, "beds", "bedrooms"),
+    bedrooms: field(row, "bedrooms", "beds"),
+    baths: field(row, "baths", "bathrooms"),
+    bathrooms: field(row, "bathrooms", "baths"),
+    square_feet: field(row, "square_feet", "sqft", "building_sqft"),
+    sqft: field(row, "sqft", "square_feet", "building_sqft"),
+    building_sqft: field(row, "building_sqft", "square_feet", "sqft"),
+    year_built: field(row, "year_built"),
+    occupancy: field(row, "occupancy"),
+    zoning: field(row, "zoning"),
+    acres: field(row, "acres", "land_acres"),
+    land_acres: field(row, "land_acres", "acres"),
+    utilities: field(row, "utilities"),
+    road_access: field(row, "road_access"),
+    noi: field(row, "noi"),
+    cap_rate: field(row, "cap_rate"),
 
-    routing_needs: first(row.routing_needs, row.deal_needs, row.needs, metadata.routing_needs, metadata.deal_needs, metadata.needs),
-    deal_needs: first(row.deal_needs, metadata.deal_needs, row.routing_needs, metadata.routing_needs),
-    needs: first(row.needs, metadata.needs, row.routing_needs, metadata.routing_needs),
-    distress_signals: first(row.distress_signals, metadata.distress_signals),
-    seller_situation: first(row.seller_situation, metadata.seller_situation),
+    routing_needs: field(row, "routing_needs", "deal_needs", "needs"),
+    deal_needs: field(row, "deal_needs", "routing_needs"),
+    needs: field(row, "needs", "routing_needs"),
+    distress_signals: field(row, "distress_signals"),
+    seller_situation: field(row, "seller_situation"),
 
     owner_email: ownerEmail,
-    created_by_email: first(row.created_by_email, metadata.created_by_email, ownerEmail),
-    submitted_by_email: first(row.submitted_by_email, metadata.submitted_by_email, ownerEmail),
-    submitted_by: first(row.submitted_by, row.user_email, row.member_email, row.email, metadata.submitted_by, metadata.user_email, metadata.member_email, ownerEmail),
-    member_email: first(row.member_email, metadata.member_email, ownerEmail),
-    user_email: first(row.user_email, metadata.user_email, ownerEmail),
+    created_by_email: field(row, "created_by_email") || ownerEmail,
+    submitted_by_email: field(row, "submitted_by_email") || ownerEmail,
+    submitted_by: field(row, "submitted_by", "user_email", "member_email", "email") || ownerEmail,
+    member_email: field(row, "member_email") || ownerEmail,
+    user_email: field(row, "user_email") || ownerEmail,
 
     detail_href: dealId ? `/deal/detail?id=${encodeURIComponent(dealId)}` : "/projects",
     direct_links: metadata.direct_links || row.direct_links || {},
-    created_at: first(row.created_at, metadata.created_at, row.updated_at, new Date().toISOString()),
-    updated_at: first(row.updated_at, metadata.updated_at, row.created_at, new Date().toISOString()),
+    created_at: field(row, "created_at", "updated_at") || new Date().toISOString(),
+    updated_at: field(row, "updated_at", "created_at") || new Date().toISOString(),
     source_table: table,
     _source_table: table,
     _source_rank: sourceRank(table),
@@ -464,20 +498,64 @@ function dealish(row: AnyRow, table: string) {
   return false;
 }
 
-function mergeDeal(base: AnyRow, next: AnyRow) {
-  const merged: AnyRow = { ...next, ...base };
+function completenessScore(row: AnyRow) {
+  let score = 0;
+  const important = [
+    "asking_price",
+    "price",
+    "arv",
+    "arv_value",
+    "repair_estimate",
+    "repairs_needed",
+    "route_summary",
+    "ai_route_summary",
+    "routing_needs",
+    "deal_needs",
+    "beds",
+    "bedrooms",
+    "baths",
+    "bathrooms",
+    "square_feet",
+    "sqft",
+    "strategy",
+    "exit_strategy",
+  ];
 
-  const baseMeta = metadataOf(base);
-  const nextMeta = metadataOf(next);
+  for (const key of important) {
+    if (field(row, key)) score += 1;
+  }
 
-  merged.metadata = { ...nextMeta, ...baseMeta };
-  merged.photo_urls = Array.from(new Set([...(next.photo_urls || []), ...(base.photo_urls || [])].map(clean).filter(Boolean)));
-  merged.photos = merged.photo_urls.map((url: string) => ({ url }));
-  merged.main_photo_url = first(base.main_photo_url, next.main_photo_url, merged.photo_urls[0]);
-  merged.image_url = first(base.image_url, next.image_url, merged.main_photo_url);
-  merged.photo_url = first(base.photo_url, next.photo_url, merged.main_photo_url);
+  if (photosFrom(row).photo_urls.length) score += 2;
+  if (row._source_table === "vf_deals") score += 100;
 
-  return normalizeDeal(merged, first(base.source_table, next.source_table, "merged"));
+  return score;
+}
+
+function mergeDeal(primary: AnyRow, secondary: AnyRow) {
+  const primaryMeta = metadataOf(primary);
+  const secondaryMeta = metadataOf(secondary);
+
+  const mergedMeta = { ...secondaryMeta, ...primaryMeta };
+  const merged: AnyRow = { ...secondary, ...primary, metadata: mergedMeta };
+
+  const photos = Array.from(
+    new Set([
+      ...(Array.isArray(secondary.photo_urls) ? secondary.photo_urls : []),
+      ...(Array.isArray(primary.photo_urls) ? primary.photo_urls : []),
+      ...(Array.isArray(secondaryMeta.photo_urls) ? secondaryMeta.photo_urls : []),
+      ...(Array.isArray(primaryMeta.photo_urls) ? primaryMeta.photo_urls : []),
+    ].map(clean).filter(Boolean))
+  );
+
+  if (photos.length) {
+    merged.photo_urls = photos;
+    merged.photos = photos.map((url) => ({ url }));
+    merged.main_photo_url = first(primary.main_photo_url, secondary.main_photo_url, photos[0]);
+    merged.image_url = first(primary.image_url, secondary.image_url, merged.main_photo_url);
+    merged.photo_url = first(primary.photo_url, secondary.photo_url, merged.main_photo_url);
+  }
+
+  return normalizeDeal(merged, first(primary.source_table, secondary.source_table, "merged"));
 }
 
 export async function GET(request: Request) {
@@ -517,7 +595,7 @@ export async function GET(request: Request) {
     const byKey = new Map<string, AnyRow>();
 
     for (const row of found) {
-      const key = first(row.canonical_event_id, row.deal_id, row.signal_id, row.id, row.title);
+      const key = first(row.canonical_event_id, row.signal_id, row.deal_id, row.id, row.title);
       if (!key) continue;
 
       const existing = byKey.get(key);
@@ -527,13 +605,19 @@ export async function GET(request: Request) {
         continue;
       }
 
-      const preferred = row._source_rank < existing._source_rank ? row : existing;
-      const secondary = row._source_rank < existing._source_rank ? existing : row;
+      const rowBetter =
+        completenessScore(row) > completenessScore(existing) ||
+        (completenessScore(row) === completenessScore(existing) && row._source_rank < existing._source_rank);
+
+      const preferred = rowBetter ? row : existing;
+      const secondary = rowBetter ? existing : row;
+
       byKey.set(key, mergeDeal(preferred, secondary));
     }
 
-    const deals = Array.from(byKey.values())
-      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    const deals = Array.from(byKey.values()).sort(
+      (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    );
 
     return NextResponse.json({
       ok: true,
@@ -544,7 +628,7 @@ export async function GET(request: Request) {
       count: deals.length,
       source: "api/deal/feed",
       mirrors: "api/pain/feed",
-      dedupe_model: "one deal per canonical_event_id",
+      dedupe_model: "one deal per canonical_event_id, prefers vf_deals full record",
     });
   } catch (error: any) {
     return NextResponse.json(
