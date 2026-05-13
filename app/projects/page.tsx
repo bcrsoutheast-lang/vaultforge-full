@@ -113,7 +113,7 @@ function titleOf(row: Row) {
 function sourceOf(row: Row) {
   const source = first(row.source_kind, row.source_table, row._source_table, row.source, field(row, "canonical_kind")).toLowerCase();
 
-  if (source.includes("deal") || field(row, "deal_id", "asking_price", "price", "arv", "arv_value", "repair_estimate", "repairs_needed")) return "deal";
+  if (source.includes("deal") || field(row, "deal_id", "asking_price", "price", "arv")) return "deal";
   if (source.includes("pain") || field(row, "pain_id", "pain_type")) return "pain";
 
   return "signal";
@@ -202,6 +202,127 @@ function money(value: unknown) {
     currency: "USD",
     maximumFractionDigits: 0,
   });
+}
+
+function canonicalKey(row: Row) {
+  return (
+    field(row, "canonical_event_id") ||
+    field(row, "deal_id") ||
+    field(row, "project_id") ||
+    field(row, "item_id") ||
+    field(row, "signal_id") ||
+    field(row, "id") ||
+    `${titleOf(row)}-${marketOf(row)}`
+  );
+}
+
+function completenessScore(row: Row) {
+  let score = 0;
+
+  const keys = [
+    "asking_price",
+    "price",
+    "arv",
+    "arv_value",
+    "repair_estimate",
+    "repairs_needed",
+    "beds",
+    "bedrooms",
+    "baths",
+    "bathrooms",
+    "square_feet",
+    "sqft",
+    "strategy",
+    "exit_strategy",
+    "routing_needs",
+    "deal_needs",
+    "distress_signals",
+    "route_summary",
+    "ai_route_summary",
+    "routing_summary",
+  ];
+
+  for (const key of keys) {
+    if (field(row, key)) score += 1;
+  }
+
+  if (photosOf(row).length) score += 3;
+
+  const source = first(row.source_table, row._source_table, row.source).toLowerCase();
+
+  if (source.includes("vf_deals")) score += 100;
+  if (source.includes("deal")) score += 20;
+
+  return score;
+}
+
+function mergeRows(primary: Row, secondary: Row) {
+  const primaryMeta = meta(primary);
+  const secondaryMeta = meta(secondary);
+  const merged: Row = {
+    ...secondary,
+    ...primary,
+    metadata: {
+      ...secondaryMeta,
+      ...primaryMeta,
+    },
+  };
+
+  const photos = Array.from(
+    new Set([
+      ...parseArray(secondary.photo_urls),
+      ...parseArray(primary.photo_urls),
+      ...parseArray(secondaryMeta.photo_urls),
+      ...parseArray(primaryMeta.photo_urls),
+      ...photosOf(secondary),
+      ...photosOf(primary),
+    ].map(clean).filter(Boolean))
+  );
+
+  if (photos.length) {
+    merged.photo_urls = photos;
+    merged.photos = photos.map((url) => ({ url }));
+    merged.main_photo_url = first(primary.main_photo_url, secondary.main_photo_url, photos[0]);
+    merged.image_url = first(primary.image_url, secondary.image_url, merged.main_photo_url);
+    merged.photo_url = first(primary.photo_url, secondary.photo_url, merged.main_photo_url);
+  }
+
+  return merged;
+}
+
+function routingSummary(row: Row) {
+  const summary = noteOf(row);
+  const needs = field(row, "routing_needs", "deal_needs", "needs");
+  const signals = field(row, "distress_signals");
+  const strategy = field(row, "strategy", "exit_strategy");
+  const market = marketOf(row);
+  const owner = ownerOf(row);
+
+  const parts = [
+    summary && summary !== "Workstation ready for review." ? summary : "",
+    needs ? `Needs: ${needs}` : "",
+    signals ? `Signal pressure: ${signals}` : "",
+    strategy ? `Likely strategy: ${strategy}` : "",
+    market && market !== "Market not listed" ? `Market context: ${market}` : "",
+    owner ? `Owner/contact connected: ${owner}` : "",
+  ].filter(Boolean);
+
+  return parts.length
+    ? parts.join(" • ")
+    : "This deal needs a routing summary. Useful AI context would include buyer type, lender need, contractor scope, timeline, seller pressure, and next best action.";
+}
+
+function missingInfo(row: Row) {
+  const missing: string[] = [];
+
+  if (!field(row, "routing_needs", "deal_needs", "needs")) missing.push("who should receive this");
+  if (!field(row, "distress_signals")) missing.push("urgency or seller pressure");
+  if (!field(row, "capital_needed")) missing.push("capital need");
+  if (!field(row, "contractor_scope")) missing.push("contractor scope");
+  if (!field(row, "operator_scope")) missing.push("operator/JV scope");
+  if (!field(row, "target_buyer")) missing.push("target buyer type");
+
+  return missing;
 }
 
 const page: React.CSSProperties = {
@@ -311,19 +432,11 @@ function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
   const source = sourceOf(row);
   const photos = photosOf(row);
   const owner = ownerOf(row);
-
-  const openHref =
-    source === "deal" && id
-      ? `/deal/detail?id=${encodeURIComponent(id)}`
-      : signalId
-      ? `/signals/${encodeURIComponent(signalId)}`
-      : id
-      ? `/pain-room/${encodeURIComponent(id)}`
-      : "/projects";
+  const missing = missingInfo(row);
 
   const contactHref = signalId
-    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}`
-    : `/messages/new?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}`;
+    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`
+    : `/messages/new?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`;
 
   return (
     <article style={glass}>
@@ -357,6 +470,16 @@ function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
 
           {source === "deal" ? <DetailGrid row={row} /> : null}
 
+          <section style={{ marginTop: 14, border: "1px solid rgba(232,196,107,.16)", borderRadius: 18, padding: 14, background: "rgba(232,196,107,.055)" }}>
+            <div style={{ ...label, fontSize: 11 }}>Routing Summary</div>
+            <p style={{ ...muted, margin: "8px 0 0" }}>{routingSummary(row)}</p>
+            {missing.length ? (
+              <p style={{ color: "#f8e7b0", margin: "10px 0 0", fontWeight: 850 }}>
+                Add for stronger AI routing: {missing.join(", ")}.
+              </p>
+            ) : null}
+          </section>
+
           <div style={{ marginTop: 12 }}>
             {id ? <span style={chip}>ID: {id}</span> : null}
             {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
@@ -370,11 +493,9 @@ function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <Link href={openHref} style={button}>{source === "deal" ? "Open Deal Detail" : source === "pain" ? "Open Pain Room" : "Open Signal"}</Link>
-
+            <Link href={contactHref} style={button}>Contact Owner</Link>
             {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
-
-            <Link href={contactHref} style={ghost}>Message Owner</Link>
+            {source === "deal" && id ? <Link href={`/deal/detail?id=${encodeURIComponent(id)}`} style={ghost}>Deal Detail</Link> : null}
           </div>
         </div>
       </div>
@@ -429,13 +550,29 @@ export default function ProjectsPage() {
         }
       }
 
-      const seen = new Set<string>();
-      const unique = collected.filter((item) => {
-        const key = first(field(item, "canonical_event_id"), idOf(item), signalIdOf(item), titleOf(item) + noteOf(item));
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      const byKey = new Map<string, Row>();
+
+      for (const item of collected) {
+        const key = canonicalKey(item);
+        if (!key) continue;
+
+        const existing = byKey.get(key);
+
+        if (!existing) {
+          byKey.set(key, item);
+          continue;
+        }
+
+        const itemScore = completenessScore(item);
+        const existingScore = completenessScore(existing);
+
+        const primary = itemScore >= existingScore ? item : existing;
+        const secondary = itemScore >= existingScore ? existing : item;
+
+        byKey.set(key, mergeRows(primary, secondary));
+      }
+
+      const unique = Array.from(byKey.values());
 
       setItems(unique);
       setStatus(unique.length ? "" : "No deal or pain workstations found yet.");
