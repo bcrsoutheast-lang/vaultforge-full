@@ -762,7 +762,7 @@ export default function ProfilePage() {
         setForm((current) => profileToForm(localBackup, email, current));
       }
 
-      const res = await fetch(`/api/profile/me?email=${encodeURIComponent(email)}`, {
+      const res = await fetch(`/api/profile?email=${encodeURIComponent(email)}`, {
         cache: "no-store",
         headers: { "x-vf-email": email },
       });
@@ -815,7 +815,7 @@ export default function ProfilePage() {
         max_alerts_per_day: Number(form.max_alerts_per_day || 10),
       };
 
-      const res = await fetch("/api/profile/save", {
+      const res = await fetch("/api/profile", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
