@@ -4,151 +4,144 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type AnyRecord = Record<string, any>;
+
 const DEAL_TABLE = "vf_deals";
 
-type Row = Record<string, any>;
-
-function supabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) {
-    throw new Error("Missing Supabase environment values.");
-  }
+  if (!url || !key) return null;
 
   return createClient(url, key, {
     auth: {
-      autoRefreshToken: false,
       persistSession: false,
+      autoRefreshToken: false,
       detectSessionInUrl: false,
     },
   });
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
+function cleanText(value: unknown) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
 }
 
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
+function cleanLower(value: unknown) {
+  return cleanText(value).toLowerCase();
 }
 
-function cleanNumber(value: unknown) {
-  const text = clean(value);
-  if (!text) return null;
-  const n = Number(text.replace(/[^\d.-]/g, ""));
-  return Number.isFinite(n) ? n : null;
-}
-
-function nullable(value: unknown) {
-  const text = clean(value);
-  return text ? text : null;
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
+function firstText(body: AnyRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = body?.[key];
+    const text = cleanText(value);
     if (text) return text;
   }
   return "";
 }
 
-function photoArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+function arrayFromAny(value: unknown): string[] {
+  if (!value) return [];
 
-  const text = clean(value);
-  if (!text) return [];
-
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
-  } catch {
-    // Use as one URL.
+  if (Array.isArray(value)) {
+    return value.map((item) => cleanText(item)).filter(Boolean);
   }
 
-  return [text];
-}
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
 
-function removeUndefined(row: Row) {
-  const cleaned: Row = {};
-  for (const [key, value] of Object.entries(row)) {
-    if (value !== undefined) cleaned[key] = value;
-  }
-  return cleaned;
-}
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map((item) => cleanText(item)).filter(Boolean);
+    } catch {
+      return trimmed
+        .split(/[,\n|;]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
 
-function missingColumnFromError(error: any) {
-  const text = `${error?.message || ""} ${error?.details || ""} ${error?.hint || ""}`;
-
-  const patterns = [
-    /column ["']?([a-zA-Z0-9_]+)["']? of relation ["']?[a-zA-Z0-9_]+["']? does not exist/i,
-    /Could not find the ["']?([a-zA-Z0-9_]+)["']? column/i,
-    /schema cache.*["']?([a-zA-Z0-9_]+)["']?/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) return match[1];
+    return [trimmed];
   }
 
-  return "";
+  return [];
 }
 
-function isMissingColumnError(error: any) {
-  const text = `${error?.code || ""} ${error?.message || ""} ${error?.details || ""}`.toLowerCase();
-  return (
-    error?.code === "42703" ||
-    (text.includes("column") && text.includes("does not exist")) ||
-    (text.includes("could not find") && text.includes("column")) ||
-    text.includes("schema cache")
-  );
+function makeId(prefix: string) {
+  const random = Math.random().toString(36).slice(2, 10);
+  return `${prefix}_${Date.now()}_${random}`;
 }
 
-function routingRole(body: Row) {
-  const text = [
-    body.routing_needs,
-    body.deal_needs,
-    body.needs,
-    body.ai_route_summary,
-    body.route_summary,
-    body.description,
-    body.seller_situation,
-    body.distress_signals,
-  ]
-    .map(clean)
-    .join(" ")
-    .toLowerCase();
+function json(data: AnyRecord, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}
 
-  if (text.includes("lender") || text.includes("capital") || text.includes("fund")) return "Lender / Capital";
-  if (text.includes("operator") || text.includes("jv") || text.includes("partner")) return "Operator / JV";
-  if (text.includes("contractor") || text.includes("repair") || text.includes("construction")) return "Contractor";
-  if (text.includes("buyer") || text.includes("acquisition")) return "Buyer";
+function makeDirectLinks(baseUrl: string, dealId: string, signalId: string, routingId: string, activityId: string) {
+  const base = baseUrl.replace(/\/$/, "");
+
+  return {
+    deal_detail: `${base}/deal/detail?id=${encodeURIComponent(dealId)}`,
+    projects: `${base}/projects`,
+    signal_room: `${base}/signals/${encodeURIComponent(signalId)}`,
+    routing_room: `${base}/routing-room/${encodeURIComponent(routingId || signalId)}`,
+    activity_room: `${base}/activity/deal/${encodeURIComponent(activityId)}`,
+    alerts: `${base}/alerts`,
+    routing_inbox: `${base}/routing-inbox`,
+    dashboard: `${base}/dashboard`,
+  };
+}
+
+function normalizeMoney(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return "";
+  return text;
+}
+
+function roleFromText(text: string) {
+  const lower = text.toLowerCase();
+
+  if (lower.includes("lender") || lower.includes("capital") || lower.includes("fund")) return "Lender / Capital";
+  if (lower.includes("operator") || lower.includes("jv") || lower.includes("partner")) return "Operator / JV";
+  if (lower.includes("contractor") || lower.includes("repair") || lower.includes("construction")) return "Contractor";
+  if (lower.includes("buyer") || lower.includes("acquisition")) return "Buyer";
 
   return "Owner Review";
 }
 
-function routingAction(role: string) {
-  const text = role.toLowerCase();
-  if (text.includes("lender") || text.includes("capital")) return "route_to_lender";
-  if (text.includes("operator") || text.includes("jv")) return "route_to_operator";
-  if (text.includes("contractor")) return "route_to_contractor";
-  if (text.includes("buyer")) return "route_to_buyer";
+function actionFromRole(role: string) {
+  const lower = role.toLowerCase();
+
+  if (lower.includes("lender") || lower.includes("capital")) return "route_to_lender";
+  if (lower.includes("operator") || lower.includes("jv")) return "route_to_operator";
+  if (lower.includes("contractor")) return "route_to_contractor";
+  if (lower.includes("buyer")) return "route_to_buyer";
+
   return "needs_review";
 }
 
-function priority(body: Row) {
+function priorityFromBody(body: AnyRecord) {
   const text = [
     body.urgency_level,
+    body.urgency,
     body.distress_signals,
     body.description,
     body.seller_situation,
+    body.ai_route_summary,
     body.route_summary,
   ]
-    .map(clean)
+    .map(cleanText)
     .join(" ")
     .toLowerCase();
 
@@ -174,516 +167,577 @@ function priority(body: Row) {
   return "medium";
 }
 
-function buildRouteSummary(body: Row) {
-  return first(
-    body.ai_route_summary,
-    body.route_summary,
-    [
-      `Type: ${first(body.property_type, body.deal_type, body.asset_type, "Deal")}`,
-      `Strategy: ${first(body.strategy, body.exit_strategy, "Not listed")}`,
-      `Exit: ${first(body.exit_strategy, body.strategy, "Not listed")}`,
-      `Market: ${[first(body.city), first(body.state)].filter(Boolean).join(", ") || "Not listed"}`,
-      first(body.routing_needs, body.deal_needs, body.needs) ? `Needs: ${first(body.routing_needs, body.deal_needs, body.needs)}` : "",
-      first(body.distress_signals) ? `Signals: ${first(body.distress_signals)}` : "",
-      first(body.urgency_level) ? `Urgency: ${first(body.urgency_level)}` : "",
-      first(body.capital_needed) ? `Capital: ${first(body.capital_needed)}` : "",
-      first(body.contractor_scope) ? `Contractor Scope: ${first(body.contractor_scope)}` : "",
-      first(body.operator_scope) ? `Operator Scope: ${first(body.operator_scope)}` : "",
-    ]
-      .filter(Boolean)
-      .join(" | ")
+function buildRouteSummary(body: AnyRecord) {
+  const supplied = firstText(body, ["ai_route_summary", "route_summary", "routing_summary"]);
+  if (supplied) return supplied;
+
+  return [
+    `Type: ${firstText(body, ["property_type", "deal_type", "asset_type"]) || "Deal"}`,
+    `Strategy: ${firstText(body, ["strategy", "exit_strategy"]) || "Not listed"}`,
+    `Exit: ${firstText(body, ["exit_strategy", "strategy"]) || "Not listed"}`,
+    `Market: ${[firstText(body, ["city"]), firstText(body, ["state"])].filter(Boolean).join(", ") || "Not listed"}`,
+    firstText(body, ["routing_needs", "deal_needs", "needs"]) ? `Needs: ${firstText(body, ["routing_needs", "deal_needs", "needs"])}` : "",
+    firstText(body, ["distress_signals"]) ? `Signals: ${firstText(body, ["distress_signals"])}` : "",
+    firstText(body, ["urgency_level", "urgency"]) ? `Urgency: ${firstText(body, ["urgency_level", "urgency"])}` : "",
+    firstText(body, ["capital_needed"]) ? `Capital: ${firstText(body, ["capital_needed"])}` : "",
+    firstText(body, ["contractor_scope"]) ? `Contractor Scope: ${firstText(body, ["contractor_scope"])}` : "",
+    firstText(body, ["operator_scope"]) ? `Operator Scope: ${firstText(body, ["operator_scope"])}` : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function missingColumnFromError(error: any) {
+  const text = `${error?.message || ""} ${error?.details || ""} ${error?.hint || ""}`;
+
+  const patterns = [
+    /column ["']?([a-zA-Z0-9_]+)["']? of relation ["']?[a-zA-Z0-9_]+["']? does not exist/i,
+    /Could not find the ["']?([a-zA-Z0-9_]+)["']? column/i,
+    /schema cache.*["']?([a-zA-Z0-9_]+)["']?/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+
+  return "";
+}
+
+function isMissingColumnError(error: any) {
+  const text = `${error?.code || ""} ${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+
+  return (
+    error?.code === "42703" ||
+    (text.includes("column") && text.includes("does not exist")) ||
+    (text.includes("could not find") && text.includes("column")) ||
+    text.includes("schema cache")
   );
 }
 
-function buildRows(body: Row, email: string) {
-  const photos = photoArray(body.photo_urls || body.photos);
-  const propertyType = first(body.property_type, body.deal_type, body.asset_type, "Deal");
-  const strategy = first(body.strategy, body.exit_strategy, "Strategy Needed");
-  const exitStrategy = first(body.exit_strategy, body.strategy);
-  const asking = cleanNumber(body.asking_price ?? body.price);
-  const arv = cleanNumber(body.arv ?? body.arv_value ?? body.estimated_value);
-  const repairs = cleanNumber(body.repair_estimate ?? body.repairs_needed ?? body.estimated_repairs);
-  const squareFeet = first(body.square_feet, body.sqft, body.building_sqft);
-  const acres = first(body.acres, body.land_acres);
-  const routingNeeds = first(body.routing_needs, body.deal_needs, body.needs);
-  const distressSignals = first(body.distress_signals);
-  const sellerSituation = [body.seller_situation, distressSignals].map(clean).filter(Boolean).join(" | ");
-  const summary = buildRouteSummary(body);
-  const now = new Date().toISOString();
+async function adaptiveInsert(client: any, table: string, variants: AnyRecord[]) {
+  const attempts: AnyRecord[] = [];
 
-  const metadata = removeUndefined({
-    ...body,
-    source: "api_deal_create_signal_route_fix",
-    owner_email: email,
-    member_email: email,
-    property_type: propertyType,
-    deal_type: propertyType,
-    asset_type: propertyType,
-    strategy,
-    exit_strategy: exitStrategy,
-    asking_price: asking,
-    price: asking,
-    arv,
-    arv_value: arv,
-    repair_estimate: repairs,
-    repairs_needed: repairs,
-    photo_urls: photos,
-    main_photo_url: photos[0] || first(body.main_photo_url),
-    route_summary: summary,
-    ai_route_summary: summary,
-    routing_summary: summary,
-    routing_needs: routingNeeds,
-    deal_needs: first(body.deal_needs, routingNeeds),
-    needs: first(body.needs, routingNeeds),
-    distress_signals: distressSignals,
-    seller_situation: sellerSituation,
-    beds: first(body.beds, body.bedrooms),
-    bedrooms: first(body.bedrooms, body.beds),
-    baths: first(body.baths, body.bathrooms),
-    bathrooms: first(body.bathrooms, body.baths),
-    square_feet: squareFeet,
-    sqft: squareFeet,
-    building_sqft: squareFeet,
-    year_built: first(body.year_built),
-    occupancy: first(body.occupancy),
-    zoning: first(body.zoning),
-    acres,
-    land_acres: acres,
-    utilities: first(body.utilities, body.access_notes),
-    road_access: first(body.road_access, body.occupancy),
-    noi: first(body.noi),
-    cap_rate: first(body.cap_rate),
-    target_buyer: first(body.target_buyer),
-    capital_needed: first(body.capital_needed),
-    ideal_lender: first(body.ideal_lender),
-    contractor_scope: first(body.contractor_scope),
-    operator_scope: first(body.operator_scope),
-    jv_structure: first(body.jv_structure),
-    title_issue: first(body.title_issue),
-    saved_at: now,
-  });
+  for (const variant of variants) {
+    let payload = { ...variant };
+    const removed_columns: string[] = [];
 
-  const core = removeUndefined({
-    owner_email: email,
-    member_email: email,
-    title: first(body.title, body.deal_title, "Untitled Deal"),
-    property_type: propertyType,
-    strategy,
-    city: first(body.city, "Unknown City"),
-    state: first(body.state, "Unknown State"),
-    address: nullable(body.address),
-    asking_price: asking,
-    arv,
-    repair_estimate: repairs,
-    description: nullable(body.description),
-    status: first(body.status, "active"),
-    photo_urls: photos,
-    main_photo_url: photos[0] || nullable(body.main_photo_url),
-    route_summary: summary,
-    ai_route_summary: summary,
-    routing_summary: summary,
-    routing_needs: routingNeeds,
-    deal_needs: first(body.deal_needs, routingNeeds),
-    needs: routingNeeds,
-    distress_signals: distressSignals,
-    seller_situation: sellerSituation,
-    metadata,
-    created_at: now,
-    updated_at: now,
-  });
-
-  const expanded = removeUndefined({
-    ...core,
-    deal_type: propertyType,
-    asset_type: propertyType,
-    exit_strategy: exitStrategy,
-    price: asking,
-    beds: nullable(body.beds ?? body.bedrooms),
-    baths: nullable(body.baths ?? body.bathrooms),
-    bedrooms: nullable(body.bedrooms ?? body.beds),
-    bathrooms: nullable(body.bathrooms ?? body.baths),
-    square_feet: nullable(squareFeet),
-    sqft: nullable(squareFeet),
-    building_sqft: nullable(squareFeet),
-    year_built: nullable(body.year_built),
-    occupancy: nullable(body.occupancy),
-    zoning: nullable(body.zoning),
-    acres: nullable(acres),
-    land_acres: nullable(acres),
-    utilities: nullable(body.utilities ?? body.access_notes),
-    road_access: nullable(body.road_access ?? body.occupancy),
-    noi: nullable(body.noi),
-    cap_rate: nullable(body.cap_rate),
-    target_buyer: nullable(body.target_buyer),
-    capital_needed: nullable(body.capital_needed),
-    ideal_lender: nullable(body.ideal_lender),
-    contractor_scope: nullable(body.contractor_scope),
-    operator_scope: nullable(body.operator_scope),
-    jv_structure: nullable(body.jv_structure),
-    title_issue: nullable(body.title_issue),
-    private_notes: nullable(body.private_notes ?? body.access_notes),
-    access_notes: nullable(body.access_notes),
-  });
-
-  const minimalWithMetadata = removeUndefined({
-    owner_email: email,
-    member_email: email,
-    title: core.title,
-    property_type: propertyType,
-    strategy,
-    city: core.city,
-    state: core.state,
-    address: core.address,
-    asking_price: asking,
-    arv,
-    repair_estimate: repairs,
-    description: core.description,
-    status: core.status,
-    photo_urls: photos,
-    main_photo_url: core.main_photo_url,
-    metadata,
-    created_at: now,
-    updated_at: now,
-  });
-
-  return { expanded, core, minimalWithMetadata };
-}
-
-async function adaptiveInsert(supabase: any, candidates: Row[]) {
-  const errors: string[] = [];
-
-  for (const candidate of candidates) {
-    let row = { ...candidate };
-
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      const { data, error } = await supabase.from(DEAL_TABLE).insert(row).select("*").single();
-
-      if (!error && data) return { data, error: null };
-
-      if (error?.message) errors.push(error.message);
-
-      if (!isMissingColumnError(error)) break;
-
-      const missing = missingColumnFromError(error);
-
-      if (!missing || !Object.prototype.hasOwnProperty.call(row, missing)) break;
-
-      delete row[missing];
-    }
-  }
-
-  return {
-    data: null,
-    error: { message: errors[0] || "Could not create deal." },
-  };
-}
-
-async function insertAdaptive(supabase: any, table: string, variants: Row[]) {
-  const errors: string[] = [];
-
-  for (const original of variants) {
-    let row = { ...original };
-
-    for (let attempt = 0; attempt < 18; attempt += 1) {
+    for (let i = 0; i < 24; i += 1) {
       try {
-        const { data, error } = await supabase.from(table).insert(row).select("*").single();
+        const { data, error } = await client.from(table).insert(payload).select("*").single();
 
-        if (!error && data) return { ok: true, data };
+        attempts.push({
+          table,
+          ok: !error,
+          error: error?.message || null,
+          keys: Object.keys(payload),
+          removed_columns: [...removed_columns],
+        });
 
-        if (error?.message) errors.push(error.message);
+        if (!error && data) {
+          return { ok: true, data, error: null, attempts, removed_columns };
+        }
 
         if (!isMissingColumnError(error)) break;
 
         const missing = missingColumnFromError(error);
-        if (!missing || !Object.prototype.hasOwnProperty.call(row, missing)) break;
-        delete row[missing];
+        if (!missing || !Object.prototype.hasOwnProperty.call(payload, missing)) break;
+
+        delete payload[missing];
+        removed_columns.push(missing);
       } catch (error: any) {
-        if (error?.message) errors.push(error.message);
+        attempts.push({
+          table,
+          ok: false,
+          error: error?.message || String(error),
+          keys: Object.keys(payload),
+          removed_columns: [...removed_columns],
+        });
         break;
       }
     }
   }
 
-  return { ok: false, error: errors[0] || `${table} insert failed.` };
+  return {
+    ok: false,
+    data: null,
+    error: attempts.find((attempt) => attempt.error)?.error || `${table} insert failed.`,
+    attempts,
+    removed_columns: [],
+  };
 }
 
-async function createDealSignal(supabase: any, deal: Row, body: Row, email: string) {
-  const dealId = first(deal.id, deal.deal_id, deal.project_id, deal.item_id);
-  const signalId = `deal-${dealId || crypto.randomUUID()}`;
-  const role = routingRole(body);
-  const action = routingAction(role);
-  const summary = buildRouteSummary(body);
-  const p = priority(body);
+function buildDealPayloads(body: AnyRecord, email: string, directLinksPending: AnyRecord) {
+  const photoUrls = Array.from(
+    new Set([
+      ...arrayFromAny(body.photo_urls),
+      ...arrayFromAny(body.photoUrls),
+      ...arrayFromAny(body.photos),
+      ...arrayFromAny(body.files),
+    ].filter(Boolean))
+  );
+
+  const firstPhoto = firstText(body, ["main_photo_url", "image_url", "photo_url"]) || photoUrls[0] || "";
+  const propertyType = firstText(body, ["property_type", "deal_type", "asset_type"]) || "Deal";
+  const strategy = firstText(body, ["strategy", "exit_strategy"]) || "Strategy Needed";
+  const exitStrategy = firstText(body, ["exit_strategy", "strategy"]);
+  const routeSummary = buildRouteSummary(body);
+  const routingNeeds = firstText(body, ["routing_needs", "deal_needs", "needs"]);
+  const distressSignals = firstText(body, ["distress_signals"]);
+  const sellerSituation = [firstText(body, ["seller_situation"]), distressSignals].filter(Boolean).join(" | ");
   const now = new Date().toISOString();
 
-  const metadata = removeUndefined({
+  const metadata = {
+    ...body,
+    source: "deal_create_mirrors_pain_pipeline",
     owner_email: email,
     member_email: email,
-    deal_id: dealId,
-    item_id: dealId,
-    signal_id: signalId,
-    source: "deal_create_signal",
-    property_type: first(body.property_type, body.deal_type, body.asset_type),
-    strategy: first(body.strategy, body.exit_strategy),
-    market: [first(body.city), first(body.state)].filter(Boolean).join(", "),
-    routing_needs: first(body.routing_needs, body.deal_needs, body.needs),
-    distress_signals: first(body.distress_signals),
-    route_summary: summary,
-    asking_price: cleanNumber(body.asking_price ?? body.price),
-    arv: cleanNumber(body.arv ?? body.arv_value),
-    repair_estimate: cleanNumber(body.repair_estimate ?? body.repairs_needed),
-  });
+    submitted_by: email,
+    user_email: email,
+    property_type: propertyType,
+    deal_type: propertyType,
+    asset_type: propertyType,
+    strategy,
+    exit_strategy: exitStrategy,
+    asking_price: normalizeMoney(firstText(body, ["asking_price", "price"])),
+    price: normalizeMoney(firstText(body, ["price", "asking_price"])),
+    arv: normalizeMoney(firstText(body, ["arv", "arv_value", "estimated_value"])),
+    arv_value: normalizeMoney(firstText(body, ["arv_value", "arv", "estimated_value"])),
+    repair_estimate: normalizeMoney(firstText(body, ["repair_estimate", "repairs_needed", "estimated_repairs"])),
+    repairs_needed: normalizeMoney(firstText(body, ["repairs_needed", "repair_estimate", "estimated_repairs"])),
+    route_summary: routeSummary,
+    ai_route_summary: routeSummary,
+    routing_summary: routeSummary,
+    routing_needs: routingNeeds,
+    deal_needs: firstText(body, ["deal_needs"]) || routingNeeds,
+    needs: firstText(body, ["needs"]) || routingNeeds,
+    distress_signals: distressSignals,
+    seller_situation: sellerSituation,
+    city: firstText(body, ["city"]),
+    state: firstText(body, ["state"]),
+    address: firstText(body, ["address", "property_address", "location"]),
+    photo_urls: photoUrls,
+    photos: photoUrls,
+    main_photo_url: firstPhoto,
+    direct_links: directLinksPending,
+    created_at: now,
+    updated_at: now,
+  };
 
-  const signalPayload = {
-    signal_id: signalId,
-    item_id: dealId || null,
-    deal_id: dealId || null,
-    title: first(body.title, deal.title, "New Deal Signal"),
-    signal_type: "Deal Signal",
-    type: "deal",
-    priority: p,
-    urgency: p,
+  const full = {
+    owner_email: email,
+    member_email: email,
+    submitted_by: email,
+    user_email: email,
+
+    title: firstText(body, ["title", "deal_title", "headline", "name"]) || "Untitled Deal",
+    description: firstText(body, ["description", "notes", "seller_situation"]),
     status: "active",
-    market: [first(body.city), first(body.state)].filter(Boolean).join(", "),
-    city: first(body.city),
-    state: first(body.state),
-    asset_type: first(body.property_type, body.asset_type, body.deal_type),
-    property_type: first(body.property_type, body.asset_type, body.deal_type),
-    note: summary,
-    notes: summary,
-    description: summary,
-    route_summary: summary,
-    routing_summary: summary,
-    ai_route_summary: summary,
+
+    property_type: propertyType,
+    deal_type: propertyType,
+    asset_type: propertyType,
+    strategy,
+    exit_strategy: exitStrategy,
+
+    city: firstText(body, ["city"]) || "Unknown City",
+    state: firstText(body, ["state"]) || "Unknown State",
+    market: [firstText(body, ["city"]), firstText(body, ["state"])].filter(Boolean).join(", "),
+    address: firstText(body, ["address", "property_address", "location"]),
+
+    asking_price: normalizeMoney(firstText(body, ["asking_price", "price"])),
+    price: normalizeMoney(firstText(body, ["price", "asking_price"])),
+    arv: normalizeMoney(firstText(body, ["arv", "arv_value", "estimated_value"])),
+    arv_value: normalizeMoney(firstText(body, ["arv_value", "arv", "estimated_value"])),
+    repair_estimate: normalizeMoney(firstText(body, ["repair_estimate", "repairs_needed", "estimated_repairs"])),
+    repairs_needed: normalizeMoney(firstText(body, ["repairs_needed", "repair_estimate", "estimated_repairs"])),
+
+    beds: firstText(body, ["beds", "bedrooms"]),
+    bedrooms: firstText(body, ["bedrooms", "beds"]),
+    baths: firstText(body, ["baths", "bathrooms"]),
+    bathrooms: firstText(body, ["bathrooms", "baths"]),
+    square_feet: firstText(body, ["square_feet", "sqft", "building_sqft"]),
+    sqft: firstText(body, ["sqft", "square_feet", "building_sqft"]),
+    building_sqft: firstText(body, ["building_sqft", "square_feet", "sqft"]),
+    year_built: firstText(body, ["year_built"]),
+    occupancy: firstText(body, ["occupancy"]),
+    zoning: firstText(body, ["zoning"]),
+    acres: firstText(body, ["acres", "land_acres"]),
+    land_acres: firstText(body, ["land_acres", "acres"]),
+    utilities: firstText(body, ["utilities", "access_notes"]),
+    road_access: firstText(body, ["road_access", "occupancy"]),
+    noi: firstText(body, ["noi"]),
+    cap_rate: firstText(body, ["cap_rate"]),
+
+    target_buyer: firstText(body, ["target_buyer"]),
+    capital_needed: firstText(body, ["capital_needed"]),
+    ideal_lender: firstText(body, ["ideal_lender"]),
+    contractor_scope: firstText(body, ["contractor_scope"]),
+    operator_scope: firstText(body, ["operator_scope"]),
+    jv_structure: firstText(body, ["jv_structure"]),
+    title_issue: firstText(body, ["title_issue"]),
+
+    route_summary: routeSummary,
+    ai_route_summary: routeSummary,
+    routing_summary: routeSummary,
+    routing_needs: routingNeeds,
+    deal_needs: firstText(body, ["deal_needs"]) || routingNeeds,
+    needs: firstText(body, ["needs"]) || routingNeeds,
+    distress_signals: distressSignals,
+    seller_situation: sellerSituation,
+    access_notes: firstText(body, ["access_notes"]),
+    private_notes: firstText(body, ["private_notes", "access_notes"]),
+
+    image_url: firstPhoto,
+    photo_url: firstPhoto,
+    main_photo_url: firstPhoto,
+    photo_urls: photoUrls,
+    photos: photoUrls,
+
+    direct_links: directLinksPending,
+    archived: false,
+    deleted: false,
+    metadata,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const core = {
     owner_email: email,
     member_email: email,
-    created_by_email: email,
-    submitted_by_email: email,
-    source: "deal_create_pipeline",
-    source_table: DEAL_TABLE,
+    title: full.title,
+    description: full.description,
+    status: full.status,
+    property_type: propertyType,
+    strategy,
+    city: full.city,
+    state: full.state,
+    address: full.address,
+    asking_price: full.asking_price,
+    arv: full.arv,
+    repair_estimate: full.repair_estimate,
+    main_photo_url: firstPhoto,
+    photo_urls: photoUrls,
+    route_summary: routeSummary,
+    routing_needs: routingNeeds,
+    distress_signals: distressSignals,
     metadata,
     created_at: now,
     updated_at: now,
   };
 
-  const signalResult = await insertAdaptive(supabase, "vf_intelligence_signals", [
-    signalPayload,
-    {
-      signal_id: signalPayload.signal_id,
-      item_id: signalPayload.item_id,
-      title: signalPayload.title,
-      signal_type: signalPayload.signal_type,
-      priority: signalPayload.priority,
-      status: signalPayload.status,
-      market: signalPayload.market,
-      note: signalPayload.note,
-      owner_email: signalPayload.owner_email,
-      member_email: signalPayload.member_email,
-      source: signalPayload.source,
-      metadata: signalPayload.metadata,
-      created_at: signalPayload.created_at,
-      updated_at: signalPayload.updated_at,
-    },
-    {
-      signal_id: signalPayload.signal_id,
-      title: signalPayload.title,
-      note: signalPayload.note,
-      owner_email: signalPayload.owner_email,
-      metadata: signalPayload.metadata,
-      created_at: signalPayload.created_at,
-    },
-  ]);
-
-  const routingPayload = {
-    signal_id: signalId,
-    alert_id: signalId,
-    item_id: dealId || null,
-    deal_id: dealId || null,
-    title: first(body.title, deal.title, "New Deal Routing"),
-    note: summary || "New deal created and routed for review.",
-    notes: summary || "New deal created and routed for review.",
-    reason: summary || "New deal created and routed for review.",
-    route_summary: summary,
-    routing_summary: summary,
-    action,
-    routing_action: action,
-    priority: p,
-    status: "generated",
-    routing_status: "generated",
-    state_match: first(body.state, deal.state) || null,
-    market_match: first(body.city, deal.city, body.state, deal.state) || null,
-    strategy_match: first(body.strategy, body.exit_strategy, deal.strategy) || null,
-    role_match: role,
-    target_role: role,
-    confidence_score: 72,
-    match_score: 72,
+  const minimal = {
     owner_email: email,
-    admin_email: email,
-    created_by: email,
-    routed_by_email: email,
-    source: "deal_create_pipeline",
-    source_table: DEAL_TABLE,
-    metadata,
-    created_at: now,
-    updated_at: now,
-  };
-
-  const routingResult = await insertAdaptive(supabase, "vf_routing_actions", [
-    routingPayload,
-    {
-      signal_id: routingPayload.signal_id,
-      item_id: routingPayload.item_id,
-      deal_id: routingPayload.deal_id,
-      title: routingPayload.title,
-      note: routingPayload.note,
-      action: routingPayload.action,
-      priority: routingPayload.priority,
-      role_match: routingPayload.role_match,
-      target_role: routingPayload.target_role,
-      routing_status: routingPayload.routing_status,
-      owner_email: routingPayload.owner_email,
-      source: routingPayload.source,
-      metadata: routingPayload.metadata,
-      created_at: routingPayload.created_at,
-      updated_at: routingPayload.updated_at,
-    },
-    {
-      signal_id: routingPayload.signal_id,
-      item_id: routingPayload.item_id,
-      title: routingPayload.title,
-      note: routingPayload.note,
-      action: routingPayload.action,
-      priority: routingPayload.priority,
-      owner_email: routingPayload.owner_email,
-      metadata: routingPayload.metadata,
-      created_at: routingPayload.created_at,
-    },
-  ]);
-
-  const activityPayload = {
-    event_type: "deal_created",
-    event_title: first(body.title, deal.title, "New Deal Created"),
-    title: first(body.title, deal.title, "New Deal Created"),
-    event_description: summary,
-    note: summary,
-    message: summary,
     member_email: email,
-    owner_email: email,
-    related_deal_id: dealId || null,
-    item_id: dealId || null,
-    signal_id: signalId,
-    visibility: "owner",
+    title: full.title,
+    property_type: propertyType,
+    city: full.city,
+    state: full.state,
+    status: full.status,
+    photo_urls: photoUrls,
+    main_photo_url: firstPhoto,
     metadata,
     created_at: now,
     updated_at: now,
   };
 
-  const activityResult = await insertAdaptive(supabase, "vf_activity_events", [
-    activityPayload,
-    {
-      event_type: activityPayload.event_type,
-      event_title: activityPayload.event_title,
-      event_description: activityPayload.event_description,
-      member_email: activityPayload.member_email,
-      related_deal_id: activityPayload.related_deal_id,
-      metadata: activityPayload.metadata,
-      created_at: activityPayload.created_at,
-    },
-    {
-      event_type: activityPayload.event_type,
-      event_title: activityPayload.event_title,
-      event_description: activityPayload.event_description,
-      member_email: activityPayload.member_email,
-    },
-  ]);
+  return { full, core, minimal, metadata, photoUrls, routeSummary, propertyType };
+}
 
-  return {
-    signal_id: signalId,
-    signal: signalResult,
-    routing: routingResult,
-    activity: activityResult,
-  };
+export async function GET() {
+  const client = supabaseAdmin();
+
+  if (!client) {
+    return json({ ok: false, error: "Supabase environment variables are missing." }, 500);
+  }
+
+  return json({
+    ok: true,
+    route: "/api/deal/create",
+    writes_to: DEAL_TABLE,
+    mirrors: "/api/pain/create",
+    message: "Deal create route is live.",
+  });
 }
 
 export async function POST(request: Request) {
+  const client = supabaseAdmin();
+
+  if (!client) {
+    return json({ ok: false, error: "Supabase environment variables are missing." }, 500);
+  }
+
+  let body: AnyRecord = {};
+
   try {
-    const body = await request.json().catch(() => ({}));
+    body = await request.json();
+  } catch {
+    return json({ ok: false, error: "Invalid JSON body." }, 400);
+  }
 
-    const email =
-      cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(body.owner_email) ||
-      cleanEmail(body.member_email);
+  const cookieHeader = request.headers.get("cookie") || "";
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
 
-    if (!email) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Login required to create a deal.",
-        },
-        { status: 401 }
-      );
-    }
+  const submittedBy =
+    cleanLower(request.headers.get("x-vf-email")) ||
+    firstText(body, ["submitted_by", "submittedBy", "user_email", "member_email", "memberEmail", "owner_email", "email"]) ||
+    cleanLower(cookieHeader.match(/vf_email=([^;]+)/)?.[1] ? decodeURIComponent(cookieHeader.match(/vf_email=([^;]+)/)?.[1] || "") : "") ||
+    "unknown";
 
-    const rows = buildRows(body, email);
+  const title = firstText(body, ["title", "deal_title", "headline", "name"]);
+  const city = firstText(body, ["city"]);
 
-    if (!clean(rows.core.title) || rows.core.title === "Untitled Deal") {
-      return NextResponse.json({ ok: false, error: "Deal title is required." }, { status: 400 });
-    }
+  if (!title) {
+    return json({ ok: false, error: "Deal title is required." }, 400);
+  }
 
-    if (!clean(rows.core.city) || rows.core.city === "Unknown City") {
-      return NextResponse.json({ ok: false, error: "City is required." }, { status: 400 });
-    }
+  if (!city) {
+    return json({ ok: false, error: "City is required." }, 400);
+  }
 
-    const supabase = supabaseClient();
-    const result = await adaptiveInsert(supabase, [rows.expanded, rows.core, rows.minimalWithMetadata]);
+  const pendingDealId = "pending";
+  const signalId = firstText(body, ["signal_id", "signalId"]) || makeId("deal_signal");
+  const routingId = firstText(body, ["routing_id", "routingId"]) || signalId;
+  const activityId = firstText(body, ["activity_id", "activityId"]) || makeId("deal_activity");
+  const pendingLinks = makeDirectLinks(baseUrl, pendingDealId, signalId, routingId, activityId);
 
-    if (result.error || !result.data) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: result.error?.message || "Could not create deal.",
-        },
-        { status: 500 }
-      );
-    }
+  const built = buildDealPayloads(body, submittedBy, pendingLinks);
+  const dealInsert = await adaptiveInsert(client, DEAL_TABLE, [built.full, built.core, built.minimal]);
 
-    const pipeline = await createDealSignal(supabase, result.data, body, email);
-    const dealId = first(result.data.id, result.data.deal_id, result.data.project_id, result.data.item_id);
-
-    return NextResponse.json({
-      ok: true,
-      deal: result.data,
-      deal_id: dealId,
-      id: dealId,
-      signal_id: pipeline.signal_id,
-      signal: pipeline.signal,
-      routing: pipeline.routing,
-      activity: pipeline.activity,
-      direct_links: {
-        deal_detail: dealId ? `/deal/detail?id=${encodeURIComponent(dealId)}` : "",
-        projects: "/projects",
-        dashboard: "/dashboard",
-        signal_room: pipeline.signal_id ? `/signals/${encodeURIComponent(pipeline.signal_id)}` : "",
-        routing_room: pipeline.signal_id ? `/routing-room/${encodeURIComponent(pipeline.signal_id)}` : "",
-        activity: "/activity",
-      },
-      saved_to: {
-        deal_table: DEAL_TABLE,
-        deal_detail: Boolean(dealId),
-        intelligence_signal: Boolean(pipeline.signal.ok),
-        routing_action: Boolean(pipeline.routing.ok),
-        activity_event: Boolean(pipeline.activity.ok),
-      },
-      message: "Deal created, signal generated, and routing action created.",
-    });
-  } catch (error: any) {
-    return NextResponse.json(
+  if (!dealInsert.ok || !dealInsert.data) {
+    return json(
       {
         ok: false,
-        error: "Could not create deal.",
-        details: error?.message || String(error),
+        error: "Deal could not be saved.",
+        table: DEAL_TABLE,
+        supabase_error: dealInsert.error,
+        attempts: dealInsert.attempts,
       },
-      { status: 500 }
+      500
     );
   }
+
+  const saved = dealInsert.data || {};
+  const dealId = cleanText(saved.id) || cleanText(saved.deal_id) || signalId;
+  const savedLinks = makeDirectLinks(baseUrl, dealId, signalId, routingId, activityId);
+
+  const role = roleFromText([built.routeSummary, built.full.routing_needs, built.full.distress_signals].map(cleanText).join(" "));
+  const action = actionFromRole(role);
+  const priority = priorityFromBody(body);
+  const now = new Date().toISOString();
+
+  const sharedMeta = {
+    ...built.metadata,
+    deal_id: dealId,
+    item_id: dealId,
+    signal_id: signalId,
+    routing_id: routingId,
+    activity_id: activityId,
+    direct_links: savedLinks,
+    generated_by: "deal_create_mirrors_pain_pipeline",
+  };
+
+  const activityInsert = await adaptiveInsert(client, "vf_activity_events", [
+    {
+      event_type: "deal_created",
+      event_id: activityId,
+      item_id: dealId,
+      related_deal_id: dealId,
+      deal_id: dealId,
+      signal_id: signalId,
+      member_email: submittedBy,
+      owner_email: submittedBy,
+      title: built.full.title,
+      event_title: built.full.title,
+      description: built.routeSummary,
+      event_description: built.routeSummary,
+      status: "new",
+      visibility: "owner",
+      source: "deal",
+      metadata: sharedMeta,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      event_type: "deal_created",
+      event_id: activityId,
+      item_id: dealId,
+      signal_id: signalId,
+      member_email: submittedBy,
+      title: built.full.title,
+      description: built.routeSummary,
+      status: "new",
+      source: "deal",
+      metadata: sharedMeta,
+    },
+    {
+      event_type: "deal_created",
+      event_title: built.full.title,
+      event_description: built.routeSummary,
+      member_email: submittedBy,
+      metadata: sharedMeta,
+    },
+  ]);
+
+  const routingInsert = await adaptiveInsert(client, "vf_routing_actions", [
+    {
+      action_type: "deal_routing_needed",
+      action,
+      routing_action: action,
+      signal_id: signalId,
+      alert_id: signalId,
+      routing_id: routingId,
+      item_id: dealId,
+      deal_id: dealId,
+      member_email: submittedBy,
+      owner_email: submittedBy,
+      title: built.full.title,
+      note: built.routeSummary,
+      notes: built.routeSummary,
+      reason: built.routeSummary,
+      route_summary: built.routeSummary,
+      routing_summary: built.routeSummary,
+      status: "new",
+      routing_status: "new",
+      priority,
+      role_match: role,
+      target_role: role,
+      route_context: built.full.routing_needs || role,
+      source: "deal",
+      source_table: DEAL_TABLE,
+      metadata: sharedMeta,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      action_type: "deal_routing_needed",
+      signal_id: signalId,
+      item_id: dealId,
+      member_email: submittedBy,
+      title: built.full.title,
+      status: "new",
+      route_context: built.full.routing_needs || role,
+      metadata: sharedMeta,
+    },
+    {
+      signal_id: signalId,
+      item_id: dealId,
+      title: built.full.title,
+      note: built.routeSummary,
+      action,
+      priority,
+      metadata: sharedMeta,
+    },
+  ]);
+
+  const signalInsert = await adaptiveInsert(client, "vf_routing_signals", [
+    {
+      signal_id: signalId,
+      routing_id: routingId,
+      item_id: dealId,
+      deal_id: dealId,
+      member_email: submittedBy,
+      owner_email: submittedBy,
+      title: built.full.title,
+      signal_type: "deal",
+      type: "deal",
+      status: "new",
+      priority,
+      market: built.full.market,
+      city: built.full.city,
+      state: built.full.state,
+      asset_type: built.full.asset_type,
+      property_type: built.full.property_type,
+      note: built.routeSummary,
+      notes: built.routeSummary,
+      description: built.routeSummary,
+      route_summary: built.routeSummary,
+      routing_summary: built.routeSummary,
+      ai_route_summary: built.routeSummary,
+      source: "deal",
+      source_table: DEAL_TABLE,
+      metadata: sharedMeta,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      signal_id: signalId,
+      item_id: dealId,
+      member_email: submittedBy,
+      title: built.full.title,
+      signal_type: "deal",
+      status: "new",
+      metadata: sharedMeta,
+    },
+  ]);
+
+  const intelligenceInsert = await adaptiveInsert(client, "vf_intelligence_signals", [
+    {
+      signal_id: signalId,
+      routing_id: routingId,
+      item_id: dealId,
+      deal_id: dealId,
+      member_email: submittedBy,
+      owner_email: submittedBy,
+      title: built.full.title,
+      signal_type: "deal",
+      type: "deal",
+      status: "new",
+      priority,
+      market: built.full.market,
+      city: built.full.city,
+      state: built.full.state,
+      asset_type: built.full.asset_type,
+      property_type: built.full.property_type,
+      note: built.routeSummary,
+      notes: built.routeSummary,
+      description: built.routeSummary,
+      route_summary: built.routeSummary,
+      routing_summary: built.routeSummary,
+      ai_route_summary: built.routeSummary,
+      source: "deal",
+      source_table: DEAL_TABLE,
+      metadata: sharedMeta,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      signal_id: signalId,
+      item_id: dealId,
+      member_email: submittedBy,
+      title: built.full.title,
+      signal_type: "deal",
+      status: "new",
+      metadata: sharedMeta,
+    },
+  ]);
+
+  return json({
+    ok: true,
+    saved: true,
+    table: DEAL_TABLE,
+    id: dealId,
+    deal_id: dealId,
+    signal_id: signalId,
+    routing_id: routingId,
+    activity_id: activityId,
+    photos_saved: built.photoUrls.length,
+    direct_links: savedLinks,
+    saved_to: {
+      deal: Boolean(dealInsert.ok),
+      activity: Boolean(activityInsert.ok),
+      routing_action: Boolean(routingInsert.ok),
+      routing_signal: Boolean(signalInsert.ok),
+      intelligence_signal: Boolean(intelligenceInsert.ok),
+    },
+    secondary_errors: {
+      activity: activityInsert.ok ? null : activityInsert.error,
+      routing_action: routingInsert.ok ? null : routingInsert.error,
+      routing_signal: signalInsert.ok ? null : signalInsert.error,
+      intelligence_signal: intelligenceInsert.ok ? null : intelligenceInsert.error,
+    },
+    record: saved,
+    message: "Deal saved and routed into VaultForge.",
+  });
 }
