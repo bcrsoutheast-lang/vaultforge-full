@@ -312,7 +312,12 @@ export default function PainPage() {
       }
 
       setLinks(data.direct_links || data.links || {});
-      setStatus("Pain signal created. Signal room, routing context, and AI-style summary are ready.");
+      setStatus("Saved. Pain signal created and routed into VaultForge. Use the buttons below to open where it was saved.");
+
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+      setForm(defaultForm);
+      setFiles([]);
+      setPreviewUrls([]);
     } catch (error: any) {
       setStatus(error?.message || "Pain signal could not be created.");
     } finally {
@@ -375,9 +380,11 @@ export default function PainPage() {
           <section style={card}>
             <h2 style={{ marginTop: 0 }}>{status}</h2>
             <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {links.signal_room ? <Link href={links.signal_room} style={button}>Open Signal Room</Link> : null}
-              {links.pain_feed ? <Link href={links.pain_feed} style={ghost}>Pain Feed</Link> : null}
+              {links.pain_room ? <Link href={links.pain_room} style={button}>Open Pain Room</Link> : null}
+              {links.signal_room ? <Link href={links.signal_room} style={ghost}>Open Signal Room</Link> : null}
+              {links.pain_feed ? <Link href={links.pain_feed} style={ghost}>Pain Feed</Link> : <Link href="/pain-feed" style={ghost}>Pain Feed</Link>}
               {links.routing_room ? <Link href={links.routing_room} style={ghost}>Routing Room</Link> : null}
+              <Link href="/projects" style={ghost}>Projects</Link>
               <Link href="/dashboard" style={ghost}>Dashboard</Link>
             </div>
           </section>
