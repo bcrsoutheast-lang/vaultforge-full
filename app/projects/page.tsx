@@ -955,9 +955,13 @@ export default function ProjectsPage() {
     const key = canonicalKey(row);
     if (!key) return;
 
-    const next = new Set(archivedIds);
-    next.add(key);
-    persistArchived(next);
+    const nextArchived = new Set(archivedIds);
+    nextArchived.add(key);
+    persistArchived(nextArchived);
+
+    const nextSaved = new Set(savedIds);
+    nextSaved.delete(key);
+    persistSaved(nextSaved);
   }
 
   function restoreProject(row: Row) {
@@ -1001,6 +1005,21 @@ export default function ProjectsPage() {
   }, [items, savedIds, archivedIds, deletedIds, folder]);
 
   const counts = useMemo(() => {
+    const allLiveItems = items.filter((item) => {
+      const key = canonicalKey(item);
+      return key && !deletedIds.has(key);
+    });
+
+    const activeSavedItems = allLiveItems.filter((item) => {
+      const key = canonicalKey(item);
+      return savedIds.has(key) && !archivedIds.has(key);
+    });
+
+    const archivedItems = allLiveItems.filter((item) => {
+      const key = canonicalKey(item);
+      return archivedIds.has(key);
+    });
+
     const deals = visibleItems.filter((item) => sourceOf(item) === "deal").length;
     const pains = visibleItems.filter((item) => sourceOf(item) === "pain").length;
     const withPhotos = visibleItems.filter((item) => photosOf(item).length).length;
@@ -1010,10 +1029,10 @@ export default function ProjectsPage() {
       deals,
       pains,
       withPhotos,
-      saved: Array.from(savedIds).filter((id) => !archivedIds.has(id) && !deletedIds.has(id)).length,
-      archived: Array.from(archivedIds).filter((id) => !deletedIds.has(id)).length,
+      saved: activeSavedItems.length,
+      archived: archivedItems.length,
     };
-  }, [visibleItems, savedIds, archivedIds, deletedIds]);
+  }, [items, visibleItems, savedIds, archivedIds, deletedIds]);
 
   return (
     <main style={page}>
