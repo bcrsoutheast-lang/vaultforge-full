@@ -18,7 +18,7 @@ function readCookie(n:string){if(typeof document==="undefined")return"";const m=
 function currentEmail(){if(typeof window==="undefined")return"";for(const k of["vf_email","vf_member_email","vf_admin_email","email","memberEmail"]){const l=lower(window.localStorage.getItem(k));if(l.includes("@"))return l;const s=lower(window.sessionStorage.getItem(k));if(s.includes("@"))return s}return lower(readCookie("vf_email")||readCookie("vf_member_email")||readCookie("vf_admin_email"))}
 async function safeJson(r:Response){try{return await r.json()}catch{return {}}}
 function laneMeta(k:string){return LANES.find(l=>l.key===k)||LANES[LANES.length-1]}
-function safeTitle(v:unknown){return clean(v||"VaultForge message").replace(/^(re:\s*)+/gi,"").replace(/\s+/g," ").trim()}
+function safeTitle(v:unknown){return clean(v||"VaultForge message").replace(/^(re:\s*)+/gi,"").replace(/\s+/g," ").trim(){
 export default function MessageCommandPage(){
 const [email,setEmail]=useState(""); const [conversations,setConversations]=useState<Conversation[]>([]); const [counts,setCounts]=useState<Record<string,number>>({}); const [unreadCounts,setUnreadCounts]=useState<Record<string,number>>({}); const [openLane,setOpenLane]=useState(""); const [query,setQuery]=useState(""); const [collapsed,setCollapsed]=useState<Record<string,boolean>>({}); const [status,setStatus]=useState("Loading message command..."); const [busyKey,setBusyKey]=useState("");
 useEffect(()=>{if(typeof window==="undefined")return;const p=new URLSearchParams(window.location.search||"");const r=lower(p.get("route")||p.get("folder")||p.get("lane"));if(r&&LANES.some(l=>l.key===r))setOpenLane(r)},[]);
