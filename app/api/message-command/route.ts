@@ -6,7 +6,7 @@ export const revalidate = 0;
 
 type Row = Record<string, any>;
 
-type MarkerSets = {
+type ViewerState = {
   archived: Set<string>;
   deleted: Set<string>;
   saved: Set<string>;
@@ -34,6 +34,7 @@ type ConversationSummary = {
 };
 
 const TABLE = "vf_message_command_messages";
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 function clean(v: unknown): string {
   return String(v || "").trim();
@@ -78,6 +79,10 @@ function db() {
       autoRefreshToken: false,
     },
   });
+}
+
+function isOwner(email: string): boolean {
+  return lower(email) === OWNER_EMAIL;
 }
 
 function sourceOfValue(v: unknown): string {
@@ -137,6 +142,33 @@ function fromOf(r: Row): string {
 function toOf(r: Row): string {
   const m = meta(r);
   return lower(first(r.to_email, r.recipient_email, r.target_email, r.owner_email, m.to_email));
+}
+
+function participantsOf(r: Row): string[] {
+  const m = meta(r);
+  const raw = [
+    fromOf(r),
+    toOf(r),
+    lower(first(r.owner_email, m.owner_email)),
+    lower(first(r.target_email, m.target_email)),
+    lower(first(r.recipient_email, m.recipient_email)),
+    lower(first(r.member_email, m.member_email)),
+    lower(first(r.viewer_email, m.viewer_email)),
+    lower(first(r.participant_email, m.participant_email)),
+    lower(first(r.created_by_email, m.created_by_email)),
+  ];
+
+  const metadataParticipants = Array.isArray(m.participants)
+    ? m.participants.map(lower)
+    : [];
+
+  const participantEmails = Array.isArray(r.participants)
+    ? r.participants.map(lower)
+    : [];
+
+  return Array.from(
+    new Set([...raw, ...metadataParticipants, ...participantEmails].filter((v) => v.includes("@")))
+  );
 }
 
 function titleOf(r: Row): string {
@@ -215,6 +247,11 @@ function markerKey(r: Row): string {
   return first(m.cleanup_thread_key, m.hidden_thread_key, m.read_thread_key, m.saved_thread_key, r.cleanup_thread_key);
 }
 
+function markerViewer(r: Row): string {
+  const m = meta(r);
+  return lower(first(m.viewer_email, m.actor_email, m.from_email, r.viewer_email, r.actor_email, r.from_email));
+}
+
 function markerAction(r: Row): string {
   const m = meta(r);
   return lower(first(m.cleanup_action, m.marker_action, r.cleanup_action, r.status));
@@ -236,19 +273,24 @@ function later(a: string, b: string): string {
   return String(a) >= String(b) ? a : b;
 }
 
-function markers(rows: Row[]): MarkerSets {
+function viewerState(rows: Row[], viewerEmail: string): ViewerState {
   const archived = new Set<string>();
   const deleted = new Set<string>();
   const saved = new Set<string>();
   const read = new Set<string>();
   const readAt = new Map<string, string>();
   const unreadAt = new Map<string, string>();
+  const viewer = lower(viewerEmail);
 
   for (const r of rows) {
     if (!isMarker(r)) continue;
 
     const key = markerKey(r);
     if (!key) continue;
+
+    const actor = markerViewer(r);
+
+    if (viewer && actor && actor !== viewer) continue;
 
     const a = markerAction(r);
     const at = markerTime(r);
@@ -284,6 +326,7 @@ function normalize(r: Row): Row {
   const key = canonical(r);
   const from = fromOf(r);
   const to = toOf(r);
+  const participants = participantsOf(r);
 
   return {
     ...r,
@@ -295,6 +338,7 @@ function normalize(r: Row): Row {
     lane_label: label(s),
     from_email: from,
     to_email: to,
+    participants,
     subject: titleOf(r),
     title: titleOf(r),
     message: bodyOf(r),
@@ -307,11 +351,17 @@ function normalize(r: Row): Row {
 }
 
 function visible(r: Row, email: string): boolean {
-  if (!email || email === "bcrsoutheast@gmail.com") return true;
-  return fromOf(r) === email || toOf(r) === email || toOf(r) === "bcrsoutheast@gmail.com";
+  const viewer = lower(email);
+
+  if (isOwner(viewer)) return true;
+  if (!viewer) return false;
+
+  const participants = participantsOf(r);
+
+  return participants.includes(viewer);
 }
 
-function readCutoffForThread(key: string, marks: MarkerSets): string {
+function readCutoffForThread(key: string, marks: ViewerState): string {
   const readAt = marks.readAt.get(key) || "";
   const unreadAt = marks.unreadAt.get(key) || "";
 
@@ -321,22 +371,25 @@ function readCutoffForThread(key: string, marks: MarkerSets): string {
   return readAt;
 }
 
-function forcedUnreadForThread(key: string, marks: MarkerSets): boolean {
+function forcedUnreadForThread(key: string, marks: ViewerState): boolean {
   const readAt = marks.readAt.get(key) || "";
   const unreadAt = marks.unreadAt.get(key) || "";
   return Boolean(unreadAt && unreadAt >= readAt);
 }
 
-function messageUnread(r: Row, key: string, marks: MarkerSets): boolean {
+function messageUnread(r: Row, key: string, marks: ViewerState, viewerEmail: string): boolean {
+  const viewer = lower(viewerEmail);
+  const from = fromOf(r);
   const cutoff = readCutoffForThread(key, marks);
   const messageAt = first(r.created_at, r.updated_at, new Date().toISOString());
 
+  if (viewer && from === viewer) return false;
   if (cutoff && messageAt <= cutoff) return false;
 
   return r.read !== true;
 }
 
-function group(rows: Row[], marks: MarkerSets): ConversationSummary[] {
+function group(rows: Row[], marks: ViewerState, viewerEmail: string): ConversationSummary[] {
   const map = new Map<string, ConversationSummary>();
 
   for (const raw of rows) {
@@ -348,7 +401,7 @@ function group(rows: Row[], marks: MarkerSets): ConversationSummary[] {
     const existing = map.get(key);
     const latestAt = first(r.updated_at, r.created_at, new Date().toISOString());
     const messageId = clean(r.id);
-    const unread = messageUnread(r, key, marks);
+    const unread = messageUnread(r, key, marks, viewerEmail);
 
     if (!existing) {
       map.set(key, {
@@ -443,7 +496,7 @@ function insertRow(input: Row): Row {
   const s = sourceOfValue(first(input.source, input.type, input.context, sourceFromFolder(first(input.folder, input.folder_key))));
   const f = lower(first(input.folder, input.folder_key, folderForSource(s)));
   const from = lower(first(input.from_email, input.sender_email, input.email, input.member_email));
-  const to = lower(first(input.to_email, input.recipient_email, input.target_email, input.owner_email, "bcrsoutheast@gmail.com"));
+  const to = lower(first(input.to_email, input.recipient_email, input.target_email, input.owner_email, OWNER_EMAIL));
   const signalId = first(input.signal_id, input.signalId);
   const itemId = first(input.item_id, input.itemId, input.deal_id, input.project_id, input.pain_id);
   const incoming = first(input.thread_key, input.threadKey);
@@ -452,6 +505,7 @@ function insertRow(input: Row): Row {
   const now = new Date().toISOString();
   const subject = first(input.subject, input.title, `${label(s)} message`);
   const message = first(input.message, input.body, input.note, input.content);
+  const participants = Array.from(new Set([from, to].filter((v) => v.includes("@"))));
 
   return {
     thread_id: first(input.thread_id, input.threadId) || safePart(key),
@@ -482,6 +536,7 @@ function insertRow(input: Row): Row {
     is_deleted: false,
     created_at: now,
     updated_at: now,
+    participants,
     metadata: {
       thread_key: key,
       source: s,
@@ -491,6 +546,7 @@ function insertRow(input: Row): Row {
       subject,
       signal_id: signalId || null,
       item_id: itemId || null,
+      participants,
       created_at: now,
       updated_at: now,
     },
@@ -536,7 +592,9 @@ function marker(action: string, threadKey: string, email: string): Row {
       hidden_thread_key: threadKey,
       read_thread_key: threadKey,
       saved_thread_key: threadKey,
-      action_scope: "thread",
+      viewer_email: e,
+      actor_email: e,
+      action_scope: "viewer_thread",
       created_at: now,
       updated_at: now,
     },
@@ -557,7 +615,8 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ ok: false, error: error.message || String(error) }, { status: 500 });
 
   const all: Row[] = Array.isArray(data) ? (data as Row[]) : [];
-  const marks = markers(all);
+  const marks = viewerState(all, email);
+
   let rows: Row[] = all
     .filter((r) => !isMarker(r))
     .filter((r) => includeHidden || !isHidden(r))
@@ -574,21 +633,25 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       mode: "thread",
+      viewer: email,
+      owner_view: isOwner(email),
       thread_key: threadKey,
       messages: rows.map((r) => {
         const key = clean(r.canonical_thread_key);
-        return { ...r, read: !messageUnread(r, key, marks) };
+        return { ...r, read: !messageUnread(r, key, marks, email) };
       }),
       count: rows.length,
     });
   }
 
-  const conversations = group(rows, marks);
+  const conversations = group(rows, marks, email);
   const counted = counts(conversations);
 
   return NextResponse.json({
     ok: true,
     mode: "list",
+    viewer: email,
+    owner_view: isOwner(email),
     conversations,
     messages: rows,
     counts: counted.counts,
@@ -634,7 +697,7 @@ export async function PATCH(request: Request) {
   const action = lower(input.action);
   const threadKey = clean(input.thread_key || input.threadKey);
   const ids = Array.isArray(input.ids) ? input.ids.map(clean).filter(Boolean) : [];
-  const email = lower(input.email || input.viewer_email || "system@vaultforge.local");
+  const email = lower(input.email || input.viewer_email || request.headers.get("x-vf-email") || "system@vaultforge.local");
 
   if (!["archive", "delete", "save", "unsave", "read", "unread", "restore"].includes(action)) {
     return NextResponse.json({ ok: false, error: "Unknown action." }, { status: 400 });
@@ -672,5 +735,5 @@ export async function PATCH(request: Request) {
     if (error) return NextResponse.json({ ok: false, error: "Marker failed.", details: error.message || String(error) }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, action, thread_key: threadKey, ids });
+  return NextResponse.json({ ok: true, action, thread_key: threadKey, ids, viewer: email });
 }
