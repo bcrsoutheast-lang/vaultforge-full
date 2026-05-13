@@ -517,16 +517,16 @@ export default function SubmitPage() {
         throw new Error(data?.error || data?.details || "Deal save failed.");
       }
 
-      const savedId = String(data?.deal?.id || data?.deal_id || data?.id || data?.item_id || "").trim();
+      const savedId = String(data?.deal_id || data?.deal?.id || data?.id || data?.item_id || "").trim();
 
-      setMsg("Saved. Deal created and routed into VaultForge. Use the buttons below to open where it was saved.");
+      setMsg("Saved. Deal created in VaultForge. Open Deal Detail or Projects to review the saved record.");
 
       setSuccessLinks({
-        deal_detail: savedId ? `/deal/detail?id=${encodeURIComponent(savedId)}` : "",
-        projects: "/projects",
-        pain_feed: "/pain-feed",
-        alerts: "/alerts",
-        dashboard: "/dashboard",
+        deal_detail: data?.direct_links?.deal_detail || (savedId ? `/deal/detail?id=${encodeURIComponent(savedId)}` : ""),
+        projects: data?.direct_links?.projects || "/projects",
+        dashboard: data?.direct_links?.dashboard || "/dashboard",
+        routing_room: data?.direct_links?.routing_room || "",
+        activity: data?.direct_links?.activity || "",
       });
 
       setForm(empty as any);
@@ -626,8 +626,8 @@ export default function SubmitPage() {
               <div className="vf-submit-actions">
                 {successLinks.deal_detail ? <Link href={successLinks.deal_detail} style={btn}>Open Deal Detail</Link> : null}
                 <Link href={successLinks.projects || "/projects"} style={ghost}>Projects</Link>
-                <Link href={successLinks.pain_feed || "/pain-feed"} style={ghost}>Pain Feed</Link>
-                <Link href={successLinks.alerts || "/alerts"} style={ghost}>Alerts</Link>
+                {successLinks.routing_room ? <Link href={successLinks.routing_room} style={ghost}>Routing Room</Link> : null}
+                {successLinks.activity ? <Link href={successLinks.activity} style={ghost}>Activity</Link> : null}
                 <Link href={successLinks.dashboard || "/dashboard"} style={ghost}>Dashboard</Link>
               </div>
             ) : null}
