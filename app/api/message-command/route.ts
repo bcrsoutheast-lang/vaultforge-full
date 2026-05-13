@@ -5,12 +5,16 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type Row = Record<string, any>;
+
 type MarkerSets = {
   archived: Set<string>;
   deleted: Set<string>;
   saved: Set<string>;
   read: Set<string>;
+  readAt: Map<string, string>;
+  unreadAt: Map<string, string>;
 };
+
 type ConversationSummary = {
   thread_key: string;
   thread_id: string;
@@ -193,6 +197,11 @@ function updated(r: Row): string {
   return first(r.updated_at, r.created_at, new Date().toISOString());
 }
 
+function markerTime(r: Row): string {
+  const m = meta(r);
+  return first(r.created_at, r.updated_at, m.created_at, m.updated_at, new Date().toISOString());
+}
+
 function status(r: Row): string {
   return lower(first(r.status, meta(r).status, "sent"));
 }
@@ -221,11 +230,19 @@ function isHidden(r: Row): boolean {
   return r.is_deleted === true || r.deleted === true || r.is_archived === true || r.archived === true || s === "deleted" || s === "archived";
 }
 
+function later(a: string, b: string): string {
+  if (!a) return b;
+  if (!b) return a;
+  return String(a) >= String(b) ? a : b;
+}
+
 function markers(rows: Row[]): MarkerSets {
   const archived = new Set<string>();
   const deleted = new Set<string>();
   const saved = new Set<string>();
   const read = new Set<string>();
+  const readAt = new Map<string, string>();
+  const unreadAt = new Map<string, string>();
 
   for (const r of rows) {
     if (!isMarker(r)) continue;
@@ -234,6 +251,8 @@ function markers(rows: Row[]): MarkerSets {
     if (!key) continue;
 
     const a = markerAction(r);
+    const at = markerTime(r);
+
     if (a === "delete" || a === "deleted") {
       deleted.add(key);
       archived.delete(key);
@@ -246,15 +265,17 @@ function markers(rows: Row[]): MarkerSets {
       saved.delete(key);
     } else if (a === "read") {
       read.add(key);
+      readAt.set(key, later(readAt.get(key) || "", at));
     } else if (a === "unread") {
       read.delete(key);
+      unreadAt.set(key, later(unreadAt.get(key) || "", at));
     } else if (a === "restore") {
       archived.delete(key);
       deleted.delete(key);
     }
   }
 
-  return { archived, deleted, saved, read };
+  return { archived, deleted, saved, read, readAt, unreadAt };
 }
 
 function normalize(r: Row): Row {
@@ -290,6 +311,31 @@ function visible(r: Row, email: string): boolean {
   return fromOf(r) === email || toOf(r) === email || toOf(r) === "bcrsoutheast@gmail.com";
 }
 
+function readCutoffForThread(key: string, marks: MarkerSets): string {
+  const readAt = marks.readAt.get(key) || "";
+  const unreadAt = marks.unreadAt.get(key) || "";
+
+  if (!readAt) return "";
+  if (unreadAt && unreadAt >= readAt) return "";
+
+  return readAt;
+}
+
+function forcedUnreadForThread(key: string, marks: MarkerSets): boolean {
+  const readAt = marks.readAt.get(key) || "";
+  const unreadAt = marks.unreadAt.get(key) || "";
+  return Boolean(unreadAt && unreadAt >= readAt);
+}
+
+function messageUnread(r: Row, key: string, marks: MarkerSets): boolean {
+  const cutoff = readCutoffForThread(key, marks);
+  const messageAt = first(r.created_at, r.updated_at, new Date().toISOString());
+
+  if (cutoff && messageAt <= cutoff) return false;
+
+  return r.read !== true;
+}
+
 function group(rows: Row[], marks: MarkerSets): ConversationSummary[] {
   const map = new Map<string, ConversationSummary>();
 
@@ -302,6 +348,7 @@ function group(rows: Row[], marks: MarkerSets): ConversationSummary[] {
     const existing = map.get(key);
     const latestAt = first(r.updated_at, r.created_at, new Date().toISOString());
     const messageId = clean(r.id);
+    const unread = messageUnread(r, key, marks);
 
     if (!existing) {
       map.set(key, {
@@ -314,8 +361,8 @@ function group(rows: Row[], marks: MarkerSets): ConversationSummary[] {
         latest_message: first(r.message, r.body, ""),
         latest_at: latestAt,
         count: 1,
-        unread_count: marks.read.has(key) || r.read === true ? 0 : 1,
-        is_read: marks.read.has(key) || r.read === true,
+        unread_count: unread ? 1 : 0,
+        is_read: !unread,
         is_saved: marks.saved.has(key),
         from_email: first(r.from_email),
         to_email: first(r.to_email),
@@ -324,7 +371,7 @@ function group(rows: Row[], marks: MarkerSets): ConversationSummary[] {
     } else {
       existing.count += 1;
       if (messageId) existing.message_ids.push(messageId);
-      if (!marks.read.has(key) && r.read !== true) existing.unread_count += 1;
+      if (unread) existing.unread_count += 1;
 
       if (String(latestAt) > String(existing.latest_at)) {
         existing.latest_at = latestAt;
@@ -334,12 +381,22 @@ function group(rows: Row[], marks: MarkerSets): ConversationSummary[] {
         existing.to_email = first(r.to_email, existing.to_email);
       }
 
-      existing.is_read = marks.read.has(key) || existing.unread_count <= 0;
       existing.is_saved = marks.saved.has(key);
     }
   }
 
-  return Array.from(map.values()).sort((a, b) => String(b.latest_at).localeCompare(String(a.latest_at)));
+  const conversations = Array.from(map.values()).map((conversation) => {
+    if (forcedUnreadForThread(conversation.thread_key, marks) && conversation.unread_count <= 0) {
+      conversation.unread_count = 1;
+    }
+
+    conversation.is_read = conversation.unread_count <= 0;
+    conversation.is_saved = marks.saved.has(conversation.thread_key);
+
+    return conversation;
+  });
+
+  return conversations.sort((a, b) => String(b.latest_at).localeCompare(String(a.latest_at)));
 }
 
 function counts(convos: ConversationSummary[]) {
@@ -518,7 +575,10 @@ export async function GET(request: Request) {
       ok: true,
       mode: "thread",
       thread_key: threadKey,
-      messages: rows.map((r) => ({ ...r, read: marks.read.has(clean(r.canonical_thread_key)) ? true : r.read === true })),
+      messages: rows.map((r) => {
+        const key = clean(r.canonical_thread_key);
+        return { ...r, read: !messageUnread(r, key, marks) };
+      }),
       count: rows.length,
     });
   }
