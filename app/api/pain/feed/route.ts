@@ -5,511 +5,132 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+type R = Record<string, any>;
 
-type AnyRow = Record<string, any>;
-
-function supabaseClient() {
+function sb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+  if (!url || !key) throw new Error("Missing Supabase environment values.");
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } });
+}
+function c(v: unknown) { return String(v || "").trim(); }
+function ce(v: unknown) { return c(v).toLowerCase(); }
+function first(...xs: unknown[]) { for (const x of xs) { if (Array.isArray(x)) { const f = x.find((i) => c(i)); if (f) return c(f); } else { const t = c(x); if (t) return t; } } return ""; }
+function cookie(header: string, name: string) { const f = header.split(";").map((x) => x.trim()).find((x) => x.startsWith(`${name}=`)); if (!f) return ""; try { return decodeURIComponent(f.slice(name.length + 1)); } catch { return f.slice(name.length + 1); } }
+function meta(r: R) { return typeof r?.metadata === "object" && r.metadata ? r.metadata : {}; }
+function field(r: R, ...keys: string[]) { const m = meta(r); const vals: unknown[] = []; for (const k of keys) { vals.push(r[k], m[k]); } return first(...vals); }
+function arr(v: unknown): any[] { if (Array.isArray(v)) return v; const s = c(v); if (!s) return []; try { const p = JSON.parse(s); if (Array.isArray(p)) return p; } catch {} return s.split(/[,\n|;]/).map((x) => x.trim()).filter(Boolean); }
+function requestEmail(req: Request) { const u = new URL(req.url); const h = req.headers.get("cookie") || ""; return ce(req.headers.get("x-vf-email") || u.searchParams.get("email") || cookie(h, "vf_email") || cookie(h, "vf_member_email") || cookie(h, "vf_admin_email")); }
+function isOwner(req: Request, email: string) { const u = new URL(req.url); const h = req.headers.get("cookie") || ""; return email === OWNER_EMAIL || c(req.headers.get("x-vf-admin")) === "1" || c(u.searchParams.get("owner")) === "1" || h.includes("vf_admin=1") || h.includes("isAdmin=true"); }
 
-  if (!url || !key) {
-    throw new Error("Missing Supabase environment values.");
-  }
-
-  return createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-  });
+function photos(r: R) {
+  const m = meta(r);
+  const urls = [r.image_url, r.photo_url, r.main_photo_url, m.image_url, m.photo_url, m.main_photo_url, ...arr(r.photo_urls), ...arr(r.photos), ...arr(m.photo_urls), ...arr(m.photos)]
+    .map((x: any) => typeof x === "string" ? c(x) : c(x?.url || x?.publicUrl || x?.public_url || x?.photo_url || x?.image_url))
+    .filter((x) => x.startsWith("http"));
+  const unique = Array.from(new Set(urls));
+  return { image_url: unique[0] || "", photo_url: unique[0] || "", main_photo_url: unique[0] || "", photo_urls: unique, photos: unique.map((url) => ({ url })) };
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
-
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      const found = value.find((item) => clean(item));
-      if (found !== undefined) return clean(found);
-      continue;
-    }
-
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
-}
-
-function readCookie(cookieHeader: string, name: string) {
-  const parts = cookieHeader.split(";").map((part) => part.trim());
-
-  for (const part of parts) {
-    if (!part.startsWith(`${name}=`)) continue;
-
-    try {
-      return decodeURIComponent(part.slice(name.length + 1));
-    } catch {
-      return part.slice(name.length + 1);
-    }
-  }
-
-  return "";
-}
-
-function requestEmail(request: Request) {
-  const url = new URL(request.url);
-  const cookie = request.headers.get("cookie") || "";
-
-  return cleanEmail(
-    request.headers.get("x-vf-email") ||
-      url.searchParams.get("email") ||
-      readCookie(cookie, "vf_email") ||
-      readCookie(cookie, "vf_member_email") ||
-      readCookie(cookie, "vf_admin_email")
-  );
-}
-
-function isOwnerRequest(request: Request, email: string) {
-  const url = new URL(request.url);
-  const cookie = request.headers.get("cookie") || "";
-
-  return (
-    email === OWNER_EMAIL ||
-    clean(request.headers.get("x-vf-admin")) === "1" ||
-    clean(url.searchParams.get("owner")) === "1" ||
-    cookie.includes("vf_admin=1") ||
-    cookie.includes("isAdmin=true")
-  );
-}
-
-function metadataOf(row: AnyRow) {
-  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
-}
-
-function parseJsonArray(value: unknown): any[] {
-  if (Array.isArray(value)) return value;
-
-  if (typeof value === "string" && value.trim()) {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return value
-        .split(/[,\n|;]/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-    }
-  }
-
-  return [];
-}
-
-function photosFrom(row: AnyRow) {
-  const metadata = metadataOf(row);
-  const metadataPhotos = parseJsonArray(metadata.photos);
-  const rowPhotos = parseJsonArray(row.photos);
-  const rowPhotoUrls = parseJsonArray(row.photo_urls);
-  const metadataPhotoUrls = parseJsonArray(metadata.photo_urls);
-
-  const urls = [
-    row.image_url,
-    row.photo_url,
-    row.main_photo_url,
-    row.primary_photo_url,
-    metadata.image_url,
-    metadata.photo_url,
-    metadata.main_photo_url,
-    metadata.primary_photo_url,
-    ...rowPhotoUrls,
-    ...metadataPhotoUrls,
-    ...rowPhotos.map((photo) =>
-      typeof photo === "string" ? photo : photo?.url || photo?.publicUrl || photo?.public_url || photo?.data_url || photo?.dataUrl
-    ),
-    ...metadataPhotos.map((photo) =>
-      typeof photo === "string" ? photo : photo?.url || photo?.publicUrl || photo?.public_url || photo?.data_url || photo?.dataUrl
-    ),
-  ]
-    .map(clean)
-    .filter((url) => url.startsWith("http"));
-
-  const uniqueUrls = Array.from(new Set(urls));
-
-  const richPhotos = [
-    ...rowPhotos,
-    ...metadataPhotos,
-    ...uniqueUrls.map((url) => ({ url })),
-  ].filter(Boolean);
-
-  return {
-    image_url: uniqueUrls[0] || "",
-    photo_url: uniqueUrls[0] || "",
-    main_photo_url: uniqueUrls[0] || "",
-    photo_urls: uniqueUrls,
-    photos: richPhotos,
-  };
-}
-
-function ownerEmailFrom(row: AnyRow) {
-  const metadata = metadataOf(row);
-
-  const canonical = cleanEmail(
-    first(
-      row.owner_email,
-      metadata.owner_email,
-      row.created_by_email,
-      metadata.created_by_email,
-      row.submitted_by_email,
-      metadata.submitted_by_email,
-      row.creator_email,
-      metadata.creator_email
-    )
-  );
-
-  if (canonical && canonical !== OWNER_EMAIL) return canonical;
-
-  const legacy = cleanEmail(
-    first(
-      row.submitted_by,
-      metadata.submitted_by,
-      row.user_email,
-      metadata.user_email,
-      row.member_email,
-      metadata.member_email,
-      row.email,
-      metadata.email,
-      row.sender_email,
-      metadata.sender_email
-    )
-  );
-
-  if (legacy) return legacy;
-
-  return canonical || "";
-}
-
-function canSee(row: AnyRow, email: string, owner: boolean) {
+function ownerEmail(r: R) { return ce(field(r, "owner_email", "member_email", "user_email", "submitted_by", "submitted_by_email", "email")); }
+function canSee(r: R, email: string, owner: boolean) {
   if (owner) return true;
-
-  const metadata = metadataOf(row);
-  const ownerEmail = ownerEmailFrom(row);
-
-  const visible = [
-    ownerEmail,
-    row.visible_to_email,
-    row.recipient_email,
-    row.target_email,
-    row.assigned_to_email,
-    row.member_email,
-    metadata.visible_to_email,
-    metadata.recipient_email,
-    metadata.target_email,
-    metadata.assigned_to_email,
-    metadata.member_email,
-  ]
-    .map(cleanEmail)
-    .filter(Boolean);
-
-  if (visible.length === 0) return false;
-  return visible.includes(email);
+  if (!email) return false;
+  const visible = [ownerEmail(r), ce(field(r, "visible_to_email", "recipient_email", "target_email", "assigned_to_email"))].filter(Boolean);
+  return visible.length ? visible.includes(email) : false;
 }
+function idOf(r: R) { return field(r, "pain_id", "request_id", "item_id", "id", "signal_id", "alert_id"); }
+function sigOf(r: R) { return field(r, "signal_id", "signalId", "alert_id", "routing_id"); }
+function keyOf(r: R) { return field(r, "canonical_event_id", "signal_id", "pain_id", "request_id", "item_id", "id"); }
+function titleOf(r: R) { return field(r, "title", "pain_title", "problem_title", "headline", "name", "address") || "Pain Request"; }
+function summaryOf(r: R) { return field(r, "problem_description", "pain_description", "description", "summary", "ai_summary", "note", "notes", "message", "help_requested", "requested_help", "route_summary", "ai_route_summary", "routing_summary"); }
+function marketOf(r: R) { const city = field(r, "city"); const state = field(r, "state", "market", "operating_state"); return [city, state].filter(Boolean).join(", ") || field(r, "location", "address") || "Market not listed"; }
 
-function dealIdOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-  return first(row.id, row.deal_id, row.project_id, row.item_id, row.related_deal_id, metadata.deal_id, metadata.project_id, metadata.item_id, metadata.related_deal_id);
-}
-
-function signalIdOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-  return first(row.signal_id, row.signalId, row.alert_id, row.routing_id, metadata.signal_id, metadata.signalId, metadata.alert_id, metadata.routing_id, dealIdOf(row));
-}
-
-function titleOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-
-  return first(
-    row.title,
-    row.deal_title,
-    row.name,
-    row.headline,
-    row.event_title,
-    metadata.title,
-    metadata.deal_title,
-    metadata.name,
-    metadata.event_title,
-    "Deal Signal"
-  );
-}
-
-function noteOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-
-  return first(
-    row.note,
-    row.notes,
-    row.description,
-    row.message,
-    row.route_summary,
-    row.routing_summary,
-    row.ai_route_summary,
-    row.reason,
-    row.event_description,
-    metadata.note,
-    metadata.notes,
-    metadata.description,
-    metadata.message,
-    metadata.route_summary,
-    metadata.routing_summary,
-    metadata.ai_route_summary,
-    metadata.reason,
-    metadata.event_description
-  );
-}
-
-function marketOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-
-  return first(
-    row.market,
-    [row.city, row.state].filter(Boolean).join(", "),
-    row.location,
-    row.address,
-    metadata.market,
-    [metadata.city, metadata.state].filter(Boolean).join(", "),
-    metadata.location,
-    metadata.address
-  );
-}
-
-function normalizeDeal(row: AnyRow, table: string) {
-  const metadata = metadataOf(row);
-  const photoData = photosFrom(row);
-  const ownerEmail = ownerEmailFrom(row) || OWNER_EMAIL;
-  const dealId = dealIdOf(row);
-  const signalId = signalIdOf(row);
-
-  const askingPrice = first(row.asking_price, row.price, metadata.asking_price, metadata.price);
-  const arv = first(row.arv, row.arv_value, row.estimated_value, metadata.arv, metadata.arv_value, metadata.estimated_value);
-  const repairs = first(row.repair_estimate, row.repairs_needed, row.estimated_repairs, metadata.repair_estimate, metadata.repairs_needed, metadata.estimated_repairs);
-  const propertyType = first(row.property_type, row.deal_type, row.asset_type, metadata.property_type, metadata.deal_type, metadata.asset_type, "Deal");
-  const routeSummary = first(row.route_summary, row.routing_summary, row.ai_route_summary, metadata.route_summary, metadata.routing_summary, metadata.ai_route_summary, noteOf(row));
-
+function normalize(r: R, table: string) {
+  const m = meta(r), ph = photos(r), id = idOf(r), sig = sigOf(r), key = keyOf(r) || sig || id;
+  const summary = summaryOf(r);
   return {
-    ...metadata,
-    ...row,
-    id: dealId,
-    deal_id: dealId,
-    project_id: first(row.project_id, metadata.project_id, dealId),
-    item_id: first(row.item_id, metadata.item_id, dealId),
-    signal_id: signalId,
-    routing_id: first(row.routing_id, metadata.routing_id, signalId),
-
-    title: titleOf(row),
-    deal_label: first(row.deal_label, metadata.deal_label, propertyType, "Deal Signal"),
-    signal_type: first(row.signal_type, metadata.signal_type, "deal"),
-    source_kind: "deal",
-
-    note: noteOf(row),
-    route_summary: routeSummary,
-    routing_summary: first(row.routing_summary, metadata.routing_summary, routeSummary),
-    ai_route_summary: first(row.ai_route_summary, metadata.ai_route_summary, routeSummary),
-
-    state: first(row.state, metadata.state),
-    city: first(row.city, metadata.city),
-    market: marketOf(row),
-
-    priority: first(row.priority, row.urgency, row.urgency_level, metadata.priority, metadata.urgency, "medium"),
-    urgency: first(row.urgency, row.urgency_level, metadata.urgency, metadata.urgency_level, row.priority, "medium"),
-    status: first(row.status, row.routing_status, metadata.status, metadata.routing_status, "new"),
-    routing_status: first(row.routing_status, metadata.routing_status, row.status, "new"),
-
-    asset_type: propertyType,
-    property_type: propertyType,
-    deal_type: first(row.deal_type, metadata.deal_type, propertyType),
-    strategy: first(row.strategy, metadata.strategy),
-    exit_strategy: first(row.exit_strategy, metadata.exit_strategy, row.strategy, metadata.strategy),
-
-    asking_price: askingPrice,
-    price: first(row.price, metadata.price, askingPrice),
-    arv,
-    arv_value: first(row.arv_value, metadata.arv_value, arv),
-    repair_estimate: repairs,
-    repairs_needed: first(row.repairs_needed, metadata.repairs_needed, repairs),
-
-    beds: first(row.beds, row.bedrooms, metadata.beds, metadata.bedrooms),
-    bedrooms: first(row.bedrooms, row.beds, metadata.bedrooms, metadata.beds),
-    baths: first(row.baths, row.bathrooms, metadata.baths, metadata.bathrooms),
-    bathrooms: first(row.bathrooms, row.baths, metadata.bathrooms, metadata.baths),
-    square_feet: first(row.square_feet, row.sqft, row.building_sqft, metadata.square_feet, metadata.sqft, metadata.building_sqft),
-    sqft: first(row.sqft, row.square_feet, row.building_sqft, metadata.sqft, metadata.square_feet, metadata.building_sqft),
-    building_sqft: first(row.building_sqft, row.square_feet, row.sqft, metadata.building_sqft, metadata.square_feet, metadata.sqft),
-    year_built: first(row.year_built, metadata.year_built),
-    occupancy: first(row.occupancy, metadata.occupancy),
-    zoning: first(row.zoning, metadata.zoning),
-    acres: first(row.acres, row.land_acres, metadata.acres, metadata.land_acres),
-    land_acres: first(row.land_acres, row.acres, metadata.land_acres, metadata.acres),
-    utilities: first(row.utilities, metadata.utilities),
-    road_access: first(row.road_access, metadata.road_access),
-    noi: first(row.noi, metadata.noi),
-    cap_rate: first(row.cap_rate, metadata.cap_rate),
-
-    routing_needs: first(row.routing_needs, row.deal_needs, row.needs, metadata.routing_needs, metadata.deal_needs, metadata.needs),
-    deal_needs: first(row.deal_needs, metadata.deal_needs, row.routing_needs, metadata.routing_needs),
-    needs: first(row.needs, metadata.needs, row.routing_needs, metadata.routing_needs),
-    distress_signals: first(row.distress_signals, metadata.distress_signals),
-    seller_situation: first(row.seller_situation, metadata.seller_situation),
-
-    owner_email: ownerEmail,
-    created_by_email: first(row.created_by_email, metadata.created_by_email, ownerEmail),
-    submitted_by_email: first(row.submitted_by_email, metadata.submitted_by_email, ownerEmail),
-    submitted_by: first(row.submitted_by, row.user_email, row.member_email, row.email, metadata.submitted_by, metadata.user_email, metadata.member_email, ownerEmail),
-    member_email: first(row.member_email, metadata.member_email, ownerEmail),
-    user_email: first(row.user_email, metadata.user_email, ownerEmail),
-
-    detail_href: dealId ? `/deal/detail?id=${encodeURIComponent(dealId)}` : "/projects",
-    direct_links: metadata.direct_links || row.direct_links || {},
-    created_at: first(row.created_at, metadata.created_at, row.updated_at, new Date().toISOString()),
-    updated_at: first(row.updated_at, metadata.updated_at, row.created_at, new Date().toISOString()),
-    source_table: table,
-    _source_table: table,
-    ...photoData,
-    metadata,
+    ...m, ...r,
+    id, pain_id: field(r, "pain_id") || id, request_id: field(r, "request_id") || id, item_id: field(r, "item_id") || id,
+    signal_id: sig || key, canonical_event_id: key,
+    title: titleOf(r), pain_title: field(r, "pain_title") || titleOf(r), problem_title: field(r, "problem_title") || titleOf(r),
+    summary, description: field(r, "description", "problem_description", "pain_description") || summary,
+    route_summary: field(r, "route_summary", "ai_route_summary", "routing_summary") || summary,
+    ai_route_summary: field(r, "ai_route_summary", "route_summary", "routing_summary") || summary,
+    routing_summary: field(r, "routing_summary", "route_summary", "ai_route_summary") || summary,
+    owner_email: ownerEmail(r), member_email: field(r, "member_email") || ownerEmail(r), user_email: field(r, "user_email") || ownerEmail(r),
+    status: field(r, "status", "pain_status", "routing_status") || "new",
+    pain_status: field(r, "pain_status", "status", "routing_status") || "new",
+    urgency: field(r, "urgency", "urgency_level", "priority"), urgency_level: field(r, "urgency_level", "urgency", "priority"), priority: field(r, "priority", "urgency", "urgency_level"),
+    pain_type: field(r, "pain_type", "problem_type", "asset_type", "property_type"), problem_type: field(r, "problem_type", "pain_type", "asset_type", "property_type"), asset_type: field(r, "asset_type", "property_type", "pain_type", "problem_type"), property_type: field(r, "property_type", "asset_type", "pain_type", "problem_type"),
+    requested_help: field(r, "requested_help", "help_requested", "routing_needs", "needs"), help_requested: field(r, "help_requested", "requested_help", "routing_needs", "needs"), routing_needs: field(r, "routing_needs", "needs", "requested_help", "help_requested"), needs: field(r, "needs", "routing_needs", "requested_help", "help_requested"),
+    city: field(r, "city"), state: field(r, "state"), market: marketOf(r), address: field(r, "address", "property_address", "location"), location: field(r, "location", "address", "property_address"),
+    asking_price: field(r, "asking_price", "price", "target_price"), price: field(r, "price", "asking_price", "target_price"),
+    arv: field(r, "arv", "arv_value", "estimated_value", "property_value"), arv_value: field(r, "arv_value", "arv", "estimated_value", "property_value"),
+    repair_estimate: field(r, "repair_estimate", "repairs_needed", "estimated_repairs", "repair_budget"), repairs_needed: field(r, "repairs_needed", "repair_estimate", "estimated_repairs", "repair_budget"),
+    capital_needed: field(r, "capital_needed", "funding_needed", "gap_amount"), funding_needed: field(r, "funding_needed", "capital_needed", "gap_amount"), gap_amount: field(r, "gap_amount", "capital_needed", "funding_needed"),
+    beds: field(r, "beds", "bedrooms"), bedrooms: field(r, "bedrooms", "beds"), baths: field(r, "baths", "bathrooms"), bathrooms: field(r, "bathrooms", "baths"), sqft: field(r, "sqft", "square_feet", "building_sqft"), square_feet: field(r, "square_feet", "sqft", "building_sqft"), acres: field(r, "acres", "land_acres"), land_acres: field(r, "land_acres", "acres"),
+    occupancy: field(r, "occupancy", "tenant_status", "vacancy_status"), zoning: field(r, "zoning", "land_use"), timeline: field(r, "timeline", "deadline", "desired_timeline"), owner_goal: field(r, "owner_goal", "goal", "desired_outcome", "exit_strategy", "strategy"),
+    detail_href: id ? `/pain-room/${encodeURIComponent(id)}` : "/pain-feed",
+    direct_links: m.direct_links || r.direct_links || {}, created_at: field(r, "created_at", "updated_at") || new Date().toISOString(), updated_at: field(r, "updated_at", "created_at") || new Date().toISOString(),
+    source_table: table, _source_table: table, ...ph, metadata: m,
   };
 }
 
-async function selectRecent(supabase: any, table: string, limit = 160) {
-  const orderColumns = ["created_at", "updated_at", "id"];
+function painish(r: R, table: string) {
+  const source = field(r, "source", "source_table").toLowerCase();
+  const type = field(r, "signal_type", "type").toLowerCase();
+  return table.includes("pain") || source.includes("pain") || type.includes("pain") || Boolean(field(r, "pain_id", "request_id"));
+}
 
-  for (const column of orderColumns) {
-    try {
-      const { data, error } = await supabase.from(table).select("*").order(column, { ascending: false }).limit(limit);
-      if (!error && Array.isArray(data)) return data;
-    } catch {
-      // Try next order column.
-    }
+async function selectRecent(client: any, table: string) {
+  for (const col of ["created_at", "updated_at", "id"]) {
+    try { const { data, error } = await client.from(table).select("*").order(col, { ascending: false }).limit(250); if (!error && Array.isArray(data)) return data; } catch {}
   }
-
-  try {
-    const { data, error } = await supabase.from(table).select("*").limit(limit);
-    if (!error && Array.isArray(data)) return data;
-  } catch {
-    // Table may not exist.
-  }
-
+  try { const { data, error } = await client.from(table).select("*").limit(250); if (!error && Array.isArray(data)) return data; } catch {}
   return [];
 }
 
-function matchesId(row: AnyRow, id: string) {
-  if (!id) return false;
-  const metadata = metadataOf(row);
-
-  return [
-    row.id,
-    row.deal_id,
-    row.project_id,
-    row.item_id,
-    row.related_deal_id,
-    row.signal_id,
-    row.alert_id,
-    row.routing_id,
-    metadata.deal_id,
-    metadata.project_id,
-    metadata.item_id,
-    metadata.related_deal_id,
-    metadata.signal_id,
-  ]
-    .map(clean)
-    .includes(id);
+function score(r: R) {
+  let n = 0;
+  for (const k of ["title","summary","description","requested_help","urgency","city","state","pain_type","asset_type","photo_urls","main_photo_url"]) if (field(r,k)) n++;
+  if (r._source_table === "vf_pain_submissions") n += 100;
+  if (String(r._source_table || "").includes("pain")) n += 20;
+  return n;
 }
-
-function dealish(row: AnyRow, table: string) {
-  const metadata = metadataOf(row);
-  const source = first(row.source, row.source_table, metadata.source, metadata.source_table, table).toLowerCase();
-  const signalType = first(row.signal_type, metadata.signal_type, row.type, metadata.type).toLowerCase();
-
-  if (table === "vf_deals") return true;
-  if (source.includes("deal")) return true;
-  if (signalType.includes("deal")) return true;
-  if (first(row.deal_id, metadata.deal_id)) return true;
-
-  return false;
-}
+function merge(primary: R, secondary: R) { return normalize({ ...secondary, ...primary, metadata: { ...meta(secondary), ...meta(primary) } }, first(primary._source_table, secondary._source_table, "merged")); }
 
 export async function GET(request: Request) {
   try {
-    const url = new URL(request.url);
-    const email = requestEmail(request);
-    const owner = isOwnerRequest(request, email);
-    const id = clean(url.searchParams.get("id") || "");
-
-    if (!email) {
-      return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
-    }
-
-    const supabase = supabaseClient();
-
-    const tables = [
-      "vf_deals",
-      "vf_intelligence_signals",
-      "vf_routing_signals",
-      "vf_routing_actions",
-      "vf_activity_events",
-    ];
-
-    const found: AnyRow[] = [];
-
+    const url = new URL(request.url), email = requestEmail(request), owner = isOwner(request, email), id = c(url.searchParams.get("id") || "");
+    if (!email) return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
+    const client = sb();
+    const tables = ["vf_pain_submissions","vf_pain_requests","pain_requests","vf_pain_signals","pain_signals","vf_routing_signals","vf_routing_actions","vf_activity_events"];
+    const rows: R[] = [];
     for (const table of tables) {
-      const rows = await selectRecent(supabase, table, 180);
-
-      for (const row of rows) {
-        if (!dealish(row, table)) continue;
-        if (!canSee(row, email, owner)) continue;
-        if (id && !matchesId(row, id)) continue;
-
-        found.push(normalizeDeal(row, table));
+      const data = await selectRecent(client, table);
+      for (const row of data) {
+        if (!painish(row, table) || !canSee(row, email, owner)) continue;
+        const n = normalize(row, table);
+        if (id) {
+          const ids = [n.id,n.pain_id,n.request_id,n.item_id,n.signal_id,n.canonical_event_id].map(c);
+          if (!ids.includes(id)) continue;
+        }
+        rows.push(n);
       }
     }
-
-    const seen = new Set<string>();
-    const deals = found
-      .filter((row) => {
-        const key = first(row.deal_id, row.signal_id, row.id, row.title, row.created_at);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-
-    return NextResponse.json({
-      ok: true,
-      deals,
-      projects: deals,
-      items: deals,
-      deal: id ? deals[0] || null : null,
-      count: deals.length,
-      source: "api/deal/feed",
-      mirrors: "api/pain/feed",
-    });
+    const by = new Map<string, R>();
+    for (const row of rows) {
+      const key = first(row.canonical_event_id, row.pain_id, row.request_id, row.item_id, row.signal_id, row.id, row.title);
+      if (!key) continue;
+      const existing = by.get(key);
+      if (!existing) { by.set(key, row); continue; }
+      const better = score(row) >= score(existing);
+      by.set(key, merge(better ? row : existing, better ? existing : row));
+    }
+    const pains = Array.from(by.values()).sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    return NextResponse.json({ ok: true, pains, items: pains, signals: pains, data: pains, pain: id ? pains[0] || null : null, count: pains.length, source: "api/pain/feed" });
   } catch (error: any) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Could not load deal feed.",
-        details: error?.message || String(error),
-        source: "api/deal/feed",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: "Could not load pain feed.", details: error?.message || String(error) }, { status: 500 });
   }
 }
