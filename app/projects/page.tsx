@@ -323,7 +323,6 @@ export default function ProjectsPage() {
       const ownerFlag = owner ? "1" : "0";
 
       const urls = [
-        `/api/projects?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
         `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
       ];
 
@@ -345,6 +344,7 @@ export default function ProjectsPage() {
             ...(Array.isArray(data.projects) ? data.projects : []),
             ...(Array.isArray(data.items) ? data.items : []),
             ...(Array.isArray(data.pains) ? data.pains : []),
+            ...(Array.isArray(data.signals) ? data.signals : []),
             ...(Array.isArray(data.data) ? data.data : []),
           ];
 
@@ -363,7 +363,7 @@ export default function ProjectsPage() {
       });
 
       setItems(unique);
-      setStatus(unique.length ? "" : "No project workstations connected yet.");
+      setStatus(unique.length ? "" : "No pain/signal workstations connected yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load projects.");
     }
@@ -434,7 +434,7 @@ export default function ProjectsPage() {
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>{email === OWNER_EMAIL ? "Owner View" : "Member View"}</span>
-            <span style={chip}>Projects: {counts.total}</span>
+            <span style={chip}>Workstations: {counts.total}</span>
             <span style={chip}>Active: {counts.active}</span>
             <span style={chip}>Signal Linked: {counts.signalLinked}</span>
           </div>
@@ -469,7 +469,7 @@ export default function ProjectsPage() {
             <div style={glass}>
               <h3 style={{ marginTop: 0 }}>No workstations connected yet.</h3>
               <p style={muted}>
-                Projects will appear here when project records or related pain/signal records are connected.
+                Workstations will appear here when Pain Button creates pain, signal, routing, or intelligence records.
               </p>
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
                 <Link href="/pain" style={button}>Submit Pain</Link>
