@@ -113,7 +113,7 @@ function titleOf(row: Row) {
 function sourceOf(row: Row) {
   const source = first(row.source_kind, row.source_table, row._source_table, row.source, field(row, "canonical_kind")).toLowerCase();
 
-  if (source.includes("deal") || field(row, "deal_id", "asking_price", "price", "arv")) return "deal";
+  if (source.includes("deal") || field(row, "deal_id", "asking_price", "price", "arv", "arv_value", "repair_estimate", "repairs_needed")) return "deal";
   if (source.includes("pain") || field(row, "pain_id", "pain_type")) return "pain";
 
   return "signal";
