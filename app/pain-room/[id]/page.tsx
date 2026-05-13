@@ -304,13 +304,40 @@ function missingInfo(row: Row | null) {
   return missing;
 }
 
+
+function executiveRead(row: Row | null) {
+  const asset = assetClass(row);
+  const market = marketOf(row);
+  const problem = assetOf(row);
+  const urgency = urgencyOf(row);
+  const bottleneck = primaryBottleneck(row);
+  const ask = money(field(row, "asking_price", "price", "target_price"));
+  const arv = money(field(row, "arv", "arv_value", "estimated_value", "property_value"));
+  const repairs = money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "repair_budget"));
+  const capital = money(field(row, "capital_needed", "funding_needed", "gap_amount"));
+
+  return `VaultForge reads this as a ${asset} ${problem.toLowerCase()} issue in ${market}. Urgency is ${urgency}. The main blocker is ${bottleneck.toLowerCase()}. Numbers on file: ask/target ${ask}, ARV/value ${arv}, repair/scope ${repairs}, capital need ${capital}. This should be worked as a problem-resolution room, not a generic listing.`;
+}
+
+function nextBestMove(row: Row | null) {
+  const bottleneck = primaryBottleneck(row);
+  const viewers = whoShouldSee(row).join(", ");
+
+  return `Next move: ${fastestPath(row)} Put this first in front of: ${viewers}. Before broad routing, confirm the missing details and keep owner contact controlled inside VaultForge.`;
+}
+
+function riskRead(row: Row | null) {
+  const missing = missingInfo(row);
+
+  if (missing.length) {
+    return `Risk: routing quality is limited until these are added: ${missing.join(", ")}. Without them, members may understand the problem but not know how to act.`;
+  }
+
+  return "Risk: enough information exists for first-pass routing. Next risk is execution follow-through: buyer/capital/operator needs to be confirmed quickly.";
+}
+
 function aiProblemSummary(row: Row | null) {
-  return [
-    `Primary bottleneck: ${primaryBottleneck(row)}`,
-    `Fastest path: ${fastestPath(row)}`,
-    `Who should see this: ${whoShouldSee(row).join(", ")}`,
-    missingInfo(row).length ? `Missing: ${missingInfo(row).join(", ")}` : "Record has enough detail for first-pass routing",
-  ].join(" • ");
+  return [executiveRead(row), nextBestMove(row), riskRead(row)].join(" ");
 }
 
 const page: React.CSSProperties = {
@@ -506,7 +533,7 @@ export default function PainRoomPage() {
 
           {pain ? (
             <>
-              <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>{problemText(pain)}</p>
+              <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>{executiveRead(pain)}</p>
 
               <div style={{ marginTop: 14 }}>
                 <span style={chip}>Status: {statusOf(pain)}</span>
@@ -586,7 +613,7 @@ export default function PainRoomPage() {
             </section>
 
             <section style={card}>
-              <div style={label}>AI Problem Solver Summary</div>
+              <div style={label}>VaultForge AI Problem Read</div>
               <p style={{ ...muted, fontSize: 18 }}>{aiProblemSummary(pain)}</p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginTop: 16 }}>
