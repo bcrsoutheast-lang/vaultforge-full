@@ -468,7 +468,8 @@ export default function DashboardPage() {
               </div>
 
               <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 22 }}>
-                <Link href="/pain" style={goldButton}>Submit Pain Signal</Link>
+                <Link href="/submit" style={goldButton}>Create Deal</Link>
+                <Link href="/pain" style={ghostButton}>Submit Pain Signal</Link>
                 <Link href="/signals" style={ghostButton}>Open Signals</Link>
                 <Link href="/messages" style={ghostButton}>Messages</Link>
                 <Link href="/profile" style={ghostButton}>Profile</Link>
@@ -583,6 +584,14 @@ export default function DashboardPage() {
           </p>
 
           <div className="vf-four" style={{ marginTop: 22 }}>
+            <QueueCard
+              tag="Create"
+              title="Submit Opportunity"
+              body="Create a deal, upload photos, route opportunities, and open a new workstation."
+              href="/submit"
+              tone="gold"
+            />
+
             <QueueCard
               tag="Active"
               title="Active Signals"
