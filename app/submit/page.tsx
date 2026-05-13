@@ -367,6 +367,7 @@ export default function SubmitPage() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [successLinks, setSuccessLinks] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function checkAccess() {
@@ -457,6 +458,7 @@ export default function SubmitPage() {
 
     setBusy(true);
     setMsg("");
+    setSuccessLinks({});
 
     try {
       const email = getEmail();
@@ -515,7 +517,22 @@ export default function SubmitPage() {
         throw new Error(data?.error || data?.details || "Deal save failed.");
       }
 
-      setMsg("Deal room saved successfully. Routing fields are ready for Smart Alerts.");
+      setMsg("Saved. Deal room created and routed into VaultForge. Use the buttons below to open where it was saved.");
+
+      setSuccessLinks({
+        dashboard: "/dashboard",
+        projects: "/projects",
+        pain_feed: "/pain-feed",
+        alerts: "/alerts",
+        messages: "/messages",
+        deal_room:
+          data?.direct_links?.deal_room ||
+          data?.links?.deal_room ||
+          data?.deal_room ||
+          data?.deal_id
+            ? `/deal-room/${encodeURIComponent(String(data?.deal_id || data?.id || data?.item_id || ""))}`
+            : "",
+      });
 
       setForm(empty as any);
       setFiles([]);
@@ -608,7 +625,17 @@ export default function SubmitPage() {
 
         {msg && (
           <section style={card}>
-            <strong>{msg}</strong>
+            <div style={greenEyebrow}>SAVE STATUS</div>
+            <h2 style={{ margin: "0 0 12px", fontSize: 34, lineHeight: 1 }}>{msg}</h2>
+            {Object.keys(successLinks).length ? (
+              <div className="vf-submit-actions">
+                {successLinks.deal_room ? <Link href={successLinks.deal_room} style={btn}>Open Deal Room</Link> : null}
+                <Link href={successLinks.projects || "/projects"} style={ghost}>Projects</Link>
+                <Link href={successLinks.pain_feed || "/pain-feed"} style={ghost}>Pain Feed</Link>
+                <Link href={successLinks.alerts || "/alerts"} style={ghost}>Alerts</Link>
+                <Link href={successLinks.dashboard || "/dashboard"} style={ghost}>Dashboard</Link>
+              </div>
+            ) : null}
           </section>
         )}
 
