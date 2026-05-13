@@ -647,6 +647,7 @@ function WorkstationCard({
   onUnsave,
   onArchive,
   onRestore,
+  onDelete,
 }: {
   row: Row;
   viewer: string;
@@ -656,6 +657,7 @@ function WorkstationCard({
   onUnsave: () => void;
   onArchive: () => void;
   onRestore: () => void;
+  onDelete: () => void;
 }) {
   const id = idOf(row);
   const signalId = signalIdOf(row);
@@ -777,6 +779,21 @@ function WorkstationCard({
             ) : (
               <button type="button" onClick={onRestore} style={ghost}>Restore to Active</button>
             )}
+
+            {(isSaved || isArchived) ? (
+              <button
+                type="button"
+                onClick={onDelete}
+                style={{
+                  ...ghost,
+                  borderColor: "rgba(248,113,113,.35)",
+                  color: "#fecaca",
+                  background: "rgba(248,113,113,.08)",
+                }}
+              >
+                Delete
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -791,6 +808,7 @@ export default function ProjectsPage() {
   const [folder, setFolder] = useState<FolderMode>("active");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
   async function load() {
     const viewer = getEmail();
@@ -895,6 +913,7 @@ export default function ProjectsPage() {
   useEffect(() => {
     setSavedIds(readSet("vf_project_saved_ids"));
     setArchivedIds(readSet("vf_project_archived_ids"));
+    setDeletedIds(readSet("vf_project_deleted_ids"));
     load();
   }, []);
 
@@ -907,6 +926,11 @@ export default function ProjectsPage() {
   function persistArchived(next: Set<string>) {
     setArchivedIds(new Set(next));
     writeSet("vf_project_archived_ids", next);
+  }
+
+  function persistDeleted(next: Set<string>) {
+    setDeletedIds(new Set(next));
+    writeSet("vf_project_deleted_ids", next);
   }
 
   function saveProject(row: Row) {
@@ -945,17 +969,36 @@ export default function ProjectsPage() {
     persistArchived(next);
   }
 
+  function deleteProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const nextDeleted = new Set(deletedIds);
+    nextDeleted.add(key);
+    persistDeleted(nextDeleted);
+
+    const nextSaved = new Set(savedIds);
+    nextSaved.delete(key);
+    persistSaved(nextSaved);
+
+    const nextArchived = new Set(archivedIds);
+    nextArchived.delete(key);
+    persistArchived(nextArchived);
+  }
+
   const visibleItems = useMemo(() => {
     return items.filter((item) => {
       const key = canonicalKey(item);
       const saved = savedIds.has(key);
       const archived = archivedIds.has(key);
+      const deleted = deletedIds.has(key);
 
+      if (deleted) return false;
       if (folder === "saved") return saved && !archived;
       if (folder === "archived") return archived;
       return !archived;
     });
-  }, [items, savedIds, archivedIds, folder]);
+  }, [items, savedIds, archivedIds, deletedIds, folder]);
 
   const counts = useMemo(() => {
     const deals = visibleItems.filter((item) => sourceOf(item) === "deal").length;
@@ -967,10 +1010,10 @@ export default function ProjectsPage() {
       deals,
       pains,
       withPhotos,
-      saved: savedIds.size,
-      archived: archivedIds.size,
+      saved: Array.from(savedIds).filter((id) => !archivedIds.has(id) && !deletedIds.has(id)).length,
+      archived: Array.from(archivedIds).filter((id) => !deletedIds.has(id)).length,
     };
-  }, [visibleItems, savedIds, archivedIds]);
+  }, [visibleItems, savedIds, archivedIds, deletedIds]);
 
   return (
     <main style={page}>
@@ -1066,6 +1109,7 @@ export default function ProjectsPage() {
                     onUnsave={() => unsaveProject(item)}
                     onArchive={() => archiveProject(item)}
                     onRestore={() => restoreProject(item)}
+                    onDelete={() => deleteProject(item)}
                   />
                 );
               })}
