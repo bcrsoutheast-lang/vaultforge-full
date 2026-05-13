@@ -253,7 +253,7 @@ function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
     ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${projectId ? `&item_id=${encodeURIComponent(projectId)}` : ""}`
     : `/messages/new?email=${encodeURIComponent(viewer)}${projectId ? `&item_id=${encodeURIComponent(projectId)}` : ""}`;
 
-  const projectHref = projectId ? `/deal-room/${encodeURIComponent(projectId)}` : "/projects";
+  const projectHref = projectId ? `/deal/detail?id=${encodeURIComponent(projectId)}` : "/projects";
 
   return (
     <article style={glass}>
@@ -321,14 +321,9 @@ export default function ProjectsPage() {
     setStatus("Loading projects...");
 
     try {
-      const owner = viewer === OWNER_EMAIL;
-      const ownerFlag = owner ? "1" : "0";
-
       const urls = [
-        `/api/deal/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
-        `/api/deals/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
-        `/api/deals?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
-        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
+        `/api/projects?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
       ];
 
       const collected: Row[] = [];
@@ -337,20 +332,14 @@ export default function ProjectsPage() {
         try {
           const res = await fetch(url, {
             cache: "no-store",
-            credentials: "include",
-            headers: {
-              "x-vf-email": viewer || "",
-              "x-vf-admin": ownerFlag,
-            },
+            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
           });
 
           const data = await safeJson(res);
           const list = [
-            ...(Array.isArray(data.deals) ? data.deals : []),
             ...(Array.isArray(data.projects) ? data.projects : []),
             ...(Array.isArray(data.items) ? data.items : []),
             ...(Array.isArray(data.pains) ? data.pains : []),
-            ...(Array.isArray(data.signals) ? data.signals : []),
             ...(Array.isArray(data.data) ? data.data : []),
           ];
 
@@ -369,7 +358,7 @@ export default function ProjectsPage() {
       });
 
       setItems(unique);
-      setStatus(unique.length ? "" : "No deal/pain workstations connected yet.");
+      setStatus(unique.length ? "" : "No project workstations connected yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load projects.");
     }
@@ -439,8 +428,7 @@ export default function ProjectsPage() {
 
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>{email === OWNER_EMAIL ? "Owner View" : "Member View"}</span>
-            <span style={chip}>Workstations: {counts.total}</span>
+            <span style={chip}>Projects: {counts.total}</span>
             <span style={chip}>Active: {counts.active}</span>
             <span style={chip}>Signal Linked: {counts.signalLinked}</span>
           </div>
@@ -475,7 +463,7 @@ export default function ProjectsPage() {
             <div style={glass}>
               <h3 style={{ marginTop: 0 }}>No workstations connected yet.</h3>
               <p style={muted}>
-                Workstations will appear here when Create Deal or Pain Button creates deal, pain, signal, routing, or intelligence records.
+                Projects will appear here when project records or related pain/signal records are connected.
               </p>
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
                 <Link href="/pain" style={button}>Submit Pain</Link>
