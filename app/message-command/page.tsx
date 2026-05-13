@@ -181,6 +181,10 @@ function inferLane(row: Conversation): LaneKey {
   return "general";
 }
 
+function timestampOf(row: Conversation) {
+  return row.latest_at || row.last_message_at || row.updated_at || row.created_at;
+}
+
 function formatDate(value: unknown) {
   const raw = clean(value);
 
@@ -196,6 +200,26 @@ function formatDate(value: unknown) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function relativeTime(value: unknown) {
+  const raw = clean(value);
+  if (!raw) return "No activity";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return formatDate(raw);
+
+  const diff = Date.now() - date.getTime();
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diff < minute) return "Just now";
+  if (diff < hour) return `${Math.max(1, Math.round(diff / minute))}m ago`;
+  if (diff < day) return `${Math.round(diff / hour)}h ago`;
+  if (diff < day * 7) return `${Math.round(diff / day)}d ago`;
+
+  return formatDate(raw);
 }
 
 async function safeJson(response: Response) {
@@ -220,8 +244,40 @@ function conversationPreview(row: Conversation) {
   );
 }
 
-function timestampOf(row: Conversation) {
-  return row.latest_at || row.last_message_at || row.updated_at || row.created_at;
+function senderOf(row: Conversation) {
+  return clean(row.from_email || row.sender_email || row.member_email || "VaultForge");
+}
+
+function receiverOf(row: Conversation) {
+  return clean(row.to_email || row.recipient_email || row.target_email || "");
+}
+
+function urgencyForLane(lane: LaneKey, count: number, unread: number, latest?: Conversation) {
+  if (unread > 0) return "Review Now";
+  if (lane === "priority" && count > 0) return "Active Watch";
+  if (lane === "signals" && count > 0) return "Intel Live";
+  if (lane === "execution" && count > 0) return "Work Active";
+  if (lane === "saved" && count > 0) return "Follow-Up";
+  if (lane === "network" && count > 0) return "Relationship Active";
+  if (latest) return "Monitoring";
+  return "Clear";
+}
+
+function operationalSummary(lane: LaneKey, count: number, unread: number) {
+  if (count === 0) {
+    if (lane === "priority") return "No unread or saved pressure is currently hitting mission control.";
+    if (lane === "signals") return "No signal, alert, routing, or intro conversations are active.";
+    if (lane === "execution") return "No pain, project, or deal execution message threads are active.";
+    if (lane === "saved") return "No saved follow-up threads are pinned right now.";
+    if (lane === "network") return "No member or network communication threads are active.";
+    return "No uncategorized messages are waiting.";
+  }
+
+  if (unread > 0) {
+    return `${unread} unread thread${unread === 1 ? "" : "s"} need review across ${count} active conversation${count === 1 ? "" : "s"}.`;
+  }
+
+  return `${count} active conversation${count === 1 ? "" : "s"} connected and current.`;
 }
 
 export default function MessageCommandPage() {
@@ -321,21 +377,25 @@ export default function MessageCommandPage() {
         filtered = rows.filter((row) => isUnread(row) || isSaved(row));
       }
 
-      const unread = filtered.reduce(
+      const sorted = filtered
+        .slice()
+        .sort((a, b) => String(timestampOf(b)).localeCompare(String(timestampOf(a))));
+
+      const unread = sorted.reduce(
         (sum, row) => sum + Number(row.unread_count || (row.read === false ? 1 : 0)),
         0,
       );
 
-      const latest = filtered
-        .slice()
-        .sort((a, b) => String(timestampOf(b)).localeCompare(String(timestampOf(a))))[0];
+      const latest = sorted[0];
 
       return {
         ...lane,
-        rows: filtered,
-        count: filtered.length,
+        rows: sorted,
+        count: sorted.length,
         unread,
         latest,
+        urgency: urgencyForLane(lane.key, sorted.length, unread, latest),
+        summary: operationalSummary(lane.key, sorted.length, unread),
       };
     });
   }, [rows]);
@@ -348,6 +408,9 @@ export default function MessageCommandPage() {
     0,
   );
   const savedTotal = rows.filter(isSaved).length;
+  const latestOverall = rows
+    .slice()
+    .sort((a, b) => String(timestampOf(b)).localeCompare(String(timestampOf(a))))[0];
 
   return (
     <main style={styles.page}>
@@ -391,9 +454,13 @@ export default function MessageCommandPage() {
           </div>
 
           <div style={styles.metricWide}>
-            <span style={styles.metricLabel}>Command Status</span>
+            <span style={styles.metricLabel}>Latest Pulse</span>
             <strong style={styles.metricText}>
-              {loading ? "Scanning message lanes…" : totalThreads > 0 ? "Live message lanes connected." : "No active conversations found for this account."}
+              {loading
+                ? "Scanning message lanes…"
+                : latestOverall
+                  ? `${conversationTitle(latestOverall)} • ${relativeTime(timestampOf(latestOverall))}`
+                  : "No active conversations found for this account."}
             </strong>
           </div>
         </section>
@@ -407,33 +474,45 @@ export default function MessageCommandPage() {
                 onClick={() => setActiveLane(lane.key)}
                 style={styles.card}
               >
-                <div style={styles.cardLabel}>{lane.label}</div>
-                <div style={styles.cardTitle}>{lane.title}</div>
+                <div style={styles.cardTop}>
+                  <div>
+                    <div style={styles.cardLabel}>{lane.label}</div>
+                    <div style={styles.cardTitle}>{lane.title}</div>
+                  </div>
+                  <span style={lane.urgency === "Clear" ? styles.clearBadge : styles.liveBadge}>
+                    {lane.urgency}
+                  </span>
+                </div>
+
                 <div style={styles.cardCount}>{loading ? "…" : lane.count}</div>
+
+                <div style={styles.cardSection}>
+                  <span style={styles.sectionLabel}>Operational read</span>
+                  <p style={styles.cardText}>{lane.summary}</p>
+                </div>
 
                 <div style={styles.cardSection}>
                   <span style={styles.sectionLabel}>What is here</span>
                   <p style={styles.cardText}>{lane.purpose}</p>
                 </div>
 
-                <div style={styles.cardSection}>
-                  <span style={styles.sectionLabel}>Current status</span>
-                  <p style={styles.cardText}>
-                    {lane.count > 0
-                      ? lane.unread > 0
-                        ? `${lane.unread} unread thread${lane.unread === 1 ? "" : "s"} need review.`
-                        : `${lane.count} active thread${lane.count === 1 ? "" : "s"} available.`
-                      : lane.statusEmpty}
-                  </p>
-                </div>
-
                 {lane.latest ? (
                   <div style={styles.latestBox}>
-                    <span style={styles.sectionLabel}>Latest</span>
+                    <span style={styles.sectionLabel}>Latest activity</span>
                     <p style={styles.latestTitle}>{conversationTitle(lane.latest)}</p>
-                    <p style={styles.latestTime}>{formatDate(timestampOf(lane.latest))}</p>
+                    <p style={styles.latestPreview}>{conversationPreview(lane.latest)}</p>
+                    <p style={styles.latestTime}>
+                      {senderOf(lane.latest)}
+                      {receiverOf(lane.latest) ? ` → ${receiverOf(lane.latest)}` : ""} • {relativeTime(timestampOf(lane.latest))}
+                    </p>
                   </div>
-                ) : null}
+                ) : (
+                  <div style={styles.latestBox}>
+                    <span style={styles.sectionLabel}>Latest activity</span>
+                    <p style={styles.latestTitle}>{lane.statusEmpty}</p>
+                    <p style={styles.latestTime}>Standing by</p>
+                  </div>
+                )}
               </button>
             ))}
           </section>
@@ -443,7 +522,7 @@ export default function MessageCommandPage() {
               <div>
                 <div style={styles.eyebrow}>Command Lane</div>
                 <h2 style={styles.panelTitle}>{active?.title}</h2>
-                <p style={styles.panelSubtitle}>{active?.purpose}</p>
+                <p style={styles.panelSubtitle}>{active?.summary}</p>
               </div>
 
               <button type="button" onClick={() => setActiveLane(null)} style={styles.back}>
@@ -459,16 +538,20 @@ export default function MessageCommandPage() {
               {(active?.rows || []).map((row) => {
                 const threadKey = getThreadKey(row);
                 const isBusy = busy.endsWith(threadKey);
+                const unread = Number(row.unread_count || (row.read === false ? 1 : 0));
 
                 return (
                   <article key={threadKey} style={styles.thread}>
                     <div style={styles.threadMain}>
-                      <div style={styles.threadMeta}>{formatDate(timestampOf(row))}</div>
+                      <div style={styles.threadMeta}>
+                        {unread > 0 ? `${unread} unread • ` : ""}
+                        {formatDate(timestampOf(row))}
+                      </div>
                       <h3 style={styles.threadTitle}>{conversationTitle(row)}</h3>
                       <p style={styles.threadBody}>{conversationPreview(row)}</p>
                       <div style={styles.threadMeta}>
-                        {clean(row.from_email || row.sender_email) || "VaultForge"}
-                        {clean(row.to_email || row.recipient_email) ? ` → ${clean(row.to_email || row.recipient_email)}` : ""}
+                        {senderOf(row)}
+                        {receiverOf(row) ? ` → ${receiverOf(row)}` : ""}
                       </div>
                     </div>
 
@@ -648,7 +731,7 @@ const styles: Record<string, CSSProperties> = {
   grid: {
     marginTop: 20,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+    gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
     gap: 16,
   },
   card: {
@@ -658,8 +741,14 @@ const styles: Record<string, CSSProperties> = {
     padding: 22,
     background: "linear-gradient(180deg, rgba(15,23,42,.92), rgba(2,6,23,.88))",
     color: "white",
-    minHeight: 290,
+    minHeight: 360,
     cursor: "pointer",
+  },
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
   },
   cardLabel: {
     color: "#e8c46b",
@@ -679,6 +768,26 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 50,
     fontWeight: 950,
     letterSpacing: "-.08em",
+  },
+  liveBadge: {
+    borderRadius: 999,
+    border: "1px solid rgba(248,113,113,.28)",
+    background: "rgba(248,113,113,.11)",
+    color: "#fecaca",
+    padding: "7px 10px",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
+  },
+  clearBadge: {
+    borderRadius: 999,
+    border: "1px solid rgba(34,197,94,.24)",
+    background: "rgba(34,197,94,.10)",
+    color: "#bbf7d0",
+    padding: "7px 10px",
+    fontSize: 11,
+    fontWeight: 950,
+    whiteSpace: "nowrap",
   },
   cardSection: {
     marginTop: 14,
@@ -707,10 +816,17 @@ const styles: Record<string, CSSProperties> = {
     color: "#f8e7b0",
     fontWeight: 900,
   },
+  latestPreview: {
+    margin: "6px 0 0",
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
   latestTime: {
-    margin: "4px 0 0",
+    margin: "7px 0 0",
     color: "#94a3b8",
     fontSize: 12,
+    lineHeight: 1.35,
   },
   panel: {
     marginTop: 20,
