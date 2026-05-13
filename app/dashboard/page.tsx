@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +44,34 @@ function getEmail() {
     if (sessionValue.includes("@")) return sessionValue;
   }
 
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+  return cleanEmail(
+    readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("vf_admin_email")
+  );
 }
+
+type DashboardStats = {
+  ok?: boolean;
+  email?: string;
+  owner?: boolean;
+  deals?: number;
+  members?: number;
+  bucket?: number;
+  messages?: number;
+  alerts?: number;
+  pain?: number;
+  routing?: number;
+  activity?: number;
+  admin?: {
+    owner?: boolean;
+    pendingDeals?: number;
+    archivedDeals?: number;
+    lockedMembers?: number;
+    paymentRequiredMembers?: number;
+    activeMembers?: number;
+  };
+};
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -220,7 +246,9 @@ function QueueCard({
       <h3 className="vf-queue-title" style={{ margin: "0 0 10px", fontSize: 26, lineHeight: 1.05 }}>
         {title}
       </h3>
+
       <p style={{ ...muted, margin: 0, flex: 1 }}>{body}</p>
+
       <div style={{ marginTop: 18, fontWeight: 950 }}>Open →</div>
     </Link>
   );
@@ -241,6 +269,7 @@ function Bar({
         <span>{label}</span>
         <span>{right}</span>
       </div>
+
       <div
         style={{
           height: 14,
@@ -265,10 +294,86 @@ function Bar({
 
 export default function DashboardPage() {
   const [email, setEmail] = useState("");
+  const [stats, setStats] = useState<DashboardStats>({
+    deals: 0,
+    members: 0,
+    bucket: 0,
+    messages: 0,
+    alerts: 0,
+    pain: 0,
+    routing: 0,
+    activity: 0,
+  });
+
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setEmail(getEmail());
+    const viewer = getEmail();
+
+    setEmail(viewer);
+
+    async function load() {
+      try {
+        const response = await fetch(
+          `/api/dashboard/stats?email=${encodeURIComponent(viewer)}`,
+          {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "x-vf-email": viewer,
+            },
+            cache: "no-store",
+          }
+        );
+
+        const data = await response.json();
+
+        if (data?.ok) {
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Dashboard stats load failed.", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
   }, []);
+
+  const pressureValue = useMemo(() => {
+    const total =
+      Number(stats.alerts || 0) +
+      Number(stats.routing || 0) +
+      Number(stats.pain || 0);
+
+    if (total <= 0) return 8;
+    if (total >= 100) return 100;
+
+    return total;
+  }, [stats]);
+
+  const movementValue = useMemo(() => {
+    const total =
+      Number(stats.messages || 0) +
+      Number(stats.activity || 0);
+
+    if (total <= 0) return 4;
+    if (total >= 100) return 100;
+
+    return total;
+  }, [stats]);
+
+  const responseVelocity = useMemo(() => {
+    const total =
+      Number(stats.messages || 0) +
+      Number(stats.routing || 0);
+
+    if (total <= 0) return 5;
+    if (total >= 100) return 100;
+
+    return total;
+  }, [stats]);
 
   return (
     <main style={page}>
@@ -338,6 +443,7 @@ export default function DashboardPage() {
           <div className="vf-two" style={{ display: "grid", gridTemplateColumns: "1.25fr .75fr", gap: 20, alignItems: "stretch" }}>
             <div>
               <div style={eyebrow}>VaultForge Command Center</div>
+
               <h1
                 style={{
                   fontSize: "clamp(54px,10vw,104px)",
@@ -356,7 +462,7 @@ export default function DashboardPage() {
 
               <div style={{ marginTop: 18 }}>
                 <span style={pill}>Signed in: {email || "unknown"}</span>
-                <span style={pill}>Member View</span>
+                <span style={pill}>{stats.owner ? "Owner View" : "Member View"}</span>
                 <span style={pill}>Live OS</span>
                 <span style={pill}>Private Network</span>
               </div>
@@ -371,13 +477,14 @@ export default function DashboardPage() {
 
             <div style={{ ...glass, background: "rgba(0,0,0,.20)" }}>
               <div style={eyebrow}>Today’s Operating Tape</div>
+
               <div style={{ display: "grid", gap: 13, marginTop: 16 }}>
                 {[
-                  ["Signals", "5 active records"],
-                  ["Messages", "9 communication threads"],
-                  ["Routing", "1 routed path"],
-                  ["Alerts", "81 active alerts"],
-                  ["Introductions", "ready for controlled routing"],
+                  ["Signals", `${stats.routing || 0} routed paths`],
+                  ["Messages", `${stats.messages || 0} communication threads`],
+                  ["Pain", `${stats.pain || 0} open pain records`],
+                  ["Alerts", `${stats.alerts || 0} active alerts`],
+                  ["Members", `${stats.members || 0} network members`],
                 ].map(([left, right]) => (
                   <div
                     key={left}
@@ -392,7 +499,7 @@ export default function DashboardPage() {
                     }}
                   >
                     <span style={{ color: "white" }}>{left}</span>
-                    <span>{right}</span>
+                    <span>{loading ? "Loading..." : right}</span>
                   </div>
                 ))}
               </div>
@@ -401,24 +508,64 @@ export default function DashboardPage() {
         </section>
 
         <section className="vf-four" style={{ marginBottom: 20 }}>
-          <Metric label="Signals" value="5" sub="Active opportunities, pain, and deal signals." tone="blue" />
-          <Metric label="Messages" value="9" sub="Controlled conversations and replies." tone="green" />
-          <Metric label="Routing" value="1" sub="Member-fit execution path generated." tone="gold" />
-          <Metric label="Alerts" value="81" sub="Live network pressure and movement." tone="red" />
+          <Metric
+            label="Signals"
+            value={String(stats.routing || 0)}
+            sub="Routing, signals, and active opportunity flow."
+            tone="blue"
+          />
+
+          <Metric
+            label="Messages"
+            value={String(stats.messages || 0)}
+            sub="Controlled conversations and communication threads."
+            tone="green"
+          />
+
+          <Metric
+            label="Pain"
+            value={String(stats.pain || 0)}
+            sub="Open unresolved operational pressure."
+            tone="gold"
+          />
+
+          <Metric
+            label="Alerts"
+            value={String(stats.alerts || 0)}
+            sub="Live network alerts and intelligence movement."
+            tone="red"
+          />
         </section>
 
         <section style={section}>
           <div style={eyebrow}>Live Pressure Board</div>
+
           <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 8px", letterSpacing: "-.04em" }}>
             Market movement and execution pressure.
           </h2>
-          <Bar label="Priority pressure" value={81} right="81 urgent · 6 high · 43 normal" />
-          <Bar label="Execution movement" value={72} right="130 active · 1 routed · 9 messages" />
-          <Bar label="Member response velocity" value={58} right="messages, intros, and routing activity" />
+
+          <Bar
+            label="Priority pressure"
+            value={pressureValue}
+            right={`${stats.alerts || 0} alerts · ${stats.pain || 0} pain · ${stats.routing || 0} routing`}
+          />
+
+          <Bar
+            label="Execution movement"
+            value={movementValue}
+            right={`${stats.activity || 0} activity · ${stats.messages || 0} messages`}
+          />
+
+          <Bar
+            label="Member response velocity"
+            value={responseVelocity}
+            right="messages, routing, and execution movement"
+          />
         </section>
 
         <section style={section}>
           <div style={eyebrow}>Member Execution Layer</div>
+
           <h2
             style={{
               fontSize: "clamp(42px,7vw,72px)",
@@ -443,6 +590,7 @@ export default function DashboardPage() {
               href="/signals"
               tone="blue"
             />
+
             <QueueCard
               tag="Communication"
               title="Conversations"
@@ -450,6 +598,7 @@ export default function DashboardPage() {
               href="/messages"
               tone="green"
             />
+
             <QueueCard
               tag="Routing"
               title="Introductions"
@@ -457,6 +606,7 @@ export default function DashboardPage() {
               href="/introductions"
               tone="gold"
             />
+
             <QueueCard
               tag="Priority"
               title="Execution Queue"
@@ -469,6 +619,7 @@ export default function DashboardPage() {
 
         <section style={section}>
           <div style={eyebrow}>Operating Map</div>
+
           <h2 style={{ fontSize: 36, lineHeight: 1, margin: "10px 0 18px", letterSpacing: "-.035em" }}>
             Pain → Signal → Routing → Intro → Message → Execution.
           </h2>
