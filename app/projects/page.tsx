@@ -738,7 +738,7 @@ export default function ProjectsPage() {
 
       const secondPass = new Map<string, Row>();
 
-      for (const item of byKey.values()) {
+      for (const item of Array.from(byKey.values())) {
         const key = duplicateFamilyKey(item);
         const existing = secondPass.get(key);
 
