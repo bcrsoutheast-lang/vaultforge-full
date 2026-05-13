@@ -78,7 +78,7 @@ function first(...values: unknown[]) {
 
 function idOf(row: Row) {
   const m = meta(row);
-  return first(row.id, row.project_id, row.item_id, row.itemId, m.id, m.project_id, m.item_id);
+  return first(row.id, row.deal_id, row.project_id, row.item_id, row.itemId, m.id, m.deal_id, m.project_id, m.item_id);
 }
 
 function signalIdOf(row: Row) {
@@ -124,8 +124,10 @@ function photosOf(row: Row) {
     row.image_url,
     row.photo_url,
     row.primary_photo_url,
+    row.main_photo_url,
     m.image_url,
     m.photo_url,
+    m.main_photo_url,
     ...(Array.isArray(row.photo_urls) ? row.photo_urls : []),
     ...(Array.isArray(row.photos) ? row.photos : []),
     ...(Array.isArray(m.photo_urls) ? m.photo_urls : []),
@@ -251,7 +253,7 @@ function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
     ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${projectId ? `&item_id=${encodeURIComponent(projectId)}` : ""}`
     : `/messages/new?email=${encodeURIComponent(viewer)}${projectId ? `&item_id=${encodeURIComponent(projectId)}` : ""}`;
 
-  const projectHref = projectId ? `/project-room/${encodeURIComponent(projectId)}` : "/projects";
+  const projectHref = projectId ? `/deal-room/${encodeURIComponent(projectId)}` : "/projects";
 
   return (
     <article style={glass}>
@@ -323,6 +325,9 @@ export default function ProjectsPage() {
       const ownerFlag = owner ? "1" : "0";
 
       const urls = [
+        `/api/deal/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
+        `/api/deals/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
+        `/api/deals?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
         `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
       ];
 
@@ -341,6 +346,7 @@ export default function ProjectsPage() {
 
           const data = await safeJson(res);
           const list = [
+            ...(Array.isArray(data.deals) ? data.deals : []),
             ...(Array.isArray(data.projects) ? data.projects : []),
             ...(Array.isArray(data.items) ? data.items : []),
             ...(Array.isArray(data.pains) ? data.pains : []),
@@ -363,7 +369,7 @@ export default function ProjectsPage() {
       });
 
       setItems(unique);
-      setStatus(unique.length ? "" : "No pain/signal workstations connected yet.");
+      setStatus(unique.length ? "" : "No deal/pain workstations connected yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load projects.");
     }
@@ -469,7 +475,7 @@ export default function ProjectsPage() {
             <div style={glass}>
               <h3 style={{ marginTop: 0 }}>No workstations connected yet.</h3>
               <p style={muted}>
-                Workstations will appear here when Pain Button creates pain, signal, routing, or intelligence records.
+                Workstations will appear here when Create Deal or Pain Button creates deal, pain, signal, routing, or intelligence records.
               </p>
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
                 <Link href="/pain" style={button}>Submit Pain</Link>
