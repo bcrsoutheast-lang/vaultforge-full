@@ -4,10 +4,21 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BUCKETS = ["vaultforge-pain-photos", "pain-photos", "vf-pain-photos", "uploads"];
+const BUCKETS = ["vaultforge-pain-photos", "vf-pain-photos", "pain-photos", "uploads"];
 
 function clean(value: unknown) {
   return String(value || "").trim();
+}
+
+function json(data: Record<string, any>, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
 }
 
 function supabaseAdmin() {
@@ -29,17 +40,6 @@ function supabaseAdmin() {
   });
 }
 
-function json(data: Record<string, any>, status = 200) {
-  return NextResponse.json(data, {
-    status,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  });
-}
-
 function safeName(name: string) {
   return clean(name)
     .toLowerCase()
@@ -48,15 +48,15 @@ function safeName(name: string) {
     .slice(0, 90) || "pain-photo.jpg";
 }
 
-async function ensureBucket(client: any, bucket: string) {
+async function tryCreateBucket(client: any, bucket: string) {
   try {
     await client.storage.createBucket(bucket, {
       public: true,
       fileSizeLimit: 10485760,
-      allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+      allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/heic", "image/heif"],
     });
   } catch {
-    // Bucket may already exist or current key may not allow creation.
+    // Bucket may already exist or anon key may not have bucket-create permission.
   }
 }
 
@@ -64,7 +64,13 @@ export async function POST(request: Request) {
   const client = supabaseAdmin();
 
   if (!client) {
-    return json({ ok: false, error: "Supabase environment variables are missing." }, 500);
+    return json(
+      {
+        ok: false,
+        error: "Supabase upload is not configured. Pain record can still save without photos.",
+      },
+      200
+    );
   }
 
   let form: FormData;
@@ -72,17 +78,17 @@ export async function POST(request: Request) {
   try {
     form = await request.formData();
   } catch {
-    return json({ ok: false, error: "Invalid upload form." }, 400);
+    return json({ ok: false, error: "Invalid upload form. Pain record can still save without photos." }, 200);
   }
 
   const file = form.get("file");
 
   if (!(file instanceof File)) {
-    return json({ ok: false, error: "Missing file." }, 400);
+    return json({ ok: false, error: "Missing file. Pain record can still save without photos." }, 200);
   }
 
   if (!file.type.startsWith("image/")) {
-    return json({ ok: false, error: "Only image uploads are supported for pain photos." }, 400);
+    return json({ ok: false, error: "Only image uploads are supported. Pain record can still save without this file." }, 200);
   }
 
   const email = clean(form.get("email") || request.headers.get("x-vf-email") || "unknown")
@@ -99,11 +105,10 @@ export async function POST(request: Request) {
     : "jpg";
 
   const filePath = `${email || "unknown"}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeName(file.name || `pain.${ext}`)}`;
-
   const attempts: Record<string, any>[] = [];
 
   for (const bucket of BUCKETS) {
-    await ensureBucket(client, bucket);
+    await tryCreateBucket(client, bucket);
 
     try {
       const { error } = await client.storage.from(bucket).upload(filePath, buffer, {
@@ -118,30 +123,27 @@ export async function POST(request: Request) {
       const { data } = client.storage.from(bucket).getPublicUrl(filePath);
       const publicUrl = clean(data?.publicUrl);
 
-      if (!publicUrl) continue;
-
-      return json({
-        ok: true,
-        url: publicUrl,
-        publicUrl,
-        public_url: publicUrl,
-        photo_url: publicUrl,
-        image_url: publicUrl,
-        main_photo_url: publicUrl,
-        bucket,
-        path: filePath,
-      });
+      if (publicUrl) {
+        return json({
+          ok: true,
+          url: publicUrl,
+          publicUrl,
+          public_url: publicUrl,
+          photo_url: publicUrl,
+          image_url: publicUrl,
+          main_photo_url: publicUrl,
+          bucket,
+          path: filePath,
+        });
+      }
     } catch (error: any) {
       attempts.push({ bucket, ok: false, error: error?.message || String(error) });
     }
   }
 
-  return json(
-    {
-      ok: false,
-      error: "Photo upload failed. Check Supabase Storage bucket permissions.",
-      attempts,
-    },
-    500
-  );
+  return json({
+    ok: false,
+    error: "Photo upload failed because Supabase Storage bucket or policy is not allowing upload. Pain record can still save without photos.",
+    attempts,
+  }, 200);
 }
