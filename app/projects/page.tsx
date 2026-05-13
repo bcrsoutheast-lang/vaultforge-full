@@ -412,6 +412,131 @@ function signalPressureTone(row: Row) {
   };
 }
 
+
+function clampScore(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function operatingScore(row: Row) {
+  let score = 42;
+
+  if (field(row, "asking_price", "price")) score += 8;
+  if (field(row, "arv", "arv_value", "estimated_value")) score += 8;
+  if (field(row, "repair_estimate", "repairs_needed", "estimated_repairs")) score += 8;
+  if (field(row, "routing_needs", "deal_needs", "needs")) score += 10;
+  if (field(row, "distress_signals")) score += 10;
+  if (field(row, "strategy", "exit_strategy")) score += 6;
+  if (photosOf(row).length) score += 8;
+
+  return clampScore(score);
+}
+
+function urgencyScore(row: Row) {
+  const pressure = `${field(row, "distress_signals")} ${field(row, "urgency", "urgency_level")} ${field(row, "seller_situation")}`.toLowerCase();
+  let score = 38;
+
+  if (pressure.includes("urgent")) score += 28;
+  if (pressure.includes("fast close")) score += 22;
+  if (pressure.includes("funding gap")) score += 18;
+  if (pressure.includes("foreclosure")) score += 25;
+  if (pressure.includes("inherited")) score += 10;
+  if (field(row, "routing_needs", "deal_needs", "needs")) score += 10;
+
+  return clampScore(score);
+}
+
+function aiHiveSuggestions(row: Row) {
+  const needs = field(row, "routing_needs", "deal_needs", "needs").toLowerCase();
+  const pressure = field(row, "distress_signals").toLowerCase();
+  const strategy = field(row, "strategy", "exit_strategy") || "Fix & Flip";
+
+  const suggestions: string[] = [];
+
+  if (needs.includes("buyer")) suggestions.push("Route to cash buyers first; confirm proof of funds before releasing private details.");
+  if (needs.includes("contractor")) suggestions.push("Get repair scope priced fast so spread can be verified before buyer intro.");
+  if (needs.includes("jv") || needs.includes("partner")) suggestions.push("Package as JV/operator opportunity with role, capital need, and profit split clearly defined.");
+  if (needs.includes("lender") || pressure.includes("funding")) suggestions.push("Send to private/hard-money capital with ask, ARV, repairs, and timeline.");
+  if (pressure.includes("fast close")) suggestions.push("Prioritize speed: buyer + title readiness matter more than broad exposure.");
+
+  if (!suggestions.length) {
+    suggestions.push("Hold for owner review until buyer type, funding need, timeline, and execution role are clarified.");
+  }
+
+  suggestions.push(`Best formation: ${strategy} deal room with controlled owner contact and member-by-member routing.`);
+
+  return suggestions.slice(0, 4);
+}
+
+function bestDealFormation(row: Row) {
+  const needs = field(row, "routing_needs", "deal_needs", "needs").toLowerCase();
+  const pressure = field(row, "distress_signals").toLowerCase();
+
+  if (needs.includes("jv") || needs.includes("partner")) return "JV / Operator-Led Execution";
+  if (needs.includes("lender") || pressure.includes("funding")) return "Capital-Backed Acquisition";
+  if (needs.includes("contractor")) return "Contractor-Verified Flip";
+  if (needs.includes("buyer")) return "Buyer-First Off-Market Route";
+
+  return "Owner Review / Intelligence Hold";
+}
+
+function ScoreBar({ label, value, caption }: { label: string; value: number; caption: string }) {
+  return (
+    <div style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: 12, background: "rgba(0,0,0,.16)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, fontWeight: 950 }}>
+        <span>{label}</span>
+        <span>{value}%</span>
+      </div>
+      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 10 }}>
+        <div style={{ width: `${value}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)" }} />
+      </div>
+      <p style={{ ...muted, margin: "8px 0 0", fontSize: 13 }}>{caption}</p>
+    </div>
+  );
+}
+
+function IntelligencePanel({ row }: { row: Row }) {
+  const opScore = operatingScore(row);
+  const urgScore = urgencyScore(row);
+  const suggestions = aiHiveSuggestions(row);
+
+  return (
+    <section
+      style={{
+        marginTop: 14,
+        border: "1px solid rgba(232,196,107,.18)",
+        borderRadius: 20,
+        padding: 14,
+        background: "linear-gradient(145deg,rgba(232,196,107,.08),rgba(255,255,255,.025))",
+      }}
+    >
+      <div style={{ ...label, fontSize: 11 }}>VaultForge AI Hive</div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginTop: 12 }}>
+        <ScoreBar label="Operating Score" value={opScore} caption="Completeness, photos, spread, need, and actionability." />
+        <ScoreBar label="Urgency" value={urgScore} caption={field(row, "urgency", "urgency_level") || "Calculated from pressure signals."} />
+        <ScoreBar label="Asset Context" value={photosOf(row).length ? 76 : 42} caption={`${photosOf(row).length} photo${photosOf(row).length === 1 ? "" : "s"} connected.`} />
+      </div>
+
+      <div style={{ marginTop: 14, border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: 12, background: "rgba(0,0,0,.14)" }}>
+        <div style={{ ...label, fontSize: 11 }}>Best Deal Formation</div>
+        <div style={{ fontSize: 22, fontWeight: 950, marginTop: 6 }}>{bestDealFormation(row)}</div>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <div style={{ ...label, fontSize: 11 }}>AI Hive Suggestions</div>
+        <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          {suggestions.map((item) => (
+            <div key={item} style={{ border: "1px solid rgba(157,243,191,.18)", borderRadius: 14, padding: 10, color: "#dbeafe", background: "rgba(157,243,191,.055)", lineHeight: 1.45 }}>
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -599,6 +724,8 @@ function WorkstationCard({
               </p>
             ) : null}
           </section>
+
+          <IntelligencePanel row={row} />
 
           <div style={{ marginTop: 12 }}>
             {id ? <span style={chip}>ID: {id}</span> : null}
