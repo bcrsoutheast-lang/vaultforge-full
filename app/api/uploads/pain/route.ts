@@ -4,201 +4,144 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BUCKET_NAME = "vaultforge-pain-photos";
+const BUCKETS = ["vaultforge-pain-photos", "pain-photos", "vf-pain-photos", "uploads"];
 
-type UploadFile = {
-  name?: string;
-  size?: number;
-  type?: string;
-  data_url?: string;
-  dataUrl?: string;
-};
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
 
-function supabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) {
-    throw new Error("Missing Supabase environment values.");
-  }
+  if (!url || !key) return null;
 
   return createClient(url, key, {
     auth: {
-      autoRefreshToken: false,
       persistSession: false,
+      autoRefreshToken: false,
       detectSessionInUrl: false,
     },
   });
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
+function json(data: Record<string, any>, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
 }
 
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
-}
-
-function readCookie(cookieHeader: string, name: string) {
-  const parts = cookieHeader.split(";").map((part) => part.trim());
-
-  for (const part of parts) {
-    if (!part.startsWith(`${name}=`)) continue;
-
-    try {
-      return decodeURIComponent(part.slice(name.length + 1));
-    } catch {
-      return part.slice(name.length + 1);
-    }
-  }
-
-  return "";
-}
-
-function requestEmail(request: Request, body: Record<string, any>) {
-  const cookie = request.headers.get("cookie") || "";
-
-  return cleanEmail(
-    request.headers.get("x-vf-email") ||
-      body.email ||
-      body.member_email ||
-      readCookie(cookie, "vf_email") ||
-      readCookie(cookie, "vf_member_email") ||
-      readCookie(cookie, "vf_admin_email")
-  );
-}
-
-function safeFileName(name: string) {
-  const base = clean(name || "pain-photo")
+function safeName(name: string) {
+  return clean(name)
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  return base || "pain-photo";
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90) || "pain-photo.jpg";
 }
 
-function extensionFromType(type: string, name: string) {
-  const lowerName = name.toLowerCase();
-  const existing = lowerName.match(/\.[a-z0-9]+$/)?.[0]?.replace(".", "");
-
-  if (existing) return existing;
-  if (type.includes("png")) return "png";
-  if (type.includes("webp")) return "webp";
-  if (type.includes("gif")) return "gif";
-  if (type.includes("pdf")) return "pdf";
-  return "jpg";
-}
-
-function parseDataUrl(dataUrl: string) {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-
-  if (!match) {
-    throw new Error("Invalid file data.");
-  }
-
-  return {
-    contentType: match[1],
-    buffer: Buffer.from(match[2], "base64"),
-  };
-}
-
-async function ensureBucket(supabase: any) {
+async function ensureBucket(client: any, bucket: string) {
   try {
-    await supabase.storage.createBucket(BUCKET_NAME, {
+    await client.storage.createBucket(bucket, {
       public: true,
-      fileSizeLimit: 8 * 1024 * 1024,
-      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"],
+      fileSizeLimit: 10485760,
+      allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
     });
   } catch {
-    // Bucket likely already exists, or the available key cannot create buckets.
+    // Bucket may already exist or current key may not allow creation.
   }
 }
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    const email = requestEmail(request, body);
-    const files: UploadFile[] = Array.isArray(body.files) ? body.files.slice(0, 8) : [];
+  const client = supabaseAdmin();
 
-    if (!email || !email.includes("@")) {
-      return NextResponse.json({ ok: false, error: "Login email required." }, { status: 401 });
-    }
-
-    if (!files.length) {
-      return NextResponse.json({ ok: true, files: [], urls: [] });
-    }
-
-    const supabase = supabaseClient();
-    await ensureBucket(supabase);
-
-    const folderEmail = email.replace(/[^a-z0-9._-]+/g, "_");
-    const uploaded: Record<string, any>[] = [];
-    const errors: string[] = [];
-
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
-      const rawData = clean(file.data_url || file.dataUrl);
-      const originalName = clean(file.name || `pain-photo-${index + 1}`);
-      const typeHint = clean(file.type || "");
-
-      if (!rawData) continue;
-
-      try {
-        const parsed = parseDataUrl(rawData);
-        const contentType = typeHint || parsed.contentType;
-        const ext = extensionFromType(contentType, originalName);
-        const name = safeFileName(originalName.replace(/\.[a-z0-9]+$/i, ""));
-        const path = `${folderEmail}/${Date.now()}-${index + 1}-${name}.${ext}`;
-
-        const { error } = await supabase.storage
-          .from(BUCKET_NAME)
-          .upload(path, parsed.buffer, {
-            contentType,
-            upsert: false,
-          });
-
-        if (error) {
-          errors.push(`${originalName}: ${error.message}`);
-          continue;
-        }
-
-        const publicResult = supabase.storage.from(BUCKET_NAME).getPublicUrl(path);
-        const publicUrl = publicResult?.data?.publicUrl || "";
-
-        uploaded.push({
-          name: originalName,
-          size: Number(file.size || 0),
-          type: contentType,
-          path,
-          url: publicUrl,
-          public_url: publicUrl,
-          bucket: BUCKET_NAME,
-        });
-      } catch (error: any) {
-        errors.push(`${originalName}: ${error?.message || "upload failed"}`);
-      }
-    }
-
-    return NextResponse.json({
-      ok: true,
-      bucket: BUCKET_NAME,
-      files: uploaded,
-      urls: uploaded.map((file) => file.url).filter(Boolean),
-      errors,
-    });
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Pain photo upload failed.",
-        details: error?.message || String(error),
-      },
-      { status: 500 }
-    );
+  if (!client) {
+    return json({ ok: false, error: "Supabase environment variables are missing." }, 500);
   }
+
+  let form: FormData;
+
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ ok: false, error: "Invalid upload form." }, 400);
+  }
+
+  const file = form.get("file");
+
+  if (!(file instanceof File)) {
+    return json({ ok: false, error: "Missing file." }, 400);
+  }
+
+  if (!file.type.startsWith("image/")) {
+    return json({ ok: false, error: "Only image uploads are supported for pain photos." }, 400);
+  }
+
+  const email = clean(form.get("email") || request.headers.get("x-vf-email") || "unknown")
+    .toLowerCase()
+    .replace(/[^a-z0-9@._-]+/g, "-");
+
+  const buffer = await file.arrayBuffer();
+  const ext = file.type.includes("png")
+    ? "png"
+    : file.type.includes("webp")
+    ? "webp"
+    : file.type.includes("gif")
+    ? "gif"
+    : "jpg";
+
+  const filePath = `${email || "unknown"}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeName(file.name || `pain.${ext}`)}`;
+
+  const attempts: Record<string, any>[] = [];
+
+  for (const bucket of BUCKETS) {
+    await ensureBucket(client, bucket);
+
+    try {
+      const { error } = await client.storage.from(bucket).upload(filePath, buffer, {
+        contentType: file.type || `image/${ext}`,
+        upsert: true,
+      });
+
+      attempts.push({ bucket, ok: !error, error: error?.message || null });
+
+      if (error) continue;
+
+      const { data } = client.storage.from(bucket).getPublicUrl(filePath);
+      const publicUrl = clean(data?.publicUrl);
+
+      if (!publicUrl) continue;
+
+      return json({
+        ok: true,
+        url: publicUrl,
+        publicUrl,
+        public_url: publicUrl,
+        photo_url: publicUrl,
+        image_url: publicUrl,
+        main_photo_url: publicUrl,
+        bucket,
+        path: filePath,
+      });
+    } catch (error: any) {
+      attempts.push({ bucket, ok: false, error: error?.message || String(error) });
+    }
+  }
+
+  return json(
+    {
+      ok: false,
+      error: "Photo upload failed. Check Supabase Storage bucket permissions.",
+      attempts,
+    },
+    500
+  );
 }
