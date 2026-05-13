@@ -73,10 +73,6 @@ function photosOf(row: Row) {
   );
 }
 
-function statusOf(row: Row) {
-  return first(row.status, row.project_status, row.routing_status, "Active");
-}
-
 function titleOf(row: Row) {
   return first(row.title, row.deal_title, row.name, row.address, "VaultForge Deal");
 }
@@ -84,7 +80,7 @@ function titleOf(row: Row) {
 function marketOf(row: Row) {
   const city = first(row.city);
   const state = first(row.state, row.market);
-  return [city, state].filter(Boolean).join(", ") || first(row.location, "Market not listed");
+  return [city, state].filter(Boolean).join(", ") || first(row.location, row.address, "Market not listed");
 }
 
 function routeSummary(row: Row) {
@@ -94,8 +90,8 @@ function routeSummary(row: Row) {
     row.routing_summary,
     row.urgency_reason,
     row.routing_reason,
-    row.seller_situation,
     row.description,
+    row.seller_situation,
     "No routing summary saved yet."
   );
 }
@@ -216,16 +212,20 @@ export default function DealDetailPage() {
           cache: "no-store",
           credentials: "include",
         });
+
         const data = await response.json().catch(() => ({}));
+
         if (!response.ok || data?.ok === false || data?.error) {
           throw new Error(data?.error || "Deal could not be loaded.");
         }
+
         setDeal(data.deal || null);
         setStatus("");
       } catch (error: any) {
         setStatus(error?.message || "Deal could not be loaded.");
       }
     }
+
     load();
   }, []);
 
@@ -262,16 +262,18 @@ export default function DealDetailPage() {
           {deal ? (
             <>
               <p style={{ ...muted, fontSize: 20, maxWidth: 960 }}>{routeSummary(deal)}</p>
+
               <div style={{ marginTop: 14 }}>
                 <span style={chip}>Deal ID: {dealId}</span>
-                <span style={chip}>Status: {statusOf(deal)}</span>
+                <span style={chip}>Status: {first(deal.status, "Active")}</span>
                 <span style={chip}>Type: {first(deal.property_type, deal.deal_type, deal.asset_type, "Deal")}</span>
                 <span style={chip}>Market: {marketOf(deal)}</span>
               </div>
+
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
                 <Link href="/projects" style={button}>Projects</Link>
                 <Link href="/dashboard" style={ghost}>Dashboard</Link>
-                <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+                <Link href="/submit" style={ghost}>Create Deal</Link>
                 <Link href="/messages" style={ghost}>Messages</Link>
               </div>
             </>
@@ -308,9 +310,12 @@ export default function DealDetailPage() {
                 <div style={eyebrow}>Why Routed / Importance</div>
                 <p style={{ ...muted, fontSize: 17 }}>{routeSummary(deal)}</p>
               </section>
+
               <section style={glass}>
                 <div style={eyebrow}>Seller / Situation</div>
-                <p style={{ ...muted, fontSize: 17 }}>{first(deal.seller_situation, deal.description, deal.private_notes, deal.access_notes, "Not listed.")}</p>
+                <p style={{ ...muted, fontSize: 17 }}>
+                  {first(deal.seller_situation, deal.description, deal.private_notes, deal.access_notes, "Not listed.")}
+                </p>
               </section>
             </section>
 
