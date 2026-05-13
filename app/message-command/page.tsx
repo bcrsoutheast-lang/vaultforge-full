@@ -16,40 +16,63 @@ type LaneKey =
 
 type Conversation = Record<string, any>;
 
-const COMMAND_LANES: Array<{
+type CommandLane = {
   key: LaneKey;
   title: string;
   subtitle: string;
-}> = [
+  label: string;
+  purpose: string;
+  statusEmpty: string;
+};
+
+const COMMAND_LANES: CommandLane[] = [
   {
     key: "priority",
     title: "Priority",
     subtitle: "Urgent active threads, unread pressure, and owner attention.",
+    label: "Mission Control",
+    purpose: "Unread, saved, or high-attention threads that need action first.",
+    statusEmpty: "No priority pressure.",
   },
   {
     key: "saved",
     title: "Saved Bucket",
     subtitle: "Pinned opportunities, operators, and high-value conversations.",
+    label: "Working Memory",
+    purpose: "Important conversations you intentionally saved for follow-up.",
+    statusEmpty: "No saved conversations.",
   },
   {
     key: "signals",
     title: "Signals",
     subtitle: "Signals, alerts, routing, and introduction intelligence.",
+    label: "Intelligence Flow",
+    purpose: "Messages created from alerts, signal rooms, routing, and introductions.",
+    statusEmpty: "No signal messages.",
   },
   {
     key: "execution",
     title: "Execution",
     subtitle: "Pain requests, projects, and active operational work.",
+    label: "Active Work",
+    purpose: "Pain requests, deal rooms, projects, and work that needs execution.",
+    statusEmpty: "No execution threads.",
   },
   {
     key: "network",
     title: "Network",
     subtitle: "Member communication and relationship conversations.",
+    label: "People Layer",
+    purpose: "Member-to-member, operator, buyer, lender, and partner conversations.",
+    statusEmpty: "No network conversations.",
   },
   {
     key: "general",
     title: "General",
     subtitle: "Unsorted or uncategorized communication.",
+    label: "Fallback Inbox",
+    purpose: "Messages that are not attached to a signal, pain request, project, or member lane.",
+    statusEmpty: "No general messages.",
   },
 ];
 
@@ -74,14 +97,10 @@ function currentEmail() {
     if (value) return value.trim().toLowerCase();
   }
 
-  const cookieMatch = document.cookie.match(
-    /(?:^|;\s*)vf_email=([^;]+)/,
-  );
+  const cookieMatch = document.cookie.match(/(?:^|;\s*)vf_email=([^;]+)/);
 
   if (cookieMatch?.[1]) {
-    return decodeURIComponent(cookieMatch[1])
-      .trim()
-      .toLowerCase();
+    return decodeURIComponent(cookieMatch[1]).trim().toLowerCase();
   }
 
   return "";
@@ -103,28 +122,35 @@ function sourceOf(row: Conversation) {
       row.folder ||
       row.folder_key ||
       row.route_lane ||
-      row.lane,
+      row.lane ||
+      getThreadKey(row),
   );
+}
+
+function isSaved(row: Conversation) {
+  return row.is_saved === true || sourceOf(row).includes("saved");
+}
+
+function isUnread(row: Conversation) {
+  return Number(row.unread_count || 0) > 0 || row.read === false;
 }
 
 function inferLane(row: Conversation): LaneKey {
   const source = sourceOf(row);
   const threadKey = lower(getThreadKey(row));
 
-  if (
-    row.is_saved === true ||
-    source.includes("saved") ||
-    threadKey.startsWith("saved:")
-  ) {
-    return "saved";
-  }
+  if (isSaved(row)) return "saved";
 
   if (
     source.includes("signal") ||
     source.includes("alert") ||
     source.includes("routing") ||
     source.includes("route") ||
-    source.includes("intro")
+    source.includes("intro") ||
+    threadKey.startsWith("signal:") ||
+    threadKey.startsWith("alert:") ||
+    threadKey.startsWith("routing:") ||
+    threadKey.startsWith("introduction:")
   ) {
     return "signals";
   }
@@ -133,21 +159,24 @@ function inferLane(row: Conversation): LaneKey {
     source.includes("pain") ||
     source.includes("project") ||
     source.includes("deal") ||
-    source.includes("property")
+    source.includes("property") ||
+    threadKey.startsWith("pain:") ||
+    threadKey.startsWith("project:") ||
+    threadKey.startsWith("deal:") ||
+    threadKey.startsWith("property:")
   ) {
     return "execution";
   }
 
   if (
     source.includes("member") ||
-    source.includes("network")
+    source.includes("network") ||
+    threadKey.startsWith("member:")
   ) {
     return "network";
   }
 
-  const unread = Number(row.unread_count || 0);
-
-  if (unread > 0) return "priority";
+  if (isUnread(row)) return "priority";
 
   return "general";
 }
@@ -177,19 +206,35 @@ async function safeJson(response: Response) {
   }
 }
 
+function conversationTitle(row: Conversation) {
+  return clean(row.title || row.subject || getThreadKey(row) || "VaultForge message");
+}
+
+function conversationPreview(row: Conversation) {
+  return clean(
+    row.latest_message ||
+      row.preview ||
+      row.body ||
+      row.message ||
+      "No message preview available.",
+  );
+}
+
+function timestampOf(row: Conversation) {
+  return row.latest_at || row.last_message_at || row.updated_at || row.created_at;
+}
+
 export default function MessageCommandPage() {
   const [email, setEmail] = useState("");
-  const [activeLane, setActiveLane] =
-    useState<LaneKey | null>(null);
-
+  const [activeLane, setActiveLane] = useState<LaneKey | null>(null);
   const [rows, setRows] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
-  const [toast, setToast] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const showToast = useCallback((text: string) => {
-    setToast(text);
-    window.setTimeout(() => setToast(""), 3200);
+  const showNotice = useCallback((text: string) => {
+    setNotice(text);
+    window.setTimeout(() => setNotice(""), 3200);
   }, []);
 
   const load = useCallback(async () => {
@@ -206,21 +251,15 @@ export default function MessageCommandPage() {
 
       params.set("mode", "list");
 
-      const response = await fetch(
-        `/api/message-command?${params.toString()}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        },
-      );
+      const response = await fetch(`/api/message-command?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
 
       const data = await safeJson(response);
 
       if (!response.ok) {
-        throw new Error(
-          clean(data?.error) ||
-            "Message Command failed to load.",
-        );
+        throw new Error(clean(data?.error) || "Message Command failed to load.");
       }
 
       const conversations = Array.isArray(data?.conversations)
@@ -230,62 +269,45 @@ export default function MessageCommandPage() {
       setRows(conversations);
     } catch (error: any) {
       setRows([]);
-      showToast(
-        error?.message ||
-          "Message Command failed to load.",
-      );
+      showNotice(error?.message || "Message Command failed to load.");
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showNotice]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function threadAction(
-    threadKey: string,
-    action: string,
-  ) {
+  async function threadAction(threadKey: string, action: string) {
     if (!threadKey) return;
 
     setBusy(`${action}:${threadKey}`);
 
     try {
-      const response = await fetch(
-        "/api/message-command",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            action,
-            thread_key: threadKey,
-            email: email || currentEmail(),
-          }),
+      const response = await fetch("/api/message-command", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          action,
+          thread_key: threadKey,
+          email: email || currentEmail(),
+        }),
+      });
 
       const data = await safeJson(response);
 
       if (!response.ok || data?.ok === false) {
-        throw new Error(
-          clean(data?.error) ||
-            `Unable to ${action}.`,
-        );
+        throw new Error(clean(data?.error) || `Unable to ${action}.`);
       }
 
       await load();
 
-      showToast(
-        `Thread ${action.replace(/_/g, " ")} complete.`,
-      );
+      showNotice(`Thread ${action.replace(/_/g, " ")} complete.`);
     } catch (error: any) {
-      showToast(
-        error?.message ||
-          `Unable to ${action}.`,
-      );
+      showNotice(error?.message || `Unable to ${action}.`);
     } finally {
       setBusy("");
     }
@@ -293,73 +315,88 @@ export default function MessageCommandPage() {
 
   const laneData = useMemo(() => {
     return COMMAND_LANES.map((lane) => {
-      let filtered = rows.filter(
-        (row) => inferLane(row) === lane.key,
-      );
+      let filtered = rows.filter((row) => inferLane(row) === lane.key);
 
       if (lane.key === "priority") {
-        filtered = rows.filter((row) => {
-          const unread =
-            Number(row.unread_count || 0) > 0;
-
-          return unread || row.is_saved;
-        });
+        filtered = rows.filter((row) => isUnread(row) || isSaved(row));
       }
+
+      const unread = filtered.reduce(
+        (sum, row) => sum + Number(row.unread_count || (row.read === false ? 1 : 0)),
+        0,
+      );
+
+      const latest = filtered
+        .slice()
+        .sort((a, b) => String(timestampOf(b)).localeCompare(String(timestampOf(a))))[0];
 
       return {
         ...lane,
         rows: filtered,
         count: filtered.length,
-        unread: filtered.reduce(
-          (sum, row) =>
-            sum + Number(row.unread_count || 0),
-          0,
-        ),
+        unread,
+        latest,
       };
     });
   }, [rows]);
 
-  const active =
-    laneData.find((lane) => lane.key === activeLane) ||
-    null;
+  const active = laneData.find((lane) => lane.key === activeLane) || null;
+
+  const totalThreads = rows.length;
+  const totalUnread = rows.reduce(
+    (sum, row) => sum + Number(row.unread_count || (row.read === false ? 1 : 0)),
+    0,
+  );
+  const savedTotal = rows.filter(isSaved).length;
 
   return (
     <main style={styles.page}>
       <section style={styles.shell}>
         <header style={styles.hero}>
           <div>
-            <div style={styles.eyebrow}>
-              VaultForge Intelligence Inbox
-            </div>
-
-            <h1 style={styles.title}>
-              Message Command
-            </h1>
-
+            <div style={styles.eyebrow}>VaultForge Intelligence Inbox</div>
+            <h1 style={styles.title}>Message Command</h1>
             <p style={styles.subtitle}>
-              Bloomberg-style operational messaging
-              and intelligence routing command center.
+              Bloomberg-style command dashboard for operational messages, intelligence flow, saved follow-up, and execution conversations.
             </p>
           </div>
 
           <div style={styles.topRight}>
-            <div style={styles.context}>
-              {email || "browser session"}
-            </div>
-
-            <button
-              type="button"
-              style={styles.refresh}
-              onClick={() => void load()}
-            >
+            <div style={styles.context}>{email || "browser session"}</div>
+            <button type="button" style={styles.refresh} onClick={() => void load()}>
               Refresh
             </button>
+            <Link href="/dashboard" style={styles.dashboardLink}>
+              Dashboard
+            </Link>
           </div>
         </header>
 
-        {toast ? (
-          <div style={styles.toast}>{toast}</div>
-        ) : null}
+        {notice ? <div style={styles.notice}>{notice}</div> : null}
+
+        <section style={styles.dashboard}>
+          <div style={styles.metric}>
+            <span style={styles.metricLabel}>Active Threads</span>
+            <strong style={styles.metricValue}>{loading ? "…" : totalThreads}</strong>
+          </div>
+
+          <div style={styles.metric}>
+            <span style={styles.metricLabel}>Unread Pressure</span>
+            <strong style={styles.metricValue}>{loading ? "…" : totalUnread}</strong>
+          </div>
+
+          <div style={styles.metric}>
+            <span style={styles.metricLabel}>Saved Follow-Up</span>
+            <strong style={styles.metricValue}>{loading ? "…" : savedTotal}</strong>
+          </div>
+
+          <div style={styles.metricWide}>
+            <span style={styles.metricLabel}>Command Status</span>
+            <strong style={styles.metricText}>
+              {loading ? "Scanning message lanes…" : totalThreads > 0 ? "Live message lanes connected." : "No active conversations found for this account."}
+            </strong>
+          </div>
+        </section>
 
         {!activeLane ? (
           <section style={styles.grid}>
@@ -367,28 +404,36 @@ export default function MessageCommandPage() {
               <button
                 key={lane.key}
                 type="button"
-                onClick={() =>
-                  setActiveLane(lane.key)
-                }
+                onClick={() => setActiveLane(lane.key)}
                 style={styles.card}
               >
-                <div style={styles.cardLabel}>
-                  {lane.title}
+                <div style={styles.cardLabel}>{lane.label}</div>
+                <div style={styles.cardTitle}>{lane.title}</div>
+                <div style={styles.cardCount}>{loading ? "…" : lane.count}</div>
+
+                <div style={styles.cardSection}>
+                  <span style={styles.sectionLabel}>What is here</span>
+                  <p style={styles.cardText}>{lane.purpose}</p>
                 </div>
 
-                <div style={styles.cardCount}>
-                  {loading ? "…" : lane.count}
+                <div style={styles.cardSection}>
+                  <span style={styles.sectionLabel}>Current status</span>
+                  <p style={styles.cardText}>
+                    {lane.count > 0
+                      ? lane.unread > 0
+                        ? `${lane.unread} unread thread${lane.unread === 1 ? "" : "s"} need review.`
+                        : `${lane.count} active thread${lane.count === 1 ? "" : "s"} available.`
+                      : lane.statusEmpty}
+                  </p>
                 </div>
 
-                <div style={styles.cardSubtitle}>
-                  {lane.subtitle}
-                </div>
-
-                <div style={styles.cardFooter}>
-                  {lane.unread > 0
-                    ? `${lane.unread} unread`
-                    : "No unread"}
-                </div>
+                {lane.latest ? (
+                  <div style={styles.latestBox}>
+                    <span style={styles.sectionLabel}>Latest</span>
+                    <p style={styles.latestTitle}>{conversationTitle(lane.latest)}</p>
+                    <p style={styles.latestTime}>{formatDate(timestampOf(lane.latest))}</p>
+                  </div>
+                ) : null}
               </button>
             ))}
           </section>
@@ -396,88 +441,39 @@ export default function MessageCommandPage() {
           <section style={styles.panel}>
             <div style={styles.panelTop}>
               <div>
-                <div style={styles.eyebrow}>
-                  Command Lane
-                </div>
-
-                <h2 style={styles.panelTitle}>
-                  {active?.title}
-                </h2>
-
-                <p style={styles.panelSubtitle}>
-                  {active?.subtitle}
-                </p>
+                <div style={styles.eyebrow}>Command Lane</div>
+                <h2 style={styles.panelTitle}>{active?.title}</h2>
+                <p style={styles.panelSubtitle}>{active?.purpose}</p>
               </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setActiveLane(null)
-                }
-                style={styles.back}
-              >
+              <button type="button" onClick={() => setActiveLane(null)} style={styles.back}>
                 Back to Command
               </button>
             </div>
 
+            {active && active.rows.length === 0 ? (
+              <div style={styles.empty}>{active.statusEmpty}</div>
+            ) : null}
+
             <div style={styles.threadList}>
               {(active?.rows || []).map((row) => {
-                const threadKey =
-                  getThreadKey(row);
-
-                const isBusy =
-                  busy.endsWith(threadKey);
+                const threadKey = getThreadKey(row);
+                const isBusy = busy.endsWith(threadKey);
 
                 return (
-                  <article
-                    key={threadKey}
-                    style={styles.thread}
-                  >
+                  <article key={threadKey} style={styles.thread}>
                     <div style={styles.threadMain}>
+                      <div style={styles.threadMeta}>{formatDate(timestampOf(row))}</div>
+                      <h3 style={styles.threadTitle}>{conversationTitle(row)}</h3>
+                      <p style={styles.threadBody}>{conversationPreview(row)}</p>
                       <div style={styles.threadMeta}>
-                        {formatDate(
-                          row.latest_at ||
-                            row.updated_at ||
-                            row.created_at,
-                        )}
-                      </div>
-
-                      <h3 style={styles.threadTitle}>
-                        {clean(
-                          row.title ||
-                            row.subject ||
-                            threadKey,
-                        )}
-                      </h3>
-
-                      <p style={styles.threadBody}>
-                        {clean(
-                          row.latest_message ||
-                            row.body ||
-                            row.message ||
-                            "No message preview.",
-                        )}
-                      </p>
-
-                      <div style={styles.threadMeta}>
-                        {clean(
-                          row.from_email,
-                        ) || "VaultForge"}
-                        {clean(row.to_email)
-                          ? ` → ${clean(
-                              row.to_email,
-                            )}`
-                          : ""}
+                        {clean(row.from_email || row.sender_email) || "VaultForge"}
+                        {clean(row.to_email || row.recipient_email) ? ` → ${clean(row.to_email || row.recipient_email)}` : ""}
                       </div>
                     </div>
 
                     <div style={styles.actions}>
-                      <Link
-                        href={`/message-command/${encodeURIComponent(
-                          threadKey,
-                        )}`}
-                        style={styles.open}
-                      >
+                      <Link href={`/message-command/${encodeURIComponent(threadKey)}`} style={styles.open}>
                         Open
                       </Link>
 
@@ -485,30 +481,16 @@ export default function MessageCommandPage() {
                         type="button"
                         disabled={isBusy}
                         style={styles.action}
-                        onClick={() =>
-                          void threadAction(
-                            threadKey,
-                            row.is_saved
-                              ? "unsave"
-                              : "save",
-                          )
-                        }
+                        onClick={() => void threadAction(threadKey, row.is_saved ? "unsave" : "save")}
                       >
-                        {row.is_saved
-                          ? "Unsave"
-                          : "Save"}
+                        {row.is_saved ? "Unsave" : "Save"}
                       </button>
 
                       <button
                         type="button"
                         disabled={isBusy}
                         style={styles.action}
-                        onClick={() =>
-                          void threadAction(
-                            threadKey,
-                            "read",
-                          )
-                        }
+                        onClick={() => void threadAction(threadKey, "read")}
                       >
                         Read
                       </button>
@@ -517,12 +499,7 @@ export default function MessageCommandPage() {
                         type="button"
                         disabled={isBusy}
                         style={styles.warn}
-                        onClick={() =>
-                          void threadAction(
-                            threadKey,
-                            "archive",
-                          )
-                        }
+                        onClick={() => void threadAction(threadKey, "archive")}
                       >
                         Archive
                       </button>
@@ -531,12 +508,7 @@ export default function MessageCommandPage() {
                         type="button"
                         disabled={isBusy}
                         style={styles.danger}
-                        onClick={() =>
-                          void threadAction(
-                            threadKey,
-                            "delete",
-                          )
-                        }
+                        onClick={() => void threadAction(threadKey, "delete")}
                       >
                         Delete
                       </button>
@@ -559,11 +531,10 @@ const styles: Record<string, CSSProperties> = {
       "radial-gradient(circle at top left, rgba(232,196,107,.12), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
     color: "white",
     padding: "24px 16px 90px",
-    fontFamily:
-      "Inter, Arial, sans-serif",
+    fontFamily: "Inter, Arial, sans-serif",
   },
   shell: {
-    width: "min(1200px,100%)",
+    width: "min(1220px,100%)",
     margin: "0 auto",
   },
   hero: {
@@ -586,15 +557,14 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     margin: "10px 0",
-    fontSize:
-      "clamp(46px,9vw,88px)",
+    fontSize: "clamp(44px,9vw,88px)",
     lineHeight: ".9",
     letterSpacing: "-.07em",
   },
   subtitle: {
     margin: 0,
     color: "#cbd5e1",
-    maxWidth: 700,
+    maxWidth: 760,
     lineHeight: 1.6,
   },
   topRight: {
@@ -605,85 +575,149 @@ const styles: Record<string, CSSProperties> = {
   },
   context: {
     borderRadius: 999,
-    border:
-      "1px solid rgba(255,255,255,.10)",
+    border: "1px solid rgba(255,255,255,.10)",
     padding: "10px 14px",
     color: "#dbeafe",
     fontWeight: 700,
   },
   refresh: {
     borderRadius: 999,
-    border:
-      "1px solid rgba(232,196,107,.28)",
-    background:
-      "rgba(232,196,107,.12)",
+    border: "1px solid rgba(232,196,107,.28)",
+    background: "rgba(232,196,107,.12)",
     color: "#f8e7b0",
     padding: "12px 18px",
     fontWeight: 900,
     cursor: "pointer",
   },
-  toast: {
+  dashboardLink: {
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,.14)",
+    background: "rgba(255,255,255,.06)",
+    color: "white",
+    padding: "12px 18px",
+    fontWeight: 900,
+    textDecoration: "none",
+  },
+  notice: {
     marginTop: 16,
     borderRadius: 18,
     padding: 14,
-    background:
-      "rgba(22,101,52,.22)",
-    border:
-      "1px solid rgba(34,197,94,.28)",
+    background: "rgba(22,101,52,.22)",
+    border: "1px solid rgba(34,197,94,.28)",
     color: "#dcfce7",
     fontWeight: 800,
+  },
+  dashboard: {
+    marginTop: 18,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
+    gap: 12,
+  },
+  metric: {
+    border: "1px solid rgba(255,255,255,.10)",
+    borderRadius: 20,
+    padding: 16,
+    background: "rgba(2,6,23,.72)",
+  },
+  metricWide: {
+    border: "1px solid rgba(232,196,107,.18)",
+    borderRadius: 20,
+    padding: 16,
+    background: "rgba(232,196,107,.07)",
+  },
+  metricLabel: {
+    display: "block",
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: ".08em",
+  },
+  metricValue: {
+    display: "block",
+    marginTop: 8,
+    fontSize: 34,
+    lineHeight: 1,
+  },
+  metricText: {
+    display: "block",
+    marginTop: 8,
+    color: "#f8e7b0",
+    lineHeight: 1.35,
   },
   grid: {
     marginTop: 20,
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit,minmax(260px,1fr))",
+    gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
     gap: 16,
   },
   card: {
     textAlign: "left",
-    border:
-      "1px solid rgba(232,196,107,.18)",
+    border: "1px solid rgba(232,196,107,.18)",
     borderRadius: 24,
     padding: 22,
-    background:
-      "linear-gradient(180deg, rgba(15,23,42,.92), rgba(2,6,23,.88))",
+    background: "linear-gradient(180deg, rgba(15,23,42,.92), rgba(2,6,23,.88))",
     color: "white",
-    minHeight: 220,
+    minHeight: 290,
     cursor: "pointer",
   },
   cardLabel: {
     color: "#e8c46b",
     fontWeight: 900,
-    fontSize: 14,
+    fontSize: 12,
     textTransform: "uppercase",
-    letterSpacing: ".08em",
+    letterSpacing: ".14em",
+  },
+  cardTitle: {
+    marginTop: 10,
+    fontSize: 24,
+    fontWeight: 950,
+    letterSpacing: "-.04em",
   },
   cardCount: {
-    marginTop: 18,
-    fontSize: 54,
-    fontWeight: 900,
+    marginTop: 14,
+    fontSize: 50,
+    fontWeight: 950,
     letterSpacing: "-.08em",
   },
-  cardSubtitle: {
-    marginTop: 10,
-    color: "#cbd5e1",
-    lineHeight: 1.5,
+  cardSection: {
+    marginTop: 14,
   },
-  cardFooter: {
-    marginTop: 18,
-    color: "#fecaca",
+  sectionLabel: {
+    display: "block",
+    color: "#94a3b8",
+    fontSize: 11,
     fontWeight: 900,
+    textTransform: "uppercase",
+    letterSpacing: ".10em",
+  },
+  cardText: {
+    margin: "6px 0 0",
+    color: "#cbd5e1",
+    lineHeight: 1.45,
+    fontSize: 13,
+  },
+  latestBox: {
+    marginTop: 14,
+    borderTop: "1px solid rgba(255,255,255,.08)",
+    paddingTop: 12,
+  },
+  latestTitle: {
+    margin: "6px 0 0",
+    color: "#f8e7b0",
+    fontWeight: 900,
+  },
+  latestTime: {
+    margin: "4px 0 0",
+    color: "#94a3b8",
     fontSize: 12,
   },
   panel: {
     marginTop: 20,
-    border:
-      "1px solid rgba(232,196,107,.18)",
+    border: "1px solid rgba(232,196,107,.18)",
     borderRadius: 26,
     padding: 22,
-    background:
-      "rgba(2,6,23,.78)",
+    background: "rgba(2,6,23,.78)",
   },
   panelTop: {
     display: "flex",
@@ -691,8 +725,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 20,
     flexWrap: "wrap",
     alignItems: "flex-start",
-    borderBottom:
-      "1px solid rgba(255,255,255,.08)",
+    borderBottom: "1px solid rgba(255,255,255,.08)",
     paddingBottom: 18,
   },
   panelTitle: {
@@ -706,14 +739,19 @@ const styles: Record<string, CSSProperties> = {
   },
   back: {
     borderRadius: 999,
-    border:
-      "1px solid rgba(232,196,107,.30)",
-    background:
-      "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+    border: "1px solid rgba(232,196,107,.30)",
+    background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
     color: "#081018",
     padding: "12px 18px",
     fontWeight: 900,
     cursor: "pointer",
+  },
+  empty: {
+    marginTop: 18,
+    borderRadius: 18,
+    border: "1px dashed rgba(255,255,255,.14)",
+    padding: 18,
+    color: "#cbd5e1",
   },
   threadList: {
     display: "grid",
@@ -722,15 +760,12 @@ const styles: Record<string, CSSProperties> = {
   },
   thread: {
     display: "grid",
-    gridTemplateColumns:
-      "minmax(0,1fr) auto",
+    gridTemplateColumns: "minmax(0,1fr) auto",
     gap: 18,
-    border:
-      "1px solid rgba(255,255,255,.08)",
+    border: "1px solid rgba(255,255,255,.08)",
     borderRadius: 22,
     padding: 18,
-    background:
-      "rgba(15,23,42,.68)",
+    background: "rgba(15,23,42,.68)",
   },
   threadMain: {
     minWidth: 0,
@@ -759,8 +794,7 @@ const styles: Record<string, CSSProperties> = {
   open: {
     textAlign: "center",
     borderRadius: 999,
-    background:
-      "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+    background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
     color: "#06100a",
     padding: "11px 14px",
     fontWeight: 900,
@@ -768,10 +802,8 @@ const styles: Record<string, CSSProperties> = {
   },
   action: {
     borderRadius: 999,
-    border:
-      "1px solid rgba(255,255,255,.12)",
-    background:
-      "rgba(255,255,255,.05)",
+    border: "1px solid rgba(255,255,255,.12)",
+    background: "rgba(255,255,255,.05)",
     color: "white",
     padding: "10px 12px",
     fontWeight: 800,
@@ -779,10 +811,8 @@ const styles: Record<string, CSSProperties> = {
   },
   warn: {
     borderRadius: 999,
-    border:
-      "1px solid rgba(232,196,107,.22)",
-    background:
-      "rgba(232,196,107,.10)",
+    border: "1px solid rgba(232,196,107,.22)",
+    background: "rgba(232,196,107,.10)",
     color: "#f8e7b0",
     padding: "10px 12px",
     fontWeight: 900,
@@ -790,10 +820,8 @@ const styles: Record<string, CSSProperties> = {
   },
   danger: {
     borderRadius: 999,
-    border:
-      "1px solid rgba(248,113,113,.22)",
-    background:
-      "rgba(248,113,113,.10)",
+    border: "1px solid rgba(248,113,113,.22)",
+    background: "rgba(248,113,113,.10)",
     color: "#fecaca",
     padding: "10px 12px",
     fontWeight: 900,
