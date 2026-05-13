@@ -269,32 +269,51 @@ export default function PainPage() {
     body.append("file", file);
     body.append("email", email);
 
-    const res = await fetch("/api/uploads/pain", {
-      method: "POST",
-      headers: { "x-vf-email": email },
-      body,
-    });
+    try {
+      const res = await fetch("/api/uploads/pain", {
+        method: "POST",
+        headers: { "x-vf-email": email },
+        body,
+      });
 
-    const data = await safeJson(res);
+      const data = await safeJson(res);
 
-    if (!res.ok || data.ok === false) {
-      throw new Error(clean(data.error || data.details || "Photo upload failed."));
+      if (!res.ok || data.ok === false) {
+        return {
+          url: "",
+          error: clean(data.error || data.details || "Photo upload failed."),
+        };
+      }
+
+      return {
+        url: clean(data.url || data.publicUrl || data.public_url || data.photo_url || data.image_url || data.main_photo_url || data.profile_photo_url),
+        error: "",
+      };
+    } catch (error: any) {
+      return {
+        url: "",
+        error: error?.message || "Photo upload failed.",
+      };
     }
-
-    return clean(data.url || data.publicUrl || data.photo_url || data.image_url || data.profile_photo_url);
   }
 
   async function submitPain() {
     setSubmitting(true);
-    setStatus("Building VaultForge signal...");
+    setStatus("Saving Pain Room...");
     setLinks({});
 
     try {
       const photoUrls: string[] = [];
+      const photoWarnings: string[] = [];
 
       for (const file of files) {
-        const url = await uploadPhoto(file);
-        if (url && url.startsWith("http")) photoUrls.push(url);
+        const uploaded = await uploadPhoto(file);
+
+        if (uploaded.url && uploaded.url.startsWith("http")) {
+          photoUrls.push(uploaded.url);
+        } else if (uploaded.error) {
+          photoWarnings.push(`${file.name}: ${uploaded.error}`);
+        }
       }
 
       const asset_specific: Record<string, any> = {};
@@ -315,6 +334,8 @@ export default function PainPage() {
           submitted_by: email,
           photo_urls: photoUrls,
           photos: photoUrls,
+          photo_upload_warning: photoWarnings.join(" | "),
+          photo_upload_failed_count: photoWarnings.length,
           asset_specific,
         }),
       });
@@ -328,7 +349,11 @@ export default function PainPage() {
       const savedLinks = firstSavedLink(data);
 
       setLinks(savedLinks);
-      setStatus("Saved to Pain Room. VaultForge will use this pain record to alert and match the right members in the background.");
+      setStatus(
+        photoWarnings.length
+          ? `Saved to Pain Room. ${photoWarnings.length} photo upload did not save, but the Pain record was not blocked. We can fix Storage next.`
+          : "Saved to Pain Room. VaultForge will use this pain record to alert and match the right members in the background."
+      );
 
       previewUrls.forEach((url) => URL.revokeObjectURL(url));
       setForm(defaultForm);
