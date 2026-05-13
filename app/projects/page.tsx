@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Row = Record<string, any>;
+type FolderMode = "active" | "saved" | "archived";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -80,6 +81,25 @@ function parseArray(value: unknown): string[] {
     .split(/[,\n|;]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+
+function readSet(key: string) {
+  if (typeof window === "undefined") return new Set<string>();
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map(clean).filter(Boolean) : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function writeSet(key: string, value: Set<string>) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(key, JSON.stringify(Array.from(value)));
 }
 
 function meta(row: Row) {
@@ -325,6 +345,46 @@ function missingInfo(row: Row) {
   return missing;
 }
 
+
+function signalPressureText(row: Row) {
+  return field(row, "distress_signals") || "No pressure signal listed yet.";
+}
+
+function signalPressureTone(row: Row) {
+  const value = signalPressureText(row).toLowerCase();
+
+  if (
+    value.includes("foreclosure") ||
+    value.includes("urgent") ||
+    value.includes("fast close") ||
+    value.includes("funding gap") ||
+    value.includes("emergency")
+  ) {
+    return {
+      border: "rgba(248,113,113,.34)",
+      background: "rgba(248,113,113,.11)",
+      color: "#fecaca",
+      label: "High pressure",
+    };
+  }
+
+  if (value && value !== "no pressure signal listed yet.") {
+    return {
+      border: "rgba(232,196,107,.30)",
+      background: "rgba(232,196,107,.09)",
+      color: "#f8e7b0",
+      label: "Signal present",
+    };
+  }
+
+  return {
+    border: "rgba(148,163,184,.22)",
+    background: "rgba(148,163,184,.06)",
+    color: "#cbd5e1",
+    label: "No signal",
+  };
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -426,13 +486,32 @@ function DetailGrid({ row }: { row: Row }) {
   );
 }
 
-function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
+function WorkstationCard({
+  row,
+  viewer,
+  isSaved,
+  isArchived,
+  onSave,
+  onUnsave,
+  onArchive,
+  onRestore,
+}: {
+  row: Row;
+  viewer: string;
+  isSaved: boolean;
+  isArchived: boolean;
+  onSave: () => void;
+  onUnsave: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
+}) {
   const id = idOf(row);
   const signalId = signalIdOf(row);
   const source = sourceOf(row);
   const photos = photosOf(row);
   const owner = ownerOf(row);
   const missing = missingInfo(row);
+  const pressure = signalPressureTone(row);
 
   const contactHref = signalId
     ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`
@@ -463,6 +542,8 @@ function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
             <span style={chip}>{assetOf(row)}</span>
             <span style={chip}>{statusOf(row)}</span>
             {signalId ? <span style={chip}>Signal linked</span> : null}
+            {isSaved ? <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.34)", background: "rgba(232,196,107,.10)" }}>Saved</span> : null}
+            {isArchived ? <span style={{ ...chip, color: "#cbd5e1", borderColor: "rgba(148,163,184,.24)", background: "rgba(148,163,184,.07)" }}>Archived</span> : null}
           </div>
 
           <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
@@ -473,6 +554,16 @@ function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
           <section style={{ marginTop: 14, border: "1px solid rgba(232,196,107,.16)", borderRadius: 18, padding: 14, background: "rgba(232,196,107,.055)" }}>
             <div style={{ ...label, fontSize: 11 }}>Routing Summary</div>
             <p style={{ ...muted, margin: "8px 0 0" }}>{routingSummary(row)}</p>
+
+            <div style={{ marginTop: 12, border: `1px solid ${pressure.border}`, background: pressure.background, borderRadius: 16, padding: 12 }}>
+              <div style={{ color: pressure.color, fontSize: 11, textTransform: "uppercase", letterSpacing: ".14em", fontWeight: 950 }}>
+                Signal Pressure · {pressure.label}
+              </div>
+              <p style={{ color: pressure.color, margin: "7px 0 0", fontWeight: 850 }}>
+                {signalPressureText(row)}
+              </p>
+            </div>
+
             {missing.length ? (
               <p style={{ color: "#f8e7b0", margin: "10px 0 0", fontWeight: 850 }}>
                 Add for stronger AI routing: {missing.join(", ")}.
@@ -489,13 +580,24 @@ function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
 
           <div style={{ marginTop: 12 }}>
             {field(row, "routing_needs", "deal_needs", "needs") ? <span style={chip}>Needs: {field(row, "routing_needs", "deal_needs", "needs")}</span> : null}
-            {field(row, "distress_signals") ? <span style={chip}>Signals: {field(row, "distress_signals")}</span> : null}
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
             <Link href={contactHref} style={button}>Contact Owner</Link>
-            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
-            {source === "deal" && id ? <Link href={`/deal/detail?id=${encodeURIComponent(id)}`} style={ghost}>Deal Detail</Link> : null}
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+            {!isSaved ? (
+              <button type="button" onClick={onSave} style={ghost}>Save to Project Folder</button>
+            ) : (
+              <button type="button" onClick={onUnsave} style={ghost}>Remove Saved</button>
+            )}
+
+            {!isArchived ? (
+              <button type="button" onClick={onArchive} style={ghost}>Archive / Clean Up</button>
+            ) : (
+              <button type="button" onClick={onRestore} style={ghost}>Restore to Active</button>
+            )}
           </div>
         </div>
       </div>
@@ -507,6 +609,9 @@ export default function ProjectsPage() {
   const [email, setEmail] = useState("");
   const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading workstations...");
+  const [folder, setFolder] = useState<FolderMode>("active");
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
 
   async function load() {
     const viewer = getEmail();
@@ -582,16 +687,84 @@ export default function ProjectsPage() {
   }
 
   useEffect(() => {
+    setSavedIds(readSet("vf_project_saved_ids"));
+    setArchivedIds(readSet("vf_project_archived_ids"));
     load();
   }, []);
 
-  const counts = useMemo(() => {
-    const deals = items.filter((item) => sourceOf(item) === "deal").length;
-    const pains = items.filter((item) => sourceOf(item) === "pain").length;
-    const withPhotos = items.filter((item) => photosOf(item).length).length;
 
-    return { total: items.length, deals, pains, withPhotos };
-  }, [items]);
+  function persistSaved(next: Set<string>) {
+    setSavedIds(new Set(next));
+    writeSet("vf_project_saved_ids", next);
+  }
+
+  function persistArchived(next: Set<string>) {
+    setArchivedIds(new Set(next));
+    writeSet("vf_project_archived_ids", next);
+  }
+
+  function saveProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const next = new Set(savedIds);
+    next.add(key);
+    persistSaved(next);
+  }
+
+  function unsaveProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const next = new Set(savedIds);
+    next.delete(key);
+    persistSaved(next);
+  }
+
+  function archiveProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const next = new Set(archivedIds);
+    next.add(key);
+    persistArchived(next);
+  }
+
+  function restoreProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const next = new Set(archivedIds);
+    next.delete(key);
+    persistArchived(next);
+  }
+
+  const visibleItems = useMemo(() => {
+    return items.filter((item) => {
+      const key = canonicalKey(item);
+      const saved = savedIds.has(key);
+      const archived = archivedIds.has(key);
+
+      if (folder === "saved") return saved && !archived;
+      if (folder === "archived") return archived;
+      return !archived;
+    });
+  }, [items, savedIds, archivedIds, folder]);
+
+  const counts = useMemo(() => {
+    const deals = visibleItems.filter((item) => sourceOf(item) === "deal").length;
+    const pains = visibleItems.filter((item) => sourceOf(item) === "pain").length;
+    const withPhotos = visibleItems.filter((item) => photosOf(item).length).length;
+
+    return {
+      total: visibleItems.length,
+      deals,
+      pains,
+      withPhotos,
+      saved: savedIds.size,
+      archived: archivedIds.size,
+    };
+  }, [visibleItems, savedIds, archivedIds]);
 
   return (
     <main style={page}>
@@ -639,6 +812,14 @@ export default function ProjectsPage() {
             <span style={chip}>Deals: {counts.deals}</span>
             <span style={chip}>Pain: {counts.pains}</span>
             <span style={chip}>With Photos: {counts.withPhotos}</span>
+            <span style={chip}>Saved: {counts.saved}</span>
+            <span style={chip}>Archived: {counts.archived}</span>
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <button type="button" onClick={() => setFolder("active")} style={folder === "active" ? button : ghost}>Active Projects</button>
+            <button type="button" onClick={() => setFolder("saved")} style={folder === "saved" ? button : ghost}>Saved Folder</button>
+            <button type="button" onClick={() => setFolder("archived")} style={folder === "archived" ? button : ghost}>Archived / Cleaned Up</button>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
@@ -650,10 +831,10 @@ export default function ProjectsPage() {
         </section>
 
         <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
-          <Metric label="Workstations" value={String(counts.total)} />
+          <Metric label="Showing" value={String(counts.total)} />
           <Metric label="Deals" value={String(counts.deals)} />
-          <Metric label="Pain" value={String(counts.pains)} />
-          <Metric label="With Photos" value={String(counts.withPhotos)} />
+          <Metric label="Saved" value={String(counts.saved)} />
+          <Metric label="Archived" value={String(counts.archived)} />
         </section>
 
         <section style={card}>
@@ -663,15 +844,35 @@ export default function ProjectsPage() {
             Clean workstations.
           </h2>
 
-          {items.length ? (
+          {visibleItems.length ? (
             <div style={{ display: "grid", gap: 14 }}>
-              {items.map((item, index) => (
-                <WorkstationCard key={first(field(item, "canonical_event_id"), idOf(item), signalIdOf(item), String(index))} row={item} viewer={email} />
-              ))}
+              {visibleItems.map((item, index) => {
+                const key = canonicalKey(item);
+
+                return (
+                  <WorkstationCard
+                    key={first(key, String(index))}
+                    row={item}
+                    viewer={email}
+                    isSaved={savedIds.has(key)}
+                    isArchived={archivedIds.has(key)}
+                    onSave={() => saveProject(item)}
+                    onUnsave={() => unsaveProject(item)}
+                    onArchive={() => archiveProject(item)}
+                    onRestore={() => restoreProject(item)}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div style={glass}>
-              <h3 style={{ marginTop: 0 }}>No deal or pain workstations connected yet.</h3>
+              <h3 style={{ marginTop: 0 }}>
+                {folder === "saved"
+                  ? "No saved projects yet."
+                  : folder === "archived"
+                  ? "No archived projects yet."
+                  : "No deal or pain workstations connected yet."}
+              </h3>
 
               <p style={muted}>{status}</p>
 
@@ -684,7 +885,7 @@ export default function ProjectsPage() {
           )}
         </section>
 
-        {status && items.length ? <section style={card}>{status}</section> : null}
+        {status && visibleItems.length ? <section style={card}>{status}</section> : null}
       </div>
     </main>
   );
