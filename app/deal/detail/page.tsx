@@ -9,6 +9,10 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
+function meta(row: Deal | null) {
+  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+}
+
 function first(...values: unknown[]) {
   for (const value of values) {
     if (Array.isArray(value)) {
@@ -22,6 +26,19 @@ function first(...values: unknown[]) {
   }
 
   return "";
+}
+
+function from(deal: Deal | null, ...keys: string[]) {
+  if (!deal) return "";
+  const m = meta(deal);
+  const values: unknown[] = [];
+
+  for (const key of keys) {
+    values.push(deal[key]);
+    values.push(m[key]);
+  }
+
+  return first(...values);
 }
 
 function parseArray(value: unknown): string[] {
@@ -44,19 +61,19 @@ function parseArray(value: unknown): string[] {
 }
 
 function photosOf(deal: Deal) {
-  const meta = typeof deal?.metadata === "object" && deal.metadata ? deal.metadata : {};
+  const m = meta(deal);
 
   const values = [
     deal.main_photo_url,
     deal.image_url,
     deal.photo_url,
-    meta.main_photo_url,
-    meta.image_url,
-    meta.photo_url,
+    m.main_photo_url,
+    m.image_url,
+    m.photo_url,
     ...parseArray(deal.photo_urls),
-    ...parseArray(meta.photo_urls),
+    ...parseArray(m.photo_urls),
     ...parseArray(deal.photos),
-    ...parseArray(meta.photos),
+    ...parseArray(m.photos),
   ];
 
   return Array.from(
@@ -66,11 +83,9 @@ function photosOf(deal: Deal) {
 
 function money(value: unknown) {
   const text = clean(value);
-
   if (!text) return "Not listed";
 
   const number = Number(text.replace(/[^\d.-]/g, ""));
-
   if (!Number.isFinite(number)) return text;
 
   return number.toLocaleString("en-US", {
@@ -132,19 +147,11 @@ const primary: React.CSSProperties = {
   border: "none",
 };
 
-function Info({
-  title,
-  value,
-}: {
-  title: string;
-  value: unknown;
-}) {
+function Info({ title, value }: { title: string; value: unknown }) {
   return (
     <div style={card}>
       <div style={label}>{title}</div>
-      <div style={{ fontSize: 28, fontWeight: 900 }}>
-        {clean(value) || "Not listed"}
-      </div>
+      <div style={{ fontSize: 28, fontWeight: 900 }}>{clean(value) || "Not listed"}</div>
     </div>
   );
 }
@@ -167,13 +174,10 @@ export default function DealDetailPage() {
           return;
         }
 
-        const response = await fetch(
-          `/api/deal/detail?id=${encodeURIComponent(id)}`,
-          {
-            cache: "no-store",
-            credentials: "include",
-          }
-        );
+        const response = await fetch(`/api/deal/detail?id=${encodeURIComponent(id)}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
 
         const data = await response.json().catch(() => ({}));
 
@@ -191,28 +195,22 @@ export default function DealDetailPage() {
     load();
   }, []);
 
-  const photos = useMemo(() => {
-    if (!deal) return [];
-    return photosOf(deal);
-  }, [deal]);
+  const photos = useMemo(() => (deal ? photosOf(deal) : []), [deal]);
+
+  const signalId = from(deal, "signal_id");
+  const detailTitle = first(
+    from(deal, "title", "deal_title"),
+    from(deal, "address"),
+    "Deal Detail"
+  );
 
   return (
     <main style={page}>
       <style>{`
         @media (max-width: 820px) {
-          .vf-grid {
-            grid-template-columns: 1fr !important;
-          }
-
-          .vf-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-          }
-
-          .vf-actions a {
-            width: 100%;
-            box-sizing: border-box;
-          }
+          .vf-grid { grid-template-columns: 1fr !important; }
+          .vf-actions { display: grid !important; grid-template-columns: 1fr !important; }
+          .vf-actions a { width: 100%; box-sizing: border-box; }
         }
       `}</style>
 
@@ -228,51 +226,24 @@ export default function DealDetailPage() {
               letterSpacing: "-.07em",
             }}
           >
-            {deal
-              ? first(
-                  deal.title,
-                  deal.deal_title,
-                  deal.address,
-                  "Deal Detail"
-                )
-              : "Deal Detail"}
+            {detailTitle}
           </h1>
 
           <p style={{ color: "#cbd5e1", fontSize: 18 }}>
             {status ||
               first(
-                deal?.ai_route_summary,
-                deal?.route_summary,
-                deal?.routing_summary,
-                deal?.description,
+                from(deal, "ai_route_summary", "route_summary", "routing_summary"),
+                from(deal, "description"),
                 "VaultForge execution intelligence layer."
               )}
           </p>
 
-          <div
-            className="vf-actions"
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              marginTop: 20,
-            }}
-          >
-            <Link href="/projects" style={primary}>
-              Projects
-            </Link>
-
-            <Link href="/dashboard" style={button}>
-              Dashboard
-            </Link>
-
-            <Link href="/submit" style={button}>
-              Create Deal
-            </Link>
-
-            <Link href="/messages" style={button}>
-              Messages
-            </Link>
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+            <Link href="/projects" style={primary}>Projects</Link>
+            <Link href="/dashboard" style={button}>Dashboard</Link>
+            <Link href="/submit" style={button}>Create Deal</Link>
+            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={button}>Signal Room</Link> : null}
+            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={button}>Routing Room</Link> : null}
           </div>
         </section>
 
@@ -281,16 +252,7 @@ export default function DealDetailPage() {
             {photos.length ? (
               <section style={card}>
                 <div style={label}>Photos</div>
-
-                <div
-                  className="vf-grid"
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fit,minmax(220px,1fr))",
-                    gap: 12,
-                  }}
-                >
+                <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
                   {photos.map((photo) => (
                     <img
                       key={photo}
@@ -309,112 +271,40 @@ export default function DealDetailPage() {
               </section>
             ) : null}
 
-            <section
-              className="vf-grid"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3,minmax(0,1fr))",
-                gap: 14,
-              }}
-            >
-              <Info
-                title="Property Type"
-                value={first(
-                  deal.property_type,
-                  deal.deal_type,
-                  deal.asset_type
-                )}
-              />
-
-              <Info
-                title="Market"
-                value={[
-                  first(deal.city),
-                  first(deal.state, deal.market),
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
-              />
-
-              <Info
-                title="Strategy"
-                value={first(deal.strategy, deal.exit_strategy)}
-              />
-
-              <Info
-                title="Asking Price"
-                value={money(deal.asking_price || deal.price)}
-              />
-
-              <Info
-                title="ARV"
-                value={money(
-                  deal.arv || deal.arv_value || deal.estimated_value
-                )}
-              />
-
-              <Info
-                title="Repairs"
-                value={money(
-                  deal.repair_estimate ||
-                    deal.repairs_needed ||
-                    deal.estimated_repairs
-                )}
-              />
-
-              <Info
-                title="Beds"
-                value={first(deal.beds, deal.bedrooms)}
-              />
-
-              <Info
-                title="Baths"
-                value={first(deal.baths, deal.bathrooms)}
-              />
-
-              <Info
-                title="Sqft / Acres"
-                value={first(
-                  deal.square_feet,
-                  deal.sqft,
-                  deal.building_sqft,
-                  deal.acres,
-                  deal.land_acres
-                )}
-              />
+            <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14 }}>
+              <Info title="Property Type" value={from(deal, "property_type", "deal_type", "asset_type")} />
+              <Info title="Market" value={[from(deal, "city"), from(deal, "state", "market")].filter(Boolean).join(", ")} />
+              <Info title="Strategy" value={from(deal, "strategy", "exit_strategy")} />
+              <Info title="Asking Price" value={money(from(deal, "asking_price", "price"))} />
+              <Info title="ARV" value={money(from(deal, "arv", "arv_value", "estimated_value"))} />
+              <Info title="Repairs" value={money(from(deal, "repair_estimate", "repairs_needed", "estimated_repairs"))} />
+              <Info title="Beds" value={from(deal, "beds", "bedrooms")} />
+              <Info title="Baths" value={from(deal, "baths", "bathrooms")} />
+              <Info title="Sqft / Acres" value={from(deal, "square_feet", "sqft", "building_sqft", "acres", "land_acres")} />
+              <Info title="Year Built" value={from(deal, "year_built")} />
+              <Info title="Occupancy" value={from(deal, "occupancy")} />
+              <Info title="Zoning" value={from(deal, "zoning")} />
+              <Info title="Utilities" value={from(deal, "utilities")} />
+              <Info title="Road Access" value={from(deal, "road_access")} />
+              <Info title="NOI / Cap Rate" value={[from(deal, "noi"), from(deal, "cap_rate")].filter(Boolean).join(" / ")} />
             </section>
 
             <section style={card}>
               <div style={label}>Routing Needs</div>
-              <div style={{ fontSize: 22 }}>
-                {first(
-                  deal.routing_needs,
-                  deal.deal_needs,
-                  deal.needs,
-                  "Not listed"
-                )}
-              </div>
+              <div style={{ fontSize: 22 }}>{from(deal, "routing_needs", "deal_needs", "needs") || "Not listed"}</div>
             </section>
 
             <section style={card}>
               <div style={label}>Distress / Pain Signals</div>
-              <div style={{ fontSize: 22 }}>
-                {first(
-                  deal.distress_signals,
-                  deal.seller_situation,
-                  "Not listed"
-                )}
-              </div>
+              <div style={{ fontSize: 22 }}>{from(deal, "distress_signals") || "Not listed"}</div>
             </section>
 
             <section style={card}>
               <div style={label}>Why Routed / Importance</div>
               <div style={{ fontSize: 22 }}>
                 {first(
-                  deal.ai_route_summary,
-                  deal.route_summary,
-                  deal.routing_summary,
-                  deal.description,
+                  from(deal, "ai_route_summary", "route_summary", "routing_summary"),
+                  from(deal, "description"),
                   "Not listed"
                 )}
               </div>
@@ -422,20 +312,15 @@ export default function DealDetailPage() {
 
             <section style={card}>
               <div style={label}>Seller / Situation</div>
-              <div style={{ fontSize: 22 }}>
-                {first(
-                  deal.seller_situation,
-                  deal.private_notes,
-                  deal.access_notes,
-                  "Not listed"
-                )}
-              </div>
+              <div style={{ fontSize: 22 }}>{from(deal, "seller_situation", "private_notes", "access_notes") || "Not listed"}</div>
             </section>
 
             <section style={card}>
-              <div style={label}>Deal ID</div>
+              <div style={label}>Project / Routing IDs</div>
               <div style={{ fontSize: 20 }}>
-                {dealId || first(deal.id, deal.deal_id)}
+                Deal ID: {dealId || from(deal, "id", "deal_id")}
+                <br />
+                Signal ID: {signalId || "Not created on this older record"}
               </div>
             </section>
           </>
