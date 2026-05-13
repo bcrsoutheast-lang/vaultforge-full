@@ -35,13 +35,7 @@ function readCookie(name: string) {
 function getEmail() {
   if (typeof window === "undefined") return "";
 
-  const keys = [
-    "vf_email",
-    "vf_member_email",
-    "vf_admin_email",
-    "email",
-    "memberEmail",
-  ];
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
 
   for (const key of keys) {
     const localValue = cleanEmail(window.localStorage.getItem(key));
@@ -51,11 +45,7 @@ function getEmail() {
     if (sessionValue.includes("@")) return sessionValue;
   }
 
-  return cleanEmail(
-    readCookie("vf_email") ||
-      readCookie("vf_member_email") ||
-      readCookie("vf_admin_email")
-  );
+  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
 function first(...values: unknown[]) {
@@ -96,173 +86,75 @@ function meta(row: Row) {
   return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
-function idOf(row: Row) {
+function field(row: Row, ...keys: string[]) {
   const m = meta(row);
+  const values: unknown[] = [];
 
-  return first(
-    row.id,
-    row.deal_id,
-    row.project_id,
-    row.item_id,
-    row.pain_id,
-    row.signal_id,
-    m.id,
-    m.deal_id,
-    m.project_id,
-    m.item_id,
-    m.pain_id,
-    m.signal_id
-  );
+  for (const key of keys) {
+    values.push(row[key]);
+    values.push(m[key]);
+  }
+
+  return first(...values);
+}
+
+function idOf(row: Row) {
+  return field(row, "deal_id", "project_id", "item_id", "id", "pain_id", "signal_id");
 }
 
 function signalIdOf(row: Row) {
-  const m = meta(row);
-
-  return first(
-    row.signal_id,
-    row.signalId,
-    row.alert_id,
-    row.routing_id,
-    m.signal_id,
-    m.signalId,
-    m.alert_id,
-    m.routing_id
-  );
+  return field(row, "signal_id", "signalId", "alert_id", "routing_id");
 }
 
 function titleOf(row: Row) {
-  const m = meta(row);
-
-  return first(
-    row.title,
-    row.deal_title,
-    row.project_title,
-    row.name,
-    row.address,
-    m.title,
-    m.deal_title,
-    m.project_title,
-    m.name,
-    m.address,
-    "VaultForge Workstation"
-  );
+  return field(row, "title", "deal_title", "project_title", "name", "address") || "VaultForge Workstation";
 }
 
 function sourceOf(row: Row) {
-  const text = first(row.source_table, row._source_table, row.source);
-  const lower = text.toLowerCase();
+  const source = first(row.source_kind, row.source_table, row._source_table, row.source, field(row, "canonical_kind")).toLowerCase();
 
-  if (
-    lower.includes("deal") ||
-    first(row.deal_id, row.asking_price, row.price, row.arv)
-  ) {
-    return "deal";
-  }
-
-  if (lower.includes("pain") || first(row.pain_id, row.pain_type)) {
-    return "pain";
-  }
+  if (source.includes("deal") || field(row, "deal_id", "asking_price", "price", "arv")) return "deal";
+  if (source.includes("pain") || field(row, "pain_id", "pain_type")) return "pain";
 
   return "signal";
 }
 
 function noteOf(row: Row) {
-  const m = meta(row);
-
-  return first(
-    row.ai_route_summary,
-    row.route_summary,
-    row.routing_summary,
-    row.summary,
-    row.description,
-    row.notes,
-    row.note,
-    row.strategy_notes,
-    row.message,
-    row.help_requested,
-    row.requested_help,
-    m.ai_route_summary,
-    m.route_summary,
-    m.routing_summary,
-    m.summary,
-    m.description,
-    m.notes,
-    m.note,
-    m.strategy_notes,
-    m.help_requested,
-    m.requested_help,
-    "Workstation ready for review."
+  return (
+    field(
+      row,
+      "ai_route_summary",
+      "route_summary",
+      "routing_summary",
+      "summary",
+      "description",
+      "notes",
+      "note",
+      "strategy_notes",
+      "message",
+      "help_requested",
+      "requested_help"
+    ) || "Workstation ready for review."
   );
 }
 
 function assetOf(row: Row) {
-  const m = meta(row);
-
-  return first(
-    row.asset_type,
-    row.property_type,
-    row.deal_type,
-    row.pain_type,
-    m.asset_type,
-    m.property_type,
-    m.deal_type,
-    m.pain_type,
-    "Asset"
-  );
+  return field(row, "asset_type", "property_type", "deal_type", "pain_type") || "Asset";
 }
 
 function statusOf(row: Row) {
-  const m = meta(row);
-
-  return first(
-    row.status,
-    row.project_status,
-    row.stage,
-    row.routing_status,
-    m.status,
-    m.project_status,
-    m.stage,
-    m.routing_status,
-    "Open"
-  );
+  return field(row, "status", "project_status", "stage", "routing_status") || "Open";
 }
 
 function marketOf(row: Row) {
-  const m = meta(row);
-  const city = first(row.city, m.city);
-  const state = first(
-    row.state,
-    row.market,
-    row.operating_state,
-    m.state,
-    m.market,
-    m.operating_state
-  );
+  const city = field(row, "city");
+  const state = field(row, "state", "market", "operating_state");
 
-  return (
-    [city, state].filter(Boolean).join(", ") ||
-    state ||
-    first(row.location, row.address, m.location, m.address, "Market not listed")
-  );
+  return [city, state].filter(Boolean).join(", ") || field(row, "location", "address") || "Market not listed";
 }
 
 function ownerOf(row: Row) {
-  const m = meta(row);
-
-  return cleanEmail(
-    first(
-      row.owner_email,
-      row.member_email,
-      row.user_email,
-      row.submitted_by_email,
-      row.created_by_email,
-      m.owner_email,
-      m.member_email,
-      m.user_email,
-      m.submitted_by_email,
-      m.created_by_email
-    )
-  );
+  return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email"));
 }
 
 function photosOf(row: Row) {
@@ -289,13 +181,7 @@ function photosOf(row: Row) {
         .map((item: any) => {
           if (typeof item === "string") return clean(item);
           if (item && typeof item === "object") {
-            return clean(
-              item.url ||
-                item.publicUrl ||
-                item.public_url ||
-                item.photo_url ||
-                item.image_url
-            );
+            return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url);
           }
           return "";
         })
@@ -327,10 +213,7 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = {
-  width: "min(1220px,100%)",
-  margin: "0 auto",
-};
+const wrap: React.CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
 
 const card: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
@@ -356,10 +239,7 @@ const label: React.CSSProperties = {
   fontSize: 12,
 };
 
-const muted: React.CSSProperties = {
-  color: "#cbd5e1",
-  lineHeight: 1.55,
-};
+const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
 
 const button: React.CSSProperties = {
   display: "inline-flex",
@@ -394,44 +274,38 @@ const chip: React.CSSProperties = {
   display: "inline-flex",
 };
 
-function Metric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
     <section style={glass}>
-      <div style={{ ...labelStyle, color: "#e8c46b" }}>{label}</div>
-      <div
-        style={{
-          fontSize: 48,
-          fontWeight: 1000,
-          lineHeight: 1,
-          marginTop: 12,
-        }}
-      >
-        {value}
-      </div>
+      <div style={{ fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12, color: "#e8c46b" }}>{label}</div>
+      <div style={{ fontSize: 48, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
     </section>
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  fontWeight: 950,
-  letterSpacing: ".14em",
-  textTransform: "uppercase",
-  fontSize: 12,
-};
+function DetailGrid({ row }: { row: Row }) {
+  const values = [
+    ["Ask", money(field(row, "asking_price", "price"))],
+    ["ARV", money(field(row, "arv", "arv_value", "estimated_value"))],
+    ["Repairs", money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"))],
+    ["Beds/Baths", [field(row, "beds", "bedrooms"), field(row, "baths", "bathrooms")].filter(Boolean).join(" / ") || "Not listed"],
+    ["Sqft/Acres", field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres") || "Not listed"],
+    ["Strategy", field(row, "strategy", "exit_strategy") || "Not listed"],
+  ];
 
-function WorkstationCard({
-  row,
-  viewer,
-}: {
-  row: Row;
-  viewer: string;
-}) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(135px,1fr))", gap: 10, marginTop: 14 }}>
+      {values.map(([k, v]) => (
+        <div key={k} style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: 12, background: "rgba(0,0,0,.14)" }}>
+          <div style={{ color: "#94a3b8", fontSize: 11, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 850 }}>{k}</div>
+          <div style={{ marginTop: 6, fontWeight: 950 }}>{v}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
   const id = idOf(row);
   const signalId = signalIdOf(row);
   const source = sourceOf(row);
@@ -448,22 +322,12 @@ function WorkstationCard({
       : "/projects";
 
   const contactHref = signalId
-    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(
-        viewer
-      )}${id ? `&item_id=${encodeURIComponent(id)}` : ""}`
-    : `/messages/new?email=${encodeURIComponent(viewer)}${
-        id ? `&item_id=${encodeURIComponent(id)}` : ""
-      }`;
+    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}`
+    : `/messages/new?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}`;
 
   return (
     <article style={glass}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "170px 1fr",
-          gap: 18,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 18 }}>
         <div
           style={{
             borderRadius: 20,
@@ -474,28 +338,9 @@ function WorkstationCard({
           }}
         >
           {photos[0] ? (
-            <img
-              src={photos[0]}
-              alt="Workstation"
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: "block",
-              }}
-            />
+            <img src={photos[0]} alt="Workstation" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           ) : (
-            <div
-              style={{
-                height: 150,
-                display: "grid",
-                placeItems: "center",
-                color: "#94a3b8",
-                fontWeight: 850,
-              }}
-            >
-              No photo
-            </div>
+            <div style={{ height: 150, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850 }}>No photo</div>
           )}
         </div>
 
@@ -504,40 +349,13 @@ function WorkstationCard({
             <span style={chip}>{source === "deal" ? "Deal" : source === "pain" ? "Pain" : "Signal"}</span>
             <span style={chip}>{assetOf(row)}</span>
             <span style={chip}>{statusOf(row)}</span>
+            {signalId ? <span style={chip}>Signal linked</span> : null}
           </div>
 
-          <h3
-            style={{
-              fontSize: 30,
-              lineHeight: 1.02,
-              margin: "14px 0 10px",
-            }}
-          >
-            {titleOf(row)}
-          </h3>
-
+          <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
           <p style={muted}>{noteOf(row)}</p>
 
-          {source === "deal" ? (
-            <div style={{ marginTop: 12 }}>
-              <span style={chip}>
-                Ask: {money(first(row.asking_price, row.price))}
-              </span>
-              <span style={chip}>
-                ARV: {money(first(row.arv, row.arv_value, row.estimated_value))}
-              </span>
-              <span style={chip}>
-                Repairs:{" "}
-                {money(
-                  first(
-                    row.repair_estimate,
-                    row.repairs_needed,
-                    row.estimated_repairs
-                  )
-                )}
-              </span>
-            </div>
-          ) : null}
+          {source === "deal" ? <DetailGrid row={row} /> : null}
 
           <div style={{ marginTop: 12 }}>
             {id ? <span style={chip}>ID: {id}</span> : null}
@@ -546,35 +364,17 @@ function WorkstationCard({
             {owner ? <span style={chip}>Owner: {owner}</span> : null}
           </div>
 
-          <div
-            className="vf-actions"
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              marginTop: 18,
-            }}
-          >
-            <Link href={openHref} style={button}>
-              {source === "deal"
-                ? "Open Deal Detail"
-                : source === "pain"
-                ? "Open Pain Room"
-                : "Open Signal"}
-            </Link>
+          <div style={{ marginTop: 12 }}>
+            {field(row, "routing_needs", "deal_needs", "needs") ? <span style={chip}>Needs: {field(row, "routing_needs", "deal_needs", "needs")}</span> : null}
+            {field(row, "distress_signals") ? <span style={chip}>Signals: {field(row, "distress_signals")}</span> : null}
+          </div>
 
-            {signalId ? (
-              <Link
-                href={`/routing-room/${encodeURIComponent(signalId)}`}
-                style={ghost}
-              >
-                Routing Room
-              </Link>
-            ) : null}
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            <Link href={openHref} style={button}>{source === "deal" ? "Open Deal Detail" : source === "pain" ? "Open Pain Room" : "Open Signal"}</Link>
 
-            <Link href={contactHref} style={ghost}>
-              Message Owner
-            </Link>
+            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
+
+            <Link href={contactHref} style={ghost}>Message Owner</Link>
           </div>
         </div>
       </div>
@@ -631,7 +431,7 @@ export default function ProjectsPage() {
 
       const seen = new Set<string>();
       const unique = collected.filter((item) => {
-        const key = first(idOf(item), signalIdOf(item), titleOf(item) + noteOf(item));
+        const key = first(field(item, "canonical_event_id"), idOf(item), signalIdOf(item), titleOf(item) + noteOf(item));
         if (!key || seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -653,12 +453,7 @@ export default function ProjectsPage() {
     const pains = items.filter((item) => sourceOf(item) === "pain").length;
     const withPhotos = items.filter((item) => photosOf(item).length).length;
 
-    return {
-      total: items.length,
-      deals,
-      pains,
-      withPhotos,
-    };
+    return { total: items.length, deals, pains, withPhotos };
   }, [items]);
 
   return (
@@ -692,69 +487,32 @@ export default function ProjectsPage() {
         <section style={card}>
           <div style={label}>VaultForge Project Desk</div>
 
-          <h1
-            style={{
-              fontSize: "clamp(52px,10vw,96px)",
-              lineHeight: 0.88,
-              letterSpacing: "-.07em",
-              margin: "12px 0 18px",
-            }}
-          >
+          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
             Workstations.
           </h1>
 
           <p style={{ ...muted, fontSize: 20 }}>
-            Deal and pain records share one execution desk. Cards show pricing,
-            routing context, photos, owner, market, and next action.
+            Deal and pain records share one execution desk. Cards show pricing, routing context, photos, owner, market, and next action.
           </p>
 
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>
-              {email === OWNER_EMAIL ? "Owner View" : "Member View"}
-            </span>
+            <span style={chip}>{email === OWNER_EMAIL ? "Owner View" : "Member View"}</span>
             <span style={chip}>Workstations: {counts.total}</span>
             <span style={chip}>Deals: {counts.deals}</span>
             <span style={chip}>Pain: {counts.pains}</span>
             <span style={chip}>With Photos: {counts.withPhotos}</span>
           </div>
 
-          <div
-            className="vf-actions"
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              marginTop: 20,
-            }}
-          >
-            <Link href="/dashboard" style={ghost}>
-              Dashboard
-            </Link>
-
-            <Link href="/submit" style={button}>
-              Create Deal
-            </Link>
-
-            <Link href="/pain" style={ghost}>
-              Submit Pain
-            </Link>
-
-            <button type="button" onClick={load} style={ghost}>
-              Refresh
-            </button>
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/submit" style={button}>Create Deal</Link>
+            <Link href="/pain" style={ghost}>Submit Pain</Link>
+            <button type="button" onClick={load} style={ghost}>Refresh</button>
           </div>
         </section>
 
-        <section
-          className="vf-four"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4,minmax(0,1fr))",
-            gap: 16,
-            marginBottom: 18,
-          }}
-        >
+        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
           <Metric label="Workstations" value={String(counts.total)} />
           <Metric label="Deals" value={String(counts.deals)} />
           <Metric label="Pain" value={String(counts.pains)} />
@@ -764,54 +522,26 @@ export default function ProjectsPage() {
         <section style={card}>
           <div style={label}>Project Queue</div>
 
-          <h2
-            style={{
-              fontSize: 42,
-              lineHeight: 1,
-              margin: "10px 0 18px",
-            }}
-          >
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>
             Clean workstations.
           </h2>
 
           {items.length ? (
             <div style={{ display: "grid", gap: 14 }}>
               {items.map((item, index) => (
-                <WorkstationCard
-                  key={first(idOf(item), signalIdOf(item), String(index))}
-                  row={item}
-                  viewer={email}
-                />
+                <WorkstationCard key={first(field(item, "canonical_event_id"), idOf(item), signalIdOf(item), String(index))} row={item} viewer={email} />
               ))}
             </div>
           ) : (
             <div style={glass}>
-              <h3 style={{ marginTop: 0 }}>
-                No deal or pain workstations connected yet.
-              </h3>
+              <h3 style={{ marginTop: 0 }}>No deal or pain workstations connected yet.</h3>
 
               <p style={muted}>{status}</p>
 
-              <div
-                className="vf-actions"
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                  marginTop: 16,
-                }}
-              >
-                <Link href="/submit" style={button}>
-                  Create Deal
-                </Link>
-
-                <Link href="/pain" style={ghost}>
-                  Submit Pain
-                </Link>
-
-                <Link href="/dashboard" style={ghost}>
-                  Dashboard
-                </Link>
+              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                <Link href="/submit" style={button}>Create Deal</Link>
+                <Link href="/pain" style={ghost}>Submit Pain</Link>
+                <Link href="/dashboard" style={ghost}>Dashboard</Link>
               </div>
             </div>
           )}
