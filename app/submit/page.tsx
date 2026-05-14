@@ -277,9 +277,84 @@ function extractUploadUrl(data: any) {
   ).trim();
 }
 
+async function compressImage(file: File) {
+  const maxWidth = 1600;
+  const maxHeight = 1600;
+  const quality = 0.72;
+
+  if (!file.type.startsWith("image/")) return file;
+
+  if (file.type.includes("gif") || file.type.includes("heic") || file.type.includes("heif")) {
+    return file;
+  }
+
+  if (file.size <= 1400 * 1024) {
+    return file;
+  }
+
+  const imageUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not read selected image."));
+      img.src = imageUrl;
+    });
+
+    let width = image.width;
+    let height = image.height;
+
+    if (width > maxWidth || height > maxHeight) {
+      const ratio = Math.min(maxWidth / width, maxHeight / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return file;
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", quality);
+    });
+
+    if (!blob) {
+      return file;
+    }
+
+    if (blob.size >= file.size) {
+      return file;
+    }
+
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "deal-photo";
+
+    return new File([blob], `${baseName}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
 async function upload(file: File, email: string) {
+  const preparedFile = await compressImage(file);
+
+  if (preparedFile.size > 4 * 1024 * 1024) {
+    throw new Error("Photo is still too large after compression. Pick a smaller photo or screenshot.");
+  }
+
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", preparedFile);
   formData.append("email", email);
 
   const res = await fetch("/api/uploads/pain", {
@@ -503,7 +578,7 @@ export default function SubmitPage() {
       const urls: string[] = [];
 
       for (let index = 0; index < files.length; index += 1) {
-        setMsg(`Uploading photo ${index + 1} of ${files.length}...`);
+        setMsg(`Compressing and uploading photo ${index + 1} of ${files.length}...`);
         const url = await upload(files[index], email);
         urls.push(url);
       }
