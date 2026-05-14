@@ -798,7 +798,7 @@ function WorkstationCard({
               background: "rgba(255,255,255,.02)",
             }}
           >
-            <div style={{ ...label, fontSize: 11 }}>Suggested Operators</div>
+            <div style={{ ...label, fontSize: 11 }}>Owner Review</div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
               <span style={chip}>Buyer</span>
@@ -814,10 +814,8 @@ function WorkstationCard({
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
             <Link href={detailHref} style={button}>
-              {source === "deal" ? "Open Deal Detail" : source === "pain" ? "Open Pain Room" : "Open Signal"}
+              {source === "deal" ? "Open Deal" : source === "pain" ? "Open Pain Room" : "Open Workstation"}
             </Link>
-            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link> : null}
-            {routingId ? <Link href={`/routing-room/${encodeURIComponent(routingId)}`} style={ghost}>Routing Room</Link> : null}
             <Link href={contactHref} style={ghost}>Contact Owner</Link>
           </div>
 
