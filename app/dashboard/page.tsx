@@ -76,41 +76,34 @@ type DashboardStats = {
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at 8% 0%, rgba(232,196,107,.18), transparent 30%), radial-gradient(circle at 92% 8%, rgba(56,189,248,.12), transparent 28%), radial-gradient(circle at 65% 56%, rgba(157,243,191,.08), transparent 30%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 28%), radial-gradient(circle at 88% 8%, rgba(56,189,248,.11), transparent 26%), radial-gradient(circle at 62% 54%, rgba(157,243,191,.075), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
   padding: "22px 16px 100px",
   fontFamily: "Arial, sans-serif",
 };
 
 const wrap: React.CSSProperties = {
-  width: "min(1300px,100%)",
+  width: "min(1280px,100%)",
   margin: "0 auto",
 };
 
-const panel: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.22)",
+const section: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
   borderRadius: 30,
   background:
-    "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.026))",
+    "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
   padding: 24,
-  marginBottom: 18,
+  marginBottom: 20,
   boxShadow: "0 28px 86px rgba(0,0,0,.30)",
 };
 
 const glass: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 22,
-  padding: 18,
-  background: "rgba(255,255,255,.045)",
+  borderRadius: 24,
+  padding: 20,
+  background:
+    "linear-gradient(180deg,rgba(255,255,255,.052),rgba(255,255,255,.020))",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,.06)",
-};
-
-const label: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: ".18em",
-  textTransform: "uppercase",
-  fontWeight: 950,
-  fontSize: 12,
 };
 
 const muted: React.CSSProperties = {
@@ -118,23 +111,22 @@ const muted: React.CSSProperties = {
   lineHeight: 1.55,
 };
 
-const chip: React.CSSProperties = {
+const pill: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   borderRadius: 999,
-  border: "1px solid rgba(157,243,191,.22)",
-  background: "rgba(157,243,191,.07)",
-  color: "#9df3bf",
-  padding: "7px 10px",
+  border: "1px solid rgba(255,255,255,.14)",
+  background: "rgba(255,255,255,.055)",
+  color: "#cbd5e1",
+  padding: "8px 12px",
   fontWeight: 850,
-  margin: "0 7px 7px 0",
-  fontSize: 12,
+  margin: "0 8px 8px 0",
 };
 
 const goldButton: React.CSSProperties = {
-  minHeight: 52,
+  minHeight: 54,
   borderRadius: 999,
-  padding: "13px 18px",
+  padding: "14px 20px",
   background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
   fontWeight: 950,
@@ -142,7 +134,6 @@ const goldButton: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  border: 0,
 };
 
 const ghostButton: React.CSSProperties = {
@@ -152,58 +143,180 @@ const ghostButton: React.CSSProperties = {
   color: "white",
 };
 
-function clamp(value: number) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
+const eyebrow: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
 
-function CountTile({ labelText, value, caption, tone = "gold" }: { labelText: string; value: number | string; caption: string; tone?: "gold" | "blue" | "green" | "red" }) {
-  const color = tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
+function Metric({
+  label,
+  value,
+  sub,
+  tone = "gold",
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone?: "gold" | "blue" | "green" | "red";
+}) {
+  const color =
+    tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
 
   return (
-    <div style={{ ...glass, minHeight: 132 }}>
-      <div style={{ ...label, color }}>{labelText}</div>
-      <div style={{ fontSize: 44, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
-      <p style={{ ...muted, margin: "9px 0 0", fontSize: 14 }}>{caption}</p>
+    <div style={glass}>
+      <div
+        style={{
+          color,
+          fontWeight: 950,
+          letterSpacing: ".14em",
+          textTransform: "uppercase",
+          fontSize: 12,
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontSize: 56, fontWeight: 1000, lineHeight: 1, marginTop: 14 }}>
+        {value}
+      </div>
+      <div style={{ ...muted, marginTop: 10 }}>{sub}</div>
     </div>
   );
 }
 
-function ActionCard({ tag, title, body, href, primary = false }: { tag: string; title: string; body: string; href: string; primary?: boolean }) {
+function QueueCard({
+  title,
+  body,
+  href,
+  tag,
+  tone = "gold",
+}: {
+  title: string;
+  body: string;
+  href: string;
+  tag: string;
+  tone?: "gold" | "blue" | "green" | "red";
+}) {
+  const color =
+    tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
+
   return (
     <Link
       href={href}
-      className="vf-action-card"
+      className="vf-queue-card"
       style={{
         ...glass,
+        minHeight: 184,
         textDecoration: "none",
         color: "white",
-        display: "grid",
-        gap: 10,
-        minHeight: 178,
-        borderColor: primary ? "rgba(232,196,107,.42)" : "rgba(255,255,255,.12)",
-        background: primary ? "linear-gradient(145deg,rgba(232,196,107,.12),rgba(255,255,255,.035))" : glass.background,
+        display: "flex",
+        flexDirection: "column",
+        borderColor:
+          tone === "blue"
+            ? "rgba(56,189,248,.40)"
+            : tone === "green"
+            ? "rgba(74,222,128,.40)"
+            : tone === "red"
+            ? "rgba(248,113,113,.40)"
+            : "rgba(232,196,107,.40)",
       }}
     >
-      <span style={{ ...chip, alignSelf: "start", width: "fit-content" }}>{tag}</span>
-      <h3 style={{ margin: 0, fontSize: 27, lineHeight: 1.02, letterSpacing: "-.03em" }}>{title}</h3>
-      <p style={{ ...muted, margin: 0 }}>{body}</p>
-      <strong style={{ color: "#f8e7b0" }}>Open →</strong>
+      <div
+        style={{
+          display: "inline-flex",
+          alignSelf: "flex-start",
+          border: `1px solid ${color}`,
+          color,
+          background: "rgba(255,255,255,.04)",
+          borderRadius: 999,
+          padding: "6px 10px",
+          fontSize: 11,
+          fontWeight: 950,
+          letterSpacing: ".10em",
+          textTransform: "uppercase",
+          marginBottom: 14,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {tag}
+      </div>
+
+      <h3 className="vf-queue-title" style={{ margin: "0 0 10px", fontSize: 26, lineHeight: 1.05 }}>
+        {title}
+      </h3>
+
+      <p style={{ ...muted, margin: 0, flex: 1 }}>{body}</p>
+
+      <div style={{ marginTop: 18, fontWeight: 950 }}>Open →</div>
     </Link>
   );
 }
 
-function ScoreLine({ title, value, caption }: { title: string; value: number; caption: string }) {
+function Bar({
+  label,
+  value,
+  right,
+}: {
+  label: string;
+  value: number;
+  right: string;
+}) {
   return (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, color: "#e2e8f0", fontWeight: 900 }}>
-        <span>{title}</span>
-        <span>{value}%</span>
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, color: "#cbd5e1", fontWeight: 850 }}>
+        <span>{label}</span>
+        <span>{right}</span>
       </div>
-      <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 8 }}>
-        <div style={{ width: `${value}%`, height: "100%", background: "linear-gradient(90deg,#f87171,#e8c46b,#4ade80,#38bdf8)" }} />
+
+      <div
+        style={{
+          height: 14,
+          borderRadius: 999,
+          background: "rgba(255,255,255,.14)",
+          overflow: "hidden",
+          marginTop: 8,
+          border: "1px solid rgba(255,255,255,.08)",
+        }}
+      >
+        <div
+          style={{
+            width: `${value}%`,
+            height: "100%",
+            background: "linear-gradient(90deg,#ff4d4d,#e8c46b,#4ade80,#38bdf8)",
+          }}
+        />
       </div>
-      <p style={{ ...muted, margin: "7px 0 0", fontSize: 13 }}>{caption}</p>
+    </div>
+  );
+}
+
+function Notice({
+  title,
+  body,
+  tone = "gold",
+}: {
+  title: string;
+  body: string;
+  tone?: "gold" | "blue" | "green" | "red";
+}) {
+  const color =
+    tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${color}55`,
+        borderRadius: 20,
+        padding: 16,
+        background: "rgba(255,255,255,.04)",
+      }}
+    >
+      <div style={{ color, fontWeight: 950, letterSpacing: ".12em", textTransform: "uppercase", fontSize: 11 }}>
+        {title}
+      </div>
+      <p style={{ ...muted, margin: "8px 0 0" }}>{body}</p>
     </div>
   );
 }
@@ -220,23 +333,33 @@ export default function DashboardPage() {
     routing: 0,
     activity: 0,
   });
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const viewer = getEmail();
+
     setEmail(viewer);
 
     async function load() {
       try {
-        const response = await fetch(`/api/dashboard/stats?email=${encodeURIComponent(viewer)}`, {
-          method: "GET",
-          credentials: "include",
-          headers: { "x-vf-email": viewer },
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/api/dashboard/stats?email=${encodeURIComponent(viewer)}`,
+          {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "x-vf-email": viewer,
+            },
+            cache: "no-store",
+          }
+        );
 
         const data = await response.json();
-        if (data?.ok) setStats(data);
+
+        if (data?.ok) {
+          setStats(data);
+        }
       } catch (error) {
         console.error("Dashboard stats load failed.", error);
       } finally {
@@ -247,121 +370,173 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  const painCount = Number(stats.pain || 0);
-  const dealCount = Number(stats.deals || 0);
-  const msgCount = Number(stats.messages || 0);
-  const alertCount = Number(stats.alerts || 0);
-  const activityCount = Number(stats.activity || 0);
-  const routingCount = Number(stats.routing || 0);
-  const memberCount = Number(stats.members || 0);
+  const pressureValue = useMemo(() => {
+    const total =
+      Number(stats.pain || 0) +
+      Number(stats.deals || 0) +
+      Number(stats.messages || 0);
 
-  const pressureScore = useMemo(() => clamp(18 + painCount * 9 + alertCount * 8 + routingCount * 5), [painCount, alertCount, routingCount]);
-  const networkScore = useMemo(() => clamp(12 + memberCount * 6 + msgCount * 5 + activityCount * 4), [memberCount, msgCount, activityCount]);
-  const opportunityScore = useMemo(() => clamp(20 + dealCount * 8 + painCount * 5), [dealCount, painCount]);
+    if (total <= 0) return 12;
+    if (total >= 100) return 100;
 
-  const aiRead = loading
-    ? "VaultForge AI is loading the operating desk."
-    : painCount || dealCount || msgCount
-    ? `AI is watching ${dealCount} deal rooms, ${painCount} pain records, ${msgCount} message threads, and ${alertCount} active alerts. Routing stays in the background; members only see the rooms, priorities, and next best actions.`
-    : "No major pressure detected yet. Create a deal or submit a pain signal to start the intelligence loop.";
+    return total;
+  }, [stats]);
 
-  const nextMove = painCount > 0
-    ? "Review the highest-pressure Pain Room and let VaultForge suggest the best-fit member path."
-    : dealCount > 0
-    ? "Open Projects and work the strongest opportunity room first."
-    : "Create a Deal or submit a Pain Signal to activate routing intelligence.";
+  const movementValue = useMemo(() => {
+    const total =
+      Number(stats.messages || 0) +
+      Number(stats.activity || 0) +
+      Number(stats.bucket || 0);
+
+    if (total <= 0) return 8;
+    if (total >= 100) return 100;
+
+    return total;
+  }, [stats]);
+
+  const aiRoutingValue = useMemo(() => {
+    const total =
+      Number(stats.routing || 0) +
+      Number(stats.alerts || 0) +
+      Number(stats.activity || 0);
+
+    if (total <= 0) return 18;
+    if (total >= 100) return 100;
+
+    return total;
+  }, [stats]);
+
+  const openOpportunities = Number(stats.deals || 0);
+  const openPain = Number(stats.pain || 0);
+  const messages = Number(stats.messages || 0);
+  const members = Number(stats.members || 0);
 
   return (
     <main style={page}>
       <style>{`
-        a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
-        .vf-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(245px,1fr)); gap: 14px; }
-        .vf-two { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; }
-        .vf-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-        @media (max-width: 840px) {
-          .vf-two, .vf-grid, .vf-actions { grid-template-columns: 1fr !important; }
-          .vf-actions { display: grid !important; }
-          .vf-actions > * { width: 100%; box-sizing: border-box; }
-          .vf-action-card { min-height: auto !important; }
+        a:hover, button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        .vf-four {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+          gap: 16px;
+        }
+
+        .vf-queue-title {
+          overflow-wrap: normal;
+          word-break: normal;
+          hyphens: none;
+        }
+
+        @media (max-width: 980px) {
+          .vf-four {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .vf-grid,
+          .vf-two,
+          .vf-three,
+          .vf-four,
+          .vf-actions {
+            grid-template-columns: 1fr !important;
+          }
+
+          .vf-actions {
+            display: grid !important;
+            gap: 10px !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+          }
+
+          .vf-queue-card {
+            min-height: auto !important;
+          }
+
+          .vf-queue-title {
+            font-size: 30px !important;
+            line-height: 1.02 !important;
+          }
         }
       `}</style>
 
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Dashboard"
-          subtitle="AI command center for rooms, pressure, messages, and next best action."
+          subtitle="AI Market Intelligence · Opportunity Flow · Execution"
           active="dashboard"
         />
 
-        <section style={panel}>
-          <div className="vf-two">
+        <section style={section}>
+          <div className="vf-two" style={{ display: "grid", gridTemplateColumns: "1.22fr .78fr", gap: 20, alignItems: "stretch" }}>
             <div>
-              <div style={label}>VaultForge AI Operating System</div>
-              <h1 style={{ fontSize: "clamp(52px,10vw,102px)", lineHeight: .88, letterSpacing: "-.075em", margin: "12px 0 16px" }}>
-                Member intelligence desk.
+              <div style={eyebrow}>VaultForge AI Command Center</div>
+
+              <h1
+                style={{
+                  fontSize: "clamp(54px,10vw,104px)",
+                  lineHeight: 0.88,
+                  letterSpacing: "-.07em",
+                  margin: "12px 0 18px",
+                }}
+              >
+                Intelligence routes in the background.
               </h1>
-              <p style={{ ...muted, fontSize: 20, maxWidth: 850 }}>
-                VaultForge routes in the background. Members focus on the rooms, the pressure, the opportunity, and the next best move.
+
+              <p style={{ ...muted, fontSize: 20, maxWidth: 900 }}>
+                Members work opportunities, pain rooms, messages, and network connections.
+                VaultForge watches the pressure, reads the context, and keeps routing logic behind the scenes.
               </p>
-              <div style={{ marginTop: 16 }}>
-                <span style={chip}>Signed in: {email || "unknown"}</span>
-                <span style={chip}>{stats.owner ? "Owner intelligence view" : "Member view"}</span>
-                <span style={chip}>AI routing hidden behind rooms</span>
+
+              <div style={{ marginTop: 18 }}>
+                <span style={pill}>Signed in: {email || "unknown"}</span>
+                <span style={pill}>{stats.owner ? "Owner View" : "Member View"}</span>
+                <span style={pill}>AI Routing Active</span>
+                <span style={pill}>Private Network</span>
               </div>
-              <div className="vf-actions" style={{ marginTop: 20 }}>
+
+              <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 22 }}>
                 <Link href="/projects" style={goldButton}>Open Projects</Link>
-                <Link href="/pain-feed" style={ghostButton}>Open Pain Feed</Link>
+                <Link href="/pain-feed" style={ghostButton}>Pain Feed</Link>
                 <Link href="/submit" style={ghostButton}>Create Deal</Link>
                 <Link href="/pain" style={ghostButton}>Submit Pain</Link>
                 <Link href="/messages" style={ghostButton}>Messages</Link>
               </div>
             </div>
 
-            <aside style={{ ...glass, background: "rgba(0,0,0,.22)" }}>
-              <div style={label}>AI Noticed</div>
-              <h2 style={{ margin: "10px 0", fontSize: 30, lineHeight: 1.05 }}>What matters now</h2>
-              <p style={{ ...muted, fontSize: 16 }}>{aiRead}</p>
-              <div style={{ marginTop: 16, border: "1px solid rgba(232,196,107,.22)", borderRadius: 18, padding: 14, background: "rgba(232,196,107,.07)" }}>
-                <div style={{ ...label, fontSize: 11 }}>Best Next Move</div>
-                <p style={{ color: "#f8e7b0", fontWeight: 900, margin: "8px 0 0", lineHeight: 1.45 }}>{nextMove}</p>
-              </div>
-            </aside>
-          </div>
-        </section>
+            <div style={{ ...glass, background: "rgba(0,0,0,.20)" }}>
+              <div style={eyebrow}>AI Operating Tape</div>
 
-        <section className="vf-grid" style={{ marginBottom: 18 }}>
-          <CountTile labelText="Projects" value={dealCount} caption="Deal rooms and opportunity command files." tone="gold" />
-          <CountTile labelText="Pain" value={painCount} caption="Problem rooms and pressure signals." tone="red" />
-          <CountTile labelText="Messages" value={msgCount} caption="Controlled member and owner conversations." tone="green" />
-          <CountTile labelText="Members" value={memberCount} caption="Network capacity available for routing." tone="blue" />
-        </section>
-
-        <section style={panel}>
-          <div style={label}>Hidden Routing Engine</div>
-          <h2 style={{ fontSize: "clamp(34px,6vw,62px)", lineHeight: .95, letterSpacing: "-.055em", margin: "10px 0 12px" }}>
-            AI routing stays behind the curtain.
-          </h2>
-          <p style={{ ...muted, fontSize: 18, maxWidth: 960 }}>
-            Signals, routing paths, introductions, and match scoring should support the experience without becoming the experience. The member sees rooms, recommendations, and action — not internal plumbing.
-          </p>
-          <div className="vf-two" style={{ marginTop: 18 }}>
-            <div style={glass}>
-              <div style={label}>Operating Pressure</div>
-              <ScoreLine title="Pressure load" value={pressureScore} caption={`${alertCount} alerts · ${painCount} pain rooms · background routing active`} />
-              <ScoreLine title="Opportunity heat" value={opportunityScore} caption={`${dealCount} projects and ${painCount} problem signals feeding intelligence`} />
-              <ScoreLine title="Network movement" value={networkScore} caption={`${msgCount} messages · ${activityCount} activity · ${memberCount} members`} />
-            </div>
-            <div style={glass}>
-              <div style={label}>AI Routing Premise</div>
-              <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+              <div style={{ display: "grid", gap: 13, marginTop: 16 }}>
                 {[
-                  "Read every deal and pain record like an operator.",
-                  "Infer buyer, lender, contractor, operator, and partner fit.",
-                  "Show the room and next move, not the routing database.",
-                  "Escalate pressure only when action is needed.",
-                ].map((item) => (
-                  <div key={item} style={{ border: "1px solid rgba(157,243,191,.16)", borderRadius: 15, padding: 12, background: "rgba(157,243,191,.055)", color: "#dbeafe", fontWeight: 850 }}>
-                    {item}
+                  ["Opportunities", `${openOpportunities} active project rooms`],
+                  ["Pain Pressure", `${openPain} open pressure records`],
+                  ["Messages", `${messages} communication threads`],
+                  ["Members", `${members} network members`],
+                  ["AI Routing", loading ? "Loading..." : "active in background"],
+                ].map(([left, right]) => (
+                  <div
+                    key={left}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      borderBottom: "1px solid rgba(255,255,255,.08)",
+                      paddingBottom: 12,
+                      color: "#cbd5e1",
+                      fontWeight: 850,
+                    }}
+                  >
+                    <span style={{ color: "white" }}>{left}</span>
+                    <span>{loading ? "Loading..." : right}</span>
                   </div>
                 ))}
               </div>
@@ -369,23 +544,220 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section style={panel}>
-          <div style={label}>Primary Member Paths</div>
-          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 14px", letterSpacing: "-.045em" }}>
-            Simple front door. Smart backend.
+        <section className="vf-four" style={{ marginBottom: 20 }}>
+          <Metric
+            label="Projects"
+            value={String(openOpportunities)}
+            sub="Active opportunities and deal command rooms."
+            tone="blue"
+          />
+
+          <Metric
+            label="Pain"
+            value={String(openPain)}
+            sub="Operational problems, pressure, and rescue signals."
+            tone="gold"
+          />
+
+          <Metric
+            label="Messages"
+            value={String(messages)}
+            sub="Controlled member and owner conversations."
+            tone="green"
+          />
+
+          <Metric
+            label="Members"
+            value={String(members)}
+            sub="Private network capacity behind the routing engine."
+            tone="red"
+          />
+        </section>
+
+        <section style={section}>
+          <div style={eyebrow}>AI Routing Layer</div>
+
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 8px", letterSpacing: "-.04em" }}>
+            The system works behind the scenes.
           </h2>
-          <div className="vf-grid">
-            <ActionCard primary tag="Deals" title="Projects" body="Open deal rooms, review economics, photos, summaries, and next-best action." href="/projects" />
-            <ActionCard primary tag="Pressure" title="Pain Feed" body="Review operational problems, urgency, bottlenecks, and resolution paths." href="/pain-feed" />
-            <ActionCard tag="Create" title="Create Deal" body="Submit an opportunity and let VaultForge build the intelligence room." href="/submit" />
-            <ActionCard tag="Einstein Intake" title="Submit Pain" body="Send a real-world problem into the AI routing brain." href="/pain" />
-            <ActionCard tag="Communication" title="Messages" body="Keep owner/member communication tied to the opportunity or problem." href="/messages" />
+
+          <p style={{ ...muted, fontSize: 18, maxWidth: 960 }}>
+            Routing, signals, introductions, activity, and alerts are no longer member-facing workflow buttons.
+            They are hidden orchestration signals that help VaultForge recommend where attention should go next.
+          </p>
+
+          <Bar
+            label="Market pressure"
+            value={pressureValue}
+            right={`${openPain} pain · ${openOpportunities} projects · ${messages} messages`}
+          />
+
+          <Bar
+            label="Execution movement"
+            value={movementValue}
+            right={`${stats.activity || 0} background events · ${messages} messages`}
+          />
+
+          <Bar
+            label="AI routing activity"
+            value={aiRoutingValue}
+            right="routing, matching, alerts, and introductions stay background"
+          />
+        </section>
+
+        <section style={section}>
+          <div style={eyebrow}>AI Noticed</div>
+
+          <h2
+            style={{
+              fontSize: "clamp(42px,7vw,72px)",
+              lineHeight: 0.94,
+              letterSpacing: "-.06em",
+              margin: "10px 0 14px",
+            }}
+          >
+            What matters next.
+          </h2>
+
+          <div className="vf-four" style={{ marginTop: 20 }}>
+            <Notice
+              title="Opportunity Flow"
+              body={
+                openOpportunities
+                  ? "Project rooms are active. Review the best next move inside each deal room instead of chasing manual signal pages."
+                  : "No active project rooms yet. Submit a deal to create an AI-read opportunity room."
+              }
+              tone="blue"
+            />
+
+            <Notice
+              title="Pressure Detection"
+              body={
+                openPain
+                  ? "Pain records are live. VaultForge uses those records as pressure signals for routing, capital, buyer, and operator fit."
+                  : "No open pain records yet. Submit pain when a deal, asset, owner, or project needs resolution."
+              }
+              tone="red"
+            />
+
+            <Notice
+              title="Network Execution"
+              body={
+                messages
+                  ? "Messages are active. Keep execution tied to the room so the network context stays clean."
+                  : "No active message threads yet. Use room-level contact buttons when a project or pain record needs action."
+              }
+              tone="green"
+            />
+
+            <Notice
+              title="Hidden Routing"
+              body="Signals, alerts, introductions, and routing activity remain active as infrastructure, not member navigation clutter."
+              tone="gold"
+            />
           </div>
         </section>
 
-        <footer style={{ borderTop: "1px solid rgba(255,255,255,.10)", color: "#94a3b8", padding: "20px 0", display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", letterSpacing: ".18em", fontSize: 12, textTransform: "uppercase" }}>
+        <section style={section}>
+          <div style={eyebrow}>Member Workbench</div>
+
+          <h2
+            style={{
+              fontSize: "clamp(42px,7vw,72px)",
+              lineHeight: 0.94,
+              letterSpacing: "-.06em",
+              margin: "10px 0 14px",
+            }}
+          >
+            Work the rooms. Let AI route.
+          </h2>
+
+          <p style={{ ...muted, fontSize: 18, maxWidth: 980 }}>
+            The member experience stays simple: submit, review, message, and execute.
+            VaultForge handles matching intelligence in the background.
+          </p>
+
+          <div className="vf-four" style={{ marginTop: 22 }}>
+            <QueueCard
+              tag="Deals"
+              title="Projects"
+              body="Open active deal rooms, review economics, photos, AI summary, and best next move."
+              href="/projects"
+              tone="blue"
+            />
+
+            <QueueCard
+              tag="Pain"
+              title="Pain Feed"
+              body="Review pressure rooms, distressed situations, stalled execution, funding gaps, and rescue opportunities."
+              href="/pain-feed"
+              tone="red"
+            />
+
+            <QueueCard
+              tag="Create"
+              title="Submit New"
+              body="Create a deal room or submit a pain signal. VaultForge turns it into intelligence."
+              href="/submit"
+              tone="gold"
+            />
+
+            <QueueCard
+              tag="Message"
+              title="Messages"
+              body="Coordinate with owners and members without exposing the internal routing engine."
+              href="/messages"
+              tone="green"
+            />
+
+            <QueueCard
+              tag="Network"
+              title="Members"
+              body="Review private network capacity and member context when you need the right operator."
+              href="/members"
+              tone="gold"
+            />
+          </div>
+        </section>
+
+        <section style={section}>
+          <div style={eyebrow}>Operating Model</div>
+
+          <h2 style={{ fontSize: 36, lineHeight: 1, margin: "10px 0 18px", letterSpacing: "-.035em" }}>
+            Member-facing simplicity. AI-facing complexity.
+          </h2>
+
+          <div className="vf-four">
+            {[
+              ["1. Submit", "Deals and pain records create intelligence rooms."],
+              ["2. Read", "VaultForge interprets numbers, pressure, context, and execution fit."],
+              ["3. Route", "The AI routing layer works silently behind the member interface."],
+              ["4. Execute", "Members use rooms and messages to move opportunities toward resolution."],
+            ].map(([title, text]) => (
+              <div key={title} style={glass}>
+                <strong style={{ color: "#f8e7b0" }}>{title}</strong>
+                <p style={muted}>{text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <footer
+          style={{
+            borderTop: "1px solid rgba(255,255,255,.10)",
+            color: "#94a3b8",
+            padding: "20px 0",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            letterSpacing: ".18em",
+            fontSize: 12,
+            textTransform: "uppercase",
+          }}
+        >
           <span>VaultForge OS</span>
-          <span>AI Routing Behind Rooms</span>
+          <span>AI Routing Hidden · Rooms Visible</span>
           <span>Private Real Estate Intelligence Network</span>
         </footer>
       </div>
