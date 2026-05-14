@@ -9,7 +9,7 @@ const TABLE = "vf_deals";
 type Row = Record<string, any>;
 
 function supabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -48,15 +48,61 @@ function first(...values: unknown[]) {
   return "";
 }
 
+function json(data: Record<string, any>, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}
+
+function metadataOf(row: Row | null | undefined) {
+  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+}
+
+function field(row: Row, ...keys: string[]) {
+  const m = metadataOf(row);
+  const values: unknown[] = [];
+
+  for (const key of keys) {
+    values.push(row[key]);
+    values.push(m[key]);
+  }
+
+  return first(...values);
+}
+
 function parseArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item: any) => {
+        if (typeof item === "string") return clean(item);
+        if (item && typeof item === "object") {
+          return clean(
+            item.url ||
+              item.publicUrl ||
+              item.public_url ||
+              item.photo_url ||
+              item.image_url ||
+              item.main_photo_url
+          );
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
 
   const text = clean(value);
   if (!text) return [];
 
   try {
     const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
+    if (Array.isArray(parsed)) return parseArray(parsed);
   } catch {
     // Continue.
   }
@@ -65,10 +111,6 @@ function parseArray(value: unknown): string[] {
     .split(/[,\n|;]/)
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function metadataOf(row: Row) {
-  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function photoUrls(row: Row) {
@@ -93,107 +135,195 @@ function photoUrls(row: Row) {
 }
 
 function normalizeDeal(row: Row) {
-  const m = metadataOf(row);
   const photos = photoUrls(row);
-  const id = first(row.id, row.deal_id, row.project_id, row.item_id, m.id, m.deal_id, m.project_id, m.item_id);
-  const asking = first(row.asking_price, row.price, m.asking_price, m.price);
-  const arv = first(row.arv, row.arv_value, row.estimated_value, m.arv, m.arv_value, m.estimated_value);
-  const repairs = first(row.repair_estimate, row.repairs_needed, row.estimated_repairs, m.repair_estimate, m.repairs_needed, m.estimated_repairs);
-  const propertyType = first(row.property_type, row.deal_type, row.asset_type, m.property_type, m.deal_type, m.asset_type, "Deal");
-  const strategy = first(row.strategy, row.exit_strategy, m.strategy, m.exit_strategy);
-  const routingNeeds = first(row.routing_needs, row.deal_needs, row.needs, m.routing_needs, m.deal_needs, m.needs);
-  const distress = first(row.distress_signals, row.seller_situation, m.distress_signals, m.seller_situation);
+
+  const id = field(row, "id", "deal_id", "project_id", "item_id");
+  const signalId = field(row, "signal_id", "signalId", "canonical_event_id");
+  const routingId = field(row, "routing_id", "routingId") || signalId;
+  const activityId = field(row, "activity_id", "activityId");
+
+  const title = field(row, "title", "deal_title", "project_title", "headline", "name", "address") || "VaultForge Deal";
+  const propertyType = field(row, "property_type", "deal_type", "asset_type") || "Deal";
+
+  const city = field(row, "city");
+  const state = field(row, "state");
+  const market =
+    [city, state].filter(Boolean).join(", ") ||
+    field(row, "market", "location", "address", "property_address");
+
+  const asking = field(row, "asking_price", "price", "ask", "purchase_price");
+  const arv = field(row, "arv", "arv_value", "estimated_value", "value", "after_repair_value");
+  const repairs = field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
+
+  const strategy = field(row, "strategy", "exit_strategy", "deal_strategy");
+  const exitStrategy = field(row, "exit_strategy", "strategy");
+
+  const routingNeeds = field(row, "routing_needs", "deal_needs", "needs", "route_context");
+  const distress = field(row, "distress_signals", "seller_pressure", "pain_signals");
+  const sellerSituation = field(row, "seller_situation", "private_notes", "access_notes", "distress_signals", "description");
+
   const routeSummary = first(
-    row.ai_route_summary,
-    row.route_summary,
-    row.routing_summary,
-    row.urgency_reason,
-    row.routing_reason,
-    row.description,
-    row.seller_situation,
-    m.ai_route_summary,
-    m.route_summary,
-    m.routing_summary,
-    m.urgency_reason,
-    m.routing_reason,
-    m.description,
-    m.seller_situation
+    field(row, "ai_route_summary"),
+    field(row, "route_summary"),
+    field(row, "routing_summary"),
+    field(row, "urgency_reason"),
+    field(row, "routing_reason"),
+    field(row, "description"),
+    sellerSituation
   );
 
   return {
-    ...m,
+    ...metadataOf(row),
     ...row,
-    id,
-    deal_id: first(row.deal_id, m.deal_id, id),
-    item_id: first(row.item_id, m.item_id, id),
-    project_id: first(row.project_id, m.project_id, id),
 
-    title: first(row.title, row.deal_title, row.name, row.address, m.title, m.deal_title, m.name, m.address, "VaultForge Deal"),
-    status: first(row.status, row.project_status, row.routing_status, m.status, m.project_status, m.routing_status, "active"),
+    id,
+    deal_id: field(row, "deal_id") || id,
+    item_id: field(row, "item_id") || id,
+    project_id: field(row, "project_id") || id,
+    related_deal_id: field(row, "related_deal_id") || id,
+
+    signal_id: signalId,
+    routing_id: routingId,
+    activity_id: activityId,
+    canonical_event_id: field(row, "canonical_event_id") || signalId,
+
+    title,
+    deal_title: field(row, "deal_title") || title,
+    project_title: field(row, "project_title") || title,
+    status: field(row, "status", "project_status", "routing_status") || "active",
 
     property_type: propertyType,
-    deal_type: first(row.deal_type, m.deal_type, propertyType),
-    asset_type: first(row.asset_type, m.asset_type, propertyType),
+    deal_type: field(row, "deal_type") || propertyType,
+    asset_type: field(row, "asset_type") || propertyType,
 
-    city: first(row.city, m.city),
-    state: first(row.state, row.market, m.state, m.market),
-    market: [first(row.city, m.city), first(row.state, row.market, m.state, m.market)].filter(Boolean).join(", ") || first(row.location, row.address, m.location, m.address),
+    city,
+    state,
+    market,
+    address: field(row, "address", "property_address", "location"),
+    property_address: field(row, "property_address", "address", "location"),
+    location: field(row, "location", "address", "property_address"),
 
     asking_price: asking,
-    price: first(row.price, m.price, asking),
+    price: field(row, "price") || asking,
+    ask: field(row, "ask") || asking,
+    purchase_price: field(row, "purchase_price") || asking,
+
     arv,
-    arv_value: first(row.arv_value, m.arv_value, arv),
+    arv_value: field(row, "arv_value") || arv,
+    estimated_value: field(row, "estimated_value") || arv,
+    after_repair_value: field(row, "after_repair_value") || arv,
+
     repair_estimate: repairs,
-    repairs_needed: first(row.repairs_needed, m.repairs_needed, repairs),
+    repairs_needed: field(row, "repairs_needed") || repairs,
+    estimated_repairs: field(row, "estimated_repairs") || repairs,
+    rehab_budget: field(row, "rehab_budget") || repairs,
+    repair_budget: field(row, "repair_budget") || repairs,
 
     strategy,
-    exit_strategy: first(row.exit_strategy, m.exit_strategy, strategy),
+    exit_strategy: exitStrategy,
+    deal_strategy: field(row, "deal_strategy") || strategy,
+
+    beds: field(row, "beds", "bedrooms"),
+    bedrooms: field(row, "bedrooms", "beds"),
+    baths: field(row, "baths", "bathrooms"),
+    bathrooms: field(row, "bathrooms", "baths"),
+    square_feet: field(row, "square_feet", "sqft", "building_sqft"),
+    sqft: field(row, "sqft", "square_feet", "building_sqft"),
+    building_sqft: field(row, "building_sqft", "square_feet", "sqft"),
+
+    year_built: field(row, "year_built", "built_year"),
+    built_year: field(row, "built_year", "year_built"),
+
+    occupancy: field(row, "occupancy", "occupancy_status", "tenant_status"),
+    occupancy_status: field(row, "occupancy_status", "occupancy", "tenant_status"),
+    tenant_status: field(row, "tenant_status", "occupancy", "occupancy_status"),
+
+    zoning: field(row, "zoning", "zoning_type"),
+    zoning_type: field(row, "zoning_type", "zoning"),
+
+    acres: field(row, "acres", "land_acres"),
+    land_acres: field(row, "land_acres", "acres"),
+
+    utilities: field(row, "utilities", "utility_access", "access_notes"),
+    utility_access: field(row, "utility_access", "utilities", "access_notes"),
+
+    road_access: field(row, "road_access", "access", "access_notes"),
+    access: field(row, "access", "road_access", "access_notes"),
+
+    noi: field(row, "noi", "net_operating_income"),
+    net_operating_income: field(row, "net_operating_income", "noi"),
+    cap_rate: field(row, "cap_rate"),
+
+    target_buyer: field(row, "target_buyer"),
+    capital_needed: field(row, "capital_needed"),
+    ideal_lender: field(row, "ideal_lender"),
+    contractor_scope: field(row, "contractor_scope"),
+    operator_scope: field(row, "operator_scope"),
+    jv_structure: field(row, "jv_structure"),
+    title_issue: field(row, "title_issue"),
 
     routing_needs: routingNeeds,
-    deal_needs: first(row.deal_needs, m.deal_needs, routingNeeds),
-    needs: first(row.needs, m.needs, routingNeeds),
+    deal_needs: field(row, "deal_needs") || routingNeeds,
+    needs: field(row, "needs") || routingNeeds,
+    route_context: field(row, "route_context") || routingNeeds,
 
-    distress_signals: first(row.distress_signals, m.distress_signals, distress),
-    seller_situation: first(row.seller_situation, m.seller_situation, distress),
+    distress_signals: distress,
+    seller_pressure: field(row, "seller_pressure") || distress,
+    seller_situation: sellerSituation,
+    access_notes: field(row, "access_notes", "private_notes", "seller_situation"),
+    private_notes: field(row, "private_notes", "access_notes", "seller_situation"),
 
-    ai_route_summary: first(row.ai_route_summary, m.ai_route_summary, routeSummary),
-    route_summary: first(row.route_summary, m.route_summary, routeSummary),
-    routing_summary: first(row.routing_summary, m.routing_summary, routeSummary),
+    description: field(row, "description", "notes") || routeSummary,
+    notes: field(row, "notes", "description") || routeSummary,
+    ai_route_summary: field(row, "ai_route_summary") || routeSummary,
+    route_summary: field(row, "route_summary") || routeSummary,
+    routing_summary: field(row, "routing_summary") || routeSummary,
 
-    beds: first(row.beds, row.bedrooms, m.beds, m.bedrooms),
-    bedrooms: first(row.bedrooms, row.beds, m.bedrooms, m.beds),
-    baths: first(row.baths, row.bathrooms, m.baths, m.bathrooms),
-    bathrooms: first(row.bathrooms, row.baths, m.bathrooms, m.baths),
-    square_feet: first(row.square_feet, row.sqft, row.building_sqft, m.square_feet, m.sqft, m.building_sqft),
-    sqft: first(row.sqft, row.square_feet, row.building_sqft, m.sqft, m.square_feet, m.building_sqft),
-    building_sqft: first(row.building_sqft, row.square_feet, row.sqft, m.building_sqft, m.square_feet, m.sqft),
-
-    year_built: first(row.year_built, m.year_built),
-    occupancy: first(row.occupancy, m.occupancy),
-    zoning: first(row.zoning, m.zoning),
-    acres: first(row.acres, row.land_acres, m.acres, m.land_acres),
-    land_acres: first(row.land_acres, row.acres, m.land_acres, m.acres),
-    utilities: first(row.utilities, m.utilities),
-    road_access: first(row.road_access, m.road_access),
-    noi: first(row.noi, m.noi),
-    cap_rate: first(row.cap_rate, m.cap_rate),
-
-    target_buyer: first(row.target_buyer, m.target_buyer),
-    capital_needed: first(row.capital_needed, m.capital_needed),
-    ideal_lender: first(row.ideal_lender, m.ideal_lender),
-    contractor_scope: first(row.contractor_scope, m.contractor_scope),
-    operator_scope: first(row.operator_scope, m.operator_scope),
-    jv_structure: first(row.jv_structure, m.jv_structure),
-    title_issue: first(row.title_issue, m.title_issue),
-
+    image_url: photos[0] || "",
+    photo_url: photos[0] || "",
+    main_photo_url: photos[0] || "",
+    primary_photo_url: photos[0] || "",
     photo_urls: photos,
-    main_photo_url: first(row.main_photo_url, m.main_photo_url, photos[0]),
+    photos: photos.map((url) => ({ url })),
+
+    owner_email: field(row, "owner_email", "submitted_by", "user_email", "member_email", "email"),
+    member_email: field(row, "member_email", "owner_email", "submitted_by", "user_email", "email"),
+    submitted_by: field(row, "submitted_by", "owner_email", "member_email", "user_email", "email"),
+    user_email: field(row, "user_email", "owner_email", "member_email", "submitted_by", "email"),
+
     source_table: TABLE,
+    metadata: metadataOf(row),
   };
 }
 
+function matchesId(row: Row, id: string) {
+  return [
+    field(row, "id"),
+    field(row, "deal_id"),
+    field(row, "project_id"),
+    field(row, "item_id"),
+    field(row, "related_deal_id"),
+    field(row, "signal_id"),
+    field(row, "routing_id"),
+    field(row, "activity_id"),
+    field(row, "canonical_event_id"),
+  ]
+    .map(clean)
+    .includes(id);
+}
+
 async function findDeal(supabase: any, id: string) {
-  const columns = ["id", "deal_id", "project_id", "item_id"];
+  const columns = [
+    "id",
+    "deal_id",
+    "project_id",
+    "item_id",
+    "related_deal_id",
+    "signal_id",
+    "routing_id",
+    "activity_id",
+    "canonical_event_id",
+  ];
 
   for (const column of columns) {
     try {
@@ -210,16 +340,24 @@ async function findDeal(supabase: any, id: string) {
   }
 
   try {
-    const { data, error } = await supabase.from(TABLE).select("*").limit(250);
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
 
     if (!error && Array.isArray(data)) {
-      return (
-        data.find((row: Row) =>
-          [row.id, row.deal_id, row.project_id, row.item_id, metadataOf(row).id, metadataOf(row).deal_id, metadataOf(row).project_id, metadataOf(row).item_id]
-            .map(clean)
-            .includes(id)
-        ) || null
-      );
+      return data.find((row: Row) => matchesId(row, id)) || null;
+    }
+  } catch {
+    // Fall through.
+  }
+
+  try {
+    const { data, error } = await supabase.from(TABLE).select("*").limit(500);
+
+    if (!error && Array.isArray(data)) {
+      return data.find((row: Row) => matchesId(row, id)) || null;
     }
   } catch {
     // Fail below.
@@ -233,29 +371,30 @@ export async function GET(request: Request) {
     const id = clean(new URL(request.url).searchParams.get("id") || "");
 
     if (!id) {
-      return NextResponse.json({ ok: false, error: "Missing deal id." }, { status: 400 });
+      return json({ ok: false, error: "Missing deal id." }, 400);
     }
 
     const supabase = supabaseClient();
     const deal = await findDeal(supabase, id);
 
     if (!deal) {
-      return NextResponse.json({ ok: false, error: "Deal not found." }, { status: 404 });
+      return json({ ok: false, error: "Deal not found.", id }, 404);
     }
 
-    return NextResponse.json({
+    return json({
       ok: true,
       deal: normalizeDeal(deal),
       source: "api/deal/detail",
+      table: TABLE,
     });
   } catch (error: any) {
-    return NextResponse.json(
+    return json(
       {
         ok: false,
         error: "Could not load deal.",
         details: error?.message || String(error),
       },
-      { status: 500 }
+      500
     );
   }
 }
