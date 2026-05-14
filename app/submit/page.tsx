@@ -249,6 +249,53 @@ function moneyText(value: string) {
   });
 }
 
+function shortJson(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value || "");
+  }
+}
+
+function backendErrorText(data: Record<string, any>, fallback: string) {
+  const parts = [
+    data?.error ? `Error: ${data.error}` : "",
+    data?.supabase_error ? `Supabase: ${data.supabase_error}` : "",
+    data?.code ? `Code: ${data.code}` : "",
+    data?.details ? `Details: ${data.details}` : "",
+    data?.hint ? `Hint: ${data.hint}` : "",
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(" | ") : fallback;
+}
+
+function debugPayload(data: Record<string, any> | null) {
+  if (!data) return null;
+
+  return {
+    ok: data.ok,
+    error: data.error,
+    supabase_error: data.supabase_error,
+    code: data.code,
+    details: data.details,
+    hint: data.hint,
+    payload_preview: data.payload_preview,
+    field_check: data.field_check,
+    attempts: Array.isArray(data.attempts)
+      ? data.attempts.map((attempt: any) => ({
+          table: attempt.table,
+          ok: attempt.ok,
+          code: attempt.code,
+          error: attempt.error,
+          details: attempt.details,
+          hint: attempt.hint,
+          removed_columns: attempt.removed_columns,
+          kept_columns: attempt.kept_columns,
+        }))
+      : undefined,
+  };
+}
+
 function Field({
   labelText,
   name,
@@ -645,7 +692,7 @@ export default function SubmitDealPage() {
       setLastResponse(data);
 
       if (!response.ok || data?.ok === false) {
-        throw new Error(data?.error || "Deal save failed.");
+        throw new Error(backendErrorText(data, "Deal save failed."));
       }
 
       const check = data?.field_check || {};
@@ -719,10 +766,25 @@ export default function SubmitDealPage() {
           <section style={card}>
             <div style={label}>Save Status</div>
             <h2 style={{ margin: "10px 0 0", fontSize: 30 }}>{status}</h2>
-            {lastResponse?.field_check ? (
-              <pre style={{ whiteSpace: "pre-wrap", color: "#cbd5e1", fontSize: 13, marginTop: 12 }}>
-                {JSON.stringify(lastResponse.field_check, null, 2)}
-              </pre>
+            {lastResponse ? (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ ...label, fontSize: 11 }}>Backend Debug</div>
+                <pre
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    color: "#cbd5e1",
+                    fontSize: 13,
+                    marginTop: 10,
+                    padding: 14,
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,.12)",
+                    background: "rgba(0,0,0,.26)",
+                    overflowX: "auto",
+                  }}
+                >
+                  {shortJson(debugPayload(lastResponse))}
+                </pre>
+              </div>
             ) : null}
           </section>
         ) : null}
