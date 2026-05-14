@@ -15,6 +15,17 @@ function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
+function compact(value: unknown) {
+  return clean(value).replace(/\s+/g, " ");
+}
+
+function fingerprint(value: unknown) {
+  return compact(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
 
@@ -188,11 +199,25 @@ function photosOf(row: Row) {
   );
 }
 
+function photoKey(url: string) {
+  const cleaned = clean(url).split("?")[0];
+  const parts = cleaned.split("/").filter(Boolean);
+  return fingerprint(parts.slice(-2).join("-") || cleaned);
+}
+
+function numberValue(value: unknown) {
+  const text = clean(value);
+  if (!text) return NaN;
+
+  const number = Number(text.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(number) ? number : NaN;
+}
+
 function money(value: unknown) {
   const text = clean(value);
   if (!text) return "Not listed";
 
-  const number = Number(text.replace(/[^\d.-]/g, ""));
+  const number = numberValue(text);
   if (!Number.isFinite(number)) return text;
 
   return number.toLocaleString("en-US", {
@@ -202,14 +227,33 @@ function money(value: unknown) {
   });
 }
 
+function displayValue(value: unknown, fallback = "Not listed") {
+  const text = clean(value);
+  return text || fallback;
+}
+
 function canonicalKey(row: Row) {
+  const title = fingerprint(titleOf(row));
+  const market = fingerprint(marketOf(row));
+  const owner = fingerprint(ownerOf(row));
+  const address = fingerprint(field(row, "address", "property_address", "location"));
+  const ask = fingerprint(field(row, "asking_price", "price"));
+  const arv = fingerprint(field(row, "arv", "arv_value", "estimated_value"));
+  const firstPhoto = photoKey(photosOf(row)[0] || "");
+
+  const strongParts = [title, market, owner, address || firstPhoto, ask || arv].filter(Boolean);
+
+  if (title && (market || address || firstPhoto || ask || arv)) {
+    return `project-fingerprint:${strongParts.join("|")}`;
+  }
+
   return (
     field(row, "canonical_event_id") ||
     field(row, "deal_id") ||
     field(row, "project_id") ||
     field(row, "item_id") ||
     field(row, "id") ||
-    `${titleOf(row)}-${marketOf(row)}-${money(field(row, "asking_price", "price"))}`
+    `project-fallback:${title || "untitled"}|${market || "unknown"}`
   );
 }
 
@@ -234,6 +278,11 @@ function completenessScore(row: Row) {
     "routing_needs",
     "deal_needs",
     "distress_signals",
+    "urgency",
+    "contractor_scope",
+    "capital_needed",
+    "operator_scope",
+    "target_buyer",
     "route_summary",
     "ai_route_summary",
     "routing_summary",
@@ -243,14 +292,26 @@ function completenessScore(row: Row) {
     if (field(row, key)) score += 1;
   }
 
-  if (photosOf(row).length) score += 3;
+  if (photosOf(row).length) score += 5;
 
   const source = first(row.source_table, row._source_table, row.source).toLowerCase();
 
   if (source.includes("vf_deals")) score += 100;
   if (source.includes("deal")) score += 20;
 
+  const status = statusOf(row).toLowerCase();
+  if (status.includes("active") || status.includes("new") || status.includes("open")) score += 3;
+  if (status.includes("archived") || status.includes("deleted")) score -= 10;
+
   return score;
+}
+
+function mergeText(primary: unknown, secondary: unknown) {
+  const a = clean(primary);
+  const b = clean(secondary);
+
+  if (a && b && a !== b) return a.length >= b.length ? a : b;
+  return a || b;
 }
 
 function mergeRows(primary: Row, secondary: Row) {
@@ -264,6 +325,28 @@ function mergeRows(primary: Row, secondary: Row) {
       ...primaryMeta,
     },
   };
+
+  const keysToKeepLongest = [
+    "ai_route_summary",
+    "route_summary",
+    "routing_summary",
+    "summary",
+    "description",
+    "notes",
+    "strategy_notes",
+    "routing_needs",
+    "deal_needs",
+    "distress_signals",
+    "contractor_scope",
+    "operator_scope",
+    "capital_needed",
+    "target_buyer",
+  ];
+
+  for (const key of keysToKeepLongest) {
+    const value = mergeText(primary[key], secondary[key]);
+    if (value) merged[key] = value;
+  }
 
   const photos = Array.from(
     new Set(
@@ -291,26 +374,94 @@ function mergeRows(primary: Row, secondary: Row) {
   return merged;
 }
 
-function routingSummary(row: Row) {
-  const summary = noteOf(row);
-  const needs = field(row, "routing_needs", "deal_needs", "needs");
-  const signals = field(row, "distress_signals");
+function marginSpread(row: Row) {
+  const ask = numberValue(field(row, "asking_price", "price"));
+  const arv = numberValue(field(row, "arv", "arv_value", "estimated_value"));
+  const repairs = numberValue(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"));
+
+  if (!Number.isFinite(ask) || !Number.isFinite(arv)) return "";
+
+  const spread = arv - ask - (Number.isFinite(repairs) ? repairs : 0);
+  if (!Number.isFinite(spread)) return "";
+
+  const formatted = spread.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+
+  if (spread > 0) return `Implied room before soft costs: ${formatted}.`;
+  if (spread < 0) return `Pricing pressure: ${formatted} before soft costs.`;
+  return "Pricing spread is neutral before soft costs.";
+}
+
+function bestFit(row: Row) {
+  const asset = assetOf(row).toLowerCase();
+  const strategy = field(row, "strategy", "exit_strategy").toLowerCase();
+  const needs = field(row, "routing_needs", "deal_needs", "needs").toLowerCase();
+  const contractor = field(row, "contractor_scope");
+  const capital = field(row, "capital_needed");
+
+  if (needs.includes("buyer") || strategy.includes("flip")) {
+    if (contractor) return "cash buyer or flip operator with contractor capacity";
+    return "cash buyer or flip operator";
+  }
+
+  if (capital || needs.includes("capital") || needs.includes("lender")) {
+    return "private lender, capital partner, or JV operator";
+  }
+
+  if (asset.includes("land")) return "land buyer, builder, or entitlement operator";
+  if (asset.includes("commercial")) return "commercial operator or capitalized sponsor";
+
+  return "local operator with execution capacity";
+}
+
+function smartSummary(row: Row) {
+  const asset = displayValue(assetOf(row), "project").toLowerCase();
   const strategy = field(row, "strategy", "exit_strategy");
   const market = marketOf(row);
+  const ask = money(field(row, "asking_price", "price"));
+  const arv = money(field(row, "arv", "arv_value", "estimated_value"));
+  const repairs = money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"));
+  const needs = field(row, "routing_needs", "deal_needs", "needs");
+  const signals = field(row, "distress_signals");
+  const urgency = field(row, "urgency", "timeline", "priority");
+  const contractor = field(row, "contractor_scope");
   const owner = ownerOf(row);
 
-  const parts = [
-    summary && summary !== "Project ready for review." ? summary : "",
-    needs ? `Needs: ${needs}` : "",
-    signals ? `Signal pressure: ${signals}` : "",
-    strategy ? `Likely strategy: ${strategy}` : "",
-    market && market !== "Market not listed" ? `Market context: ${market}` : "",
-    owner ? `Owner/contact: ${owner}` : "",
+  const lead = [
+    `Route this ${asset}`,
+    strategy ? `as a ${strategy} opportunity` : "as an operator-reviewed opportunity",
+    market && market !== "Market not listed" ? `in ${market}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const economics = [
+    ask !== "Not listed" ? `${ask} ask` : "",
+    arv !== "Not listed" ? `${arv} ARV` : "",
+    repairs !== "Not listed" ? `${repairs} repairs` : "",
   ].filter(Boolean);
 
-  return parts.length
-    ? parts.join(" • ")
-    : "Routing context is light. Add buyer type, lender need, contractor scope, timeline, seller pressure, or next action to improve matching.";
+  const execution = [
+    needs ? `needs ${needs}` : "",
+    signals ? `pressure signal: ${signals}` : "",
+    urgency ? `urgency: ${urgency}` : "",
+    contractor ? `contractor scope: ${contractor}` : "",
+  ].filter(Boolean);
+
+  const lines = [
+    `${lead}.`,
+    economics.length ? `Economics: ${economics.join(" / ")}. ${marginSpread(row)}`.trim() : "",
+    execution.length ? `Execution read: ${execution.join(" / ")}.` : "",
+    `Best-fit route: ${bestFit(row)}.`,
+    owner ? `Next action: contact ${owner}, verify access, confirm timeline, and route to qualified members.` : "Next action: verify owner contact, access, timeline, and route to qualified members.",
+  ].filter(Boolean);
+
+  return lines.join(" ");
 }
 
 function missingInfo(row: Row) {
@@ -435,26 +586,19 @@ function DetailGrid({ row }: { row: Row }) {
     ["Ask", money(field(row, "asking_price", "price"))],
     ["ARV", money(field(row, "arv", "arv_value", "estimated_value"))],
     ["Repairs", money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"))],
-    [
-      "Beds/Baths",
-      [field(row, "beds", "bedrooms"), field(row, "baths", "bathrooms")]
-        .filter(Boolean)
-        .join(" / ") || "Not listed",
-    ],
-    [
-      "Sqft/Acres",
-      field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres") ||
-        "Not listed",
-    ],
-    ["Strategy", field(row, "strategy", "exit_strategy") || "Not listed"],
+    ["Beds", displayValue(field(row, "beds", "bedrooms"))],
+    ["Baths", displayValue(field(row, "baths", "bathrooms"))],
+    ["Sqft/Acres", displayValue(field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres"))],
+    ["Strategy", displayValue(field(row, "strategy", "exit_strategy"))],
+    ["Occupancy", displayValue(field(row, "occupancy", "occupancy_status"))],
   ];
 
   return (
     <div className="vf-detail-grid">
       {values.map(([k, v]) => (
-        <div key={k} style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: 12, background: "rgba(0,0,0,.14)" }}>
-          <div style={{ color: "#94a3b8", fontSize: 11, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 850 }}>{k}</div>
-          <div style={{ marginTop: 6, fontWeight: 950 }}>{v}</div>
+        <div key={k} className="vf-detail-tile">
+          <div className="vf-detail-label">{k}</div>
+          <div className="vf-detail-value">{v}</div>
         </div>
       ))}
     </div>
@@ -506,16 +650,16 @@ function ProjectCard({
         </div>
 
         <h3 className="vf-card-title">{titleOf(row)}</h3>
-        <p style={{ ...muted, marginTop: 0 }}>{noteOf(row)}</p>
+        <p className="vf-one-line">{noteOf(row)}</p>
 
         <DetailGrid row={row} />
 
         <section className="vf-routing-box">
-          <div style={{ ...label, fontSize: 11 }}>AI Routing Context</div>
-          <p style={{ ...muted, margin: "8px 0 0" }}>{routingSummary(row)}</p>
+          <div style={{ ...label, fontSize: 11 }}>Bloomberg AI Brief</div>
+          <p style={{ ...muted, margin: "8px 0 0" }}>{smartSummary(row)}</p>
           {missing.length ? (
             <p style={{ color: "#f8e7b0", margin: "10px 0 0", fontWeight: 850 }}>
-              Missing for stronger routing: {missing.join(", ")}.
+              Missing fields for sharper routing: {missing.join(", ")}.
             </p>
           ) : null}
         </section>
@@ -744,11 +888,37 @@ export default function ProjectsPage() {
           letter-spacing: -.04em;
         }
 
+        .vf-one-line {
+          color: #cbd5e1;
+          line-height: 1.45;
+          margin-top: 0;
+        }
+
         .vf-detail-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
           gap: 10px;
           margin-top: 14px;
+        }
+
+        .vf-detail-tile {
+          border: 1px solid rgba(255,255,255,.10);
+          border-radius: 16px;
+          padding: 12px;
+          background: rgba(0,0,0,.14);
+        }
+
+        .vf-detail-label {
+          color: #94a3b8;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: .12em;
+          font-weight: 850;
+        }
+
+        .vf-detail-value {
+          margin-top: 6px;
+          font-weight: 950;
         }
 
         .vf-routing-box {
@@ -866,7 +1036,7 @@ export default function ProjectsPage() {
             <div style={{ display: "grid", gap: 14 }}>
               {visibleItems.map((item, index) => (
                 <ProjectCard
-                  key={first(field(item, "canonical_event_id"), idOf(item), signalIdOf(item), String(index))}
+                  key={first(canonicalKey(item), idOf(item), signalIdOf(item), String(index))}
                   row={item}
                   viewer={email}
                   onHide={hideProject}
