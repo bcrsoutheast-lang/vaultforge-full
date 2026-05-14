@@ -278,49 +278,36 @@ function extractUploadUrl(data: any) {
 }
 
 async function upload(file: File, email: string) {
-  const endpoints = [
-    "/api/deal/upload-photo",
-    "/api/uploads/deal",
-    "/api/uploads/project",
-    "/api/uploads/pain",
-  ];
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("email", email);
 
-  const errors: string[] = [];
+  const res = await fetch("/api/uploads/pain", {
+    method: "POST",
+    headers: {
+      "x-vf-email": email,
+    },
+    body: formData,
+  });
 
-  for (const endpoint of endpoints) {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("photo", file);
-    formData.append("image", file);
-    formData.append("email", email);
-    formData.append("owner_email", email);
-    formData.append("member_email", email);
-    formData.append("source", "deal");
-    formData.append("folder", "deals");
+  const data = await safeJson(res);
+  const url = extractUploadUrl(data);
 
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "x-vf-email": email,
-        },
-        body: formData,
-      });
-
-      const data = await safeJson(res);
-      const url = extractUploadUrl(data);
-
-      if (res.ok && data?.ok !== false && url) {
-        return url;
-      }
-
-      errors.push(`${endpoint}: ${data?.error || data?.details || res.statusText || "upload failed"}`);
-    } catch (error: any) {
-      errors.push(`${endpoint}: ${error?.message || String(error)}`);
-    }
+  if (!res.ok) {
+    throw new Error(data?.error || data?.details || `Photo upload failed with status ${res.status}.`);
   }
 
-  throw new Error(`Photo upload failed. Tried ${endpoints.length} upload routes. ${errors.slice(0, 3).join(" | ")}`);
+  if (data?.ok === false || !url) {
+    const attempts = Array.isArray(data?.attempts)
+      ? data.attempts
+          .map((attempt: any) => `${attempt.bucket || "bucket"}: ${attempt.error || "failed"}`)
+          .join(" | ")
+      : "";
+
+    throw new Error(data?.error || attempts || "Photo upload failed.");
+  }
+
+  return url;
 }
 
 function strategyOptions(type: DealType) {
