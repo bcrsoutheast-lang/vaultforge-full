@@ -74,39 +74,162 @@ function first(...values: unknown[]) {
   return "";
 }
 
-function titleOf(row: Row) {
+const PAYLOAD_START = "VF_PAIN_PAYLOAD_START";
+const PAYLOAD_END = "VF_PAIN_PAYLOAD_END";
+
+function stripPayload(value: unknown) {
+  let text = clean(value);
+
+  const marker = text.indexOf(PAYLOAD_START);
+  if (marker !== -1) text = text.slice(0, marker).trim();
+
+  const jsonStart = text.indexOf('{"pain_id"');
+  if (jsonStart !== -1) text = text.slice(0, jsonStart).trim();
+
+  return text;
+}
+
+function extractPayload(row: Row) {
+  const candidates = [
+    row.note,
+    row.notes,
+    row.summary,
+    row.description,
+    row.message,
+    row.body,
+    row.route_summary,
+    row.routing_summary,
+    row.ai_summary,
+    meta(row).note,
+    meta(row).notes,
+    meta(row).summary,
+    meta(row).description,
+    meta(row).message,
+    meta(row).route_summary,
+    meta(row).routing_summary,
+    meta(row).ai_summary,
+  ].map(clean);
+
+  for (const text of candidates) {
+    const start = text.indexOf(PAYLOAD_START);
+    const end = text.indexOf(PAYLOAD_END);
+
+    if (start !== -1 && end !== -1 && end > start) {
+      const raw = text.slice(start + PAYLOAD_START.length, end).trim();
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") return parsed as Row;
+      } catch {
+        // continue
+      }
+    }
+
+    const jsonStart = text.indexOf('{"pain_id"');
+    if (jsonStart !== -1) {
+      const raw = text.slice(jsonStart).trim();
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") return parsed as Row;
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  return {};
+}
+
+function merged(row: Row) {
   const m = meta(row);
-  return first(row.title, row.signal_title, row.event_title, row.alert_title, row.subject, row.name, m.title, m.signal_title, "VaultForge Record");
+  const payload = extractPayload(row);
+  return { ...row, ...m, ...payload };
+}
+
+function money(value: unknown) {
+  const text = clean(value);
+  if (!text) return "Not listed";
+  const number = Number(text.replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(number)) return text;
+  return number.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+function smartField(row: Row, ...keys: string[]) {
+  const r = merged(row);
+  return first(...keys.map((key) => r[key]));
+}
+
+function titleOf(row: Row) {
+  return smartField(row, "title", "signal_title", "event_title", "alert_title", "pain_title", "problem_title", "headline", "subject", "name") || "VaultForge Intelligence";
 }
 
 function noteOf(row: Row) {
-  const m = meta(row);
-  return first(row.note, row.notes, row.summary, row.description, row.message, row.body, row.route_summary, m.note, m.summary, m.description, m.message, "Live VaultForge operational record.");
+  const cleanDirect = stripPayload(
+    first(
+      row.note,
+      row.notes,
+      row.summary,
+      row.description,
+      row.message,
+      row.body,
+      row.route_summary,
+      row.routing_summary,
+      row.ai_summary,
+      meta(row).note,
+      meta(row).summary,
+      meta(row).description,
+      meta(row).message
+    )
+  );
+
+  if (cleanDirect && cleanDirect.length > 12) return cleanDirect;
+
+  const r = merged(row);
+  const pieces = [
+    r.pain_title ? `Pain: ${r.pain_title}` : "",
+    r.pain_type || r.problem_type ? `Type: ${first(r.pain_type, r.problem_type)}` : "",
+    r.asset_type || r.asset_class ? `Asset: ${first(r.asset_type, r.asset_class)}` : "",
+    r.city || r.state || r.market ? `Market: ${[first(r.city), first(r.state, r.market, r.operating_state)].filter(Boolean).join(", ")}` : "",
+    r.urgency || r.priority ? `Urgency: ${first(r.urgency, r.priority, r.urgency_level)}` : "",
+    r.help_requested || r.requested_help ? `Need: ${first(r.help_requested, r.requested_help)}` : "",
+    r.primary_bottleneck ? `Bottleneck: ${r.primary_bottleneck}` : "",
+    r.fastest_path ? `Next: ${r.fastest_path}` : "",
+  ].filter(Boolean);
+
+  return pieces.join(" • ") || "AI background intelligence record. Open the related room for full context.";
 }
 
 function signalIdOf(row: Row) {
-  const m = meta(row);
-  return first(row.signal_id, row.signalId, row.alert_id, row.id, m.signal_id, m.alert_id);
+  return smartField(row, "signal_id", "signalId", "alert_id", "routing_id", "id");
 }
 
 function itemIdOf(row: Row) {
-  const m = meta(row);
-  return first(row.item_id, row.itemId, row.pain_id, row.deal_id, row.project_id, m.item_id, m.pain_id, m.deal_id, m.project_id);
+  return smartField(row, "item_id", "itemId", "pain_id", "request_id", "deal_id", "project_id");
 }
 
 function ownerEmailOf(row: Row) {
-  const m = meta(row);
-  return cleanEmail(first(row.owner_email, row.submitted_by_email, row.created_by_email, row.member_email, row.target_email, row.recipient_email, m.owner_email, m.submitted_by_email, m.created_by_email, m.member_email, m.target_email, m.recipient_email));
+  return cleanEmail(smartField(row, "owner_email", "submitted_by_email", "created_by_email", "member_email", "target_email", "recipient_email", "email"));
 }
 
 function imgOf(row: Row) {
-  const m = meta(row);
-  const photos = Array.isArray(row.photos) ? row.photos : [];
-  const photoUrls = Array.isArray(row.photo_urls) ? row.photo_urls : [];
-  const mPhotos = Array.isArray(m.photos) ? m.photos : [];
-  const mPhotoUrls = Array.isArray(m.photo_urls) ? m.photo_urls : [];
+  const r = merged(row);
+  const photos = Array.isArray(r.photos) ? r.photos : [];
+  const photoUrls = Array.isArray(r.photo_urls) ? r.photo_urls : [];
+  const files = Array.isArray(r.files) ? r.files : [];
+  const uploads = Array.isArray(r.uploads) ? r.uploads : [];
 
-  return first(row.image_url, row.photo_url, row.primary_photo_url, m.image_url, m.photo_url, photoUrls[0], mPhotoUrls[0], photos[0]?.url, photos[0], mPhotos[0]?.url, mPhotos[0]);
+  return first(
+    r.image_url,
+    r.photo_url,
+    r.primary_photo_url,
+    r.main_photo_url,
+    photoUrls[0],
+    photos[0]?.url,
+    photos[0],
+    files[0]?.url,
+    files[0],
+    uploads[0]?.url,
+    uploads[0]
+  );
 }
 
 function connectHref(row: Row, email: string) {
@@ -119,6 +242,46 @@ function connectHref(row: Row, email: string) {
   if (itemId) query.set("item_id", itemId);
 
   return `/connect/${encodeURIComponent(signalId)}?${query.toString()}`;
+}
+
+function marketOf(row: Row) {
+  const city = smartField(row, "city");
+  const state = smartField(row, "state", "market", "operating_state");
+  return [city, state].filter(Boolean).join(", ") || "Market not listed";
+}
+
+function tagsOf(row: Row) {
+  const r = merged(row);
+  const values = [
+    first(r.pain_type, r.problem_type, r.asset_type, r.asset_class),
+    first(r.urgency, r.priority, r.urgency_level),
+    marketOf(row),
+    first(r.primary_bottleneck),
+  ].filter(Boolean);
+
+  return Array.from(new Set(values)).slice(0, 4);
+}
+
+function economicsOf(row: Row) {
+  const r = merged(row);
+  return [
+    ["Ask", money(first(r.asking_price, r.price, r.target_price))],
+    ["ARV", money(first(r.arv, r.arv_value, r.estimated_value, r.property_value))],
+    ["Repairs", money(first(r.repair_estimate, r.repairs_needed, r.repair_budget))],
+  ];
+}
+
+function bestMoveOf(row: Row) {
+  return smartField(row, "fastest_path", "best_next_move", "next_move") || "Open the related room, verify context, and message the owner if the opportunity fits.";
+}
+
+function shouldSeeOf(row: Row) {
+  const r = merged(row);
+  const raw = r.who_should_see || r.suggested_resolution_stack;
+  if (Array.isArray(raw)) return raw.map(clean).filter(Boolean).slice(0, 5);
+  const text = first(raw);
+  if (text) return text.split(/[,\n|;]/).map(clean).filter(Boolean).slice(0, 5);
+  return ["Buyer", "Operator", "Capital"];
 }
 
 const page: React.CSSProperties = {
@@ -202,11 +365,8 @@ function RecordCard({ row, email, mode }: { row: Row; email: string; mode: "aler
   const itemId = itemIdOf(row);
   const image = imgOf(row);
   const owner = ownerEmailOf(row);
-
   const signalHref = signalId ? `/signals/${encodeURIComponent(signalId)}` : "/signals";
-  const routingHref = signalId ? `/routing-room/${encodeURIComponent(signalId)}` : "/routing-inbox";
-  const introHref = row.id ? `/introduction/${encodeURIComponent(String(row.id))}` : "/introductions";
-  const sourceHref = mode === "introductions" ? introHref : mode === "routing" ? routingHref : signalHref;
+  const roomHref = itemId ? `/pain-room/${encodeURIComponent(itemId)}` : signalHref;
 
   return (
     <article style={card}>
@@ -217,22 +377,37 @@ function RecordCard({ row, email, mode }: { row: Row; email: string; mode: "aler
         </div>
       ) : null}
 
-      <p style={eyebrow}>{mode} · operational card</p>
+      <p style={eyebrow}>AI Background Intelligence</p>
       <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 10px" }}>{titleOf(row)}</h2>
       <p style={{ ...muted, fontSize: 17 }}>{noteOf(row)}</p>
 
-      <div>
-        {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
-        {itemId ? <span style={chip}>Item: {itemId}</span> : null}
+      <div style={{ marginTop: 12 }}>
+        {tagsOf(row).map((tag) => <span key={tag} style={chip}>{tag}</span>)}
+      </div>
+
+      <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10, marginTop: 14 }}>
+        {economicsOf(row).map(([labelText, value]) => (
+          <div key={labelText} style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: 12, background: "rgba(0,0,0,.18)" }}>
+            <div style={{ ...eyebrow, fontSize: 10 }}>{labelText}</div>
+            <div style={{ fontSize: 18, fontWeight: 950, marginTop: 6 }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ border: "1px solid rgba(232,196,107,.20)", borderRadius: 18, padding: 14, background: "rgba(232,196,107,.06)", marginTop: 14 }}>
+        <div style={eyebrow}>Best Next Move</div>
+        <p style={{ ...muted, margin: "8px 0 0" }}>{bestMoveOf(row)}</p>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        {shouldSeeOf(row).map((item) => <span key={item} style={chip}>{item}</span>)}
         {owner ? <span style={chip}>Owner: {owner}</span> : null}
-        <span style={chip}>Source: {mode}</span>
       </div>
 
       <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
         <Link href="/dashboard" style={ghost}>Dashboard</Link>
-        <Link href={sourceHref} style={button}>Open</Link>
+        <Link href={roomHref} style={button}>Open Related Room</Link>
         {signalId ? <Link href={connectHref(row, email)} style={ghost}>Message Owner</Link> : null}
-        {signalId ? <Link href={routingHref} style={ghost}>Routing Room</Link> : null}
       </div>
     </article>
   );
@@ -339,14 +514,14 @@ export default function CommandPage() {
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav title="Signals" subtitle="Signal windows with dashboard access, owner messages, and routing-room links." active="signals" />
+        <VaultForgeMemberNav title="AI Background Intelligence" subtitle="Clean intelligence records. Routing stays behind the scenes." active="dashboard" />
 
         <section style={card}>
-          <p style={eyebrow}>VaultForge Signals</p>
+          <p style={eyebrow}>VaultForge Background Intelligence</p>
           <h1 style={{ fontSize: "clamp(50px,10vw,92px)", lineHeight: 0.88, margin: "10px 0 18px", letterSpacing: "-.06em" }}>
-            Signals.
+            AI intelligence records.
           </h1>
-          <p style={{ ...muted, fontSize: 18 }}>Signal windows with dashboard access, owner messages, and routing-room links.</p>
+          <p style={{ ...muted, fontSize: 18 }}>Clean background intelligence surfaced only when needed. No raw payloads, no internal routing clutter.</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>Records: {rows.length}</span>
@@ -363,7 +538,7 @@ export default function CommandPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search title, signal id, owner, note..."
+            placeholder="Search title, owner, market, summary..."
             style={input}
           />
         </section>
