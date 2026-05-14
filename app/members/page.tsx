@@ -577,7 +577,9 @@ export default function MembersPage() {
       ].join(" ").toLowerCase();
 
       const matchesQuery = !q || searchable.includes(q);
-      const matchesState = !stateFilter || filterStatesOf(item).some((state) => state.toLowerCase() === stateFilter.toLowerCase());
+      const matchesState =
+        !stateFilter ||
+        visibleBaseStateOf(item).toLowerCase() === stateFilter.toLowerCase();
 
       return matchesQuery && matchesState;
     });
