@@ -366,6 +366,90 @@ function mergeRows(primary: Row, secondary: Row) {
   return merged;
 }
 
+function inferredRouteProfile(row: Row) {
+  const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
+  const pressure = field(row, "distress_signals", "seller_pressure", "pain_signals").toLowerCase();
+  const asset = assetOf(row).toLowerCase();
+  const strategy = field(row, "strategy", "exit_strategy", "deal_strategy").toLowerCase();
+  const ask = field(row, "asking_price", "price", "ask", "purchase_price");
+  const arv = field(row, "arv", "arv_value", "estimated_value", "after_repair_value");
+  const repairs = field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
+  const noi = field(row, "noi", "net_operating_income");
+  const capRate = field(row, "cap_rate");
+  const zoning = field(row, "zoning", "zoning_type");
+  const utilities = field(row, "utilities", "utility_access");
+
+  if (needs.includes("jv") || needs.includes("partner")) {
+    return {
+      formation: "JV / Operator-Led Execution",
+      primary: "operator or JV partner",
+      action: "Package the role, capital need, decision rights, and profit split before introduction.",
+    };
+  }
+
+  if (needs.includes("lender") || pressure.includes("funding") || pressure.includes("capital")) {
+    return {
+      formation: "Capital-Backed Acquisition",
+      primary: "private lender or capital partner",
+      action: "Use ask, ARV/value, repairs, photos, and timeline to route to capital first.",
+    };
+  }
+
+  if (needs.includes("contractor")) {
+    return {
+      formation: "Contractor-Verified Execution",
+      primary: "contractor or local operator",
+      action: "Price the scope quickly so the spread and timeline can be verified before buyer routing.",
+    };
+  }
+
+  if (needs.includes("buyer")) {
+    return {
+      formation: "Buyer-First Off-Market Route",
+      primary: "cash buyer or active investor",
+      action: "Route to buyers first while keeping address/contact controlled until the member is qualified.",
+    };
+  }
+
+  if (asset.includes("land") || strategy.includes("entitlement") || zoning || utilities) {
+    return {
+      formation: "Developer / Builder Route",
+      primary: "builder, developer, or land buyer",
+      action: "Lead with zoning, utilities, road access, acreage, price, and entitlement path.",
+    };
+  }
+
+  if (asset.includes("commercial") || noi || capRate || strategy.includes("lease")) {
+    return {
+      formation: "Commercial Investor Route",
+      primary: "commercial investor, operator, or 1031 buyer",
+      action: "Lead with NOI, cap rate, tenant status, value-add angle, and lease-up risk.",
+    };
+  }
+
+  if (strategy.includes("flip") || (ask && arv && repairs)) {
+    return {
+      formation: "Buyer-First Flip Route",
+      primary: "cash buyer, flipper, or rehab operator",
+      action: "Lead with spread, repair estimate, photos, and market. Contractor routing is optional unless scope is uncertain.",
+    };
+  }
+
+  if (strategy.includes("hold") || strategy.includes("rental") || strategy.includes("brrrr")) {
+    return {
+      formation: "Rental / Hold Investor Route",
+      primary: "landlord, DSCR buyer, or buy-and-hold investor",
+      action: "Lead with rent potential, occupancy, condition, value, and financing fit.",
+    };
+  }
+
+  return {
+    formation: "Best-Fit Deal Routing",
+    primary: "qualified buyer or local operator",
+    action: "Use the available market, asset, price, strategy, and photos to route for owner review first.",
+  };
+}
+
 function routingSummary(row: Row) {
   const summary = noteOf(row);
   const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context");
@@ -373,36 +457,35 @@ function routingSummary(row: Row) {
   const strategy = field(row, "strategy", "exit_strategy", "deal_strategy");
   const market = marketOf(row);
   const owner = ownerOf(row);
+  const profile = inferredRouteProfile(row);
 
   const parts = [
     summary && summary !== "Workstation ready for review." ? summary : "",
-    needs ? `Needs: ${needs}` : "",
+    `Best action: ${profile.action}`,
+    `Likely receiver: ${profile.primary}`,
+    needs ? `Requested need: ${needs}` : "",
     signals ? `Signal pressure: ${signals}` : "",
     strategy ? `Likely strategy: ${strategy}` : "",
     market && market !== "Market not listed" ? `Market context: ${market}` : "",
     owner ? `Owner/contact connected: ${owner}` : "",
   ].filter(Boolean);
 
-  return parts.length
-    ? parts.join(" • ")
-    : "AI routing summary pending.";
+  return parts.join(" • ");
 }
 
 function missingInfo(row: Row) {
-  const missing: string[] = [];
+  const optional: string[] = [];
 
-  if (!field(row, "routing_needs", "deal_needs", "needs", "route_context")) missing.push("who should receive this");
-  if (!field(row, "distress_signals", "seller_pressure", "pain_signals")) missing.push("urgency or seller pressure");
-  if (!field(row, "capital_needed")) missing.push("capital need");
-  if (!field(row, "contractor_scope")) missing.push("contractor scope");
-  if (!field(row, "operator_scope")) missing.push("operator/JV scope");
-  if (!field(row, "target_buyer")) missing.push("target buyer type");
+  if (!field(row, "distress_signals", "seller_pressure", "pain_signals")) optional.push("seller pressure or timeline");
+  if (!field(row, "routing_needs", "deal_needs", "needs", "route_context") && !field(row, "target_buyer")) optional.push("preferred buyer/operator type");
+  if (!field(row, "capital_needed") && !field(row, "asking_price", "price", "ask", "purchase_price")) optional.push("capital need or purchase number");
+  if (!field(row, "contractor_scope") && field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget")) optional.push("repair scope detail");
 
-  return missing;
+  return optional.slice(0, 3);
 }
 
 function signalPressureText(row: Row) {
-  return field(row, "distress_signals", "seller_pressure", "pain_signals") || "No pressure signal listed yet.";
+  return field(row, "distress_signals", "seller_pressure", "pain_signals") || "No hard pressure listed. Routing is inferred from asset, market, numbers, strategy, and photos.";
 }
 
 function signalPressureTone(row: Row) {
@@ -474,11 +557,17 @@ function urgencyScore(row: Row) {
 }
 
 function aiHiveSuggestions(row: Row) {
+  const profile = inferredRouteProfile(row);
   const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
   const pressure = field(row, "distress_signals", "seller_pressure", "pain_signals").toLowerCase();
   const strategy = field(row, "strategy", "exit_strategy", "deal_strategy") || "Fix & Flip";
+  const ask = money(field(row, "asking_price", "price", "ask", "purchase_price"));
+  const arv = money(field(row, "arv", "arv_value", "estimated_value", "after_repair_value"));
+  const repairs = money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"));
 
   const suggestions: string[] = [];
+
+  suggestions.push(profile.action);
 
   if (needs.includes("buyer")) suggestions.push("Route to cash buyers first; confirm proof of funds before releasing private details.");
   if (needs.includes("contractor")) suggestions.push("Get repair scope priced fast so spread can be verified before buyer intro.");
@@ -486,25 +575,17 @@ function aiHiveSuggestions(row: Row) {
   if (needs.includes("lender") || pressure.includes("funding")) suggestions.push("Send to private/hard-money capital with ask, ARV, repairs, and timeline.");
   if (pressure.includes("fast close")) suggestions.push("Prioritize speed: buyer + title readiness matter more than broad exposure.");
 
-  if (!suggestions.length) {
-    suggestions.push("Hold for owner review until buyer type, funding need, timeline, and execution role are clarified.");
+  if (ask !== "Not listed" || arv !== "Not listed" || repairs !== "Not listed") {
+    suggestions.push(`Deal packet is numbers-ready: Ask ${ask}, ARV ${arv}, repairs ${repairs}.`);
   }
 
-  suggestions.push(`Best formation: ${strategy} deal room with controlled owner contact and member-by-member routing.`);
+  suggestions.push(`Best formation: ${strategy} deal room routed first to ${profile.primary}.`);
 
-  return suggestions.slice(0, 4);
+  return Array.from(new Set(suggestions)).slice(0, 4);
 }
 
 function bestDealFormation(row: Row) {
-  const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
-  const pressure = field(row, "distress_signals", "seller_pressure", "pain_signals").toLowerCase();
-
-  if (needs.includes("jv") || needs.includes("partner")) return "JV / Operator-Led Execution";
-  if (needs.includes("lender") || pressure.includes("funding")) return "Capital-Backed Acquisition";
-  if (needs.includes("contractor")) return "Contractor-Verified Flip";
-  if (needs.includes("buyer")) return "Buyer-First Off-Market Route";
-
-  return "Owner Review / Intelligence Hold";
+  return inferredRouteProfile(row).formation;
 }
 
 const page: React.CSSProperties = {
@@ -771,7 +852,7 @@ function WorkstationCard({
 
             {missing.length ? (
               <p style={{ color: "#f8e7b0", margin: "10px 0 0", fontWeight: 850 }}>
-                Missing intelligence: {missing.join(", ")}.
+                Optional intel to sharpen routing: {missing.join(", ")}.
               </p>
             ) : null}
           </section>
