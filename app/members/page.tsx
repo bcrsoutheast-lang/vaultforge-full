@@ -194,6 +194,28 @@ function basedStateDisplay(row: Row) {
   return basedStateOf(row) || "Base state not listed";
 }
 
+
+function filterStatesOf(row: Row) {
+  const base = basedStateOf(row);
+  if (base) return [base];
+
+  /*
+    Fallback only:
+    Some existing member rows may not have home_state/based_state saved yet.
+    Until profiles are normalized, state buttons should not make members vanish.
+    AI can still use operating states/markets behind the scenes.
+  */
+  return statesOf(row);
+}
+
+function visibleBaseStateOf(row: Row) {
+  return basedStateOf(row) || first(statesOf(row)) || "";
+}
+
+function visibleBaseStateDisplay(row: Row) {
+  return visibleBaseStateOf(row) || "Base state not listed";
+}
+
 function rolesOf(row: Row) {
   const m = meta(row);
   return unique([
@@ -434,7 +456,7 @@ function MemberCard({ row, viewer }: { row: Row; viewer: string }) {
             <div style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 950, marginBottom: 8 }}>
               Based In
             </div>
-            <span style={basedStateOf(row) ? stateChip : chip}>{basedStateDisplay(row)}</span>
+            <span style={visibleBaseStateOf(row) ? stateChip : chip}>{visibleBaseStateDisplay(row)}</span>
           </div>
 
           {states.length ? (
@@ -554,7 +576,7 @@ export default function MembersPage() {
         emailOf(item),
         statusOf(item),
         strategyNote(item),
-        basedStateDisplay(item),
+        visibleBaseStateDisplay(item),
         ...rolesOf(item),
         ...statesOf(item),
         ...strategiesOf(item),
@@ -563,7 +585,7 @@ export default function MembersPage() {
       ].join(" ").toLowerCase();
 
       const matchesQuery = !q || searchable.includes(q);
-      const matchesState = !stateFilter || basedStateOf(item).toLowerCase() === stateFilter.toLowerCase();
+      const matchesState = !stateFilter || filterStatesOf(item).some((state) => state.toLowerCase() === stateFilter.toLowerCase());
 
       return matchesQuery && matchesState;
     });
@@ -571,7 +593,7 @@ export default function MembersPage() {
 
   const counts = useMemo(() => {
     const acceptedCount = items.filter((item) => accepted(item)).length;
-    const withStates = items.filter((item) => basedStateOf(item)).length;
+    const withStates = items.filter((item) => visibleBaseStateOf(item)).length;
     const withCapabilities = items.filter((item) => capabilitiesOf(item).length).length;
 
     return { total: items.length, accepted: acceptedCount, withStates, withCapabilities };
@@ -624,7 +646,7 @@ export default function MembersPage() {
             Private operator network.
           </h1>
           <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            VaultForge organizes the network by where each member is based first, then uses capabilities, execution style, and market reach as intelligence context behind the scenes.
+            VaultForge organizes the network by where each member is based first. If an older profile is missing a base state, the page falls back to saved market/state data so members do not disappear while AI still reads capabilities, needs, and market reach behind the scenes.
           </p>
 
           <div style={{ marginTop: 16 }}>
