@@ -487,7 +487,7 @@ function ScoreBar({ label, value, caption }: { label: string; value: number; cap
         <span>{label}</span>
         <span>{value}%</span>
       </div>
-      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 10 }}>
+      <div style={{ height: 260, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 10 }}>
         <div style={{ width: `${value}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)" }} />
       </div>
       <p style={{ ...muted, margin: "8px 0 0", fontSize: 13 }}>{caption}</p>
@@ -684,9 +684,9 @@ function WorkstationCard({
           }}
         >
           {photos[0] ? (
-            <img src={photos[0]} alt="Workstation" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            <img src={photos[0]} alt="Workstation" style={{ width: "100%", height: "100%", objectFit: "cover", maxHeight: 340, display: "block" }} />
           ) : (
-            <div style={{ height: 150, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850 }}>No photo</div>
+            <div style={{ height: 260, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850 }}>No photo</div>
           )}
         </div>
 
@@ -1037,6 +1037,10 @@ export default function ProjectsPage() {
   return (
     <main style={page}>
       <style>{`
+        .vf-project-card img { max-height: 260px !important; object-fit: cover !important; width: 100% !important; display: block !important; }
+        .vf-project-card { overflow: hidden !important; }
+        .vf-project-card section, .vf-project-card article, .vf-project-card div { box-sizing: border-box; }
+
         @media (max-width: 820px) {
           .vf-grid,
           .vf-four,
@@ -1062,7 +1066,7 @@ export default function ProjectsPage() {
       `}</style>
 
       <div style={wrap}>
-        <section style={card}>
+        <section className="vf-project-card" style={card}>
           <div style={label}>VaultForge Project Desk</div>
 
           <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
