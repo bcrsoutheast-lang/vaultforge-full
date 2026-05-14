@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Row = Record<string, any>;
+type ViewMode = "active" | "saved" | "hidden";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -13,6 +14,21 @@ function clean(value: unknown) {
 
 function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
+}
+
+function lower(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function compact(value: unknown) {
+  return clean(value).replace(/\s+/g, " ");
+}
+
+function slug(value: unknown) {
+  return compact(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function first(...values: unknown[]) {
@@ -77,7 +93,7 @@ function parseArray(value: unknown): any[] {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) return parsed;
   } catch {
-    // Continue.
+    // Keep parsing as delimited text.
   }
 
   return text
@@ -100,40 +116,6 @@ function field(row: Row, ...keys: string[]) {
   }
 
   return first(...values);
-}
-
-function idOf(row: Row) {
-  return field(row, "deal_id", "project_id", "item_id", "id");
-}
-
-function signalIdOf(row: Row) {
-  return field(row, "signal_id", "signalId", "alert_id", "routing_id");
-}
-
-function titleOf(row: Row) {
-  return field(row, "title", "deal_title", "project_title", "name", "address") || "Untitled Project";
-}
-
-function marketOf(row: Row) {
-  const city = field(row, "city");
-  const state = field(row, "state", "market");
-  return [city, state].filter(Boolean).join(", ") || field(row, "market", "location", "address") || "Market not listed";
-}
-
-function ownerOf(row: Row) {
-  return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email"));
-}
-
-function assetOf(row: Row) {
-  return field(row, "asset_type", "property_type", "deal_type") || "Project";
-}
-
-function statusOf(row: Row) {
-  return field(row, "status", "project_status", "routing_status") || "Open";
-}
-
-function noteOf(row: Row) {
-  return field(row, "note", "ai_route_summary", "route_summary", "routing_summary", "summary", "description", "notes", "message") || "Project ready for review.";
 }
 
 function photosOf(row: Row) {
@@ -169,11 +151,60 @@ function photosOf(row: Row) {
   );
 }
 
+function photoFingerprint(row: Row) {
+  const photo = photosOf(row)[0] || "";
+  const bare = photo.split("?")[0];
+  const parts = bare.split("/").filter(Boolean);
+  return slug(parts.slice(-2).join("-") || bare);
+}
+
+function idOf(row: Row) {
+  return field(row, "deal_id", "project_id", "item_id", "id");
+}
+
+function signalIdOf(row: Row) {
+  return field(row, "signal_id", "signalId", "alert_id", "routing_id");
+}
+
+function titleOf(row: Row) {
+  return field(row, "title", "deal_title", "project_title", "name", "address") || "Untitled Project";
+}
+
+function marketOf(row: Row) {
+  const city = field(row, "city");
+  const state = field(row, "state", "market");
+  return [city, state].filter(Boolean).join(", ") || field(row, "market", "location", "address") || "Market not listed";
+}
+
+function ownerOf(row: Row) {
+  return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email"));
+}
+
+function assetOf(row: Row) {
+  return field(row, "asset_type", "property_type", "deal_type") || "Project";
+}
+
+function statusOf(row: Row) {
+  return field(row, "status", "project_status", "routing_status") || "Open";
+}
+
+function noteOf(row: Row) {
+  return field(row, "note", "ai_route_summary", "route_summary", "routing_summary", "summary", "description", "notes", "message", "seller_situation") || "Project ready for review.";
+}
+
+function numberValue(value: unknown) {
+  const text = clean(value);
+  if (!text) return NaN;
+
+  const number = Number(text.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(number) ? number : NaN;
+}
+
 function money(value: unknown) {
   const text = clean(value);
   if (!text) return "Not listed";
 
-  const number = Number(text.replace(/[^\d.-]/g, ""));
+  const number = numberValue(text);
   if (!Number.isFinite(number)) return text;
 
   return number.toLocaleString("en-US", {
@@ -183,15 +214,263 @@ function money(value: unknown) {
   });
 }
 
-function keyOf(row: Row, index: number) {
-  return (
-    field(row, "canonical_event_id") ||
-    field(row, "deal_id") ||
-    field(row, "project_id") ||
-    field(row, "item_id") ||
-    field(row, "id") ||
-    `${titleOf(row)}-${marketOf(row)}-${index}`
-  );
+function display(value: unknown) {
+  return clean(value) || "Not listed";
+}
+
+function strongKey(row: Row, index = 0) {
+  const title = slug(titleOf(row));
+  const market = slug(marketOf(row));
+  const owner = slug(ownerOf(row));
+  const address = slug(field(row, "address", "property_address", "location"));
+  const ask = slug(field(row, "asking_price", "price"));
+  const arv = slug(field(row, "arv", "arv_value", "estimated_value"));
+  const photo = photoFingerprint(row);
+  const backendKey = field(row, "canonical_project_key", "_dedupe_key", "canonical_event_id");
+
+  if (title && (market || address || ask || arv || photo)) {
+    return ["project", title, market, owner, address || photo, ask || arv].filter(Boolean).join("|");
+  }
+
+  return backendKey || idOf(row) || signalIdOf(row) || `${title || "project"}-${market || "market"}-${index}`;
+}
+
+function completenessScore(row: Row) {
+  let score = 0;
+
+  const keys = [
+    "asking_price",
+    "price",
+    "arv",
+    "arv_value",
+    "repair_estimate",
+    "repairs_needed",
+    "beds",
+    "bedrooms",
+    "baths",
+    "bathrooms",
+    "square_feet",
+    "sqft",
+    "strategy",
+    "exit_strategy",
+    "routing_needs",
+    "deal_needs",
+    "distress_signals",
+    "seller_situation",
+    "contractor_scope",
+    "capital_needed",
+    "operator_scope",
+    "target_buyer",
+    "route_summary",
+    "ai_route_summary",
+    "routing_summary",
+  ];
+
+  for (const key of keys) {
+    if (field(row, key)) score += 1;
+  }
+
+  if (photosOf(row).length) score += 5;
+
+  const source = lower(first(row.source_table, row._source_table, row.source));
+  if (source.includes("vf_deals")) score += 100;
+  if (source.includes("deal")) score += 10;
+
+  const status = lower(statusOf(row));
+  if (status.includes("active") || status.includes("open") || status.includes("new")) score += 3;
+  if (status.includes("archive") || status.includes("delete")) score -= 10;
+
+  return score;
+}
+
+function mergeText(a: unknown, b: unknown) {
+  const firstText = clean(a);
+  const secondText = clean(b);
+  if (firstText && secondText && firstText !== secondText) {
+    return firstText.length >= secondText.length ? firstText : secondText;
+  }
+  return firstText || secondText;
+}
+
+function mergeRows(primary: Row, secondary: Row) {
+  const primaryMeta = meta(primary);
+  const secondaryMeta = meta(secondary);
+  const merged: Row = {
+    ...secondary,
+    ...primary,
+    metadata: {
+      ...secondaryMeta,
+      ...primaryMeta,
+    },
+  };
+
+  const textKeys = [
+    "note",
+    "notes",
+    "description",
+    "route_summary",
+    "routing_summary",
+    "ai_route_summary",
+    "routing_needs",
+    "deal_needs",
+    "needs",
+    "distress_signals",
+    "seller_situation",
+    "contractor_scope",
+    "operator_scope",
+    "capital_needed",
+    "target_buyer",
+  ];
+
+  for (const key of textKeys) {
+    const value = mergeText(primary[key], secondary[key]);
+    if (value) merged[key] = value;
+  }
+
+  const photos = Array.from(new Set([...photosOf(secondary), ...photosOf(primary)].map(clean).filter(Boolean)));
+
+  if (photos.length) {
+    merged.photo_urls = photos;
+    merged.photos = photos.map((url) => ({ url }));
+    merged.main_photo_url = first(primary.main_photo_url, secondary.main_photo_url, photos[0]);
+    merged.image_url = first(primary.image_url, secondary.image_url, merged.main_photo_url);
+    merged.photo_url = first(primary.photo_url, secondary.photo_url, merged.main_photo_url);
+  }
+
+  return merged;
+}
+
+function dedupeRows(rows: Row[]) {
+  const byKey = new Map<string, Row>();
+
+  rows.forEach((row, index) => {
+    const key = strongKey(row, index);
+    const existing = byKey.get(key);
+
+    if (!existing) {
+      byKey.set(key, row);
+      return;
+    }
+
+    const rowScore = completenessScore(row);
+    const existingScore = completenessScore(existing);
+
+    const primary = rowScore >= existingScore ? row : existing;
+    const secondary = rowScore >= existingScore ? existing : row;
+
+    byKey.set(key, mergeRows(primary, secondary));
+  });
+
+  return Array.from(byKey.values());
+}
+
+function spreadText(row: Row) {
+  const ask = numberValue(field(row, "asking_price", "price"));
+  const arv = numberValue(field(row, "arv", "arv_value", "estimated_value"));
+  const repairs = numberValue(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"));
+
+  if (!Number.isFinite(ask) || !Number.isFinite(arv)) return "";
+
+  const spread = arv - ask - (Number.isFinite(repairs) ? repairs : 0);
+  const formatted = spread.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+
+  if (spread > 0) return `Estimated room before soft costs: ${formatted}.`;
+  if (spread < 0) return `Pricing pressure before soft costs: ${formatted}.`;
+  return "Estimated spread is neutral before soft costs.";
+}
+
+function bestFit(row: Row) {
+  const asset = lower(assetOf(row));
+  const strategy = lower(field(row, "strategy", "exit_strategy"));
+  const needs = lower(field(row, "routing_needs", "deal_needs", "needs"));
+  const contractor = field(row, "contractor_scope");
+  const capital = field(row, "capital_needed");
+
+  if (needs.includes("buyer") || strategy.includes("flip")) {
+    return contractor ? "cash buyer or flip operator with contractor capacity" : "cash buyer or flip operator";
+  }
+
+  if (capital || needs.includes("capital") || needs.includes("lender")) {
+    return "private lender, capital partner, or JV operator";
+  }
+
+  if (asset.includes("land")) return "land buyer, builder, or entitlement operator";
+  if (asset.includes("commercial")) return "commercial operator or capitalized sponsor";
+
+  return "local operator with execution capacity";
+}
+
+function smartSummary(row: Row) {
+  const asset = display(assetOf(row)).toLowerCase();
+  const strategy = field(row, "strategy", "exit_strategy");
+  const market = marketOf(row);
+  const ask = money(field(row, "asking_price", "price"));
+  const arv = money(field(row, "arv", "arv_value", "estimated_value"));
+  const repairs = money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"));
+  const needs = field(row, "routing_needs", "deal_needs", "needs");
+  const signals = field(row, "distress_signals", "seller_pressure");
+  const urgency = field(row, "urgency", "priority", "urgency_level");
+  const contractor = field(row, "contractor_scope");
+
+  const lead = [
+    `Route this ${asset}`,
+    strategy ? `as a ${strategy} opportunity` : "as an operator-reviewed opportunity",
+    market && market !== "Market not listed" ? `in ${market}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const economics = [
+    ask !== "Not listed" ? `${ask} ask` : "",
+    arv !== "Not listed" ? `${arv} ARV` : "",
+    repairs !== "Not listed" ? `${repairs} repairs` : "",
+  ].filter(Boolean);
+
+  const execution = [
+    needs ? `needs ${needs}` : "",
+    signals ? `pressure signal: ${signals}` : "",
+    urgency ? `urgency: ${urgency}` : "",
+    contractor ? `contractor scope: ${contractor}` : "",
+  ].filter(Boolean);
+
+  return [
+    `${lead}.`,
+    economics.length ? `Economics: ${economics.join(" / ")}. ${spreadText(row)}`.trim() : "",
+    execution.length ? `Execution read: ${execution.join(" / ")}.` : "",
+    `Best-fit route: ${bestFit(row)}.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function localKey(email: string, name: string) {
+  return `vf_projects_${name}_${email || "unknown"}`;
+}
+
+function loadKeySet(email: string, name: string) {
+  if (typeof window === "undefined") return new Set<string>();
+
+  try {
+    const raw = window.localStorage.getItem(localKey(email, name));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set<string>(Array.isArray(parsed) ? parsed.map(clean).filter(Boolean) : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function saveKeySet(email: string, name: string, keys: Set<string>) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(localKey(email, name), JSON.stringify(Array.from(keys)));
+  } catch {
+    // Local cleanup controls are non-critical.
+  }
 }
 
 const page: React.CSSProperties = {
@@ -259,6 +538,12 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
+const dangerGhost: React.CSSProperties = {
+  ...ghost,
+  border: "1px solid rgba(248,113,113,.34)",
+  color: "#fecaca",
+};
+
 const chip: React.CSSProperties = {
   border: "1px solid rgba(157,243,191,.22)",
   borderRadius: 999,
@@ -274,7 +559,9 @@ const chip: React.CSSProperties = {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <section style={panel}>
-      <div style={{ fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12, color: "#e8c46b" }}>{label}</div>
+      <div style={{ fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12, color: "#e8c46b" }}>
+        {label}
+      </div>
       <div style={{ fontSize: 42, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
     </section>
   );
@@ -285,9 +572,11 @@ function DetailGrid({ row }: { row: Row }) {
     ["Ask", money(field(row, "asking_price", "price"))],
     ["ARV", money(field(row, "arv", "arv_value", "estimated_value"))],
     ["Repairs", money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"))],
-    ["Beds", field(row, "beds", "bedrooms") || "Not listed"],
-    ["Baths", field(row, "baths", "bathrooms") || "Not listed"],
-    ["Sqft/Acres", field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres") || "Not listed"],
+    ["Beds", display(field(row, "beds", "bedrooms"))],
+    ["Baths", display(field(row, "baths", "bathrooms"))],
+    ["Sqft/Acres", display(field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres"))],
+    ["Strategy", display(field(row, "strategy", "exit_strategy"))],
+    ["Occupancy", display(field(row, "occupancy", "occupancy_status", "tenant_status"))],
   ];
 
   return (
@@ -302,13 +591,36 @@ function DetailGrid({ row }: { row: Row }) {
   );
 }
 
-function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
+function ProjectCard({
+  row,
+  viewer,
+  saved,
+  hidden,
+  onSave,
+  onUnsave,
+  onHide,
+  onRestore,
+}: {
+  row: Row;
+  viewer: string;
+  saved: boolean;
+  hidden: boolean;
+  onSave: (key: string) => void;
+  onUnsave: (key: string) => void;
+  onHide: (key: string) => void;
+  onRestore: (key: string) => void;
+}) {
   const id = idOf(row);
   const signalId = signalIdOf(row);
   const photos = photosOf(row);
   const owner = ownerOf(row);
+  const key = strongKey(row);
 
-  const contactHref = `/messages/new?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`;
+  const contactHref = `/messages/new?email=${encodeURIComponent(viewer)}${
+    id ? `&item_id=${encodeURIComponent(id)}` : ""
+  }${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(
+    titleOf(row)
+  )}&subject=${encodeURIComponent(titleOf(row))}`;
 
   return (
     <article className="vf-project-card">
@@ -327,6 +639,8 @@ function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
           <span style={chip}>{assetOf(row)}</span>
           <span style={chip}>{statusOf(row)}</span>
           {signalId ? <span style={chip}>Signal linked</span> : null}
+          {saved ? <span style={chip}>Saved</span> : null}
+          {hidden ? <span style={chip}>Hidden</span> : null}
         </div>
 
         <h3 className="vf-card-title">{titleOf(row)}</h3>
@@ -335,10 +649,8 @@ function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
         <DetailGrid row={row} />
 
         <section className="vf-routing-box">
-          <div style={{ ...label, fontSize: 11 }}>Routing Context</div>
-          <p style={{ ...muted, margin: "8px 0 0" }}>
-            {first(field(row, "ai_route_summary"), field(row, "route_summary"), field(row, "routing_summary"), "Routing context ready for review.")}
-          </p>
+          <div style={{ ...label, fontSize: 11 }}>Bloomberg AI Brief</div>
+          <p style={{ ...muted, margin: "8px 0 0" }}>{smartSummary(row)}</p>
         </section>
 
         <div style={{ marginTop: 12 }}>
@@ -352,6 +664,18 @@ function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
           <Link href={contactHref} style={button}>Contact Owner</Link>
           {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
           {id ? <Link href={`/deal/detail?id=${encodeURIComponent(id)}`} style={ghost}>Deal Detail</Link> : null}
+
+          {saved ? (
+            <button type="button" onClick={() => onUnsave(key)} style={ghost}>Remove Saved</button>
+          ) : (
+            <button type="button" onClick={() => onSave(key)} style={ghost}>Save</button>
+          )}
+
+          {hidden ? (
+            <button type="button" onClick={() => onRestore(key)} style={ghost}>Restore</button>
+          ) : (
+            <button type="button" onClick={() => onHide(key)} style={dangerGhost}>Hide</button>
+          )}
         </div>
       </div>
     </article>
@@ -361,6 +685,9 @@ function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
 export default function ProjectsPage() {
   const [email, setEmail] = useState("");
   const [items, setItems] = useState<Row[]>([]);
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<ViewMode>("active");
   const [status, setStatus] = useState("Loading projects...");
 
   async function load() {
@@ -369,6 +696,8 @@ export default function ProjectsPage() {
     const ownerFlag = owner ? "1" : "0";
 
     setEmail(viewer);
+    setSavedKeys(loadKeySet(viewer, "saved"));
+    setHiddenKeys(loadKeySet(viewer, "hidden"));
     setStatus("Loading projects...");
 
     try {
@@ -393,13 +722,7 @@ export default function ProjectsPage() {
         ...(Array.isArray(data.data) ? data.data : []),
       ];
 
-      const byKey = new Map<string, Row>();
-      collected.forEach((item, index) => {
-        const key = keyOf(item, index);
-        if (!byKey.has(key)) byKey.set(key, item);
-      });
-
-      const unique = Array.from(byKey.values());
+      const unique = dedupeRows(collected);
       setItems(unique);
       setStatus(unique.length ? "" : "No projects found yet.");
     } catch (error: any) {
@@ -412,20 +735,74 @@ export default function ProjectsPage() {
     load();
   }, []);
 
+  const rowsForView = useMemo(() => {
+    return items.filter((item, index) => {
+      const key = strongKey(item, index);
+      const isSaved = savedKeys.has(key);
+      const isHidden = hiddenKeys.has(key);
+
+      if (view === "saved") return isSaved && !isHidden;
+      if (view === "hidden") return isHidden;
+      return !isHidden;
+    });
+  }, [items, savedKeys, hiddenKeys, view]);
+
   const counts = useMemo(() => {
+    const active = items.filter((item, index) => !hiddenKeys.has(strongKey(item, index))).length;
+    const saved = items.filter((item, index) => savedKeys.has(strongKey(item, index)) && !hiddenKeys.has(strongKey(item, index))).length;
+    const hidden = items.filter((item, index) => hiddenKeys.has(strongKey(item, index))).length;
+
     return {
-      total: items.length,
-      withPhotos: items.filter((item) => photosOf(item).length).length,
-      routed: items.filter((item) => signalIdOf(item)).length,
+      total: active,
+      saved,
+      hidden,
+      withPhotos: items.filter((item, index) => !hiddenKeys.has(strongKey(item, index)) && photosOf(item).length).length,
+      routed: items.filter((item, index) => !hiddenKeys.has(strongKey(item, index)) && signalIdOf(item)).length,
     };
-  }, [items]);
+  }, [items, savedKeys, hiddenKeys]);
+
+  function saveProject(key: string) {
+    const next = new Set(savedKeys);
+    next.add(key);
+    setSavedKeys(next);
+    saveKeySet(email, "saved", next);
+  }
+
+  function unsaveProject(key: string) {
+    const next = new Set(savedKeys);
+    next.delete(key);
+    setSavedKeys(next);
+    saveKeySet(email, "saved", next);
+  }
+
+  function hideProject(key: string) {
+    const next = new Set(hiddenKeys);
+    next.add(key);
+    setHiddenKeys(next);
+    saveKeySet(email, "hidden", next);
+  }
+
+  function restoreProject(key: string) {
+    const next = new Set(hiddenKeys);
+    next.delete(key);
+    setHiddenKeys(next);
+    saveKeySet(email, "hidden", next);
+  }
+
+  function clearLocalCleanup() {
+    const emptySet = new Set<string>();
+    setSavedKeys(emptySet);
+    setHiddenKeys(emptySet);
+    saveKeySet(email, "saved", emptySet);
+    saveKeySet(email, "hidden", emptySet);
+  }
 
   return (
     <main style={page}>
       <style>{`
         .vf-metrics {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(5, minmax(0, 1fr));
           gap: 16px;
           margin-bottom: 18px;
         }
@@ -534,11 +911,13 @@ export default function ProjectsPage() {
           margin-top: 18px;
         }
 
-        @media (max-width: 880px) {
+        @media (max-width: 1000px) {
           .vf-metrics {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr 1fr;
           }
+        }
 
+        @media (max-width: 880px) {
           .vf-project-card {
             grid-template-columns: 1fr;
           }
@@ -549,6 +928,10 @@ export default function ProjectsPage() {
         }
 
         @media (max-width: 560px) {
+          .vf-metrics {
+            grid-template-columns: 1fr;
+          }
+
           .vf-actions {
             display: grid;
             grid-template-columns: 1fr;
@@ -571,27 +954,36 @@ export default function ProjectsPage() {
           </h1>
 
           <p style={{ ...muted, fontSize: 20, maxWidth: 900 }}>
-            Clean opportunity review for submitted projects, deal rooms, photos, pricing, routing context, and owner contact.
+            Clean opportunity review for submitted projects, deal rooms, photos, pricing, routing context, saved cards, and cleanup controls.
           </p>
 
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>{email === OWNER_EMAIL ? "Owner View" : "Member View"}</span>
-            <span style={chip}>Projects: {counts.total}</span>
-            <span style={chip}>Routed: {counts.routed}</span>
-            <span style={chip}>With Photos: {counts.withPhotos}</span>
+            <span style={chip}>Active: {counts.total}</span>
+            <span style={chip}>Saved: {counts.saved}</span>
+            <span style={chip}>Hidden: {counts.hidden}</span>
+          </div>
+
+          <div className="vf-actions">
+            <button type="button" onClick={() => setView("active")} style={view === "active" ? button : ghost}>Active</button>
+            <button type="button" onClick={() => setView("saved")} style={view === "saved" ? button : ghost}>Saved</button>
+            <button type="button" onClick={() => setView("hidden")} style={view === "hidden" ? button : ghost}>Hidden</button>
+            <button type="button" onClick={load} style={ghost}>Refresh</button>
+            <button type="button" onClick={clearLocalCleanup} style={dangerGhost}>Clear Local Cleanup</button>
           </div>
 
           <div className="vf-actions">
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <Link href="/submit" style={button}>Create Deal</Link>
             <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-            <button type="button" onClick={load} style={ghost}>Refresh</button>
           </div>
         </section>
 
         <section className="vf-metrics">
-          <Metric label="Projects" value={String(counts.total)} />
+          <Metric label="Active" value={String(counts.total)} />
+          <Metric label="Saved" value={String(counts.saved)} />
+          <Metric label="Hidden" value={String(counts.hidden)} />
           <Metric label="Routed" value={String(counts.routed)} />
           <Metric label="With Photos" value={String(counts.withPhotos)} />
         </section>
@@ -600,19 +992,36 @@ export default function ProjectsPage() {
           <div style={label}>Project Queue</div>
 
           <h2 style={{ fontSize: "clamp(34px,6vw,54px)", lineHeight: 1, margin: "10px 0 18px", letterSpacing: "-.05em" }}>
-            Opportunity cards.
+            {view === "active" ? "Active opportunity cards." : view === "saved" ? "Saved opportunities." : "Hidden opportunities."}
           </h2>
 
-          {items.length ? (
+          {rowsForView.length ? (
             <div style={{ display: "grid", gap: 14 }}>
-              {items.map((item, index) => (
-                <ProjectCard key={keyOf(item, index)} row={item} viewer={email} />
-              ))}
+              {rowsForView.map((item, index) => {
+                const key = strongKey(item, index);
+                return (
+                  <ProjectCard
+                    key={key}
+                    row={item}
+                    viewer={email}
+                    saved={savedKeys.has(key)}
+                    hidden={hiddenKeys.has(key)}
+                    onSave={saveProject}
+                    onUnsave={unsaveProject}
+                    onHide={hideProject}
+                    onRestore={restoreProject}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div style={panel}>
-              <h3 style={{ marginTop: 0 }}>No projects connected yet.</h3>
+              <h3 style={{ marginTop: 0 }}>
+                {view === "active" ? "No active projects connected yet." : view === "saved" ? "No saved projects yet." : "No hidden projects."}
+              </h3>
+
               <p style={muted}>{status}</p>
+
               <div className="vf-actions">
                 <Link href="/submit" style={button}>Create Deal</Link>
                 <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
@@ -622,7 +1031,7 @@ export default function ProjectsPage() {
           )}
         </section>
 
-        {status && items.length ? <section style={shell}>{status}</section> : null}
+        {status && rowsForView.length ? <section style={shell}>{status}</section> : null}
       </div>
     </main>
   );
