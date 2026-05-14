@@ -197,19 +197,11 @@ function basedStateDisplay(row: Row) {
 
 function filterStatesOf(row: Row) {
   const base = basedStateOf(row);
-  if (base) return [base];
-
-  /*
-    Fallback only:
-    Some existing member rows may not have home_state/based_state saved yet.
-    Until profiles are normalized, state buttons should not make members vanish.
-    AI can still use operating states/markets behind the scenes.
-  */
-  return statesOf(row);
+  return base ? [base] : [];
 }
 
 function visibleBaseStateOf(row: Row) {
-  return basedStateOf(row) || first(statesOf(row)) || "";
+  return basedStateOf(row);
 }
 
 function visibleBaseStateDisplay(row: Row) {
@@ -646,7 +638,7 @@ export default function MembersPage() {
             Private operator network.
           </h1>
           <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            VaultForge organizes the network by where each member is based first. If an older profile is missing a base state, the page falls back to saved market/state data so members do not disappear while AI still reads capabilities, needs, and market reach behind the scenes.
+            VaultForge organizes the member directory by where each member is based. Market reach and operating states stay visible for AI context, but state buttons only filter by the member’s base/from state.
           </p>
 
           <div style={{ marginTop: 16 }}>
