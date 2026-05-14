@@ -299,10 +299,16 @@ function relatedRoomHref(row: Row) {
   }
 
   const painId = first(r.pain_id, r.request_id, r.item_id);
-  if (painId) return `/pain-room/${encodeURIComponent(painId)}`;
+
+  if (painId) {
+    return `/pain-room/${encodeURIComponent(painId)}`;
+  }
 
   const dealId = first(r.deal_id, r.project_id);
-  if (dealId) return `/deal/detail?id=${encodeURIComponent(dealId)}`;
+
+  if (dealId) {
+    return `/deal/detail?id=${encodeURIComponent(dealId)}`;
+  }
 
   return "/pain-feed";
 }
@@ -428,7 +434,13 @@ function RecordCard({ row, email, mode }: { row: Row; email: string; mode: "aler
 
       <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
         <Link href="/dashboard" style={ghost}>Dashboard</Link>
-        <Link href={roomHref} style={button}>Open Related Room</Link>
+        <Link href={roomHref} style={button}>
+          {roomHref.includes("/pain-room/")
+            ? "Open Pain Room"
+            : roomHref.includes("/deal/detail")
+            ? "Open Deal Room"
+            : "Open Feed"}
+        </Link>
         {signalId ? <Link href={connectHref(row, email)} style={ghost}>Message Owner</Link> : null}
       </div>
     </article>
