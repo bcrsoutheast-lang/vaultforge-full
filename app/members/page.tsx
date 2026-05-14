@@ -162,6 +162,38 @@ function statesOf(row: Row) {
   return unique(normalized);
 }
 
+
+function basedStateOf(row: Row) {
+  const m = meta(row);
+
+  const raw = first(
+    row.home_state,
+    row.based_state,
+    row.base_state,
+    row.member_state,
+    row.state,
+    row.location_state,
+    row.primary_state,
+    row.market_state,
+    m.home_state,
+    m.based_state,
+    m.base_state,
+    m.member_state,
+    m.state,
+    m.location_state,
+    m.primary_state,
+    m.market_state
+  );
+
+  const found = OPERATING_STATES.find((allowed) => allowed.toLowerCase() === raw.toLowerCase());
+
+  return found || "";
+}
+
+function basedStateDisplay(row: Row) {
+  return basedStateOf(row) || "Base state not listed";
+}
+
 function rolesOf(row: Row) {
   const m = meta(row);
   return unique([
@@ -400,12 +432,21 @@ function MemberCard({ row, viewer }: { row: Row; viewer: string }) {
 
           <div style={{ marginTop: 12 }}>
             <div style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 950, marginBottom: 8 }}>
-              Operating states
+              Based In
             </div>
-            {(states.length ? states : ["No states selected"]).map((state) => (
-              <span key={state} style={states.length ? stateChip : chip}>{state}</span>
-            ))}
+            <span style={basedStateOf(row) ? stateChip : chip}>{basedStateDisplay(row)}</span>
           </div>
+
+          {states.length ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 950, marginBottom: 8 }}>
+                Markets / Reach
+              </div>
+              {states.map((state) => (
+                <span key={state} style={stateChip}>{state}</span>
+              ))}
+            </div>
+          ) : null}
 
           {strategies.length ? (
             <div style={{ marginTop: 12 }}>
@@ -513,6 +554,7 @@ export default function MembersPage() {
         emailOf(item),
         statusOf(item),
         strategyNote(item),
+        basedStateDisplay(item),
         ...rolesOf(item),
         ...statesOf(item),
         ...strategiesOf(item),
@@ -521,7 +563,7 @@ export default function MembersPage() {
       ].join(" ").toLowerCase();
 
       const matchesQuery = !q || searchable.includes(q);
-      const matchesState = !stateFilter || statesOf(item).some((state) => state.toLowerCase() === stateFilter.toLowerCase());
+      const matchesState = !stateFilter || basedStateOf(item).toLowerCase() === stateFilter.toLowerCase();
 
       return matchesQuery && matchesState;
     });
@@ -529,7 +571,7 @@ export default function MembersPage() {
 
   const counts = useMemo(() => {
     const acceptedCount = items.filter((item) => accepted(item)).length;
-    const withStates = items.filter((item) => statesOf(item).length).length;
+    const withStates = items.filter((item) => basedStateOf(item)).length;
     const withCapabilities = items.filter((item) => capabilitiesOf(item).length).length;
 
     return { total: items.length, accepted: acceptedCount, withStates, withCapabilities };
@@ -572,7 +614,7 @@ export default function MembersPage() {
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Members"
-          subtitle="Private operator network organized by markets, capabilities, execution style, and opportunity alignment."
+          subtitle="Private operator network organized by where members are based, capabilities, execution style, and opportunity alignment."
           active="members"
         />
 
@@ -582,7 +624,7 @@ export default function MembersPage() {
             Private operator network.
           </h1>
           <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            VaultForge maps members by market, capability, execution style, and operational fit so opportunities naturally flow toward the right people.
+            VaultForge organizes the network by where each member is based first, then uses capabilities, execution style, and market reach as intelligence context behind the scenes.
           </p>
 
           <div style={{ marginTop: 16 }}>
@@ -603,18 +645,18 @@ export default function MembersPage() {
         <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
           <Metric label="Members" value={String(counts.total)} tone="blue" />
           <Metric label="Accepted" value={String(counts.accepted)} tone="green" />
-          <Metric label="State Ready" value={String(counts.withStates)} tone="gold" />
+          <Metric label="Base State" value={String(counts.withStates)} tone="gold" />
           <Metric label="Capabilities" value={String(counts.withCapabilities)} tone="red" />
         </section>
 
         <section style={card}>
-          <div style={eyebrow}>Search Network</div>
+          <div style={eyebrow}>Search Network By Base State</div>
 
           <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1.25fr .75fr", gap: 14, marginTop: 16 }}>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search members, markets, roles, strategies..."
+              placeholder="Search members, base state, markets, roles, strategies..."
               style={{
                 width: "100%",
                 boxSizing: "border-box",
@@ -643,7 +685,7 @@ export default function MembersPage() {
                 outline: "none",
               }}
             >
-              <option value="">All operating states</option>
+              <option value="">All base states</option>
               {OPERATING_STATES.map((state) => (
                 <option key={state} value={state}>{state}</option>
               ))}
@@ -671,7 +713,7 @@ export default function MembersPage() {
 
         <section style={card}>
           <div style={eyebrow}>Operator Network</div>
-          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Profiles aligned to markets, capabilities, and execution fit.</h2>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Profiles organized by base state, capability, market reach, and execution fit.</h2>
 
           {filtered.length ? (
             <div style={{ display: "grid", gap: 14 }}>
