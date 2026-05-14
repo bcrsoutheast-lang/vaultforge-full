@@ -553,6 +553,130 @@ export default function SubmitPage() {
     return parts.filter(Boolean).join(" | ");
   }
 
+  function buildDealPayload(photoUrls: string[], email: string) {
+    const aiRouteSummary = buildRouteSummary(form);
+
+    const canonical = {
+      ...form,
+
+      // Identity / ownership
+      owner_email: email,
+      member_email: email,
+      submitted_by: email,
+      submitted_by_email: email,
+      user_email: email,
+      created_by_email: email,
+
+      // Title / type
+      title: form.title,
+      deal_title: form.title,
+      project_title: form.title,
+      property_type: form.property_type,
+      deal_type: form.property_type,
+      asset_type: form.property_type,
+
+      // Strategy
+      strategy: form.strategy,
+      deal_strategy: form.strategy,
+      exit_strategy: form.exit_strategy,
+
+      // Market / location
+      city: form.city,
+      state: form.state,
+      market: [form.city, form.state].filter(Boolean).join(", "),
+      address: form.address,
+      property_address: form.address,
+      location: form.address,
+
+      // Numbers
+      asking_price: form.asking_price,
+      price: form.asking_price,
+      ask: form.asking_price,
+      purchase_price: form.asking_price,
+      arv: form.arv,
+      arv_value: form.arv,
+      estimated_value: form.arv,
+      after_repair_value: form.arv,
+      repair_estimate: form.repair_estimate,
+      repairs_needed: form.repair_estimate,
+      estimated_repairs: form.repair_estimate,
+      rehab_budget: form.repair_estimate,
+      repair_budget: form.repair_estimate,
+
+      // Residential/commercial/land fields
+      beds: form.beds,
+      bedrooms: form.beds,
+      baths: form.baths,
+      bathrooms: form.baths,
+      square_feet: form.square_feet,
+      sqft: form.square_feet,
+      building_sqft: form.square_feet,
+      year_built: form.year_built,
+      built_year: form.year_built,
+      occupancy: form.occupancy,
+      occupancy_status: form.occupancy,
+      tenant_status: form.occupancy,
+      zoning: form.zoning,
+      zoning_type: form.zoning,
+      acres: form.acres,
+      land_acres: form.acres,
+      utilities: form.access_notes,
+      utility_access: form.access_notes,
+      road_access: form.occupancy,
+      access: form.occupancy,
+      noi: form.noi,
+      net_operating_income: form.noi,
+      cap_rate: form.cap_rate,
+
+      // Routing / intelligence
+      description: form.description,
+      notes: form.description,
+      seller_situation: [form.seller_situation, form.distress_signals].filter(Boolean).join(" | "),
+      access_notes: form.access_notes,
+      private_notes: form.access_notes,
+      deal_needs: form.routing_needs || form.deal_needs,
+      routing_needs: form.routing_needs,
+      needs: form.routing_needs || form.deal_needs,
+      route_context: form.routing_needs || form.deal_needs,
+      distress_signals: form.distress_signals,
+      seller_pressure: form.distress_signals,
+      pain_signals: form.distress_signals,
+      urgency_level: form.urgency_level,
+      urgency: form.urgency_level,
+      target_buyer: form.target_buyer,
+      capital_needed: form.capital_needed,
+      ideal_lender: form.ideal_lender,
+      contractor_scope: form.contractor_scope,
+      operator_scope: form.operator_scope,
+      jv_structure: form.jv_structure,
+      title_issue: form.title_issue,
+
+      ai_route_summary: aiRouteSummary,
+      route_summary: aiRouteSummary,
+      routing_summary: aiRouteSummary,
+
+      // Photos
+      photo_urls: photoUrls,
+      photos: photoUrls,
+      image_url: photoUrls[0] || "",
+      photo_url: photoUrls[0] || "",
+      main_photo_url: photoUrls[0] || "",
+      primary_photo_url: photoUrls[0] || "",
+    };
+
+    return {
+      ...canonical,
+      metadata: {
+        ...canonical,
+        source: "submit_page_full_payload",
+        canonical_kind: "deal",
+      },
+      raw_form_snapshot: {
+        ...form,
+      },
+    };
+  }
+
   async function submit() {
     if (busy) return;
 
@@ -585,33 +709,13 @@ export default function SubmitPage() {
 
       setMsg("Saving deal room...");
 
-      const aiRouteSummary = buildRouteSummary();
-
       const res = await fetch("/api/deal/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-vf-email": email,
         },
-        body: JSON.stringify({
-          ...form,
-          ai_route_summary: aiRouteSummary,
-          route_summary: aiRouteSummary,
-          routing_needs: form.routing_needs,
-          deal_needs: form.routing_needs || form.deal_needs,
-          needs: form.routing_needs || form.deal_needs,
-          distress_signals: form.distress_signals,
-          seller_situation: [form.seller_situation, form.distress_signals].filter(Boolean).join(" | "),
-          urgency_level: form.urgency_level,
-          exit_strategy: form.exit_strategy,
-          owner_email: email,
-          member_email: email,
-          photo_urls: urls,
-          photos: urls,
-          image_url: urls[0] || "",
-          photo_url: urls[0] || "",
-          main_photo_url: urls[0] || "",
-        }),
+        body: JSON.stringify(buildDealPayload(urls, email)),
       });
 
       const data = await safeJson(res);
