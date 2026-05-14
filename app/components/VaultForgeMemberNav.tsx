@@ -54,19 +54,12 @@ function workspaceFromPath(pathname: string) {
   if (pathname === "/" || pathname.includes("dashboard")) return "Dashboard";
   if (pathname.includes("pain-feed")) return "Pain Feed";
   if (pathname.includes("pain-room")) return "Pain Room";
-  if (pathname.includes("pain")) return "Pain Button";
-  if (pathname.includes("signals")) return "Signals";
-  if (pathname.includes("routing-room")) return "Routing Room";
-  if (pathname.includes("routing")) return "Routing";
-  if (pathname.includes("introduction")) return "Introductions";
+  if (pathname.includes("pain")) return "Pain";
   if (pathname.includes("messages")) return "Messages";
-  if (pathname.includes("activity")) return "Activity";
-  if (pathname.includes("alerts")) return "Alerts";
-  if (pathname.includes("projects")) return "Projects";
+  if (pathname.includes("projects") || pathname.includes("deal")) return "Projects";
   if (pathname.includes("members")) return "Members";
-  if (pathname.includes("network")) return "Network";
+  if (pathname.includes("network")) return "Members";
   if (pathname.includes("profile")) return "Profile";
-  if (pathname.includes("intelligence")) return "Intelligence";
   if (pathname.includes("admin")) return "Admin";
   return "Command Center";
 }
@@ -75,21 +68,24 @@ function isActive(pathname: string, href: string, key: string, active = "") {
   const current = active.toLowerCase();
   if (current && (current === key.toLowerCase() || current === href.toLowerCase())) return true;
   if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
+  if (href === "/pain") return pathname === "/pain";
+  if (href === "/projects") return pathname.startsWith("/projects") || pathname.startsWith("/deal");
+  if (href === "/members") return pathname.startsWith("/members") || pathname.startsWith("/network");
   return pathname.startsWith(href);
 }
 
+/*
+  Visible member navigation is intentionally clean.
+  Routing, signals, introductions, activity, and alerts still exist as background
+  AI orchestration infrastructure, but they are not primary member destinations.
+*/
 const links = [
   { label: "Dashboard", href: "/dashboard", key: "dashboard", tag: "HOME" },
+  { label: "Projects", href: "/projects", key: "projects", tag: "DEALS" },
   { label: "Pain", href: "/pain", key: "pain", tag: "INTAKE" },
-  { label: "Pain Feed", href: "/pain-feed", key: "pain-feed", tag: "FEED" },
-  { label: "Activity", href: "/activity", key: "activity", tag: "LIVE" },
-  { label: "Alerts", href: "/alerts", key: "alerts", tag: "SIGNAL" },
-  { label: "Routing", href: "/routing-inbox", key: "routing", tag: "FLOW" },
-  { label: "Introductions", href: "/introductions", key: "introductions", tag: "INTRO" },
-  { label: "Signals", href: "/signals", key: "signals", tag: "SIG" },
+  { label: "Pain Feed", href: "/pain-feed", key: "pain-feed", tag: "SIGNALS" },
   { label: "Messages", href: "/messages", key: "messages", tag: "MSG" },
   { label: "Members", href: "/members", key: "members", tag: "NET" },
-  { label: "Projects", href: "/projects", key: "projects", tag: "DEAL" },
   { label: "Profile", href: "/profile", key: "profile", tag: "ID" },
 ];
 
@@ -140,8 +136,7 @@ const center: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
   borderRadius: 24,
   padding: "13px 14px",
-  background:
-    "linear-gradient(135deg,rgba(0,0,0,.30),rgba(255,255,255,.035))",
+  background: "linear-gradient(135deg,rgba(0,0,0,.30),rgba(255,255,255,.035))",
   minWidth: 0,
 };
 
@@ -165,7 +160,7 @@ const pill: React.CSSProperties = {
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(6,minmax(0,1fr))",
+  gridTemplateColumns: "repeat(7,minmax(0,1fr))",
   gap: 9,
 };
 
@@ -263,7 +258,7 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
                 whiteSpace: "nowrap",
               }}
             >
-              Private Deal Flow · Real Execution
+              Private Deal Flow · AI Routing Network
             </div>
           </div>
         </Link>
@@ -292,7 +287,7 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
             {workspace}
           </div>
           <div style={{ color: "#94a3b8", lineHeight: 1.35, marginTop: 8, fontSize: 14 }}>
-            {subtitle || "Intelligence · Routing · Messaging · Execution"}
+            {subtitle || "AI Market Intelligence · Opportunity Flow · Execution"}
           </div>
         </div>
 
