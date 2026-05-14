@@ -766,7 +766,7 @@ export default function SubmitDealPage() {
           <section style={card}>
             <div style={label}>Save Status</div>
             <h2 style={{ margin: "10px 0 0", fontSize: 30 }}>{status}</h2>
-            {lastResponse ? (
+            {lastResponse && lastResponse.ok === false ? (
               <div style={{ marginTop: 14 }}>
                 <div style={{ ...label, fontSize: 11 }}>Backend Debug</div>
                 <pre
