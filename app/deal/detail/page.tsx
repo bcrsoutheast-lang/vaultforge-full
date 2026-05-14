@@ -9,8 +9,8 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function meta(row: Deal | null) {
-  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
 }
 
 function first(...values: unknown[]) {
@@ -26,6 +26,10 @@ function first(...values: unknown[]) {
   }
 
   return "";
+}
+
+function meta(row: Deal | null) {
+  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function from(deal: Deal | null, ...keys: string[]) {
@@ -47,7 +51,7 @@ function parseArray(value: unknown): string[] {
       .map((item: any) => {
         if (typeof item === "string") return clean(item);
         if (item && typeof item === "object") {
-          return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url || item.main_photo_url);
+          return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url || item.main_photo_url || item.src);
         }
         return "";
       })
@@ -84,8 +88,8 @@ function photosOf(deal: Deal | null) {
     m.photo_url,
     m.primary_photo_url,
     ...parseArray(deal.photo_urls),
-    ...parseArray(m.photo_urls),
     ...parseArray(deal.photos),
+    ...parseArray(m.photo_urls),
     ...parseArray(m.photos),
   ];
 
@@ -106,7 +110,7 @@ function money(value: unknown) {
   });
 }
 
-function numValue(value: unknown) {
+function numberValue(value: unknown) {
   const text = clean(value);
   if (!text) return null;
   const number = Number(text.replace(/[^\d.-]/g, ""));
@@ -114,214 +118,209 @@ function numValue(value: unknown) {
 }
 
 function marketText(deal: Deal | null) {
-  return (
-    [from(deal, "city"), from(deal, "state")].filter(Boolean).join(", ") ||
-    from(deal, "market", "location", "address", "property_address") ||
-    "Market not listed"
-  );
+  return [from(deal, "city"), from(deal, "state")].filter(Boolean).join(", ") || from(deal, "market", "location", "address", "property_address") || "Market not listed";
 }
 
-function titleText(deal: Deal | null) {
+function titleOf(deal: Deal | null) {
   return first(from(deal, "title", "deal_title", "project_title"), from(deal, "address"), "Deal Room");
 }
 
-function assetText(deal: Deal | null) {
-  return from(deal, "property_type", "deal_type", "asset_type") || "Asset";
+function assetType(deal: Deal | null) {
+  return from(deal, "property_type", "deal_type", "asset_type") || "Deal";
 }
 
-function strategyText(deal: Deal | null) {
+function strategyOf(deal: Deal | null) {
   return from(deal, "strategy", "exit_strategy", "deal_strategy") || "Strategy not listed";
 }
 
-function bedsBaths(deal: Deal | null) {
-  const beds = from(deal, "beds", "bedrooms");
-  const baths = from(deal, "baths", "bathrooms");
-  return [beds ? `${beds} bd` : "", baths ? `${baths} ba` : ""].filter(Boolean).join(" / ") || "Not listed";
+function ownerOf(deal: Deal | null) {
+  return cleanEmail(from(deal, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email", "submitted_by", "email"));
 }
 
-function sqftAcres(deal: Deal | null) {
-  const sqft = from(deal, "square_feet", "sqft", "building_sqft");
-  const acres = from(deal, "acres", "land_acres", "lot_size");
-  if (sqft) return `${sqft} sqft`;
-  if (acres) return `${acres} acres`;
-  return "Not listed";
+function askValue(deal: Deal | null) {
+  return from(deal, "asking_price", "price", "ask", "purchase_price");
+}
+
+function arvValue(deal: Deal | null) {
+  return from(deal, "arv", "arv_value", "estimated_value", "after_repair_value");
+}
+
+function repairsValue(deal: Deal | null) {
+  return from(deal, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
 }
 
 function spreadText(deal: Deal | null) {
-  const ask = numValue(from(deal, "asking_price", "price", "ask", "purchase_price"));
-  const arv = numValue(from(deal, "arv", "arv_value", "estimated_value", "after_repair_value"));
-  const repairs = numValue(from(deal, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"));
+  const ask = numberValue(askValue(deal));
+  const arv = numberValue(arvValue(deal));
+  const repairs = numberValue(repairsValue(deal));
 
-  if (ask === null || arv === null) return "Spread pending";
-  const net = arv - ask - (repairs || 0);
-  return money(net);
+  if (ask === null || arv === null) return "Need ask + ARV";
+
+  const spread = arv - ask - (repairs || 0);
+  return money(spread);
 }
 
-function cleanSummaryText(value: string) {
-  return clean(value)
-    .replace(/VF_[A-Z_]+_START[\s\S]*?VF_[A-Z_]+_END/g, "")
-    .replace(/\s*\|\s*/g, " • ")
-    .replace(/\s+/g, " ")
-    .trim();
+function spreadTone(deal: Deal | null) {
+  const ask = numberValue(askValue(deal));
+  const arv = numberValue(arvValue(deal));
+  const repairs = numberValue(repairsValue(deal)) || 0;
+  if (ask === null || arv === null) return "neutral";
+  const spread = arv - ask - repairs;
+  if (spread >= 75000) return "strong";
+  if (spread >= 25000) return "watch";
+  return "risk";
 }
 
-function existingSummary(deal: Deal | null) {
-  return cleanSummaryText(
-    first(
-      from(deal, "ai_summary"),
-      from(deal, "ai_route_summary"),
-      from(deal, "route_summary"),
-      from(deal, "routing_summary"),
-      from(deal, "summary")
-    )
+function bedsBaths(deal: Deal | null) {
+  return [from(deal, "beds", "bedrooms"), from(deal, "baths", "bathrooms")].filter(Boolean).join(" / ") || "Not listed";
+}
+
+function sizeText(deal: Deal | null) {
+  return from(deal, "sqft", "square_feet", "building_sqft", "lot_size", "acres", "land_acres") || "Not listed";
+}
+
+function routeNeed(deal: Deal | null) {
+  return from(deal, "routing_needs", "deal_needs", "needs", "route_context") || "Owner review / buyer route";
+}
+
+function pressureText(deal: Deal | null) {
+  return from(deal, "distress_signals", "seller_pressure", "pain_signals", "urgency", "urgency_level", "seller_situation") || "No urgent pressure listed.";
+}
+
+function summaryText(deal: Deal | null) {
+  const saved = first(
+    from(deal, "ai_route_summary", "route_summary", "routing_summary", "ai_summary"),
+    from(deal, "description", "notes", "note")
   );
+
+  if (saved) return saved;
+
+  const parts = [
+    `${assetType(deal)} opportunity in ${marketText(deal)}.`,
+    `Strategy: ${strategyOf(deal)}.`,
+    `Economics: ask ${money(askValue(deal))}, ARV ${money(arvValue(deal))}, repairs ${money(repairsValue(deal))}, spread ${spreadText(deal)}.`,
+    `Routing read: ${routeNeed(deal)}.`,
+    `Pressure: ${pressureText(deal)}.`,
+  ];
+
+  return parts.join(" ");
 }
 
-function likelyRouteStack(deal: Deal | null) {
-  const type = assetText(deal).toLowerCase();
-  const strategy = strategyText(deal).toLowerCase();
-  const needs = from(deal, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
-  const pressure = from(deal, "distress_signals", "seller_pressure", "pain_signals", "seller_situation").toLowerCase();
+function routeStack(deal: Deal | null) {
+  const text = `${routeNeed(deal)} ${pressureText(deal)} ${strategyOf(deal)} ${assetType(deal)}`.toLowerCase();
   const stack: string[] = [];
 
-  if (needs.includes("buyer") || strategy.includes("flip") || strategy.includes("wholesale")) stack.push("Cash buyer");
-  if (needs.includes("contractor") || from(deal, "repair_estimate", "repairs_needed", "rehab_budget")) stack.push("Contractor");
-  if (needs.includes("lender") || needs.includes("capital") || pressure.includes("funding") || pressure.includes("gap")) stack.push("Private lender");
-  if (needs.includes("jv") || needs.includes("partner") || needs.includes("operator")) stack.push("JV/operator");
-  if (type.includes("land")) stack.push("Builder / developer");
-  if (type.includes("commercial") || from(deal, "noi", "cap_rate")) stack.push("Commercial investor");
-  if (!stack.length) stack.push("Buyer", "Operator", "Owner review");
+  if (text.includes("buyer") || text.includes("wholesale") || text.includes("assign") || text.includes("flip")) stack.push("Cash Buyer");
+  if (text.includes("contractor") || text.includes("repair") || text.includes("rehab")) stack.push("Contractor / Rehab Operator");
+  if (text.includes("lender") || text.includes("capital") || text.includes("funding")) stack.push("Private Lender");
+  if (text.includes("jv") || text.includes("partner") || text.includes("operator")) stack.push("JV / Operator");
+  if (text.includes("land") || text.includes("develop") || text.includes("entitlement")) stack.push("Builder / Developer");
+  if (text.includes("commercial") || text.includes("noi") || text.includes("cap")) stack.push("Commercial Investor");
 
-  return Array.from(new Set(stack)).slice(0, 4);
-}
-
-function bestFormation(deal: Deal | null) {
-  const stack = likelyRouteStack(deal);
-  const strategy = strategyText(deal).toLowerCase();
-  const type = assetText(deal).toLowerCase();
-
-  if (stack.includes("Private lender")) return "Capital-backed acquisition";
-  if (stack.includes("JV/operator")) return "JV / operator-led execution";
-  if (stack.includes("Contractor")) return "Contractor-verified flip";
-  if (stack.includes("Builder / developer")) return "Developer / builder route";
-  if (type.includes("commercial")) return "Investor yield review";
-  if (strategy.includes("wholesale")) return "Buyer-first off-market route";
-  if (strategy.includes("hold") || strategy.includes("rental")) return "Buy-and-hold investor route";
-
-  return "Buyer-first execution route";
-}
-
-function confidenceScore(deal: Deal | null) {
-  let score = 38;
-
-  if (from(deal, "asking_price", "price", "ask", "purchase_price")) score += 11;
-  if (from(deal, "arv", "arv_value", "estimated_value", "after_repair_value")) score += 11;
-  if (from(deal, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget")) score += 8;
-  if (from(deal, "city", "state", "market")) score += 8;
-  if (from(deal, "strategy", "exit_strategy", "deal_strategy")) score += 8;
-  if (from(deal, "beds", "bedrooms", "sqft", "building_sqft", "land_acres", "acres")) score += 6;
-  if (from(deal, "routing_needs", "deal_needs", "needs", "route_context")) score += 7;
-  if (from(deal, "distress_signals", "seller_pressure", "pain_signals", "seller_situation")) score += 7;
-  if (photosOf(deal).length) score += 9;
-
-  return Math.max(0, Math.min(96, score));
-}
-
-function riskText(deal: Deal | null) {
-  const pressure = `${from(deal, "distress_signals", "seller_pressure", "pain_signals")} ${from(deal, "seller_situation")} ${from(deal, "title_issue")}`.toLowerCase();
-
-  if (pressure.includes("foreclosure") || pressure.includes("urgent") || pressure.includes("emergency")) {
-    return "High urgency: confirm title, access, and buyer/capital readiness before broad routing.";
-  }
-
-  if (pressure.includes("funding") || pressure.includes("gap")) {
-    return "Capital risk: verify funding gap and timeline before introducing buyers or operators.";
-  }
-
-  if (from(deal, "repair_estimate", "repairs_needed", "rehab_budget") && !from(deal, "contractor_scope")) {
-    return "Execution risk: repairs are listed, so contractor scope or inspection notes should be confirmed.";
-  }
-
-  return "Normal review: validate numbers, photo condition, access, and member fit before routing.";
+  if (!stack.length) stack.push("Buyer", "Operator", "Owner Review");
+  return Array.from(new Set(stack)).slice(0, 5);
 }
 
 function bestNextMove(deal: Deal | null) {
-  const stack = likelyRouteStack(deal);
-  const ask = from(deal, "asking_price", "price", "ask", "purchase_price");
-  const arv = from(deal, "arv", "arv_value", "estimated_value", "after_repair_value");
-  const repairs = from(deal, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
+  const text = `${routeNeed(deal)} ${pressureText(deal)} ${strategyOf(deal)} ${assetType(deal)}`.toLowerCase();
 
-  if (stack.includes("Private lender")) return "Verify funding gap, then route to private lender with ask, ARV, repairs, and timeline.";
-  if (stack.includes("Contractor")) return "Confirm repair scope and photos, then send to contractor-backed buyer/operator.";
-  if (stack.includes("Builder / developer")) return "Confirm zoning, utilities, road access, and entitlement path before developer routing.";
-  if (stack.includes("Commercial investor")) return "Confirm NOI, tenant status, cap rate, and lease details before investor routing.";
-  if (ask && arv && repairs) return "Package the spread and route to cash buyers first; keep owner contact controlled.";
-  if (ask && arv) return "Confirm repair estimate, then route as buyer-first opportunity.";
-  return "Complete the key economics, then route to the best-fit buyer/operator lane.";
+  if (text.includes("lender") || text.includes("funding") || text.includes("capital")) {
+    return "Verify ask, ARV, repairs, and timeline, then route to private capital before releasing sensitive owner details.";
+  }
+
+  if (text.includes("contractor") || text.includes("repair") || text.includes("rehab")) {
+    return "Get repair scope priced first, then route the deal to buyers/operators with the spread already protected.";
+  }
+
+  if (text.includes("fast close") || text.includes("urgent") || text.includes("foreclosure")) {
+    return "Prioritize speed: package photos, numbers, and access notes, then route to cash buyers with proof-of-funds discipline.";
+  }
+
+  if (text.includes("land") || text.includes("entitlement") || text.includes("develop")) {
+    return "Package zoning, utilities, access, acreage, and entitlement status, then route to builders/developers first.";
+  }
+
+  if (text.includes("commercial") || text.includes("noi") || text.includes("cap")) {
+    return "Confirm income, tenant status, and cap-rate assumptions, then route to commercial investors or owner-users.";
+  }
+
+  return "Confirm the missing execution details, then route to the highest-fit buyer/operator stack instead of broadcasting broadly.";
 }
 
-function executiveSummary(deal: Deal | null) {
-  const saved = existingSummary(deal);
-  if (saved) return saved;
+function confidenceScore(deal: Deal | null) {
+  let score = 34;
+  if (askValue(deal)) score += 10;
+  if (arvValue(deal)) score += 10;
+  if (repairsValue(deal)) score += 8;
+  if (from(deal, "beds", "bedrooms", "sqft", "building_sqft", "acres", "land_acres")) score += 8;
+  if (from(deal, "strategy", "exit_strategy")) score += 8;
+  if (routeNeed(deal) && routeNeed(deal) !== "Owner review / buyer route") score += 12;
+  if (pressureText(deal) && pressureText(deal) !== "No urgent pressure listed.") score += 8;
+  if (photosOf(deal).length) score += 10;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
 
-  const title = titleText(deal);
-  const type = assetText(deal);
-  const market = marketText(deal);
-  const strategy = strategyText(deal);
-  const ask = money(from(deal, "asking_price", "price", "ask", "purchase_price"));
-  const arv = money(from(deal, "arv", "arv_value", "estimated_value", "after_repair_value"));
-  const repairs = money(from(deal, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"));
-  const route = likelyRouteStack(deal).join(", ");
+function urgencyScore(deal: Deal | null) {
+  const text = pressureText(deal).toLowerCase();
+  let score = 34;
+  if (text.includes("urgent")) score += 26;
+  if (text.includes("fast close")) score += 22;
+  if (text.includes("foreclosure")) score += 26;
+  if (text.includes("funding gap")) score += 18;
+  if (text.includes("deadline")) score += 16;
+  if (routeNeed(deal) && routeNeed(deal) !== "Owner review / buyer route") score += 8;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
 
-  return [
-    `${title} is a ${type} opportunity in ${market}.`,
-    strategy !== "Strategy not listed" ? `Likely strategy is ${strategy}.` : "",
-    ask !== "Not listed" || arv !== "Not listed" || repairs !== "Not listed"
-      ? `Economics show Ask ${ask}, ARV ${arv}, and Repairs ${repairs}.`
-      : "",
-    `Recommended route stack: ${route}.`,
-    `Best next move: ${bestNextMove(deal)}`,
-  ]
-    .filter(Boolean)
-    .join(" ");
+function riskRead(deal: Deal | null) {
+  const missing: string[] = [];
+  if (!askValue(deal)) missing.push("ask");
+  if (!arvValue(deal)) missing.push("ARV/value");
+  if (!repairsValue(deal)) missing.push("repairs/scope");
+  if (!from(deal, "occupancy", "tenant_status")) missing.push("occupancy");
+  if (!from(deal, "access_notes")) missing.push("access notes");
+
+  if (!missing.length) return "Core underwriting and execution fields are present. Ready for controlled routing.";
+  return `Clarify ${missing.slice(0, 4).join(", ")} before wide routing.`;
+}
+
+function valueText(value: unknown) {
+  return clean(value) || "Not listed";
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at 8% 0%, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at 88% 10%, rgba(56,189,248,.12), transparent 28%), linear-gradient(180deg,#02040a,#071326 55%,#02040a)",
+    "radial-gradient(circle at 8% 0%, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at 92% 10%, rgba(86,216,255,.12), transparent 28%), linear-gradient(180deg,#020409,#071326 54%,#020409)",
   color: "white",
-  padding: "24px 16px 100px",
+  padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
 };
 
 const wrap: React.CSSProperties = {
-  width: "min(1180px,100%)",
+  width: "min(1240px,100%)",
   margin: "0 auto",
 };
 
-const card: React.CSSProperties = {
+const panel: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.22)",
   borderRadius: 28,
-  padding: 22,
-  background: "rgba(255,255,255,.04)",
-  marginBottom: 18,
-  boxShadow: "0 24px 80px rgba(0,0,0,.28)",
+  background: "linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.028))",
+  boxShadow: "0 24px 90px rgba(0,0,0,.32)",
 };
 
-const glass: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 22,
-  padding: 16,
-  background: "rgba(255,255,255,.045)",
+const card: React.CSSProperties = {
+  ...panel,
+  padding: 20,
+  marginBottom: 16,
 };
 
 const label: React.CSSProperties = {
   color: "#e8c46b",
-  fontWeight: 950,
-  fontSize: 12,
   letterSpacing: ".18em",
   textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 11,
 };
 
 const muted: React.CSSProperties = {
@@ -334,67 +333,70 @@ const button: React.CSSProperties = {
   justifyContent: "center",
   alignItems: "center",
   minHeight: 48,
-  padding: "12px 18px",
   borderRadius: 999,
+  padding: "12px 17px",
+  border: 0,
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
   textDecoration: "none",
-  fontWeight: 900,
-  border: "1px solid rgba(255,255,255,.14)",
-  color: "white",
-  background: "rgba(255,255,255,.06)",
 };
 
-const primary: React.CSSProperties = {
+const ghost: React.CSSProperties = {
   ...button,
-  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-  color: "#071326",
-  border: "none",
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.15)",
+  color: "white",
 };
 
 const chip: React.CSSProperties = {
-  border: "1px solid rgba(157,243,191,.24)",
+  border: "1px solid rgba(157,243,191,.22)",
   borderRadius: 999,
   padding: "7px 10px",
   color: "#9df3bf",
-  background: "rgba(157,243,191,.075)",
+  background: "rgba(157,243,191,.07)",
   fontSize: 12,
-  fontWeight: 850,
+  fontWeight: 900,
   display: "inline-flex",
 };
 
-function Metric({ title, value, tone }: { title: string; value: unknown; tone?: "gold" | "blue" | "green" }) {
-  const color = tone === "blue" ? "#bfdbfe" : tone === "green" ? "#9df3bf" : "#f8e7b0";
+function Mini({ labelText, value, tone }: { labelText: string; value: unknown; tone?: "strong" | "watch" | "risk" | "neutral" }) {
+  const colors = {
+    strong: { border: "rgba(157,243,191,.28)", bg: "rgba(157,243,191,.075)", color: "#9df3bf" },
+    watch: { border: "rgba(232,196,107,.28)", bg: "rgba(232,196,107,.075)", color: "#f8e7b0" },
+    risk: { border: "rgba(248,113,113,.30)", bg: "rgba(248,113,113,.075)", color: "#fecaca" },
+    neutral: { border: "rgba(255,255,255,.12)", bg: "rgba(255,255,255,.045)", color: "white" },
+  }[tone || "neutral"];
 
   return (
-    <div style={glass}>
-      <div style={label}>{title}</div>
-      <div style={{ fontSize: 28, fontWeight: 1000, marginTop: 8, color }}>{clean(value) || "Not listed"}</div>
+    <div style={{ border: `1px solid ${colors.border}`, borderRadius: 18, padding: 14, background: colors.bg }}>
+      <div style={{ ...label, color: colors.color }}>{labelText}</div>
+      <div style={{ marginTop: 8, fontSize: 22, fontWeight: 1000, color: colors.color }}>{clean(value) || "Not listed"}</div>
     </div>
   );
 }
 
-function ScoreBar({ title, value }: { title: string; value: number }) {
+function Score({ labelText, value, caption }: { labelText: string; value: number; caption: string }) {
   return (
-    <div style={glass}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-        <div style={label}>{title}</div>
-        <strong>{value}%</strong>
+    <div style={{ border: "1px solid rgba(255,255,255,.11)", borderRadius: 18, padding: 14, background: "rgba(0,0,0,.16)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, fontWeight: 950 }}>
+        <span>{labelText}</span>
+        <span>{value}%</span>
       </div>
-      <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 12 }}>
-        <div style={{ height: "100%", width: `${value}%`, borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)" }} />
+      <div style={{ height: 9, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 10 }}>
+        <div style={{ width: `${value}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)" }} />
       </div>
+      <p style={{ ...muted, margin: "8px 0 0", fontSize: 13 }}>{caption}</p>
     </div>
   );
 }
 
-function NotesBlock({ title, value }: { title: string; value: unknown }) {
-  const text = clean(value);
-  if (!text) return null;
-
+function DetailRow({ labelText, value }: { labelText: string; value: unknown }) {
   return (
-    <section style={card}>
-      <div style={label}>{title}</div>
-      <p style={{ ...muted, fontSize: 18, margin: "10px 0 0" }}>{text}</p>
-    </section>
+    <div style={{ borderTop: "1px solid rgba(255,255,255,.08)", padding: "12px 0" }}>
+      <div style={{ ...label, fontSize: 10 }}>{labelText}</div>
+      <div style={{ marginTop: 5, color: "#e5eefb", fontWeight: 800 }}>{valueText(value)}</div>
+    </div>
   );
 }
 
@@ -438,170 +440,172 @@ export default function DealDetailPage() {
   }, []);
 
   const photos = useMemo(() => photosOf(deal), [deal]);
-  const signalId = from(deal, "signal_id");
+  const signalId = from(deal, "signal_id", "canonical_event_id", "routing_id");
+  const owner = ownerOf(deal);
+  const routeItems = routeStack(deal);
   const confidence = confidenceScore(deal);
-  const routeStack = likelyRouteStack(deal);
-  const mainPhoto = photos[0];
+  const urgency = urgencyScore(deal);
+  const spreadToneValue = spreadTone(deal);
 
   return (
     <main style={page}>
       <style>{`
         @media (max-width: 860px) {
-          .vf-hero { grid-template-columns: 1fr !important; }
-          .vf-grid { grid-template-columns: 1fr !important; }
-          .vf-actions { display: grid !important; grid-template-columns: 1fr !important; }
-          .vf-actions a { width: 100%; box-sizing: border-box; }
+          .vf-hero,
+          .vf-grid,
+          .vf-actions,
+          .vf-two {
+            grid-template-columns: 1fr !important;
+          }
+          .vf-actions {
+            display: grid !important;
+            gap: 10px !important;
+          }
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+            justify-content: center;
+          }
         }
       `}</style>
 
       <div style={wrap}>
-        <section style={card}>
-          <div style={label}>VaultForge Deal Room</div>
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-            <Link href="/projects" style={primary}>Back to Projects</Link>
-            <Link href="/dashboard" style={button}>Dashboard</Link>
-            <Link href="/submit" style={button}>Create Deal</Link>
-            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={button}>Signal Room</Link> : null}
-            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={button}>Routing Room</Link> : null}
+        <section className="vf-hero" style={{ ...panel, display: "grid", gridTemplateColumns: "minmax(280px,420px) 1fr", gap: 22, padding: 18, marginBottom: 16 }}>
+          <div style={{ borderRadius: 24, overflow: "hidden", border: "1px solid rgba(232,196,107,.18)", background: "rgba(0,0,0,.24)", minHeight: 300 }}>
+            {photos[0] ? (
+              <img src={photos[0]} alt="Deal" style={{ width: "100%", height: "100%", minHeight: 300, objectFit: "cover", display: "block" }} />
+            ) : (
+              <div style={{ minHeight: 300, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 900 }}>No photo connected</div>
+            )}
+          </div>
+
+          <div style={{ padding: "8px 4px" }}>
+            <div style={label}>VaultForge Deal Command Room</div>
+            <h1 style={{ fontSize: "clamp(42px,8vw,84px)", lineHeight: 0.9, letterSpacing: "-.065em", margin: "12px 0 12px" }}>
+              {deal ? titleOf(deal) : "Deal Room"}
+            </h1>
+
+            {status ? <p style={{ ...muted, fontSize: 20 }}>{status}</p> : null}
+
+            {deal ? (
+              <>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                  <span style={chip}>{assetType(deal)}</span>
+                  <span style={chip}>{marketText(deal)}</span>
+                  <span style={chip}>{strategyOf(deal)}</span>
+                  {owner ? <span style={chip}>Owner: {owner}</span> : null}
+                </div>
+
+                <div style={{ border: "1px solid rgba(232,196,107,.22)", borderRadius: 22, padding: 16, background: "rgba(232,196,107,.06)", marginBottom: 14 }}>
+                  <div style={label}>Executive Summary</div>
+                  <p style={{ ...muted, margin: "9px 0 0", fontSize: 17 }}>{summaryText(deal)}</p>
+                </div>
+
+                <div style={{ border: "1px solid rgba(157,243,191,.23)", borderRadius: 22, padding: 16, background: "rgba(157,243,191,.065)", marginBottom: 14 }}>
+                  <div style={{ ...label, color: "#9df3bf" }}>Best Next Move</div>
+                  <p style={{ color: "#dfffea", margin: "9px 0 0", fontSize: 17, lineHeight: 1.55, fontWeight: 800 }}>{bestNextMove(deal)}</p>
+                </div>
+
+                <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <Link href="/projects" style={button}>Back to Projects</Link>
+                  <Link href="/submit" style={ghost}>Create Deal</Link>
+                  <Link href="/dashboard" style={ghost}>Dashboard</Link>
+                  {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Signal Room</Link> : null}
+                  {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
+                </div>
+              </>
+            ) : null}
           </div>
         </section>
 
-        {status ? (
-          <section style={card}>
-            <div style={label}>Status</div>
-            <h1 style={{ margin: "10px 0 0", fontSize: 34 }}>{status}</h1>
-          </section>
-        ) : null}
-
         {deal ? (
           <>
-            <section className="vf-hero" style={{ display: "grid", gridTemplateColumns: "390px 1fr", gap: 18, alignItems: "stretch" }}>
-              <div style={{ ...card, padding: 0, overflow: "hidden", minHeight: 310 }}>
-                {mainPhoto ? (
-                  <img src={mainPhoto} alt="Deal" style={{ width: "100%", height: "100%", minHeight: 310, objectFit: "cover", display: "block" }} />
-                ) : (
-                  <div style={{ minHeight: 310, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 900 }}>
-                    No photo attached
-                  </div>
-                )}
-              </div>
-
-              <section style={card}>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-                  <span style={chip}>{assetText(deal)}</span>
-                  <span style={chip}>{marketText(deal)}</span>
-                  <span style={chip}>{strategyText(deal)}</span>
-                </div>
-
-                <h1
-                  style={{
-                    fontSize: "clamp(44px,8vw,82px)",
-                    lineHeight: 0.9,
-                    margin: "6px 0 14px",
-                    letterSpacing: "-.07em",
-                  }}
-                >
-                  {titleText(deal)}
-                </h1>
-
-                <div style={{ border: "1px solid rgba(232,196,107,.22)", borderRadius: 22, padding: 18, background: "rgba(232,196,107,.07)" }}>
-                  <div style={label}>Executive Summary</div>
-                  <p style={{ ...muted, fontSize: 19, margin: "10px 0 0" }}>{executiveSummary(deal)}</p>
-                </div>
-
-                <div style={{ marginTop: 14, border: "1px solid rgba(157,243,191,.22)", borderRadius: 22, padding: 18, background: "rgba(157,243,191,.06)" }}>
-                  <div style={label}>Best Next Move</div>
-                  <p style={{ color: "#dbeafe", fontSize: 20, lineHeight: 1.45, margin: "10px 0 0", fontWeight: 850 }}>
-                    {bestNextMove(deal)}
-                  </p>
-                </div>
-              </section>
+            <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginBottom: 16 }}>
+              <Mini labelText="Ask" value={money(askValue(deal))} />
+              <Mini labelText="ARV" value={money(arvValue(deal))} />
+              <Mini labelText="Repairs" value={money(repairsValue(deal))} />
+              <Mini labelText="Spread" value={spreadText(deal)} tone={spreadToneValue as any} />
             </section>
 
-            <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14 }}>
-              <Metric title="Ask" value={money(from(deal, "asking_price", "price", "ask", "purchase_price"))} />
-              <Metric title="ARV" value={money(from(deal, "arv", "arv_value", "estimated_value", "after_repair_value"))} />
-              <Metric title="Repairs" value={money(from(deal, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"))} />
-              <Metric title="Spread Read" value={spreadText(deal)} tone="green" />
-              <Metric title="Beds / Baths" value={bedsBaths(deal)} tone="blue" />
-              <Metric title="Size" value={sqftAcres(deal)} tone="blue" />
-              <Metric title="Year Built" value={from(deal, "year_built", "built_year") || "Not listed"} tone="blue" />
-              <Metric title="Occupancy" value={from(deal, "occupancy", "occupancy_status", "tenant_status") || "Not listed"} tone="blue" />
+            <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1.3fr .9fr .9fr", gap: 14, marginBottom: 16 }}>
+              <div style={card}>
+                <div style={label}>Route Stack</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                  {routeItems.map((item) => (
+                    <span key={item} style={chip}>{item}</span>
+                  ))}
+                </div>
+                <p style={{ ...muted, margin: "14px 0 0" }}>{routeNeed(deal)}</p>
+              </div>
+
+              <Score labelText="Confidence" value={confidence} caption={riskRead(deal)} />
+              <Score labelText="Urgency" value={urgency} caption={pressureText(deal)} />
             </section>
 
-            <section style={card}>
-              <div style={label}>Bloomberg Intelligence Layer</div>
-
-              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
-                <ScoreBar title="Confidence" value={confidence} />
-                <ScoreBar title="Execution Readiness" value={Math.max(35, Math.min(95, confidence - 8 + (photos.length ? 8 : 0)))} />
-              </div>
-
-              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr .8fr", gap: 14, marginTop: 14 }}>
-                <div style={glass}>
-                  <div style={label}>Recommended Formation</div>
-                  <h2 style={{ fontSize: 30, lineHeight: 1, margin: "10px 0 0" }}>{bestFormation(deal)}</h2>
-                  <p style={{ ...muted, margin: "10px 0 0" }}>{riskText(deal)}</p>
-                </div>
-
-                <div style={glass}>
-                  <div style={label}>Route Stack</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-                    {routeStack.map((item) => (
-                      <span key={item} style={chip}>{item}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginBottom: 16 }}>
+              <Mini labelText="Beds / Baths" value={bedsBaths(deal)} />
+              <Mini labelText="Size" value={sizeText(deal)} />
+              <Mini labelText="Year Built" value={from(deal, "year_built", "built_year") || "Not listed"} />
+              <Mini labelText="Occupancy" value={from(deal, "occupancy", "occupancy_status", "tenant_status") || "Not listed"} />
             </section>
 
             {photos.length > 1 ? (
               <section style={card}>
-                <div style={label}>Additional Photos</div>
-                <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginTop: 12 }}>
+                <div style={label}>Photo Strip</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginTop: 12 }}>
                   {photos.slice(1).map((photo) => (
-                    <img
-                      key={photo}
-                      src={photo}
-                      alt="Deal"
-                      style={{
-                        width: "100%",
-                        height: 190,
-                        objectFit: "cover",
-                        borderRadius: 20,
-                        border: "1px solid rgba(232,196,107,.18)",
-                      }}
-                    />
+                    <img key={photo} src={photo} alt="Deal" style={{ width: "100%", height: 150, objectFit: "cover", borderRadius: 16, border: "1px solid rgba(232,196,107,.16)" }} />
                   ))}
                 </div>
               </section>
             ) : null}
 
-            <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14 }}>
-              <Metric title="Zoning" value={from(deal, "zoning", "zoning_type") || "Not listed"} />
-              <Metric title="Utilities" value={from(deal, "utilities", "utility_access") || "Not listed"} />
-              <Metric title="Road Access" value={from(deal, "road_access", "access", "frontage", "road_frontage") || "Not listed"} />
-              <Metric title="NOI / Cap" value={[from(deal, "noi", "net_operating_income"), from(deal, "cap_rate")].filter(Boolean).join(" / ") || "Not listed"} />
-              <Metric title="Timeline" value={from(deal, "timeline", "deadline") || "Not listed"} />
-              <Metric title="Capital Need" value={from(deal, "capital_needed", "funding_needed") || "Not listed"} />
+            <section className="vf-two" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+              <div style={card}>
+                <div style={label}>Situation Brief</div>
+                <p style={{ ...muted, fontSize: 17 }}>{from(deal, "seller_situation", "description", "notes", "private_notes") || "No seller/situation notes listed."}</p>
+              </div>
+
+              <div style={card}>
+                <div style={label}>Access / Execution Notes</div>
+                <p style={{ ...muted, fontSize: 17 }}>{from(deal, "access_notes", "condition", "timeline", "private_notes") || "No access or execution notes listed."}</p>
+              </div>
             </section>
 
-            <NotesBlock title="Routing Need" value={from(deal, "routing_needs", "deal_needs", "needs", "route_context")} />
-            <NotesBlock title="Signal Pressure" value={from(deal, "distress_signals", "seller_pressure", "pain_signals")} />
-            <NotesBlock title="Seller / Situation" value={from(deal, "seller_situation")} />
-            <NotesBlock title="Access Notes" value={from(deal, "access_notes")} />
-            <NotesBlock title="Private Notes" value={from(deal, "private_notes")} />
-            <NotesBlock title="Deal Notes" value={from(deal, "description", "notes", "note")} />
-
-            <section style={{ ...card, opacity: 0.72 }}>
-              <div style={label}>Internal Reference</div>
-              <p style={{ ...muted, margin: "10px 0 0" }}>
-                Reference hidden from top view. Deal room loaded successfully.
-              </p>
-              <p style={{ ...muted, fontSize: 13, margin: "10px 0 0" }}>
-                Deal reference: {dealId || "Loaded"} {signalId ? "• Signal linked" : ""}
-              </p>
+            <section style={card}>
+              <div style={label}>Detailed Deal Data</div>
+              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 18, marginTop: 10 }}>
+                <div>
+                  <DetailRow labelText="Property Type" value={assetType(deal)} />
+                  <DetailRow labelText="Market" value={marketText(deal)} />
+                  <DetailRow labelText="Address" value={from(deal, "address", "property_address", "location")} />
+                  <DetailRow labelText="County" value={from(deal, "county")} />
+                </div>
+                <div>
+                  <DetailRow labelText="Strategy" value={strategyOf(deal)} />
+                  <DetailRow labelText="Timeline" value={from(deal, "timeline", "deadline", "desired_timeline")} />
+                  <DetailRow labelText="Zoning" value={from(deal, "zoning", "zoning_type")} />
+                  <DetailRow labelText="Utilities" value={from(deal, "utilities", "utility_access")} />
+                </div>
+                <div>
+                  <DetailRow labelText="Road Access / Frontage" value={from(deal, "road_access", "frontage", "road_frontage")} />
+                  <DetailRow labelText="NOI / Rent" value={[from(deal, "noi", "net_operating_income"), from(deal, "rent_estimate", "monthly_rent")].filter(Boolean).join(" / ")} />
+                  <DetailRow labelText="Cap Rate" value={from(deal, "cap_rate")} />
+                  <DetailRow labelText="Contact" value={[from(deal, "contact_name", "seller_name", "owner_name"), from(deal, "contact_phone", "seller_phone", "owner_phone"), from(deal, "contact_email", "seller_email", "owner_contact_email")].filter(Boolean).join(" / ")} />
+                </div>
+              </div>
             </section>
+
+            <details style={{ ...card, padding: 0, overflow: "hidden" }}>
+              <summary style={{ padding: 18, cursor: "pointer", fontWeight: 950, color: "#e8c46b", letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>
+                Internal IDs / Technical Links
+              </summary>
+              <div style={{ padding: "0 18px 18px" }}>
+                <DetailRow labelText="Deal ID" value={dealId || from(deal, "id", "deal_id", "item_id")} />
+                <DetailRow labelText="Signal ID" value={signalId || "Not linked"} />
+                <DetailRow labelText="Owner / Submitted By" value={owner || "Not listed"} />
+              </div>
+            </details>
           </>
         ) : null}
       </div>
