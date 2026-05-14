@@ -263,26 +263,64 @@ async function safeJson(res: Response) {
   }
 }
 
+function extractUploadUrl(data: any) {
+  return String(
+    data?.url ||
+      data?.publicUrl ||
+      data?.public_url ||
+      data?.photo_url ||
+      data?.image_url ||
+      data?.main_photo_url ||
+      data?.file_url ||
+      data?.path_url ||
+      ""
+  ).trim();
+}
+
 async function upload(file: File, email: string) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("email", email);
+  const endpoints = [
+    "/api/deal/upload-photo",
+    "/api/uploads/deal",
+    "/api/uploads/project",
+    "/api/uploads/pain",
+  ];
 
-  const res = await fetch("/api/deal/upload-photo", {
-    method: "POST",
-    headers: {
-      "x-vf-email": email,
-    },
-    body: formData,
-  });
+  const errors: string[] = [];
 
-  const data = await safeJson(res);
+  for (const endpoint of endpoints) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("photo", file);
+    formData.append("image", file);
+    formData.append("email", email);
+    formData.append("owner_email", email);
+    formData.append("member_email", email);
+    formData.append("source", "deal");
+    formData.append("folder", "deals");
 
-  if (!res.ok || data?.ok === false || !data?.url) {
-    throw new Error(data?.error || data?.details || "Photo upload failed.");
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "x-vf-email": email,
+        },
+        body: formData,
+      });
+
+      const data = await safeJson(res);
+      const url = extractUploadUrl(data);
+
+      if (res.ok && data?.ok !== false && url) {
+        return url;
+      }
+
+      errors.push(`${endpoint}: ${data?.error || data?.details || res.statusText || "upload failed"}`);
+    } catch (error: any) {
+      errors.push(`${endpoint}: ${error?.message || String(error)}`);
+    }
   }
 
-  return String(data.url);
+  throw new Error(`Photo upload failed. Tried ${endpoints.length} upload routes. ${errors.slice(0, 3).join(" | ")}`);
 }
 
 function strategyOptions(type: DealType) {
@@ -507,6 +545,9 @@ export default function SubmitPage() {
           owner_email: email,
           member_email: email,
           photo_urls: urls,
+          photos: urls,
+          image_url: urls[0] || "",
+          photo_url: urls[0] || "",
           main_photo_url: urls[0] || "",
         }),
       });
