@@ -16,6 +16,29 @@ const OPERATING_STATES = [
   "Texas",
 ];
 
+const STATE_ALIASES: Record<string, string> = {
+  ga: "Georgia",
+  georgia: "Georgia",
+  fl: "Florida",
+  florida: "Florida",
+  nc: "North Carolina",
+  "north carolina": "North Carolina",
+  sc: "South Carolina",
+  "south carolina": "South Carolina",
+  tn: "Tennessee",
+  tennessee: "Tennessee",
+  al: "Alabama",
+  alabama: "Alabama",
+  tx: "Texas",
+  texas: "Texas",
+};
+
+function normalizeState(value: unknown) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  return STATE_ALIASES[raw] || "";
+}
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -153,10 +176,7 @@ function statesOf(row: Row) {
   ]);
 
   const normalized = raw
-    .map((state) => {
-      const found = OPERATING_STATES.find((allowed) => allowed.toLowerCase() === state.toLowerCase());
-      return found || "";
-    })
+    .map((state) => normalizeState(state))
     .filter(Boolean);
 
   return unique(normalized);
@@ -170,24 +190,26 @@ function basedStateOf(row: Row) {
     row.home_state,
     row.based_state,
     row.base_state,
+    row.from_state,
     row.member_state,
     row.state,
     row.location_state,
     row.primary_state,
     row.market_state,
+    row.operating_state,
     m.home_state,
     m.based_state,
     m.base_state,
+    m.from_state,
     m.member_state,
     m.state,
     m.location_state,
     m.primary_state,
-    m.market_state
+    m.market_state,
+    m.operating_state
   );
 
-  const found = OPERATING_STATES.find((allowed) => allowed.toLowerCase() === raw.toLowerCase());
-
-  return found || "";
+  return normalizeState(raw);
 }
 
 function basedStateDisplay(row: Row) {
@@ -577,9 +599,9 @@ export default function MembersPage() {
       ].join(" ").toLowerCase();
 
       const matchesQuery = !q || searchable.includes(q);
-      const matchesState =
-        !stateFilter ||
-        visibleBaseStateOf(item).toLowerCase() === stateFilter.toLowerCase();
+      const selectedState = normalizeState(stateFilter);
+      const memberBaseState = normalizeState(visibleBaseStateOf(item));
+      const matchesState = !selectedState || memberBaseState === selectedState;
 
       return matchesQuery && matchesState;
     });
@@ -708,17 +730,23 @@ export default function MembersPage() {
             </select>
           </div>
 
+          {stateFilter ? (
+            <p style={{ ...muted, marginTop: 14 }}>
+              Showing members based in <strong style={{ color: "#f8e7b0" }}>{normalizeState(stateFilter)}</strong>.
+            </p>
+          ) : null}
+
           <div style={{ marginTop: 14 }}>
             {OPERATING_STATES.map((state) => (
               <button
                 key={state}
                 type="button"
-                onClick={() => setStateFilter(stateFilter === state ? "" : state)}
+                onClick={() => setStateFilter(normalizeState(stateFilter) === state ? "" : state)}
                 style={{
                   ...stateChip,
                   cursor: "pointer",
-                  borderColor: stateFilter === state ? "rgba(232,196,107,.70)" : "rgba(56,189,248,.30)",
-                  color: stateFilter === state ? "#f8e7b0" : "#8fd3ff",
+                  borderColor: normalizeState(stateFilter) === state ? "rgba(232,196,107,.70)" : "rgba(56,189,248,.30)",
+                  color: normalizeState(stateFilter) === state ? "#f8e7b0" : "#8fd3ff",
                 }}
               >
                 {state}
