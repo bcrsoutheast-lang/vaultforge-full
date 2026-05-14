@@ -30,6 +30,43 @@ function first(...values: unknown[]) {
   return "";
 }
 
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
+function getEmail() {
+  if (typeof window === "undefined") return "";
+
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
+
+  for (const key of keys) {
+    const localValue = cleanEmail(window.localStorage.getItem(key));
+    if (localValue.includes("@")) return localValue;
+
+    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
+    if (sessionValue.includes("@")) return sessionValue;
+  }
+
+  return cleanEmail(
+    readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("vf_admin_email")
+  );
+}
+
 function parseArray(value: unknown): any[] {
   if (Array.isArray(value)) return value;
 
@@ -43,7 +80,10 @@ function parseArray(value: unknown): any[] {
     // Continue.
   }
 
-  return text.split(/[,\n|;]/).map((item) => item.trim()).filter(Boolean);
+  return text
+    .split(/[,\n|;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function meta(row: Row) {
@@ -53,35 +93,52 @@ function meta(row: Row) {
 function field(row: Row, ...keys: string[]) {
   const m = meta(row);
   const values: unknown[] = [];
+
   for (const key of keys) {
     values.push(row[key]);
     values.push(m[key]);
   }
+
   return first(...values);
 }
 
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
-  if (!match) return "";
-  try { return decodeURIComponent(match.slice(name.length + 1)); }
-  catch { return match.slice(name.length + 1); }
+function idOf(row: Row) {
+  return field(row, "deal_id", "project_id", "item_id", "id");
 }
 
-function getEmail() {
-  if (typeof window === "undefined") return "";
-  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-  for (const key of keys) {
-    const localValue = cleanEmail(window.localStorage.getItem(key));
-    if (localValue.includes("@")) return localValue;
-    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
-    if (sessionValue.includes("@")) return sessionValue;
-  }
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+function signalIdOf(row: Row) {
+  return field(row, "signal_id", "signalId", "alert_id", "routing_id");
+}
+
+function titleOf(row: Row) {
+  return field(row, "title", "deal_title", "project_title", "name", "address") || "Untitled Project";
+}
+
+function marketOf(row: Row) {
+  const city = field(row, "city");
+  const state = field(row, "state", "market");
+  return [city, state].filter(Boolean).join(", ") || field(row, "market", "location", "address") || "Market not listed";
+}
+
+function ownerOf(row: Row) {
+  return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email"));
+}
+
+function assetOf(row: Row) {
+  return field(row, "asset_type", "property_type", "deal_type") || "Project";
+}
+
+function statusOf(row: Row) {
+  return field(row, "status", "project_status", "routing_status") || "Open";
+}
+
+function noteOf(row: Row) {
+  return field(row, "note", "ai_route_summary", "route_summary", "routing_summary", "summary", "description", "notes", "message") || "Project ready for review.";
 }
 
 function photosOf(row: Row) {
   const m = meta(row);
+
   const values = [
     row.main_photo_url,
     row.image_url,
@@ -97,133 +154,130 @@ function photosOf(row: Row) {
     ...parseArray(m.photos),
   ];
 
-  return Array.from(new Set(values.map((item: any) => {
-    if (typeof item === "string") return clean(item);
-    if (item && typeof item === "object") return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url);
-    return "";
-  }).filter((url) => url.startsWith("http"))));
-}
-
-function titleOf(row: Row) {
-  return field(row, "title", "deal_title", "project_title", "name", "address") || "Untitled Project";
-}
-
-function idOf(row: Row) {
-  return field(row, "deal_id", "project_id", "item_id", "id");
-}
-
-function signalIdOf(row: Row) {
-  return field(row, "signal_id", "signalId", "alert_id", "routing_id");
-}
-
-function keyOf(row: Row) {
-  return field(row, "canonical_project_key", "_dedupe_key", "canonical_event_id") || idOf(row) || `${titleOf(row)}-${marketOf(row)}`;
-}
-
-function noteOf(row: Row) {
-  return field(row, "note", "ai_route_summary", "route_summary", "routing_summary", "summary", "description", "notes", "message", "seller_situation") || "Project ready for review.";
-}
-
-function assetOf(row: Row) {
-  return field(row, "asset_type", "property_type", "deal_type") || "Project";
-}
-
-function statusOf(row: Row) {
-  return field(row, "status", "project_status", "routing_status") || "Open";
-}
-
-function marketOf(row: Row) {
-  const city = field(row, "city");
-  const state = field(row, "state", "market");
-  return [city, state].filter(Boolean).join(", ") || field(row, "market", "location", "address") || "Market not listed";
-}
-
-function ownerOf(row: Row) {
-  return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email"));
-}
-
-function numberValue(value: unknown) {
-  const text = clean(value);
-  if (!text) return NaN;
-  const number = Number(text.replace(/[^\d.-]/g, ""));
-  return Number.isFinite(number) ? number : NaN;
+  return Array.from(
+    new Set(
+      values
+        .map((item: any) => {
+          if (typeof item === "string") return clean(item);
+          if (item && typeof item === "object") {
+            return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url);
+          }
+          return "";
+        })
+        .filter((url) => url.startsWith("http"))
+    )
+  );
 }
 
 function money(value: unknown) {
   const text = clean(value);
   if (!text) return "Not listed";
-  const number = numberValue(text);
+
+  const number = Number(text.replace(/[^\d.-]/g, ""));
   if (!Number.isFinite(number)) return text;
-  return number.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+  return number.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
 }
 
-function display(value: unknown) {
-  return clean(value) || "Not listed";
+function keyOf(row: Row, index: number) {
+  return (
+    field(row, "canonical_event_id") ||
+    field(row, "deal_id") ||
+    field(row, "project_id") ||
+    field(row, "item_id") ||
+    field(row, "id") ||
+    `${titleOf(row)}-${marketOf(row)}-${index}`
+  );
 }
 
-function spreadText(row: Row) {
-  const ask = numberValue(field(row, "asking_price", "price"));
-  const arv = numberValue(field(row, "arv", "arv_value", "estimated_value"));
-  const repairs = numberValue(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"));
-  if (!Number.isFinite(ask) || !Number.isFinite(arv)) return "";
-  const spread = arv - ask - (Number.isFinite(repairs) ? repairs : 0);
-  const formatted = spread.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-  if (spread > 0) return `Estimated room before soft costs: ${formatted}.`;
-  if (spread < 0) return `Pricing pressure before soft costs: ${formatted}.`;
-  return "Estimated spread is neutral before soft costs.";
-}
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 52%,#020303)",
+  color: "white",
+  padding: "22px 16px 96px",
+  fontFamily: "Arial, sans-serif",
+};
 
-function bestFit(row: Row) {
-  const asset = assetOf(row).toLowerCase();
-  const strategy = field(row, "strategy", "exit_strategy").toLowerCase();
-  const needs = field(row, "routing_needs", "deal_needs", "needs").toLowerCase();
-  const contractor = field(row, "contractor_scope");
-  const capital = field(row, "capital_needed");
+const wrap: React.CSSProperties = {
+  width: "min(1220px,100%)",
+  margin: "0 auto",
+};
 
-  if (needs.includes("buyer") || strategy.includes("flip")) return contractor ? "cash buyer or flip operator with contractor capacity" : "cash buyer or flip operator";
-  if (capital || needs.includes("capital") || needs.includes("lender")) return "private lender, capital partner, or JV operator";
-  if (asset.includes("land")) return "land buyer, builder, or entitlement operator";
-  if (asset.includes("commercial")) return "commercial operator or capitalized sponsor";
-  return "local operator with execution capacity";
-}
+const shell: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 22,
+  background: "rgba(255,255,255,.045)",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
 
-function smartSummary(row: Row) {
-  const asset = display(assetOf(row)).toLowerCase();
-  const strategy = field(row, "strategy", "exit_strategy");
-  const market = marketOf(row);
-  const ask = money(field(row, "asking_price", "price"));
-  const arv = money(field(row, "arv", "arv_value", "estimated_value"));
-  const repairs = money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"));
-  const needs = field(row, "routing_needs", "deal_needs", "needs");
-  const signals = field(row, "distress_signals", "seller_pressure");
-  const urgency = field(row, "urgency", "priority");
-  const contractor = field(row, "contractor_scope");
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,.045)",
+};
 
-  const lead = [`Route this ${asset}`, strategy ? `as a ${strategy} opportunity` : "as an operator-reviewed opportunity", market && market !== "Market not listed" ? `in ${market}` : ""].filter(Boolean).join(" ");
-  const economics = [ask !== "Not listed" ? `${ask} ask` : "", arv !== "Not listed" ? `${arv} ARV` : "", repairs !== "Not listed" ? `${repairs} repairs` : ""].filter(Boolean);
-  const execution = [needs ? `needs ${needs}` : "", signals ? `pressure signal: ${signals}` : "", urgency ? `urgency: ${urgency}` : "", contractor ? `contractor scope: ${contractor}` : ""].filter(Boolean);
+const label: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
 
-  return [
-    `${lead}.`,
-    economics.length ? `Economics: ${economics.join(" / ")}. ${spreadText(row)}`.trim() : "",
-    execution.length ? `Execution read: ${execution.join(" / ")}.` : "",
-    `Best-fit route: ${bestFit(row)}.`,
-  ].filter(Boolean).join(" ");
-}
+const muted: React.CSSProperties = {
+  color: "#cbd5e1",
+  lineHeight: 1.55,
+};
 
-const page: React.CSSProperties = { minHeight: "100vh", background: "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), linear-gradient(180deg,#020303,#071326 52%,#020303)", color: "white", padding: "22px 16px 96px", fontFamily: "Arial, sans-serif" };
-const wrap: React.CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
-const shell: React.CSSProperties = { border: "1px solid rgba(232,196,107,.24)", borderRadius: 30, padding: 22, background: "rgba(255,255,255,.045)", boxShadow: "0 28px 86px rgba(0,0,0,.30)", marginBottom: 18 };
-const panel: React.CSSProperties = { border: "1px solid rgba(255,255,255,.12)", borderRadius: 22, padding: 18, background: "rgba(255,255,255,.045)" };
-const label: React.CSSProperties = { color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 12 };
-const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
-const button: React.CSSProperties = { display: "inline-flex", justifyContent: "center", alignItems: "center", minHeight: 46, borderRadius: 999, padding: "11px 16px", border: 0, background: "linear-gradient(135deg,#f8e7b0,#e8c46b)", color: "#06100a", fontWeight: 950, textDecoration: "none", cursor: "pointer" };
-const ghost: React.CSSProperties = { ...button, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.16)", color: "white" };
-const dangerGhost: React.CSSProperties = { ...ghost, border: "1px solid rgba(248,113,113,.34)", color: "#fecaca" };
-const chip: React.CSSProperties = { border: "1px solid rgba(157,243,191,.22)", borderRadius: 999, padding: "7px 10px", color: "#9df3bf", background: "rgba(157,243,191,.07)", margin: "0 7px 7px 0", fontSize: 12, fontWeight: 850, display: "inline-flex" };
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: 46,
+  borderRadius: 999,
+  padding: "11px 16px",
+  border: 0,
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+  cursor: "pointer",
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.16)",
+  color: "white",
+};
+
+const chip: React.CSSProperties = {
+  border: "1px solid rgba(157,243,191,.22)",
+  borderRadius: 999,
+  padding: "7px 10px",
+  color: "#9df3bf",
+  background: "rgba(157,243,191,.07)",
+  margin: "0 7px 7px 0",
+  fontSize: 12,
+  fontWeight: 850,
+  display: "inline-flex",
+};
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <section style={panel}><div style={{ fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12, color: "#e8c46b" }}>{label}</div><div style={{ fontSize: 42, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div></section>;
+  return (
+    <section style={panel}>
+      <div style={{ fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12, color: "#e8c46b" }}>{label}</div>
+      <div style={{ fontSize: 42, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
+    </section>
+  );
 }
 
 function DetailGrid({ row }: { row: Row }) {
@@ -231,98 +285,105 @@ function DetailGrid({ row }: { row: Row }) {
     ["Ask", money(field(row, "asking_price", "price"))],
     ["ARV", money(field(row, "arv", "arv_value", "estimated_value"))],
     ["Repairs", money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs"))],
-    ["Beds", display(field(row, "beds", "bedrooms"))],
-    ["Baths", display(field(row, "baths", "bathrooms"))],
-    ["Sqft/Acres", display(field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres"))],
-    ["Strategy", display(field(row, "strategy", "exit_strategy"))],
-    ["Occupancy", display(field(row, "occupancy", "occupancy_status", "tenant_status"))],
+    ["Beds", field(row, "beds", "bedrooms") || "Not listed"],
+    ["Baths", field(row, "baths", "bathrooms") || "Not listed"],
+    ["Sqft/Acres", field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres") || "Not listed"],
   ];
 
-  return <div className="vf-detail-grid">{values.map(([k, v]) => <div key={k} className="vf-detail-tile"><div className="vf-detail-label">{k}</div><div className="vf-detail-value">{v}</div></div>)}</div>;
+  return (
+    <div className="vf-detail-grid">
+      {values.map(([k, v]) => (
+        <div key={k} className="vf-detail-tile">
+          <div className="vf-detail-label">{k}</div>
+          <div className="vf-detail-value">{v}</div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function ProjectCard({ row, viewer, onHide }: { row: Row; viewer: string; onHide: (key: string) => void }) {
+function ProjectCard({ row, viewer }: { row: Row; viewer: string }) {
   const id = idOf(row);
   const signalId = signalIdOf(row);
   const photos = photosOf(row);
   const owner = ownerOf(row);
-  const key = keyOf(row);
+
   const contactHref = `/messages/new?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`;
 
-  return <article className="vf-project-card">
-    <div className="vf-project-photo-box">
-      {photos[0] ? <img src={photos[0]} alt={titleOf(row)} className="vf-project-photo" /> : <div className="vf-no-photo">No photo</div>}
-      {photos.length > 1 ? <div className="vf-photo-count">{photos.length} photos</div> : null}
-    </div>
-
-    <div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <span style={chip}>Project</span>
-        <span style={chip}>{assetOf(row)}</span>
-        <span style={chip}>{statusOf(row)}</span>
-        {signalId ? <span style={chip}>Signal linked</span> : null}
+  return (
+    <article className="vf-project-card">
+      <div className="vf-project-photo-box">
+        {photos[0] ? (
+          <img src={photos[0]} alt={titleOf(row)} className="vf-project-photo" />
+        ) : (
+          <div className="vf-no-photo">No photo</div>
+        )}
+        {photos.length > 1 ? <div className="vf-photo-count">{photos.length} photos</div> : null}
       </div>
 
-      <h3 className="vf-card-title">{titleOf(row)}</h3>
-      <p className="vf-one-line">{noteOf(row)}</p>
-      <DetailGrid row={row} />
+      <div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span style={chip}>Project</span>
+          <span style={chip}>{assetOf(row)}</span>
+          <span style={chip}>{statusOf(row)}</span>
+          {signalId ? <span style={chip}>Signal linked</span> : null}
+        </div>
 
-      <section className="vf-routing-box">
-        <div style={{ ...label, fontSize: 11 }}>Bloomberg AI Brief</div>
-        <p style={{ ...muted, margin: "8px 0 0" }}>{smartSummary(row)}</p>
-      </section>
+        <h3 className="vf-card-title">{titleOf(row)}</h3>
+        <p className="vf-one-line">{noteOf(row)}</p>
 
-      <div style={{ marginTop: 12 }}>
-        {id ? <span style={chip}>ID: {id}</span> : null}
-        {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
-        <span style={chip}>Market: {marketOf(row)}</span>
-        {owner ? <span style={chip}>Owner: {owner}</span> : null}
+        <DetailGrid row={row} />
+
+        <section className="vf-routing-box">
+          <div style={{ ...label, fontSize: 11 }}>Routing Context</div>
+          <p style={{ ...muted, margin: "8px 0 0" }}>
+            {first(field(row, "ai_route_summary"), field(row, "route_summary"), field(row, "routing_summary"), "Routing context ready for review.")}
+          </p>
+        </section>
+
+        <div style={{ marginTop: 12 }}>
+          {id ? <span style={chip}>ID: {id}</span> : null}
+          {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
+          <span style={chip}>Market: {marketOf(row)}</span>
+          {owner ? <span style={chip}>Owner: {owner}</span> : null}
+        </div>
+
+        <div className="vf-actions">
+          <Link href={contactHref} style={button}>Contact Owner</Link>
+          {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
+          {id ? <Link href={`/deal/detail?id=${encodeURIComponent(id)}`} style={ghost}>Deal Detail</Link> : null}
+        </div>
       </div>
-
-      <div className="vf-actions">
-        <Link href={contactHref} style={button}>Contact Owner</Link>
-        {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
-        {id ? <Link href={`/deal/detail?id=${encodeURIComponent(id)}`} style={ghost}>Deal Detail</Link> : null}
-        <button type="button" onClick={() => onHide(key)} style={dangerGhost}>Hide From View</button>
-      </div>
-    </div>
-  </article>;
-}
-
-function loadHiddenKeys(email: string) {
-  if (typeof window === "undefined") return new Set<string>();
-  try {
-    const raw = window.localStorage.getItem(`vf_projects_hidden_${email || "unknown"}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return new Set<string>(Array.isArray(parsed) ? parsed.map(clean).filter(Boolean) : []);
-  } catch { return new Set<string>(); }
-}
-
-function saveHiddenKeys(email: string, keys: Set<string>) {
-  if (typeof window === "undefined") return;
-  try { window.localStorage.setItem(`vf_projects_hidden_${email || "unknown"}`, JSON.stringify(Array.from(keys))); } catch {}
+    </article>
+  );
 }
 
 export default function ProjectsPage() {
   const [email, setEmail] = useState("");
   const [items, setItems] = useState<Row[]>([]);
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState("Loading projects...");
 
   async function load() {
     const viewer = getEmail();
     const owner = viewer === OWNER_EMAIL;
     const ownerFlag = owner ? "1" : "0";
+
     setEmail(viewer);
-    setHiddenKeys(loadHiddenKeys(viewer));
     setStatus("Loading projects...");
 
     try {
-      const response = await fetch(`/api/deal/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`, {
-        cache: "no-store",
-        credentials: "include",
-        headers: { "x-vf-email": viewer, "x-vf-admin": ownerFlag },
-      });
+      const response = await fetch(
+        `/api/deal/feed?email=${encodeURIComponent(viewer)}&owner=${ownerFlag}`,
+        {
+          cache: "no-store",
+          credentials: "include",
+          headers: {
+            "x-vf-email": viewer,
+            "x-vf-admin": ownerFlag,
+          },
+        }
+      );
+
       const data = await response.json().catch(() => ({}));
 
       const collected: Row[] = [
@@ -333,11 +394,10 @@ export default function ProjectsPage() {
       ];
 
       const byKey = new Map<string, Row>();
-      for (const item of collected) {
-        const key = keyOf(item);
-        if (!key) continue;
+      collected.forEach((item, index) => {
+        const key = keyOf(item, index);
         if (!byKey.has(key)) byKey.set(key, item);
-      }
+      });
 
       const unique = Array.from(byKey.values());
       setItems(unique);
@@ -348,84 +408,222 @@ export default function ProjectsPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const visibleItems = useMemo(() => items.filter((item) => !hiddenKeys.has(keyOf(item))), [items, hiddenKeys]);
-  const counts = useMemo(() => ({
-    total: visibleItems.length,
-    withPhotos: visibleItems.filter((item) => photosOf(item).length).length,
-    routed: visibleItems.filter((item) => signalIdOf(item)).length,
-    hidden: items.length - visibleItems.length,
-  }), [items, visibleItems]);
+  const counts = useMemo(() => {
+    return {
+      total: items.length,
+      withPhotos: items.filter((item) => photosOf(item).length).length,
+      routed: items.filter((item) => signalIdOf(item)).length,
+    };
+  }, [items]);
 
-  function hideProject(key: string) {
-    const next = new Set(hiddenKeys);
-    next.add(key);
-    setHiddenKeys(next);
-    saveHiddenKeys(email, next);
-  }
+  return (
+    <main style={page}>
+      <style>{`
+        .vf-metrics {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px;
+          margin-bottom: 18px;
+        }
 
-  function restoreHidden() {
-    const next = new Set<string>();
-    setHiddenKeys(next);
-    saveHiddenKeys(email, next);
-  }
+        .vf-project-card {
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 24px;
+          padding: 18px;
+          background: rgba(255,255,255,.045);
+          display: grid;
+          grid-template-columns: 220px 1fr;
+          gap: 18px;
+          overflow: hidden;
+        }
 
-  return <main style={page}>
-    <style>{`
-      .vf-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:18px}
-      .vf-project-card{border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:18px;background:rgba(255,255,255,.045);display:grid;grid-template-columns:220px 1fr;gap:18px;overflow:hidden}
-      .vf-project-photo-box{position:relative;width:100%;height:170px;border-radius:20px;overflow:hidden;border:1px solid rgba(232,196,107,.18);background:rgba(0,0,0,.22)}
-      .vf-project-photo{width:100%;height:100%;object-fit:cover;display:block}
-      .vf-no-photo{height:100%;display:grid;place-items:center;color:#94a3b8;font-weight:850}
-      .vf-photo-count{position:absolute;left:10px;bottom:10px;border-radius:999px;padding:6px 9px;background:rgba(0,0,0,.70);border:1px solid rgba(255,255,255,.16);color:white;font-size:12px;font-weight:850}
-      .vf-card-title{font-size:clamp(26px,4vw,38px);line-height:1;margin:14px 0 10px;letter-spacing:-.04em}
-      .vf-one-line{color:#cbd5e1;line-height:1.45;margin-top:0}
-      .vf-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-top:14px}
-      .vf-detail-tile{border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:12px;background:rgba(0,0,0,.14)}
-      .vf-detail-label{color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:850}
-      .vf-detail-value{margin-top:6px;font-weight:950}
-      .vf-routing-box{margin-top:14px;border:1px solid rgba(232,196,107,.16);border-radius:18px;padding:14px;background:rgba(232,196,107,.055)}
-      .vf-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
-      @media(max-width:880px){.vf-metrics{grid-template-columns:1fr 1fr}.vf-project-card{grid-template-columns:1fr}.vf-project-photo-box{height:210px}}
-      @media(max-width:560px){.vf-metrics{grid-template-columns:1fr}.vf-actions{display:grid;grid-template-columns:1fr}.vf-actions>*{width:100%;box-sizing:border-box;justify-content:center}}
-    `}</style>
+        .vf-project-photo-box {
+          position: relative;
+          width: 100%;
+          height: 170px;
+          border-radius: 20px;
+          overflow: hidden;
+          border: 1px solid rgba(232,196,107,.18);
+          background: rgba(0,0,0,.22);
+        }
 
-    <div style={wrap}>
-      <section style={shell}>
-        <div style={label}>VaultForge Projects</div>
-        <h1 style={{ fontSize: "clamp(48px,9vw,92px)", lineHeight: .9, letterSpacing: "-.07em", margin: "12px 0 18px" }}>Projects.</h1>
-        <p style={{ ...muted, fontSize: 20, maxWidth: 900 }}>Clean opportunity review for submitted projects, deal rooms, photos, pricing, routing context, and owner contact. Pain records stay out of this page.</p>
-        <div style={{ marginTop: 16 }}>
-          <span style={chip}>Signed in: {email || "unknown"}</span>
-          <span style={chip}>{email === OWNER_EMAIL ? "Owner View" : "Member View"}</span>
-          <span style={chip}>Visible Projects: {counts.total}</span>
-          <span style={chip}>Routed: {counts.routed}</span>
-          <span style={chip}>With Photos: {counts.withPhotos}</span>
-          {counts.hidden ? <span style={chip}>Hidden Locally: {counts.hidden}</span> : null}
-        </div>
-        <div className="vf-actions">
-          <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          <Link href="/submit" style={button}>Create Deal</Link>
-          <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-          <button type="button" onClick={load} style={ghost}>Refresh</button>
-          {counts.hidden ? <button type="button" onClick={restoreHidden} style={ghost}>Restore Hidden</button> : null}
-        </div>
-      </section>
+        .vf-project-photo {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
 
-      <section className="vf-metrics">
-        <Metric label="Projects" value={String(counts.total)} />
-        <Metric label="Routed" value={String(counts.routed)} />
-        <Metric label="With Photos" value={String(counts.withPhotos)} />
-        <Metric label="Hidden" value={String(counts.hidden)} />
-      </section>
+        .vf-no-photo {
+          height: 100%;
+          display: grid;
+          place-items: center;
+          color: #94a3b8;
+          font-weight: 850;
+        }
 
-      <section style={shell}>
-        <div style={label}>Project Queue</div>
-        <h2 style={{ fontSize: "clamp(34px,6vw,54px)", lineHeight: 1, margin: "10px 0 18px", letterSpacing: "-.05em" }}>Opportunity cards.</h2>
-        {visibleItems.length ? <div style={{ display: "grid", gap: 14 }}>{visibleItems.map((item, index) => <ProjectCard key={first(keyOf(item), idOf(item), signalIdOf(item), String(index))} row={item} viewer={email} onHide={hideProject} />)}</div> : <div style={panel}><h3 style={{ marginTop: 0 }}>No projects connected yet.</h3><p style={muted}>{status}</p><div className="vf-actions"><Link href="/submit" style={button}>Create Deal</Link><Link href="/pain-feed" style={ghost}>Pain Feed</Link><Link href="/dashboard" style={ghost}>Dashboard</Link>{counts.hidden ? <button type="button" onClick={restoreHidden} style={ghost}>Restore Hidden</button> : null}</div></div>}
-      </section>
-      {status && visibleItems.length ? <section style={shell}>{status}</section> : null}
-    </div>
-  </main>;
+        .vf-photo-count {
+          position: absolute;
+          left: 10px;
+          bottom: 10px;
+          border-radius: 999px;
+          padding: 6px 9px;
+          background: rgba(0,0,0,.70);
+          border: 1px solid rgba(255,255,255,.16);
+          color: white;
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .vf-card-title {
+          font-size: clamp(26px, 4vw, 38px);
+          line-height: 1;
+          margin: 14px 0 10px;
+          letter-spacing: -.04em;
+        }
+
+        .vf-one-line {
+          color: #cbd5e1;
+          line-height: 1.45;
+          margin-top: 0;
+        }
+
+        .vf-detail-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+          gap: 10px;
+          margin-top: 14px;
+        }
+
+        .vf-detail-tile {
+          border: 1px solid rgba(255,255,255,.10);
+          border-radius: 16px;
+          padding: 12px;
+          background: rgba(0,0,0,.14);
+        }
+
+        .vf-detail-label {
+          color: #94a3b8;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: .12em;
+          font-weight: 850;
+        }
+
+        .vf-detail-value {
+          margin-top: 6px;
+          font-weight: 950;
+        }
+
+        .vf-routing-box {
+          margin-top: 14px;
+          border: 1px solid rgba(232,196,107,.16);
+          border-radius: 18px;
+          padding: 14px;
+          background: rgba(232,196,107,.055);
+        }
+
+        .vf-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-top: 18px;
+        }
+
+        @media (max-width: 880px) {
+          .vf-metrics {
+            grid-template-columns: 1fr;
+          }
+
+          .vf-project-card {
+            grid-template-columns: 1fr;
+          }
+
+          .vf-project-photo-box {
+            height: 210px;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .vf-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+            justify-content: center;
+          }
+        }
+      `}</style>
+
+      <div style={wrap}>
+        <section style={shell}>
+          <div style={label}>VaultForge Projects</div>
+
+          <h1 style={{ fontSize: "clamp(48px,9vw,92px)", lineHeight: 0.9, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+            Projects.
+          </h1>
+
+          <p style={{ ...muted, fontSize: 20, maxWidth: 900 }}>
+            Clean opportunity review for submitted projects, deal rooms, photos, pricing, routing context, and owner contact.
+          </p>
+
+          <div style={{ marginTop: 16 }}>
+            <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>{email === OWNER_EMAIL ? "Owner View" : "Member View"}</span>
+            <span style={chip}>Projects: {counts.total}</span>
+            <span style={chip}>Routed: {counts.routed}</span>
+            <span style={chip}>With Photos: {counts.withPhotos}</span>
+          </div>
+
+          <div className="vf-actions">
+            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+            <Link href="/submit" style={button}>Create Deal</Link>
+            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+            <button type="button" onClick={load} style={ghost}>Refresh</button>
+          </div>
+        </section>
+
+        <section className="vf-metrics">
+          <Metric label="Projects" value={String(counts.total)} />
+          <Metric label="Routed" value={String(counts.routed)} />
+          <Metric label="With Photos" value={String(counts.withPhotos)} />
+        </section>
+
+        <section style={shell}>
+          <div style={label}>Project Queue</div>
+
+          <h2 style={{ fontSize: "clamp(34px,6vw,54px)", lineHeight: 1, margin: "10px 0 18px", letterSpacing: "-.05em" }}>
+            Opportunity cards.
+          </h2>
+
+          {items.length ? (
+            <div style={{ display: "grid", gap: 14 }}>
+              {items.map((item, index) => (
+                <ProjectCard key={keyOf(item, index)} row={item} viewer={email} />
+              ))}
+            </div>
+          ) : (
+            <div style={panel}>
+              <h3 style={{ marginTop: 0 }}>No projects connected yet.</h3>
+              <p style={muted}>{status}</p>
+              <div className="vf-actions">
+                <Link href="/submit" style={button}>Create Deal</Link>
+                <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+                <Link href="/dashboard" style={ghost}>Dashboard</Link>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {status && items.length ? <section style={shell}>{status}</section> : null}
+      </div>
+    </main>
+  );
 }
