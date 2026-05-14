@@ -216,7 +216,7 @@ function needsOf(row: Row) {
 
 function strategyNote(row: Row) {
   const m = meta(row);
-  return first(row.strategy_notes, row.buy_box, row.notes, row.description, m.strategy_notes, m.buy_box, m.notes, "Network profile ready for routing.");
+  return first(row.strategy_notes, row.buy_box, row.notes, row.description, m.strategy_notes, m.buy_box, m.notes, "Network profile ready for alignment.");
 }
 
 function accepted(row: Row) {
@@ -226,7 +226,7 @@ function accepted(row: Row) {
 
 function scoreOf(row: Row) {
   const m = meta(row);
-  let score = Number(row.routing_score || row.match_score || row.score || m.routing_score || m.match_score || 0);
+  let score = Number(row.alignment_score || row.match_score || row.score || m.alignment_score || m.match_score || 0);
 
   if (!Number.isFinite(score) || score <= 0) score = 50;
   if (statesOf(row).length) score += 12;
@@ -387,7 +387,7 @@ function MemberCard({ row, viewer }: { row: Row; viewer: string }) {
               }}
             >
               <div style={{ fontSize: 42, lineHeight: 1, fontWeight: 1000, color: "#f8e7b0" }}>{score}</div>
-              <div style={{ color: "#cbd5e1", fontSize: 12, marginTop: 6, fontWeight: 850 }}>Routing score</div>
+              <div style={{ color: "#cbd5e1", fontSize: 12, marginTop: 6, fontWeight: 850 }}>Network fit</div>
             </div>
           </div>
 
@@ -440,8 +440,8 @@ function MemberCard({ row, viewer }: { row: Row; viewer: string }) {
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
             <Link href={connectHref} style={button}>Message / Request Connection</Link>
-            <Link href="/signals" style={ghost}>Find Signals</Link>
-            <Link href="/routing-inbox" style={ghost}>Route / Match</Link>
+            <Link href="/signals" style={ghost}>View Opportunities</Link>
+            <Link href="/alignment-inbox" style={ghost}>Open Network</Link>
           </div>
         </div>
       </div>
@@ -572,18 +572,17 @@ export default function MembersPage() {
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Members"
-          subtitle="Private network directory by state, profile, need, capability, and routing fit."
+          subtitle="Private operator network organized by markets, capabilities, execution style, and opportunity alignment."
           active="members"
         />
 
         <section style={card}>
           <div style={eyebrow}>VaultForge Network</div>
           <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
-            Member command directory.
+            Private operator network.
           </h1>
           <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            Every profile needs visible operating states so VaultForge can connect Georgia, Florida,
-            Carolina, Tennessee, Alabama, and Texas opportunities to the right members.
+            VaultForge maps members by market, capability, execution style, and operational fit so opportunities naturally flow toward the right people.
           </p>
 
           <div style={{ marginTop: 16 }}>
@@ -671,8 +670,8 @@ export default function MembersPage() {
         </section>
 
         <section style={card}>
-          <div style={eyebrow}>Member Queue</div>
-          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Profiles with state routing.</h2>
+          <div style={eyebrow}>Operator Network</div>
+          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Profiles aligned to markets, capabilities, and execution fit.</h2>
 
           {filtered.length ? (
             <div style={{ display: "grid", gap: 14 }}>
@@ -684,7 +683,7 @@ export default function MembersPage() {
             <div style={glass}>
               <h3 style={{ marginTop: 0 }}>No matching members found.</h3>
               <p style={muted}>
-                Adjust filters or complete more member profiles so the network can route by state, need, and capability.
+                Adjust filters or complete more member profiles so VaultForge can better align opportunities, operators, and execution capacity.
               </p>
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
                 <Link href="/profile" style={button}>Edit Profile</Link>
