@@ -9,7 +9,7 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 type AnyRow = Record<string, any>;
 
 function supabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -35,6 +35,17 @@ function clean(value: unknown) {
 
 function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
+}
+
+function compact(value: unknown) {
+  return clean(value).replace(/\s+/g, " ");
+}
+
+function slug(value: unknown) {
+  return compact(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function first(...values: unknown[]) {
@@ -116,6 +127,18 @@ function parseJsonArray(value: unknown): any[] {
   return [];
 }
 
+function field(row: AnyRow, ...keys: string[]) {
+  const metadata = metadataOf(row);
+  const values: unknown[] = [];
+
+  for (const key of keys) {
+    values.push(row[key]);
+    values.push(metadata[key]);
+  }
+
+  return first(...values);
+}
+
 function photosFrom(row: AnyRow) {
   const metadata = metadataOf(row);
   const metadataPhotos = parseJsonArray(metadata.photos);
@@ -156,18 +179,12 @@ function photosFrom(row: AnyRow) {
 }
 
 function ownerEmailFrom(row: AnyRow) {
-  const metadata = metadataOf(row);
-
   const canonical = cleanEmail(
     first(
-      row.owner_email,
-      metadata.owner_email,
-      row.created_by_email,
-      metadata.created_by_email,
-      row.submitted_by_email,
-      metadata.submitted_by_email,
-      row.creator_email,
-      metadata.creator_email
+      field(row, "owner_email"),
+      field(row, "created_by_email"),
+      field(row, "submitted_by_email"),
+      field(row, "creator_email")
     )
   );
 
@@ -175,42 +192,29 @@ function ownerEmailFrom(row: AnyRow) {
 
   const legacy = cleanEmail(
     first(
-      row.submitted_by,
-      metadata.submitted_by,
-      row.user_email,
-      metadata.user_email,
-      row.member_email,
-      metadata.member_email,
-      row.email,
-      metadata.email,
-      row.sender_email,
-      metadata.sender_email
+      field(row, "submitted_by"),
+      field(row, "user_email"),
+      field(row, "member_email"),
+      field(row, "email"),
+      field(row, "sender_email")
     )
   );
 
-  if (legacy) return legacy;
-
-  return canonical || "";
+  return legacy || canonical || "";
 }
 
 function canSee(row: AnyRow, email: string, owner: boolean) {
   if (owner) return true;
 
-  const metadata = metadataOf(row);
   const ownerEmail = ownerEmailFrom(row);
 
   const visible = [
     ownerEmail,
-    row.visible_to_email,
-    row.recipient_email,
-    row.target_email,
-    row.assigned_to_email,
-    row.member_email,
-    metadata.visible_to_email,
-    metadata.recipient_email,
-    metadata.target_email,
-    metadata.assigned_to_email,
-    metadata.member_email,
+    field(row, "visible_to_email"),
+    field(row, "recipient_email"),
+    field(row, "target_email"),
+    field(row, "assigned_to_email"),
+    field(row, "member_email"),
   ]
     .map(cleanEmail)
     .filter(Boolean);
@@ -220,93 +224,58 @@ function canSee(row: AnyRow, email: string, owner: boolean) {
 }
 
 function dealIdOf(row: AnyRow) {
-  const metadata = metadataOf(row);
   return first(
-    row.deal_id,
-    row.project_id,
-    row.item_id,
-    row.related_deal_id,
-    metadata.deal_id,
-    metadata.project_id,
-    metadata.item_id,
-    metadata.related_deal_id,
-    row.id
+    field(row, "deal_id"),
+    field(row, "project_id"),
+    field(row, "item_id"),
+    field(row, "related_deal_id"),
+    field(row, "id")
   );
 }
 
 function signalIdOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-  return first(row.signal_id, row.signalId, row.alert_id, row.routing_id, metadata.signal_id, metadata.signalId, metadata.alert_id, metadata.routing_id);
-}
-
-function canonicalKeyOf(row: AnyRow) {
-  const metadata = metadataOf(row);
   return first(
-    row.canonical_event_id,
-    metadata.canonical_event_id,
-    metadata.signal_id,
-    row.signal_id,
-    metadata.deal_id,
-    row.deal_id,
-    row.item_id,
-    row.id
+    field(row, "signal_id"),
+    field(row, "signalId"),
+    field(row, "alert_id"),
+    field(row, "routing_id"),
+    field(row, "canonical_event_id")
   );
 }
 
 function titleOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-
   return first(
-    row.title,
-    row.deal_title,
-    row.name,
-    row.headline,
-    row.event_title,
-    metadata.title,
-    metadata.deal_title,
-    metadata.name,
-    metadata.event_title,
+    field(row, "title"),
+    field(row, "deal_title"),
+    field(row, "project_title"),
+    field(row, "name"),
+    field(row, "headline"),
+    field(row, "event_title"),
+    field(row, "address"),
     "Deal Signal"
   );
 }
 
 function noteOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-
   return first(
-    row.note,
-    row.notes,
-    row.description,
-    row.message,
-    row.route_summary,
-    row.routing_summary,
-    row.ai_route_summary,
-    row.reason,
-    row.event_description,
-    metadata.note,
-    metadata.notes,
-    metadata.description,
-    metadata.message,
-    metadata.route_summary,
-    metadata.routing_summary,
-    metadata.ai_route_summary,
-    metadata.reason,
-    metadata.event_description
+    field(row, "note"),
+    field(row, "notes"),
+    field(row, "description"),
+    field(row, "message"),
+    field(row, "route_summary"),
+    field(row, "routing_summary"),
+    field(row, "ai_route_summary"),
+    field(row, "reason"),
+    field(row, "event_description")
   );
 }
 
 function marketOf(row: AnyRow) {
-  const metadata = metadataOf(row);
-
   return first(
-    row.market,
-    [row.city, row.state].filter(Boolean).join(", "),
-    row.location,
-    row.address,
-    metadata.market,
-    [metadata.city, metadata.state].filter(Boolean).join(", "),
-    metadata.location,
-    metadata.address
+    field(row, "market"),
+    [field(row, "city"), field(row, "state")].filter(Boolean).join(", "),
+    field(row, "location"),
+    field(row, "address")
   );
 }
 
@@ -318,16 +287,30 @@ function sourceRank(table: string) {
   return 9;
 }
 
-function field(row: AnyRow, ...keys: string[]) {
-  const metadata = metadataOf(row);
-  const values: unknown[] = [];
+function photoFingerprint(row: AnyRow) {
+  const firstPhoto = photosFrom(row).photo_urls[0] || "";
+  const bare = firstPhoto.split("?")[0];
+  const parts = bare.split("/").filter(Boolean);
+  return slug(parts.slice(-2).join("-") || bare);
+}
 
-  for (const key of keys) {
-    values.push(row[key]);
-    values.push(metadata[key]);
+function canonicalProjectKeyOf(row: AnyRow) {
+  const explicit = first(field(row, "canonical_project_key"));
+  if (explicit) return explicit;
+
+  const title = slug(titleOf(row));
+  const market = slug(marketOf(row));
+  const owner = slug(ownerEmailFrom(row));
+  const address = slug(field(row, "address", "property_address", "location"));
+  const ask = slug(field(row, "asking_price", "price", "ask", "purchase_price"));
+  const arv = slug(field(row, "arv", "arv_value", "estimated_value", "after_repair_value"));
+  const photo = photoFingerprint(row);
+
+  if (title && (market || address || ask || arv || photo)) {
+    return ["deal", title, market, owner, address || photo, ask || arv].filter(Boolean).join("|");
   }
 
-  return first(...values);
+  return first(field(row, "canonical_event_id"), signalIdOf(row), dealIdOf(row), title);
 }
 
 function normalizeDeal(row: AnyRow, table: string) {
@@ -336,32 +319,31 @@ function normalizeDeal(row: AnyRow, table: string) {
   const ownerEmail = ownerEmailFrom(row) || OWNER_EMAIL;
   const dealId = dealIdOf(row);
   const signalId = signalIdOf(row);
-  const canonicalKey = canonicalKeyOf(row) || signalId || dealId;
+  const canonicalProjectKey = canonicalProjectKeyOf(row);
+  const canonicalEventId = first(field(row, "canonical_event_id"), signalId, dealId, canonicalProjectKey);
   const routeSummary = first(
-    row.route_summary,
-    row.routing_summary,
-    row.ai_route_summary,
-    metadata.route_summary,
-    metadata.routing_summary,
-    metadata.ai_route_summary,
+    field(row, "route_summary"),
+    field(row, "routing_summary"),
+    field(row, "ai_route_summary"),
     noteOf(row)
   );
 
   const propertyType = field(row, "property_type", "deal_type", "asset_type") || "Deal";
-  const askingPrice = field(row, "asking_price", "price");
-  const arv = field(row, "arv", "arv_value", "estimated_value");
-  const repairs = field(row, "repair_estimate", "repairs_needed", "estimated_repairs");
+  const askingPrice = field(row, "asking_price", "price", "ask", "purchase_price");
+  const arv = field(row, "arv", "arv_value", "estimated_value", "after_repair_value");
+  const repairs = field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
 
   return {
     ...metadata,
     ...row,
-    id: dealId || canonicalKey,
-    deal_id: dealId || canonicalKey,
-    project_id: field(row, "project_id") || dealId || canonicalKey,
-    item_id: field(row, "item_id") || dealId || canonicalKey,
-    signal_id: signalId || canonicalKey,
-    routing_id: field(row, "routing_id") || signalId || canonicalKey,
-    canonical_event_id: canonicalKey,
+    id: dealId || canonicalEventId,
+    deal_id: dealId || canonicalEventId,
+    project_id: field(row, "project_id") || dealId || canonicalEventId,
+    item_id: field(row, "item_id") || dealId || canonicalEventId,
+    signal_id: signalId || canonicalEventId,
+    routing_id: field(row, "routing_id") || signalId || canonicalEventId,
+    canonical_event_id: canonicalEventId,
+    canonical_project_key: canonicalProjectKey,
 
     title: titleOf(row),
     deal_label: field(row, "deal_label") || propertyType || "Deal Signal",
@@ -385,15 +367,17 @@ function normalizeDeal(row: AnyRow, table: string) {
     asset_type: propertyType,
     property_type: propertyType,
     deal_type: field(row, "deal_type") || propertyType,
-    strategy: field(row, "strategy"),
+    strategy: field(row, "strategy", "deal_strategy"),
     exit_strategy: field(row, "exit_strategy", "strategy"),
 
     asking_price: askingPrice,
     price: field(row, "price") || askingPrice,
     arv,
     arv_value: field(row, "arv_value") || arv,
+    estimated_value: field(row, "estimated_value") || arv,
     repair_estimate: repairs,
     repairs_needed: field(row, "repairs_needed") || repairs,
+    estimated_repairs: field(row, "estimated_repairs") || repairs,
 
     beds: field(row, "beds", "bedrooms"),
     bedrooms: field(row, "bedrooms", "beds"),
@@ -402,21 +386,25 @@ function normalizeDeal(row: AnyRow, table: string) {
     square_feet: field(row, "square_feet", "sqft", "building_sqft"),
     sqft: field(row, "sqft", "square_feet", "building_sqft"),
     building_sqft: field(row, "building_sqft", "square_feet", "sqft"),
-    year_built: field(row, "year_built"),
-    occupancy: field(row, "occupancy"),
-    zoning: field(row, "zoning"),
+    year_built: field(row, "year_built", "built_year"),
+    occupancy: field(row, "occupancy", "occupancy_status", "tenant_status"),
+    occupancy_status: field(row, "occupancy_status", "occupancy", "tenant_status"),
+    zoning: field(row, "zoning", "zoning_type"),
+    zoning_type: field(row, "zoning_type", "zoning"),
     acres: field(row, "acres", "land_acres"),
     land_acres: field(row, "land_acres", "acres"),
-    utilities: field(row, "utilities"),
-    road_access: field(row, "road_access"),
-    noi: field(row, "noi"),
+    utilities: field(row, "utilities", "utility_access", "access_notes"),
+    utility_access: field(row, "utility_access", "utilities", "access_notes"),
+    road_access: field(row, "road_access", "access", "occupancy"),
+    access: field(row, "access", "road_access", "occupancy"),
+    noi: field(row, "noi", "net_operating_income"),
     cap_rate: field(row, "cap_rate"),
 
-    routing_needs: field(row, "routing_needs", "deal_needs", "needs"),
+    routing_needs: field(row, "routing_needs", "deal_needs", "needs", "route_context"),
     deal_needs: field(row, "deal_needs", "routing_needs"),
     needs: field(row, "needs", "routing_needs"),
-    distress_signals: field(row, "distress_signals"),
-    seller_situation: field(row, "seller_situation"),
+    distress_signals: field(row, "distress_signals", "seller_pressure", "pain_signals"),
+    seller_situation: field(row, "seller_situation", "private_notes", "access_notes"),
 
     owner_email: ownerEmail,
     created_by_email: field(row, "created_by_email") || ownerEmail,
@@ -433,11 +421,16 @@ function normalizeDeal(row: AnyRow, table: string) {
     _source_table: table,
     _source_rank: sourceRank(table),
     ...photoData,
-    metadata,
+    metadata: {
+      ...metadata,
+      canonical_project_key: canonicalProjectKey,
+      canonical_event_id: canonicalEventId,
+      deal_id: dealId,
+    },
   };
 }
 
-async function selectRecent(supabase: any, table: string, limit = 160) {
+async function selectRecent(supabase: any, table: string, limit = 180) {
   const orderColumns = ["created_at", "updated_at", "id"];
 
   for (const column of orderColumns) {
@@ -461,41 +454,67 @@ async function selectRecent(supabase: any, table: string, limit = 160) {
 
 function matchesId(row: AnyRow, id: string) {
   if (!id) return false;
-  const metadata = metadataOf(row);
 
   return [
-    row.id,
-    row.deal_id,
-    row.project_id,
-    row.item_id,
-    row.related_deal_id,
-    row.signal_id,
-    row.alert_id,
-    row.routing_id,
-    row.canonical_event_id,
-    metadata.deal_id,
-    metadata.project_id,
-    metadata.item_id,
-    metadata.related_deal_id,
-    metadata.signal_id,
-    metadata.canonical_event_id,
+    field(row, "id"),
+    field(row, "deal_id"),
+    field(row, "project_id"),
+    field(row, "item_id"),
+    field(row, "related_deal_id"),
+    field(row, "signal_id"),
+    field(row, "alert_id"),
+    field(row, "routing_id"),
+    field(row, "canonical_event_id"),
+    field(row, "canonical_project_key"),
   ]
     .map(clean)
     .includes(id);
 }
 
 function dealish(row: AnyRow, table: string) {
-  const metadata = metadataOf(row);
-  const source = first(row.source, row.source_table, metadata.source, metadata.source_table, table).toLowerCase();
-  const signalType = first(row.signal_type, metadata.signal_type, row.type, metadata.type).toLowerCase();
+  const source = first(field(row, "source"), field(row, "source_table"), table).toLowerCase();
+  const signalType = first(field(row, "signal_type"), field(row, "type")).toLowerCase();
 
   if (table === "vf_deals") return true;
   if (source.includes("deal")) return true;
   if (signalType.includes("deal")) return true;
-  if (first(row.deal_id, metadata.deal_id)) return true;
-  if (first(row.canonical_event_id, metadata.canonical_event_id).startsWith("deal_signal")) return true;
+  if (field(row, "deal_id", "project_id", "item_id", "related_deal_id")) return true;
+  if (field(row, "canonical_event_id").startsWith("deal_signal")) return true;
 
   return false;
+}
+
+function isWeakMirrorRow(row: AnyRow, table: string) {
+  if (table === "vf_deals") return false;
+
+  const hasCanonicalDeal = Boolean(field(row, "deal_id", "item_id", "related_deal_id"));
+  if (hasCanonicalDeal) return false;
+
+  const hasCoreDealFields = Boolean(
+    field(
+      row,
+      "asking_price",
+      "price",
+      "arv",
+      "arv_value",
+      "estimated_value",
+      "repair_estimate",
+      "repairs_needed",
+      "beds",
+      "bedrooms",
+      "baths",
+      "bathrooms",
+      "square_feet",
+      "sqft",
+      "strategy",
+      "exit_strategy"
+    )
+  );
+
+  const hasPhoto = photosFrom(row).photo_urls.length > 0;
+  const hasTitleMarket = Boolean(titleOf(row) && marketOf(row));
+
+  return !hasCoreDealFields && !hasPhoto && !hasTitleMarket;
 }
 
 function completenessScore(row: AnyRow) {
@@ -505,12 +524,15 @@ function completenessScore(row: AnyRow) {
     "price",
     "arv",
     "arv_value",
+    "estimated_value",
     "repair_estimate",
     "repairs_needed",
     "route_summary",
     "ai_route_summary",
     "routing_needs",
     "deal_needs",
+    "distress_signals",
+    "seller_situation",
     "beds",
     "bedrooms",
     "baths",
@@ -519,14 +541,17 @@ function completenessScore(row: AnyRow) {
     "sqft",
     "strategy",
     "exit_strategy",
+    "occupancy",
+    "zoning",
+    "utilities",
   ];
 
   for (const key of important) {
     if (field(row, key)) score += 1;
   }
 
-  if (photosFrom(row).photo_urls.length) score += 2;
-  if (row._source_table === "vf_deals") score += 100;
+  if (photosFrom(row).photo_urls.length) score += 4;
+  if (row._source_table === "vf_deals" || row.source_table === "vf_deals") score += 100;
 
   return score;
 }
@@ -538,14 +563,33 @@ function mergeDeal(primary: AnyRow, secondary: AnyRow) {
   const mergedMeta = { ...secondaryMeta, ...primaryMeta };
   const merged: AnyRow = { ...secondary, ...primary, metadata: mergedMeta };
 
-  const photos = Array.from(
-    new Set([
-      ...(Array.isArray(secondary.photo_urls) ? secondary.photo_urls : []),
-      ...(Array.isArray(primary.photo_urls) ? primary.photo_urls : []),
-      ...(Array.isArray(secondaryMeta.photo_urls) ? secondaryMeta.photo_urls : []),
-      ...(Array.isArray(primaryMeta.photo_urls) ? primaryMeta.photo_urls : []),
-    ].map(clean).filter(Boolean))
-  );
+  const textKeys = [
+    "note",
+    "notes",
+    "description",
+    "route_summary",
+    "routing_summary",
+    "ai_route_summary",
+    "routing_needs",
+    "deal_needs",
+    "needs",
+    "distress_signals",
+    "seller_situation",
+    "contractor_scope",
+    "operator_scope",
+    "capital_needed",
+    "target_buyer",
+  ];
+
+  for (const key of textKeys) {
+    const primaryText = clean(primary[key] || primaryMeta[key]);
+    const secondaryText = clean(secondary[key] || secondaryMeta[key]);
+    if (primaryText || secondaryText) {
+      merged[key] = primaryText.length >= secondaryText.length ? primaryText : secondaryText;
+    }
+  }
+
+  const photos = Array.from(new Set([...photosFrom(secondary).photo_urls, ...photosFrom(primary).photo_urls].map(clean).filter(Boolean)));
 
   if (photos.length) {
     merged.photo_urls = photos;
@@ -555,7 +599,7 @@ function mergeDeal(primary: AnyRow, secondary: AnyRow) {
     merged.photo_url = first(primary.photo_url, secondary.photo_url, merged.main_photo_url);
   }
 
-  return normalizeDeal(merged, first(primary.source_table, secondary.source_table, "merged"));
+  return normalizeDeal(merged, first(primary.source_table, secondary.source_table, primary._source_table, secondary._source_table, "merged"));
 }
 
 export async function GET(request: Request) {
@@ -581,12 +625,13 @@ export async function GET(request: Request) {
     const found: AnyRow[] = [];
 
     for (const table of tables) {
-      const rows = await selectRecent(supabase, table, 180);
+      const rows = await selectRecent(supabase, table, 220);
 
       for (const row of rows) {
         if (!dealish(row, table)) continue;
         if (!canSee(row, email, owner)) continue;
         if (id && !matchesId(row, id)) continue;
+        if (!id && isWeakMirrorRow(row, table)) continue;
 
         found.push(normalizeDeal(row, table));
       }
@@ -595,7 +640,7 @@ export async function GET(request: Request) {
     const byKey = new Map<string, AnyRow>();
 
     for (const row of found) {
-      const key = first(row.canonical_event_id, row.signal_id, row.deal_id, row.id, row.title);
+      const key = canonicalProjectKeyOf(row);
       if (!key) continue;
 
       const existing = byKey.get(key);
@@ -605,9 +650,12 @@ export async function GET(request: Request) {
         continue;
       }
 
+      const rowScore = completenessScore(row);
+      const existingScore = completenessScore(existing);
+
       const rowBetter =
-        completenessScore(row) > completenessScore(existing) ||
-        (completenessScore(row) === completenessScore(existing) && row._source_rank < existing._source_rank);
+        rowScore > existingScore ||
+        (rowScore === existingScore && Number(row._source_rank || 9) < Number(existing._source_rank || 9));
 
       const preferred = rowBetter ? row : existing;
       const secondary = rowBetter ? existing : row;
@@ -628,7 +676,7 @@ export async function GET(request: Request) {
       count: deals.length,
       source: "api/deal/feed",
       mirrors: "api/pain/feed",
-      dedupe_model: "one deal per canonical_event_id, prefers vf_deals full record",
+      dedupe_model: "canonical_project_key, vf_deals preferred, weak mirrors suppressed",
     });
   } catch (error: any) {
     return NextResponse.json(
