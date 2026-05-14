@@ -42,14 +42,24 @@ function from(deal: Deal | null, ...keys: string[]) {
 }
 
 function parseArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+  if (Array.isArray(value)) {
+    return value
+      .map((item: any) => {
+        if (typeof item === "string") return clean(item);
+        if (item && typeof item === "object") {
+          return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url || item.main_photo_url);
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
 
   const text = clean(value);
   if (!text) return [];
 
   try {
     const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
+    if (Array.isArray(parsed)) return parseArray(parsed);
   } catch {
     // continue
   }
@@ -93,6 +103,60 @@ function money(value: unknown) {
     currency: "USD",
     maximumFractionDigits: 0,
   });
+}
+
+function valueText(value: unknown) {
+  return clean(value) || "Not listed";
+}
+
+function bedsBaths(deal: Deal | null) {
+  const beds = from(deal, "beds", "bedrooms");
+  const baths = from(deal, "baths", "bathrooms");
+  return [beds, baths].filter(Boolean).join(" / ") || "Not listed";
+}
+
+function sqftAcres(deal: Deal | null) {
+  return (
+    from(deal, "square_feet", "sqft", "building_sqft", "lot_size") ||
+    from(deal, "acres", "land_acres") ||
+    "Not listed"
+  );
+}
+
+function marketText(deal: Deal | null) {
+  return (
+    [from(deal, "city"), from(deal, "state")].filter(Boolean).join(", ") ||
+    from(deal, "market", "location", "address", "property_address") ||
+    "Not listed"
+  );
+}
+
+function bloombergBrief(deal: Deal | null) {
+  const title = first(from(deal, "title", "deal_title", "project_title"), "Deal");
+  const type = from(deal, "property_type", "deal_type", "asset_type") || "deal";
+  const market = marketText(deal);
+  const strategy = from(deal, "strategy", "exit_strategy", "deal_strategy");
+  const needs = from(deal, "routing_needs", "deal_needs", "needs", "route_context");
+  const signals = from(deal, "distress_signals", "seller_pressure", "pain_signals");
+  const ask = money(from(deal, "asking_price", "price", "ask", "purchase_price"));
+  const arv = money(from(deal, "arv", "arv_value", "estimated_value", "after_repair_value"));
+  const repairs = money(from(deal, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"));
+  const summary = first(
+    from(deal, "ai_route_summary", "route_summary", "routing_summary"),
+    from(deal, "description", "notes", "note")
+  );
+
+  if (summary) return summary;
+
+  return [
+    `${title}: ${type} opportunity in ${market}.`,
+    strategy ? `Likely strategy: ${strategy}.` : "",
+    ask !== "Not listed" || arv !== "Not listed" || repairs !== "Not listed"
+      ? `Economics: Ask ${ask} / ARV ${arv} / Repairs ${repairs}.`
+      : "",
+    needs ? `Routing need: ${needs}.` : "",
+    signals ? `Pressure signal: ${signals}.` : "",
+  ].filter(Boolean).join(" ");
 }
 
 const page: React.CSSProperties = {
@@ -230,12 +294,7 @@ export default function DealDetailPage() {
           </h1>
 
           <p style={{ color: "#cbd5e1", fontSize: 18 }}>
-            {status ||
-              first(
-                from(deal, "ai_route_summary", "route_summary", "routing_summary"),
-                from(deal, "description"),
-                "VaultForge execution intelligence layer."
-              )}
+            {status || bloombergBrief(deal) || "VaultForge execution intelligence layer."}
           </p>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
@@ -273,46 +332,41 @@ export default function DealDetailPage() {
 
             <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14 }}>
               <Info title="Property Type" value={from(deal, "property_type", "deal_type", "asset_type")} />
-              <Info title="Market" value={[from(deal, "city"), from(deal, "state", "market")].filter(Boolean).join(", ")} />
-              <Info title="Strategy" value={from(deal, "strategy", "exit_strategy")} />
-              <Info title="Asking Price" value={money(from(deal, "asking_price", "price"))} />
-              <Info title="ARV" value={money(from(deal, "arv", "arv_value", "estimated_value"))} />
-              <Info title="Repairs" value={money(from(deal, "repair_estimate", "repairs_needed", "estimated_repairs"))} />
-              <Info title="Beds" value={from(deal, "beds", "bedrooms")} />
-              <Info title="Baths" value={from(deal, "baths", "bathrooms")} />
-              <Info title="Sqft / Acres" value={from(deal, "square_feet", "sqft", "building_sqft", "acres", "land_acres")} />
-              <Info title="Year Built" value={from(deal, "year_built")} />
-              <Info title="Occupancy" value={from(deal, "occupancy")} />
-              <Info title="Zoning" value={from(deal, "zoning")} />
-              <Info title="Utilities" value={from(deal, "utilities")} />
-              <Info title="Road Access" value={from(deal, "road_access")} />
-              <Info title="NOI / Cap Rate" value={[from(deal, "noi"), from(deal, "cap_rate")].filter(Boolean).join(" / ")} />
+              <Info title="Market" value={marketText(deal)} />
+              <Info title="Strategy" value={from(deal, "strategy", "exit_strategy", "deal_strategy")} />
+              <Info title="Asking Price" value={money(from(deal, "asking_price", "price", "ask", "purchase_price"))} />
+              <Info title="ARV" value={money(from(deal, "arv", "arv_value", "estimated_value", "after_repair_value"))} />
+              <Info title="Repairs" value={money(from(deal, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"))} />
+              <Info title="Beds / Baths" value={bedsBaths(deal)} />
+              <Info title="Sqft / Acres" value={sqftAcres(deal)} />
+              <Info title="Year Built" value={from(deal, "year_built", "built_year")} />
+              <Info title="Occupancy" value={from(deal, "occupancy", "occupancy_status", "tenant_status")} />
+              <Info title="Zoning" value={from(deal, "zoning", "zoning_type")} />
+              <Info title="Utilities" value={from(deal, "utilities", "utility_access", "access_notes")} />
+              <Info title="Road Access" value={from(deal, "road_access", "access", "frontage", "road_frontage")} />
+              <Info title="NOI / Cap Rate" value={[from(deal, "noi", "net_operating_income"), from(deal, "cap_rate")].filter(Boolean).join(" / ")} />
             </section>
 
             <section style={card}>
               <div style={label}>Routing Needs</div>
-              <div style={{ fontSize: 22 }}>{from(deal, "routing_needs", "deal_needs", "needs") || "Not listed"}</div>
+              <div style={{ fontSize: 22 }}>{from(deal, "routing_needs", "deal_needs", "needs", "route_context") || "Not listed"}</div>
             </section>
 
             <section style={card}>
               <div style={label}>Distress / Pain Signals</div>
-              <div style={{ fontSize: 22 }}>{from(deal, "distress_signals") || "Not listed"}</div>
+              <div style={{ fontSize: 22 }}>{from(deal, "distress_signals", "seller_pressure", "pain_signals") || "Not listed"}</div>
             </section>
 
             <section style={card}>
               <div style={label}>Why Routed / Importance</div>
               <div style={{ fontSize: 22 }}>
-                {first(
-                  from(deal, "ai_route_summary", "route_summary", "routing_summary"),
-                  from(deal, "description"),
-                  "Not listed"
-                )}
+                {bloombergBrief(deal) || "Not listed"}
               </div>
             </section>
 
             <section style={card}>
               <div style={label}>Seller / Situation</div>
-              <div style={{ fontSize: 22 }}>{from(deal, "seller_situation", "private_notes", "access_notes") || "Not listed"}</div>
+              <div style={{ fontSize: 22 }}>{from(deal, "seller_situation", "private_notes", "access_notes", "description", "notes") || "Not listed"}</div>
             </section>
 
             <section style={card}>
