@@ -19,6 +19,7 @@ type FormState = {
   beds: string;
   baths: string;
   sqft: string;
+  square_feet: string;
   year_built: string;
   occupancy: string;
   zoning: string;
@@ -65,6 +66,7 @@ const initialForm: FormState = {
   beds: "",
   baths: "",
   sqft: "",
+  square_feet: "",
   year_built: "",
   occupancy: "",
   zoning: "",
