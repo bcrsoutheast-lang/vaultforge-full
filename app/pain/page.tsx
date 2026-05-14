@@ -222,6 +222,179 @@ const defaultForm: Record<string, any> = {
   repairs_needed: "",
 };
 
+
+function numberValue(value: unknown) {
+  const text = clean(value).replace(/[^0-9.-]/g, "");
+  const number = Number(text);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function moneyText(value: unknown) {
+  const number = numberValue(value);
+  if (!number) return "Not listed";
+
+  return number.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
+function hasText(value: unknown) {
+  return clean(value).length > 0;
+}
+
+function lowerText(...values: unknown[]) {
+  return values.map(clean).join(" ").toLowerCase();
+}
+
+function clampScore(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function bestBottleneck(form: Record<string, any>) {
+  const text = lowerText(
+    form.pain_type,
+    form.help_requested,
+    form.notes,
+    form.capital_needed,
+    form.repairs_needed,
+    form.timeline,
+    form.contractor_scope,
+    form.repair_scope,
+    form.commercial_notes,
+    form.land_notes
+  );
+
+  if (text.includes("foreclosure") || text.includes("deadline") || text.includes("emergency") || text.includes("fast close")) return "Time Pressure";
+  if (text.includes("capital") || text.includes("fund") || text.includes("lender") || text.includes("gap") || text.includes("money")) return "Capital Gap";
+  if (text.includes("contractor") || text.includes("repair") || text.includes("roof") || text.includes("hvac") || text.includes("buildout")) return "Execution / Contractor Gap";
+  if (text.includes("permit") || text.includes("city") || text.includes("zoning") || text.includes("code")) return "Municipal / Approval Blocker";
+  if (text.includes("buyer") || text.includes("sell") || text.includes("exit") || text.includes("disposition")) return "Buyer / Exit Gap";
+  if (text.includes("tenant") || text.includes("lease") || text.includes("occupancy")) return "Occupancy / Lease Issue";
+
+  if (form.pain_type === "capital_needed") return "Capital Gap";
+  if (form.pain_type === "contractor_needed" || form.pain_type === "stalled_project") return "Execution / Contractor Gap";
+  if (form.pain_type === "permit_city_issue") return "Municipal / Approval Blocker";
+  if (form.pain_type === "buyer_needed" || form.pain_type === "distressed_seller" || form.pain_type === "emergency_exit") return "Buyer / Exit Gap";
+
+  return "Owner Review / Triage";
+}
+
+function bestStack(form: Record<string, any>) {
+  const text = lowerText(form.pain_type, form.help_requested, form.notes, form.capital_needed, form.repairs_needed, form.asset_type);
+  const stack: string[] = [];
+
+  if (text.includes("buyer") || text.includes("sell") || text.includes("exit") || form.pain_type === "buyer_needed" || form.pain_type === "distressed_seller") stack.push("Buyer");
+  if (text.includes("capital") || text.includes("fund") || text.includes("lender") || form.pain_type === "capital_needed") stack.push("Private Lender");
+  if (text.includes("contractor") || text.includes("repair") || form.pain_type === "contractor_needed" || form.pain_type === "stalled_project") stack.push("Contractor");
+  if (text.includes("jv") || text.includes("partner") || text.includes("operator") || form.pain_type === "stalled_project") stack.push("Operator / JV Partner");
+  if (text.includes("permit") || text.includes("city") || text.includes("zoning") || form.pain_type === "permit_city_issue") stack.push("Local Operator");
+  if (text.includes("title") || text.includes("probate") || text.includes("lien")) stack.push("Attorney / Title");
+  if (form.asset_type === "Land" && !stack.includes("Builder / Developer")) stack.push("Builder / Developer");
+  if (form.asset_type === "Commercial" && !stack.includes("Commercial Investor")) stack.push("Commercial Investor");
+
+  if (!stack.length) stack.push("Owner Review", "Operator", "Buyer");
+
+  return Array.from(new Set(stack)).slice(0, 5);
+}
+
+function bestNextMove(form: Record<string, any>) {
+  const bottleneck = bestBottleneck(form);
+  const stack = bestStack(form);
+  const market = [clean(form.city), clean(form.operating_state)].filter(Boolean).join(", ") || "the target market";
+
+  if (bottleneck === "Time Pressure") return `Escalate as urgent: confirm deadline, access, seller contact, and route to ${stack.slice(0, 2).join(" + ")} in ${market}.`;
+  if (bottleneck === "Capital Gap") return `Package the numbers, confirm exact funding gap, then route to ${stack.includes("Private Lender") ? "private lender / capital partner" : "capital partner"}.`;
+  if (bottleneck === "Execution / Contractor Gap") return "Get photos, scope, access, and timeline tight; route to contractor/operator before buyer exposure.";
+  if (bottleneck === "Municipal / Approval Blocker") return "Clarify municipality, permit/code issue, timeline, and zoning facts before routing to local operator.";
+  if (bottleneck === "Buyer / Exit Gap") return "Package the asset, owner timeline, and price target; route first to buyer/operator fit instead of broad exposure.";
+  if (bottleneck === "Occupancy / Lease Issue") return "Clarify lease, tenant status, access rights, and legal constraints before any intro.";
+
+  return "Capture the missing facts, then route to the highest-fit operator stack.";
+}
+
+function pressureRead(form: Record<string, any>) {
+  const text = lowerText(form.urgency, form.timeline, form.notes, form.help_requested, form.pain_type);
+  let score = 35;
+
+  if (form.urgency === "Emergency") score += 35;
+  if (form.urgency === "High") score += 24;
+  if (form.urgency === "Medium") score += 12;
+  if (text.includes("foreclosure")) score += 24;
+  if (text.includes("deadline") || text.includes("closing") || text.includes("friday")) score += 18;
+  if (text.includes("fast close") || text.includes("urgent")) score += 18;
+  if (hasText(form.timeline)) score += 8;
+
+  return clampScore(score);
+}
+
+function readinessRead(form: Record<string, any>, photoCount: number) {
+  let score = 24;
+
+  if (hasText(form.title)) score += 10;
+  if (hasText(form.help_requested)) score += 12;
+  if (hasText(form.notes)) score += 12;
+  if (hasText(form.city) && hasText(form.operating_state)) score += 10;
+  if (hasText(form.address) || hasText(form.area)) score += 6;
+  if (hasText(form.timeline)) score += 8;
+  if (hasText(form.asking_price) || hasText(form.arv_value) || hasText(form.capital_needed)) score += 12;
+  if (photoCount) score += 12;
+
+  return clampScore(score);
+}
+
+function capitalRiskRead(form: Record<string, any>) {
+  const ask = numberValue(form.asking_price);
+  const arv = numberValue(form.arv_value);
+  const repairs = numberValue(form.repairs_needed);
+  const capital = numberValue(form.capital_needed);
+  let score = 28;
+
+  if (capital) score += 26;
+  if (ask && arv && ask >= arv * 0.82) score += 18;
+  if (repairs && arv && repairs >= arv * 0.18) score += 14;
+  if (lowerText(form.help_requested, form.notes).includes("gap")) score += 18;
+  if (lowerText(form.help_requested, form.notes).includes("lender")) score += 10;
+
+  return clampScore(score);
+}
+
+function intelligenceRead(form: Record<string, any>, selectedPain: { title: string }, photoCount: number) {
+  const market = [clean(form.city), clean(form.operating_state)].filter(Boolean).join(", ") || "market not listed";
+  const bottleneck = bestBottleneck(form);
+  const stack = bestStack(form);
+  const ask = moneyText(form.asking_price);
+  const arv = moneyText(form.arv_value);
+  const repairs = moneyText(form.repairs_needed);
+  const capital = moneyText(form.capital_needed);
+
+  return {
+    bottleneck,
+    stack,
+    bestMove: bestNextMove(form),
+    pressure: pressureRead(form),
+    readiness: readinessRead(form, photoCount),
+    capitalRisk: capitalRiskRead(form),
+    headline: `${selectedPain.title} · ${form.asset_type} · ${market}`,
+    summary: `VaultForge reads this as a ${form.asset_type} ${selectedPain.title.toLowerCase()} case in ${market}. Primary bottleneck: ${bottleneck}. Stack to consider: ${stack.join(", ")}. Numbers: ask ${ask}, ARV/value ${arv}, repairs/scope ${repairs}, capital need ${capital}.`,
+  };
+}
+
+function missingEinsteinPrompts(form: Record<string, any>, photoCount: number) {
+  const missing: string[] = [];
+
+  if (!hasText(form.title)) missing.push("title the problem clearly");
+  if (!hasText(form.help_requested)) missing.push("say exactly what help is needed");
+  if (!hasText(form.timeline)) missing.push("add timeline or deadline");
+  if (!hasText(form.city)) missing.push("add city/market");
+  if (!hasText(form.notes)) missing.push("add the real situation/context");
+  if (!photoCount) missing.push("add photos if possible");
+
+  return missing.slice(0, 5);
+}
+
 export default function PainPage() {
   const [email, setEmail] = useState("");
   const [form, setForm] = useState<Record<string, any>>(defaultForm);
@@ -240,6 +413,9 @@ export default function PainPage() {
   }, [form.pain_type]);
 
   const assetFields = FIELD_SETS[form.asset_type] || FIELD_SETS.Residential;
+
+  const einstein = useMemo(() => intelligenceRead(form, selectedPain, previewUrls.length), [form, selectedPain, previewUrls.length]);
+  const missingPrompts = useMemo(() => missingEinsteinPrompts(form, previewUrls.length), [form, previewUrls.length]);
 
   function update(key: string, value: any) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -413,8 +589,61 @@ export default function PainPage() {
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>Asset: {form.asset_type}</span>
             <span style={chip}>State: {form.operating_state}</span>
-            <span style={chip}>Version: asset-fields-visible</span>
+            <span style={chip}>Einstein Mode: Live intake intelligence</span>
           </div>
+        </section>
+
+        <section style={{ ...card, borderColor: "rgba(157,243,191,.34)", background: "linear-gradient(145deg,rgba(157,243,191,.075),rgba(232,196,107,.055),rgba(255,255,255,.035))" }}>
+          <p style={goldEyebrow}>Einstein Live Read</p>
+          <h2 style={{ fontSize: "clamp(34px,6vw,64px)", lineHeight: .95, letterSpacing: "-.045em", margin: "8px 0 12px" }}>
+            {einstein.headline}
+          </h2>
+          <p style={{ color: "#dbeafe", fontSize: 18, lineHeight: 1.55, maxWidth: 980 }}>
+            {einstein.summary}
+          </p>
+
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12, marginTop: 16 }}>
+            <div style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 14, background: "rgba(0,0,0,.16)" }}>
+              <div style={goldEyebrow}>Primary Bottleneck</div>
+              <div style={{ fontSize: 24, fontWeight: 950, marginTop: 8 }}>{einstein.bottleneck}</div>
+            </div>
+            <div style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 14, background: "rgba(0,0,0,.16)" }}>
+              <div style={goldEyebrow}>Best Operator Stack</div>
+              <div style={{ fontSize: 20, fontWeight: 900, marginTop: 8 }}>{einstein.stack.join(" → ")}</div>
+            </div>
+            <div style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 14, background: "rgba(0,0,0,.16)" }}>
+              <div style={goldEyebrow}>Best Next Move</div>
+              <div style={{ fontSize: 18, fontWeight: 850, marginTop: 8, lineHeight: 1.45 }}>{einstein.bestMove}</div>
+            </div>
+          </div>
+
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12, marginTop: 12 }}>
+            {[
+              ["Pressure", einstein.pressure, "Timeline, urgency, distress, and escalation signals."],
+              ["Routing Readiness", einstein.readiness, "How complete the case is for first-pass routing."],
+              ["Capital Risk", einstein.capitalRisk, "Funding gap, numbers, spread, and execution exposure."],
+            ].map(([name, score, caption]) => (
+              <div key={String(name)} style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 14, background: "rgba(0,0,0,.16)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontWeight: 950 }}>
+                  <span>{name}</span>
+                  <span>{score}%</span>
+                </div>
+                <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 10 }}>
+                  <div style={{ width: `${score}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#9df3bf)" }} />
+                </div>
+                <p style={{ color: "#cbd5e1", margin: "8px 0 0", fontSize: 13, lineHeight: 1.45 }}>{caption}</p>
+              </div>
+            ))}
+          </div>
+
+          {missingPrompts.length ? (
+            <div style={{ marginTop: 14, border: "1px solid rgba(232,196,107,.22)", borderRadius: 18, padding: 14, background: "rgba(232,196,107,.075)" }}>
+              <div style={goldEyebrow}>Einstein Wants</div>
+              <p style={{ color: "#f8e7b0", margin: "8px 0 0", fontWeight: 850, lineHeight: 1.45 }}>
+                To make routing sharper: {missingPrompts.join(", ")}. This does not block saving.
+              </p>
+            </div>
+          ) : null}
         </section>
 
         {status ? (
@@ -618,7 +847,7 @@ export default function PainPage() {
         <section style={{ ...card, position: "sticky", bottom: 12, zIndex: 20, backdropFilter: "blur(16px)" }}>
           <div className="vf-actions" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button type="button" disabled={submitting} onClick={submitPain} style={{ ...button, opacity: submitting ? 0.6 : 1 }}>
-              {submitting ? "Saving Pain Room..." : "Submit Pain Room"}
+              {submitting ? "Saving Pain Room..." : "Create Einstein Pain Room"}
             </button>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
           </div>
