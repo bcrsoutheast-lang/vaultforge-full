@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Row = Record<string, any>;
+type FolderMode = "active" | "saved" | "archived";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -64,22 +65,50 @@ function first(...values: unknown[]) {
 }
 
 function parseArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+  if (Array.isArray(value)) {
+    return value
+      .map((item: any) => {
+        if (typeof item === "string") return clean(item);
+        if (item && typeof item === "object") {
+          return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url || item.main_photo_url);
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
 
   const text = clean(value);
   if (!text) return [];
 
   try {
     const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
+    if (Array.isArray(parsed)) return parseArray(parsed);
   } catch {
-    // continue
+    // Continue as delimited text.
   }
 
   return text
     .split(/[,\n|;]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function readSet(key: string) {
+  if (typeof window === "undefined") return new Set<string>();
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map(clean).filter(Boolean) : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function writeSet(key: string, value: Set<string>) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(key, JSON.stringify(Array.from(value)));
 }
 
 function meta(row: Row) {
@@ -102,8 +131,20 @@ function idOf(row: Row) {
   return field(row, "deal_id", "project_id", "item_id", "id", "pain_id", "signal_id");
 }
 
+function dealIdOf(row: Row) {
+  return field(row, "deal_id", "project_id", "item_id", "related_deal_id", "id");
+}
+
+function painIdOf(row: Row) {
+  return field(row, "pain_id", "id", "item_id", "signal_id");
+}
+
 function signalIdOf(row: Row) {
-  return field(row, "signal_id", "signalId", "alert_id", "routing_id");
+  return field(row, "signal_id", "signalId", "alert_id", "routing_id", "canonical_event_id");
+}
+
+function routingIdOf(row: Row) {
+  return field(row, "routing_id", "signal_id", "alert_id", "canonical_event_id");
 }
 
 function titleOf(row: Row) {
@@ -113,7 +154,7 @@ function titleOf(row: Row) {
 function sourceOf(row: Row) {
   const source = first(row.source_kind, row.source_table, row._source_table, row.source, field(row, "canonical_kind")).toLowerCase();
 
-  if (source.includes("deal") || field(row, "deal_id", "asking_price", "price", "arv")) return "deal";
+  if (source.includes("deal") || field(row, "deal_id", "asking_price", "price", "arv", "arv_value", "estimated_value")) return "deal";
   if (source.includes("pain") || field(row, "pain_id", "pain_type")) return "pain";
 
   return "signal";
@@ -133,7 +174,6 @@ function noteOf(row: Row) {
       "strategy_notes",
       "urgency_reason",
       "routing_reason",
-      "ai_summary",
       "message",
       "help_requested",
       "requested_help"
@@ -153,11 +193,11 @@ function marketOf(row: Row) {
   const city = field(row, "city");
   const state = field(row, "state", "market", "operating_state");
 
-  return [city, state].filter(Boolean).join(", ") || field(row, "location", "address") || "Market not listed";
+  return [city, state].filter(Boolean).join(", ") || field(row, "location", "address", "property_address") || "Market not listed";
 }
 
 function ownerOf(row: Row) {
-  return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email"));
+  return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email", "submitted_by"));
 }
 
 function photosOf(row: Row) {
@@ -184,7 +224,7 @@ function photosOf(row: Row) {
         .map((item: any) => {
           if (typeof item === "string") return clean(item);
           if (item && typeof item === "object") {
-            return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url);
+            return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url || item.main_photo_url);
           }
           return "";
         })
@@ -207,54 +247,46 @@ function money(value: unknown) {
   });
 }
 
-function detailValue(value: unknown) {
-  return clean(value) || "Not listed";
-}
-
-function bedsBathsOf(row: Row) {
-  const beds = field(row, "beds", "bedrooms");
-  const baths = field(row, "baths", "bathrooms");
-  return [beds, baths].filter(Boolean).join(" / ") || "Not listed";
-}
-
-function sqftAcresOf(row: Row) {
-  return (
-    field(row, "square_feet", "sqft", "building_sqft", "lot_size") ||
-    field(row, "acres", "land_acres") ||
-    "Not listed"
-  );
-}
-
-function smartProjectSummary(row: Row) {
-  const supplied = field(row, "ai_route_summary", "route_summary", "routing_summary", "note", "notes", "description");
-  if (supplied) return supplied;
-
-  const type = field(row, "property_type", "deal_type", "asset_type") || "deal";
-  const strategy = field(row, "strategy", "exit_strategy", "deal_strategy");
-  const market = marketOf(row);
-  const bedsBaths = bedsBathsOf(row);
-  const size = sqftAcresOf(row);
-  const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context");
-
-  return [
-    `${titleOf(row)} is a ${type} opportunity in ${market}.`,
-    strategy ? `Strategy: ${strategy}.` : "",
-    bedsBaths !== "Not listed" ? `Beds/Baths: ${bedsBaths}.` : "",
-    size !== "Not listed" ? `Size: ${size}.` : "",
-    needs ? `Routing need: ${needs}.` : "",
-  ].filter(Boolean).join(" ");
+function normalizedKey(value: unknown) {
+  return clean(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function canonicalKey(row: Row) {
-  return (
+  const direct =
+    field(row, "canonical_project_key") ||
     field(row, "canonical_event_id") ||
     field(row, "deal_id") ||
     field(row, "project_id") ||
-    field(row, "item_id") ||
-    field(row, "signal_id") ||
-    field(row, "id") ||
-    `${titleOf(row)}-${marketOf(row)}`
-  );
+    field(row, "pain_id") ||
+    field(row, "item_id");
+
+  if (direct) return `id:${normalizedKey(direct)}`;
+
+  const signal = field(row, "signal_id", "alert_id", "routing_id");
+
+  if (signal) return `signal:${normalizedKey(signal)}`;
+
+  const title = normalizedKey(titleOf(row));
+  const market = normalizedKey(marketOf(row));
+  const owner = normalizedKey(ownerOf(row));
+  const asset = normalizedKey(assetOf(row));
+
+  return `fuzzy:${[title, market, owner, asset].filter(Boolean).join(":")}`;
+}
+
+function duplicateFamilyKey(row: Row) {
+  const source = sourceOf(row);
+  const title = normalizedKey(titleOf(row));
+  const market = normalizedKey(marketOf(row));
+  const owner = normalizedKey(ownerOf(row));
+  const asset = normalizedKey(assetOf(row));
+  const ask = normalizedKey(field(row, "asking_price", "price", "ask", "purchase_price"));
+  const arv = normalizedKey(field(row, "arv", "arv_value", "estimated_value", "after_repair_value"));
+
+  return `family:${[source, title, market, owner, asset, ask, arv].filter(Boolean).join(":")}`;
 }
 
 function completenessScore(row: Row) {
@@ -265,14 +297,17 @@ function completenessScore(row: Row) {
     "price",
     "arv",
     "arv_value",
+    "estimated_value",
     "repair_estimate",
     "repairs_needed",
+    "estimated_repairs",
     "beds",
     "bedrooms",
     "baths",
     "bathrooms",
     "square_feet",
     "sqft",
+    "building_sqft",
     "strategy",
     "exit_strategy",
     "routing_needs",
@@ -287,7 +322,7 @@ function completenessScore(row: Row) {
     if (field(row, key)) score += 1;
   }
 
-  if (photosOf(row).length) score += 3;
+  if (photosOf(row).length) score += 5;
 
   const source = first(row.source_table, row._source_table, row.source).toLowerCase();
 
@@ -333,9 +368,9 @@ function mergeRows(primary: Row, secondary: Row) {
 
 function routingSummary(row: Row) {
   const summary = noteOf(row);
-  const needs = field(row, "routing_needs", "deal_needs", "needs");
-  const signals = field(row, "distress_signals");
-  const strategy = field(row, "strategy", "exit_strategy");
+  const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context");
+  const signals = field(row, "distress_signals", "seller_pressure", "pain_signals");
+  const strategy = field(row, "strategy", "exit_strategy", "deal_strategy");
   const market = marketOf(row);
   const owner = ownerOf(row);
 
@@ -350,20 +385,126 @@ function routingSummary(row: Row) {
 
   return parts.length
     ? parts.join(" • ")
-    : "This deal needs a routing summary. Useful AI context would include buyer type, lender need, contractor scope, timeline, seller pressure, and next best action.";
+    : "AI routing summary pending.";
 }
 
 function missingInfo(row: Row) {
   const missing: string[] = [];
 
-  if (!field(row, "routing_needs", "deal_needs", "needs")) missing.push("who should receive this");
-  if (!field(row, "distress_signals")) missing.push("urgency or seller pressure");
+  if (!field(row, "routing_needs", "deal_needs", "needs", "route_context")) missing.push("who should receive this");
+  if (!field(row, "distress_signals", "seller_pressure", "pain_signals")) missing.push("urgency or seller pressure");
   if (!field(row, "capital_needed")) missing.push("capital need");
   if (!field(row, "contractor_scope")) missing.push("contractor scope");
   if (!field(row, "operator_scope")) missing.push("operator/JV scope");
   if (!field(row, "target_buyer")) missing.push("target buyer type");
 
   return missing;
+}
+
+function signalPressureText(row: Row) {
+  return field(row, "distress_signals", "seller_pressure", "pain_signals") || "No pressure signal listed yet.";
+}
+
+function signalPressureTone(row: Row) {
+  const value = signalPressureText(row).toLowerCase();
+
+  if (
+    value.includes("foreclosure") ||
+    value.includes("urgent") ||
+    value.includes("fast close") ||
+    value.includes("funding gap") ||
+    value.includes("emergency")
+  ) {
+    return {
+      border: "rgba(248,113,113,.34)",
+      background: "rgba(248,113,113,.11)",
+      color: "#fecaca",
+      label: "High pressure",
+    };
+  }
+
+  if (value && value !== "no pressure signal listed yet.") {
+    return {
+      border: "rgba(232,196,107,.30)",
+      background: "rgba(232,196,107,.09)",
+      color: "#f8e7b0",
+      label: "Signal present",
+    };
+  }
+
+  return {
+    border: "rgba(148,163,184,.22)",
+    background: "rgba(148,163,184,.06)",
+    color: "#cbd5e1",
+    label: "No signal",
+  };
+}
+
+function clampScore(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function operatingScore(row: Row) {
+  let score = 42;
+
+  if (field(row, "asking_price", "price", "ask", "purchase_price")) score += 8;
+  if (field(row, "arv", "arv_value", "estimated_value", "after_repair_value")) score += 8;
+  if (field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget")) score += 8;
+  if (field(row, "routing_needs", "deal_needs", "needs", "route_context")) score += 10;
+  if (field(row, "distress_signals", "seller_pressure", "pain_signals")) score += 10;
+  if (field(row, "strategy", "exit_strategy", "deal_strategy")) score += 6;
+  if (photosOf(row).length) score += 8;
+
+  return clampScore(score);
+}
+
+function urgencyScore(row: Row) {
+  const pressure = `${field(row, "distress_signals", "seller_pressure", "pain_signals")} ${field(row, "urgency", "urgency_level")} ${field(row, "seller_situation")}`.toLowerCase();
+  let score = 38;
+
+  if (pressure.includes("urgent")) score += 28;
+  if (pressure.includes("fast close")) score += 22;
+  if (pressure.includes("funding gap")) score += 18;
+  if (pressure.includes("foreclosure")) score += 25;
+  if (pressure.includes("inherited")) score += 10;
+  if (field(row, "routing_needs", "deal_needs", "needs", "route_context")) score += 10;
+
+  return clampScore(score);
+}
+
+function aiHiveSuggestions(row: Row) {
+  const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
+  const pressure = field(row, "distress_signals", "seller_pressure", "pain_signals").toLowerCase();
+  const strategy = field(row, "strategy", "exit_strategy", "deal_strategy") || "Fix & Flip";
+
+  const suggestions: string[] = [];
+
+  if (needs.includes("buyer")) suggestions.push("Route to cash buyers first; confirm proof of funds before releasing private details.");
+  if (needs.includes("contractor")) suggestions.push("Get repair scope priced fast so spread can be verified before buyer intro.");
+  if (needs.includes("jv") || needs.includes("partner")) suggestions.push("Package as JV/operator opportunity with role, capital need, and profit split clearly defined.");
+  if (needs.includes("lender") || pressure.includes("funding")) suggestions.push("Send to private/hard-money capital with ask, ARV, repairs, and timeline.");
+  if (pressure.includes("fast close")) suggestions.push("Prioritize speed: buyer + title readiness matter more than broad exposure.");
+
+  if (!suggestions.length) {
+    suggestions.push("Hold for owner review until buyer type, funding need, timeline, and execution role are clarified.");
+  }
+
+  suggestions.push(`Best formation: ${strategy} deal room with controlled owner contact and member-by-member routing.`);
+
+  return suggestions.slice(0, 4);
+}
+
+function bestDealFormation(row: Row) {
+  const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
+  const pressure = field(row, "distress_signals", "seller_pressure", "pain_signals").toLowerCase();
+
+  if (needs.includes("jv") || needs.includes("partner")) return "JV / Operator-Led Execution";
+  if (needs.includes("lender") || pressure.includes("funding")) return "Capital-Backed Acquisition";
+  if (needs.includes("contractor")) return "Contractor-Verified Flip";
+  if (needs.includes("buyer")) return "Buyer-First Off-Market Route";
+
+  return "Owner Review / Intelligence Hold";
 }
 
 const page: React.CSSProperties = {
@@ -415,6 +556,7 @@ const button: React.CSSProperties = {
   color: "#06100a",
   fontWeight: 950,
   textDecoration: "none",
+  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -422,6 +564,13 @@ const ghost: React.CSSProperties = {
   background: "rgba(255,255,255,.06)",
   border: "1px solid rgba(255,255,255,.16)",
   color: "white",
+};
+
+const dangerGhost: React.CSSProperties = {
+  ...ghost,
+  border: "1px solid rgba(248,113,113,.34)",
+  color: "#fecaca",
+  background: "rgba(248,113,113,.08)",
 };
 
 const chip: React.CSSProperties = {
@@ -450,11 +599,9 @@ function DetailGrid({ row }: { row: Row }) {
     ["Ask", money(field(row, "asking_price", "price", "ask", "purchase_price"))],
     ["ARV", money(field(row, "arv", "arv_value", "estimated_value", "after_repair_value"))],
     ["Repairs", money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"))],
-    ["Beds/Baths", bedsBathsOf(row)],
-    ["Sqft/Acres", sqftAcresOf(row)],
-    ["Strategy", detailValue(field(row, "strategy", "exit_strategy", "deal_strategy"))],
-    ["Occupancy", detailValue(field(row, "occupancy", "occupancy_status", "tenant_status"))],
-    ["Zoning", detailValue(field(row, "zoning", "zoning_type"))],
+    ["Beds/Baths", [field(row, "beds", "bedrooms"), field(row, "baths", "bathrooms")].filter(Boolean).join(" / ") || "Not listed"],
+    ["Sqft/Acres", field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres") || "Not listed"],
+    ["Strategy", field(row, "strategy", "exit_strategy", "deal_strategy") || "Not listed"],
   ];
 
   return (
@@ -469,34 +616,126 @@ function DetailGrid({ row }: { row: Row }) {
   );
 }
 
-function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
+function ScoreBar({ label: scoreLabel, value, caption }: { label: string; value: number; caption: string }) {
+  return (
+    <div style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: 12, background: "rgba(0,0,0,.16)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, fontWeight: 950 }}>
+        <span>{scoreLabel}</span>
+        <span>{value}%</span>
+      </div>
+      <div style={{ height: 9, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 10 }}>
+        <div style={{ width: `${value}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)" }} />
+      </div>
+      <p style={{ ...muted, margin: "8px 0 0", fontSize: 13 }}>{caption}</p>
+    </div>
+  );
+}
+
+function IntelligencePanel({ row }: { row: Row }) {
+  const opScore = operatingScore(row);
+  const urgScore = urgencyScore(row);
+  const suggestions = aiHiveSuggestions(row);
+
+  return (
+    <section
+      style={{
+        marginTop: 14,
+        border: "1px solid rgba(232,196,107,.18)",
+        borderRadius: 20,
+        padding: 14,
+        background: "linear-gradient(145deg,rgba(232,196,107,.08),rgba(255,255,255,.025))",
+      }}
+    >
+      <div style={{ ...label, fontSize: 11 }}>VaultForge AI Hive</div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginTop: 12 }}>
+        <ScoreBar label="Operating Score" value={opScore} caption="Completeness, photos, spread, need, and actionability." />
+        <ScoreBar label="Urgency" value={urgScore} caption={field(row, "urgency", "urgency_level") || "Calculated from pressure signals."} />
+        <ScoreBar label="Asset Context" value={photosOf(row).length ? 76 : 42} caption={`${photosOf(row).length} photo${photosOf(row).length === 1 ? "" : "s"} connected.`} />
+      </div>
+
+      <div style={{ marginTop: 14, border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: 12, background: "rgba(0,0,0,.14)" }}>
+        <div style={{ ...label, fontSize: 11 }}>Best Deal Formation</div>
+        <div style={{ fontSize: 22, fontWeight: 950, marginTop: 6 }}>{bestDealFormation(row)}</div>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <div style={{ ...label, fontSize: 11 }}>AI Hive Suggestions</div>
+        <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          {suggestions.map((item) => (
+            <div key={item} style={{ border: "1px solid rgba(157,243,191,.18)", borderRadius: 14, padding: 10, color: "#dbeafe", background: "rgba(157,243,191,.055)", lineHeight: 1.45 }}>
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WorkstationCard({
+  row,
+  viewer,
+  isSaved,
+  isArchived,
+  onSave,
+  onUnsave,
+  onArchive,
+  onRestore,
+  onDelete,
+}: {
+  row: Row;
+  viewer: string;
+  isSaved: boolean;
+  isArchived: boolean;
+  onSave: () => void;
+  onUnsave: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
   const id = idOf(row);
+  const dealId = dealIdOf(row);
+  const painId = painIdOf(row);
   const signalId = signalIdOf(row);
+  const routingId = routingIdOf(row);
   const source = sourceOf(row);
   const photos = photosOf(row);
   const owner = ownerOf(row);
   const missing = missingInfo(row);
+  const pressure = signalPressureTone(row);
 
   const contactHref = signalId
     ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`
     : `/messages/new?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`;
 
+  const detailHref =
+    source === "deal" && dealId
+      ? `/deal/detail?id=${encodeURIComponent(dealId)}`
+      : source === "pain" && painId
+      ? `/pain-room/${encodeURIComponent(painId)}`
+      : signalId
+      ? `/signals/${encodeURIComponent(signalId)}`
+      : "/projects";
+
   return (
-    <article style={glass}>
-      <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 18 }}>
+    <article className="vf-workstation-card" style={glass}>
+      <div className="vf-workstation-layout" style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 18 }}>
         <div
+          className="vf-photo-wrap"
           style={{
             borderRadius: 20,
             overflow: "hidden",
             border: "1px solid rgba(232,196,107,.18)",
             background: "rgba(0,0,0,.20)",
             minHeight: 150,
+            maxHeight: 240,
           }}
         >
           {photos[0] ? (
-            <img className="vf-safe-project-img" src={photos[0]} alt="Workstation" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            <img src={photos[0]} alt="Workstation" style={{ width: "100%", height: "100%", objectFit: "cover", maxHeight: 240, minHeight: 150, display: "block" }} />
           ) : (
-            <div style={{ height: 150, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850 }}>No photo</div>
+            <div style={{ height: 180, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850 }}>No photo</div>
           )}
         </div>
 
@@ -506,22 +745,38 @@ function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
             <span style={chip}>{assetOf(row)}</span>
             <span style={chip}>{statusOf(row)}</span>
             {signalId ? <span style={chip}>Signal linked</span> : null}
+            {isSaved ? <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.34)", background: "rgba(232,196,107,.10)" }}>Saved</span> : null}
+            {isArchived ? <span style={{ ...chip, color: "#cbd5e1", borderColor: "rgba(148,163,184,.24)", background: "rgba(148,163,184,.07)" }}>Archived</span> : null}
           </div>
 
-          <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
-          <p style={muted}>{smartProjectSummary(row)}</p>
+          <h3 style={{ fontSize: 24, lineHeight: 1.05, margin: "12px 0 8px", letterSpacing: "-.02em" }}>{titleOf(row)}</h3>
+          <p style={{ ...muted, fontSize: 14, lineHeight: 1.5 }}>{marketOf(row)} • {field(row, "strategy", "exit_strategy", "deal_strategy") || "Strategy not listed"} • {assetOf(row)}</p>
 
           {source === "deal" ? <DetailGrid row={row} /> : null}
 
           <section style={{ marginTop: 14, border: "1px solid rgba(232,196,107,.16)", borderRadius: 18, padding: 14, background: "rgba(232,196,107,.055)" }}>
-            <div style={{ ...label, fontSize: 11 }}>Routing Summary</div>
-            <p style={{ ...muted, margin: "8px 0 0" }}>{routingSummary(row)}</p>
+            <div style={{ ...label, fontSize: 11 }}>AI Routing Insight</div>
+            <p style={{ ...muted, margin: "8px 0 0", fontSize: 14, lineHeight: 1.6 }}>
+              {routingSummary(row)}
+            </p>
+
+            <div style={{ marginTop: 12, border: `1px solid ${pressure.border}`, background: pressure.background, borderRadius: 16, padding: 12 }}>
+              <div style={{ color: pressure.color, fontSize: 11, textTransform: "uppercase", letterSpacing: ".14em", fontWeight: 950 }}>
+                Signal Pressure · {pressure.label}
+              </div>
+              <p style={{ color: pressure.color, margin: "7px 0 0", fontWeight: 850 }}>
+                {signalPressureText(row)}
+              </p>
+            </div>
+
             {missing.length ? (
               <p style={{ color: "#f8e7b0", margin: "10px 0 0", fontWeight: 850 }}>
-                Add for stronger AI routing: {missing.join(", ")}.
+                Missing intelligence: {missing.join(", ")}.
               </p>
             ) : null}
           </section>
+
+          <IntelligencePanel row={row} />
 
           <div style={{ marginTop: 12 }}>
             {id ? <span style={chip}>ID: {id}</span> : null}
@@ -530,15 +785,58 @@ function WorkstationCard({ row, viewer }: { row: Row; viewer: string }) {
             {owner ? <span style={chip}>Owner: {owner}</span> : null}
           </div>
 
-          <div style={{ marginTop: 12 }}>
-            {field(row, "routing_needs", "deal_needs", "needs") ? <span style={chip}>Needs: {field(row, "routing_needs", "deal_needs", "needs")}</span> : null}
-            {field(row, "distress_signals") ? <span style={chip}>Signals: {field(row, "distress_signals")}</span> : null}
+          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {field(row, "routing_needs", "deal_needs", "needs", "route_context") ? <span style={chip}>Execution: {field(row, "routing_needs", "deal_needs", "needs", "route_context")}</span> : null}
           </div>
 
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <Link href={contactHref} style={button}>Contact Owner</Link>
-            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
-            {source === "deal" && id ? <Link href={`/deal/detail?id=${encodeURIComponent(id)}`} style={ghost}>Deal Detail</Link> : null}
+          <section
+            style={{
+              marginTop: 12,
+              border: "1px solid rgba(148,163,184,.12)",
+              borderRadius: 16,
+              padding: 12,
+              background: "rgba(255,255,255,.02)",
+            }}
+          >
+            <div style={{ ...label, fontSize: 11 }}>Suggested Operators</div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              <span style={chip}>Buyer</span>
+              <span style={chip}>Contractor</span>
+              {field(row, "routing_needs", "deal_needs", "needs", "route_context")?.toLowerCase().includes("jv") ? (
+                <span style={chip}>JV Partner</span>
+              ) : null}
+              {(field(row, "distress_signals", "seller_pressure", "pain_signals") || "").toLowerCase().includes("funding") ? (
+                <span style={chip}>Lender</span>
+              ) : null}
+            </div>
+          </section>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+            <Link href={detailHref} style={button}>
+              {source === "deal" ? "Open Deal Detail" : source === "pain" ? "Open Pain Room" : "Open Signal"}
+            </Link>
+            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Open Signal</Link> : null}
+            {routingId ? <Link href={`/routing-room/${encodeURIComponent(routingId)}`} style={ghost}>Routing Room</Link> : null}
+            <Link href={contactHref} style={ghost}>Contact Owner</Link>
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, opacity: .88 }}>
+            {!isSaved ? (
+              <button type="button" onClick={onSave} style={ghost}>Save to Project Folder</button>
+            ) : (
+              <button type="button" onClick={onUnsave} style={ghost}>Remove Saved</button>
+            )}
+
+            {!isArchived ? (
+              <button type="button" onClick={onArchive} style={ghost}>Archive / Clean Up</button>
+            ) : (
+              <button type="button" onClick={onRestore} style={ghost}>Restore to Active</button>
+            )}
+
+            {(isSaved || isArchived) ? (
+              <button type="button" onClick={onDelete} style={dangerGhost}>Delete</button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -550,6 +848,10 @@ export default function ProjectsPage() {
   const [email, setEmail] = useState("");
   const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading workstations...");
+  const [folder, setFolder] = useState<FolderMode>("active");
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
   async function load() {
     const viewer = getEmail();
@@ -594,15 +896,21 @@ export default function ProjectsPage() {
       }
 
       const byKey = new Map<string, Row>();
+      const familyToKey = new Map<string, string>();
 
       for (const item of collected) {
-        const key = canonicalKey(item);
+        const directKey = canonicalKey(item);
+        const familyKey = duplicateFamilyKey(item);
+        const knownKey = familyToKey.get(familyKey);
+        const key = knownKey || directKey;
+
         if (!key) continue;
 
         const existing = byKey.get(key);
 
         if (!existing) {
           byKey.set(key, item);
+          familyToKey.set(familyKey, key);
           continue;
         }
 
@@ -613,9 +921,30 @@ export default function ProjectsPage() {
         const secondary = itemScore >= existingScore ? existing : item;
 
         byKey.set(key, mergeRows(primary, secondary));
+        familyToKey.set(familyKey, key);
       }
 
-      const unique = Array.from(byKey.values());
+      const secondPass = new Map<string, Row>();
+
+      for (const item of Array.from(byKey.values())) {
+        const key = duplicateFamilyKey(item);
+        const existing = secondPass.get(key);
+
+        if (!existing) {
+          secondPass.set(key, item);
+          continue;
+        }
+
+        const itemScore = completenessScore(item);
+        const existingScore = completenessScore(existing);
+
+        const primary = itemScore >= existingScore ? item : existing;
+        const secondary = itemScore >= existingScore ? existing : item;
+
+        secondPass.set(key, mergeRows(primary, secondary));
+      }
+
+      const unique = Array.from(secondPass.values());
 
       setItems(unique);
       setStatus(unique.length ? "" : "No deal or pain workstations found yet.");
@@ -625,33 +954,153 @@ export default function ProjectsPage() {
   }
 
   useEffect(() => {
+    setSavedIds(readSet("vf_project_saved_ids"));
+    setArchivedIds(readSet("vf_project_archived_ids"));
+    setDeletedIds(readSet("vf_project_deleted_ids"));
     load();
   }, []);
 
-  const counts = useMemo(() => {
-    const deals = items.filter((item) => sourceOf(item) === "deal").length;
-    const pains = items.filter((item) => sourceOf(item) === "pain").length;
-    const withPhotos = items.filter((item) => photosOf(item).length).length;
+  function persistSaved(next: Set<string>) {
+    setSavedIds(new Set(next));
+    writeSet("vf_project_saved_ids", next);
+  }
 
-    return { total: items.length, deals, pains, withPhotos };
-  }, [items]);
+  function persistArchived(next: Set<string>) {
+    setArchivedIds(new Set(next));
+    writeSet("vf_project_archived_ids", next);
+  }
+
+  function persistDeleted(next: Set<string>) {
+    setDeletedIds(new Set(next));
+    writeSet("vf_project_deleted_ids", next);
+  }
+
+  function saveProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const next = new Set(savedIds);
+    next.add(key);
+    persistSaved(next);
+  }
+
+  function unsaveProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const next = new Set(savedIds);
+    next.delete(key);
+    persistSaved(next);
+  }
+
+  function archiveProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const nextArchived = new Set(archivedIds);
+    nextArchived.add(key);
+    persistArchived(nextArchived);
+
+    const nextSaved = new Set(savedIds);
+    nextSaved.delete(key);
+    persistSaved(nextSaved);
+  }
+
+  function restoreProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const next = new Set(archivedIds);
+    next.delete(key);
+    persistArchived(next);
+  }
+
+  function deleteProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const nextDeleted = new Set(deletedIds);
+    nextDeleted.add(key);
+    persistDeleted(nextDeleted);
+
+    const nextSaved = new Set(savedIds);
+    nextSaved.delete(key);
+    persistSaved(nextSaved);
+
+    const nextArchived = new Set(archivedIds);
+    nextArchived.delete(key);
+    persistArchived(nextArchived);
+  }
+
+  const visibleItems = useMemo(() => {
+    return items.filter((item) => {
+      const key = canonicalKey(item);
+      const saved = savedIds.has(key);
+      const archived = archivedIds.has(key);
+      const deleted = deletedIds.has(key);
+
+      if (deleted) return false;
+      if (folder === "saved") return saved && !archived;
+      if (folder === "archived") return archived;
+      return !archived;
+    });
+  }, [items, savedIds, archivedIds, deletedIds, folder]);
+
+  const counts = useMemo(() => {
+    const allLiveItems = items.filter((item) => {
+      const key = canonicalKey(item);
+      return key && !deletedIds.has(key);
+    });
+
+    const activeSavedItems = allLiveItems.filter((item) => {
+      const key = canonicalKey(item);
+      return savedIds.has(key) && !archivedIds.has(key);
+    });
+
+    const archivedItems = allLiveItems.filter((item) => {
+      const key = canonicalKey(item);
+      return archivedIds.has(key);
+    });
+
+    const deals = visibleItems.filter((item) => sourceOf(item) === "deal").length;
+    const pains = visibleItems.filter((item) => sourceOf(item) === "pain").length;
+    const signals = visibleItems.filter((item) => sourceOf(item) === "signal" || signalIdOf(item)).length;
+    const withPhotos = visibleItems.filter((item) => photosOf(item).length).length;
+
+    return {
+      total: visibleItems.length,
+      deals,
+      pains,
+      signals,
+      withPhotos,
+      saved: activeSavedItems.length,
+      archived: archivedItems.length,
+    };
+  }, [items, visibleItems, savedIds, archivedIds, deletedIds]);
 
   return (
     <main style={page}>
       <style>{`
-        .vf-safe-project-img {
-          width: 100% !important;
-          height: 260px !important;
-          max-height: 260px !important;
-          object-fit: cover !important;
-          display: block !important;
-          border-radius: 22px !important;
+        .vf-workstation-card {
+          overflow: hidden !important;
         }
-        @media (max-width: 820px) {
-          .vf-safe-project-img {
-            height: 220px !important;
-            max-height: 220px !important;
-          }
+
+        .vf-workstation-card * {
+          box-sizing: border-box;
+        }
+
+        .vf-workstation-card img {
+          max-height: 240px !important;
+          object-fit: cover !important;
+          width: 100% !important;
+          display: block !important;
+        }
+
+        a:hover,
+        button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
         }
 
         @media (max-width: 820px) {
@@ -672,14 +1121,18 @@ export default function ProjectsPage() {
             justify-content: center;
           }
 
-          article > div {
+          .vf-workstation-layout {
             grid-template-columns: 1fr !important;
+          }
+
+          .vf-photo-wrap {
+            max-height: 220px !important;
           }
         }
       `}</style>
 
       <div style={wrap}>
-        <section style={card}>
+        <section className="vf-project-card" style={card}>
           <div style={label}>VaultForge Project Desk</div>
 
           <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
@@ -696,7 +1149,16 @@ export default function ProjectsPage() {
             <span style={chip}>Workstations: {counts.total}</span>
             <span style={chip}>Deals: {counts.deals}</span>
             <span style={chip}>Pain: {counts.pains}</span>
+            <span style={chip}>Signals: {counts.signals}</span>
             <span style={chip}>With Photos: {counts.withPhotos}</span>
+            <span style={chip}>Saved: {counts.saved}</span>
+            <span style={chip}>Archived: {counts.archived}</span>
+          </div>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <button type="button" onClick={() => setFolder("active")} style={folder === "active" ? button : ghost}>Active</button>
+            <button type="button" onClick={() => setFolder("saved")} style={folder === "saved" ? button : ghost}>Saved</button>
+            <button type="button" onClick={() => setFolder("archived")} style={folder === "archived" ? button : ghost}>Archive</button>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
@@ -708,10 +1170,10 @@ export default function ProjectsPage() {
         </section>
 
         <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
-          <Metric label="Workstations" value={String(counts.total)} />
+          <Metric label="Showing" value={String(counts.total)} />
           <Metric label="Deals" value={String(counts.deals)} />
-          <Metric label="Pain" value={String(counts.pains)} />
-          <Metric label="With Photos" value={String(counts.withPhotos)} />
+          <Metric label="Saved" value={String(counts.saved)} />
+          <Metric label="Archived" value={String(counts.archived)} />
         </section>
 
         <section style={card}>
@@ -721,15 +1183,36 @@ export default function ProjectsPage() {
             Clean workstations.
           </h2>
 
-          {items.length ? (
+          {visibleItems.length ? (
             <div style={{ display: "grid", gap: 14 }}>
-              {items.map((item, index) => (
-                <WorkstationCard key={first(field(item, "canonical_event_id"), idOf(item), signalIdOf(item), String(index))} row={item} viewer={email} />
-              ))}
+              {visibleItems.map((item, index) => {
+                const key = canonicalKey(item);
+
+                return (
+                  <WorkstationCard
+                    key={first(key, String(index))}
+                    row={item}
+                    viewer={email}
+                    isSaved={savedIds.has(key)}
+                    isArchived={archivedIds.has(key)}
+                    onSave={() => saveProject(item)}
+                    onUnsave={() => unsaveProject(item)}
+                    onArchive={() => archiveProject(item)}
+                    onRestore={() => restoreProject(item)}
+                    onDelete={() => deleteProject(item)}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div style={glass}>
-              <h3 style={{ marginTop: 0 }}>No deal or pain workstations connected yet.</h3>
+              <h3 style={{ marginTop: 0 }}>
+                {folder === "saved"
+                  ? "No saved projects yet."
+                  : folder === "archived"
+                  ? "No archived projects yet."
+                  : "No deal or pain workstations connected yet."}
+              </h3>
 
               <p style={muted}>{status}</p>
 
@@ -742,7 +1225,7 @@ export default function ProjectsPage() {
           )}
         </section>
 
-        {status && items.length ? <section style={card}>{status}</section> : null}
+        {status && visibleItems.length ? <section style={card}>{status}</section> : null}
       </div>
     </main>
   );
