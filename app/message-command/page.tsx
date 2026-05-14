@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 type LaneKey =
   | "priority"
   | "saved"
-  | "signals"
-  | "execution"
-  | "network"
+  | "deals"
+  | "pain"
+  | "members"
   | "general";
 
 type Conversation = Record<string, any>;
@@ -29,50 +29,50 @@ const COMMAND_LANES: CommandLane[] = [
   {
     key: "priority",
     title: "Priority",
-    subtitle: "Urgent active threads, unread pressure, and owner attention.",
-    label: "Mission Control",
-    purpose: "Unread, saved, or high-attention threads that need action first.",
-    statusEmpty: "No priority pressure.",
+    subtitle: "Unread, urgent, and saved threads that need attention first.",
+    label: "Action First",
+    purpose: "Unread, saved, or high-attention conversations that need review before anything else.",
+    statusEmpty: "No priority conversations need attention.",
   },
   {
     key: "saved",
-    title: "Saved Bucket",
-    subtitle: "Pinned opportunities, operators, and high-value conversations.",
-    label: "Working Memory",
+    title: "Saved",
+    subtitle: "Pinned opportunities, owners, members, and conversations worth tracking.",
+    label: "Follow-Up",
     purpose: "Important conversations you intentionally saved for follow-up.",
     statusEmpty: "No saved conversations.",
   },
   {
-    key: "signals",
-    title: "Signals",
-    subtitle: "Signals, alerts, routing, and introduction intelligence.",
-    label: "Intelligence Flow",
-    purpose: "Messages created from alerts, signal rooms, routing, and introductions.",
-    statusEmpty: "No signal messages.",
+    key: "deals",
+    title: "Deals",
+    subtitle: "Project rooms, deal conversations, owner follow-up, and opportunity execution.",
+    label: "Opportunities",
+    purpose: "Deal, project, property, and opportunity conversations connected to execution rooms.",
+    statusEmpty: "No deal conversations are active.",
   },
   {
-    key: "execution",
-    title: "Execution",
-    subtitle: "Pain requests, projects, and active operational work.",
-    label: "Active Work",
-    purpose: "Pain requests, deal rooms, projects, and work that needs execution.",
-    statusEmpty: "No execution threads.",
+    key: "pain",
+    title: "Pain",
+    subtitle: "Distress, capital gaps, stalled execution, and problem-solving conversations.",
+    label: "Pressure",
+    purpose: "Pain room conversations tied to problems, pressure, rescue needs, and execution blockers.",
+    statusEmpty: "No pain conversations are active.",
   },
   {
-    key: "network",
-    title: "Network",
-    subtitle: "Member communication and relationship conversations.",
-    label: "People Layer",
-    purpose: "Member-to-member, operator, buyer, lender, and partner conversations.",
-    statusEmpty: "No network conversations.",
+    key: "members",
+    title: "Members",
+    subtitle: "Member-to-member, buyer, operator, lender, contractor, and network conversations.",
+    label: "Network",
+    purpose: "People-layer conversations with members, operators, buyers, lenders, contractors, and partners.",
+    statusEmpty: "No member conversations are active.",
   },
   {
     key: "general",
     title: "General",
-    subtitle: "Unsorted or uncategorized communication.",
-    label: "Fallback Inbox",
-    purpose: "Messages that are not attached to a signal, pain request, project, or member lane.",
-    statusEmpty: "No general messages.",
+    subtitle: "Unsorted communication that is not yet tied to a room or member lane.",
+    label: "Inbox",
+    purpose: "Messages not yet attached to a deal, pain room, member, or saved follow-up lane.",
+    statusEmpty: "No general messages are waiting.",
   },
 ];
 
@@ -138,42 +138,65 @@ function isUnread(row: Conversation) {
 function inferLane(row: Conversation): LaneKey {
   const source = sourceOf(row);
   const threadKey = lower(getThreadKey(row));
+  const title = lower(row.title || row.subject || "");
+  const combined = `${source} ${threadKey} ${title}`;
 
   if (isSaved(row)) return "saved";
 
   if (
-    source.includes("signal") ||
-    source.includes("alert") ||
-    source.includes("routing") ||
-    source.includes("route") ||
-    source.includes("intro") ||
+    combined.includes("pain") ||
+    combined.includes("distress") ||
+    combined.includes("pressure") ||
+    combined.includes("funding gap") ||
+    combined.includes("stalled") ||
+    threadKey.startsWith("pain:")
+  ) {
+    return "pain";
+  }
+
+  if (
+    combined.includes("project") ||
+    combined.includes("deal") ||
+    combined.includes("property") ||
+    combined.includes("opportunity") ||
+    threadKey.startsWith("project:") ||
+    threadKey.startsWith("deal:") ||
+    threadKey.startsWith("property:")
+  ) {
+    return "deals";
+  }
+
+  if (
+    combined.includes("member") ||
+    combined.includes("network") ||
+    combined.includes("buyer") ||
+    combined.includes("operator") ||
+    combined.includes("lender") ||
+    combined.includes("contractor") ||
+    combined.includes("partner") ||
+    threadKey.startsWith("member:")
+  ) {
+    return "members";
+  }
+
+  /*
+    Signals, alerts, routing, and introductions are intentionally treated as
+    background AI orchestration. If those internal sources generate messages,
+    they land in the most useful member-facing lane instead of exposing the
+    internal infrastructure as primary navigation.
+  */
+  if (
+    combined.includes("signal") ||
+    combined.includes("alert") ||
+    combined.includes("routing") ||
+    combined.includes("route") ||
+    combined.includes("intro") ||
     threadKey.startsWith("signal:") ||
     threadKey.startsWith("alert:") ||
     threadKey.startsWith("routing:") ||
     threadKey.startsWith("introduction:")
   ) {
-    return "signals";
-  }
-
-  if (
-    source.includes("pain") ||
-    source.includes("project") ||
-    source.includes("deal") ||
-    source.includes("property") ||
-    threadKey.startsWith("pain:") ||
-    threadKey.startsWith("project:") ||
-    threadKey.startsWith("deal:") ||
-    threadKey.startsWith("property:")
-  ) {
-    return "execution";
-  }
-
-  if (
-    source.includes("member") ||
-    source.includes("network") ||
-    threadKey.startsWith("member:")
-  ) {
-    return "network";
+    return isUnread(row) ? "priority" : "deals";
   }
 
   if (isUnread(row)) return "priority";
@@ -254,22 +277,22 @@ function receiverOf(row: Conversation) {
 
 function urgencyForLane(lane: LaneKey, count: number, unread: number, latest?: Conversation) {
   if (unread > 0) return "Review Now";
-  if (lane === "priority" && count > 0) return "Active Watch";
-  if (lane === "signals" && count > 0) return "Intel Live";
-  if (lane === "execution" && count > 0) return "Work Active";
+  if (lane === "priority" && count > 0) return "Action Watch";
+  if (lane === "deals" && count > 0) return "Opportunity Live";
+  if (lane === "pain" && count > 0) return "Pressure Live";
   if (lane === "saved" && count > 0) return "Follow-Up";
-  if (lane === "network" && count > 0) return "Relationship Active";
+  if (lane === "members" && count > 0) return "Network Active";
   if (latest) return "Monitoring";
   return "Clear";
 }
 
 function operationalSummary(lane: LaneKey, count: number, unread: number) {
   if (count === 0) {
-    if (lane === "priority") return "No unread or saved pressure is currently hitting mission control.";
-    if (lane === "signals") return "No signal, alert, routing, or intro conversations are active.";
-    if (lane === "execution") return "No pain, project, or deal execution message threads are active.";
+    if (lane === "priority") return "No unread or saved pressure is currently hitting the desk.";
+    if (lane === "deals") return "No deal or project conversations are active.";
+    if (lane === "pain") return "No pain or pressure conversations are active.";
     if (lane === "saved") return "No saved follow-up threads are pinned right now.";
-    if (lane === "network") return "No member or network communication threads are active.";
+    if (lane === "members") return "No member or network communication threads are active.";
     return "No uncategorized messages are waiting.";
   }
 
@@ -417,10 +440,10 @@ export default function MessageCommandPage() {
       <section style={styles.shell}>
         <header style={styles.hero}>
           <div>
-            <div style={styles.eyebrow}>VaultForge Intelligence Inbox</div>
+            <div style={styles.eyebrow}>VaultForge Execution Communications</div>
             <h1 style={styles.title}>Message Command</h1>
             <p style={styles.subtitle}>
-              Bloomberg-style command dashboard for operational messages, intelligence flow, saved follow-up, and execution conversations.
+              Coordination desk for deals, pain rooms, members, and follow-up. AI routing stays in the background so members only see the conversations that matter.
             </p>
           </div>
 
@@ -457,7 +480,7 @@ export default function MessageCommandPage() {
             <span style={styles.metricLabel}>Latest Pulse</span>
             <strong style={styles.metricText}>
               {loading
-                ? "Scanning message lanes…"
+                ? "Scanning communication lanes…"
                 : latestOverall
                   ? `${conversationTitle(latestOverall)} • ${relativeTime(timestampOf(latestOverall))}`
                   : "No active conversations found for this account."}
@@ -487,7 +510,7 @@ export default function MessageCommandPage() {
                 <div style={styles.cardCount}>{loading ? "…" : lane.count}</div>
 
                 <div style={styles.cardSection}>
-                  <span style={styles.sectionLabel}>Operational read</span>
+                  <span style={styles.sectionLabel}>Execution read</span>
                   <p style={styles.cardText}>{lane.summary}</p>
                 </div>
 
@@ -520,7 +543,7 @@ export default function MessageCommandPage() {
           <section style={styles.panel}>
             <div style={styles.panelTop}>
               <div>
-                <div style={styles.eyebrow}>Command Lane</div>
+                <div style={styles.eyebrow}>Communication Lane</div>
                 <h2 style={styles.panelTitle}>{active?.title}</h2>
                 <p style={styles.panelSubtitle}>{active?.summary}</p>
               </div>
