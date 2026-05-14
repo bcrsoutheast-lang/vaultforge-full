@@ -101,11 +101,20 @@ function field(row: Row | null, ...keys: string[]) {
   return first(...values);
 }
 
-function cleanDisplayText(value: unknown) {
+function stripPayload(value: unknown) {
   let text = clean(value);
+
   const start = text.indexOf(PAYLOAD_START);
   if (start !== -1) text = text.slice(0, start).trim();
+
+  const jsonStart = text.indexOf('{"pain_id"');
+  if (jsonStart !== -1) text = text.slice(0, jsonStart).trim();
+
   return text;
+}
+
+function cleanDisplayText(value: unknown) {
+  return stripPayload(value) || "";
 }
 
 function money(value: unknown) {
@@ -120,6 +129,12 @@ function money(value: unknown) {
     currency: "USD",
     maximumFractionDigits: 0,
   });
+}
+
+function numberValue(value: unknown) {
+  const text = clean(value);
+  const number = Number(text.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(number) ? number : 0;
 }
 
 function photoUrl(item: any) {
@@ -296,11 +311,33 @@ function resolutionScore(row: Row | null) {
 }
 
 function primaryBottleneck(row: Row | null) {
-  return field(row, "primary_bottleneck") || "Owner Review Needed";
+  const direct = field(row, "primary_bottleneck");
+  if (direct) return direct;
+
+  const text = `${problemText(row)} ${field(row, "capital_needed", "funding_needed", "gap_amount")} ${field(row, "requested_help", "help_requested")}`.toLowerCase();
+
+  if (text.includes("capital") || text.includes("funding") || text.includes("lender") || text.includes("gap")) return "Capital / Funding Gap";
+  if (text.includes("contractor") || text.includes("repair") || text.includes("construction")) return "Contractor / Execution Gap";
+  if (text.includes("buyer") || text.includes("sell") || text.includes("exit")) return "Buyer / Exit Gap";
+  if (text.includes("permit") || text.includes("city") || text.includes("code")) return "Permit / City Issue";
+  if (text.includes("tenant") || text.includes("lease")) return "Tenant / Occupancy Issue";
+
+  return "Owner Review Needed";
 }
 
 function fastestPath(row: Row | null) {
-  return field(row, "fastest_path") || "Clarify missing details, then route to the best operator type.";
+  const direct = field(row, "fastest_path");
+  if (direct) return direct;
+
+  const bottleneck = primaryBottleneck(row);
+
+  if (bottleneck.includes("Capital")) return "Verify numbers, confirm funding gap, route to private lender or JV capital.";
+  if (bottleneck.includes("Contractor")) return "Confirm scope/photos, get repair pricing, route to contractor or operator.";
+  if (bottleneck.includes("Buyer")) return "Package asset facts, confirm seller timeline, route to qualified buyer.";
+  if (bottleneck.includes("Permit")) return "Identify municipality issue, timeline, and route to local operator.";
+  if (bottleneck.includes("Tenant")) return "Clarify lease, access, occupancy, and legal constraints before routing.";
+
+  return "Clarify missing decision details, then route to the best operator.";
 }
 
 function whoShouldSee(row: Row | null) {
@@ -308,7 +345,7 @@ function whoShouldSee(row: Row | null) {
 
   if (Array.isArray(raw)) return raw.map(clean).filter(Boolean);
 
-  const text = `${problemText(row)} ${field(row, "requested_help", "help_requested", "routing_needs", "needs")} ${field(row, "distress_signals")}`.toLowerCase();
+  const text = `${problemText(row)} ${field(row, "requested_help", "help_requested", "routing_needs", "needs")} ${field(row, "distress_signals")} ${primaryBottleneck(row)}`.toLowerCase();
   const stack: string[] = [];
 
   if (text.includes("buyer") || text.includes("sell") || text.includes("fast close")) stack.push("Buyer");
@@ -326,47 +363,54 @@ function whoShouldSee(row: Row | null) {
 function missingInfo(row: Row | null) {
   const missing: string[] = [];
 
-  if (!field(row, "requested_help", "help_requested", "routing_needs", "needs")) missing.push("specific help needed");
-  if (!field(row, "urgency", "urgency_level", "timeline", "deadline")) missing.push("timeline/deadline");
-  if (!field(row, "city", "state", "market")) missing.push("market");
-  if (!field(row, "asset_type", "property_type", "pain_type", "problem_type")) missing.push("asset/problem type");
-  if (!photosOf(row).length) missing.push("photos/files");
-  if (!field(row, "contact_phone", "phone", "owner_phone")) missing.push("best phone/contact method");
+  if (!field(row, "timeline", "deadline", "desired_timeline")) missing.push("timeline");
+  if (!field(row, "contact_phone", "phone", "owner_phone")) missing.push("best contact");
+  if (!field(row, "requested_help", "help_requested", "routing_needs", "needs")) missing.push("exact ask");
 
   return missing;
 }
 
-function executiveRead(row: Row | null) {
+function spreadText(row: Row | null) {
+  const ask = numberValue(field(row, "asking_price", "price", "target_price"));
+  const arv = numberValue(field(row, "arv", "arv_value", "estimated_value", "property_value"));
+  const repairs = numberValue(field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "repair_budget"));
+
+  if (!ask || !arv) return "Not enough pricing data";
+
+  const spread = arv - ask - repairs;
+  return money(spread);
+}
+
+function executiveBrief(row: Row | null) {
   const asset = assetClass(row);
   const market = marketOf(row);
   const problem = assetOf(row);
   const urgency = urgencyOf(row);
   const bottleneck = primaryBottleneck(row);
-  const ask = money(field(row, "asking_price", "price", "target_price"));
-  const arv = money(field(row, "arv", "arv_value", "estimated_value", "property_value"));
-  const repairs = money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "repair_budget"));
-  const capital = money(field(row, "capital_needed", "funding_needed", "gap_amount"));
+  const path = fastestPath(row);
 
-  return `VaultForge reads this as a ${asset} ${problem.toLowerCase()} issue in ${market}. Urgency is ${urgency}. The main blocker is ${bottleneck.toLowerCase()}. Numbers on file: ask/target ${ask}, ARV/value ${arv}, repair/scope ${repairs}, capital need ${capital}.`;
+  return `${asset} ${problem.toLowerCase()} in ${market}. Urgency: ${urgency}. Primary constraint: ${bottleneck}. Recommended move: ${path}`;
 }
 
-function aiProblemSummary(row: Row | null) {
-  const parts = [
-    executiveRead(row),
-    `Next move: ${fastestPath(row)}`,
-    `Who should see this: ${whoShouldSee(row).join(", ")}.`,
-    missingInfo(row).length ? `Missing: ${missingInfo(row).join(", ")}.` : "Ready for first-pass routing.",
-  ];
+function routeStackText(row: Row | null) {
+  return whoShouldSee(row).join(" → ");
+}
 
-  return parts.join(" ");
+function signalTone(row: Row | null) {
+  const score = pressureScore(row);
+
+  if (score >= 75) return { label: "High pressure", color: "#fecaca", border: "rgba(248,113,113,.34)", bg: "rgba(248,113,113,.10)" };
+  if (score >= 55) return { label: "Active pressure", color: "#f8e7b0", border: "rgba(232,196,107,.34)", bg: "rgba(232,196,107,.09)" };
+
+  return { label: "Monitor", color: "#cbd5e1", border: "rgba(148,163,184,.22)", bg: "rgba(148,163,184,.06)" };
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 28%), radial-gradient(circle at 92% 12%, rgba(248,113,113,.12), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at 16% 0%, rgba(232,196,107,.16), transparent 30%), radial-gradient(circle at 92% 9%, rgba(248,113,113,.12), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
-  padding: "22px 16px 96px",
+  padding: "18px 14px 90px",
   fontFamily: "Arial, sans-serif",
 };
 
@@ -375,42 +419,41 @@ const wrap: React.CSSProperties = {
   margin: "0 auto",
 };
 
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 30,
-  padding: 24,
-  background: "linear-gradient(145deg,rgba(255,255,255,.065),rgba(255,255,255,.030))",
-  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
-  marginBottom: 18,
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.22)",
+  borderRadius: 26,
+  padding: 20,
+  background: "linear-gradient(145deg,rgba(255,255,255,.060),rgba(255,255,255,.025))",
+  boxShadow: "0 24px 78px rgba(0,0,0,.28)",
 };
 
-const glass: React.CSSProperties = {
+const tightPanel: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 22,
-  padding: 18,
-  background: "rgba(255,255,255,.045)",
+  borderRadius: 18,
+  padding: 14,
+  background: "rgba(0,0,0,.16)",
 };
 
 const label: React.CSSProperties = {
   color: "#e8c46b",
-  letterSpacing: ".18em",
+  letterSpacing: ".17em",
   textTransform: "uppercase",
   fontWeight: 950,
-  fontSize: 12,
+  fontSize: 11,
 };
 
 const muted: React.CSSProperties = {
   color: "#cbd5e1",
-  lineHeight: 1.6,
+  lineHeight: 1.55,
 };
 
 const button: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  minHeight: 50,
+  minHeight: 48,
   borderRadius: 999,
-  padding: "12px 18px",
+  padding: "11px 17px",
   border: 0,
   background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
@@ -431,32 +474,41 @@ const chip: React.CSSProperties = {
   padding: "7px 10px",
   color: "#9df3bf",
   background: "rgba(157,243,191,.07)",
-  margin: "0 7px 7px 0",
   fontSize: 12,
   fontWeight: 850,
   display: "inline-flex",
 };
 
-function ScoreBar({ labelText, value, caption }: { labelText: string; value: number; caption: string }) {
+function MiniMetric({ labelText, value, emphasis = false }: { labelText: string; value: unknown; emphasis?: boolean }) {
   return (
-    <div style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: 14, background: "rgba(0,0,0,.16)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, fontWeight: 950 }}>
-        <span>{labelText}</span>
-        <span>{value}%</span>
+    <div style={tightPanel}>
+      <div style={label}>{labelText}</div>
+      <div style={{ fontSize: emphasis ? 28 : 20, fontWeight: 950, marginTop: 8, lineHeight: 1.05 }}>
+        {clean(value) || "Not listed"}
       </div>
-      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 10 }}>
-        <div style={{ width: `${value}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)" }} />
-      </div>
-      <p style={{ ...muted, margin: "8px 0 0", fontSize: 13 }}>{caption}</p>
     </div>
   );
 }
 
-function Info({ labelText, value }: { labelText: string; value: unknown }) {
+function ScoreStrip({ labelText, value }: { labelText: string; value: number }) {
   return (
-    <div style={glass}>
-      <div style={label}>{labelText}</div>
-      <div style={{ fontSize: 22, fontWeight: 950, marginTop: 8 }}>{clean(value) || "Not listed"}</div>
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 950, fontSize: 12 }}>
+        <span>{labelText}</span>
+        <span>{value}%</span>
+      </div>
+      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 8 }}>
+        <div style={{ width: `${value}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)" }} />
+      </div>
+    </div>
+  );
+}
+
+function DetailLine({ labelText, value }: { labelText: string; value: unknown }) {
+  return (
+    <div style={{ borderBottom: "1px solid rgba(255,255,255,.08)", padding: "11px 0" }}>
+      <div style={{ ...label, fontSize: 10 }}>{labelText}</div>
+      <div style={{ ...muted, marginTop: 5, fontWeight: 750 }}>{clean(value) || "Not listed"}</div>
     </div>
   );
 }
@@ -516,8 +568,10 @@ export default function PainRoomPage() {
   }, []);
 
   const photos = useMemo(() => photosOf(pain), [pain]);
+  const heroPhoto = photos[0] || "";
   const signalId = signalIdOf(pain);
   const owner = ownerOf(pain);
+  const tone = signalTone(pain);
   const contactHref = signalId
     ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(email)}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=pain&type=pain&folder=pain&folder_key=pain&title=${encodeURIComponent(titleOf(pain))}&subject=${encodeURIComponent(titleOf(pain))}`
     : `/messages/new?email=${encodeURIComponent(email)}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=pain&type=pain&folder=pain&folder_key=pain&title=${encodeURIComponent(titleOf(pain))}&subject=${encodeURIComponent(titleOf(pain))}`;
@@ -525,140 +579,183 @@ export default function PainRoomPage() {
   return (
     <main style={page}>
       <style>{`
-        @media (max-width: 820px) {
-          .vf-grid,
+        @media (max-width: 860px) {
+          .vf-main-grid,
+          .vf-metric-grid,
+          .vf-detail-grid,
           .vf-actions,
-          .vf-photo-grid {
+          .vf-lower-grid {
             grid-template-columns: 1fr !important;
           }
+
           .vf-actions {
             display: grid !important;
             gap: 10px !important;
           }
+
           .vf-actions > * {
             width: 100%;
             box-sizing: border-box;
             justify-content: center;
           }
+
+          .vf-hero-title {
+            font-size: 54px !important;
+          }
         }
       `}</style>
 
       <div style={wrap}>
-        <section style={card}>
-          <div style={label}>VaultForge Problem Solver Intelligence</div>
-          <h1 style={{ fontSize: "clamp(48px,10vw,92px)", lineHeight: 0.9, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
-            {pain ? titleOf(pain) : "Pain Room"}
-          </h1>
+        <section className="vf-main-grid" style={{ display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: 16, marginBottom: 16 }}>
+          <div style={{ ...panel, padding: 0, overflow: "hidden" }}>
+            {heroPhoto ? (
+              <img src={heroPhoto} alt="Pain context" style={{ width: "100%", height: 330, objectFit: "cover", display: "block" }} />
+            ) : (
+              <div style={{ height: 260, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 900 }}>No photo attached</div>
+            )}
 
-          {status ? <p style={{ ...muted, fontSize: 20 }}>{status}</p> : null}
+            <div style={{ padding: 20 }}>
+              <div style={label}>VaultForge Problem Command Center</div>
+              <h1 className="vf-hero-title" style={{ fontSize: "clamp(52px,8vw,88px)", lineHeight: .88, letterSpacing: "-.07em", margin: "10px 0 12px" }}>
+                {pain ? titleOf(pain) : "Pain Room"}
+              </h1>
 
-          {pain ? (
-            <>
-              <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>{executiveRead(pain)}</p>
+              {status ? <p style={{ ...muted, fontSize: 18 }}>{status}</p> : null}
 
-              <div style={{ marginTop: 14 }}>
-                <span style={chip}>Status: {statusOf(pain)}</span>
-                <span style={chip}>Urgency: {urgencyOf(pain)}</span>
-                <span style={chip}>Problem: {assetOf(pain)}</span>
-                <span style={chip}>Market: {marketOf(pain)}</span>
+              {pain ? (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                  <span style={chip}>{statusOf(pain)}</span>
+                  <span style={chip}>{urgencyOf(pain)}</span>
+                  <span style={chip}>{assetClass(pain)}</span>
+                  <span style={chip}>{marketOf(pain)}</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <aside style={{ ...panel, display: "grid", gap: 14 }}>
+            <div>
+              <div style={label}>Executive Brief</div>
+              <p style={{ ...muted, fontSize: 19, margin: "9px 0 0" }}>
+                {pain ? executiveBrief(pain) : "Loading command intelligence..."}
+              </p>
+            </div>
+
+            <div style={{ border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 18, padding: 14 }}>
+              <div style={{ ...label, color: tone.color }}>Pressure Signal · {tone.label}</div>
+              <div style={{ color: tone.color, fontSize: 24, fontWeight: 950, marginTop: 8 }}>{primaryBottleneck(pain)}</div>
+            </div>
+
+            <div style={tightPanel}>
+              <div style={label}>Best Next Move</div>
+              <div style={{ fontSize: 22, lineHeight: 1.25, fontWeight: 950, marginTop: 8 }}>{fastestPath(pain)}</div>
+            </div>
+
+            <div style={tightPanel}>
+              <div style={label}>Route Stack</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                {whoShouldSee(pain).map((item) => (
+                  <span key={item} style={chip}>{item}</span>
+                ))}
               </div>
+            </div>
 
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-                <Link href={contactHref} style={button}>Contact Owner</Link>
-                <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-                <Link href="/dashboard" style={ghost}>Dashboard</Link>
-                <button type="button" onClick={load} style={ghost}>Refresh</button>
-              </div>
-            </>
-          ) : null}
+            <div className="vf-actions" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Link href={contactHref} style={button}>Contact Owner</Link>
+              <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
+              <Link href="/dashboard" style={ghost}>Dashboard</Link>
+              <button type="button" onClick={load} style={ghost}>Refresh</button>
+            </div>
+          </aside>
         </section>
 
         {pain ? (
           <>
-            <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
-              <ScoreBar labelText="Pressure" value={pressureScore(pain)} caption="Urgency, distress, timeline, and problem severity." />
-              <ScoreBar labelText="Resolution Readiness" value={resolutionScore(pain)} caption="How much info exists to route the problem." />
-              <ScoreBar labelText="Asset Context" value={photos.length ? 76 : 42} caption={`${photos.length} photo${photos.length === 1 ? "" : "s"} connected.`} />
-              <ScoreBar labelText="Execution Risk" value={missingInfo(pain).length ? 72 : 38} caption={missingInfo(pain).length ? `Missing: ${missingInfo(pain).join(", ")}` : "Ready for first-pass routing."} />
+            <section style={{ ...panel, marginBottom: 16 }}>
+              <div style={label}>Live Intelligence Read</div>
+
+              <div className="vf-metric-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
+                <ScoreStrip labelText="Pressure" value={pressureScore(pain)} />
+                <ScoreStrip labelText="Readiness" value={resolutionScore(pain)} />
+                <ScoreStrip labelText="Asset Context" value={photos.length ? 76 : 42} />
+                <ScoreStrip labelText="Execution Risk" value={missingInfo(pain).length ? 72 : 38} />
+              </div>
+
+              <div className="vf-detail-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 16 }}>
+                <MiniMetric labelText="Ask / Target" value={money(field(pain, "asking_price", "price", "target_price"))} emphasis />
+                <MiniMetric labelText="ARV / Value" value={money(field(pain, "arv", "arv_value", "estimated_value", "property_value"))} emphasis />
+                <MiniMetric labelText="Repairs / Scope" value={money(field(pain, "repair_estimate", "repairs_needed", "estimated_repairs", "repair_budget"))} emphasis />
+                <MiniMetric labelText="Spread Read" value={spreadText(pain)} emphasis />
+              </div>
             </section>
 
-            {photos.length ? (
-              <section style={card}>
-                <div style={label}>Photos / Problem Context</div>
-                <div className="vf-photo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12, marginTop: 14 }}>
-                  {photos.map((url) => (
-                    <img key={url} src={url} alt="Pain context" style={{ width: "100%", height: 230, objectFit: "cover", borderRadius: 20, border: "1px solid rgba(232,196,107,.20)" }} />
+            <section className="vf-lower-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 16, marginBottom: 16 }}>
+              <div style={panel}>
+                <div style={label}>Situation Brief</div>
+                <p style={{ ...muted, fontSize: 18, marginTop: 10 }}>{problemText(pain)}</p>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginTop: 16 }}>
+                  <MiniMetric labelText="Problem Type" value={assetOf(pain)} />
+                  <MiniMetric labelText="Market / Address" value={field(pain, "address", "property_address", "location") || marketOf(pain)} />
+                  <MiniMetric labelText="Owner Goal" value={ownerGoal(pain)} />
+                </div>
+              </div>
+
+              <div style={panel}>
+                <div style={label}>Missing / Clarify</div>
+                {missingInfo(pain).length ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                    {missingInfo(pain).map((item) => (
+                      <span key={item} style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.32)", background: "rgba(232,196,107,.08)" }}>{item}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ ...muted, marginTop: 10 }}>Ready for first-pass routing.</p>
+                )}
+
+                <div style={{ marginTop: 18 }}>
+                  <DetailLine labelText="Contact" value={owner || email || "Not listed"} />
+                  <DetailLine labelText="Timeline" value={field(pain, "timeline", "deadline", "desired_timeline", "urgency_level", "urgency")} />
+                  <DetailLine labelText="Capital Needed" value={money(field(pain, "capital_needed", "funding_needed", "gap_amount"))} />
+                </div>
+              </div>
+            </section>
+
+            <section style={{ ...panel, marginBottom: 16 }}>
+              <div style={label}>Asset Snapshot</div>
+              <div className="vf-detail-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 14 }}>
+                <MiniMetric labelText="Beds / Baths" value={[field(pain, "beds", "bedrooms"), field(pain, "baths", "bathrooms")].filter(Boolean).join(" / ") || "Not listed"} />
+                <MiniMetric labelText="Sqft / Acres" value={field(pain, "square_feet", "sqft", "building_sqft", "acres", "land_acres")} />
+                <MiniMetric labelText="Occupancy" value={field(pain, "occupancy", "tenant_status", "vacancy_status")} />
+                <MiniMetric labelText="Year Built" value={field(pain, "year_built")} />
+                <MiniMetric labelText="Zoning" value={field(pain, "zoning", "land_use")} />
+                <MiniMetric labelText="Access / Utilities" value={field(pain, "access_notes", "road_access", "utilities")} />
+                <MiniMetric labelText="NOI / Rent" value={field(pain, "noi", "rent", "monthly_rent", "income")} />
+                <MiniMetric labelText="Debt / Payoff" value={money(field(pain, "loan_balance", "payoff", "debt", "mortgage_balance"))} />
+              </div>
+            </section>
+
+            {photos.length > 1 ? (
+              <section style={{ ...panel, marginBottom: 16 }}>
+                <div style={label}>Additional Photos</div>
+                <div className="vf-photo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginTop: 14 }}>
+                  {photos.slice(1).map((url) => (
+                    <img key={url} src={url} alt="Pain context" style={{ width: "100%", height: 180, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(232,196,107,.18)" }} />
                   ))}
                 </div>
               </section>
             ) : null}
 
-            <section style={card}>
-              <div style={label}>Asset Snapshot</div>
-              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
-                <Info labelText="Asset Class" value={assetClass(pain)} />
-                <Info labelText="Market / Address" value={field(pain, "address", "property_address", "location") || marketOf(pain)} />
-                <Info labelText="Beds / Baths" value={[field(pain, "beds", "bedrooms"), field(pain, "baths", "bathrooms")].filter(Boolean).join(" / ") || "Not listed"} />
-                <Info labelText="Sqft / Acres" value={field(pain, "square_feet", "sqft", "building_sqft", "acres", "land_acres")} />
-                <Info labelText="Occupancy" value={field(pain, "occupancy", "tenant_status", "vacancy_status")} />
-                <Info labelText="Zoning" value={field(pain, "zoning", "land_use")} />
-                <Info labelText="Year Built" value={field(pain, "year_built")} />
-                <Info labelText="Access / Utilities" value={field(pain, "access_notes", "road_access", "utilities")} />
+            <details style={{ ...panel, marginBottom: 16 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 950, color: "#e8c46b", letterSpacing: ".12em", textTransform: "uppercase" }}>
+                System IDs / Routing Trace
+              </summary>
+              <div style={{ marginTop: 14 }}>
+                <DetailLine labelText="Pain ID" value={idOf(pain)} />
+                <DetailLine labelText="Signal ID" value={signalId || "Not linked"} />
+                <DetailLine labelText="Submitted By" value={owner || email || "Not listed"} />
               </div>
-            </section>
-
-            <section style={card}>
-              <div style={label}>Numbers Snapshot</div>
-              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
-                <Info labelText="Asking / Target" value={money(field(pain, "asking_price", "price", "target_price"))} />
-                <Info labelText="ARV / Value" value={money(field(pain, "arv", "arv_value", "estimated_value", "property_value"))} />
-                <Info labelText="Repairs / Scope" value={money(field(pain, "repair_estimate", "repairs_needed", "estimated_repairs", "repair_budget"))} />
-                <Info labelText="Capital Needed" value={money(field(pain, "capital_needed", "funding_needed", "gap_amount"))} />
-                <Info labelText="Debt / Payoff" value={money(field(pain, "loan_balance", "payoff", "debt", "mortgage_balance"))} />
-                <Info labelText="NOI / Rent" value={field(pain, "noi", "rent", "monthly_rent", "income")} />
-                <Info labelText="Timeline" value={field(pain, "timeline", "deadline", "desired_timeline", "urgency_level", "urgency")} />
-                <Info labelText="Owner Goal" value={ownerGoal(pain)} />
-              </div>
-            </section>
-
-            <section style={card}>
-              <div style={label}>Problem Snapshot</div>
-              <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, marginTop: 14 }}>
-                <Info labelText="Problem Type" value={assetOf(pain)} />
-                <Info labelText="Primary Bottleneck" value={primaryBottleneck(pain)} />
-                <Info labelText="Urgency" value={urgencyOf(pain)} />
-              </div>
-              <div style={{ marginTop: 14, border: "1px solid rgba(248,113,113,.25)", borderRadius: 18, padding: 14, background: "rgba(248,113,113,.075)" }}>
-                <div style={{ ...label, color: "#fecaca" }}>Pain Details</div>
-                <p style={{ ...muted, margin: "8px 0 0", fontSize: 17 }}>{problemText(pain)}</p>
-              </div>
-            </section>
-
-            <section style={card}>
-              <div style={label}>VaultForge AI Problem Read</div>
-              <p style={{ ...muted, fontSize: 18 }}>{aiProblemSummary(pain)}</p>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginTop: 16 }}>
-                <Info labelText="Primary Bottleneck" value={primaryBottleneck(pain)} />
-                <Info labelText="Fastest Resolution Path" value={fastestPath(pain)} />
-                <Info labelText="Owner / Contact" value={owner || "Not listed"} />
-              </div>
-            </section>
-
-            <section style={card}>
-              <div style={label}>Who Should See This</div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                {whoShouldSee(pain).map((item) => (
-                  <span key={item} style={chip}>{item}</span>
-                ))}
-              </div>
-            </section>
-
-            <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
-              <Info labelText="Pain ID" value={idOf(pain)} />
-              <Info labelText="Signal ID" value={signalId || "Not linked"} />
-              <Info labelText="Submitted By" value={owner || email || "Not listed"} />
-            </section>
+            </details>
           </>
         ) : null}
       </div>
