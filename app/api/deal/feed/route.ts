@@ -430,7 +430,7 @@ function normalizeDeal(row: AnyRow, table: string) {
   };
 }
 
-async function selectRecent(supabase: any, table: string, limit = 180) {
+async function selectRecent(supabase: any, table: string, limit = 220) {
   const orderColumns = ["created_at", "updated_at", "id"];
 
   for (const column of orderColumns) {
@@ -482,39 +482,6 @@ function dealish(row: AnyRow, table: string) {
   if (field(row, "canonical_event_id").startsWith("deal_signal")) return true;
 
   return false;
-}
-
-function isWeakMirrorRow(row: AnyRow, table: string) {
-  if (table === "vf_deals") return false;
-
-  const hasCanonicalDeal = Boolean(field(row, "deal_id", "item_id", "related_deal_id"));
-  if (hasCanonicalDeal) return false;
-
-  const hasCoreDealFields = Boolean(
-    field(
-      row,
-      "asking_price",
-      "price",
-      "arv",
-      "arv_value",
-      "estimated_value",
-      "repair_estimate",
-      "repairs_needed",
-      "beds",
-      "bedrooms",
-      "baths",
-      "bathrooms",
-      "square_feet",
-      "sqft",
-      "strategy",
-      "exit_strategy"
-    )
-  );
-
-  const hasPhoto = photosFrom(row).photo_urls.length > 0;
-  const hasTitleMarket = Boolean(titleOf(row) && marketOf(row));
-
-  return !hasCoreDealFields && !hasPhoto && !hasTitleMarket;
 }
 
 function completenessScore(row: AnyRow) {
@@ -602,6 +569,52 @@ function mergeDeal(primary: AnyRow, secondary: AnyRow) {
   return normalizeDeal(merged, first(primary.source_table, secondary.source_table, primary._source_table, secondary._source_table, "merged"));
 }
 
+function realDealIdentity(row: AnyRow) {
+  return first(
+    field(row, "id"),
+    field(row, "deal_id"),
+    field(row, "project_id"),
+    field(row, "item_id"),
+    field(row, "related_deal_id"),
+    field(row, "canonical_event_id"),
+    field(row, "canonical_project_key")
+  );
+}
+
+function mirrorPointsToCanonicalDeal(row: AnyRow, canonicalDealIds: Set<string>, canonicalProjectKeys: Set<string>, canonicalEventIds: Set<string>) {
+  const ids = [
+    field(row, "deal_id"),
+    field(row, "project_id"),
+    field(row, "item_id"),
+    field(row, "related_deal_id"),
+    field(row, "id"),
+  ]
+    .map(clean)
+    .filter(Boolean);
+
+  const events = [
+    field(row, "canonical_event_id"),
+    field(row, "signal_id"),
+    field(row, "routing_id"),
+    field(row, "alert_id"),
+  ]
+    .map(clean)
+    .filter(Boolean);
+
+  const keys = [
+    field(row, "canonical_project_key"),
+    canonicalProjectKeyOf(row),
+  ]
+    .map(clean)
+    .filter(Boolean);
+
+  return (
+    ids.some((id) => canonicalDealIds.has(id)) ||
+    events.some((eventId) => canonicalEventIds.has(eventId)) ||
+    keys.some((key) => canonicalProjectKeys.has(key))
+  );
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -615,25 +628,73 @@ export async function GET(request: Request) {
 
     const supabase = supabaseClient();
 
-    const tables = [
-      "vf_deals",
-      "vf_routing_signals",
-      "vf_routing_actions",
-      "vf_activity_events",
-    ];
+    const vfDealRows = (await selectRecent(supabase, "vf_deals", 260))
+      .filter((row) => dealish(row, "vf_deals"))
+      .filter((row) => canSee(row, email, owner))
+      .filter((row) => !id || matchesId(row, id));
 
-    const found: AnyRow[] = [];
+    const canonicalDealIds = new Set<string>();
+    const canonicalProjectKeys = new Set<string>();
+    const canonicalEventIds = new Set<string>();
 
-    for (const table of tables) {
-      const rows = await selectRecent(supabase, table, 220);
+    for (const row of vfDealRows) {
+      const normalized = normalizeDeal(row, "vf_deals");
+
+      [
+        realDealIdentity(normalized),
+        normalized.id,
+        normalized.deal_id,
+        normalized.project_id,
+        normalized.item_id,
+      ]
+        .map(clean)
+        .filter(Boolean)
+        .forEach((value) => canonicalDealIds.add(value));
+
+      [
+        normalized.canonical_project_key,
+        canonicalProjectKeyOf(normalized),
+      ]
+        .map(clean)
+        .filter(Boolean)
+        .forEach((value) => canonicalProjectKeys.add(value));
+
+      [
+        normalized.canonical_event_id,
+        normalized.signal_id,
+        normalized.routing_id,
+      ]
+        .map(clean)
+        .filter(Boolean)
+        .forEach((value) => canonicalEventIds.add(value));
+    }
+
+    const found: AnyRow[] = vfDealRows.map((row) => normalizeDeal(row, "vf_deals"));
+
+    const mirrorTables = ["vf_routing_signals", "vf_routing_actions", "vf_activity_events"];
+
+    for (const table of mirrorTables) {
+      const rows = await selectRecent(supabase, table, 260);
 
       for (const row of rows) {
         if (!dealish(row, table)) continue;
         if (!canSee(row, email, owner)) continue;
         if (id && !matchesId(row, id)) continue;
-        if (!id && isWeakMirrorRow(row, table)) continue;
 
-        found.push(normalizeDeal(row, table));
+        const normalizedMirror = normalizeDeal(row, table);
+
+        /*
+          Critical duplicate guard:
+          If a routing/signal/activity mirror points to a real vf_deals row,
+          do not surface it as its own project card. Projects should show the
+          canonical vf_deals record only. Mirrors still exist for routing,
+          alerts, activity, and rooms, but not as duplicate project cards.
+        */
+        if (mirrorPointsToCanonicalDeal(normalizedMirror, canonicalDealIds, canonicalProjectKeys, canonicalEventIds)) {
+          continue;
+        }
+
+        found.push(normalizedMirror);
       }
     }
 
@@ -675,8 +736,8 @@ export async function GET(request: Request) {
       deal: id ? deals[0] || null : null,
       count: deals.length,
       source: "api/deal/feed",
-      mirrors: "api/pain/feed",
-      dedupe_model: "canonical_project_key, vf_deals preferred, weak mirrors suppressed",
+      mirrors: "suppressed when canonical vf_deals row exists",
+      dedupe_model: "vf_deals first, mirror rows only if orphaned",
     });
   } catch (error: any) {
     return NextResponse.json(
