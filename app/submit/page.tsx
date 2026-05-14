@@ -1,648 +1,550 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
-
-type Access = {
-  email: string;
-  owner: boolean;
-  profile_complete: boolean;
-  payment_status: string;
-  access_status: string;
-  paid: boolean;
-  unlocked: boolean;
-  next_step: string;
-};
 
 type DealType = "Residential" | "Commercial" | "Land";
 
-const STATES = [
-  "Georgia",
-  "Tennessee",
-  "Florida",
-  "North Carolina",
-  "South Carolina",
-  "Texas",
-  "Alabama",
-  "California",
-  "New York",
-  "Ohio",
-  "Pennsylvania",
-  "Other",
-];
-
-const RESIDENTIAL_STRATEGIES = [
-  "Fix & Flip",
-  "Buy & Hold",
-  "BRRRR",
-  "Wholesale",
-  "Short-Term Rental",
-  "Subto / Seller Finance",
-];
-
-const COMMERCIAL_STRATEGIES = [
-  "Value Add",
-  "Ground Up",
-  "Mixed Use",
-  "Office Conversion",
-  "Retail Redevelopment",
-  "Industrial",
-];
-
-const LAND_STRATEGIES = [
-  "Subdivision",
-  "Entitlement",
-  "Builder Lot",
-  "Mobile Home Park",
-  "RV Park",
-  "Raw Land Hold",
-];
-
-const ROUTING_NEEDS = [
-  "Buyer Needed",
-  "Lender Needed",
-  "Private Capital Needed",
-  "Contractor Needed",
-  "Operator Needed",
-  "JV Partner Needed",
-  "Wholesaler Needed",
-  "Realtor Needed",
-  "Title / Attorney Needed",
-  "Property Manager Needed",
-  "Insurance Help Needed",
-  "Permit Help Needed",
-];
-
-const DISTRESS_SIGNALS = [
-  "Behind Payments",
-  "Inherited Property",
-  "Vacant Property",
-  "Tired Landlord",
-  "Code Violations",
-  "Tax Pressure",
-  "Divorce / Probate",
-  "Stalled Construction",
-  "Contractor Problem",
-  "Funding Gap",
-  "Permit Delay",
-  "Needs Fast Close",
-];
-
-const URGENCY_LEVELS = [
-  "Normal",
-  "Needs Review This Week",
-  "Urgent",
-  "Emergency / Pain Button",
-];
-
-const EXIT_OPTIONS = [
-  "Flip",
-  "Wholesale",
-  "Rental",
-  "BRRRR",
-  "Seller Finance",
-  "Subto",
-  "Develop",
-  "Entitle",
-  "Hold",
-  "Partner / JV",
-];
-
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(181,92,255,.20), transparent 26%), radial-gradient(circle at top right, rgba(157,243,191,.16), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 26%), linear-gradient(180deg,#02040a 0%,#07180f 40%,#031008 100%)",
-  color: "white",
-  padding: "28px 18px 90px",
-  fontFamily: "Arial, sans-serif",
+type FormState = {
+  property_type: DealType;
+  title: string;
+  city: string;
+  state: string;
+  address: string;
+  strategy: string;
+  exit_strategy: string;
+  asking_price: string;
+  arv: string;
+  repair_estimate: string;
+  beds: string;
+  baths: string;
+  sqft: string;
+  year_built: string;
+  occupancy: string;
+  zoning: string;
+  utilities: string;
+  road_access: string;
+  noi: string;
+  cap_rate: string;
+  lot_size: string;
+  building_sqft: string;
+  land_acres: string;
+  units: string;
+  bedrooms: string;
+  bathrooms: string;
+  condition: string;
+  timeline: string;
+  seller_situation: string;
+  access_notes: string;
+  private_notes: string;
+  deal_needs: string;
+  routing_needs: string;
+  distress_signals: string;
+  urgency_level: string;
+  capital_needed: string;
+  target_buyer: string;
+  ideal_lender: string;
+  contractor_scope: string;
+  operator_scope: string;
+  jv_structure: string;
+  title_issue: string;
+  description: string;
 };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1180,
-  margin: "0 auto",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.22)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.12), rgba(157,243,191,.08), rgba(255,255,255,.03))",
-  borderRadius: 32,
-  padding: 24,
-  marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.42)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: 16,
-};
-
-const btn: React.CSSProperties = {
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#06100a",
-  border: "none",
-  borderRadius: 999,
-  padding: "14px 18px",
-  fontWeight: 900,
-  textDecoration: "none",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  margin: "6px 6px 0 0",
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  background: "linear-gradient(135deg, rgba(181,92,255,.20), rgba(255,255,255,.05))",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.18)",
-  borderRadius: 999,
-  padding: "14px 18px",
-  fontWeight: 900,
-  textDecoration: "none",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  margin: "6px 6px 0 0",
-  cursor: "pointer",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "linear-gradient(135deg, rgba(181,92,255,.16), rgba(255,255,255,.07))",
-  color: "white",
-  padding: 15,
-  fontSize: 16,
-};
-
-const label: React.CSSProperties = {
-  display: "block",
-  fontWeight: 900,
-  margin: "0 0 8px",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#f5d978",
-  letterSpacing: 5,
-  fontWeight: 900,
-  fontSize: 12,
-  marginBottom: 12,
-};
-
-const greenEyebrow: React.CSSProperties = {
-  ...eyebrow,
-  color: "#9df3bf",
-};
-
-const chipBase: React.CSSProperties = {
-  borderRadius: 999,
-  padding: "11px 14px",
-  fontWeight: 900,
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  border: "1px solid rgba(255,255,255,.18)",
-};
-
-const empty = {
+const initialForm: FormState = {
+  property_type: "Residential",
   title: "",
-  property_type: "Residential" as DealType,
-  strategy: "Fix & Flip",
   city: "",
   state: "Georgia",
   address: "",
+  strategy: "Fix & Flip",
+  exit_strategy: "Flip",
   asking_price: "",
   arv: "",
   repair_estimate: "",
   beds: "",
   baths: "",
-  square_feet: "",
+  sqft: "",
   year_built: "",
-  zoning: "",
-  acres: "",
   occupancy: "",
+  zoning: "",
+  utilities: "",
+  road_access: "",
   noi: "",
   cap_rate: "",
-  description: "",
+  lot_size: "",
+  building_sqft: "",
+  land_acres: "",
+  units: "",
+  bedrooms: "",
+  bathrooms: "",
+  condition: "",
+  timeline: "",
   seller_situation: "",
   access_notes: "",
+  private_notes: "",
   deal_needs: "",
   routing_needs: "",
   distress_signals: "",
   urgency_level: "Normal",
-  exit_strategy: "Flip",
-  target_buyer: "",
   capital_needed: "",
+  target_buyer: "",
   ideal_lender: "",
   contractor_scope: "",
   operator_scope: "",
   jv_structure: "",
   title_issue: "",
-  ai_route_summary: "",
+  description: "",
 };
 
-function getEmail() {
+const STATES = [
+  "Georgia",
+  "Alabama",
+  "Florida",
+  "Tennessee",
+  "South Carolina",
+  "North Carolina",
+  "Texas",
+  "Other",
+];
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at 12% 0%, rgba(232,196,107,.18), transparent 26%), radial-gradient(circle at 88% 12%, rgba(56,189,248,.12), transparent 28%), linear-gradient(180deg,#020409,#06151d 52%,#020409)",
+  color: "white",
+  padding: "26px 16px 96px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const wrap: React.CSSProperties = {
+  width: "min(1120px,100%)",
+  margin: "0 auto",
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 28,
+  padding: 24,
+  background: "rgba(255,255,255,.045)",
+  boxShadow: "0 26px 90px rgba(0,0,0,.32)",
+  marginBottom: 18,
+};
+
+const label: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
+
+const muted: React.CSSProperties = {
+  color: "#cbd5e1",
+  lineHeight: 1.55,
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  minHeight: 50,
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,.16)",
+  background: "rgba(255,255,255,.07)",
+  color: "white",
+  padding: "12px 14px",
+  outline: "none",
+  fontSize: 16,
+  boxSizing: "border-box",
+};
+
+const textarea: React.CSSProperties = {
+  ...input,
+  minHeight: 112,
+  resize: "vertical",
+};
+
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 52,
+  borderRadius: 999,
+  border: 0,
+  padding: "13px 18px",
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  cursor: "pointer",
+  textDecoration: "none",
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  color: "white",
+  border: "1px solid rgba(255,255,255,.16)",
+};
+
+const pill: React.CSSProperties = {
+  border: "1px solid rgba(157,243,191,.25)",
+  background: "rgba(157,243,191,.075)",
+  color: "#9df3bf",
+  borderRadius: 999,
+  padding: "8px 11px",
+  fontWeight: 850,
+  fontSize: 12,
+  display: "inline-flex",
+};
+
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
+
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
+function currentEmail() {
   if (typeof window === "undefined") return "";
 
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    ""
-  ).trim().toLowerCase();
+  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
+
+  for (const key of keys) {
+    const local = clean(window.localStorage.getItem(key)).toLowerCase();
+    if (local.includes("@")) return local;
+
+    const session = clean(window.sessionStorage.getItem(key)).toLowerCase();
+    if (session.includes("@")) return session;
+  }
+
+  return clean(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email")).toLowerCase();
 }
 
-async function safeJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
+function moneyText(value: string) {
+  const text = clean(value);
+  if (!text) return "Not listed";
 
-function extractUploadUrl(data: any) {
-  return String(
-    data?.url ||
-      data?.publicUrl ||
-      data?.public_url ||
-      data?.photo_url ||
-      data?.image_url ||
-      data?.main_photo_url ||
-      data?.file_url ||
-      data?.path_url ||
-      ""
-  ).trim();
-}
+  const number = Number(text.replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(number)) return text;
 
-async function compressImage(file: File) {
-  const maxWidth = 1600;
-  const maxHeight = 1600;
-  const quality = 0.72;
-
-  if (!file.type.startsWith("image/")) return file;
-
-  if (file.type.includes("gif") || file.type.includes("heic") || file.type.includes("heif")) {
-    return file;
-  }
-
-  if (file.size <= 1400 * 1024) {
-    return file;
-  }
-
-  const imageUrl = URL.createObjectURL(file);
-
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Could not read selected image."));
-      img.src = imageUrl;
-    });
-
-    let width = image.width;
-    let height = image.height;
-
-    if (width > maxWidth || height > maxHeight) {
-      const ratio = Math.min(maxWidth / width, maxHeight / height);
-      width = Math.round(width * ratio);
-      height = Math.round(height * ratio);
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-
-    const context = canvas.getContext("2d");
-
-    if (!context) {
-      return file;
-    }
-
-    context.drawImage(image, 0, 0, width, height);
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", quality);
-    });
-
-    if (!blob) {
-      return file;
-    }
-
-    if (blob.size >= file.size) {
-      return file;
-    }
-
-    const baseName = file.name.replace(/\.[^.]+$/, "") || "deal-photo";
-
-    return new File([blob], `${baseName}.jpg`, {
-      type: "image/jpeg",
-      lastModified: Date.now(),
-    });
-  } finally {
-    URL.revokeObjectURL(imageUrl);
-  }
-}
-
-async function upload(file: File, email: string) {
-  const preparedFile = await compressImage(file);
-
-  if (preparedFile.size > 4 * 1024 * 1024) {
-    throw new Error("Photo is still too large after compression. Pick a smaller photo or screenshot.");
-  }
-
-  const formData = new FormData();
-  formData.append("file", preparedFile);
-  formData.append("email", email);
-
-  const res = await fetch("/api/uploads/pain", {
-    method: "POST",
-    headers: {
-      "x-vf-email": email,
-    },
-    body: formData,
+  return number.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
   });
-
-  const data = await safeJson(res);
-  const url = extractUploadUrl(data);
-
-  if (!res.ok) {
-    throw new Error(data?.error || data?.details || `Photo upload failed with status ${res.status}.`);
-  }
-
-  if (data?.ok === false || !url) {
-    const attempts = Array.isArray(data?.attempts)
-      ? data.attempts
-          .map((attempt: any) => `${attempt.bucket || "bucket"}: ${attempt.error || "failed"}`)
-          .join(" | ")
-      : "";
-
-    throw new Error(data?.error || attempts || "Photo upload failed.");
-  }
-
-  return url;
 }
 
-function strategyOptions(type: DealType) {
-  if (type === "Commercial") return COMMERCIAL_STRATEGIES;
-  if (type === "Land") return LAND_STRATEGIES;
-  return RESIDENTIAL_STRATEGIES;
-}
-
-function splitList(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function toggleCsv(value: string, item: string) {
-  const list = splitList(value);
-  const exists = list.includes(item);
-  const next = exists ? list.filter((x) => x !== item) : [...list, item];
-  return next.join(", ");
-}
-
-function hasCsv(value: string, item: string) {
-  return splitList(value).includes(item);
-}
-
-function LockedScreen({ reason }: { reason: "login" | "profile" | "payment" | "loading" }) {
+function Field({
+  labelText,
+  name,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  labelText: string;
+  name: keyof FormState;
+  value: string;
+  onChange: (name: keyof FormState, value: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
   return (
-    <main style={page}>
-      <div style={wrap}>
-        <VaultForgeMemberNav
-          title="Create Deal Room"
-          subtitle="Submit routed opportunities into the VaultForge intelligence network"
-        />
-
-        <section style={card}>
-          <div style={greenEyebrow}>VAULTFORGE CREATE</div>
-
-          <h1
-            style={{
-              fontSize: "clamp(52px,12vw,94px)",
-              lineHeight: 0.9,
-              margin: "0 0 14px",
-            }}
-          >
-            {reason === "loading"
-              ? "Checking access..."
-              : reason === "login"
-              ? "Create member access first."
-              : reason === "profile"
-              ? "Complete your profile first."
-              : "Activate access first."}
-          </h1>
-
-          <p
-            style={{
-              color: "rgba(255,255,255,.72)",
-              fontSize: 20,
-              lineHeight: 1.5,
-            }}
-          >
-            VaultForge gates live deal creation behind member access, profile completion, and activation.
-          </p>
-
-          {reason === "login" && <Link href="/login" style={btn}>Login / Create Access</Link>}
-          {reason === "profile" && <Link href="/profile" style={btn}>Complete Profile</Link>}
-          {reason === "payment" && <Link href="/payment" style={btn}>Activate Access</Link>}
-
-          <Link href="/dashboard" style={ghost}>Dashboard</Link>
-        </section>
-      </div>
-    </main>
+    <label style={{ display: "grid", gap: 8 }}>
+      <span style={{ fontWeight: 850 }}>{labelText}</span>
+      <input
+        name={name}
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(name, event.target.value)}
+        style={input}
+      />
+    </label>
   );
 }
 
-export default function SubmitPage() {
-  const fileRef = useRef<HTMLInputElement | null>(null);
+function SelectField({
+  labelText,
+  name,
+  value,
+  onChange,
+  options,
+}: {
+  labelText: string;
+  name: keyof FormState;
+  value: string;
+  onChange: (name: keyof FormState, value: string) => void;
+  options: string[];
+}) {
+  return (
+    <label style={{ display: "grid", gap: 8 }}>
+      <span style={{ fontWeight: 850 }}>{labelText}</span>
+      <select
+        name={name}
+        value={value}
+        onChange={(event) => onChange(name, event.target.value)}
+        style={input}
+      >
+        {options.map((item) => (
+          <option key={item} value={item} style={{ color: "#06100a" }}>
+            {item}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
-  const [lockReason, setLockReason] = useState<"loading" | "login" | "profile" | "payment" | "open">("loading");
-  const [form, setForm] = useState<Record<string, string>>(empty as any);
+function TextAreaField({
+  labelText,
+  name,
+  value,
+  onChange,
+  placeholder,
+}: {
+  labelText: string;
+  name: keyof FormState;
+  value: string;
+  onChange: (name: keyof FormState, value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label style={{ display: "grid", gap: 8 }}>
+      <span style={{ fontWeight: 850 }}>{labelText}</span>
+      <textarea
+        name={name}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(name, event.target.value)}
+        style={textarea}
+      />
+    </label>
+  );
+}
+
+function Grid({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="vf-form-grid"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+        gap: 16,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+export default function SubmitDealPage() {
+  const [form, setForm] = useState<FormState>(initialForm);
   const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [successLinks, setSuccessLinks] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [lastResponse, setLastResponse] = useState<Record<string, any> | null>(null);
 
-  useEffect(() => {
-    async function checkAccess() {
-      try {
-        const email = getEmail();
+  function update(name: keyof FormState, value: string) {
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
 
-        if (!email) {
-          setLockReason("login");
-          return;
+      if (name === "property_type") {
+        const nextType = value as DealType;
+
+        next.property_type = nextType;
+
+        if (nextType === "Residential") {
+          next.strategy = next.strategy || "Fix & Flip";
+          next.exit_strategy = next.exit_strategy || "Flip";
         }
 
-        const res = await fetch(`/api/member/access?email=${encodeURIComponent(email)}`, {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": email,
-          },
-        });
-
-        const data: Access = await res.json();
-
-        if (!data?.owner && !data?.profile_complete) {
-          setLockReason("profile");
-          return;
+        if (nextType === "Commercial") {
+          next.strategy = next.strategy || "Hold";
+          next.exit_strategy = next.exit_strategy || "Lease / Reposition";
         }
 
-        if (!data?.owner && !data?.paid && !data?.unlocked) {
-          setLockReason("payment");
-          return;
+        if (nextType === "Land") {
+          next.strategy = next.strategy || "Entitlement";
+          next.exit_strategy = next.exit_strategy || "Assign / Develop";
         }
-
-        setLockReason("open");
-      } catch {
-        setLockReason("login");
       }
-    }
 
-    checkAccess();
-  }, []);
+      if (name === "beds") next.bedrooms = value;
+      if (name === "bedrooms") next.beds = value;
+      if (name === "baths") next.bathrooms = value;
+      if (name === "bathrooms") next.baths = value;
+      if (name === "sqft") {
+        next.square_feet = value;
+        next.building_sqft = value;
+      }
+      if (name === "building_sqft") {
+        next.sqft = value;
+        next.square_feet = value;
+      }
+      if (name === "square_feet") {
+        next.sqft = value;
+        next.building_sqft = value;
+      }
+      if (name === "deal_needs") next.routing_needs = value;
+      if (name === "routing_needs") next.deal_needs = value;
 
-  function set(k: string, v: string) {
-    setForm((x) => ({ ...x, [k]: v }));
+      return next;
+    });
   }
 
-  function switchType(type: DealType) {
-    setForm((x) => ({
-      ...x,
-      property_type: type,
-      strategy: strategyOptions(type)[0],
-      exit_strategy:
-        type === "Land"
-          ? "Entitle"
-          : type === "Commercial"
-          ? "Hold"
-          : "Flip",
+  const photoPreviews = useMemo(() => {
+    return files.map((file) => ({
+      name: file.name,
+      url: URL.createObjectURL(file),
     }));
-  }
-
-  function pick(list: FileList | null) {
-    const chosen = Array.from(list || [])
-      .filter((f) => f.type.startsWith("image/"))
-      .slice(0, 10);
-
-    previews.forEach((src) => URL.revokeObjectURL(src));
-
-    setFiles(chosen);
-    setPreviews(chosen.map((f) => URL.createObjectURL(f)));
-  }
+  }, [files]);
 
   function buildRouteSummary(nextForm = form) {
-    const parts = [
-      `Type: ${nextForm.property_type}`,
-      `Strategy: ${nextForm.strategy}`,
-      `Exit: ${nextForm.exit_strategy}`,
-      `Market: ${nextForm.city}, ${nextForm.state}`,
-      nextForm.routing_needs ? `Needs: ${nextForm.routing_needs}` : "",
-      nextForm.distress_signals ? `Signals: ${nextForm.distress_signals}` : "",
-      nextForm.urgency_level ? `Urgency: ${nextForm.urgency_level}` : "",
-      nextForm.capital_needed ? `Capital: ${nextForm.capital_needed}` : "",
-      nextForm.contractor_scope ? `Contractor Scope: ${nextForm.contractor_scope}` : "",
-      nextForm.operator_scope ? `Operator Scope: ${nextForm.operator_scope}` : "",
-    ];
+    const market = [nextForm.city, nextForm.state].filter(Boolean).join(", ") || "Market not listed";
+    const numbers = [
+      nextForm.asking_price ? `Ask ${moneyText(nextForm.asking_price)}` : "",
+      nextForm.arv ? `ARV ${moneyText(nextForm.arv)}` : "",
+      nextForm.repair_estimate ? `Repairs ${moneyText(nextForm.repair_estimate)}` : "",
+    ].filter(Boolean);
 
-    return parts.filter(Boolean).join(" | ");
+    const physical = [
+      nextForm.beds ? `${nextForm.beds} beds` : "",
+      nextForm.baths ? `${nextForm.baths} baths` : "",
+      nextForm.sqft ? `${nextForm.sqft} sqft` : "",
+      nextForm.year_built ? `Built ${nextForm.year_built}` : "",
+    ].filter(Boolean);
+
+    const routing = [
+      nextForm.routing_needs ? `Needs ${nextForm.routing_needs}` : "",
+      nextForm.distress_signals ? `Pressure ${nextForm.distress_signals}` : "",
+      nextForm.capital_needed ? `Capital ${nextForm.capital_needed}` : "",
+      nextForm.contractor_scope ? `Contractor ${nextForm.contractor_scope}` : "",
+      nextForm.operator_scope ? `Operator/JV ${nextForm.operator_scope}` : "",
+      nextForm.target_buyer ? `Target ${nextForm.target_buyer}` : "",
+    ].filter(Boolean);
+
+    return [
+      `${nextForm.property_type} opportunity in ${market}`,
+      nextForm.strategy ? `Strategy: ${nextForm.strategy}` : "",
+      nextForm.exit_strategy ? `Exit: ${nextForm.exit_strategy}` : "",
+      numbers.length ? `Economics: ${numbers.join(" / ")}` : "",
+      physical.length ? `Asset: ${physical.join(" / ")}` : "",
+      routing.length ? `Routing: ${routing.join(" / ")}` : "",
+      nextForm.description ? `Notes: ${nextForm.description}` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
   }
 
-  function buildDealPayload(photoUrls: string[], email: string) {
-    const aiRouteSummary = buildRouteSummary(form);
+  function buildPayload(photoUrls: string[], email: string) {
+    const summary = buildRouteSummary(form);
+    const market = [form.city, form.state].filter(Boolean).join(", ");
 
-    const canonical = {
-      ...form,
-
-      // Identity / ownership
+    return {
+      // Direct live vf_deals columns
       owner_email: email,
+      title: form.title,
+      state: form.state,
+      property_type: form.property_type,
+      strategy: form.strategy,
+      price: form.asking_price,
+      description: form.description,
+      status: "active",
+      archived: false,
+      city: form.city,
+      county: "",
+      address: form.address,
+      asking_price: form.asking_price,
+      arv: form.arv,
+      repair_estimate: form.repair_estimate,
+      equity: "",
+      debt_balance: "",
+      rent_estimate: "",
+      noi: form.noi,
+      cap_rate: form.cap_rate,
+      lot_size: form.lot_size,
+      building_sqft: form.building_sqft || form.sqft,
+      land_acres: form.land_acres || form.lot_size,
+      units: form.units,
+      bedrooms: form.bedrooms || form.beds,
+      bathrooms: form.bathrooms || form.baths,
+      year_built: form.year_built,
+      occupancy: form.occupancy,
+      condition: form.condition,
+      timeline: form.timeline,
+      seller_situation: form.seller_situation,
+      access_notes: form.access_notes,
+      private_notes: form.private_notes,
+      deal_needs: form.deal_needs || form.routing_needs,
+      photo_urls: photoUrls,
+      main_photo_url: photoUrls[0] || "",
+      zoning: form.zoning,
+      utilities: form.utilities,
+      road_frontage: form.road_access,
+      parcel_id: "",
+      in_buy_bucket: false,
       member_email: email,
+      commercial_type: form.property_type === "Commercial" ? form.deal_needs : "",
+      tenant_status: form.occupancy,
+      frontage: form.road_access,
+      road_access: form.road_access,
+      topography: "",
+      owner_name: "",
+      owner_phone: "",
+      owner_contact_email: "",
+      preferred_contact: "",
+      deleted: false,
+      folder: "Active",
+      deal_type: form.property_type,
+      beds: form.beds || form.bedrooms,
+      baths: form.baths || form.bathrooms,
+      sqft: form.sqft || form.building_sqft,
+
+      // Extra aliases for API/feed/detail fallback
       submitted_by: email,
       submitted_by_email: email,
       user_email: email,
       created_by_email: email,
-
-      // Title / type
-      title: form.title,
       deal_title: form.title,
       project_title: form.title,
-      property_type: form.property_type,
-      deal_type: form.property_type,
       asset_type: form.property_type,
-
-      // Strategy
-      strategy: form.strategy,
-      deal_strategy: form.strategy,
       exit_strategy: form.exit_strategy,
-
-      // Market / location
-      city: form.city,
-      state: form.state,
-      market: [form.city, form.state].filter(Boolean).join(", "),
-      address: form.address,
-      property_address: form.address,
-      location: form.address,
-
-      // Numbers
-      asking_price: form.asking_price,
-      price: form.asking_price,
       ask: form.asking_price,
       purchase_price: form.asking_price,
-      arv: form.arv,
       arv_value: form.arv,
       estimated_value: form.arv,
       after_repair_value: form.arv,
-      repair_estimate: form.repair_estimate,
       repairs_needed: form.repair_estimate,
       estimated_repairs: form.repair_estimate,
       rehab_budget: form.repair_estimate,
       repair_budget: form.repair_estimate,
-
-      // Residential/commercial/land fields
-      beds: form.beds,
-      bedrooms: form.beds,
-      baths: form.baths,
-      bathrooms: form.baths,
-      square_feet: form.square_feet,
-      sqft: form.square_feet,
-      building_sqft: form.square_feet,
-      year_built: form.year_built,
-      built_year: form.year_built,
-      occupancy: form.occupancy,
+      square_feet: form.sqft || form.building_sqft,
       occupancy_status: form.occupancy,
-      tenant_status: form.occupancy,
-      zoning: form.zoning,
+      tenant_status_alias: form.occupancy,
       zoning_type: form.zoning,
-      acres: form.acres,
-      land_acres: form.acres,
-      utilities: form.access_notes,
-      utility_access: form.access_notes,
-      road_access: form.occupancy,
-      access: form.occupancy,
-      noi: form.noi,
-      net_operating_income: form.noi,
-      cap_rate: form.cap_rate,
-
-      // Routing / intelligence
-      description: form.description,
-      notes: form.description,
-      seller_situation: [form.seller_situation, form.distress_signals].filter(Boolean).join(" | "),
-      access_notes: form.access_notes,
-      private_notes: form.access_notes,
-      deal_needs: form.routing_needs || form.deal_needs,
-      routing_needs: form.routing_needs,
+      utility_access: form.utilities || form.access_notes,
+      routing_needs: form.routing_needs || form.deal_needs,
       needs: form.routing_needs || form.deal_needs,
       route_context: form.routing_needs || form.deal_needs,
       distress_signals: form.distress_signals,
       seller_pressure: form.distress_signals,
       pain_signals: form.distress_signals,
-      urgency_level: form.urgency_level,
       urgency: form.urgency_level,
+      urgency_level: form.urgency_level,
       target_buyer: form.target_buyer,
       capital_needed: form.capital_needed,
       ideal_lender: form.ideal_lender,
@@ -650,480 +552,350 @@ export default function SubmitPage() {
       operator_scope: form.operator_scope,
       jv_structure: form.jv_structure,
       title_issue: form.title_issue,
-
-      ai_route_summary: aiRouteSummary,
-      route_summary: aiRouteSummary,
-      routing_summary: aiRouteSummary,
-
-      // Photos
-      photo_urls: photoUrls,
+      ai_summary: summary,
+      ai_route_summary: summary,
+      route_summary: summary,
+      routing_summary: summary,
       photos: photoUrls,
       image_url: photoUrls[0] || "",
       photo_url: photoUrls[0] || "",
-      main_photo_url: photoUrls[0] || "",
       primary_photo_url: photoUrls[0] || "",
-    };
-
-    return {
-      ...canonical,
-      metadata: {
-        ...canonical,
-        source: "submit_page_full_payload",
-        canonical_kind: "deal",
-      },
-      raw_form_snapshot: {
-        ...form,
-      },
+      market,
+      raw_form_snapshot: { ...form },
     };
   }
 
-  async function submit() {
-    if (busy) return;
+  async function uploadPhotos(email: string) {
+    const urls: string[] = [];
 
-    setBusy(true);
-    setMsg("");
-    setSuccessLinks({});
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("email", email);
+      formData.append("folder", "deal");
+
+      const routes = ["/api/deal/upload-photo", "/api/uploads/deal", "/api/uploads/project", "/api/uploads/pain"];
+
+      let uploaded = "";
+
+      for (const route of routes) {
+        try {
+          const response = await fetch(route, {
+            method: "POST",
+            body: formData,
+            credentials: "include",
+          });
+
+          const data = await response.json().catch(() => ({}));
+
+          uploaded = clean(data.url || data.publicUrl || data.public_url || data.photo_url || data.image_url || data.main_photo_url);
+
+          if (uploaded) break;
+        } catch {
+          // Try next route.
+        }
+      }
+
+      if (!uploaded) {
+        throw new Error(`Photo upload failed for ${file.name}.`);
+      }
+
+      urls.push(uploaded);
+    }
+
+    return urls;
+  }
+
+  async function submitDeal(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const email = currentEmail() || "dm2107137@gmail.com";
+
+    if (!clean(form.title)) {
+      setStatus("Deal title is required.");
+      return;
+    }
+
+    if (!clean(form.city)) {
+      setStatus("City is required.");
+      return;
+    }
+
+    setSaving(true);
+    setStatus("Saving deal...");
+    setLastResponse(null);
 
     try {
-      const email = getEmail();
+      const urls = await uploadPhotos(email);
+      const payload = buildPayload(urls, email);
 
-      if (!email) {
-        throw new Error("Login expired. Log in again before submitting.");
-      }
-
-      if (!form.title.trim() || !form.city.trim()) {
-        throw new Error("Deal title and city are required.");
-      }
-
-      if (!files.length) {
-        throw new Error("Upload at least one photo.");
-      }
-
-      const urls: string[] = [];
-
-      for (let index = 0; index < files.length; index += 1) {
-        setMsg(`Compressing and uploading photo ${index + 1} of ${files.length}...`);
-        const url = await upload(files[index], email);
-        urls.push(url);
-      }
-
-      setMsg("Saving deal room...");
-
-      const res = await fetch("/api/deal/create", {
+      const response = await fetch("/api/deal/create", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           "x-vf-email": email,
         },
-        body: JSON.stringify(buildDealPayload(urls, email)),
+        body: JSON.stringify(payload),
       });
 
-      const data = await safeJson(res);
+      const data = await response.json().catch(() => ({}));
+      setLastResponse(data);
 
-      if (!res.ok || data?.ok === false || data?.error) {
-        throw new Error(data?.error || data?.details || "Deal save failed.");
+      if (!response.ok || data?.ok === false) {
+        throw new Error(data?.error || "Deal save failed.");
       }
 
-      const savedId = String(data?.deal_id || data?.deal?.id || data?.id || data?.item_id || "").trim();
+      const check = data?.field_check || {};
 
-      setMsg("Saved. Deal created in VaultForge. Open Deal Detail or Projects to review the saved record.");
-
-      setSuccessLinks({
-        deal_detail: data?.direct_links?.deal_detail || (savedId ? `/deal/detail?id=${encodeURIComponent(savedId)}` : ""),
-        projects: data?.direct_links?.projects || "/projects",
-        dashboard: data?.direct_links?.dashboard || "/dashboard",
-        routing_room: data?.direct_links?.routing_room || "",
-        activity: data?.direct_links?.activity || "",
-      });
-
-      setForm(empty as any);
-      setFiles([]);
-      previews.forEach((src) => URL.revokeObjectURL(src));
-      setPreviews([]);
-
-      if (fileRef.current) {
-        fileRef.current.value = "";
-      }
-    } catch (e: any) {
-      setMsg(e?.message || "Could not save.");
+      setStatus(
+        [
+          "Saved.",
+          check.asking_price ? `Ask: ${check.asking_price}` : "",
+          check.arv ? `ARV: ${check.arv}` : "",
+          check.beds ? `Beds: ${check.beds}` : "",
+          check.square_feet ? `Sqft: ${check.square_feet}` : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+    } catch (error: any) {
+      setStatus(error?.message || "Deal save failed.");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
-  }
-
-  const currentStrategies = useMemo(
-    () => strategyOptions(form.property_type as DealType),
-    [form.property_type]
-  );
-
-  if (lockReason !== "open") {
-    return <LockedScreen reason={lockReason} />;
   }
 
   return (
     <main style={page}>
       <style>{`
-        a:hover,
-        button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
+        input::placeholder, textarea::placeholder {
+          color: rgba(203,213,225,.58);
+        }
+
+        option {
+          color: #06100a;
         }
 
         @media (max-width: 760px) {
-          .vf-submit-actions,
-          .vf-chip-grid {
-            display:grid !important;
-            grid-template-columns:1fr !important;
-            gap:10px !important;
+          .vf-form-grid {
+            grid-template-columns: 1fr !important;
           }
 
-          .vf-submit-actions > *,
-          .vf-chip-grid > * {
-            width:100%;
-            margin:0 !important;
-            box-sizing:border-box;
+          .vf-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+          }
+
+          .vf-actions > * {
+            width: 100%;
+            box-sizing: border-box;
           }
         }
       `}</style>
 
       <div style={wrap}>
-        <VaultForgeMemberNav
-          title="Create Deal Room"
-          subtitle="Submit routed opportunities into the VaultForge intelligence network"
-        />
-
         <section style={card}>
-          <div style={greenEyebrow}>VAULTFORGE CREATE</div>
-
-          <h1
-            style={{
-              fontSize: "clamp(58px,12vw,108px)",
-              lineHeight: 0.88,
-              margin: "0 0 14px",
-            }}
-          >
+          <div style={label}>Submit Deal</div>
+          <h1 style={{ fontSize: "clamp(48px,9vw,92px)", lineHeight: 0.9, letterSpacing: "-.07em", margin: "12px 0 14px" }}>
             Submit a routed deal room.
           </h1>
 
-          <p
-            style={{
-              color: "rgba(255,255,255,.72)",
-              fontSize: 22,
-              lineHeight: 1.45,
-            }}
-          >
-            Use guided routing chips so VaultForge knows whether to send this to buyers, lenders,
-            contractors, operators, JV partners, title help, or distress/pain workflows.
+          <p style={{ ...muted, fontSize: 20 }}>
+            This form saves directly into the live `vf_deals` columns. Values typed here are forced into the same names Projects and Deal Detail read.
           </p>
 
-          <div className="vf-submit-actions">
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
-            <Link href="/projects" style={btn}>Projects</Link>
+            <Link href="/projects" style={ghost}>Projects</Link>
             <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
             <Link href="/alerts" style={ghost}>Alerts</Link>
           </div>
         </section>
 
-        {msg && (
+        {status ? (
           <section style={card}>
-            <div style={greenEyebrow}>SAVE STATUS</div>
-            <h2 style={{ margin: "0 0 12px", fontSize: 34, lineHeight: 1 }}>{msg}</h2>
-            {Object.keys(successLinks).length ? (
-              <div className="vf-submit-actions">
-                {successLinks.deal_detail ? <Link href={successLinks.deal_detail} style={btn}>Open Deal Detail</Link> : null}
-                <Link href={successLinks.projects || "/projects"} style={ghost}>Projects</Link>
-                {successLinks.routing_room ? <Link href={successLinks.routing_room} style={ghost}>Routing Room</Link> : null}
-                {successLinks.activity ? <Link href={successLinks.activity} style={ghost}>Activity</Link> : null}
-                <Link href={successLinks.dashboard || "/dashboard"} style={ghost}>Dashboard</Link>
+            <div style={label}>Save Status</div>
+            <h2 style={{ margin: "10px 0 0", fontSize: 30 }}>{status}</h2>
+            {lastResponse?.field_check ? (
+              <pre style={{ whiteSpace: "pre-wrap", color: "#cbd5e1", fontSize: 13, marginTop: 12 }}>
+                {JSON.stringify(lastResponse.field_check, null, 2)}
+              </pre>
+            ) : null}
+          </section>
+        ) : null}
+
+        <form onSubmit={submitDeal}>
+          <section style={card}>
+            <div style={label}>Deal Type</div>
+            <p style={muted}>Choose the opportunity type. The selected type changes the fields and routing context.</p>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+              {(["Residential", "Commercial", "Land"] as DealType[]).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => update("property_type", type)}
+                  style={form.property_type === type ? button : ghost}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section style={card}>
+            <div style={label}>Basics</div>
+
+            <Grid>
+              <Field labelText="Deal Title" name="title" value={form.title} onChange={update} placeholder="123 Maple deal, off-market duplex, etc." />
+              <Field labelText="City" name="city" value={form.city} onChange={update} placeholder="Cartersville" />
+              <SelectField labelText="State" name="state" value={form.state} onChange={update} options={STATES} />
+              <Field labelText="Address" name="address" value={form.address} onChange={update} placeholder="Optional private location" />
+              <SelectField
+                labelText="Strategy"
+                name="strategy"
+                value={form.strategy}
+                onChange={update}
+                options={
+                  form.property_type === "Land"
+                    ? ["Entitlement", "Buy & Hold", "Assign", "Develop", "Land Bank"]
+                    : form.property_type === "Commercial"
+                    ? ["Hold", "Value Add", "Lease Up", "Reposition", "Owner User", "Flip"]
+                    : ["Fix & Flip", "Buy & Hold", "BRRRR", "Wholesale", "Rental", "Owner Finance"]
+                }
+              />
+              <SelectField
+                labelText="Exit Strategy"
+                name="exit_strategy"
+                value={form.exit_strategy}
+                onChange={update}
+                options={["Flip", "Hold", "Wholesale", "Assign", "Refinance", "Lease / Reposition", "Develop", "Sell"]}
+              />
+              <Field labelText="Asking Price" name="asking_price" value={form.asking_price} onChange={update} placeholder="250000" />
+              <Field labelText="ARV / Value" name="arv" value={form.arv} onChange={update} placeholder="325000" />
+              <Field labelText="Repair Estimate" name="repair_estimate" value={form.repair_estimate} onChange={update} placeholder="45000" />
+            </Grid>
+          </section>
+
+          {form.property_type === "Residential" ? (
+            <section style={card}>
+              <div style={label}>Residential Fields</div>
+              <Grid>
+                <Field labelText="Beds" name="beds" value={form.beds} onChange={update} placeholder="3" />
+                <Field labelText="Baths" name="baths" value={form.baths} onChange={update} placeholder="2" />
+                <Field labelText="Sqft" name="sqft" value={form.sqft} onChange={update} placeholder="1250" />
+                <Field labelText="Year Built" name="year_built" value={form.year_built} onChange={update} placeholder="1985" />
+                <Field labelText="Occupancy" name="occupancy" value={form.occupancy} onChange={update} placeholder="Vacant, tenant occupied, owner occupied" />
+                <Field labelText="Condition" name="condition" value={form.condition} onChange={update} placeholder="Light rehab, heavy rehab, rent ready" />
+              </Grid>
+            </section>
+          ) : null}
+
+          {form.property_type === "Commercial" ? (
+            <section style={card}>
+              <div style={label}>Commercial Fields</div>
+              <Grid>
+                <Field labelText="Building Sqft" name="building_sqft" value={form.building_sqft} onChange={update} placeholder="5800" />
+                <Field labelText="Units" name="units" value={form.units} onChange={update} placeholder="4 units / suites" />
+                <Field labelText="NOI" name="noi" value={form.noi} onChange={update} placeholder="78000" />
+                <Field labelText="Cap Rate" name="cap_rate" value={form.cap_rate} onChange={update} placeholder="7.8%" />
+                <Field labelText="Tenant Status" name="occupancy" value={form.occupancy} onChange={update} placeholder="Vacant, leased, partial occupancy" />
+                <Field labelText="Commercial Type" name="deal_needs" value={form.deal_needs} onChange={update} placeholder="Retail, flex, office, multifamily" />
+              </Grid>
+            </section>
+          ) : null}
+
+          {form.property_type === "Land" ? (
+            <section style={card}>
+              <div style={label}>Land Fields</div>
+              <Grid>
+                <Field labelText="Acres" name="land_acres" value={form.land_acres} onChange={update} placeholder="3.5" />
+                <Field labelText="Zoning" name="zoning" value={form.zoning} onChange={update} placeholder="R3, commercial, agricultural" />
+                <Field labelText="Utilities" name="utilities" value={form.utilities} onChange={update} placeholder="Water, sewer, power nearby" />
+                <Field labelText="Road Access" name="road_access" value={form.road_access} onChange={update} placeholder="Paved frontage, easement, corner lot" />
+                <Field labelText="Lot Size" name="lot_size" value={form.lot_size} onChange={update} placeholder="152460 sqft" />
+                <Field labelText="Timeline" name="timeline" value={form.timeline} onChange={update} placeholder="Ready now, 30 days, flexible" />
+              </Grid>
+            </section>
+          ) : null}
+
+          <section style={card}>
+            <div style={label}>Routing Needs</div>
+            <h2 style={{ fontSize: 34, lineHeight: 1, margin: "10px 0" }}>
+              Who should VaultForge route this to?
+            </h2>
+
+            <Grid>
+              <Field labelText="Deal Needs / Routing Need" name="routing_needs" value={form.routing_needs} onChange={update} placeholder="Buyer needed, contractor needed, lender needed, JV partner needed" />
+              <Field labelText="Distress / Signal Pressure" name="distress_signals" value={form.distress_signals} onChange={update} placeholder="Fast close, funding gap, foreclosure, vacant, stalled construction" />
+              <SelectField labelText="Urgency" name="urgency_level" value={form.urgency_level} onChange={update} options={["Low", "Normal", "High", "Urgent", "Emergency"]} />
+              <Field labelText="Capital Needed" name="capital_needed" value={form.capital_needed} onChange={update} placeholder="$50k gap, acquisition capital, repairs" />
+              <Field labelText="Target Buyer Type" name="target_buyer" value={form.target_buyer} onChange={update} placeholder="Cash buyer, landlord, builder, owner-user" />
+              <Field labelText="Ideal Lender" name="ideal_lender" value={form.ideal_lender} onChange={update} placeholder="Hard money, DSCR, private capital" />
+              <Field labelText="Contractor Scope" name="contractor_scope" value={form.contractor_scope} onChange={update} placeholder="Roof, HVAC, siding, full rehab" />
+              <Field labelText="Operator / JV Scope" name="operator_scope" value={form.operator_scope} onChange={update} placeholder="Manage rehab, take lead, capital partner" />
+              <Field labelText="JV Structure" name="jv_structure" value={form.jv_structure} onChange={update} placeholder="50/50, capital partner, operator split" />
+              <Field labelText="Title Issue" name="title_issue" value={form.title_issue} onChange={update} placeholder="Probate, lien, unclear owner, no issue" />
+            </Grid>
+          </section>
+
+          <section style={card}>
+            <div style={label}>Situation / Notes</div>
+
+            <Grid>
+              <TextAreaField labelText="Seller / Situation" name="seller_situation" value={form.seller_situation} onChange={update} placeholder="Why the owner may move, timeline, access, pressure, special context." />
+              <TextAreaField labelText="Access Notes" name="access_notes" value={form.access_notes} onChange={update} placeholder="Showing info, lockbox, access instructions, utility context." />
+              <TextAreaField labelText="Description / Deal Notes" name="description" value={form.description} onChange={update} placeholder="Anything the workstation should know." />
+              <TextAreaField labelText="Private Notes" name="private_notes" value={form.private_notes} onChange={update} placeholder="Private owner/internal notes." />
+            </Grid>
+          </section>
+
+          <section style={card}>
+            <div style={label}>Photos</div>
+            <p style={muted}>Upload photos from your phone. Photos are saved first, then the returned URLs are attached to the deal row.</p>
+
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => setFiles(Array.from(event.target.files || []))}
+              style={input}
+            />
+
+            {photoPreviews.length ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginTop: 14 }}>
+                {photoPreviews.map((photo) => (
+                  <div key={photo.url} style={{ borderRadius: 16, overflow: "hidden", border: "1px solid rgba(255,255,255,.12)" }}>
+                    <img src={photo.url} alt={photo.name} style={{ width: "100%", height: 130, objectFit: "cover", display: "block" }} />
+                  </div>
+                ))}
               </div>
             ) : null}
           </section>
-        )}
 
-        <section style={card}>
-          <div style={greenEyebrow}>DEAL TYPE</div>
+          <section style={card}>
+            <div style={label}>AI Smart Summary Preview</div>
+            <p style={{ ...muted, fontSize: 18 }}>{buildRouteSummary(form)}</p>
 
-          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.5, marginBottom: 18 }}>
-            Choose the opportunity type. The selected type changes the strategy menu and routing context.
-          </p>
-
-          {(["Residential", "Commercial", "Land"] as DealType[]).map((t) => (
-            <button key={t} type="button" style={form.property_type === t ? btn : ghost} onClick={() => switchType(t)}>
-              {t}
-            </button>
-          ))}
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>BASICS</div>
-
-          <div style={grid}>
-            <Field label="Deal Title" value={form.title} onChange={(v) => set("title", v)} />
-            <Field label="City" value={form.city} onChange={(v) => set("city", v)} />
-
-            <div>
-              <label style={label}>State</label>
-              <select style={input} value={form.state} onChange={(e) => set("state", e.target.value)}>
-                {STATES.map((s) => (
-                  <option key={s} value={s} style={{ color: "#111" }}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+              <span style={pill}>Ask: {moneyText(form.asking_price)}</span>
+              <span style={pill}>ARV: {moneyText(form.arv)}</span>
+              <span style={pill}>Repairs: {moneyText(form.repair_estimate)}</span>
+              <span style={pill}>Beds/Baths: {[form.beds, form.baths].filter(Boolean).join(" / ") || "Not listed"}</span>
+              <span style={pill}>Sqft: {form.sqft || form.building_sqft || "Not listed"}</span>
+              <span style={pill}>Strategy: {form.strategy || "Not listed"}</span>
             </div>
 
-            <Field label="Address" value={form.address} onChange={(v) => set("address", v)} />
-
-            <div>
-              <label style={label}>Strategy</label>
-              <select style={input} value={form.strategy} onChange={(e) => set("strategy", e.target.value)}>
-                {currentStrategies.map((s) => (
-                  <option key={s} value={s} style={{ color: "#111" }}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={label}>Exit Strategy</label>
-              <select style={input} value={form.exit_strategy} onChange={(e) => set("exit_strategy", e.target.value)}>
-                {EXIT_OPTIONS.map((s) => (
-                  <option key={s} value={s} style={{ color: "#111" }}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <Field label="Asking Price" value={form.asking_price} onChange={(v) => set("asking_price", v)} />
-            <Field label="ARV / Value" value={form.arv} onChange={(v) => set("arv", v)} />
-            <Field label="Repair Estimate" value={form.repair_estimate} onChange={(v) => set("repair_estimate", v)} />
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={greenEyebrow}>ROUTING NEEDS</div>
-          <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 10px" }}>
-            Who should VaultForge route this to?
-          </h2>
-          <p style={{ color: "rgba(255,255,255,.72)", fontSize: 18, lineHeight: 1.5 }}>
-            Tap every role needed. These values feed the Smart Alerts engine and determine the right alert cards.
-          </p>
-
-          <div className="vf-chip-grid" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {ROUTING_NEEDS.map((need) => (
-              <button
-                key={need}
-                type="button"
-                style={hasCsv(form.routing_needs, need) ? btn : { ...ghost, ...chipBase }}
-                onClick={() => set("routing_needs", toggleCsv(form.routing_needs, need))}
-              >
-                {need}
+            <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+              <button type="submit" disabled={saving} style={{ ...button, opacity: saving ? 0.65 : 1 }}>
+                {saving ? "Saving..." : "Submit Deal Room"}
               </button>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <strong>Selected:</strong>{" "}
-            <span style={{ color: "#9df3bf" }}>{form.routing_needs || "None selected yet"}</span>
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={greenEyebrow}>PAIN / DISTRESS SIGNALS</div>
-          <h2 style={{ fontSize: 34, lineHeight: 1, margin: "0 0 10px" }}>
-            What problem is creating the opportunity?
-          </h2>
-
-          <div className="vf-chip-grid" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {DISTRESS_SIGNALS.map((signal) => (
-              <button
-                key={signal}
-                type="button"
-                style={hasCsv(form.distress_signals, signal) ? btn : { ...ghost, ...chipBase }}
-                onClick={() => set("distress_signals", toggleCsv(form.distress_signals, signal))}
-              >
-                {signal}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <label style={label}>Urgency Level</label>
-            <select style={input} value={form.urgency_level} onChange={(e) => set("urgency_level", e.target.value)}>
-              {URGENCY_LEVELS.map((level) => (
-                <option key={level} value={level} style={{ color: "#111" }}>
-                  {level}
-                </option>
-              ))}
-            </select>
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>ROLE-SPECIFIC ROUTING FIELDS</div>
-
-          <div style={grid}>
-            <Field label="Target Buyer Type" value={form.target_buyer} onChange={(v) => set("target_buyer", v)} placeholder="Cash buyer, landlord, developer, builder, multifamily buyer..." />
-            <Field label="Capital Needed" value={form.capital_needed} onChange={(v) => set("capital_needed", v)} placeholder="Bridge loan, hard money, private capital, JV equity..." />
-            <Field label="Ideal Lender Fit" value={form.ideal_lender} onChange={(v) => set("ideal_lender", v)} placeholder="Fast close, construction draws, land loan, DSCR..." />
-            <Field label="Contractor Scope" value={form.contractor_scope} onChange={(v) => set("contractor_scope", v)} placeholder="Roof, full rehab, foundation, site work, permits..." />
-            <Field label="Operator Scope" value={form.operator_scope} onChange={(v) => set("operator_scope", v)} placeholder="Project manager, boots on ground, property manager..." />
-            <Field label="JV Structure" value={form.jv_structure} onChange={(v) => set("jv_structure", v)} placeholder="Equity partner, profit split, capital + operator..." />
-            <Field label="Title / Attorney Issue" value={form.title_issue} onChange={(v) => set("title_issue", v)} placeholder="Probate, liens, title cloud, closing help..." />
-          </div>
-        </section>
-
-        {form.property_type === "Residential" && (
-          <section style={card}>
-            <div style={eyebrow}>RESIDENTIAL DETAILS</div>
-
-            <div style={grid}>
-              <Field label="Bedrooms" value={form.beds} onChange={(v) => set("beds", v)} />
-              <Field label="Bathrooms" value={form.baths} onChange={(v) => set("baths", v)} />
-              <Field label="Square Feet" value={form.square_feet} onChange={(v) => set("square_feet", v)} />
-              <Field label="Year Built" value={form.year_built} onChange={(v) => set("year_built", v)} />
-              <Field label="Occupancy" value={form.occupancy} onChange={(v) => set("occupancy", v)} placeholder="Vacant, tenant occupied, owner occupied..." />
+              <Link href="/projects" style={ghost}>Back to Projects</Link>
             </div>
           </section>
-        )}
-
-        {form.property_type === "Commercial" && (
-          <section style={card}>
-            <div style={eyebrow}>COMMERCIAL DETAILS</div>
-
-            <div style={grid}>
-              <Field label="Square Feet" value={form.square_feet} onChange={(v) => set("square_feet", v)} />
-              <Field label="NOI" value={form.noi} onChange={(v) => set("noi", v)} />
-              <Field label="Cap Rate" value={form.cap_rate} onChange={(v) => set("cap_rate", v)} />
-              <Field label="Occupancy" value={form.occupancy} onChange={(v) => set("occupancy", v)} />
-              <Field label="Zoning" value={form.zoning} onChange={(v) => set("zoning", v)} />
-            </div>
-          </section>
-        )}
-
-        {form.property_type === "Land" && (
-          <section style={card}>
-            <div style={eyebrow}>LAND DETAILS</div>
-
-            <div style={grid}>
-              <Field label="Acres" value={form.acres} onChange={(v) => set("acres", v)} />
-              <Field label="Zoning" value={form.zoning} onChange={(v) => set("zoning", v)} />
-              <Field label="Utilities" value={form.access_notes} onChange={(v) => set("access_notes", v)} />
-              <Field label="Road Access" value={form.occupancy} onChange={(v) => set("occupancy", v)} />
-            </div>
-          </section>
-        )}
-
-        <section style={card}>
-          <div style={eyebrow}>PHOTOS</div>
-
-          <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => pick(e.target.files)} />
-
-          <button type="button" style={btn} onClick={() => fileRef.current?.click()}>
-            Choose Photos ({files.length}/10)
-          </button>
-
-          <p style={{ color: "rgba(255,255,255,.66)", lineHeight: 1.5 }}>
-            Upload actual property photos. VaultForge saves them through the server so mobile browsers do not block upload.
-          </p>
-
-          <div style={{ ...grid, marginTop: 16 }}>
-            {previews.map((src) => (
-              <img
-                key={src}
-                src={src}
-                alt="Selected property preview"
-                style={{
-                  width: "100%",
-                  height: 220,
-                  objectFit: "cover",
-                  borderRadius: 20,
-                  border: "1px solid rgba(255,255,255,.15)",
-                }}
-              />
-            ))}
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>DEAL INTELLIGENCE</div>
-
-          <div style={grid}>
-            <Field label="Seller Situation" value={form.seller_situation} onChange={(v) => set("seller_situation", v)} placeholder="Why is this available? Motivation, pressure, timeline..." />
-            <Field label="Manual Deal Notes" value={form.deal_needs} onChange={(v) => set("deal_needs", v)} placeholder="Optional extra needs not covered above..." />
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <label style={label}>Access / Private Notes</label>
-
-            <textarea style={{ ...input, minHeight: 120 }} value={form.access_notes} onChange={(e) => set("access_notes", e.target.value)} />
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={greenEyebrow}>AI ROUTE SUMMARY</div>
-          <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
-            This is the machine-readable routing summary that goes into the deal record.
-          </p>
-          <div
-            style={{
-              border: "1px solid rgba(157,243,191,.25)",
-              background: "rgba(157,243,191,.07)",
-              borderRadius: 22,
-              padding: 16,
-              color: "#9df3bf",
-              fontWeight: 850,
-              lineHeight: 1.5,
-            }}
-          >
-            {buildRouteSummary() || "Start selecting routing fields above."}
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>DESCRIPTION</div>
-
-          <textarea style={{ ...input, minHeight: 180 }} value={form.description} onChange={(e) => set("description", e.target.value)} />
-        </section>
-
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy}
-          style={{
-            ...btn,
-            width: "100%",
-            fontSize: 24,
-            padding: 20,
-            opacity: busy ? 0.65 : 1,
-          }}
-        >
-          {busy ? "Saving..." : "Submit Deal"}
-        </button>
+        </form>
       </div>
     </main>
-  );
-}
-
-function Field({
-  label: l,
-  value,
-  onChange,
-  placeholder = "",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <div>
-      <label style={label}>{l}</label>
-
-      <input style={input} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
-    </div>
   );
 }
