@@ -366,11 +366,51 @@ function mergeRows(primary: Row, secondary: Row) {
   return merged;
 }
 
+function numericValue(value: unknown) {
+  const text = clean(value);
+  if (!text) return 0;
+
+  const number = Number(text.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function dealSpread(row: Row) {
+  const ask = numericValue(field(row, "asking_price", "price", "ask", "purchase_price"));
+  const arv = numericValue(field(row, "arv", "arv_value", "estimated_value", "after_repair_value"));
+  const repairs = numericValue(field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"));
+
+  if (!ask || !arv) {
+    return {
+      ask,
+      arv,
+      repairs,
+      grossSpread: 0,
+      netSpread: 0,
+      spreadLabel: "Spread needs price + ARV",
+    };
+  }
+
+  const grossSpread = arv - ask;
+  const netSpread = arv - ask - repairs;
+
+  return {
+    ask,
+    arv,
+    repairs,
+    grossSpread,
+    netSpread,
+    spreadLabel: `${money(grossSpread)} gross / ${money(netSpread)} after repairs`,
+  };
+}
+
 function inferredRouteProfile(row: Row) {
   const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
   const pressure = field(row, "distress_signals", "seller_pressure", "pain_signals").toLowerCase();
   const asset = assetOf(row).toLowerCase();
   const strategy = field(row, "strategy", "exit_strategy", "deal_strategy").toLowerCase();
+  const occupancy = field(row, "occupancy", "tenant_status", "occupancy_status").toLowerCase();
+  const condition = field(row, "condition", "seller_situation", "description", "notes").toLowerCase();
+  const spread = dealSpread(row);
   const ask = field(row, "asking_price", "price", "ask", "purchase_price");
   const arv = field(row, "arv", "arv_value", "estimated_value", "after_repair_value");
   const repairs = field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
@@ -378,12 +418,15 @@ function inferredRouteProfile(row: Row) {
   const capRate = field(row, "cap_rate");
   const zoning = field(row, "zoning", "zoning_type");
   const utilities = field(row, "utilities", "utility_access");
+  const photos = photosOf(row).length;
 
   if (needs.includes("jv") || needs.includes("partner")) {
     return {
       formation: "JV / Operator-Led Execution",
       primary: "operator or JV partner",
+      risk: "Role, capital stack, and control rights must be clear before intro.",
       action: "Package the role, capital need, decision rights, and profit split before introduction.",
+      nextMove: "Build a one-page JV packet and route to operators who can execute, not just fund.",
     };
   }
 
@@ -391,7 +434,9 @@ function inferredRouteProfile(row: Row) {
     return {
       formation: "Capital-Backed Acquisition",
       primary: "private lender or capital partner",
+      risk: "Capital need drives speed; weak numbers will slow the route.",
       action: "Use ask, ARV/value, repairs, photos, and timeline to route to capital first.",
+      nextMove: "Confirm purchase price, lien/debt picture, repair budget, and close date before lender routing.",
     };
   }
 
@@ -399,7 +444,9 @@ function inferredRouteProfile(row: Row) {
     return {
       formation: "Contractor-Verified Execution",
       primary: "contractor or local operator",
+      risk: "Repair uncertainty can kill spread even when the deal looks good.",
       action: "Price the scope quickly so the spread and timeline can be verified before buyer routing.",
+      nextMove: "Request scope/photos walk-through, then route to rehab buyers with verified execution cost.",
     };
   }
 
@@ -407,7 +454,9 @@ function inferredRouteProfile(row: Row) {
     return {
       formation: "Buyer-First Off-Market Route",
       primary: "cash buyer or active investor",
+      risk: "Buyer quality matters more than broad exposure.",
       action: "Route to buyers first while keeping address/contact controlled until the member is qualified.",
+      nextMove: "Send to targeted buyers by asset type and market before exposing private owner details.",
     };
   }
 
@@ -415,7 +464,9 @@ function inferredRouteProfile(row: Row) {
     return {
       formation: "Developer / Builder Route",
       primary: "builder, developer, or land buyer",
+      risk: "Entitlement, utility, access, and zoning risk control the value.",
       action: "Lead with zoning, utilities, road access, acreage, price, and entitlement path.",
+      nextMove: "Route to builders/developers and request zoning, utility, frontage, and parcel confirmation.",
     };
   }
 
@@ -423,31 +474,82 @@ function inferredRouteProfile(row: Row) {
     return {
       formation: "Commercial Investor Route",
       primary: "commercial investor, operator, or 1031 buyer",
+      risk: "Income durability and tenant status drive buyer confidence.",
       action: "Lead with NOI, cap rate, tenant status, value-add angle, and lease-up risk.",
+      nextMove: "Package rent roll/NOI, tenant status, upside, and local operator fit.",
     };
   }
 
-  if (strategy.includes("flip") || (ask && arv && repairs)) {
-    return {
-      formation: "Buyer-First Flip Route",
-      primary: "cash buyer, flipper, or rehab operator",
-      action: "Lead with spread, repair estimate, photos, and market. Contractor routing is optional unless scope is uncertain.",
-    };
-  }
-
-  if (strategy.includes("hold") || strategy.includes("rental") || strategy.includes("brrrr")) {
+  if (strategy.includes("hold") || strategy.includes("rental") || strategy.includes("brrrr") || occupancy.includes("tenant")) {
     return {
       formation: "Rental / Hold Investor Route",
       primary: "landlord, DSCR buyer, or buy-and-hold investor",
+      risk: "Debt service, rent quality, and condition decide whether the hold works.",
       action: "Lead with rent potential, occupancy, condition, value, and financing fit.",
+      nextMove: "Route to landlords and DSCR-minded buyers; confirm rent estimate and occupancy status.",
+    };
+  }
+
+  if (strategy.includes("flip") || (ask && arv && repairs) || spread.netSpread > 0 || condition.includes("rehab")) {
+    return {
+      formation: "Buyer-First Flip Route",
+      primary: "cash buyer, flipper, or rehab operator",
+      risk: spread.netSpread < 0 && spread.ask && spread.arv ? "Repairs may erase the spread." : "Repair accuracy and buyer speed are the key risks.",
+      action: "Lead with spread, repair estimate, photos, and market. Contractor routing is optional unless scope is uncertain.",
+      nextMove: photos ? "Route to flippers with photo-backed spread and controlled owner contact." : "Add photos or scope notes, then route to active flippers in the market.",
     };
   }
 
   return {
     formation: "Best-Fit Deal Routing",
     primary: "qualified buyer or local operator",
+    risk: "Not enough routing context yet, but the deal can still be reviewed and matched from market, asset, price, and photos.",
     action: "Use the available market, asset, price, strategy, and photos to route for owner review first.",
+    nextMove: "Start with local buyer/operator review, then tighten buyer type, timeline, and execution need.",
   };
+}
+
+function intelligenceConfidence(row: Row) {
+  let score = 28;
+
+  if (field(row, "city", "market", "location")) score += 8;
+  if (field(row, "property_type", "asset_type", "deal_type")) score += 8;
+  if (field(row, "asking_price", "price", "ask", "purchase_price")) score += 10;
+  if (field(row, "arv", "arv_value", "estimated_value", "after_repair_value")) score += 10;
+  if (field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget")) score += 8;
+  if (field(row, "strategy", "exit_strategy", "deal_strategy")) score += 8;
+  if (field(row, "routing_needs", "deal_needs", "needs", "route_context")) score += 8;
+  if (field(row, "distress_signals", "seller_pressure", "pain_signals")) score += 7;
+  if (photosOf(row).length) score += 8;
+  if (field(row, "description", "seller_situation", "notes")) score += 5;
+
+  return clampScore(score);
+}
+
+function confidenceLabel(value: number) {
+  if (value >= 82) return "High-confidence route";
+  if (value >= 64) return "Actionable route";
+  if (value >= 46) return "Early route";
+  return "Light intel route";
+}
+
+function routeStack(row: Row) {
+  const profile = inferredRouteProfile(row);
+  const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
+  const asset = assetOf(row).toLowerCase();
+  const strategy = field(row, "strategy", "exit_strategy", "deal_strategy").toLowerCase();
+  const pressure = field(row, "distress_signals", "seller_pressure", "pain_signals").toLowerCase();
+  const stack = [profile.primary];
+
+  if (asset.includes("land")) stack.push("builder", "developer");
+  if (asset.includes("commercial")) stack.push("commercial operator", "1031 buyer");
+  if (strategy.includes("flip") || needs.includes("buyer")) stack.push("cash buyer", "rehab buyer");
+  if (strategy.includes("hold") || strategy.includes("rental")) stack.push("landlord", "DSCR buyer");
+  if (needs.includes("contractor")) stack.push("contractor");
+  if (needs.includes("lender") || pressure.includes("funding")) stack.push("private lender");
+  if (needs.includes("jv") || needs.includes("partner")) stack.push("JV partner");
+
+  return Array.from(new Set(stack.map((item) => item.trim()).filter(Boolean))).slice(0, 5);
 }
 
 function routingSummary(row: Row) {
@@ -458,11 +560,15 @@ function routingSummary(row: Row) {
   const market = marketOf(row);
   const owner = ownerOf(row);
   const profile = inferredRouteProfile(row);
+  const confidence = intelligenceConfidence(row);
+  const spread = dealSpread(row);
 
   const parts = [
-    summary && summary !== "Workstation ready for review." ? summary : "",
+    `${confidenceLabel(confidence)} (${confidence}%).`,
     `Best action: ${profile.action}`,
     `Likely receiver: ${profile.primary}`,
+    spread.ask && spread.arv ? `Spread read: ${spread.spreadLabel}` : "",
+    summary && summary !== "Workstation ready for review." ? `Deal read: ${summary}` : "",
     needs ? `Requested need: ${needs}` : "",
     signals ? `Signal pressure: ${signals}` : "",
     strategy ? `Likely strategy: ${strategy}` : "",
@@ -480,12 +586,13 @@ function missingInfo(row: Row) {
   if (!field(row, "routing_needs", "deal_needs", "needs", "route_context") && !field(row, "target_buyer")) optional.push("preferred buyer/operator type");
   if (!field(row, "capital_needed") && !field(row, "asking_price", "price", "ask", "purchase_price")) optional.push("capital need or purchase number");
   if (!field(row, "contractor_scope") && field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget")) optional.push("repair scope detail");
+  if (!photosOf(row).length) optional.push("photos for faster buyer confidence");
 
   return optional.slice(0, 3);
 }
 
 function signalPressureText(row: Row) {
-  return field(row, "distress_signals", "seller_pressure", "pain_signals") || "No hard pressure listed. Routing is inferred from asset, market, numbers, strategy, and photos.";
+  return field(row, "distress_signals", "seller_pressure", "pain_signals") || "No hard pressure listed. VaultForge is inferring the route from asset, market, numbers, strategy, photos, and owner context.";
 }
 
 function signalPressureTone(row: Row) {
@@ -506,7 +613,7 @@ function signalPressureTone(row: Row) {
     };
   }
 
-  if (value && value !== "no pressure signal listed yet.") {
+  if (value && !value.includes("no hard pressure listed")) {
     return {
       border: "rgba(232,196,107,.30)",
       background: "rgba(232,196,107,.09)",
@@ -519,7 +626,7 @@ function signalPressureTone(row: Row) {
     border: "rgba(148,163,184,.22)",
     background: "rgba(148,163,184,.06)",
     color: "#cbd5e1",
-    label: "No signal",
+    label: "Inferred route",
   };
 }
 
@@ -529,29 +636,45 @@ function clampScore(value: number) {
 }
 
 function operatingScore(row: Row) {
-  let score = 42;
+  let score = 36;
+  const spread = dealSpread(row);
 
   if (field(row, "asking_price", "price", "ask", "purchase_price")) score += 8;
   if (field(row, "arv", "arv_value", "estimated_value", "after_repair_value")) score += 8;
   if (field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget")) score += 8;
-  if (field(row, "routing_needs", "deal_needs", "needs", "route_context")) score += 10;
-  if (field(row, "distress_signals", "seller_pressure", "pain_signals")) score += 10;
+  if (spread.netSpread > 0) score += 8;
+  if (field(row, "routing_needs", "deal_needs", "needs", "route_context")) score += 8;
+  if (field(row, "distress_signals", "seller_pressure", "pain_signals")) score += 7;
   if (field(row, "strategy", "exit_strategy", "deal_strategy")) score += 6;
-  if (photosOf(row).length) score += 8;
+  if (photosOf(row).length) score += 9;
+  if (field(row, "description", "seller_situation", "notes")) score += 4;
 
   return clampScore(score);
 }
 
 function urgencyScore(row: Row) {
-  const pressure = `${field(row, "distress_signals", "seller_pressure", "pain_signals")} ${field(row, "urgency", "urgency_level")} ${field(row, "seller_situation")}`.toLowerCase();
-  let score = 38;
+  const pressure = `${field(row, "distress_signals", "seller_pressure", "pain_signals")} ${field(row, "urgency", "urgency_level")} ${field(row, "seller_situation")} ${field(row, "timeline")}`.toLowerCase();
+  let score = 34;
 
   if (pressure.includes("urgent")) score += 28;
   if (pressure.includes("fast close")) score += 22;
   if (pressure.includes("funding gap")) score += 18;
   if (pressure.includes("foreclosure")) score += 25;
-  if (pressure.includes("inherited")) score += 10;
-  if (field(row, "routing_needs", "deal_needs", "needs", "route_context")) score += 10;
+  if (pressure.includes("probate") || pressure.includes("inherited")) score += 10;
+  if (pressure.includes("vacant")) score += 8;
+  if (field(row, "routing_needs", "deal_needs", "needs", "route_context")) score += 8;
+
+  return clampScore(score);
+}
+
+function assetContextScore(row: Row) {
+  let score = 32;
+
+  if (photosOf(row).length) score += 16;
+  if (field(row, "property_type", "asset_type", "deal_type")) score += 9;
+  if (field(row, "beds", "bedrooms", "units", "building_sqft", "sqft", "land_acres", "acres")) score += 9;
+  if (field(row, "condition", "occupancy", "tenant_status", "zoning", "utilities", "road_access")) score += 9;
+  if (field(row, "address", "location", "city", "market")) score += 9;
 
   return clampScore(score);
 }
@@ -560,14 +683,13 @@ function aiHiveSuggestions(row: Row) {
   const profile = inferredRouteProfile(row);
   const needs = field(row, "routing_needs", "deal_needs", "needs", "route_context").toLowerCase();
   const pressure = field(row, "distress_signals", "seller_pressure", "pain_signals").toLowerCase();
-  const strategy = field(row, "strategy", "exit_strategy", "deal_strategy") || "Fix & Flip";
-  const ask = money(field(row, "asking_price", "price", "ask", "purchase_price"));
-  const arv = money(field(row, "arv", "arv_value", "estimated_value", "after_repair_value"));
-  const repairs = money(field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"));
+  const strategy = field(row, "strategy", "exit_strategy", "deal_strategy") || "Best-fit";
+  const spread = dealSpread(row);
+  const stack = routeStack(row);
 
   const suggestions: string[] = [];
 
-  suggestions.push(profile.action);
+  suggestions.push(profile.nextMove);
 
   if (needs.includes("buyer")) suggestions.push("Route to cash buyers first; confirm proof of funds before releasing private details.");
   if (needs.includes("contractor")) suggestions.push("Get repair scope priced fast so spread can be verified before buyer intro.");
@@ -575,13 +697,14 @@ function aiHiveSuggestions(row: Row) {
   if (needs.includes("lender") || pressure.includes("funding")) suggestions.push("Send to private/hard-money capital with ask, ARV, repairs, and timeline.");
   if (pressure.includes("fast close")) suggestions.push("Prioritize speed: buyer + title readiness matter more than broad exposure.");
 
-  if (ask !== "Not listed" || arv !== "Not listed" || repairs !== "Not listed") {
-    suggestions.push(`Deal packet is numbers-ready: Ask ${ask}, ARV ${arv}, repairs ${repairs}.`);
+  if (spread.ask && spread.arv) {
+    suggestions.push(`Numbers read: ${spread.spreadLabel}. Use this as the first underwriting hook.`);
   }
 
-  suggestions.push(`Best formation: ${strategy} deal room routed first to ${profile.primary}.`);
+  suggestions.push(`Route stack: ${stack.join(" → ")}.`);
+  suggestions.push(`Best formation: ${strategy} deal room with controlled owner contact and member-by-member routing.`);
 
-  return Array.from(new Set(suggestions)).slice(0, 4);
+  return Array.from(new Set(suggestions)).slice(0, 5);
 }
 
 function bestDealFormation(row: Row) {
@@ -715,7 +838,12 @@ function ScoreBar({ label: scoreLabel, value, caption }: { label: string; value:
 function IntelligencePanel({ row }: { row: Row }) {
   const opScore = operatingScore(row);
   const urgScore = urgencyScore(row);
+  const assetScore = assetContextScore(row);
+  const confidence = intelligenceConfidence(row);
   const suggestions = aiHiveSuggestions(row);
+  const profile = inferredRouteProfile(row);
+  const spread = dealSpread(row);
+  const stack = routeStack(row);
 
   return (
     <section
@@ -727,21 +855,58 @@ function IntelligencePanel({ row }: { row: Row }) {
         background: "linear-gradient(145deg,rgba(232,196,107,.08),rgba(255,255,255,.025))",
       }}
     >
-      <div style={{ ...label, fontSize: 11 }}>VaultForge AI Hive</div>
+      <div style={{ ...label, fontSize: 11 }}>VaultForge Intelligence Desk</div>
+
+      <div
+        style={{
+          marginTop: 12,
+          border: "1px solid rgba(232,196,107,.22)",
+          borderRadius: 18,
+          padding: 14,
+          background: "radial-gradient(circle at top left,rgba(232,196,107,.12),transparent 44%),rgba(0,0,0,.18)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <div>
+            <div style={{ color: "#f8e7b0", fontSize: 12, textTransform: "uppercase", letterSpacing: ".14em", fontWeight: 950 }}>
+              {confidenceLabel(confidence)}
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 1000, marginTop: 5, letterSpacing: "-.03em" }}>{profile.formation}</div>
+          </div>
+          <div style={{ border: "1px solid rgba(157,243,191,.24)", borderRadius: 999, padding: "10px 13px", color: "#9df3bf", fontWeight: 950 }}>
+            {confidence}% confidence
+          </div>
+        </div>
+
+        <p style={{ ...muted, margin: "12px 0 0", fontSize: 14 }}>
+          {profile.nextMove}
+        </p>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+          {stack.map((item) => (
+            <span key={item} style={{ ...chip, color: "#dbeafe", borderColor: "rgba(147,197,253,.22)", background: "rgba(147,197,253,.07)" }}>
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginTop: 12 }}>
-        <ScoreBar label="Operating Score" value={opScore} caption="Completeness, photos, spread, need, and actionability." />
-        <ScoreBar label="Urgency" value={urgScore} caption={field(row, "urgency", "urgency_level") || "Calculated from pressure signals."} />
-        <ScoreBar label="Asset Context" value={photosOf(row).length ? 76 : 42} caption={`${photosOf(row).length} photo${photosOf(row).length === 1 ? "" : "s"} connected.`} />
+        <ScoreBar label="Operating Score" value={opScore} caption="Numbers, photos, strategy, notes, spread, and actionability." />
+        <ScoreBar label="Urgency" value={urgScore} caption={field(row, "urgency", "urgency_level") || "Calculated from pressure, timing, occupancy, and situation."} />
+        <ScoreBar label="Asset Context" value={assetScore} caption={`${photosOf(row).length} photo${photosOf(row).length === 1 ? "" : "s"} plus asset facts connected.`} />
       </div>
 
       <div style={{ marginTop: 14, border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: 12, background: "rgba(0,0,0,.14)" }}>
-        <div style={{ ...label, fontSize: 11 }}>Best Deal Formation</div>
-        <div style={{ fontSize: 22, fontWeight: 950, marginTop: 6 }}>{bestDealFormation(row)}</div>
+        <div style={{ ...label, fontSize: 11 }}>Underwriting Read</div>
+        <div style={{ fontSize: 17, fontWeight: 950, marginTop: 6 }}>
+          {spread.ask && spread.arv ? spread.spreadLabel : "Add ask + ARV to calculate spread. VaultForge can still route from asset, market, strategy, and photos."}
+        </div>
+        <p style={{ ...muted, margin: "8px 0 0", fontSize: 13 }}>{profile.risk}</p>
       </div>
 
       <div style={{ marginTop: 14 }}>
-        <div style={{ ...label, fontSize: 11 }}>AI Hive Suggestions</div>
+        <div style={{ ...label, fontSize: 11 }}>Best Next Moves</div>
         <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
           {suggestions.map((item) => (
             <div key={item} style={{ border: "1px solid rgba(157,243,191,.18)", borderRadius: 14, padding: 10, color: "#dbeafe", background: "rgba(157,243,191,.055)", lineHeight: 1.45 }}>
@@ -882,14 +1047,9 @@ function WorkstationCard({
             <div style={{ ...label, fontSize: 11 }}>Owner Review</div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-              <span style={chip}>Buyer</span>
-              <span style={chip}>Contractor</span>
-              {field(row, "routing_needs", "deal_needs", "needs", "route_context")?.toLowerCase().includes("jv") ? (
-                <span style={chip}>JV Partner</span>
-              ) : null}
-              {(field(row, "distress_signals", "seller_pressure", "pain_signals") || "").toLowerCase().includes("funding") ? (
-                <span style={chip}>Lender</span>
-              ) : null}
+              {routeStack(row).map((item) => (
+                <span key={item} style={chip}>{item}</span>
+              ))}
             </div>
           </section>
 
