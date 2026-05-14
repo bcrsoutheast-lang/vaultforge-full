@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Row = Record<string, any>;
-type ViewMode = "active" | "saved" | "hidden";
+type ViewMode = "active" | "saved" | "deleted";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -595,7 +595,7 @@ function ProjectCard({
   row,
   viewer,
   saved,
-  hidden,
+  deleted,
   onSave,
   onUnsave,
   onHide,
@@ -604,7 +604,7 @@ function ProjectCard({
   row: Row;
   viewer: string;
   saved: boolean;
-  hidden: boolean;
+  deleted: boolean;
   onSave: (key: string) => void;
   onUnsave: (key: string) => void;
   onHide: (key: string) => void;
@@ -640,7 +640,7 @@ function ProjectCard({
           <span style={chip}>{statusOf(row)}</span>
           {signalId ? <span style={chip}>Signal linked</span> : null}
           {saved ? <span style={chip}>Saved</span> : null}
-          {hidden ? <span style={chip}>Hidden</span> : null}
+          {deleted ? <span style={chip}>Deleted</span> : null}
         </div>
 
         <h3 className="vf-card-title">{titleOf(row)}</h3>
@@ -671,7 +671,7 @@ function ProjectCard({
             <button type="button" onClick={() => onSave(key)} style={ghost}>Save</button>
           )}
 
-          {hidden ? (
+          {deleted ? (
             <button type="button" onClick={() => onRestore(key)} style={ghost}>Restore</button>
           ) : (
             <button type="button" onClick={() => onHide(key)} style={dangerGhost}>Hide</button>
@@ -686,7 +686,7 @@ export default function ProjectsPage() {
   const [email, setEmail] = useState("");
   const [items, setItems] = useState<Row[]>([]);
   const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [deletedKeys, setDeletedKeys] = useState<Set<string>>(new Set());
   const [view, setView] = useState<ViewMode>("active");
   const [status, setStatus] = useState("Loading projects...");
 
@@ -697,7 +697,7 @@ export default function ProjectsPage() {
 
     setEmail(viewer);
     setSavedKeys(loadKeySet(viewer, "saved"));
-    setHiddenKeys(loadKeySet(viewer, "hidden"));
+    setDeletedKeys(loadKeySet(viewer, "deleted"));
     setStatus("Loading projects...");
 
     try {
@@ -739,27 +739,27 @@ export default function ProjectsPage() {
     return items.filter((item, index) => {
       const key = strongKey(item, index);
       const isSaved = savedKeys.has(key);
-      const isHidden = hiddenKeys.has(key);
+      const isDeleted = deletedKeys.has(key);
 
-      if (view === "saved") return isSaved && !isHidden;
-      if (view === "hidden") return isHidden;
-      return !isHidden;
+      if (view === "saved") return isSaved && !isDeleted;
+      if (view === "deleted") return isDeleted;
+      return !isDeleted;
     });
-  }, [items, savedKeys, hiddenKeys, view]);
+  }, [items, savedKeys, deletedKeys, view]);
 
   const counts = useMemo(() => {
-    const active = items.filter((item, index) => !hiddenKeys.has(strongKey(item, index))).length;
-    const saved = items.filter((item, index) => savedKeys.has(strongKey(item, index)) && !hiddenKeys.has(strongKey(item, index))).length;
-    const hidden = items.filter((item, index) => hiddenKeys.has(strongKey(item, index))).length;
+    const active = items.filter((item, index) => !deletedKeys.has(strongKey(item, index))).length;
+    const saved = items.filter((item, index) => savedKeys.has(strongKey(item, index)) && !deletedKeys.has(strongKey(item, index))).length;
+    const deleted = items.filter((item, index) => deletedKeys.has(strongKey(item, index))).length;
 
     return {
       total: active,
       saved,
-      hidden,
-      withPhotos: items.filter((item, index) => !hiddenKeys.has(strongKey(item, index)) && photosOf(item).length).length,
-      routed: items.filter((item, index) => !hiddenKeys.has(strongKey(item, index)) && signalIdOf(item)).length,
+      deleted,
+      withPhotos: items.filter((item, index) => !deletedKeys.has(strongKey(item, index)) && photosOf(item).length).length,
+      routed: items.filter((item, index) => !deletedKeys.has(strongKey(item, index)) && signalIdOf(item)).length,
     };
-  }, [items, savedKeys, hiddenKeys]);
+  }, [items, savedKeys, deletedKeys]);
 
   function saveProject(key: string) {
     const next = new Set(savedKeys);
@@ -775,26 +775,26 @@ export default function ProjectsPage() {
     saveKeySet(email, "saved", next);
   }
 
-  function hideProject(key: string) {
-    const next = new Set(hiddenKeys);
+  function deleteProject(key: string) {
+    const next = new Set(deletedKeys);
     next.add(key);
-    setHiddenKeys(next);
-    saveKeySet(email, "hidden", next);
+    setDeletedKeys(next);
+    saveKeySet(email, "deleted", next);
   }
 
-  function restoreProject(key: string) {
-    const next = new Set(hiddenKeys);
+  function restoreDeletedProject(key: string) {
+    const next = new Set(deletedKeys);
     next.delete(key);
-    setHiddenKeys(next);
-    saveKeySet(email, "hidden", next);
+    setDeletedKeys(next);
+    saveKeySet(email, "deleted", next);
   }
 
   function clearLocalCleanup() {
     const emptySet = new Set<string>();
     setSavedKeys(emptySet);
-    setHiddenKeys(emptySet);
+    setDeletedKeys(emptySet);
     saveKeySet(email, "saved", emptySet);
-    saveKeySet(email, "hidden", emptySet);
+    saveKeySet(email, "deleted", emptySet);
   }
 
   return (
@@ -815,7 +815,7 @@ export default function ProjectsPage() {
           display: grid;
           grid-template-columns: 220px 1fr;
           gap: 18px;
-          overflow: hidden;
+          overflow: deleted;
         }
 
         .vf-project-photo-box {
@@ -823,7 +823,7 @@ export default function ProjectsPage() {
           width: 100%;
           height: 170px;
           border-radius: 20px;
-          overflow: hidden;
+          overflow: deleted;
           border: 1px solid rgba(232,196,107,.18);
           background: rgba(0,0,0,.22);
         }
@@ -962,13 +962,13 @@ export default function ProjectsPage() {
             <span style={chip}>{email === OWNER_EMAIL ? "Owner View" : "Member View"}</span>
             <span style={chip}>Active: {counts.total}</span>
             <span style={chip}>Saved: {counts.saved}</span>
-            <span style={chip}>Hidden: {counts.hidden}</span>
+            <span style={chip}>Deleted: {counts.deleted}</span>
           </div>
 
           <div className="vf-actions">
             <button type="button" onClick={() => setView("active")} style={view === "active" ? button : ghost}>Active</button>
             <button type="button" onClick={() => setView("saved")} style={view === "saved" ? button : ghost}>Saved</button>
-            <button type="button" onClick={() => setView("hidden")} style={view === "hidden" ? button : ghost}>Hidden</button>
+            <button type="button" onClick={() => setView("deleted")} style={view === "deleted" ? button : ghost}>Deleted</button>
             <button type="button" onClick={load} style={ghost}>Refresh</button>
             <button type="button" onClick={clearLocalCleanup} style={dangerGhost}>Clear Local Cleanup</button>
           </div>
@@ -983,7 +983,7 @@ export default function ProjectsPage() {
         <section className="vf-metrics">
           <Metric label="Active" value={String(counts.total)} />
           <Metric label="Saved" value={String(counts.saved)} />
-          <Metric label="Hidden" value={String(counts.hidden)} />
+          <Metric label="Deleted" value={String(counts.deleted)} />
           <Metric label="Routed" value={String(counts.routed)} />
           <Metric label="With Photos" value={String(counts.withPhotos)} />
         </section>
@@ -992,7 +992,7 @@ export default function ProjectsPage() {
           <div style={label}>Project Queue</div>
 
           <h2 style={{ fontSize: "clamp(34px,6vw,54px)", lineHeight: 1, margin: "10px 0 18px", letterSpacing: "-.05em" }}>
-            {view === "active" ? "Active opportunity cards." : view === "saved" ? "Saved opportunities." : "Hidden opportunities."}
+            {view === "active" ? "Active opportunity cards." : view === "saved" ? "Saved opportunities." : "Deleted opportunities."}
           </h2>
 
           {rowsForView.length ? (
@@ -1005,11 +1005,11 @@ export default function ProjectsPage() {
                     row={item}
                     viewer={email}
                     saved={savedKeys.has(key)}
-                    hidden={hiddenKeys.has(key)}
+                    deleted={deletedKeys.has(key)}
                     onSave={saveProject}
                     onUnsave={unsaveProject}
-                    onHide={hideProject}
-                    onRestore={restoreProject}
+                    onHide={deleteProject}
+                    onRestore={restoreDeletedProject}
                   />
                 );
               })}
@@ -1017,7 +1017,7 @@ export default function ProjectsPage() {
           ) : (
             <div style={panel}>
               <h3 style={{ marginTop: 0 }}>
-                {view === "active" ? "No active projects connected yet." : view === "saved" ? "No saved projects yet." : "No hidden projects."}
+                {view === "active" ? "No active projects connected yet." : view === "saved" ? "No saved projects yet." : "No deleted projects."}
               </h3>
 
               <p style={muted}>{status}</p>
