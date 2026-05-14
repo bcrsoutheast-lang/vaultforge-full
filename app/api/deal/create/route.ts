@@ -35,13 +35,6 @@ function cleanLower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function slug(value: unknown) {
-  return clean(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 function first(...values: unknown[]) {
   for (const value of values) {
     if (Array.isArray(value)) {
@@ -57,12 +50,22 @@ function first(...values: unknown[]) {
   return "";
 }
 
-function firstText(body: AnyRecord, keys: string[]) {
-  for (const key of keys) {
-    const text = clean(body?.[key]);
-    if (text) return text;
-  }
-  return "";
+function slug(value: unknown) {
+  return clean(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function json(data: AnyRecord, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
 }
 
 function arrayFromAny(value: unknown): string[] {
@@ -102,15 +105,18 @@ function makeId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function json(data: AnyRecord, status = 200) {
-  return NextResponse.json(data, {
-    status,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  });
+function field(body: AnyRecord, ...keys: string[]) {
+  const metadata = body && typeof body.metadata === "object" && body.metadata ? body.metadata : {};
+  const raw = body && typeof body.raw_form_snapshot === "object" && body.raw_form_snapshot ? body.raw_form_snapshot : {};
+  const values: unknown[] = [];
+
+  for (const key of keys) {
+    values.push(body[key]);
+    values.push(metadata[key]);
+    values.push(raw[key]);
+  }
+
+  return first(...values);
 }
 
 function makeDirectLinks(baseUrl: string, dealId: string, signalId: string, routingId: string, activityId: string) {
@@ -128,113 +134,26 @@ function makeDirectLinks(baseUrl: string, dealId: string, signalId: string, rout
   };
 }
 
-function roleFromText(text: string) {
-  const lower = text.toLowerCase();
-
-  if (lower.includes("lender") || lower.includes("capital") || lower.includes("fund")) return "Lender / Capital";
-  if (lower.includes("operator") || lower.includes("jv") || lower.includes("partner")) return "Operator / JV";
-  if (lower.includes("contractor") || lower.includes("repair") || lower.includes("construction")) return "Contractor";
-  if (lower.includes("buyer") || lower.includes("acquisition")) return "Buyer";
-
-  return "Owner Review";
-}
-
-function actionFromRole(role: string) {
-  const lower = role.toLowerCase();
-
-  if (lower.includes("lender") || lower.includes("capital")) return "route_to_lender";
-  if (lower.includes("operator") || lower.includes("jv")) return "route_to_operator";
-  if (lower.includes("contractor")) return "route_to_contractor";
-  if (lower.includes("buyer")) return "route_to_buyer";
-
-  return "needs_review";
-}
-
-function priorityFromBody(body: AnyRecord) {
-  const text = [
-    body.urgency_level,
-    body.urgency,
-    body.distress_signals,
-    body.description,
-    body.seller_situation,
-    body.ai_route_summary,
-    body.route_summary,
-  ]
-    .map(clean)
-    .join(" ")
-    .toLowerCase();
-
-  if (
-    text.includes("emergency") ||
-    text.includes("urgent") ||
-    text.includes("foreclosure") ||
-    text.includes("deadline") ||
-    text.includes("fast close")
-  ) {
-    return "urgent";
-  }
-
-  if (
-    text.includes("needs review this week") ||
-    text.includes("funding gap") ||
-    text.includes("stalled") ||
-    text.includes("behind")
-  ) {
-    return "high";
-  }
-
-  return "medium";
-}
-
-function canonicalProjectKeyFromParts(parts: {
-  title: string;
-  city: string;
-  state: string;
-  owner: string;
-  address: string;
-  asking: string;
-  arv: string;
-  firstPhoto: string;
-}) {
-  const photo = parts.firstPhoto.split("?")[0].split("/").filter(Boolean).slice(-2).join("-");
-  const keyParts = [
-    "deal",
-    slug(parts.title),
-    slug([parts.city, parts.state].filter(Boolean).join("-")),
-    slug(parts.owner),
-    slug(parts.address || photo),
-    slug(parts.asking || parts.arv),
-  ].filter(Boolean);
-
-  return keyParts.join("|");
-}
-
-function buildDealSummary(body: AnyRecord) {
-  const supplied = firstText(body, ["ai_route_summary", "route_summary", "routing_summary"]);
+function buildSummary(body: AnyRecord) {
+  const supplied = field(body, "ai_route_summary", "route_summary", "routing_summary");
   if (supplied) return supplied;
 
-  const title = firstText(body, ["title", "deal_title", "headline", "name"]) || "Deal";
-  const type = firstText(body, ["property_type", "deal_type", "asset_type"]) || "Deal";
-  const city = firstText(body, ["city"]);
-  const state = firstText(body, ["state"]);
-  const market = [city, state].filter(Boolean).join(", ") || "Market not listed";
-  const strategy = firstText(body, ["strategy", "exit_strategy"]) || "Strategy not listed";
-  const exit = firstText(body, ["exit_strategy", "strategy"]) || "Exit not listed";
-  const ask = firstText(body, ["asking_price", "price", "ask", "purchase_price"]);
-  const arv = firstText(body, ["arv", "arv_value", "estimated_value", "after_repair_value"]);
-  const repairs = firstText(body, ["repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"]);
-  const needs = firstText(body, ["routing_needs", "deal_needs", "needs", "route_context"]);
-  const signals = firstText(body, ["distress_signals", "seller_pressure", "pain_signals"]);
-  const capital = firstText(body, ["capital_needed"]);
-  const contractor = firstText(body, ["contractor_scope"]);
-  const operator = firstText(body, ["operator_scope"]);
-  const seller = firstText(body, ["seller_situation", "access_notes", "private_notes"]);
-  const desc = firstText(body, ["description", "notes"]);
+  const title = field(body, "title", "deal_title", "project_title") || "Deal";
+  const type = field(body, "property_type", "deal_type", "asset_type") || "Deal";
+  const city = field(body, "city");
+  const state = field(body, "state");
+  const strategy = field(body, "strategy", "exit_strategy", "deal_strategy") || "Strategy not listed";
+  const exit = field(body, "exit_strategy", "strategy") || "Exit not listed";
+  const needs = field(body, "routing_needs", "deal_needs", "needs", "route_context");
+  const signals = field(body, "distress_signals", "seller_pressure", "pain_signals");
+  const ask = field(body, "asking_price", "price", "ask", "purchase_price");
+  const arv = field(body, "arv", "arv_value", "estimated_value", "after_repair_value");
+  const repairs = field(body, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
 
   return [
     `Deal: ${title}`,
     `Type: ${type}`,
-    `Market: ${market}`,
+    `Market: ${[city, state].filter(Boolean).join(", ") || "Market not listed"}`,
     `Strategy: ${strategy}`,
     `Exit: ${exit}`,
     ask ? `Ask: ${ask}` : "",
@@ -242,11 +161,6 @@ function buildDealSummary(body: AnyRecord) {
     repairs ? `Repairs: ${repairs}` : "",
     needs ? `Needs: ${needs}` : "",
     signals ? `Signals: ${signals}` : "",
-    capital ? `Capital: ${capital}` : "",
-    contractor ? `Contractor Scope: ${contractor}` : "",
-    operator ? `Operator Scope: ${operator}` : "",
-    seller ? `Seller/Situation: ${seller}` : "",
-    desc ? `Notes: ${desc}` : "",
   ]
     .filter(Boolean)
     .join(" | ");
@@ -280,128 +194,115 @@ function isMissingColumnError(error: any) {
   );
 }
 
-async function adaptiveInsert(client: any, table: string, variants: AnyRecord[]) {
+async function adaptiveInsert(client: any, table: string, payloads: AnyRecord[]) {
   const attempts: AnyRecord[] = [];
 
-  for (const variant of variants) {
+  for (const variant of payloads) {
     let payload = { ...variant };
-    const removed_columns: string[] = [];
+    const removedColumns: string[] = [];
 
-    for (let i = 0; i < 36; i += 1) {
-      try {
-        const { data, error } = await client.from(table).insert(payload).select("*").single();
+    for (let i = 0; i < 60; i += 1) {
+      const { data, error } = await client.from(table).insert(payload).select("*").single();
 
-        attempts.push({
-          table,
-          ok: !error,
-          error: error?.message || null,
-          keys: Object.keys(payload),
-          removed_columns: [...removed_columns],
-        });
+      attempts.push({
+        ok: !error,
+        error: error?.message || null,
+        removed_columns: [...removedColumns],
+        keys: Object.keys(payload),
+      });
 
-        if (!error && data) {
-          return { ok: true, data, error: null, attempts, removed_columns };
-        }
-
-        if (!isMissingColumnError(error)) break;
-
-        const missing = missingColumnFromError(error);
-        if (!missing || !Object.prototype.hasOwnProperty.call(payload, missing)) break;
-
-        delete payload[missing];
-        removed_columns.push(missing);
-      } catch (error: any) {
-        attempts.push({
-          table,
-          ok: false,
-          error: error?.message || String(error),
-          keys: Object.keys(payload),
-          removed_columns: [...removed_columns],
-        });
-        break;
+      if (!error && data) {
+        return { ok: true, data, attempts, removedColumns };
       }
+
+      if (!isMissingColumnError(error)) break;
+
+      const missing = missingColumnFromError(error);
+      if (!missing || !Object.prototype.hasOwnProperty.call(payload, missing)) break;
+
+      delete payload[missing];
+      removedColumns.push(missing);
     }
   }
 
   return {
     ok: false,
     data: null,
-    error: attempts.find((attempt) => attempt.error)?.error || `${table} insert failed.`,
     attempts,
-    removed_columns: [],
+    error: attempts.find((attempt) => attempt.error)?.error || "Insert failed.",
   };
 }
 
-function buildDealPayloads(body: AnyRecord, email: string, signalId: string, routingId: string, activityId: string, directLinksPending: AnyRecord) {
-  const photoUrls = Array.from(
+function buildPayload(body: AnyRecord, email: string, signalId: string, routingId: string, activityId: string, directLinks: AnyRecord) {
+  const photos = Array.from(
     new Set([
       ...arrayFromAny(body.photo_urls),
-      ...arrayFromAny(body.photoUrls),
       ...arrayFromAny(body.photos),
-      ...arrayFromAny(body.files),
-      firstText(body, ["main_photo_url", "image_url", "photo_url"]),
+      ...arrayFromAny(body.photoUrls),
+      field(body, "main_photo_url", "image_url", "photo_url", "primary_photo_url"),
     ].filter(Boolean))
   );
 
-  const firstPhoto = firstText(body, ["main_photo_url", "image_url", "photo_url"]) || photoUrls[0] || "";
-  const title = firstText(body, ["title", "deal_title", "headline", "name"]) || "Untitled Deal";
-  const propertyType = firstText(body, ["property_type", "deal_type", "asset_type"]) || "Deal";
-  const city = firstText(body, ["city"]);
-  const state = firstText(body, ["state"]);
-  const strategy = firstText(body, ["strategy", "deal_strategy"]) || "Strategy Needed";
-  const exitStrategy = firstText(body, ["exit_strategy", "strategy"]);
-  const routeSummary = buildDealSummary(body);
-  const routingNeeds = firstText(body, ["routing_needs", "deal_needs", "needs", "route_context"]);
-  const distressSignals = firstText(body, ["distress_signals", "seller_pressure", "pain_signals"]);
-  const sellerSituation = first(firstText(body, ["seller_situation"]), [firstText(body, ["access_notes", "private_notes"]), distressSignals].filter(Boolean).join(" | "));
-  const asking = firstText(body, ["asking_price", "price", "ask", "purchase_price"]);
-  const arv = firstText(body, ["arv", "arv_value", "estimated_value", "after_repair_value"]);
-  const repairs = firstText(body, ["repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget"]);
-  const address = firstText(body, ["address", "property_address", "location"]);
+  const firstPhoto = field(body, "main_photo_url", "image_url", "photo_url", "primary_photo_url") || photos[0] || "";
+  const title = field(body, "title", "deal_title", "project_title", "name") || "Untitled Deal";
+  const type = field(body, "property_type", "deal_type", "asset_type") || "Residential";
+  const city = field(body, "city") || "Unknown City";
+  const state = field(body, "state") || "Unknown State";
   const market = [city, state].filter(Boolean).join(", ");
-  const canonicalProjectKey = canonicalProjectKeyFromParts({
-    title,
-    city,
-    state,
-    owner: email,
-    address,
-    asking,
-    arv,
-    firstPhoto,
-  });
+  const address = field(body, "address", "property_address", "location");
+  const ask = field(body, "asking_price", "price", "ask", "purchase_price");
+  const arv = field(body, "arv", "arv_value", "estimated_value", "after_repair_value");
+  const repairs = field(body, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
+  const routeSummary = buildSummary(body);
+  const routingNeeds = field(body, "routing_needs", "deal_needs", "needs", "route_context");
+  const distress = field(body, "distress_signals", "seller_pressure", "pain_signals");
+  const sellerSituation = field(body, "seller_situation") || [field(body, "access_notes", "private_notes"), distress].filter(Boolean).join(" | ");
   const now = new Date().toISOString();
+  const canonicalProjectKey = [
+    "deal",
+    slug(title),
+    slug(market),
+    slug(email),
+    slug(address || firstPhoto.split("?")[0].split("/").slice(-2).join("-")),
+    slug(ask || arv),
+  ]
+    .filter(Boolean)
+    .join("|");
 
-  const canonicalFields = {
+  const canonical: AnyRecord = {
     owner_email: email,
     member_email: email,
     submitted_by: email,
+    submitted_by_email: email,
     user_email: email,
+    created_by_email: email,
+
     title,
     deal_title: title,
     project_title: title,
-    description: firstText(body, ["description", "notes", "seller_situation"]) || routeSummary,
-    notes: firstText(body, ["notes", "description"]) || routeSummary,
+    description: field(body, "description", "notes") || routeSummary,
+    notes: field(body, "notes", "description") || routeSummary,
     status: "active",
 
-    property_type: propertyType,
-    deal_type: propertyType,
-    asset_type: propertyType,
+    property_type: type,
+    deal_type: type,
+    asset_type: type,
 
-    strategy,
-    exit_strategy: exitStrategy,
-    deal_strategy: strategy,
+    strategy: field(body, "strategy", "deal_strategy"),
+    deal_strategy: field(body, "deal_strategy", "strategy"),
+    exit_strategy: field(body, "exit_strategy", "strategy"),
 
-    city: city || "Unknown City",
-    state: state || "Unknown State",
+    city,
+    state,
     market,
     address,
     property_address: address,
     location: address,
 
-    asking_price: asking,
-    price: asking,
-    ask: asking,
-    purchase_price: asking,
+    asking_price: ask,
+    price: ask,
+    ask,
+    purchase_price: ask,
 
     arv,
     arv_value: arv,
@@ -414,51 +315,55 @@ function buildDealPayloads(body: AnyRecord, email: string, signalId: string, rou
     rehab_budget: repairs,
     repair_budget: repairs,
 
-    beds: firstText(body, ["beds", "bedrooms"]),
-    bedrooms: firstText(body, ["bedrooms", "beds"]),
-    baths: firstText(body, ["baths", "bathrooms"]),
-    bathrooms: firstText(body, ["bathrooms", "baths"]),
-    square_feet: firstText(body, ["square_feet", "sqft", "building_sqft"]),
-    sqft: firstText(body, ["sqft", "square_feet", "building_sqft"]),
-    building_sqft: firstText(body, ["building_sqft", "square_feet", "sqft"]),
-    year_built: firstText(body, ["year_built", "built_year"]),
-    built_year: firstText(body, ["built_year", "year_built"]),
-    occupancy: firstText(body, ["occupancy", "occupancy_status", "tenant_status"]),
-    occupancy_status: firstText(body, ["occupancy_status", "occupancy", "tenant_status"]),
-    tenant_status: firstText(body, ["tenant_status", "occupancy", "occupancy_status"]),
-    zoning: firstText(body, ["zoning", "zoning_type"]),
-    zoning_type: firstText(body, ["zoning_type", "zoning"]),
-    acres: firstText(body, ["acres", "land_acres"]),
-    land_acres: firstText(body, ["land_acres", "acres"]),
-    utilities: firstText(body, ["utilities", "utility_access", "access_notes"]),
-    utility_access: firstText(body, ["utility_access", "utilities", "access_notes"]),
-    road_access: firstText(body, ["road_access", "access", "occupancy"]),
-    access: firstText(body, ["access", "road_access", "occupancy"]),
-    noi: firstText(body, ["noi", "net_operating_income"]),
-    net_operating_income: firstText(body, ["net_operating_income", "noi"]),
-    cap_rate: firstText(body, ["cap_rate"]),
+    beds: field(body, "beds", "bedrooms"),
+    bedrooms: field(body, "bedrooms", "beds"),
+    baths: field(body, "baths", "bathrooms"),
+    bathrooms: field(body, "bathrooms", "baths"),
+    square_feet: field(body, "square_feet", "sqft", "building_sqft"),
+    sqft: field(body, "sqft", "square_feet", "building_sqft"),
+    building_sqft: field(body, "building_sqft", "square_feet", "sqft"),
+    year_built: field(body, "year_built", "built_year"),
+    built_year: field(body, "built_year", "year_built"),
+    occupancy: field(body, "occupancy", "occupancy_status", "tenant_status"),
+    occupancy_status: field(body, "occupancy_status", "occupancy", "tenant_status"),
+    tenant_status: field(body, "tenant_status", "occupancy", "occupancy_status"),
+    zoning: field(body, "zoning", "zoning_type"),
+    zoning_type: field(body, "zoning_type", "zoning"),
+    acres: field(body, "acres", "land_acres"),
+    land_acres: field(body, "land_acres", "acres"),
+    utilities: field(body, "utilities", "utility_access", "access_notes"),
+    utility_access: field(body, "utility_access", "utilities", "access_notes"),
+    road_access: field(body, "road_access", "access", "frontage", "road_frontage"),
+    access: field(body, "access", "road_access", "frontage", "road_frontage"),
+    noi: field(body, "noi", "net_operating_income"),
+    net_operating_income: field(body, "net_operating_income", "noi"),
+    cap_rate: field(body, "cap_rate"),
 
-    target_buyer: firstText(body, ["target_buyer"]),
-    capital_needed: firstText(body, ["capital_needed"]),
-    ideal_lender: firstText(body, ["ideal_lender"]),
-    contractor_scope: firstText(body, ["contractor_scope"]),
-    operator_scope: firstText(body, ["operator_scope"]),
-    jv_structure: firstText(body, ["jv_structure"]),
-    title_issue: firstText(body, ["title_issue"]),
-
-    route_summary: routeSummary,
-    ai_route_summary: routeSummary,
-    routing_summary: routeSummary,
     routing_needs: routingNeeds,
-    deal_needs: firstText(body, ["deal_needs"]) || routingNeeds,
-    needs: firstText(body, ["needs"]) || routingNeeds,
-    route_context: firstText(body, ["route_context"]) || routingNeeds,
-    distress_signals: distressSignals,
-    seller_pressure: firstText(body, ["seller_pressure"]) || distressSignals,
-    pain_signals: firstText(body, ["pain_signals"]) || distressSignals,
+    deal_needs: field(body, "deal_needs") || routingNeeds,
+    needs: field(body, "needs") || routingNeeds,
+    route_context: field(body, "route_context") || routingNeeds,
+    distress_signals: distress,
+    seller_pressure: field(body, "seller_pressure") || distress,
+    pain_signals: field(body, "pain_signals") || distress,
     seller_situation: sellerSituation,
-    access_notes: firstText(body, ["access_notes", "private_notes"]),
-    private_notes: firstText(body, ["private_notes", "access_notes"]),
+    access_notes: field(body, "access_notes", "private_notes"),
+    private_notes: field(body, "private_notes", "access_notes"),
+
+    urgency: field(body, "urgency", "urgency_level"),
+    urgency_level: field(body, "urgency_level", "urgency"),
+
+    target_buyer: field(body, "target_buyer"),
+    capital_needed: field(body, "capital_needed"),
+    ideal_lender: field(body, "ideal_lender"),
+    contractor_scope: field(body, "contractor_scope"),
+    operator_scope: field(body, "operator_scope"),
+    jv_structure: field(body, "jv_structure"),
+    title_issue: field(body, "title_issue"),
+
+    ai_route_summary: routeSummary,
+    route_summary: routeSummary,
+    routing_summary: routeSummary,
 
     signal_id: signalId,
     routing_id: routingId,
@@ -470,10 +375,10 @@ function buildDealPayloads(body: AnyRecord, email: string, signalId: string, rou
     photo_url: firstPhoto,
     main_photo_url: firstPhoto,
     primary_photo_url: firstPhoto,
-    photo_urls: photoUrls,
-    photos: photoUrls,
+    photo_urls: photos,
+    photos,
 
-    direct_links: directLinksPending,
+    direct_links: directLinks,
     archived: false,
     deleted: false,
     created_at: now,
@@ -482,126 +387,52 @@ function buildDealPayloads(body: AnyRecord, email: string, signalId: string, rou
 
   const metadata = {
     ...body,
-    ...canonicalFields,
+    ...(typeof body.metadata === "object" && body.metadata ? body.metadata : {}),
+    ...canonical,
+    raw_form_snapshot: typeof body.raw_form_snapshot === "object" ? body.raw_form_snapshot : {},
     canonical_kind: "deal",
-    source: "deal_create_single_canonical_signal",
+    source: "deal_create_full_field_capture",
     source_table: DEAL_TABLE,
   };
 
-  const full = {
-    ...canonicalFields,
-    metadata,
-  };
-
-  const core = {
-    owner_email: email,
-    member_email: email,
-    submitted_by: email,
-    user_email: email,
-    title,
-    description: canonicalFields.description,
-    status: "active",
-    property_type: propertyType,
-    strategy,
-    exit_strategy: exitStrategy,
-    city: canonicalFields.city,
-    state: canonicalFields.state,
-    market,
-    address,
-    asking_price: asking,
-    price: asking,
-    arv,
-    arv_value: arv,
-    repair_estimate: repairs,
-    repairs_needed: repairs,
-    beds: canonicalFields.beds,
-    bedrooms: canonicalFields.bedrooms,
-    baths: canonicalFields.baths,
-    bathrooms: canonicalFields.bathrooms,
-    square_feet: canonicalFields.square_feet,
-    sqft: canonicalFields.sqft,
-    year_built: canonicalFields.year_built,
-    occupancy: canonicalFields.occupancy,
-    zoning: canonicalFields.zoning,
-    acres: canonicalFields.acres,
-    utilities: canonicalFields.utilities,
-    road_access: canonicalFields.road_access,
-    noi: canonicalFields.noi,
-    cap_rate: canonicalFields.cap_rate,
-    target_buyer: canonicalFields.target_buyer,
-    capital_needed: canonicalFields.capital_needed,
-    ideal_lender: canonicalFields.ideal_lender,
-    contractor_scope: canonicalFields.contractor_scope,
-    operator_scope: canonicalFields.operator_scope,
-    jv_structure: canonicalFields.jv_structure,
-    title_issue: canonicalFields.title_issue,
-    route_summary: routeSummary,
-    ai_route_summary: routeSummary,
-    routing_summary: routeSummary,
-    routing_needs: routingNeeds,
-    deal_needs: canonicalFields.deal_needs,
-    needs: canonicalFields.needs,
-    distress_signals: distressSignals,
-    seller_situation: sellerSituation,
-    signal_id: signalId,
-    routing_id: routingId,
-    activity_id: activityId,
-    canonical_event_id: signalId,
-    canonical_project_key: canonicalProjectKey,
-    image_url: firstPhoto,
-    photo_url: firstPhoto,
-    main_photo_url: firstPhoto,
-    photo_urls: photoUrls,
-    photos: photoUrls,
-    direct_links: directLinksPending,
-    metadata,
-    created_at: now,
-    updated_at: now,
-  };
-
-  const minimal = {
-    owner_email: email,
-    member_email: email,
-    title,
-    property_type: propertyType,
-    city: canonicalFields.city,
-    state: canonicalFields.state,
-    status: "active",
-    main_photo_url: firstPhoto,
-    photo_urls: photoUrls,
-    canonical_event_id: signalId,
-    canonical_project_key: canonicalProjectKey,
-    metadata,
-    created_at: now,
-    updated_at: now,
-  };
-
   return {
-    full,
-    core,
-    minimal,
+    full: {
+      ...canonical,
+      metadata,
+    },
+    core: {
+      owner_email: email,
+      member_email: email,
+      submitted_by: email,
+      user_email: email,
+      title,
+      property_type: type,
+      city,
+      state,
+      market,
+      status: "active",
+      image_url: firstPhoto,
+      main_photo_url: firstPhoto,
+      photo_urls: photos,
+      photos,
+      canonical_event_id: signalId,
+      canonical_project_key: canonicalProjectKey,
+      metadata,
+      created_at: now,
+      updated_at: now,
+    },
     metadata,
-    photoUrls,
-    routeSummary,
-    propertyType,
-    title,
-    canonicalProjectKey,
-    canonicalFields,
+    photos,
+    summary: routeSummary,
+    canonical,
   };
 }
 
 export async function GET() {
-  const client = supabaseAdmin();
-
-  if (!client) {
-    return json({ ok: false, error: "Supabase environment variables are missing." }, 500);
-  }
-
   return json({
     ok: true,
     route: "/api/deal/create",
-    writes_to: DEAL_TABLE,
-    mirrors: "/api/pain/create",
+    table: DEAL_TABLE,
     message: "Deal create route is live.",
   });
 }
@@ -622,184 +453,47 @@ export async function POST(request: Request) {
   }
 
   const cookieHeader = request.headers.get("cookie") || "";
-  const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
+  const cookieMatch = cookieHeader.match(/vf_email=([^;]+)/);
+  const cookieEmail = cookieMatch?.[1] ? decodeURIComponent(cookieMatch[1]) : "";
 
-  const submittedBy =
+  const email =
     cleanLower(request.headers.get("x-vf-email")) ||
-    cleanLower(firstText(body, ["submitted_by", "submittedBy", "user_email", "member_email", "memberEmail", "owner_email", "email"])) ||
-    cleanLower(cookieHeader.match(/vf_email=([^;]+)/)?.[1] ? decodeURIComponent(cookieHeader.match(/vf_email=([^;]+)/)?.[1] || "") : "") ||
+    cleanLower(field(body, "owner_email", "member_email", "submitted_by", "submitted_by_email", "user_email", "email")) ||
+    cleanLower(cookieEmail) ||
     "unknown";
 
-  const title = firstText(body, ["title", "deal_title", "headline", "name"]);
-  const city = firstText(body, ["city"]);
+  const title = field(body, "title", "deal_title", "project_title");
+  const city = field(body, "city");
 
   if (!title) return json({ ok: false, error: "Deal title is required." }, 400);
   if (!city) return json({ ok: false, error: "City is required." }, 400);
 
-  const signalId = firstText(body, ["signal_id", "signalId"]) || makeId("deal_signal");
-  const routingId = firstText(body, ["routing_id", "routingId"]) || signalId;
-  const activityId = firstText(body, ["activity_id", "activityId"]) || makeId("deal_activity");
+  const url = new URL(request.url);
+  const baseUrl = `${url.protocol}//${url.host}`;
+  const signalId = field(body, "signal_id", "signalId", "canonical_event_id") || makeId("deal_signal");
+  const routingId = field(body, "routing_id", "routingId") || signalId;
+  const activityId = field(body, "activity_id", "activityId") || makeId("deal_activity");
   const pendingLinks = makeDirectLinks(baseUrl, "pending", signalId, routingId, activityId);
+  const built = buildPayload(body, email, signalId, routingId, activityId, pendingLinks);
 
-  const built = buildDealPayloads(body, submittedBy, signalId, routingId, activityId, pendingLinks);
-  const dealInsert = await adaptiveInsert(client, DEAL_TABLE, [built.full, built.core, built.minimal]);
+  const inserted = await adaptiveInsert(client, DEAL_TABLE, [built.full, built.core]);
 
-  if (!dealInsert.ok || !dealInsert.data) {
+  if (!inserted.ok || !inserted.data) {
     return json(
       {
         ok: false,
         error: "Deal could not be saved.",
         table: DEAL_TABLE,
-        supabase_error: dealInsert.error,
-        attempts: dealInsert.attempts,
+        supabase_error: inserted.error,
+        attempts: inserted.attempts,
       },
       500
     );
   }
 
-  const saved = dealInsert.data || {};
+  const saved = inserted.data;
   const dealId = clean(saved.id) || clean(saved.deal_id) || signalId;
-  const savedLinks = makeDirectLinks(baseUrl, dealId, signalId, routingId, activityId);
-  const role = roleFromText([built.routeSummary, built.canonicalFields.routing_needs, built.canonicalFields.distress_signals].map(clean).join(" "));
-  const action = actionFromRole(role);
-  const priority = priorityFromBody(body);
-  const now = new Date().toISOString();
-
-  const sharedMeta = {
-    ...built.metadata,
-    deal_id: dealId,
-    item_id: dealId,
-    related_deal_id: dealId,
-    signal_id: signalId,
-    routing_id: routingId,
-    activity_id: activityId,
-    direct_links: savedLinks,
-    generated_by: "deal_create_single_canonical_signal",
-    canonical_event_id: signalId,
-    canonical_project_key: built.canonicalProjectKey,
-    source_table: DEAL_TABLE,
-  };
-
-  const activityInsert = await adaptiveInsert(client, "vf_activity_events", [
-    {
-      event_type: "deal_created",
-      event_id: activityId,
-      item_id: dealId,
-      related_deal_id: dealId,
-      deal_id: dealId,
-      signal_id: signalId,
-      canonical_event_id: signalId,
-      canonical_project_key: built.canonicalProjectKey,
-      member_email: submittedBy,
-      owner_email: submittedBy,
-      title: built.title,
-      event_title: built.title,
-      description: built.routeSummary,
-      event_description: built.routeSummary,
-      status: "new",
-      visibility: "owner",
-      source: "deal_mirror",
-      source_table: DEAL_TABLE,
-      metadata: sharedMeta,
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      event_type: "deal_created",
-      event_title: built.title,
-      event_description: built.routeSummary,
-      member_email: submittedBy,
-      metadata: sharedMeta,
-    },
-  ]);
-
-  const routingInsert = await adaptiveInsert(client, "vf_routing_actions", [
-    {
-      action_type: "deal_routing_needed",
-      action,
-      routing_action: action,
-      signal_id: signalId,
-      alert_id: signalId,
-      routing_id: routingId,
-      item_id: dealId,
-      deal_id: dealId,
-      canonical_event_id: signalId,
-      canonical_project_key: built.canonicalProjectKey,
-      member_email: submittedBy,
-      owner_email: submittedBy,
-      title: built.title,
-      note: built.routeSummary,
-      notes: built.routeSummary,
-      reason: built.routeSummary,
-      route_summary: built.routeSummary,
-      routing_summary: built.routeSummary,
-      status: "new",
-      routing_status: "new",
-      priority,
-      role_match: role,
-      target_role: role,
-      route_context: built.canonicalFields.routing_needs || role,
-      source: "deal_mirror",
-      source_table: DEAL_TABLE,
-      metadata: sharedMeta,
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      signal_id: signalId,
-      item_id: dealId,
-      title: built.title,
-      note: built.routeSummary,
-      action,
-      priority,
-      metadata: sharedMeta,
-    },
-  ]);
-
-  const signalInsert = await adaptiveInsert(client, "vf_routing_signals", [
-    {
-      signal_id: signalId,
-      routing_id: routingId,
-      item_id: dealId,
-      deal_id: dealId,
-      canonical_event_id: signalId,
-      canonical_project_key: built.canonicalProjectKey,
-      member_email: submittedBy,
-      owner_email: submittedBy,
-      title: built.title,
-      signal_type: "deal",
-      type: "deal",
-      status: "new",
-      priority,
-      market: built.canonicalFields.market,
-      city: built.canonicalFields.city,
-      state: built.canonicalFields.state,
-      asset_type: built.canonicalFields.asset_type,
-      property_type: built.canonicalFields.property_type,
-      note: built.routeSummary,
-      notes: built.routeSummary,
-      description: built.routeSummary,
-      route_summary: built.routeSummary,
-      routing_summary: built.routeSummary,
-      ai_route_summary: built.routeSummary,
-      source: "deal_mirror",
-      source_table: DEAL_TABLE,
-      metadata: sharedMeta,
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      signal_id: signalId,
-      item_id: dealId,
-      member_email: submittedBy,
-      title: built.title,
-      signal_type: "deal",
-      status: "new",
-      note: built.routeSummary,
-      metadata: sharedMeta,
-    },
-  ]);
+  const directLinks = makeDirectLinks(baseUrl, dealId, signalId, routingId, activityId);
 
   return json({
     ok: true,
@@ -811,21 +505,24 @@ export async function POST(request: Request) {
     routing_id: routingId,
     activity_id: activityId,
     canonical_event_id: signalId,
-    canonical_project_key: built.canonicalProjectKey,
-    photos_saved: built.photoUrls.length,
-    direct_links: savedLinks,
-    saved_to: {
-      deal: Boolean(dealInsert.ok),
-      activity: Boolean(activityInsert.ok),
-      routing_action: Boolean(routingInsert.ok),
-      routing_signal: Boolean(signalInsert.ok),
-    },
-    secondary_errors: {
-      activity: activityInsert.ok ? null : activityInsert.error,
-      routing_action: routingInsert.ok ? null : routingInsert.error,
-      routing_signal: signalInsert.ok ? null : signalInsert.error,
-    },
+    canonical_project_key: built.canonical.canonical_project_key,
+    photos_saved: built.photos.length,
+    direct_links: directLinks,
     record: saved,
-    message: "Deal saved and routed into VaultForge.",
+    field_check: {
+      title: built.canonical.title,
+      city: built.canonical.city,
+      state: built.canonical.state,
+      asking_price: built.canonical.asking_price,
+      arv: built.canonical.arv,
+      repair_estimate: built.canonical.repair_estimate,
+      beds: built.canonical.beds,
+      baths: built.canonical.baths,
+      square_feet: built.canonical.square_feet,
+      year_built: built.canonical.year_built,
+      routing_needs: built.canonical.routing_needs,
+      distress_signals: built.canonical.distress_signals,
+    },
+    message: "Deal saved with full field capture.",
   });
 }
