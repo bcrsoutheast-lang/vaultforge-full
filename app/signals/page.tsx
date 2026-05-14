@@ -284,6 +284,29 @@ function shouldSeeOf(row: Row) {
   return ["Buyer", "Operator", "Capital"];
 }
 
+function relatedRoomHref(row: Row) {
+  const r = merged(row);
+  const links = r.direct_links && typeof r.direct_links === "object" ? r.direct_links : {};
+
+  const directPainRoom = clean(links.pain_room || r.pain_room_url || r.pain_room || "");
+  if (directPainRoom) {
+    try {
+      const url = new URL(directPainRoom);
+      return `${url.pathname}${url.search || ""}`;
+    } catch {
+      if (directPainRoom.startsWith("/")) return directPainRoom;
+    }
+  }
+
+  const painId = first(r.pain_id, r.request_id, r.item_id);
+  if (painId) return `/pain-room/${encodeURIComponent(painId)}`;
+
+  const dealId = first(r.deal_id, r.project_id);
+  if (dealId) return `/deal/detail?id=${encodeURIComponent(dealId)}`;
+
+  return "/pain-feed";
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -365,8 +388,7 @@ function RecordCard({ row, email, mode }: { row: Row; email: string; mode: "aler
   const itemId = itemIdOf(row);
   const image = imgOf(row);
   const owner = ownerEmailOf(row);
-  const signalHref = signalId ? `/signals/${encodeURIComponent(signalId)}` : "/signals";
-  const roomHref = itemId ? `/pain-room/${encodeURIComponent(itemId)}` : signalHref;
+  const roomHref = relatedRoomHref(row);
 
   return (
     <article style={card}>
