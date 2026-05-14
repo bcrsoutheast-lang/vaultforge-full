@@ -288,6 +288,19 @@ function relatedRoomHref(row: Row) {
   const r = merged(row);
   const links = r.direct_links && typeof r.direct_links === "object" ? r.direct_links : {};
 
+  const looksLikePain =
+    Boolean(r.pain_id || r.pain_type || r.problem_type || r.help_requested || r.requested_help);
+
+  /*
+    Important:
+    Pain Room lookup is most reliable with the actual saved row id from pain feed.
+    The generated pain_id/signal_id can exist but may not be the id that /pain-room/[id] resolves.
+  */
+  const savedPainRowId = looksLikePain ? first(row.id, r.id) : "";
+  if (savedPainRowId && !String(savedPainRowId).startsWith("pain_signal_")) {
+    return `/pain-room/${encodeURIComponent(savedPainRowId)}`;
+  }
+
   const directPainRoom = clean(links.pain_room || r.pain_room_url || r.pain_room || "");
   if (directPainRoom) {
     try {
@@ -299,13 +312,11 @@ function relatedRoomHref(row: Row) {
   }
 
   const painId = first(r.pain_id, r.request_id, r.item_id);
-
   if (painId) {
     return `/pain-room/${encodeURIComponent(painId)}`;
   }
 
   const dealId = first(r.deal_id, r.project_id);
-
   if (dealId) {
     return `/deal/detail?id=${encodeURIComponent(dealId)}`;
   }
@@ -434,13 +445,7 @@ function RecordCard({ row, email, mode }: { row: Row; email: string; mode: "aler
 
       <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
         <Link href="/dashboard" style={ghost}>Dashboard</Link>
-        <Link href={roomHref} style={button}>
-          {roomHref.includes("/pain-room/")
-            ? "Open Pain Room"
-            : roomHref.includes("/deal/detail")
-            ? "Open Deal Room"
-            : "Open Feed"}
-        </Link>
+        <Link href={roomHref} style={button}>Open Related Room</Link>
         {signalId ? <Link href={connectHref(row, email)} style={ghost}>Message Owner</Link> : null}
       </div>
     </article>
