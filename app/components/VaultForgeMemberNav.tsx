@@ -19,14 +19,11 @@ function cleanEmail(value: unknown) {
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
-
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${name}=`));
-
   if (!match) return "";
-
   try {
     return decodeURIComponent(match.slice(name.length + 1));
   } catch {
@@ -38,7 +35,6 @@ function getEmail() {
   if (typeof window === "undefined") return "";
 
   const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-
   for (const key of keys) {
     const localValue = cleanEmail(window.localStorage.getItem(key));
     if (localValue.includes("@")) return localValue;
@@ -52,36 +48,41 @@ function getEmail() {
 
 function workspaceFromPath(pathname: string) {
   if (pathname === "/" || pathname.includes("dashboard")) return "Command Center";
-  if (pathname.includes("pain-feed")) return "Pressure Feed";
-  if (pathname.includes("pain-room")) return "Pressure Room";
-  if (pathname.includes("pain")) return "Submit Pressure";
+  if (pathname.includes("opportunity-rooms")) return "Opportunity Rooms";
+  if (pathname.includes("pressure-rooms")) return "Pressure Rooms";
+  if (pathname.includes("saved-rooms")) return "Saved Rooms";
+  if (pathname.includes("archived-rooms")) return "Archived Rooms";
+  if (pathname.includes("deleted-rooms")) return "Deleted Rooms";
+  if (pathname.includes("opportunity-room")) return "Opportunity Room";
+  if (pathname.includes("pressure-room")) return "Pressure Room";
+  if (pathname.includes("workstations") || pathname.includes("projects")) return "Workstations";
   if (pathname.includes("submit")) return "Submit Opportunity";
-  if (pathname.includes("smart-ai") || pathname.includes("intelligence")) return "Intelligence";
+  if (pathname.includes("pain")) return "Submit Pressure";
+  if (pathname.includes("intelligence") || pathname.includes("smart-ai")) return "Intelligence";
   if (pathname.includes("messages")) return "Messages";
-  if (pathname.includes("projects") || pathname.includes("deal")) return "Workstations";
   if (pathname.includes("members") || pathname.includes("network")) return "Network";
-  if (pathname.includes("profile")) return "Profile";
-  if (pathname.includes("admin")) return "Admin";
   return "Command Center";
 }
 
 function isActive(pathname: string, href: string, key: string, active = "") {
   const current = active.toLowerCase();
-  if (current && (current === key.toLowerCase() || current === href.toLowerCase())) return true;
   const cleanHref = href.split("?")[0];
+
+  if (current && (current === key.toLowerCase() || current === cleanHref.toLowerCase())) return true;
   if (cleanHref === "/dashboard") return pathname === "/dashboard" || pathname === "/";
-  if (cleanHref === "/submit") return pathname === "/submit";
-  if (cleanHref === "/pain") return pathname === "/pain";
-  if (cleanHref === "/workstations" || cleanHref === "/projects") return pathname.startsWith("/projects") || pathname.startsWith("/workstations") || pathname.startsWith("/deal") || pathname.startsWith("/opportunity-room") || pathname.startsWith("/pressure-room");
+  if (cleanHref === "/opportunity-rooms") return pathname.startsWith("/opportunity-rooms") || pathname.startsWith("/opportunity-room");
+  if (cleanHref === "/pressure-rooms") return pathname.startsWith("/pressure-rooms") || pathname.startsWith("/pressure-room");
+  if (cleanHref === "/workstations") return pathname.startsWith("/workstations") || pathname.startsWith("/projects");
+  if (cleanHref === "/intelligence") return pathname.startsWith("/intelligence") || pathname.startsWith("/smart-ai");
   if (cleanHref === "/members") return pathname.startsWith("/members") || pathname.startsWith("/network");
   return pathname.startsWith(cleanHref);
 }
 
 const links = [
-  { label: "Command Center", href: "/dashboard", key: "dashboard", tag: "HOME" },
-  { label: "Submit Opportunity", href: "/submit", key: "submit", tag: "UPSIDE" },
-  { label: "Submit Pressure", href: "/pain", key: "pain", tag: "FIX" },
-  { label: "Workstations", href: "/workstations", key: "projects", tag: "ROOMS" },
+  { label: "Command", href: "/dashboard", key: "dashboard", tag: "HOME" },
+  { label: "Opportunity Rooms", href: "/opportunity-rooms", key: "opportunity", tag: "UPSIDE" },
+  { label: "Pressure Rooms", href: "/pressure-rooms", key: "pressure", tag: "FIX" },
+  { label: "Workstations", href: "/workstations", key: "workstations", tag: "5S" },
   { label: "Intelligence", href: "/intelligence", key: "intelligence", tag: "AI" },
   { label: "Messages", href: "/messages", key: "messages", tag: "COMMS" },
   { label: "Network", href: "/members", key: "members", tag: "OPS" },
@@ -183,49 +184,20 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
           filter: brightness(1.08);
           transition: all .18s ease;
         }
-
-        .vf-command-link {
-          transition: all .18s ease;
-        }
-
+        .vf-command-link { transition: all .18s ease; }
         @media (max-width: 1120px) {
-          .vf-command-grid {
-            grid-template-columns: repeat(4,minmax(0,1fr)) !important;
-          }
+          .vf-command-grid { grid-template-columns: repeat(4,minmax(0,1fr)) !important; }
         }
-
         @media (max-width: 920px) {
-          .vf-command-top {
-            grid-template-columns: 1fr !important;
-            text-align: center !important;
-          }
-
-          .vf-logo-link {
-            justify-content: center !important;
-          }
-
-          .vf-command-right {
-            justify-content: center !important;
-          }
-
-          .vf-command-grid {
-            grid-template-columns: repeat(2,minmax(0,1fr)) !important;
-          }
+          .vf-command-top { grid-template-columns: 1fr !important; text-align: center !important; }
+          .vf-logo-link { justify-content: center !important; }
+          .vf-command-right { justify-content: center !important; }
+          .vf-command-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
         }
-
         @media (max-width: 520px) {
-          .vf-command-grid {
-            grid-template-columns: 1fr !important;
-          }
-
-          .vf-command-link {
-            min-height: 58px !important;
-          }
-
-          .vf-logo-mark {
-            width: 104px !important;
-            height: 66px !important;
-          }
+          .vf-command-grid { grid-template-columns: 1fr !important; }
+          .vf-command-link { min-height: 58px !important; }
+          .vf-logo-mark { width: 104px !important; height: 66px !important; }
         }
       `}</style>
 
@@ -242,85 +214,34 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
             <div style={{ color: "#f8e7b0", fontWeight: 950, letterSpacing: ".16em", fontSize: 14 }}>
               VAULTFORGE
             </div>
-            <div
-              style={{
-                color: "#cbd5e1",
-                fontSize: 13,
-                marginTop: 4,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              One Command Area · Two Intake Lanes
+            <div style={{ color: "#cbd5e1", fontSize: 13, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Command Center of Money · 5S Flow
             </div>
           </div>
         </Link>
 
         <div style={center}>
-          <div
-            style={{
-              color: "#e8c46b",
-              fontWeight: 950,
-              letterSpacing: ".18em",
-              fontSize: 12,
-              textTransform: "uppercase",
-            }}
-          >
-            VaultForge Intelligence Command
+          <div style={{ color: "#e8c46b", fontWeight: 950, letterSpacing: ".18em", fontSize: 12, textTransform: "uppercase" }}>
+            VaultForge Resolution Engine
           </div>
-          <div
-            style={{
-              fontSize: "clamp(25px,5vw,44px)",
-              lineHeight: 1,
-              fontWeight: 950,
-              marginTop: 6,
-              letterSpacing: "-.045em",
-            }}
-          >
+          <div style={{ fontSize: "clamp(25px,5vw,44px)", lineHeight: 1, fontWeight: 950, marginTop: 6, letterSpacing: "-.045em" }}>
             {workspace}
           </div>
           <div style={{ color: "#94a3b8", lineHeight: 1.35, marginTop: 8, fontSize: 14 }}>
-            {subtitle || "Opportunity + Pressure enter one operating system."}
+            {subtitle || "Every room has a lane, a folder, an owner, and a next move."}
           </div>
         </div>
 
-        <div
-          className="vf-command-right"
-          style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", minWidth: 0 }}
-        >
+        <div className="vf-command-right" style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
           <span style={pill}>{email || "Signed in"}</span>
-          <Link
-            href="/dashboard"
-            className="vf-command-pill"
-            style={{
-              ...pill,
-              color: "#f8e7b0",
-              borderColor: "rgba(232,196,107,.30)",
-              background: "rgba(232,196,107,.09)",
-            }}
-          >
-            Command
-          </Link>
-          <Link
-            href="/logout"
-            className="vf-command-pill"
-            style={{
-              ...pill,
-              color: "#ffd0d0",
-              borderColor: "rgba(255,120,120,.28)",
-              background: "rgba(255,120,120,.065)",
-            }}
-          >
-            Logout
-          </Link>
+          <Link href="/dashboard" className="vf-command-pill" style={{ ...pill, color: "#f8e7b0", borderColor: "rgba(232,196,107,.30)", background: "rgba(232,196,107,.09)" }}>Command</Link>
+          <Link href="/logout" className="vf-command-pill" style={{ ...pill, color: "#ffd0d0", borderColor: "rgba(255,120,120,.28)", background: "rgba(255,120,120,.065)" }}>Logout</Link>
         </div>
       </section>
 
       <nav className="vf-command-grid" style={grid}>
         {links.map((item) => {
           const activeLink = isActive(pathname, item.href, item.key, active);
-
           return (
             <Link
               key={item.href}
@@ -343,14 +264,7 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
                 boxShadow: activeLink ? "0 14px 34px rgba(232,196,107,.16)" : "none",
               }}
             >
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 950,
-                  letterSpacing: ".16em",
-                  opacity: activeLink ? 0.84 : 0.62,
-                }}
-              >
+              <span style={{ fontSize: 10, fontWeight: 950, letterSpacing: ".16em", opacity: activeLink ? 0.84 : 0.62 }}>
                 {item.tag}
               </span>
               <span style={{ fontWeight: 950, lineHeight: 1.05 }}>{item.label}</span>
