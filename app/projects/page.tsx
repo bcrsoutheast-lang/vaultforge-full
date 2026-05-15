@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Row = Record<string, any>;
-type FolderMode = "active" | "saved" | "archived";
+type FolderMode = "active" | "opportunity" | "pressure" | "saved" | "archived" | "deleted";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -789,6 +789,8 @@ function WorkstationCard({
   onArchive,
   onRestore,
   onDelete,
+  onRestoreDeleted,
+  isDeleted,
 }: {
   row: Row;
   viewer: string;
@@ -799,6 +801,8 @@ function WorkstationCard({
   onArchive: () => void;
   onRestore: () => void;
   onDelete: () => void;
+  onRestoreDeleted: () => void;
+  isDeleted: boolean;
 }) {
   const id = idOf(row);
   const dealId = dealIdOf(row);
@@ -899,9 +903,15 @@ function WorkstationCard({
           <div className="vf-actions" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
             <Link href={detailHref} style={button}>{source === "deal" ? "Open Opportunity Room" : source === "pain" ? "Open Pressure Room" : "Open Workstation"}</Link>
             <Link href={contactHref} style={ghost}>Contact Source</Link>
-            {!isSaved ? <button type="button" onClick={onSave} style={ghost}>Save</button> : <button type="button" onClick={onUnsave} style={ghost}>Unsave</button>}
-            {!isArchived ? <button type="button" onClick={onArchive} style={ghost}>Archive</button> : <button type="button" onClick={onRestore} style={ghost}>Restore</button>}
-            {(isSaved || isArchived) ? <button type="button" onClick={onDelete} style={dangerGhost}>Delete</button> : null}
+            {isDeleted ? (
+              <button type="button" onClick={onRestoreDeleted} style={button}>Restore From Deleted</button>
+            ) : (
+              <>
+                {!isSaved ? <button type="button" onClick={onSave} style={ghost}>Save</button> : <button type="button" onClick={onUnsave} style={ghost}>Unsave</button>}
+                {!isArchived ? <button type="button" onClick={onArchive} style={ghost}>Archive</button> : <button type="button" onClick={onRestore} style={ghost}>Restore From Archive</button>}
+                <button type="button" onClick={onDelete} style={dangerGhost}>Delete</button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1191,20 +1201,44 @@ export default function ProjectsPage() {
     persistArchived(nextArchived);
   }
 
+  function restoreDeletedProject(row: Row) {
+    const key = canonicalKey(row);
+    if (!key) return;
+    const nextDeleted = new Set(deletedIds);
+    nextDeleted.delete(key);
+    persistDeleted(nextDeleted);
+  }
+
+  function emptyDeletedFolder() {
+    persistDeleted(new Set());
+    setFolder("active");
+  }
+
   const visibleItems = useMemo(() => {
     return items.filter((item) => {
       const key = canonicalKey(item);
       if (!key) return false;
-      if (deletedIds.has(key)) return false;
 
+      const deleted = deletedIds.has(key);
       const saved = savedIds.has(key);
       const archived = archivedIds.has(key);
+      const source = sourceOf(item);
+
+      if (folder === "deleted") {
+        if (!deleted) return false;
+      } else {
+        if (deleted) return false;
+      }
 
       if (selectedState !== "All" && stateOf(item) !== selectedState) return false;
       if (selectedCounty !== "All" && countyOf(item) !== selectedCounty) return false;
 
+      if (folder === "opportunity") return source === "deal" && !archived;
+      if (folder === "pressure") return source === "pain" && !archived;
       if (folder === "saved") return saved && !archived;
       if (folder === "archived") return archived;
+      if (folder === "deleted") return deleted;
+
       return !archived;
     });
   }, [items, savedIds, archivedIds, deletedIds, folder, selectedState, selectedCounty]);
@@ -1212,13 +1246,25 @@ export default function ProjectsPage() {
   const bucketBaseItems = useMemo(() => {
     return items.filter((item) => {
       const key = canonicalKey(item);
-      if (!key || deletedIds.has(key)) return false;
+      if (!key) return false;
 
+      const deleted = deletedIds.has(key);
       const saved = savedIds.has(key);
       const archived = archivedIds.has(key);
+      const source = sourceOf(item);
 
+      if (folder === "deleted") {
+        if (!deleted) return false;
+      } else {
+        if (deleted) return false;
+      }
+
+      if (folder === "opportunity") return source === "deal" && !archived;
+      if (folder === "pressure") return source === "pain" && !archived;
       if (folder === "saved") return saved && !archived;
       if (folder === "archived") return archived;
+      if (folder === "deleted") return deleted;
+
       return !archived;
     });
   }, [items, savedIds, archivedIds, deletedIds, folder]);
@@ -1289,6 +1335,10 @@ export default function ProjectsPage() {
       withPhotos: visibleItems.filter((item) => photosOf(item).length).length,
       saved: activeSavedItems.length,
       archived: archivedItems.length,
+      deleted: items.filter((item) => {
+        const key = canonicalKey(item);
+        return key && deletedIds.has(key);
+      }).length,
       avgFailure: visibleItems.length ? Math.round(visibleItems.reduce((sum, item) => sum + failureIndex(item), 0) / visibleItems.length) : 0,
     };
   }, [items, visibleItems, savedIds, archivedIds, deletedIds]);
@@ -1342,11 +1392,15 @@ export default function ProjectsPage() {
             <Mini labelText="Avg Failure" value={`${counts.avgFailure}%`} />
           </div>
 
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-            <button type="button" onClick={() => setFolder("active")} style={folder === "active" ? button : ghost}>Active</button>
-            <button type="button" onClick={() => setFolder("saved")} style={folder === "saved" ? button : ghost}>Saved</button>
-            <button type="button" onClick={() => setFolder("archived")} style={folder === "archived" ? button : ghost}>Archived</button>
+          <div className="vf-actions" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10, marginTop: 16 }}>
+            <button type="button" onClick={() => setFolder("active")} style={folder === "active" ? button : ghost}>Active ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key); }).length})</button>
+            <button type="button" onClick={() => setFolder("opportunity")} style={folder === "opportunity" ? button : ghost}>Opportunity Rooms ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key) && sourceOf(item) === "deal"; }).length})</button>
+            <button type="button" onClick={() => setFolder("pressure")} style={folder === "pressure" ? button : ghost}>Pressure Rooms ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key) && sourceOf(item) === "pain"; }).length})</button>
+            <button type="button" onClick={() => setFolder("saved")} style={folder === "saved" ? button : ghost}>Saved ({counts.saved})</button>
+            <button type="button" onClick={() => setFolder("archived")} style={folder === "archived" ? button : ghost}>Archived ({counts.archived})</button>
+            <button type="button" onClick={() => setFolder("deleted")} style={folder === "deleted" ? dangerGhost : ghost}>Deleted ({counts.deleted})</button>
             <button type="button" onClick={load} style={ghost}>Refresh</button>
+            {folder === "deleted" ? <button type="button" onClick={emptyDeletedFolder} style={dangerGhost}>Empty Deleted</button> : null}
             <Link href="/submit" style={ghost}>Submit Opportunity</Link>
             <Link href="/pain" style={ghost}>Submit Pressure</Link>
           </div>
@@ -1435,11 +1489,13 @@ export default function ProjectsPage() {
                 viewer={email}
                 isSaved={savedIds.has(key)}
                 isArchived={archivedIds.has(key)}
+                isDeleted={deletedIds.has(key)}
                 onSave={() => saveProject(item)}
                 onUnsave={() => unsaveProject(item)}
                 onArchive={() => archiveProject(item)}
                 onRestore={() => restoreProject(item)}
                 onDelete={() => deleteProject(item)}
+                onRestoreDeleted={() => restoreDeletedProject(item)}
               />
             );
           })}
