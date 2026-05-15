@@ -155,26 +155,16 @@ function Metric({
 
   return (
     <div style={glass}>
-      <div
-        style={{
-          color,
-          fontWeight: 950,
-          letterSpacing: ".14em",
-          textTransform: "uppercase",
-          fontSize: 12,
-        }}
-      >
+      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>
         {label}
       </div>
-      <div style={{ fontSize: 56, fontWeight: 1000, lineHeight: 1, marginTop: 14 }}>
-        {value}
-      </div>
+      <div style={{ fontSize: 56, fontWeight: 1000, lineHeight: 1, marginTop: 14 }}>{value}</div>
       <div style={{ ...muted, marginTop: 10 }}>{sub}</div>
     </div>
   );
 }
 
-function ActionCard({
+function CommandCard({
   title,
   body,
   href,
@@ -193,10 +183,10 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className="vf-action-card"
+      className="vf-command-card"
       style={{
         ...glass,
-        minHeight: 184,
+        minHeight: 206,
         textDecoration: "none",
         color: "white",
         display: "flex",
@@ -230,24 +220,15 @@ function ActionCard({
       >
         {tag}
       </div>
-      <h3 className="vf-action-title" style={{ margin: "0 0 10px", fontSize: 26, lineHeight: 1.05 }}>
-        {title}
-      </h3>
+
+      <h3 className="vf-card-title" style={{ margin: "0 0 10px", fontSize: 30, lineHeight: 1.02 }}>{title}</h3>
       <p style={{ ...muted, margin: 0, flex: 1 }}>{body}</p>
       <div style={{ marginTop: 18, fontWeight: 950 }}>Open →</div>
     </Link>
   );
 }
 
-function Bar({
-  label,
-  value,
-  right,
-}: {
-  label: string;
-  value: number;
-  right: string;
-}) {
+function Bar({ label, value, right }: { label: string; value: number; right: string }) {
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, color: "#cbd5e1", fontWeight: 850 }}>
@@ -255,23 +236,8 @@ function Bar({
         <span>{right}</span>
       </div>
 
-      <div
-        style={{
-          height: 14,
-          borderRadius: 999,
-          background: "rgba(255,255,255,.14)",
-          overflow: "hidden",
-          marginTop: 8,
-          border: "1px solid rgba(255,255,255,.08)",
-        }}
-      >
-        <div
-          style={{
-            width: `${value}%`,
-            height: "100%",
-            background: "linear-gradient(90deg,#ff4d4d,#e8c46b,#4ade80,#38bdf8)",
-          }}
-        />
+      <div style={{ height: 14, borderRadius: 999, background: "rgba(255,255,255,.14)", overflow: "hidden", marginTop: 8, border: "1px solid rgba(255,255,255,.08)" }}>
+        <div style={{ width: `${value}%`, height: "100%", background: "linear-gradient(90deg,#ff4d4d,#e8c46b,#4ade80,#38bdf8)" }} />
       </div>
     </div>
   );
@@ -290,14 +256,7 @@ function Notice({
     tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
 
   return (
-    <div
-      style={{
-        border: `1px solid ${color}55`,
-        borderRadius: 20,
-        padding: 16,
-        background: "rgba(255,255,255,.04)",
-      }}
-    >
+    <div style={{ border: `1px solid ${color}55`, borderRadius: 20, padding: 16, background: "rgba(255,255,255,.04)" }}>
       <div style={{ color, fontWeight: 950, letterSpacing: ".12em", textTransform: "uppercase", fontSize: 11 }}>
         {title}
       </div>
@@ -383,7 +342,7 @@ export default function DashboardPage() {
           gap: 16px;
         }
 
-        .vf-action-title {
+        .vf-card-title {
           overflow-wrap: normal;
           word-break: normal;
           hyphens: none;
@@ -414,11 +373,11 @@ export default function DashboardPage() {
             box-sizing: border-box;
           }
 
-          .vf-action-card {
+          .vf-command-card {
             min-height: auto !important;
           }
 
-          .vf-action-title {
+          .vf-card-title {
             font-size: 30px !important;
             line-height: 1.02 !important;
           }
@@ -428,55 +387,48 @@ export default function DashboardPage() {
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Command Center"
-          subtitle="One operating area for opportunity, pressure, intelligence, routing, and execution."
+          subtitle="Clean command folders: opportunity, pressure, workstations, intelligence, messages, network."
           active="dashboard"
         />
 
         <section style={section}>
-          <div className="vf-two" style={{ display: "grid", gridTemplateColumns: "1.22fr .78fr", gap: 20, alignItems: "stretch" }}>
+          <div className="vf-two" style={{ display: "grid", gridTemplateColumns: "1.18fr .82fr", gap: 20, alignItems: "stretch" }}>
             <div>
-              <div style={eyebrow}>VaultForge Operating System</div>
+              <div style={eyebrow}>VaultForge Command Center</div>
 
-              <h1
-                style={{
-                  fontSize: "clamp(54px,10vw,104px)",
-                  lineHeight: 0.88,
-                  letterSpacing: "-.07em",
-                  margin: "12px 0 18px",
-                }}
-              >
-                One command area. Two intake lanes. One intelligence brain.
+              <h1 style={{ fontSize: "clamp(54px,10vw,104px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
+                Clean lanes. Smart rooms. One operating brain.
               </h1>
 
               <p style={{ ...muted, fontSize: 20, maxWidth: 900 }}>
-                Members do not bounce between disconnected apps. Opportunity and Pressure enter the same VaultForge command layer, where the system diagnoses, structures, routes, executes, and resolves.
+                Opportunity and Pressure are not dumped into one messy feed anymore. The command center routes members into clean folders, dedicated rooms, and the intelligence layer that decides what is good, broken, fixable, risky, or worth routing.
               </p>
 
               <div style={{ marginTop: 18 }}>
                 <span style={pill}>Signed in: {email || "unknown"}</span>
                 <span style={pill}>{stats.owner ? "Owner View" : "Member View"}</span>
-                <span style={pill}>Intelligence Engine Active</span>
-                <span style={pill}>Private Operator Network</span>
+                <span style={pill}>Surgeon AI Active</span>
+                <span style={pill}>Folder-Based Workstations</span>
               </div>
 
               <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 22 }}>
-                <Link href="/submit" style={goldButton}>Submit Opportunity</Link>
-                <Link href="/pain" style={goldButton}>Submit Pressure</Link>
-                <Link href="/projects" style={ghostButton}>Open Workstations</Link>
-                <Link href="/smart-ai" style={ghostButton}>Intelligence</Link>
+                <Link href="/projects" style={goldButton}>Open Workstation Folders</Link>
+                <Link href="/submit" style={ghostButton}>Submit Opportunity</Link>
+                <Link href="/pain" style={ghostButton}>Submit Pressure</Link>
+                <Link href="/smart-ai" style={ghostButton}>Surgeon AI</Link>
                 <Link href="/messages" style={ghostButton}>Messages</Link>
               </div>
             </div>
 
             <div style={{ ...glass, background: "rgba(0,0,0,.20)" }}>
-              <div style={eyebrow}>Unified Operating Tape</div>
+              <div style={eyebrow}>Operating Tape</div>
 
               <div style={{ display: "grid", gap: 13, marginTop: 16 }}>
                 {[
-                  ["Opportunity Lane", `${opportunities} active rooms`],
-                  ["Pressure Lane", `${pressure} pressure signals`],
-                  ["Execution Comms", `${messages} message threads`],
-                  ["Operator Network", `${members} members`],
+                  ["Opportunity Rooms", `${opportunities} active rooms`],
+                  ["Pressure Rooms", `${pressure} pressure signals`],
+                  ["Execution Messages", `${messages} conversations`],
+                  ["Network Capacity", `${members} operators/members`],
                   ["Engine", loading ? "Loading..." : "online"],
                 ].map(([left, right]) => (
                   <div
@@ -501,85 +453,79 @@ export default function DashboardPage() {
         </section>
 
         <section className="vf-four" style={{ marginBottom: 20 }}>
-          <Metric label="Opportunity" value={String(opportunities)} sub="Upside, acquisition, monetization, and strategic asset rooms." tone="blue" />
-          <Metric label="Pressure" value={String(pressure)} sub="Distress, bottlenecks, instability, and situations needing intervention." tone="red" />
+          <Metric label="Opportunity Rooms" value={String(opportunities)} sub="Upside, acquisition, monetization, and strategic asset rooms." tone="blue" />
+          <Metric label="Pressure Rooms" value={String(pressure)} sub="Distress, bottlenecks, instability, and situations needing intervention." tone="red" />
           <Metric label="Messages" value={String(messages)} sub="Controlled conversations for routing, source contact, and execution." tone="green" />
-          <Metric label="Network" value={String(members)} sub="Private operating capacity behind the command layer." tone="gold" />
+          <Metric label="Network" value={String(members)} sub="Private operator capacity behind the command layer." tone="gold" />
         </section>
 
         <section style={section}>
-          <div style={eyebrow}>Central Command Area</div>
+          <div style={eyebrow}>Command Folders</div>
 
           <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 8px" }}>
-            Everything enters here. The system decides what to do with it.
+            Pick the lane. Then open the right room.
           </h2>
 
           <p style={{ ...muted, maxWidth: 960, fontSize: 18 }}>
-            Opportunity and Pressure stay as two clear member choices, but the operating brain is unified. The goal is not to list real estate. The goal is to decide whether a situation is good, bad, broken, fixable, profitable, risky, or worth routing.
+            Workstations are now folder based: Opportunity Rooms, Pressure Rooms, Saved, Archived, and Deleted. This keeps the platform clean while the intelligence engine still connects everything underneath.
           </p>
+
+          <div className="vf-four" style={{ marginTop: 16 }}>
+            <CommandCard
+              title="Opportunity Rooms"
+              body="Open the upside lane: deal rooms, acquisition intelligence, structure, capital path, exit strategy, buyer/operator fit, and opportunity scoring."
+              href="/projects"
+              tag="UPSIDE"
+              tone="blue"
+            />
+
+            <CommandCard
+              title="Pressure Rooms"
+              body="Open the problem-solving lane: distress, urgency, funding gaps, contractor breakdowns, seller pressure, timeline collapse, and resolution strategy."
+              href="/projects"
+              tag="FIX"
+              tone="red"
+            />
+
+            <CommandCard
+              title="Surgeon AI"
+              body="Open the intelligence desk that classifies pressure, rewrites weak structures, diagnoses risk, and recommends the next operator move."
+              href="/smart-ai"
+              tag="AI"
+              tone="gold"
+            />
+
+            <CommandCard
+              title="Messages"
+              body="Open execution communications for source contact, route coordination, member requests, and operator follow-up."
+              href="/messages"
+              tag="COMMS"
+              tone="green"
+            />
+          </div>
+        </section>
+
+        <section style={section}>
+          <div style={eyebrow}>System Pressure</div>
 
           <div className="vf-three" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 16, marginTop: 18 }}>
             <div style={glass}>
               <div style={eyebrow}>Command Load</div>
               <Bar label="Total active operating load" value={commandLoad} right={`${commandLoad}%`} />
-              <p style={{ ...muted, marginTop: 14 }}>
-                Combines opportunity rooms, pressure records, messages, and routing activity.
-              </p>
+              <p style={{ ...muted, marginTop: 14 }}>Combines opportunity rooms, pressure rooms, messages, and routing activity.</p>
             </div>
 
             <div style={glass}>
               <div style={eyebrow}>Pressure Load</div>
               <Bar label="Unresolved instability" value={pressureLoad} right={`${pressureLoad}%`} />
-              <p style={{ ...muted, marginTop: 14 }}>
-                Measures problems, urgency, pressure, and background intelligence signals.
-              </p>
+              <p style={{ ...muted, marginTop: 14 }}>Measures problems, urgency, pressure, and background intelligence signals.</p>
             </div>
 
             <div style={glass}>
               <div style={eyebrow}>Execution Movement</div>
               <Bar label="Routing and communication movement" value={executionLoad} right={`${executionLoad}%`} />
-              <p style={{ ...muted, marginTop: 14 }}>
-                Measures how much work is moving toward action, messaging, routing, or resolution.
-              </p>
+              <p style={{ ...muted, marginTop: 14 }}>Measures work moving toward action, messaging, routing, or resolution.</p>
             </div>
-          </div>
-        </section>
-
-        <section style={section}>
-          <div style={eyebrow}>Choose Intake Lane</div>
-
-          <div className="vf-four" style={{ marginTop: 16 }}>
-            <ActionCard
-              title="Submit Opportunity"
-              body="Use this when there is upside: off-market asset, land, commercial, portfolio, acquisition, monetization, capital, or strategic deal flow."
-              href="/submit"
-              tag="UPSIDE"
-              tone="blue"
-            />
-
-            <ActionCard
-              title="Submit Pressure"
-              body="Use this when something is broken, unstable, distressed, stuck, urgent, mispriced, undercapitalized, or needs intervention."
-              href="/pain"
-              tag="FIX"
-              tone="red"
-            />
-
-            <ActionCard
-              title="Open Workstations"
-              body="Review all active rooms. Opportunity and Pressure still route into their working systems without breaking the backend."
-              href="/projects"
-              tag="ROOMS"
-              tone="green"
-            />
-
-            <ActionCard
-              title="Run Intelligence"
-              body="Open the AI layer for smart analysis, routing context, decision support, and operator insight."
-              href="/smart-ai"
-              tag="AI"
-              tone="gold"
-            />
           </div>
         </section>
 
@@ -587,21 +533,9 @@ export default function DashboardPage() {
           <div style={eyebrow}>Operating Doctrine</div>
 
           <div className="vf-three" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, marginTop: 16 }}>
-            <Notice
-              title="Diagnose"
-              body="Identify what is actually happening: good opportunity, bad deal, broken execution, weak structure, pressure, or hidden risk."
-              tone="red"
-            />
-            <Notice
-              title="Rewrite"
-              body="Restructure the path: wholesale, novation, seller finance, contractor stabilization, bridge capital, JV, hold, reroute, or abandon."
-              tone="gold"
-            />
-            <Notice
-              title="Resolve"
-              body="Route the right people, sequence the work, monitor blockers, and move the situation toward execution."
-              tone="green"
-            />
+            <Notice title="Diagnose" body="Identify what is actually happening: opportunity, pressure, weak structure, execution failure, capital gap, or hidden risk." tone="red" />
+            <Notice title="Rewrite" body="Restructure the path: wholesale, novation, seller finance, contractor stabilization, bridge capital, JV, hold, reroute, or abandon." tone="gold" />
+            <Notice title="Resolve" body="Route the right people, sequence the work, monitor blockers, and move the situation toward execution." tone="green" />
           </div>
         </section>
       </div>
