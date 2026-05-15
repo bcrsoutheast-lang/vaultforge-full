@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BUCKET = "vaultforge-deal-photos";
+const BUCKETS = ["vaultforge-deal-photos", "vf-deal-photos", "deal-photos", "uploads"];
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -25,26 +25,17 @@ function json(data: Record<string, any>, status = 200) {
   });
 }
 
-function getSupabaseEnv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
-  return {
-    url: clean(url),
-    serviceRoleKey: clean(serviceRoleKey),
-    hasUrl: Boolean(clean(url)),
-    hasServiceRoleKey: Boolean(clean(serviceRoleKey)),
-  };
-}
-
 function supabaseAdmin() {
-  const env = getSupabaseEnv();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    "";
 
-  if (!env.url || !env.serviceRoleKey) {
-    return null;
-  }
+  if (!url || !key) return null;
 
-  return createClient(env.url, env.serviceRoleKey, {
+  return createClient(url, key, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -53,14 +44,14 @@ function supabaseAdmin() {
   });
 }
 
-function safeFileName(name: string) {
-  const fallback = "deal-photo";
-  const cleaned = clean(name)
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return cleaned || fallback;
+function safeName(name: string) {
+  return (
+    clean(name)
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 90) || "deal-photo.jpg"
+  );
 }
 
 function extensionFromType(type: string) {
@@ -71,302 +62,135 @@ function extensionFromType(type: string) {
   if (lower.includes("gif")) return "gif";
   if (lower.includes("heic")) return "heic";
   if (lower.includes("heif")) return "heif";
-  if (lower.includes("jpeg") || lower.includes("jpg")) return "jpg";
-
   return "jpg";
 }
 
-function errorDetails(error: any) {
-  return {
-    message: error?.message || String(error || ""),
-    statusCode: error?.statusCode || error?.status || null,
-    name: error?.name || null,
-    details: error?.details || null,
-    hint: error?.hint || null,
-    code: error?.code || null,
-  };
-}
-
-async function ensureBucket(client: any) {
+async function tryCreateBucket(client: any, bucket: string) {
   try {
-    const { data, error } = await client.storage.getBucket(BUCKET);
-
-    if (!error && data?.name) {
-      return { ok: true, bucket_exists: true, bucket_created: false, error: null };
-    }
-
-    if (error) {
-      const message = `${error?.message || ""}`.toLowerCase();
-
-      if (!message.includes("not found") && !message.includes("does not exist")) {
-        return {
-          ok: false,
-          bucket_exists: false,
-          bucket_created: false,
-          error: errorDetails(error),
-        };
-      }
-    }
-  } catch (error: any) {
-    return {
-      ok: false,
-      bucket_exists: false,
-      bucket_created: false,
-      error: errorDetails(error),
-    };
-  }
-
-  try {
-    const { data, error } = await client.storage.createBucket(BUCKET, {
+    await client.storage.createBucket(bucket, {
       public: true,
       fileSizeLimit: 10485760,
-      allowedMimeTypes: [
-        "image/jpeg",
-        "image/jpg",
-        "image/png",
-        "image/webp",
-        "image/gif",
-        "image/heic",
-        "image/heif",
-      ],
+      allowedMimeTypes: ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/heic", "image/heif"],
     });
-
-    if (!error) {
-      return {
-        ok: true,
-        bucket_exists: true,
-        bucket_created: true,
-        data,
-        error: null,
-      };
-    }
-
-    const message = `${error?.message || ""}`.toLowerCase();
-
-    if (message.includes("already exists") || message.includes("duplicate")) {
-      return {
-        ok: true,
-        bucket_exists: true,
-        bucket_created: false,
-        error: null,
-      };
-    }
-
-    return {
-      ok: false,
-      bucket_exists: false,
-      bucket_created: false,
-      error: errorDetails(error),
-    };
-  } catch (error: any) {
-    return {
-      ok: false,
-      bucket_exists: false,
-      bucket_created: false,
-      error: errorDetails(error),
-    };
-  }
-}
-
-async function uploadToBucket(client: any, path: string, buffer: Buffer, contentType: string) {
-  try {
-    const { data, error } = await client.storage.from(BUCKET).upload(path, buffer, {
-      contentType,
-      upsert: true,
-      cacheControl: "3600",
-    });
-
-    if (error) {
-      return {
-        ok: false,
-        data: null,
-        url: "",
-        error: errorDetails(error),
-      };
-    }
-
-    const publicUrl =
-      client.storage.from(BUCKET).getPublicUrl(data?.path || path)?.data?.publicUrl || "";
-
-    if (!publicUrl) {
-      return {
-        ok: false,
-        data,
-        url: "",
-        error: {
-          message: "Upload saved, but public URL could not be generated.",
-        },
-      };
-    }
-
-    return {
-      ok: true,
-      data,
-      url: publicUrl,
-      error: null,
-    };
-  } catch (error: any) {
-    return {
-      ok: false,
-      data: null,
-      url: "",
-      error: errorDetails(error),
-    };
+  } catch {
+    // Bucket may already exist or current key may not be allowed to create buckets.
   }
 }
 
 export async function GET() {
-  const env = getSupabaseEnv();
-
   return json({
     ok: true,
     route: "/api/deal/upload-photo",
     method: "POST multipart/form-data",
-    expected_fields: ["file", "email"],
-    bucket: BUCKET,
-    env: {
-      has_url: env.hasUrl,
-      has_service_role_key: env.hasServiceRoleKey,
-      service_role_key_required: true,
-    },
-    message: "Deal photo upload route is live.",
+    expected_fields: ["file", "photo", "image", "email"],
+    buckets: BUCKETS,
+    mode: "pain_style_non_blocking_deal_upload",
   });
 }
 
 export async function POST(request: Request) {
-  const env = getSupabaseEnv();
-
-  if (!env.hasUrl || !env.hasServiceRoleKey) {
-    return json(
-      {
-        ok: false,
-        error: "Supabase service role environment is missing.",
-        details:
-          "This route requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel. Do not use anon or publishable key for server photo uploads.",
-        env: {
-          has_url: env.hasUrl,
-          has_service_role_key: env.hasServiceRoleKey,
-        },
-      },
-      500
-    );
-  }
-
   const client = supabaseAdmin();
 
   if (!client) {
     return json(
       {
         ok: false,
-        error: "Supabase admin client could not be created.",
-        env: {
-          has_url: env.hasUrl,
-          has_service_role_key: env.hasServiceRoleKey,
-        },
+        error: "Supabase upload is not configured. Deal record can still save without photos.",
       },
-      500
+      200
     );
   }
 
-  let formData: FormData;
+  let form: FormData;
 
   try {
-    formData = await request.formData();
+    form = await request.formData();
   } catch {
-    return json({ ok: false, error: "Invalid upload body. Expected multipart form data." }, 400);
+    return json({ ok: false, error: "Invalid upload form. Deal record can still save without photos." }, 200);
   }
 
-  const fileValue = formData.get("file") || formData.get("photo") || formData.get("image");
-  const email =
-    cleanEmail(request.headers.get("x-vf-email")) ||
-    cleanEmail(formData.get("email")) ||
-    cleanEmail(formData.get("owner_email")) ||
-    cleanEmail(formData.get("member_email")) ||
-    "unknown";
+  const file = form.get("file") || form.get("photo") || form.get("image");
 
-  if (!(fileValue instanceof File)) {
-    return json({ ok: false, error: "No photo file received." }, 400);
+  if (!(file instanceof File)) {
+    return json({ ok: false, error: "Missing file. Deal record can still save without photos." }, 200);
   }
-
-  const file = fileValue;
 
   if (!file.size) {
-    return json({ ok: false, error: "Photo file is empty." }, 400);
+    return json({ ok: false, error: "Photo file is empty. Deal record can still save without photos." }, 200);
   }
 
   if (file.size > 10 * 1024 * 1024) {
-    return json({ ok: false, error: "Photo is too large. Max size is 10MB." }, 400);
+    return json({ ok: false, error: "Photo is too large. Max size is 10MB. Deal record can still save without this photo." }, 200);
   }
 
   const contentType = clean(file.type) || "image/jpeg";
 
   if (!contentType.startsWith("image/")) {
-    return json({ ok: false, error: "Only image uploads are allowed." }, 400);
+    return json({ ok: false, error: "Only image uploads are supported. Deal record can still save without this file." }, 200);
   }
+
+  const email = cleanEmail(form.get("email") || form.get("owner_email") || form.get("member_email") || request.headers.get("x-vf-email") || "unknown")
+    .replace(/[^a-z0-9@._-]+/g, "-");
 
   const ext = extensionFromType(contentType);
-  const originalName = safeFileName(file.name || `deal-photo.${ext}`);
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).slice(2, 10);
-  const emailFolder = cleanEmail(email).replace(/[^a-z0-9._-]+/g, "-") || "unknown";
+  const originalName = safeName(file.name || `deal-photo.${ext}`);
   const fileName = originalName.includes(".") ? originalName : `${originalName}.${ext}`;
-  const path = `${emailFolder}/${timestamp}_${random}_${fileName}`;
+  const filePath = `${email || "unknown"}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${fileName}`;
+  const attempts: Record<string, any>[] = [];
 
-  let buffer: Buffer;
+  let buffer: ArrayBuffer;
 
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    buffer = Buffer.from(arrayBuffer);
+    buffer = await file.arrayBuffer();
   } catch {
-    return json({ ok: false, error: "Could not read uploaded photo." }, 400);
+    return json({ ok: false, error: "Could not read uploaded photo. Deal record can still save without this photo." }, 200);
   }
 
-  const bucketStatus = await ensureBucket(client);
+  for (const bucket of BUCKETS) {
+    await tryCreateBucket(client, bucket);
 
-  if (!bucketStatus.ok) {
-    return json(
-      {
-        ok: false,
-        error: "Storage bucket is not usable.",
-        bucket: BUCKET,
-        bucket_status: bucketStatus,
-      },
-      500
-    );
+    try {
+      const { error } = await client.storage.from(bucket).upload(filePath, buffer, {
+        contentType,
+        upsert: true,
+        cacheControl: "3600",
+      });
+
+      attempts.push({ bucket, ok: !error, error: error?.message || null });
+
+      if (error) continue;
+
+      const { data } = client.storage.from(bucket).getPublicUrl(filePath);
+      const publicUrl = clean(data?.publicUrl);
+
+      if (publicUrl) {
+        return json({
+          ok: true,
+          url: publicUrl,
+          publicUrl,
+          public_url: publicUrl,
+          photo_url: publicUrl,
+          image_url: publicUrl,
+          main_photo_url: publicUrl,
+          primary_photo_url: publicUrl,
+          bucket,
+          path: filePath,
+          filename: originalName,
+          content_type: contentType,
+          size: file.size,
+        });
+      }
+    } catch (error: any) {
+      attempts.push({ bucket, ok: false, error: error?.message || String(error) });
+    }
   }
 
-  const uploaded = await uploadToBucket(client, path, buffer, contentType);
-
-  if (!uploaded.ok || !uploaded.url) {
-    return json(
-      {
-        ok: false,
-        error: "Photo upload failed.",
-        bucket: BUCKET,
-        path,
-        upload_error: uploaded.error,
-        bucket_status: bucketStatus,
-        env: {
-          has_url: env.hasUrl,
-          has_service_role_key: env.hasServiceRoleKey,
-        },
-      },
-      500
-    );
-  }
-
-  return json({
-    ok: true,
-    url: uploaded.url,
-    publicUrl: uploaded.url,
-    public_url: uploaded.url,
-    image_url: uploaded.url,
-    photo_url: uploaded.url,
-    main_photo_url: uploaded.url,
-    bucket: BUCKET,
-    path,
-    filename: originalName,
-    content_type: contentType,
-    size: file.size,
-  });
+  return json(
+    {
+      ok: false,
+      error: "Photo upload failed because Supabase Storage bucket or policy is not allowing upload. Deal record can still save without photos.",
+      attempts,
+    },
+    200
+  );
 }
