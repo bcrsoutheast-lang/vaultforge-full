@@ -68,19 +68,20 @@ function workspaceFromPath(pathname: string) {
 function isActive(pathname: string, href: string, key: string, active = "") {
   const current = active.toLowerCase();
   if (current && (current === key.toLowerCase() || current === href.toLowerCase())) return true;
-  if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
-  if (href === "/submit") return pathname === "/submit";
-  if (href === "/pain") return pathname === "/pain";
-  if (href === "/projects") return pathname.startsWith("/projects") || pathname.startsWith("/deal");
-  if (href === "/members") return pathname.startsWith("/members") || pathname.startsWith("/network");
-  return pathname.startsWith(href);
+  const cleanHref = href.split("?")[0];
+  if (cleanHref === "/dashboard") return pathname === "/dashboard" || pathname === "/";
+  if (cleanHref === "/submit") return pathname === "/submit";
+  if (cleanHref === "/pain") return pathname === "/pain";
+  if (cleanHref === "/workstations" || cleanHref === "/projects") return pathname.startsWith("/projects") || pathname.startsWith("/workstations") || pathname.startsWith("/deal") || pathname.startsWith("/opportunity-room") || pathname.startsWith("/pressure-room");
+  if (cleanHref === "/members") return pathname.startsWith("/members") || pathname.startsWith("/network");
+  return pathname.startsWith(cleanHref);
 }
 
 const links = [
   { label: "Command Center", href: "/dashboard", key: "dashboard", tag: "HOME" },
   { label: "Submit Opportunity", href: "/submit", key: "submit", tag: "UPSIDE" },
   { label: "Submit Pressure", href: "/pain", key: "pain", tag: "FIX" },
-  { label: "Workstations", href: "/projects", key: "projects", tag: "ROOMS" },
+  { label: "Workstations", href: "/workstations?folder=active", key: "projects", tag: "ROOMS" },
   { label: "Intelligence", href: "/intelligence", key: "intelligence", tag: "AI" },
   { label: "Messages", href: "/messages", key: "messages", tag: "COMMS" },
   { label: "Network", href: "/members", key: "members", tag: "OPS" },
