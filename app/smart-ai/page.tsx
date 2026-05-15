@@ -170,7 +170,7 @@ function Metric({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function InsightCard({ item }: { item: Insight }) {
+function InsightCard({ item, onHide }: { item: Insight; onHide: (item: Insight) => void }) {
   const color = tone(item.score);
 
   return (
@@ -210,14 +210,48 @@ function InsightCard({ item }: { item: Insight }) {
 
       <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
         <Link href={item.href || "/dashboard"} style={button}>
-          Open Room
+          {item.href === "/projects" ? "Open Projects" : "Open Room"}
         </Link>
         <Link href="/messages" style={ghost}>
           Messages
         </Link>
+        <button type="button" onClick={() => onHide(item)} style={ghost}>
+          Hide
+        </button>
       </div>
     </article>
   );
+}
+
+
+function hiddenKey(email: string) {
+  return `vf_smart_ai_hidden_${email || "guest"}`;
+}
+
+function loadHidden(email: string) {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(hiddenKey(email));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHidden(email: string, ids: string[]) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(hiddenKey(email), JSON.stringify(Array.from(new Set(ids))));
+  } catch {
+    // Local cleanup state is best effort only.
+  }
+}
+
+function insightKey(item: Insight) {
+  return `${item.kind}|${item.id}|${item.title}|${item.market}|${item.href}`;
 }
 
 export default function SmartAIPage() {
@@ -225,6 +259,7 @@ export default function SmartAIPage() {
   const [data, setData] = useState<SmartData>({});
   const [status, setStatus] = useState("Loading Smart AI...");
   const [filter, setFilter] = useState("all");
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
 
   async function load() {
     setStatus("Loading Smart AI...");
@@ -232,6 +267,7 @@ export default function SmartAIPage() {
     try {
       const viewer = currentEmail();
       setEmail(viewer);
+      setHiddenIds(loadHidden(viewer));
 
       if (!viewer) {
         setStatus("Log in to view Smart AI.");
@@ -265,16 +301,30 @@ export default function SmartAIPage() {
   }, []);
 
   const insights = useMemo(() => {
-    const list = Array.isArray(data.insights) ? data.insights : [];
+    const list = (Array.isArray(data.insights) ? data.insights : []).filter(
+      (item) => !hiddenIds.includes(insightKey(item))
+    );
 
     if (filter === "deal") return list.filter((item) => item.kind === "deal");
     if (filter === "pain") return list.filter((item) => item.kind === "pain");
     if (filter === "high") return list.filter((item) => item.score >= 75);
 
     return list;
-  }, [data.insights, filter]);
+  }, [data.insights, filter, hiddenIds]);
 
   const counts = data.counts || {};
+
+
+  function hideInsight(item: Insight) {
+    const next = Array.from(new Set([...hiddenIds, insightKey(item)]));
+    setHiddenIds(next);
+    saveHidden(email, next);
+  }
+
+  function clearHidden() {
+    setHiddenIds([]);
+    saveHidden(email, []);
+  }
 
   return (
     <main style={pageStyle}>
@@ -358,6 +408,9 @@ export default function SmartAIPage() {
                 {label}
               </button>
             ))}
+            <button type="button" onClick={clearHidden} style={ghost}>
+              Clear Hidden
+            </button>
           </div>
         </section>
 
@@ -374,7 +427,7 @@ export default function SmartAIPage() {
 
         <section style={{ display: "grid", gap: 14 }}>
           {insights.map((item) => (
-            <InsightCard key={`${item.kind}-${item.id}-${item.href}`} item={item} />
+            <InsightCard key={insightKey(item)} item={item} onHide={hideInsight} />
           ))}
         </section>
       </div>
