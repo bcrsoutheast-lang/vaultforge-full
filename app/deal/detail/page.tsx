@@ -579,6 +579,12 @@ export default function DealDetailPage() {
               <Link href={returnTo} style={smallGold}>Workstations</Link>
               <Link href="/dashboard" style={smallGhost}>Dashboard</Link>
               <Link href="/projects" style={smallGhost}>Projects</Link>
+              <Link
+                href={`/messages/new?deal_id=${encodeURIComponent(dealId || from(deal, "id", "deal_id") || "")}&target=${encodeURIComponent(owner || "")}`}
+                style={smallGhost}
+              >
+                Message Owner
+              </Link>
               <Link href="/messages" style={smallGhost}>Messages</Link>
               <Link href="/smart-ai" style={smallGhost}>Smart AI</Link>
               {deal ? (
@@ -706,6 +712,12 @@ export default function DealDetailPage() {
                 <Link href="/dashboard" style={ghost}>Dashboard</Link>
                 <Link href="/projects" style={ghost}>Projects</Link>
                 <Link href="/smart-ai" style={ghost}>Smart AI</Link>
+                <Link
+                  href={`/messages/new?deal_id=${encodeURIComponent(dealId || from(deal, "id", "deal_id") || "")}&target=${encodeURIComponent(owner || "")}`}
+                  style={ghost}
+                >
+                  Message Owner
+                </Link>
                 <Link href="/messages" style={ghost}>Messages</Link>
                 <button type="button" onClick={hideFromWorkstations} style={dangerButton}>
                   {roomHidden ? "Hidden from Workstations" : "Hide from Workstations"}
