@@ -283,9 +283,20 @@ function rowHref(row: AnyRow, kind: "deal" | "pain") {
 
   if (!id) return kind === "pain" ? "/pain-feed" : "/projects";
 
-  if (kind === "pain") return `/pain-room/${encodeURIComponent(id)}`;
+  if (kind === "pain") {
+    return `/pain-room/${encodeURIComponent(id)}`;
+  }
 
-  return `/deal/detail?id=${encodeURIComponent(id)}`;
+  /*
+    Only vf_deals is guaranteed to resolve in /deal/detail.
+    Legacy rows from deals/projects/property_cards can look like deals,
+    but their ids may not exist in the deal-detail lookup.
+  */
+  if (row._source_table === "vf_deals") {
+    return `/deal/detail?id=${encodeURIComponent(id)}`;
+  }
+
+  return "/projects";
 }
 
 function scoreRow(row: AnyRow, profile: ReturnType<typeof profileIntel>, kind: "deal" | "pain") {
@@ -378,6 +389,49 @@ function itemCard(row: AnyRow, profile: ReturnType<typeof profileIntel>, kind: "
   };
 }
 
+
+function stableKey(item: AnyRow) {
+  return [
+    item.kind || "",
+    clean(item.title).toLowerCase(),
+    clean(item.market).toLowerCase(),
+  ].join("|");
+}
+
+function sourceRank(item: AnyRow) {
+  if (item.source_table === "vf_deals") return 100;
+  if (item.kind === "pain" && String(item.href || "").startsWith("/pain-room/")) return 90;
+  if (item.source_table === "vf_pain_requests") return 85;
+  if (item.source_table === "pain_requests") return 75;
+  if (item.source_table === "deals") return 60;
+  if (item.source_table === "projects") return 50;
+  if (item.source_table === "property_cards") return 40;
+  return 10;
+}
+
+function dedupeInsights(items: AnyRow[]) {
+  const map = new Map<string, AnyRow>();
+
+  for (const item of items) {
+    const key = stableKey(item);
+    const existing = map.get(key);
+
+    if (!existing) {
+      map.set(key, item);
+      continue;
+    }
+
+    const existingRank = sourceRank(existing) + Number(existing.score || 0);
+    const nextRank = sourceRank(item) + Number(item.score || 0);
+
+    if (nextRank > existingRank) {
+      map.set(key, item);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 export async function GET(request: NextRequest) {
   try {
     const email =
@@ -400,10 +454,12 @@ export async function GET(request: NextRequest) {
     const deals = dealResults.flat();
     const pains = painResults.flat();
 
-    const items = [
+    const rawItems = [
       ...deals.map((row) => itemCard(row, profile, "deal")),
       ...pains.map((row) => itemCard(row, profile, "pain")),
-    ]
+    ];
+
+    const items = dedupeInsights(rawItems)
       .sort((a, b) => b.score - a.score)
       .slice(0, 30);
 
