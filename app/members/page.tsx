@@ -10,7 +10,7 @@ type Member = Record<string, any>;
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
-const STATES = [
+const STATE_OPTIONS = [
   "Georgia",
   "Florida",
   "North Carolina",
@@ -20,7 +20,24 @@ const STATES = [
   "Texas",
 ];
 
-const STATE_ALIASES: Record<string, string> = {
+const ROLE_OPTIONS = [
+  "All",
+  "Buyer",
+  "Seller",
+  "Lender",
+  "Private Money",
+  "Hard Money Lender",
+  "Contractor",
+  "Wholesaler",
+  "Investor",
+  "Developer",
+  "Operator",
+  "Partner",
+  "Realtor",
+  "Broker",
+];
+
+const STATE_MAP: Record<string, string> = {
   ga: "Georgia",
   georgia: "Georgia",
   fl: "Florida",
@@ -38,38 +55,64 @@ const STATE_ALIASES: Record<string, string> = {
 };
 
 function clean(value: unknown) {
-  return String(value || "").trim();
+  return String(value ?? "").trim();
 }
 
-function cleanEmail(value: unknown) {
+function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function normalizeState(value: unknown) {
-  const raw = clean(value).toLowerCase();
-  if (!raw || raw === "all") return "";
-  return STATE_ALIASES[raw] || "";
+function cleanEmail(value: unknown) {
+  return lower(value);
 }
 
-function splitValues(value: unknown): string[] {
+function normalizeState(value: unknown) {
+  const raw = lower(value);
+  if (!raw || raw === "all" || raw === "national") return "";
+  return STATE_MAP[raw] || "";
+}
+
+function unique(values: string[]) {
+  const map = new Map<string, string>();
+
+  for (const value of values) {
+    const text = clean(value);
+    if (!text) continue;
+    map.set(text.toLowerCase(), text);
+  }
+
+  return Array.from(map.values());
+}
+
+function valuesOf(value: unknown): string[] {
+  if (value === null || value === undefined) return [];
+
   if (Array.isArray(value)) {
-    return value.map(clean).filter(Boolean);
+    return value.flatMap((item) => valuesOf(item));
+  }
+
+  if (typeof value === "object") {
+    return [];
   }
 
   const raw = clean(value);
   if (!raw) return [];
 
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.map(clean).filter(Boolean);
+  if (
+    (raw.startsWith("[") && raw.endsWith("]")) ||
+    (raw.startsWith("{") && raw.endsWith("}"))
+  ) {
+    try {
+      const parsed = JSON.parse(raw);
+      return valuesOf(parsed);
+    } catch {
+      // Continue to delimiter split.
     }
-  } catch {
-    // Not JSON. Keep going.
   }
 
   return raw
     .replaceAll("\\n", ",")
+    .replaceAll("\n", ",")
     .replaceAll("|", ",")
     .replaceAll(";", ",")
     .split(",")
@@ -77,27 +120,20 @@ function splitValues(value: unknown): string[] {
     .filter(Boolean);
 }
 
-function unique(values: string[]) {
-  return Array.from(new Set(values.map(clean).filter(Boolean)));
-}
-
 function first(...values: unknown[]) {
   for (const value of values) {
-    if (Array.isArray(value)) {
-      const found = value.find((item) => clean(item));
-      if (found !== undefined) return clean(found);
-      continue;
-    }
+    const list = valuesOf(value);
+    if (list.length) return list[0];
 
     const text = clean(value);
-    if (text) return text;
+    if (text && typeof value !== "object") return text;
   }
 
   return "";
 }
 
-function meta(member: Member) {
-  return typeof member?.metadata === "object" && member.metadata ? member.metadata : {};
+function meta(row: Member) {
+  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function readCookie(name: string) {
@@ -117,7 +153,7 @@ function readCookie(name: string) {
   }
 }
 
-function viewerEmail() {
+function currentEmail() {
   if (typeof window === "undefined") return "";
 
   try {
@@ -125,81 +161,150 @@ function viewerEmail() {
       window.localStorage.getItem("vf_email") ||
         window.sessionStorage.getItem("vf_email") ||
         readCookie("vf_email") ||
-        readCookie("vf_admin_email") ||
-        ""
+        readCookie("vf_admin_email")
     );
   } catch {
-    return cleanEmail(readCookie("vf_email") || readCookie("vf_admin_email") || "");
+    return cleanEmail(readCookie("vf_email") || readCookie("vf_admin_email"));
   }
 }
 
-function isOwner(email: string) {
+function isOwnerEmail(email: string) {
+  return cleanEmail(email) === OWNER_EMAIL;
+}
+
+function isOwnerSession(email: string) {
   return (
-    cleanEmail(email) === OWNER_EMAIL ||
+    isOwnerEmail(email) ||
     readCookie("vf_admin") === "1" ||
     readCookie("isAdmin") === "true" ||
-    cleanEmail(readCookie("vf_admin_email")) === OWNER_EMAIL
+    isOwnerEmail(readCookie("vf_admin_email"))
   );
 }
 
-function hasRealEmail(member: Member) {
-  const email = memberEmail(member);
-  return email.includes("@") && !email.endsWith("@example.com");
+function memberEmail(row: Member) {
+  const m = meta(row);
+
+  return cleanEmail(
+    first(
+      row.email,
+      row.member_email,
+      row.user_email,
+      row.owner_email,
+      row.contact_email,
+      m.email,
+      m.member_email,
+      m.user_email,
+      m.owner_email,
+      m.contact_email
+    )
+  );
 }
 
-function memberId(member: Member) {
-  const m = meta(member);
-  return first(member.id, member.profile_id, member.member_id, member.auth_user_id, member.email, m.id, m.profile_id, m.member_id);
+function hasRealEmail(row: Member) {
+  const email = memberEmail(row);
+  return email.includes("@") && !email.endsWith("@example.com") && email !== "test@test.com";
 }
 
-function memberEmail(member: Member) {
-  const m = meta(member);
-  return cleanEmail(first(member.email, member.member_email, member.user_email, member.owner_email, m.email, m.member_email, m.user_email, m.owner_email));
+function memberId(row: Member) {
+  const m = meta(row);
+
+  return first(
+    row.id,
+    row.profile_id,
+    row.member_id,
+    row.auth_user_id,
+    row._source_id,
+    row.email,
+    m.id,
+    m.profile_id,
+    m.member_id,
+    m.auth_user_id
+  );
 }
 
-function memberName(member: Member) {
-  const m = meta(member);
-  return first(member.full_name, member.name, member.display_name, member.username, member.company, m.full_name, m.name, m.display_name, m.username, memberEmail(member), "VaultForge Member");
+function memberName(row: Member) {
+  const m = meta(row);
+
+  return first(
+    row.full_name,
+    row.name,
+    row.display_name,
+    row.member_name,
+    row.company,
+    m.full_name,
+    m.name,
+    m.display_name,
+    m.member_name,
+    memberEmail(row),
+    "VaultForge Member"
+  );
 }
 
-function companyName(member: Member) {
-  const m = meta(member);
-  return first(member.company, member.company_name, member.business_name, m.company, m.company_name, m.business_name, "VaultForge Member");
+function companyName(row: Member) {
+  const m = meta(row);
+
+  return first(
+    row.company,
+    row.company_name,
+    row.business_name,
+    row.organization,
+    row.firm,
+    m.company,
+    m.company_name,
+    m.business_name,
+    m.organization,
+    "VaultForge"
+  );
 }
 
-function memberPhoto(member: Member) {
-  const m = meta(member);
-  return first(member.profile_photo_url, member.avatar_url, member.photo_url, member.image_url, m.profile_photo_url, m.avatar_url, m.photo_url, m.image_url);
+function memberPhoto(row: Member) {
+  const m = meta(row);
+
+  return first(
+    row.profile_photo_url,
+    row.photo_url,
+    row.avatar_url,
+    row.image_url,
+    m.profile_photo_url,
+    m.photo_url,
+    m.avatar_url,
+    m.image_url
+  );
 }
 
-function memberRoles(member: Member) {
-  const m = meta(member);
+function memberRoles(row: Member) {
+  const m = meta(row);
+
   return unique([
-    ...splitValues(member.member_types),
-    ...splitValues(member.member_type),
-    ...splitValues(member.roles),
-    ...splitValues(member.role),
-    ...splitValues(member.primary_role),
-    ...splitValues(m.member_types),
-    ...splitValues(m.member_type),
-    ...splitValues(m.roles),
-    ...splitValues(m.role),
-    ...splitValues(m.primary_role),
-  ]).slice(0, 8);
+    ...valuesOf(row.member_types),
+    ...valuesOf(row.member_type),
+    ...valuesOf(row.roles),
+    ...valuesOf(row.role),
+    ...valuesOf(row.primary_role),
+    ...valuesOf(row.member_role),
+    ...valuesOf(m.member_types),
+    ...valuesOf(m.member_type),
+    ...valuesOf(m.roles),
+    ...valuesOf(m.role),
+    ...valuesOf(m.primary_role),
+    ...valuesOf(m.member_role),
+  ]).slice(0, 10);
 }
 
-function baseState(member: Member) {
-  const m = meta(member);
+function basedState(row: Member) {
+  const m = meta(row);
 
-  const raw = first(
-    member.home_state,
-    member.based_state,
-    member.base_state,
-    member.from_state,
-    member.member_state,
-    member.primary_state,
-    member.location_state,
-    member.state,
+  const candidates = [
+    row.home_state,
+    row.based_state,
+    row.base_state,
+    row.from_state,
+    row.member_state,
+    row.primary_state,
+    row.location_state,
+    row.state,
+    row.market_primary,
+    row.primary_market,
     m.home_state,
     m.based_state,
     m.base_state,
@@ -207,117 +312,162 @@ function baseState(member: Member) {
     m.member_state,
     m.primary_state,
     m.location_state,
-    m.state
-  );
+    m.state,
+    m.market_primary,
+    m.primary_market,
+  ];
 
-  return normalizeState(raw);
+  for (const candidate of candidates) {
+    const state = normalizeState(first(candidate));
+    if (state) return state;
+  }
+
+  return "";
 }
 
-function marketStates(member: Member) {
-  const m = meta(member);
+function marketStates(row: Member) {
+  const m = meta(row);
 
-  const values = unique([
-    ...splitValues(member.markets),
-    ...splitValues(member.operating_states),
-    ...splitValues(member.market_states),
-    ...splitValues(member.buy_box_states),
-    ...splitValues(member.service_states),
-    ...splitValues(member.target_states),
-    ...splitValues(member.work_states),
-    ...splitValues(m.markets),
-    ...splitValues(m.operating_states),
-    ...splitValues(m.market_states),
-    ...splitValues(m.buy_box_states),
-    ...splitValues(m.service_states),
-    ...splitValues(m.target_states),
-    ...splitValues(m.work_states),
-    baseState(member),
-  ])
+  const values = [
+    ...valuesOf(row.markets),
+    ...valuesOf(row.market_states),
+    ...valuesOf(row.buy_box_states),
+    ...valuesOf(row.deal_states),
+    ...valuesOf(row.states),
+    ...valuesOf(row.operating_states),
+    ...valuesOf(row.service_states),
+    ...valuesOf(row.target_states),
+    ...valuesOf(row.work_states),
+    ...valuesOf(m.markets),
+    ...valuesOf(m.market_states),
+    ...valuesOf(m.buy_box_states),
+    ...valuesOf(m.deal_states),
+    ...valuesOf(m.states),
+    ...valuesOf(m.operating_states),
+    ...valuesOf(m.service_states),
+    ...valuesOf(m.target_states),
+    ...valuesOf(m.work_states),
+    basedState(row),
+  ]
     .map(normalizeState)
     .filter(Boolean);
 
   return unique(values);
 }
 
-function strategies(member: Member) {
-  const m = meta(member);
+function strategies(row: Member) {
+  const m = meta(row);
+
   return unique([
-    ...splitValues(member.strategies),
-    ...splitValues(member.strategy),
-    ...splitValues(member.asset_focus),
-    ...splitValues(member.property_types),
-    ...splitValues(m.strategies),
-    ...splitValues(m.strategy),
-    ...splitValues(m.asset_focus),
-    ...splitValues(m.property_types),
+    ...valuesOf(row.strategies),
+    ...valuesOf(row.strategy),
+    ...valuesOf(row.buy_box_strategies),
+    ...valuesOf(row.asset_focus),
+    ...valuesOf(row.property_types),
+    ...valuesOf(row.asset_types),
+    ...valuesOf(m.strategies),
+    ...valuesOf(m.strategy),
+    ...valuesOf(m.buy_box_strategies),
+    ...valuesOf(m.asset_focus),
+    ...valuesOf(m.property_types),
+    ...valuesOf(m.asset_types),
   ]).slice(0, 10);
 }
 
-function provides(member: Member) {
-  const m = meta(member);
+function canProvide(row: Member) {
+  const m = meta(row);
+
   return unique([
-    ...splitValues(member.can_provide),
-    ...splitValues(member.provides),
-    ...splitValues(member.capabilities),
-    ...splitValues(member.skills),
-    ...splitValues(member.what_i_provide),
-    ...splitValues(m.can_provide),
-    ...splitValues(m.provides),
-    ...splitValues(m.capabilities),
-    ...splitValues(m.skills),
-    ...splitValues(m.what_i_provide),
+    ...valuesOf(row.can_provide),
+    ...valuesOf(row.what_i_provide),
+    ...valuesOf(row.provides),
+    ...valuesOf(row.capabilities),
+    ...valuesOf(row.services),
+    ...valuesOf(m.can_provide),
+    ...valuesOf(m.what_i_provide),
+    ...valuesOf(m.provides),
+    ...valuesOf(m.capabilities),
+    ...valuesOf(m.services),
   ]).slice(0, 10);
 }
 
-function needs(member: Member) {
-  const m = meta(member);
+function needs(row: Member) {
+  const m = meta(row);
+
   return unique([
-    ...splitValues(member.needs),
-    ...splitValues(member.looking_for),
-    ...splitValues(member.what_i_need),
-    ...splitValues(member.deal_needs),
-    ...splitValues(m.needs),
-    ...splitValues(m.looking_for),
-    ...splitValues(m.what_i_need),
-    ...splitValues(m.deal_needs),
+    ...valuesOf(row.needs),
+    ...valuesOf(row.deal_needs),
+    ...valuesOf(row.what_i_need),
+    ...valuesOf(row.looking_for),
+    ...valuesOf(row.routing_needs),
+    ...valuesOf(m.needs),
+    ...valuesOf(m.deal_needs),
+    ...valuesOf(m.what_i_need),
+    ...valuesOf(m.looking_for),
+    ...valuesOf(m.routing_needs),
   ]).slice(0, 10);
 }
 
-function memberBio(member: Member) {
-  const m = meta(member);
-  return first(member.bio, member.description, member.strategy_summary, member.buy_box, member.notes, m.bio, m.description, m.strategy_summary, m.buy_box, m.notes, "Private member profile ready for network alignment.");
+function memberBio(row: Member) {
+  const m = meta(row);
+
+  return first(
+    row.bio,
+    row.about,
+    row.summary,
+    row.description,
+    row.strategy_summary,
+    row.buy_box,
+    row.notes,
+    m.bio,
+    m.about,
+    m.summary,
+    m.description,
+    m.strategy_summary,
+    m.buy_box,
+    m.notes,
+    "Private member profile ready for network alignment."
+  );
 }
 
-function accepted(member: Member) {
-  const status = [
-    member.access_status,
-    member.member_status,
-    member.status,
-    member.payment_status,
-    member.network_status,
-    member.is_active,
-    meta(member).access_status,
-    meta(member).member_status,
-    meta(member).status,
-    meta(member).payment_status,
+function isAccepted(row: Member) {
+  const text = [
+    row.access_status,
+    row.member_status,
+    row.status,
+    row.payment_status,
+    row.network_status,
+    row.admin_bucket,
+    row.is_active,
+    meta(row).access_status,
+    meta(row).member_status,
+    meta(row).status,
+    meta(row).payment_status,
+    meta(row).network_status,
   ]
-    .map((item) => String(item || "").toLowerCase())
+    .map((item) => lower(item))
     .join(" ");
 
-  return status.includes("active") || status.includes("accepted") || status.includes("paid") || status.includes("true");
+  return (
+    text.includes("active") ||
+    text.includes("accepted") ||
+    text.includes("paid") ||
+    text.includes("member") ||
+    text.includes("true")
+  );
 }
 
-function fitScore(member: Member) {
-  let score = Number(member.score || member.match_score || member.alignment_score || 0);
+function networkScore(row: Member) {
+  let score = Number(row.score || row.match_score || row.alignment_score || row.routing_score || 0);
 
-  if (!Number.isFinite(score) || score <= 0) score = 50;
-  if (baseState(member)) score += 15;
-  if (marketStates(member).length) score += 10;
-  if (memberRoles(member).length) score += 8;
-  if (strategies(member).length) score += 6;
-  if (provides(member).length) score += 8;
-  if (needs(member).length) score += 5;
-  if (accepted(member)) score += 8;
+  if (!Number.isFinite(score) || score <= 0) score = 45;
+  if (basedState(row)) score += 18;
+  if (marketStates(row).length) score += 10;
+  if (memberRoles(row).length) score += 8;
+  if (strategies(row).length) score += 6;
+  if (canProvide(row).length) score += 8;
+  if (needs(row).length) score += 5;
+  if (isAccepted(row)) score += 5;
 
   return Math.min(100, Math.max(0, Math.round(score)));
 }
@@ -426,7 +576,15 @@ const input: React.CSSProperties = {
   outline: "none",
 };
 
-function PillList({ items, empty, blue = false }: { items: string[]; empty: string; blue?: boolean }) {
+function PillList({
+  items,
+  empty,
+  blue = false,
+}: {
+  items: string[];
+  empty: string;
+  blue?: boolean;
+}) {
   const list = items.length ? items : [empty];
 
   return (
@@ -442,12 +600,13 @@ function PillList({ items, empty, blue = false }: { items: string[]; empty: stri
 
 function MemberCard({ member, viewer }: { member: Member; viewer: string }) {
   const email = memberEmail(member);
-  const home = baseState(member);
+  const home = basedState(member);
   const markets = marketStates(member);
   const roles = memberRoles(member);
   const photo = memberPhoto(member);
-  const score = fitScore(member);
-  const connectHref = `/connect/member-${encodeURIComponent(memberId(member) || email || memberName(member))}?email=${encodeURIComponent(viewer)}${email ? `&to=${encodeURIComponent(email)}` : ""}&source=member&subject=${encodeURIComponent("VaultForge member connection request")}`;
+  const score = networkScore(member);
+  const id = memberId(member) || email || memberName(member);
+  const connectHref = `/connect/member-${encodeURIComponent(id)}?email=${encodeURIComponent(viewer)}${email ? `&to=${encodeURIComponent(email)}` : ""}&source=member&subject=${encodeURIComponent("VaultForge member connection request")}`;
 
   return (
     <article style={card}>
@@ -490,7 +649,7 @@ function MemberCard({ member, viewer }: { member: Member; viewer: string }) {
           </div>
 
           <div style={{ marginTop: 14 }}>
-            <span style={chip}>Network: {accepted(member) ? "Accepted" : "Pending"}</span>
+            <span style={chip}>Network: {isAccepted(member) ? "Accepted" : "Pending"}</span>
             <PillList items={roles} empty="Member" />
           </div>
 
@@ -515,7 +674,7 @@ function MemberCard({ member, viewer }: { member: Member; viewer: string }) {
             <div style={card}>
               <div style={eyebrow}>Can Provide</div>
               <div style={{ marginTop: 10 }}>
-                <PillList items={provides(member)} empty="No provider abilities listed yet." />
+                <PillList items={canProvide(member)} empty="No provider abilities listed yet." />
               </div>
             </div>
 
@@ -552,8 +711,8 @@ export default function MembersPage() {
     setStatus("Loading member network...");
 
     try {
-      const viewer = viewerEmail();
-      const ownerMode = isOwner(viewer);
+      const viewer = currentEmail();
+      const ownerMode = isOwnerSession(viewer);
 
       setEmail(viewer);
       setOwner(ownerMode);
@@ -620,13 +779,13 @@ export default function MembersPage() {
     const q = query.trim().toLowerCase();
 
     return members.filter((member) => {
-      const home = baseState(member);
+      const home = basedState(member);
       const roles = memberRoles(member);
+      const stateMatches = !selectedState || home === selectedState;
+
       const roleMatches =
         selectedRole === "all" ||
         roles.some((role) => role.toLowerCase() === selectedRole);
-
-      const stateMatches = !selectedState || home === selectedState;
 
       const searchable = [
         memberName(member),
@@ -637,7 +796,7 @@ export default function MembersPage() {
         ...marketStates(member),
         ...roles,
         ...strategies(member),
-        ...provides(member),
+        ...canProvide(member),
         ...needs(member),
       ]
         .join(" ")
@@ -653,8 +812,8 @@ export default function MembersPage() {
     return {
       total: members.length,
       showing: filtered.length,
-      baseReady: members.filter((member) => baseState(member)).length,
-      accepted: members.filter(accepted).length,
+      baseReady: members.filter((member) => basedState(member)).length,
+      accepted: members.filter(isAccepted).length,
     };
   }, [members, filtered]);
 
@@ -747,7 +906,7 @@ export default function MembersPage() {
 
             <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} style={input}>
               <option value="All" style={{ color: "#111" }}>All Roles</option>
-              {["Buyer", "Seller", "Lender", "Private Money", "Contractor", "Wholesaler", "Investor", "Developer", "Operator", "Partner", "Realtor", "Broker"].map((role) => (
+              {ROLE_OPTIONS.filter((role) => role !== "All").map((role) => (
                 <option key={role} value={role} style={{ color: "#111" }}>{role}</option>
               ))}
             </select>
@@ -755,7 +914,7 @@ export default function MembersPage() {
 
           <div style={{ marginTop: 14 }}>
             <button type="button" onClick={() => setStateFilter("All")} style={stateFilter === "All" ? button : ghost}>All</button>
-            {STATES.map((state) => (
+            {STATE_OPTIONS.map((state) => (
               <button key={state} type="button" onClick={() => setStateFilter(state)} style={stateFilter === state ? button : ghost}>
                 {state}
               </button>
