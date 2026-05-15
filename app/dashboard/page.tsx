@@ -505,6 +505,7 @@ export default function DashboardPage() {
 
               <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 22 }}>
                 <Link href="/projects" style={goldButton}>Open Projects</Link>
+                <Link href="/smart-ai" style={goldButton}>Smart AI</Link>
                 <Link href="/pain-feed" style={ghostButton}>Pain Feed</Link>
                 <Link href="/submit" style={ghostButton}>Create Deal</Link>
                 <Link href="/pain" style={ghostButton}>Submit Pain</Link>
@@ -678,6 +679,14 @@ export default function DashboardPage() {
           </p>
 
           <div className="vf-four" style={{ marginTop: 22 }}>
+            <QueueCard
+              tag="AI"
+              title="Smart AI"
+              body="Rank deals and pain records against your saved profile, needs, markets, and capabilities."
+              href="/smart-ai"
+              tone="gold"
+            />
+
             <QueueCard
               tag="Deals"
               title="Projects"
