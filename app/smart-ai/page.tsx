@@ -70,13 +70,36 @@ const red: React.CSSProperties = {
   border: "1px solid rgba(255,120,120,.30)",
 };
 
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
 function currentEmail() {
   if (typeof window === "undefined") return "";
-  return (
+
+  return String(
     localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    ""
-  );
+      sessionStorage.getItem("vf_email") ||
+      readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("vf_admin_email") ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
 }
 
 function trashKey(email: string) {
@@ -158,6 +181,43 @@ function InsightCard({
           {item.title || "Untitled"}
         </h2>
 
+        <div style={{ marginBottom: 12 }}>
+          {item.score !== undefined && (
+            <span
+              style={{
+                display: "inline-flex",
+                border: "1px solid rgba(157,243,191,.30)",
+                borderRadius: 999,
+                padding: "7px 10px",
+                color: "#9df3bf",
+                background: "rgba(157,243,191,.08)",
+                fontWeight: 900,
+                marginRight: 8,
+                marginBottom: 8,
+              }}
+            >
+              AI Fit: {item.score}
+            </span>
+          )}
+          {item.priority && (
+            <span
+              style={{
+                display: "inline-flex",
+                border: "1px solid rgba(232,196,107,.30)",
+                borderRadius: 999,
+                padding: "7px 10px",
+                color: "#f5d978",
+                background: "rgba(232,196,107,.08)",
+                fontWeight: 900,
+                marginRight: 8,
+                marginBottom: 8,
+              }}
+            >
+              {item.priority}
+            </span>
+          )}
+        </div>
+
         <p
           style={{
             color: "rgba(255,255,255,.78)",
@@ -165,17 +225,17 @@ function InsightCard({
             fontSize: 18,
           }}
         >
-          {item.summary || "No summary yet."}
+          {item.summary || item.best_move || (Array.isArray(item.reasoning) ? item.reasoning.join(" · ") : "") || "No summary yet."}
         </p>
 
         <div style={{ marginTop: 20 }}>
           {item.href && (
             <Link href={item.href} style={button}>
-              Open Room
+              {item.href === "/projects" ? "Open Projects" : "Open Room"}
             </Link>
           )}
 
-          <Link href="/projects" style={ghost}>
+          <Link href="/dashboard" style={ghost}>
             Dashboard
           </Link>
 
@@ -206,11 +266,24 @@ export default function SmartAIPage() {
         const viewer = currentEmail();
         setEmail(viewer);
 
-        const res = await fetch("/api/smart-ai", {
+        if (!viewer) {
+          setItems([]);
+          setStatus("Log in to view Smart AI.");
+          return;
+        }
+
+        const res = await fetch(`/api/smart-ai?email=${encodeURIComponent(viewer)}`, {
           cache: "no-store",
+          headers: {
+            "x-vf-email": viewer,
+          },
         });
 
         const data = await res.json();
+
+        if (!res.ok || data?.ok === false) {
+          throw new Error(data?.error || "Smart AI could not load.");
+        }
 
         setItems(Array.isArray(data?.insights) ? data.insights : []);
         setStatus("");
@@ -338,6 +411,15 @@ export default function SmartAIPage() {
         {status && (
           <section style={hero}>
             <strong>{status}</strong>
+          </section>
+        )}
+
+        {!status && visible.length === 0 && (
+          <section style={hero}>
+            <strong>No Smart AI records visible.</strong>
+            <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
+              Active may be empty if all records are deleted, hidden, or the API has no scored insights yet. Use Deleted to restore items or Refresh after adding deals/pain.
+            </p>
           </section>
         )}
 
