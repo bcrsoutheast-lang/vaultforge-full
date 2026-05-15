@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 
 type Deal = Record<string, any>;
 
@@ -139,6 +138,31 @@ function getEmail() {
   )
     .trim()
     .toLowerCase();
+}
+
+
+function dealIdFromBrowser() {
+  if (typeof window === "undefined") return "";
+
+  const params = new URLSearchParams(window.location.search);
+  const queryId =
+    clean(params.get("id")) ||
+    clean(params.get("deal_id")) ||
+    clean(params.get("dealId")) ||
+    clean(params.get("item_id"));
+
+  if (queryId) return queryId;
+
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  const last = clean(parts[parts.length - 1]);
+
+  if (!last || last === "detail" || last === "deal") return "";
+
+  try {
+    return decodeURIComponent(last);
+  } catch {
+    return last;
+  }
 }
 
 function headers() {
@@ -338,31 +362,44 @@ function ContactCard({ deal, id }: { deal: Deal; id: string }) {
 }
 
 export default function DealRoomPage() {
-  const params = useParams();
-  const id = String(params?.id || "");
-
+  const [id, setId] = useState("");
   const [deal, setDeal] = useState<Deal | null>(null);
   const [status, setStatus] = useState("");
   const [messageStatus, setMessageStatus] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function loadDeal() {
+  async function loadDeal(nextId = id) {
+    const dealId = clean(nextId);
+
     setLoading(true);
     setStatus("");
+    setDeal(null);
+
+    if (!dealId) {
+      setLoading(false);
+      setStatus("Missing deal id. Open this room from Projects or use /deal/detail?id=DEAL_ID.");
+      return;
+    }
 
     try {
-      const res = await fetch(`/api/deal/detail?id=${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/deal/detail?id=${encodeURIComponent(dealId)}`, {
         cache: "no-store",
+        credentials: "include",
         headers: headers(),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
+      if (!res.ok || data?.ok === false) {
         setStatus(data?.error || data?.details || "Could not load deal.");
       } else {
-        setDeal(data?.deal || null);
+        const found = data?.deal || data?.record || data?.item || data?.data || null;
+        if (found) {
+          setDeal(found);
+        } else {
+          setStatus("Deal response loaded, but no deal record was returned.");
+        }
       }
     } catch {
       setStatus("Could not load deal. Refresh and try again.");
@@ -406,8 +443,10 @@ export default function DealRoomPage() {
   }
 
   useEffect(() => {
-    if (id) loadDeal();
-  }, [id]);
+    const nextId = dealIdFromBrowser();
+    setId(nextId);
+    loadDeal(nextId);
+  }, []);
 
   const photos: string[] = useMemo(() => {
     const next = Array.isArray(deal?.photo_urls)
