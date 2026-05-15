@@ -371,10 +371,6 @@ function buildRows(body: AnyRecord, email: string) {
     seller_situation: sellerSituation,
     access_notes: field(body, "access_notes"),
     private_notes: field(body, "private_notes"),
-    deal_needs: dealNeeds,
-    routing_needs: dealNeeds,
-    needs: dealNeeds,
-    route_context: dealNeeds,
     distress_signals: distress,
     seller_pressure: distress,
     pain_signals: distress,
@@ -431,6 +427,8 @@ function buildRows(body: AnyRecord, email: string) {
     title,
     city,
     state,
+    county: full.county,
+    market: full.market,
     property_type: propertyType,
     deal_type: propertyType,
     strategy: full.strategy,
@@ -447,8 +445,6 @@ function buildRows(body: AnyRecord, email: string) {
     year_built: full.year_built,
     occupancy: full.occupancy,
     condition: full.condition,
-    deal_needs: dealNeeds,
-    routing_needs: dealNeeds,
     distress_signals: distress,
     seller_situation: sellerSituation,
     access_notes: full.access_notes,
@@ -472,6 +468,8 @@ function buildRows(body: AnyRecord, email: string) {
     title,
     city,
     state,
+    county: full.county,
+    market: full.market,
     property_type: propertyType,
     strategy: full.strategy,
     price: askingPrice,
@@ -482,7 +480,6 @@ function buildRows(body: AnyRecord, email: string) {
     baths,
     sqft,
     year_built: full.year_built,
-    deal_needs: dealNeeds,
     description,
     ai_summary: aiSummary,
     photo_urls: photos,
@@ -538,7 +535,7 @@ export async function GET() {
     ok: true,
     route: "/api/deal/create",
     table: DEAL_TABLE,
-    mode: "vf_deals_adaptive_pain_pattern_safe",
+    mode: "vf_deals_adaptive_safe_no_array_needs",
   });
 }
 
@@ -609,6 +606,6 @@ export async function POST(request: Request) {
     record: result.data,
     field_check: fieldCheck(result.data),
     attempts: result.attempts,
-    message: "Deal saved to vf_deals with adaptive Pain-style insert.",
+    message: "Deal saved to vf_deals with safe non-array routing fields preserved in AI summary.",
   });
 }
