@@ -32,7 +32,7 @@ function first(...values: unknown[]) {
 }
 
 function parseArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+  if (Array.isArray(value)) return value.map((item) => photoUrl(item) || clean(item)).filter(Boolean);
 
   const text = clean(value);
   if (!text) return [];
@@ -219,6 +219,26 @@ function titleOf(row: Row | null) {
 
 function ownerOf(row: Row | null) {
   return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email", "email"));
+}
+
+function contactNameOf(row: Row | null) {
+  return field(row, "contact_name", "owner_name", "seller_name", "source_name", "best_contact_name");
+}
+
+function contactPhoneOf(row: Row | null) {
+  return field(row, "contact_phone", "owner_phone", "seller_phone", "source_phone", "phone", "best_contact_phone");
+}
+
+function contactEmailOf(row: Row | null) {
+  return field(row, "contact_email", "owner_contact_email", "seller_email", "source_email", "best_contact_email");
+}
+
+function preferredContactOf(row: Row | null) {
+  return field(row, "preferred_contact", "best_contact_method", "contact_method");
+}
+
+function contactNotesOf(row: Row | null) {
+  return field(row, "contact_notes", "seller_contact_notes", "source_notes", "best_contact_notes");
 }
 
 function marketOf(row: Row | null) {
@@ -571,10 +591,18 @@ export default function PainRoomPage() {
   const heroPhoto = photos[0] || "";
   const signalId = signalIdOf(pain);
   const owner = ownerOf(pain);
+  const contactName = contactNameOf(pain);
+  const contactPhone = contactPhoneOf(pain);
+  const contactEmail = contactEmailOf(pain);
+  const preferredContact = preferredContactOf(pain);
+  const contactNotes = contactNotesOf(pain);
+  const contactTarget = cleanEmail(contactEmail || owner);
   const tone = signalTone(pain);
+  const phoneHref = contactPhone ? `tel:${contactPhone.replace(/[^0-9+]/g, "")}` : "";
+  const emailHref = contactEmail ? `mailto:${contactEmail}` : "";
   const contactHref = signalId
-    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(email)}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=pain&type=pain&folder=pain&folder_key=pain&title=${encodeURIComponent(titleOf(pain))}&subject=${encodeURIComponent(titleOf(pain))}`
-    : `/messages/new?email=${encodeURIComponent(email)}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=pain&type=pain&folder=pain&folder_key=pain&title=${encodeURIComponent(titleOf(pain))}&subject=${encodeURIComponent(titleOf(pain))}`;
+    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(email)}${contactTarget ? `&to=${encodeURIComponent(contactTarget)}` : ""}&source=pain&type=pain&folder=pain&folder_key=pain&title=${encodeURIComponent(titleOf(pain))}&subject=${encodeURIComponent(titleOf(pain))}`
+    : `/messages/new?email=${encodeURIComponent(email)}${contactTarget ? `&to=${encodeURIComponent(contactTarget)}` : ""}&source=pain&type=pain&folder=pain&folder_key=pain&title=${encodeURIComponent(titleOf(pain))}&subject=${encodeURIComponent(titleOf(pain))}`;
 
   return (
     <main style={page}>
@@ -714,10 +742,33 @@ export default function PainRoomPage() {
                 )}
 
                 <div style={{ marginTop: 18 }}>
-                  <DetailLine labelText="Contact" value={owner || email || "Not listed"} />
-                  <DetailLine labelText="Timeline" value={field(pain, "timeline", "deadline", "desired_timeline", "urgency_level", "urgency")} />
+                  <DetailLine labelText="Timeline" value={field(pain, "timeline", "deadline", "desired_timeline")} />
                   <DetailLine labelText="Capital Needed" value={money(field(pain, "capital_needed", "funding_needed", "gap_amount"))} />
                 </div>
+              </div>
+            </section>
+
+            <section style={{ ...panel, marginBottom: 16, borderColor: "rgba(157,243,191,.30)" }}>
+              <div style={label}>Contact / Source</div>
+              <p style={{ ...muted, marginTop: 8 }}>Private execution contact captured from the Pain intake. Keep this inside the room, not on public cards.</p>
+
+              <div className="vf-detail-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 14 }}>
+                <MiniMetric labelText="Contact Name" value={contactName || "Not listed"} />
+                <MiniMetric labelText="Phone" value={contactPhone || "Not listed"} />
+                <MiniMetric labelText="Email" value={contactEmail || owner || "Not listed"} />
+                <MiniMetric labelText="Preferred" value={preferredContact || "Not listed"} />
+              </div>
+
+              {contactNotes ? (
+                <div style={{ marginTop: 14 }}>
+                  <DetailLine labelText="Contact Notes" value={contactNotes} />
+                </div>
+              ) : null}
+
+              <div className="vf-actions" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10, marginTop: 16 }}>
+                {phoneHref ? <a href={phoneHref} style={button}>Call Contact</a> : <span style={{ ...ghost, opacity: .55 }}>No Phone Listed</span>}
+                {emailHref ? <a href={emailHref} style={ghost}>Email Contact</a> : <span style={{ ...ghost, opacity: .55 }}>No Email Listed</span>}
+                <Link href={contactHref} style={ghost}>Message Owner</Link>
               </div>
             </section>
 
