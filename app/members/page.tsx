@@ -16,29 +16,6 @@ const OPERATING_STATES = [
   "Texas",
 ];
 
-const STATE_ALIASES: Record<string, string> = {
-  ga: "Georgia",
-  georgia: "Georgia",
-  fl: "Florida",
-  florida: "Florida",
-  nc: "North Carolina",
-  "north carolina": "North Carolina",
-  sc: "South Carolina",
-  "south carolina": "South Carolina",
-  tn: "Tennessee",
-  tennessee: "Tennessee",
-  al: "Alabama",
-  alabama: "Alabama",
-  tx: "Texas",
-  texas: "Texas",
-};
-
-function normalizeState(value: unknown) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (!raw) return "";
-  return STATE_ALIASES[raw] || "";
-}
-
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -78,6 +55,11 @@ function getEmail() {
   }
 
   return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+}
+
+function readStateFromUrl() {
+  if (typeof window === "undefined") return "";
+  return normalizeState(new URLSearchParams(window.location.search).get("state") || "");
 }
 
 async function safeJson(res: Response) {
@@ -176,7 +158,10 @@ function statesOf(row: Row) {
   ]);
 
   const normalized = raw
-    .map((state) => normalizeState(state))
+    .map((state) => {
+      const found = OPERATING_STATES.find((allowed) => allowed.toLowerCase() === state.toLowerCase());
+      return found || "";
+    })
     .filter(Boolean);
 
   return unique(normalized);
@@ -190,26 +175,24 @@ function basedStateOf(row: Row) {
     row.home_state,
     row.based_state,
     row.base_state,
-    row.from_state,
     row.member_state,
     row.state,
     row.location_state,
     row.primary_state,
     row.market_state,
-    row.operating_state,
     m.home_state,
     m.based_state,
     m.base_state,
-    m.from_state,
     m.member_state,
     m.state,
     m.location_state,
     m.primary_state,
-    m.market_state,
-    m.operating_state
+    m.market_state
   );
 
-  return normalizeState(raw);
+  const found = OPERATING_STATES.find((allowed) => allowed.toLowerCase() === raw.toLowerCase());
+
+  return found || "";
 }
 
 function basedStateDisplay(row: Row) {
@@ -532,7 +515,6 @@ export default function MembersPage() {
   const [status, setStatus] = useState("Loading member network...");
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("");
-  const [filterTick, setFilterTick] = useState(0);
 
   async function load() {
     const viewer = getEmail();
@@ -578,6 +560,8 @@ export default function MembersPage() {
   }
 
   useEffect(() => {
+    const urlState = readStateFromUrl();
+    if (urlState) setStateFilter(urlState);
     load();
   }, []);
 
@@ -585,13 +569,16 @@ export default function MembersPage() {
     const normalizedCurrent = normalizeState(stateFilter);
     const normalizedNext = normalizeState(state);
 
-    setStateFilter(normalizedCurrent === normalizedNext ? "" : normalizedNext);
-    setFilterTick((value) => value + 1);
+    const nextState = normalizedCurrent === normalizedNext ? "" : normalizedNext;
+
+    setStateFilter(nextState);
 
     if (typeof window !== "undefined") {
-      window.setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }, 0);
+      const url = nextState
+        ? `/members?state=${encodeURIComponent(nextState)}`
+        : "/members";
+
+      window.location.href = url;
     }
   }
 
@@ -614,13 +601,11 @@ export default function MembersPage() {
       ].join(" ").toLowerCase();
 
       const matchesQuery = !q || searchable.includes(q);
-      const selectedState = normalizeState(stateFilter);
-      const memberBaseState = normalizeState(visibleBaseStateOf(item));
-      const matchesState = !selectedState || memberBaseState === selectedState;
+      const matchesState = !stateFilter || filterStatesOf(item).some((state) => state.toLowerCase() === stateFilter.toLowerCase());
 
       return matchesQuery && matchesState;
     });
-  }, [items, query, stateFilter, filterTick]);
+  }, [items, query, stateFilter]);
 
   const counts = useMemo(() => {
     const acceptedCount = items.filter((item) => accepted(item)).length;
@@ -685,7 +670,6 @@ export default function MembersPage() {
             <span style={chip}>Members: {counts.total}</span>
             <span style={chip}>Network accepted: {counts.accepted}</span>
             <span style={chip}>State ready: {counts.withStates}</span>
-            <span style={chip}>Showing: {filtered.length}</span>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
@@ -726,7 +710,7 @@ export default function MembersPage() {
 
             <select
               value={stateFilter}
-              onChange={(e) => setStateFilter(e.target.value)}
+              onChange={(e) => chooseState(e.target.value)}
               style={{
                 width: "100%",
                 boxSizing: "border-box",
@@ -746,23 +730,17 @@ export default function MembersPage() {
             </select>
           </div>
 
-          {stateFilter ? (
-            <p style={{ ...muted, marginTop: 14 }}>
-              Showing members based in <strong style={{ color: "#f8e7b0" }}>{normalizeState(stateFilter)}</strong>.
-            </p>
-          ) : null}
-
           <div style={{ marginTop: 14 }}>
             {OPERATING_STATES.map((state) => (
               <button
                 key={state}
                 type="button"
-                onClick={() => chooseState(state)}
+                onClick={() => setStateFilter(stateFilter === state ? "" : state)}
                 style={{
                   ...stateChip,
                   cursor: "pointer",
-                  borderColor: normalizeState(stateFilter) === state ? "rgba(232,196,107,.70)" : "rgba(56,189,248,.30)",
-                  color: normalizeState(stateFilter) === state ? "#f8e7b0" : "#8fd3ff",
+                  borderColor: stateFilter === state ? "rgba(232,196,107,.70)" : "rgba(56,189,248,.30)",
+                  color: stateFilter === state ? "#f8e7b0" : "#8fd3ff",
                 }}
               >
                 {state}
@@ -783,7 +761,7 @@ export default function MembersPage() {
             </div>
           ) : (
             <div style={glass}>
-              <h3 style={{ marginTop: 0 }}>No members match that base state yet.</h3>
+              <h3 style={{ marginTop: 0 }}>No matching members found.</h3>
               <p style={muted}>
                 Adjust filters or complete more member profiles so VaultForge can better align opportunities, operators, and execution capacity.
               </p>
