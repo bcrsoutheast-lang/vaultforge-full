@@ -407,7 +407,7 @@ export default function DashboardPage() {
               <div style={{ marginTop: 18 }}>
                 <span style={pill}>Signed in: {email || "unknown"}</span>
                 <span style={pill}>{stats.owner ? "Owner View" : "Member View"}</span>
-                <span style={pill}>Surgeon AI Active</span>
+                <span style={pill}>Intelligence Active</span>
                 <span style={pill}>Folder-Based Workstations</span>
               </div>
 
@@ -415,7 +415,7 @@ export default function DashboardPage() {
                 <Link href="/projects" style={goldButton}>Open Workstation Folders</Link>
                 <Link href="/submit" style={ghostButton}>Submit Opportunity</Link>
                 <Link href="/pain" style={ghostButton}>Submit Pressure</Link>
-                <Link href="/smart-ai" style={ghostButton}>Surgeon AI</Link>
+                <Link href="/intelligence" style={ghostButton}>Intelligence</Link>
                 <Link href="/messages" style={ghostButton}>Messages</Link>
               </div>
             </div>
@@ -488,9 +488,9 @@ export default function DashboardPage() {
             />
 
             <CommandCard
-              title="Surgeon AI"
+              title="Intelligence"
               body="Open the intelligence desk that classifies pressure, rewrites weak structures, diagnoses risk, and recommends the next operator move."
-              href="/smart-ai"
+              href="/intelligence"
               tag="AI"
               tone="gold"
             />
