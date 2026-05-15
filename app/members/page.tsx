@@ -532,6 +532,7 @@ export default function MembersPage() {
   const [status, setStatus] = useState("Loading member network...");
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("");
+  const [filterTick, setFilterTick] = useState(0);
 
   async function load() {
     const viewer = getEmail();
@@ -580,6 +581,20 @@ export default function MembersPage() {
     load();
   }, []);
 
+  function chooseState(state: string) {
+    const normalizedCurrent = normalizeState(stateFilter);
+    const normalizedNext = normalizeState(state);
+
+    setStateFilter(normalizedCurrent === normalizedNext ? "" : normalizedNext);
+    setFilterTick((value) => value + 1);
+
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }, 0);
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
 
@@ -605,7 +620,7 @@ export default function MembersPage() {
 
       return matchesQuery && matchesState;
     });
-  }, [items, query, stateFilter]);
+  }, [items, query, stateFilter, filterTick]);
 
   const counts = useMemo(() => {
     const acceptedCount = items.filter((item) => accepted(item)).length;
@@ -670,6 +685,7 @@ export default function MembersPage() {
             <span style={chip}>Members: {counts.total}</span>
             <span style={chip}>Network accepted: {counts.accepted}</span>
             <span style={chip}>State ready: {counts.withStates}</span>
+            <span style={chip}>Showing: {filtered.length}</span>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
@@ -741,7 +757,7 @@ export default function MembersPage() {
               <button
                 key={state}
                 type="button"
-                onClick={() => setStateFilter(normalizeState(stateFilter) === state ? "" : state)}
+                onClick={() => chooseState(state)}
                 style={{
                   ...stateChip,
                   cursor: "pointer",
@@ -767,7 +783,7 @@ export default function MembersPage() {
             </div>
           ) : (
             <div style={glass}>
-              <h3 style={{ marginTop: 0 }}>No matching members found.</h3>
+              <h3 style={{ marginTop: 0 }}>No members match that base state yet.</h3>
               <p style={muted}>
                 Adjust filters or complete more member profiles so VaultForge can better align opportunities, operators, and execution capacity.
               </p>
