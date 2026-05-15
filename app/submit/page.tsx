@@ -9,6 +9,7 @@ type FormState = {
   property_type: DealType;
   title: string;
   city: string;
+  county: string;
   state: string;
   address: string;
   strategy: string;
@@ -56,6 +57,7 @@ const initialForm: FormState = {
   property_type: "Residential",
   title: "",
   city: "",
+  county: "",
   state: "Georgia",
   address: "",
   strategy: "Fix & Flip",
@@ -101,13 +103,12 @@ const initialForm: FormState = {
 
 const STATES = [
   "Georgia",
+  "Tennessee",
   "Alabama",
   "Florida",
-  "Tennessee",
-  "South Carolina",
   "North Carolina",
+  "South Carolina",
   "Texas",
-  "Other",
 ];
 
 const page: React.CSSProperties = {
@@ -463,7 +464,7 @@ export default function SubmitDealPage() {
   }, [files]);
 
   function buildRouteSummary(nextForm = form) {
-    const market = [nextForm.city, nextForm.state].filter(Boolean).join(", ") || "Market not listed";
+    const market = [nextForm.city, nextForm.county, nextForm.state].filter(Boolean).join(", ") || "Market not listed";
     const numbers = [
       nextForm.asking_price ? `Ask ${moneyText(nextForm.asking_price)}` : "",
       nextForm.arv ? `ARV ${moneyText(nextForm.arv)}` : "",
@@ -501,7 +502,7 @@ export default function SubmitDealPage() {
 
   function buildPayload(photoUrls: string[], email: string) {
     const summary = buildRouteSummary(form);
-    const market = [form.city, form.state].filter(Boolean).join(", ");
+    const market = [form.city, form.county, form.state].filter(Boolean).join(", ");
 
     return {
       // Direct live vf_deals columns
@@ -515,7 +516,9 @@ export default function SubmitDealPage() {
       status: "active",
       archived: false,
       city: form.city,
-      county: "",
+      county: form.county,
+      county_name: form.county,
+      market_county: form.county,
       address: form.address,
       asking_price: form.asking_price,
       arv: form.arv,
@@ -665,6 +668,16 @@ export default function SubmitDealPage() {
       return;
     }
 
+    if (!clean(form.state)) {
+      setStatus("State is required.");
+      return;
+    }
+
+    if (!clean(form.county)) {
+      setStatus("County is required.");
+      return;
+    }
+
     if (!clean(form.city)) {
       setStatus("City is required.");
       return;
@@ -751,7 +764,7 @@ export default function SubmitDealPage() {
           </h1>
 
           <p style={{ ...muted, fontSize: 20 }}>
-            This form saves directly into the live `vf_deals` columns. Values typed here are forced into the same names Projects and Deal Detail read.
+            This form saves directly into the live `vf_deals` columns. State, county, and city are required so Projects can group workstations by market buckets.
           </p>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
@@ -813,8 +826,9 @@ export default function SubmitDealPage() {
 
             <Grid>
               <Field labelText="Deal Title" name="title" value={form.title} onChange={update} placeholder="123 Maple deal, off-market duplex, etc." />
-              <Field labelText="City" name="city" value={form.city} onChange={update} placeholder="Cartersville" />
               <SelectField labelText="State" name="state" value={form.state} onChange={update} options={STATES} />
+              <Field labelText="County" name="county" value={form.county} onChange={update} placeholder="Bartow County" />
+              <Field labelText="City" name="city" value={form.city} onChange={update} placeholder="Cartersville" />
               <Field labelText="Address" name="address" value={form.address} onChange={update} placeholder="Optional private location" />
               <SelectField
                 labelText="Strategy"
