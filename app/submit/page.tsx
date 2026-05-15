@@ -51,6 +51,11 @@ type FormState = {
   jv_structure: string;
   title_issue: string;
   description: string;
+  owner_name: string;
+  owner_phone: string;
+  owner_contact_email: string;
+  preferred_contact: string;
+  contact_notes: string;
 };
 
 const initialForm: FormState = {
@@ -99,6 +104,11 @@ const initialForm: FormState = {
   jv_structure: "",
   title_issue: "",
   description: "",
+  owner_name: "",
+  owner_phone: "",
+  owner_contact_email: "",
+  preferred_contact: "Call first",
+  contact_notes: "",
 };
 
 const STATES = [
@@ -557,6 +567,11 @@ export default function SubmitDealPage() {
       nextForm.target_buyer ? `Target ${nextForm.target_buyer}` : "",
     ].filter(Boolean);
 
+    const contact = [
+      nextForm.owner_name ? `Owner ${nextForm.owner_name}` : "",
+      nextForm.preferred_contact ? `Preferred contact ${nextForm.preferred_contact}` : "",
+    ].filter(Boolean);
+
     return [
       `${nextForm.property_type} opportunity in ${market}`,
       nextForm.strategy ? `Strategy: ${nextForm.strategy}` : "",
@@ -564,6 +579,7 @@ export default function SubmitDealPage() {
       numbers.length ? `Economics: ${numbers.join(" / ")}` : "",
       physical.length ? `Asset: ${physical.join(" / ")}` : "",
       routing.length ? `Routing: ${routing.join(" / ")}` : "",
+      contact.length ? `Contact: ${contact.join(" / ")}` : "",
       nextForm.description ? `Notes: ${nextForm.description}` : "",
     ]
       .filter(Boolean)
@@ -625,10 +641,18 @@ export default function SubmitDealPage() {
       frontage: form.road_access,
       road_access: form.road_access,
       topography: "",
-      owner_name: "",
-      owner_phone: "",
-      owner_contact_email: "",
-      preferred_contact: "",
+      owner_name: form.owner_name,
+      owner_phone: form.owner_phone,
+      owner_contact_email: form.owner_contact_email,
+      preferred_contact: form.preferred_contact,
+      contact_name: form.owner_name,
+      contact_phone: form.owner_phone,
+      contact_email: form.owner_contact_email,
+      seller_name: form.owner_name,
+      seller_phone: form.owner_phone,
+      seller_email: form.owner_contact_email,
+      contact_notes: form.contact_notes,
+      seller_contact_notes: form.contact_notes,
       deleted: false,
       folder: "Active",
       deal_type: form.property_type,
@@ -994,6 +1018,22 @@ export default function SubmitDealPage() {
               <Field labelText="Operator / JV Scope" name="operator_scope" value={form.operator_scope} onChange={update} placeholder="Manage rehab, take lead, capital partner" />
               <Field labelText="JV Structure" name="jv_structure" value={form.jv_structure} onChange={update} placeholder="50/50, capital partner, operator split" />
               <Field labelText="Title Issue" name="title_issue" value={form.title_issue} onChange={update} placeholder="Probate, lien, unclear owner, no issue" />
+            </Grid>
+          </section>
+
+
+          <section style={card}>
+            <div style={label}>Owner / Seller Contact</div>
+            <p style={muted}>
+              Capture contact details for the private Deal Room. These should stay inside the execution room, not exposed on public workstation cards.
+            </p>
+
+            <Grid>
+              <Field labelText="Owner / Seller Name" name="owner_name" value={form.owner_name} onChange={update} placeholder="Owner, seller, agent, or source name" />
+              <Field labelText="Owner / Seller Phone" name="owner_phone" value={form.owner_phone} onChange={update} placeholder="Phone number" type="tel" />
+              <Field labelText="Owner / Seller Email" name="owner_contact_email" value={form.owner_contact_email} onChange={update} placeholder="Email address" type="email" />
+              <SelectField labelText="Preferred Contact" name="preferred_contact" value={form.preferred_contact} onChange={update} options={["Call first", "Text first", "Email first", "Message through VaultForge", "Owner review before contact"]} />
+              <TextAreaField labelText="Contact Notes" name="contact_notes" value={form.contact_notes} onChange={update} placeholder="Best time to call, who controls access, sensitivity, referral source, or special contact instructions." />
             </Grid>
           </section>
 
