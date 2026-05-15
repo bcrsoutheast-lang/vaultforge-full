@@ -587,6 +587,47 @@ function safeNetworkMember(member: AnyRow) {
     headline: member.headline || member.tagline || member.bio || member.about || member.summary || "",
     bio: member.bio || member.about || member.summary || member.notes || "",
 
+    profile_photo_url:
+      member.profile_photo_url ||
+      member.photo_url ||
+      member.avatar_url ||
+      member.image_url ||
+      metadata.profile_photo_url ||
+      metadata.photo_url ||
+      metadata.avatar_url ||
+      metadata.image_url ||
+      "",
+    photo_url:
+      member.photo_url ||
+      member.profile_photo_url ||
+      member.avatar_url ||
+      member.image_url ||
+      metadata.photo_url ||
+      metadata.profile_photo_url ||
+      metadata.avatar_url ||
+      metadata.image_url ||
+      "",
+    avatar_url:
+      member.avatar_url ||
+      member.profile_photo_url ||
+      member.photo_url ||
+      member.image_url ||
+      metadata.avatar_url ||
+      metadata.profile_photo_url ||
+      metadata.photo_url ||
+      metadata.image_url ||
+      "",
+    image_url:
+      member.image_url ||
+      member.profile_photo_url ||
+      member.photo_url ||
+      member.avatar_url ||
+      metadata.image_url ||
+      metadata.profile_photo_url ||
+      metadata.photo_url ||
+      metadata.avatar_url ||
+      "",
+
     home_state: baseState,
     based_state: baseState,
     base_state: baseState,
