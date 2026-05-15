@@ -1134,6 +1134,28 @@ export default function ProjectsPage() {
     setSavedIds(readSet("vf_project_saved_ids"));
     setArchivedIds(readSet("vf_project_archived_ids"));
     setDeletedIds(readSet("vf_project_deleted_ids"));
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const requestedFolder = clean(params.get("folder")).toLowerCase();
+      const requestedState = clean(params.get("state"));
+      const requestedCounty = clean(params.get("county"));
+
+      if (
+        requestedFolder === "active" ||
+        requestedFolder === "opportunity" ||
+        requestedFolder === "pressure" ||
+        requestedFolder === "saved" ||
+        requestedFolder === "archived" ||
+        requestedFolder === "deleted"
+      ) {
+        setFolder(requestedFolder as FolderMode);
+      }
+
+      if (requestedState) setSelectedState(requestedState);
+      if (requestedCounty) setSelectedCounty(requestedCounty);
+    }
+
     load();
   }, []);
 
@@ -1150,6 +1172,16 @@ export default function ProjectsPage() {
   function persistDeleted(next: Set<string>) {
     setDeletedIds(new Set(next));
     writeSet("vf_project_deleted_ids", next);
+  }
+
+  function selectFolder(nextFolder: FolderMode) {
+    setFolder(nextFolder);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("folder", nextFolder);
+      const nextUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, "", nextUrl);
+    }
   }
 
   function saveProject(row: Row) {
@@ -1211,7 +1243,7 @@ export default function ProjectsPage() {
 
   function emptyDeletedFolder() {
     persistDeleted(new Set());
-    setFolder("active");
+    selectFolder("active");
   }
 
   const visibleItems = useMemo(() => {
@@ -1393,12 +1425,12 @@ export default function ProjectsPage() {
           </div>
 
           <div className="vf-actions" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10, marginTop: 16 }}>
-            <button type="button" onClick={() => setFolder("active")} style={folder === "active" ? button : ghost}>Active ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key); }).length})</button>
-            <button type="button" onClick={() => setFolder("opportunity")} style={folder === "opportunity" ? button : ghost}>Opportunity Rooms ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key) && sourceOf(item) === "deal"; }).length})</button>
-            <button type="button" onClick={() => setFolder("pressure")} style={folder === "pressure" ? button : ghost}>Pressure Rooms ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key) && sourceOf(item) === "pain"; }).length})</button>
-            <button type="button" onClick={() => setFolder("saved")} style={folder === "saved" ? button : ghost}>Saved ({counts.saved})</button>
-            <button type="button" onClick={() => setFolder("archived")} style={folder === "archived" ? button : ghost}>Archived ({counts.archived})</button>
-            <button type="button" onClick={() => setFolder("deleted")} style={folder === "deleted" ? dangerGhost : ghost}>Deleted ({counts.deleted})</button>
+            <button type="button" onClick={() => selectFolder("active")} style={folder === "active" ? button : ghost}>Active ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key); }).length})</button>
+            <button type="button" onClick={() => selectFolder("opportunity")} style={folder === "opportunity" ? button : ghost}>Opportunity Rooms ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key) && sourceOf(item) === "deal"; }).length})</button>
+            <button type="button" onClick={() => selectFolder("pressure")} style={folder === "pressure" ? button : ghost}>Pressure Rooms ({items.filter((item) => { const key = canonicalKey(item); return key && !deletedIds.has(key) && !archivedIds.has(key) && sourceOf(item) === "pain"; }).length})</button>
+            <button type="button" onClick={() => selectFolder("saved")} style={folder === "saved" ? button : ghost}>Saved ({counts.saved})</button>
+            <button type="button" onClick={() => selectFolder("archived")} style={folder === "archived" ? button : ghost}>Archived ({counts.archived})</button>
+            <button type="button" onClick={() => selectFolder("deleted")} style={folder === "deleted" ? dangerGhost : ghost}>Deleted ({counts.deleted})</button>
             <button type="button" onClick={load} style={ghost}>Refresh</button>
             {folder === "deleted" ? <button type="button" onClick={emptyDeletedFolder} style={dangerGhost}>Empty Deleted</button> : null}
             <Link href="/submit" style={ghost}>Submit Opportunity</Link>
