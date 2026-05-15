@@ -164,6 +164,78 @@ function marketOf(row: Row) {
   return [first(r.city), first(r.state, r.operating_state)].filter(Boolean).join(", ") || first(r.market, r.location, "Market not listed");
 }
 
+const CORE_STATES = [
+  "Georgia",
+  "Tennessee",
+  "Alabama",
+  "Florida",
+  "North Carolina",
+  "South Carolina",
+  "Texas",
+];
+
+const STATE_ALIASES: Record<string, string> = {
+  ga: "Georgia",
+  georgia: "Georgia",
+  tn: "Tennessee",
+  tennessee: "Tennessee",
+  al: "Alabama",
+  alabama: "Alabama",
+  fl: "Florida",
+  florida: "Florida",
+  nc: "North Carolina",
+  "north carolina": "North Carolina",
+  "north-carolina": "North Carolina",
+  sc: "South Carolina",
+  "south carolina": "South Carolina",
+  "south-carolina": "South Carolina",
+  tx: "Texas",
+  texas: "Texas",
+};
+
+function normalizeStateName(value: unknown) {
+  const raw = clean(value);
+  if (!raw) return "";
+
+  const lower = raw.toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  const dash = lower.replace(/\s+/g, "-");
+
+  return STATE_ALIASES[raw.toLowerCase()] || STATE_ALIASES[lower] || STATE_ALIASES[dash] || "";
+}
+
+function stateOf(row: Row) {
+  const r = merged(row);
+  const direct = normalizeStateName(first(r.state, r.operating_state, r.market_state, r.property_state, r.location_state));
+  if (direct) return direct;
+
+  const market = marketOf(row);
+  const pieces = market.split(",").map((part) => clean(part)).filter(Boolean);
+
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const state = normalizeStateName(pieces[index]);
+    if (state) return state;
+  }
+
+  const full = `${market} ${first(r.location, r.address, r.property_address)}`.toLowerCase();
+  for (const state of CORE_STATES) {
+    if (full.includes(state.toLowerCase())) return state;
+  }
+
+  return "Unlisted";
+}
+
+function countyOf(row: Row) {
+  const r = merged(row);
+  const direct = first(r.county, r.county_name, r.market_county, r.submarket, r.area, r.city);
+  if (direct) return direct;
+
+  const market = marketOf(row);
+  const pieces = market.split(",").map((part) => clean(part)).filter(Boolean);
+  if (pieces.length >= 2) return pieces[0];
+
+  return first(r.location, r.address, r.property_address, "Unlisted");
+}
+
 function problemType(row: Row) {
   const r = merged(row);
   return first(r.problem_type, r.pain_type, r.asset_type, r.property_type, "Problem");
@@ -429,11 +501,87 @@ const chip: React.CSSProperties = {
   fontWeight: 900,
 };
 
+function StateBucket({
+  bucket,
+  active,
+  onClick,
+}: {
+  bucket: { state: string; total: number; urgent: number; capital: number; execution: number };
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        textAlign: "left",
+        border: active ? "1px solid rgba(232,196,107,.72)" : "1px solid rgba(255,255,255,.12)",
+        borderRadius: 22,
+        padding: 16,
+        background: active
+          ? "linear-gradient(145deg,rgba(232,196,107,.22),rgba(157,243,191,.08))"
+          : "linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.025))",
+        color: "white",
+        cursor: "pointer",
+        boxShadow: active ? "0 0 38px rgba(232,196,107,.18)" : "0 18px 54px rgba(0,0,0,.22)",
+      }}
+    >
+      <div style={{ color: active ? "#f8e7b0" : "#9df3bf", fontSize: 11, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase" }}>
+        State Pressure
+      </div>
+      <div style={{ fontSize: 28, lineHeight: 1, fontWeight: 1000, marginTop: 9 }}>{bucket.state}</div>
+      <div style={{ fontSize: 48, lineHeight: 1, fontWeight: 1000, marginTop: 14, color: "#f8e7b0" }}>{bucket.total}</div>
+      <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 5 }}>pain cases</div>
+      <div style={{ color: "#cbd5e1", fontSize: 12, marginTop: 10 }}>
+        {bucket.urgent} urgent · {bucket.capital} capital · {bucket.execution} execution
+      </div>
+    </button>
+  );
+}
+
+function CountyBucket({
+  bucket,
+  active,
+  onClick,
+}: {
+  bucket: { county: string; total: number; urgent: number; capital: number; execution: number };
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        textAlign: "left",
+        border: active ? "1px solid rgba(157,243,191,.60)" : "1px solid rgba(255,255,255,.12)",
+        borderRadius: 18,
+        padding: 14,
+        background: active ? "rgba(157,243,191,.13)" : "rgba(255,255,255,.045)",
+        color: "white",
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ color: "#9df3bf", fontSize: 10, fontWeight: 950, letterSpacing: ".12em", textTransform: "uppercase" }}>
+        County / City
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 1000, marginTop: 8 }}>{bucket.county}</div>
+      <div style={{ fontSize: 32, fontWeight: 1000, color: "#f8e7b0", marginTop: 7 }}>{bucket.total}</div>
+      <div style={{ color: "#94a3b8", fontSize: 12 }}>
+        {bucket.urgent} urgent · {bucket.capital} capital · {bucket.execution} execution
+      </div>
+    </button>
+  );
+}
+
 export default function PainFeedPage() {
   const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading Pain Feed...");
   const [email, setEmail] = useState("");
   const [folder, setFolder] = useState<Folder>("active");
+  const [selectedState, setSelectedState] = useState("All");
+  const [selectedCounty, setSelectedCounty] = useState("All");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
@@ -564,7 +712,7 @@ export default function PainFeedPage() {
     persistArchived(nextArchived);
   }
 
-  const visibleItems = useMemo(() => {
+  const folderItems = useMemo(() => {
     return items.filter((row) => {
       const key = keyOf(row);
       if (!key) return false;
@@ -578,6 +726,62 @@ export default function PainFeedPage() {
       return !archived;
     });
   }, [items, savedIds, archivedIds, deletedIds, folder]);
+
+  const stateBuckets = useMemo(() => {
+    return CORE_STATES.map((state) => {
+      const stateItems = folderItems.filter((row) => stateOf(row) === state);
+
+      return {
+        state,
+        total: stateItems.length,
+        urgent: stateItems.filter((row) => laneOf(row) === "urgent").length,
+        capital: stateItems.filter((row) => laneOf(row) === "capital").length,
+        execution: stateItems.filter((row) => laneOf(row) === "execution").length,
+      };
+    });
+  }, [folderItems]);
+
+  const countyBuckets = useMemo(() => {
+    if (selectedState === "All") return [];
+
+    const map = new Map<string, { county: string; total: number; urgent: number; capital: number; execution: number }>();
+
+    for (const row of folderItems) {
+      if (stateOf(row) !== selectedState) continue;
+
+      const county = countyOf(row) || "Unlisted";
+      const current = map.get(county) || {
+        county,
+        total: 0,
+        urgent: 0,
+        capital: 0,
+        execution: 0,
+      };
+
+      current.total += 1;
+
+      const lane = laneOf(row);
+      if (lane === "urgent") current.urgent += 1;
+      if (lane === "capital") current.capital += 1;
+      if (lane === "execution") current.execution += 1;
+
+      map.set(county, current);
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.county === "Unlisted") return 1;
+      if (b.county === "Unlisted") return -1;
+      return b.total - a.total || a.county.localeCompare(b.county);
+    });
+  }, [folderItems, selectedState]);
+
+  const visibleItems = useMemo(() => {
+    return folderItems.filter((row) => {
+      if (selectedState !== "All" && stateOf(row) !== selectedState) return false;
+      if (selectedCounty !== "All" && countyOf(row) !== selectedCounty) return false;
+      return true;
+    });
+  }, [folderItems, selectedState, selectedCounty]);
 
   const counts = useMemo(() => {
     const live = items.filter((row) => {
@@ -621,7 +825,9 @@ export default function PainFeedPage() {
     >
       <style>{`
         @media (max-width: 860px) {
-          .pain-board { grid-template-columns: 1fr !important; }
+          .pain-board,
+          .pain-state-grid,
+          .pain-county-grid { grid-template-columns: 1fr !important; }
           .pain-summary-grid { grid-template-columns: 1fr 1fr !important; }
           .pain-actions { display: grid !important; grid-template-columns: 1fr !important; }
           .pain-actions > * { width: 100%; box-sizing: border-box; }
@@ -692,7 +898,7 @@ export default function PainFeedPage() {
           </div>
 
           <div style={{ marginTop: 12, color: "#94a3b8", fontWeight: 800 }}>
-            Signed in: {email || "unknown"} · Archived: {counts.archived}
+            Signed in: {email || "unknown"} · Archived: {counts.archived} · State: {selectedState} · Market: {selectedCounty}
           </div>
 
           <div className="pain-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
@@ -707,6 +913,96 @@ export default function PainFeedPage() {
             </div>
           ) : null}
         </section>
+
+        <section
+          style={{
+            border: "1px solid rgba(232,196,107,.20)",
+            borderRadius: 30,
+            padding: 24,
+            background: "linear-gradient(145deg,rgba(255,255,255,.050),rgba(255,255,255,.025))",
+            boxShadow: "0 26px 80px rgba(0,0,0,.28)",
+            margin: "12px 0 18px",
+          }}
+        >
+          <div style={{ color: "#e8c46b", fontWeight: 950, letterSpacing: ".18em", textTransform: "uppercase", fontSize: 12 }}>
+            State Pressure Buckets
+          </div>
+          <h2 style={{ fontSize: "clamp(36px,7vw,68px)", lineHeight: 0.92, letterSpacing: "-.06em", margin: "10px 0 10px" }}>
+            Pick a state. Read the pain.
+          </h2>
+          <p style={{ color: "#cbd5e1", maxWidth: 980, fontSize: 18, lineHeight: 1.5, margin: 0 }}>
+            Pain rooms are grouped by operating state first, then county/city so members can move market by market instead of working one giant pressure pile.
+          </p>
+
+          <div className="pain-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16, marginBottom: 16 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedState("All");
+                setSelectedCounty("All");
+              }}
+              style={selectedState === "All" ? mainBtn : ghostBtn}
+            >
+              All States ({stateBuckets.reduce((sum, bucket) => sum + bucket.total, 0)})
+            </button>
+          </div>
+
+          <div className="pain-state-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12 }}>
+            {stateBuckets.map((bucket) => (
+              <StateBucket
+                key={bucket.state}
+                bucket={bucket}
+                active={selectedState === bucket.state}
+                onClick={() => {
+                  setSelectedState(bucket.state);
+                  setSelectedCounty("All");
+                }}
+              />
+            ))}
+          </div>
+        </section>
+
+        {selectedState !== "All" ? (
+          <section
+            style={{
+              border: "1px solid rgba(157,243,191,.18)",
+              borderRadius: 28,
+              padding: 22,
+              background: "rgba(255,255,255,.035)",
+              margin: "12px 0 18px",
+            }}
+          >
+            <div style={{ color: "#9df3bf", fontWeight: 950, letterSpacing: ".16em", textTransform: "uppercase", fontSize: 12 }}>
+              {selectedState} County / City Buckets
+            </div>
+            <h2 style={{ fontSize: "clamp(30px,5vw,54px)", lineHeight: 0.95, letterSpacing: "-.05em", margin: "10px 0" }}>
+              Drill into the local pressure.
+            </h2>
+
+            <div className="pain-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14, marginBottom: 16 }}>
+              <button type="button" onClick={() => setSelectedCounty("All")} style={selectedCounty === "All" ? mainBtn : ghostBtn}>
+                All {selectedState} ({countyBuckets.reduce((sum, bucket) => sum + bucket.total, 0)})
+              </button>
+            </div>
+
+            {countyBuckets.length ? (
+              <div className="pain-county-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
+                {countyBuckets.map((bucket) => (
+                  <CountyBucket
+                    key={bucket.county}
+                    bucket={bucket}
+                    active={selectedCounty === bucket.county}
+                    onClick={() => setSelectedCounty(bucket.county)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={{ border: "1px solid rgba(232,196,107,.20)", borderRadius: 18, padding: 16, color: "#f8e7b0", background: "rgba(232,196,107,.06)" }}>
+                No county/city buckets for this state yet.
+              </div>
+            )}
+          </section>
+        ) : null}
 
         {topPressure.length ? (
           <section style={{ marginBottom: 18 }}>
