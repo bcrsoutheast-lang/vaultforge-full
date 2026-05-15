@@ -55,6 +55,42 @@ function laneHome(lane: Lane) {
   return "/workstations";
 }
 
+function folderUrlForStage(lane: Lane, stage: string) {
+  const lower = stage.toLowerCase();
+
+  if (lane === "opportunity") {
+    if (lower.includes("hot")) return "/opportunity-rooms/hot";
+    if (lower.includes("underwrite")) return "/opportunity-rooms/underwrite";
+    if (lower.includes("buyer")) return "/opportunity-rooms/needs-buyer";
+    if (lower.includes("capital") || lower.includes("fund")) return "/opportunity-rooms/needs-capital";
+    if (lower.includes("operator")) return "/opportunity-rooms/needs-operator";
+    if (lower.includes("routed") || lower.includes("assigned")) return "/opportunity-rooms/routed";
+    if (lower.includes("archived")) return "/opportunity-rooms/archived";
+    if (lower.includes("dead")) return "/opportunity-rooms/deleted";
+    if (lower.includes("closed") || lower.includes("funded")) return "/opportunity-rooms/routed";
+    return "/opportunity-rooms/active";
+  }
+
+  if (lane === "pressure") {
+    if (lower.includes("critical")) return "/pressure-rooms/urgent";
+    if (lower.includes("funding") || lower.includes("capital")) return "/pressure-rooms/funding-gap";
+    if (lower.includes("buyer")) return "/pressure-rooms/needs-buyer";
+    if (lower.includes("operator") || lower.includes("contractor")) return "/pressure-rooms/needs-operator";
+    if (lower.includes("routed") || lower.includes("escalated")) return "/pressure-rooms/routed";
+    if (lower.includes("solved")) return "/pressure-rooms/solved";
+    if (lower.includes("archived")) return "/pressure-rooms/archived";
+    if (lower.includes("legal") || lower.includes("title") || lower.includes("city") || lower.includes("permit") || lower.includes("distressed")) return "/pressure-rooms/urgent";
+    return "/pressure-rooms/active";
+  }
+
+  return "/workstations";
+}
+
+function goToFolderForStage(lane: Lane, stage: string) {
+  if (typeof window === "undefined") return;
+  window.location.href = folderUrlForStage(lane, stage);
+}
+
 function stageOptions(lane: Lane) {
   if (lane === "opportunity") {
     return [
@@ -193,7 +229,8 @@ export default function VaultForgeRoomCommandBar({
     key: string,
     nextValue: boolean,
     setter: (value: boolean) => void,
-    actionName?: string
+    actionName?: string,
+    shouldRecord = true
   ) {
     const next = readSet(key);
 
@@ -219,7 +256,7 @@ export default function VaultForgeRoomCommandBar({
           : "restore_deleted"
         : "room_control");
 
-    recordRoomAction(inferredAction, stage, stage);
+    if (shouldRecord) recordRoomAction(inferredAction, stage, stage);
   }
 
   async function recordRoomAction(action: string, nextStage?: string, previousStage?: string) {
@@ -245,17 +282,20 @@ export default function VaultForgeRoomCommandBar({
     }
   }
 
-  async function changeStage(nextStage: string) {
+  async function changeStage(nextStage / Move: string) {
     const previousStage = stage;
     const map = readStageMap(lane);
     map[cleanId] = nextStage;
     writeStageMap(lane, map);
     setStage(nextStage);
-    recordRoomAction("stage_change", nextStage, previousStage);
 
-    if (nextStage === "Archived") toggleSet(archiveKey, true, setArchived, "archive");
-    if (nextStage === "Dead") toggleSet(deleteKey, true, setDeleted, "delete");
-    if (nextStage === "Solved" || nextStage === "Closed") toggleSet(archiveKey, false, setArchived, "restore_archive");
+    await recordRoomAction("stage_change", nextStage, previousStage);
+
+    if (nextStage === "Archived") toggleSet(archiveKey, true, setArchived, "archive", false);
+    if (nextStage === "Dead") toggleSet(deleteKey, true, setDeleted, "delete", false);
+    if (nextStage === "Solved" || nextStage === "Closed") toggleSet(archiveKey, false, setArchived, "restore_archive", false);
+
+    goToFolderForStage(lane, nextStage);
   }
 
   const threadHref = `/messages/new?source=room-command&type=${encodeURIComponent(lane)}&folder=rooms&folder_key=rooms&item_id=${encodeURIComponent(cleanId)}${ownerEmail ? `&to=${encodeURIComponent(ownerEmail)}` : ""}&title=${encodeURIComponent(roomTitle)}&subject=${encodeURIComponent(`Room Command: ${roomTitle}`)}`;
@@ -327,7 +367,7 @@ export default function VaultForgeRoomCommandBar({
             >
               {stage}
             </span>{" "}
-            · Save, archive, delete, route, or create an internal command thread.
+            · Stage buttons mark the room and move you to the matching folder. Save/archive/delete stay as cleanup controls.
           </div>
         </div>
 
