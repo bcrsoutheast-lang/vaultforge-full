@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-type Row = Record<string, any>;
+export const dynamic = "force-dynamic";
 
-const OPERATING_STATES = [
+type Member = Record<string, any>;
+
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+
+const STATES = [
   "Georgia",
   "Florida",
   "North Carolina",
@@ -14,6 +19,22 @@ const OPERATING_STATES = [
   "Tennessee",
   "Alabama",
   "Texas",
+];
+
+const ROLE_OPTIONS = [
+  "All",
+  "Buyer",
+  "Seller",
+  "Lender",
+  "Private Money",
+  "Contractor",
+  "Wholesaler",
+  "Investor",
+  "Developer",
+  "Operator",
+  "Partner",
+  "Realtor",
+  "Broker",
 ];
 
 const STATE_ALIASES: Record<string, string> = {
@@ -33,18 +54,18 @@ const STATE_ALIASES: Record<string, string> = {
   texas: "Texas",
 };
 
-function normalizeState(value: unknown) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (!raw) return "";
-  return STATE_ALIASES[raw] || "";
-}
-
 function clean(value: unknown) {
   return String(value || "").trim();
 }
 
 function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
+}
+
+function normalizeState(value: unknown) {
+  const raw = clean(value).toLowerCase();
+  if (!raw || raw === "all") return "";
+  return STATE_ALIASES[raw] || "";
 }
 
 function readCookie(name: string) {
@@ -67,22 +88,188 @@ function readCookie(name: string) {
 function getEmail() {
   if (typeof window === "undefined") return "";
 
-  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-
-  for (const key of keys) {
-    const localValue = cleanEmail(window.localStorage.getItem(key));
-    if (localValue.includes("@")) return localValue;
-
-    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
-    if (sessionValue.includes("@")) return sessionValue;
+  try {
+    return cleanEmail(
+      window.localStorage.getItem("vf_email") ||
+        window.sessionStorage.getItem("vf_email") ||
+        readCookie("vf_email") ||
+        readCookie("vf_admin_email") ||
+        ""
+    );
+  } catch {
+    return cleanEmail(readCookie("vf_email") || readCookie("vf_admin_email") || "");
   }
-
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
 }
 
-function readStateFromUrl() {
-  if (typeof window === "undefined") return "";
-  return normalizeState(new URLSearchParams(window.location.search).get("state") || "");
+function isOwnerMode(email: string) {
+  return (
+    cleanEmail(email) === OWNER_EMAIL ||
+    readCookie("vf_admin") === "1" ||
+    readCookie("isAdmin") === "true" ||
+    cleanEmail(readCookie("vf_admin_email")) === OWNER_EMAIL
+  );
+}
+
+function first(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function asArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+
+  const raw = clean(value);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
+  } catch {
+    // Keep going and split the raw value.
+  }
+
+  return raw
+    .split(/[,
+|;]/)
+    .map(clean)
+    .filter(Boolean);
+}
+
+function meta(member: Member) {
+  return typeof member?.metadata === "object" && member.metadata ? member.metadata : {};
+}
+
+function unique(values: string[]) {
+  return Array.from(new Set(values.map(clean).filter(Boolean)));
+}
+
+function memberId(member: Member) {
+  const m = meta(member);
+  return first(member.id, member.profile_id, member.member_id, member._source_id, member.auth_user_id, member.email, m.id, m.profile_id);
+}
+
+function memberEmail(member: Member) {
+  const m = meta(member);
+  return cleanEmail(first(member.email, member.member_email, member.owner_email, m.email, m.member_email, m.owner_email));
+}
+
+function memberName(member: Member) {
+  const m = meta(member);
+  return first(member.full_name, member.name, member.display_name, member.company, member.member_name, m.full_name, m.name, m.display_name, memberEmail(member), "VaultForge Member");
+}
+
+function companyOf(member: Member) {
+  const m = meta(member);
+  return first(member.company, member.company_name, member.business_name, m.company, m.company_name, m.business_name, "VaultForge");
+}
+
+function hasRealEmail(member: Member) {
+  const email = memberEmail(member);
+  return email.includes("@") && !email.endsWith("@example.com");
+}
+
+function memberRoles(member: Member) {
+  const m = meta(member);
+  return unique([
+    ...asArray(member.member_types),
+    ...asArray(member.member_type),
+    ...asArray(member.roles),
+    ...asArray(member.role),
+    ...asArray(member.primary_role),
+    ...asArray(m.member_types),
+    ...asArray(m.member_type),
+    ...asArray(m.roles),
+    ...asArray(m.role),
+  ]);
+}
+
+function memberBaseState(member: Member) {
+  const m = meta(member);
+
+  const raw = first(
+    member.home_state,
+    member.based_state,
+    member.base_state,
+    member.from_state,
+    member.member_state,
+    member.state,
+    member.primary_state,
+    member.location_state,
+    m.home_state,
+    m.based_state,
+    m.base_state,
+    m.from_state,
+    m.member_state,
+    m.state,
+    m.primary_state,
+    m.location_state
+  );
+
+  return normalizeState(raw);
+}
+
+function memberMarkets(member: Member) {
+  const m = meta(member);
+
+  return unique([
+    ...asArray(member.markets),
+    ...asArray(member.operating_states),
+    ...asArray(member.buy_box_states),
+    ...asArray(member.market_states),
+    ...asArray(member.service_states),
+    ...asArray(member.target_states),
+    ...asArray(m.markets),
+    ...asArray(m.operating_states),
+    ...asArray(m.buy_box_states),
+    ...asArray(m.market_states),
+    ...asArray(m.service_states),
+    ...asArray(m.target_states),
+    memberBaseState(member),
+  ].map(normalizeState).filter(Boolean));
+}
+
+function memberStrategies(member: Member) {
+  const m = meta(member);
+  return unique([...asArray(member.strategies), ...asArray(member.strategy), ...asArray(member.asset_focus), ...asArray(m.strategies), ...asArray(m.strategy), ...asArray(m.asset_focus)]).slice(0, 10);
+}
+
+function memberProvides(member: Member) {
+  const m = meta(member);
+  return unique([...asArray(member.can_provide), ...asArray(member.what_i_provide), ...asArray(member.provides), ...asArray(member.capabilities), ...asArray(m.can_provide), ...asArray(m.what_i_provide), ...asArray(m.provides), ...asArray(m.capabilities)]).slice(0, 10);
+}
+
+function memberNeeds(member: Member) {
+  const m = meta(member);
+  return unique([...asArray(member.needs), ...asArray(member.deal_needs), ...asArray(member.what_i_need), ...asArray(member.looking_for), ...asArray(m.needs), ...asArray(m.deal_needs), ...asArray(m.what_i_need), ...asArray(m.looking_for)]).slice(0, 10);
+}
+
+function memberBio(member: Member) {
+  const m = meta(member);
+  return first(member.bio, member.description, member.strategy_summary, member.buy_box, member.notes, m.bio, m.description, m.strategy_summary, m.buy_box, "Private member profile ready for opportunity alignment.");
+}
+
+function statusOf(member: Member) {
+  return first(member.access_status, member.member_status, member.status, member.payment_status, "member").toLowerCase();
+}
+
+function accepted(member: Member) {
+  const text = `${statusOf(member)} ${first(member.network_status, member.accepted_network, meta(member).network_status, meta(member).accepted_network)}`.toLowerCase();
+  return text.includes("active") || text.includes("accepted") || text.includes("member") || text.includes("paid");
+}
+
+function scoreOf(member: Member) {
+  let score = Number(member.alignment_score || member.match_score || member.score || 0);
+  if (!Number.isFinite(score) || score <= 0) score = 50;
+  if (memberBaseState(member)) score += 12;
+  if (memberMarkets(member).length) score += 10;
+  if (memberRoles(member).length) score += 8;
+  if (memberProvides(member).length) score += 8;
+  if (memberNeeds(member).length) score += 6;
+  if (accepted(member)) score += 8;
+  return Math.min(100, Math.max(0, Math.round(score)));
 }
 
 async function safeJson(res: Response) {
@@ -93,222 +280,7 @@ async function safeJson(res: Response) {
   }
 }
 
-function meta(row: Row) {
-  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      const found = value.find((item) => clean(item));
-      if (found !== undefined) return clean(found);
-      continue;
-    }
-
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
-}
-
-function splitList(value: unknown) {
-  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
-  if (typeof value === "string") {
-    return value
-      .split(/[,\n|;]/)
-      .map(clean)
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function unique(values: string[]) {
-  return Array.from(new Set(values.map(clean).filter(Boolean)));
-}
-
-function memberId(row: Row) {
-  const m = meta(row);
-  return first(row.id, row.profile_id, row.member_id, row.auth_user_id, m.id, m.profile_id, m.member_id);
-}
-
-function emailOf(row: Row) {
-  const m = meta(row);
-  return cleanEmail(first(row.email, row.member_email, row.user_email, m.email, m.member_email, m.user_email));
-}
-
-function nameOf(row: Row) {
-  const m = meta(row);
-  return first(row.full_name, row.name, row.display_name, row.username, m.full_name, m.name, m.display_name, emailOf(row), "VaultForge Member");
-}
-
-function companyOf(row: Row) {
-  const m = meta(row);
-  return first(row.company, row.company_name, row.business_name, m.company, m.company_name, m.business_name, "VaultForge");
-}
-
-function statusOf(row: Row) {
-  const m = meta(row);
-  return first(row.access_status, row.member_status, row.status, row.payment_status, m.access_status, m.member_status, m.status, "member");
-}
-
-function photoOf(row: Row) {
-  const m = meta(row);
-  return first(row.profile_photo_url, row.avatar_url, row.photo_url, row.image_url, m.profile_photo_url, m.avatar_url, m.photo_url, m.image_url);
-}
-
-function statesOf(row: Row) {
-  const m = meta(row);
-
-  const raw = unique([
-    ...splitList(row.states),
-    ...splitList(row.operating_states),
-    ...splitList(row.deal_states),
-    ...splitList(row.markets),
-    ...splitList(row.service_states),
-    ...splitList(row.work_states),
-    ...splitList(row.preferred_states),
-    ...splitList(row.target_states),
-    ...splitList(m.states),
-    ...splitList(m.operating_states),
-    ...splitList(m.deal_states),
-    ...splitList(m.markets),
-    ...splitList(m.service_states),
-    ...splitList(m.work_states),
-    ...splitList(m.preferred_states),
-    ...splitList(m.target_states),
-    first(row.state, row.home_state, row.operating_state, m.state, m.home_state, m.operating_state),
-  ]);
-
-  const normalized = raw
-    .map((state) => normalizeState(state))
-    .filter(Boolean);
-
-  return unique(normalized);
-}
-
-
-function basedStateOf(row: Row) {
-  const m = meta(row);
-
-  const raw = first(
-    row.home_state,
-    row.based_state,
-    row.base_state,
-    row.member_state,
-    row.state,
-    row.location_state,
-    row.primary_state,
-    row.market_state,
-    m.home_state,
-    m.based_state,
-    m.base_state,
-    m.member_state,
-    m.state,
-    m.location_state,
-    m.primary_state,
-    m.market_state
-  );
-
-  return normalizeState(raw);
-}
-
-function basedStateDisplay(row: Row) {
-  return basedStateOf(row) || "Base state not listed";
-}
-
-
-function filterStatesOf(row: Row) {
-  const base = basedStateOf(row);
-  return base ? [base] : [];
-}
-
-function visibleBaseStateOf(row: Row) {
-  return basedStateOf(row);
-}
-
-function visibleBaseStateDisplay(row: Row) {
-  return visibleBaseStateOf(row) || "Base state not listed";
-}
-
-function rolesOf(row: Row) {
-  const m = meta(row);
-  return unique([
-    ...splitList(row.member_types),
-    ...splitList(row.member_type),
-    ...splitList(row.roles),
-    ...splitList(row.role),
-    ...splitList(m.member_types),
-    ...splitList(m.member_type),
-    ...splitList(m.roles),
-    ...splitList(m.role),
-  ]).slice(0, 8);
-}
-
-function strategiesOf(row: Row) {
-  const m = meta(row);
-  return unique([
-    ...splitList(row.strategies),
-    ...splitList(row.strategy),
-    ...splitList(row.asset_focus),
-    ...splitList(m.strategies),
-    ...splitList(m.strategy),
-    ...splitList(m.asset_focus),
-  ]).slice(0, 10);
-}
-
-function capabilitiesOf(row: Row) {
-  const m = meta(row);
-  return unique([
-    ...splitList(row.can_provide),
-    ...splitList(row.provides),
-    ...splitList(row.capabilities),
-    ...splitList(row.skills),
-    ...splitList(m.can_provide),
-    ...splitList(m.provides),
-    ...splitList(m.capabilities),
-    ...splitList(m.skills),
-  ]).slice(0, 10);
-}
-
-function needsOf(row: Row) {
-  const m = meta(row);
-  return unique([
-    ...splitList(row.needs),
-    ...splitList(row.looking_for),
-    ...splitList(row.pain_signals),
-    ...splitList(m.needs),
-    ...splitList(m.looking_for),
-    ...splitList(m.pain_signals),
-  ]).slice(0, 10);
-}
-
-function strategyNote(row: Row) {
-  const m = meta(row);
-  return first(row.strategy_notes, row.buy_box, row.notes, row.description, m.strategy_notes, m.buy_box, m.notes, "Network profile ready for alignment.");
-}
-
-function accepted(row: Row) {
-  const text = `${statusOf(row)} ${first(row.network_status, row.accepted_network, meta(row).network_status, meta(row).accepted_network)}`.toLowerCase();
-  return text.includes("accepted") || text.includes("active") || text.includes("member");
-}
-
-function scoreOf(row: Row) {
-  const m = meta(row);
-  let score = Number(row.alignment_score || row.match_score || row.score || m.alignment_score || m.match_score || 0);
-
-  if (!Number.isFinite(score) || score <= 0) score = 50;
-  if (statesOf(row).length) score += 12;
-  if (rolesOf(row).length) score += 8;
-  if (capabilitiesOf(row).length) score += 10;
-  if (needsOf(row).length) score += 6;
-  if (photoOf(row)) score += 4;
-  if (accepted(row)) score += 10;
-
-  return Math.min(100, Math.max(0, Math.round(score)));
-}
-
-const page: React.CSSProperties = {
+const page: CSSProperties = {
   minHeight: "100vh",
   background:
     "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(74,222,128,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
@@ -317,12 +289,9 @@ const page: React.CSSProperties = {
   fontFamily: "Arial, sans-serif",
 };
 
-const wrap: React.CSSProperties = {
-  width: "min(1220px,100%)",
-  margin: "0 auto",
-};
+const wrap: CSSProperties = { width: "min(1220px,100%)", margin: "0 auto" };
 
-const card: React.CSSProperties = {
+const panel: CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
   borderRadius: 30,
   padding: 24,
@@ -331,14 +300,14 @@ const card: React.CSSProperties = {
   marginBottom: 18,
 };
 
-const glass: React.CSSProperties = {
+const glass: CSSProperties = {
   border: "1px solid rgba(255,255,255,.12)",
   borderRadius: 22,
   padding: 18,
   background: "rgba(255,255,255,.045)",
 };
 
-const eyebrow: React.CSSProperties = {
+const eyebrow: CSSProperties = {
   color: "#e8c46b",
   letterSpacing: ".18em",
   textTransform: "uppercase",
@@ -346,12 +315,9 @@ const eyebrow: React.CSSProperties = {
   fontSize: 12,
 };
 
-const muted: React.CSSProperties = {
-  color: "#cbd5e1",
-  lineHeight: 1.55,
-};
+const muted: CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
 
-const button: React.CSSProperties = {
+const button: CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
@@ -363,16 +329,17 @@ const button: React.CSSProperties = {
   color: "#06100a",
   fontWeight: 950,
   textDecoration: "none",
+  cursor: "pointer",
 };
 
-const ghost: React.CSSProperties = {
+const ghost: CSSProperties = {
   ...button,
   background: "rgba(255,255,255,.06)",
   border: "1px solid rgba(255,255,255,.16)",
   color: "white",
 };
 
-const chip: React.CSSProperties = {
+const chip: CSSProperties = {
   border: "1px solid rgba(157,243,191,.22)",
   borderRadius: 999,
   padding: "7px 10px",
@@ -384,144 +351,107 @@ const chip: React.CSSProperties = {
   display: "inline-flex",
 };
 
-const stateChip: React.CSSProperties = {
+const blueChip: CSSProperties = {
   ...chip,
   color: "#8fd3ff",
   borderColor: "rgba(56,189,248,.30)",
   background: "rgba(56,189,248,.08)",
 };
 
-function Metric({ label, value, tone }: { label: string; value: string; tone: "blue" | "green" | "gold" | "red" }) {
-  const color = tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
+const input: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,.16)",
+  background: "rgba(255,255,255,.08)",
+  color: "white",
+  padding: 15,
+  fontSize: 16,
+  outline: "none",
+};
 
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <section style={glass}>
-      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>{label}</div>
-      <div style={{ fontSize: 52, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
+      <div style={eyebrow}>{label}</div>
+      <div style={{ fontSize: 48, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
     </section>
   );
 }
 
-function MemberCard({ row, viewer }: { row: Row; viewer: string }) {
-  const id = memberId(row);
-  const email = emailOf(row);
-  const photo = photoOf(row);
-  const score = scoreOf(row);
-  const roles = rolesOf(row);
-  const states = statesOf(row);
-  const capabilities = capabilitiesOf(row);
-  const needs = needsOf(row);
-  const strategies = strategiesOf(row);
-  const connectHref = `/connect/member-${encodeURIComponent(id || email || nameOf(row))}?email=${encodeURIComponent(viewer)}${email ? `&to=${encodeURIComponent(email)}` : ""}&source=member&subject=${encodeURIComponent("VaultForge member connection request")}`;
+function MemberCard({ member, viewer }: { member: Member; viewer: string }) {
+  const email = memberEmail(member);
+  const baseState = memberBaseState(member);
+  const markets = memberMarkets(member);
+  const roles = memberRoles(member);
+  const strategies = memberStrategies(member);
+  const provides = memberProvides(member);
+  const needs = memberNeeds(member);
+  const score = scoreOf(member);
+  const connectHref = `/connect/member-${encodeURIComponent(memberId(member) || email || memberName(member))}?email=${encodeURIComponent(viewer)}${email ? `&to=${encodeURIComponent(email)}` : ""}&source=member&subject=${encodeURIComponent("VaultForge member connection request")}`;
 
   return (
     <article style={glass}>
-      <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 18 }}>
-        <div
-          style={{
-            borderRadius: 22,
-            overflow: "hidden",
-            border: "1px solid rgba(232,196,107,.18)",
-            background: "rgba(0,0,0,.20)",
-            minHeight: 170,
-          }}
-        >
-          {photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photo} alt="Member profile" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          ) : (
-            <div style={{ height: 170, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850, textAlign: "center" }}>
-              Member<br />Profile
-            </div>
-          )}
-        </div>
-
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
-            <div>
-              <div style={eyebrow}>Member Profile</div>
-              <h3 style={{ fontSize: 38, lineHeight: 1.02, margin: "8px 0 8px" }}>{nameOf(row)}</h3>
-              <p style={{ ...muted, margin: "0 0 8px", fontWeight: 900, color: "white" }}>{companyOf(row)}</p>
-              {email ? <p style={{ color: "#cbd5e1", fontWeight: 850, margin: 0 }}>{email}</p> : null}
-            </div>
+          <div style={eyebrow}>Member Profile</div>
+          <h3 style={{ fontSize: 38, lineHeight: 1.02, margin: "8px 0" }}>{memberName(member)}</h3>
+          <p style={{ ...muted, margin: "0 0 8px", fontWeight: 900, color: "white" }}>{companyOf(member)}</p>
+          {email ? <p style={{ ...muted, margin: 0, fontWeight: 850 }}>{email}</p> : null}
+        </div>
 
-            <div
-              style={{
-                border: "1px solid rgba(232,196,107,.28)",
-                borderRadius: 20,
-                minWidth: 86,
-                padding: 14,
-                textAlign: "center",
-                background: "rgba(232,196,107,.06)",
-              }}
-            >
-              <div style={{ fontSize: 42, lineHeight: 1, fontWeight: 1000, color: "#f8e7b0" }}>{score}</div>
-              <div style={{ color: "#cbd5e1", fontSize: 12, marginTop: 6, fontWeight: 850 }}>Network fit</div>
-            </div>
-          </div>
+        <div style={{ border: "1px solid rgba(232,196,107,.28)", borderRadius: 20, minWidth: 86, padding: 14, textAlign: "center", background: "rgba(232,196,107,.06)" }}>
+          <div style={{ fontSize: 42, lineHeight: 1, fontWeight: 1000, color: "#f8e7b0" }}>{score}</div>
+          <div style={{ color: "#cbd5e1", fontSize: 12, marginTop: 6, fontWeight: 850 }}>Network fit</div>
+        </div>
+      </div>
 
-          <div style={{ marginTop: 14 }}>
-            <span style={{ ...chip, color: accepted(row) ? "#9df3bf" : "#f8e7b0" }}>
-              Network: {accepted(row) ? "Accepted" : "Pending"}
-            </span>
-            {(roles.length ? roles : ["Member"]).map((role) => <span key={role} style={chip}>{role}</span>)}
-          </div>
+      <div style={{ marginTop: 14 }}>
+        <span style={chip}>Network: {accepted(member) ? "Accepted" : "Pending"}</span>
+        {(roles.length ? roles : ["Member"]).map((role) => <span key={role} style={chip}>{role}</span>)}
+      </div>
 
-          <div style={{ marginTop: 12 }}>
-            <div style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 950, marginBottom: 8 }}>
-              Based In
-            </div>
-            <span style={visibleBaseStateOf(row) ? stateChip : chip}>{visibleBaseStateDisplay(row)}</span>
-          </div>
+      <div style={{ marginTop: 14 }}>
+        <div style={eyebrow}>Based In</div>
+        <span style={baseState ? blueChip : chip}>{baseState || "Base state not listed"}</span>
+      </div>
 
-          {states.length ? (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 950, marginBottom: 8 }}>
-                Markets / Reach
-              </div>
-              {states.map((state) => (
-                <span key={state} style={stateChip}>{state}</span>
-              ))}
-            </div>
-          ) : null}
+      <div style={{ marginTop: 14 }}>
+        <div style={eyebrow}>Markets / Reach</div>
+        {(markets.length ? markets : ["No markets listed"]).map((state) => (
+          <span key={state} style={markets.length ? blueChip : chip}>{state}</span>
+        ))}
+      </div>
 
-          {strategies.length ? (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ color: "#94a3b8", fontSize: 12, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 950, marginBottom: 8 }}>
-                Strategy / asset focus
-              </div>
-              {strategies.map((item) => <span key={item} style={chip}>{item}</span>)}
-            </div>
-          ) : null}
+      {strategies.length ? (
+        <div style={{ marginTop: 14 }}>
+          <div style={eyebrow}>Strategy / Asset Focus</div>
+          {strategies.map((item) => <span key={item} style={chip}>{item}</span>)}
+        </div>
+      ) : null}
 
-          <p style={{ ...muted, marginTop: 14 }}>{strategyNote(row)}</p>
+      <p style={{ ...muted, marginTop: 16 }}>{memberBio(member)}</p>
 
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 14 }}>
-            <div style={glass}>
-              <div style={eyebrow}>Can Provide</div>
-              <div style={{ marginTop: 10 }}>
-                {(capabilities.length ? capabilities : ["No provider abilities listed yet."]).map((item) => (
-                  <span key={item} style={chip}>{item}</span>
-                ))}
-              </div>
-            </div>
-
-            <div style={glass}>
-              <div style={eyebrow}>Needs / Watches</div>
-              <div style={{ marginTop: 10 }}>
-                {(needs.length ? needs : ["No needs listed yet."]).map((item) => (
-                  <span key={item} style={chip}>{item}</span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <Link href={connectHref} style={button}>Message / Request Connection</Link>
-            <Link href="/signals" style={ghost}>View Opportunities</Link>
-            <Link href="/alignment-inbox" style={ghost}>Open Network</Link>
+      <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 16 }}>
+        <div style={glass}>
+          <div style={eyebrow}>Can Provide</div>
+          <div style={{ marginTop: 10 }}>
+            {(provides.length ? provides : ["No provider abilities listed yet."]).map((item) => <span key={item} style={chip}>{item}</span>)}
           </div>
         </div>
+
+        <div style={glass}>
+          <div style={eyebrow}>Needs / Watches</div>
+          <div style={{ marginTop: 10 }}>
+            {(needs.length ? needs : ["No needs listed yet."]).map((item) => <span key={item} style={chip}>{item}</span>)}
+          </div>
+        </div>
+      </div>
+
+      <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+        <Link href={connectHref} style={button}>Message / Request Connection</Link>
+        <Link href="/projects" style={ghost}>View Projects</Link>
+        <Link href="/dashboard" style={ghost}>Dashboard</Link>
       </div>
     </article>
   );
@@ -529,39 +459,60 @@ function MemberCard({ row, viewer }: { row: Row; viewer: string }) {
 
 export default function MembersPage() {
   const [email, setEmail] = useState("");
-  const [items, setItems] = useState<Row[]>([]);
+  const [owner, setOwner] = useState(false);
+  const [members, setMembers] = useState<Member[]>([]);
   const [status, setStatus] = useState("Loading member network...");
   const [query, setQuery] = useState("");
-  const [stateFilter, setStateFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("All");
+  const [roleFilter, setRoleFilter] = useState("All");
+  const [rawSource, setRawSource] = useState("");
 
   async function load() {
-    const viewer = getEmail();
-    setEmail(viewer);
     setStatus("Loading member network...");
 
     try {
+      const viewer = getEmail();
+      const ownerMode = isOwnerMode(viewer);
+
+      setEmail(viewer);
+      setOwner(ownerMode);
+
+      if (!viewer) {
+        setMembers([]);
+        setRawSource("not logged in");
+        setStatus("Log in to view the member network.");
+        return;
+      }
+
       const urls = [
-        `/api/admin/members?email=${encodeURIComponent(viewer)}&owner=0`,
-        `/api/members?email=${encodeURIComponent(viewer)}&owner=0`,
+        `/api/admin/members?email=${encodeURIComponent(viewer)}&owner=${ownerMode ? "1" : "0"}`,
+        `/api/members?email=${encodeURIComponent(viewer)}&owner=${ownerMode ? "1" : "0"}`,
+        `/api/profile/me?email=${encodeURIComponent(viewer)}`,
       ];
 
       for (const url of urls) {
         try {
           const res = await fetch(url, {
             cache: "no-store",
-            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
+            headers: {
+              "x-vf-email": viewer,
+              "x-vf-admin": ownerMode ? "1" : "0",
+            },
           });
 
           const data = await safeJson(res);
+
           const list = [
             ...(Array.isArray(data.members) ? data.members : []),
             ...(Array.isArray(data.profiles) ? data.profiles : []),
             ...(Array.isArray(data.items) ? data.items : []),
             ...(Array.isArray(data.data) ? data.data : []),
+            ...(data.profile ? [data.profile] : []),
           ];
 
           if (list.length) {
-            setItems(list);
+            setMembers(list.filter(hasRealEmail));
+            setRawSource(url);
             setStatus("");
             return;
           }
@@ -570,68 +521,58 @@ export default function MembersPage() {
         }
       }
 
-      setItems([]);
-      setStatus("No member profiles connected yet.");
+      setMembers([]);
+      setRawSource("no records returned");
+      setStatus("No member records loaded yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load member network.");
     }
   }
 
   useEffect(() => {
-    const urlState = readStateFromUrl();
-    if (urlState) setStateFilter(urlState);
     load();
   }, []);
 
-  function chooseState(state: string) {
-    const normalizedCurrent = normalizeState(stateFilter);
-    const normalizedNext = normalizeState(state);
-
-    const nextState = normalizedCurrent === normalizedNext ? "" : normalizedNext;
-
-    setStateFilter(nextState);
-
-    if (typeof window !== "undefined") {
-      const url = nextState
-        ? `/members?state=${encodeURIComponent(nextState)}`
-        : "/members";
-
-      window.location.href = url;
-    }
-  }
-
   const filtered = useMemo(() => {
-    const q = query.toLowerCase();
+    const q = query.trim().toLowerCase();
+    const selectedState = normalizeState(stateFilter);
+    const selectedRole = roleFilter.toLowerCase();
 
-    return items.filter((item) => {
+    return members.filter((member) => {
+      const baseState = memberBaseState(member);
+      const markets = memberMarkets(member);
+      const roles = memberRoles(member).map((role) => role.toLowerCase());
+
+      const matchesState = !selectedState || baseState === selectedState;
+      const matchesRole = selectedRole === "all" || roles.includes(selectedRole);
+
       const searchable = [
-        nameOf(item),
-        companyOf(item),
-        emailOf(item),
-        statusOf(item),
-        strategyNote(item),
-        visibleBaseStateDisplay(item),
-        ...rolesOf(item),
-        ...statesOf(item),
-        ...strategiesOf(item),
-        ...capabilitiesOf(item),
-        ...needsOf(item),
+        memberName(member),
+        companyOf(member),
+        memberEmail(member),
+        memberBio(member),
+        baseState,
+        ...markets,
+        ...roles,
+        ...memberStrategies(member),
+        ...memberProvides(member),
+        ...memberNeeds(member),
       ].join(" ").toLowerCase();
 
       const matchesQuery = !q || searchable.includes(q);
-      const matchesState = !stateFilter || filterStatesOf(item).some((state) => state.toLowerCase() === stateFilter.toLowerCase());
 
-      return matchesQuery && matchesState;
+      return matchesState && matchesRole && matchesQuery;
     });
-  }, [items, query, stateFilter]);
+  }, [members, query, stateFilter, roleFilter]);
 
   const counts = useMemo(() => {
-    const acceptedCount = items.filter((item) => accepted(item)).length;
-    const withStates = items.filter((item) => visibleBaseStateOf(item)).length;
-    const withCapabilities = items.filter((item) => capabilitiesOf(item).length).length;
-
-    return { total: items.length, accepted: acceptedCount, withStates, withCapabilities };
-  }, [items]);
+    return {
+      total: members.length,
+      displayed: filtered.length,
+      baseReady: members.filter((member) => memberBaseState(member)).length,
+      accepted: members.filter(accepted).length,
+    };
+  }, [members, filtered]);
 
   return (
     <main style={page}>
@@ -649,8 +590,7 @@ export default function MembersPage() {
         @media (max-width: 820px) {
           .vf-grid,
           .vf-four,
-          .vf-actions,
-          article > div {
+          .vf-actions {
             grid-template-columns: 1fr !important;
           }
 
@@ -670,24 +610,27 @@ export default function MembersPage() {
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Members"
-          subtitle="Private operator network organized by where members are based, capabilities, execution style, and opportunity alignment."
+          subtitle="Private operator network by base state, capability, execution style, and market reach."
           active="members"
         />
 
-        <section style={card}>
+        <section style={panel}>
           <div style={eyebrow}>VaultForge Network</div>
           <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
             Private operator network.
           </h1>
+
           <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            VaultForge organizes the member directory by where each member is based. Market reach and operating states stay visible for AI context, but state buttons only filter by the member’s base/from state.
+            State buttons filter only by where a member is based. Markets and operating states stay visible as AI routing context.
           </p>
 
           <div style={{ marginTop: 16 }}>
             <span style={chip}>Signed in: {email || "unknown"}</span>
+            <span style={chip}>{owner ? "Owner view" : "Member view"}</span>
             <span style={chip}>Members: {counts.total}</span>
-            <span style={chip}>Network accepted: {counts.accepted}</span>
-            <span style={chip}>State ready: {counts.withStates}</span>
+            <span style={chip}>Showing: {counts.displayed}</span>
+            <span style={chip}>Base state ready: {counts.baseReady}</span>
+            <span style={chip}>Source: {rawSource || "loading"}</span>
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
@@ -699,99 +642,70 @@ export default function MembersPage() {
         </section>
 
         <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
-          <Metric label="Members" value={String(counts.total)} tone="blue" />
-          <Metric label="Accepted" value={String(counts.accepted)} tone="green" />
-          <Metric label="Base State" value={String(counts.withStates)} tone="gold" />
-          <Metric label="Capabilities" value={String(counts.withCapabilities)} tone="red" />
+          <Metric label="Members" value={counts.total} />
+          <Metric label="Showing" value={counts.displayed} />
+          <Metric label="Base State" value={counts.baseReady} />
+          <Metric label="Accepted" value={counts.accepted} />
         </section>
 
-        <section style={card}>
-          <div style={eyebrow}>Search Network By Base State</div>
+        <section style={panel}>
+          <div style={eyebrow}>Search / Filter</div>
 
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1.25fr .75fr", gap: 14, marginTop: 16 }}>
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 14, marginTop: 16 }}>
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(event) => setQuery(event.target.value)}
               placeholder="Search members, base state, markets, roles, strategies..."
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                borderRadius: 18,
-                border: "1px solid rgba(255,255,255,.16)",
-                background: "rgba(255,255,255,.08)",
-                color: "white",
-                padding: 15,
-                fontSize: 16,
-                outline: "none",
-              }}
+              style={input}
             />
 
-            <select
-              value={stateFilter}
-              onChange={(e) => chooseState(e.target.value)}
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                borderRadius: 18,
-                border: "1px solid rgba(255,255,255,.16)",
-                background: "rgba(255,255,255,.08)",
-                color: "white",
-                padding: 15,
-                fontSize: 16,
-                outline: "none",
-              }}
-            >
-              <option value="">All base states</option>
-              {OPERATING_STATES.map((state) => (
-                <option key={state} value={state}>{state}</option>
+            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} style={input}>
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role} value={role} style={{ color: "#111" }}>{role}</option>
               ))}
             </select>
           </div>
 
           <div style={{ marginTop: 14 }}>
-            {OPERATING_STATES.map((state) => (
+            <button type="button" onClick={() => setStateFilter("All")} style={stateFilter === "All" ? button : ghost}>
+              All
+            </button>
+
+            {STATES.map((state) => (
               <button
                 key={state}
                 type="button"
-                onClick={() => setStateFilter(stateFilter === state ? "" : state)}
-                style={{
-                  ...stateChip,
-                  cursor: "pointer",
-                  borderColor: stateFilter === state ? "rgba(232,196,107,.70)" : "rgba(56,189,248,.30)",
-                  color: stateFilter === state ? "#f8e7b0" : "#8fd3ff",
-                }}
+                onClick={() => setStateFilter(state)}
+                style={stateFilter === state ? button : ghost}
               >
                 {state}
               </button>
             ))}
           </div>
+
+          {stateFilter !== "All" ? (
+            <p style={{ ...muted, marginTop: 14 }}>
+              Showing members based in <strong style={{ color: "#f8e7b0" }}>{stateFilter}</strong>.
+            </p>
+          ) : null}
         </section>
 
-        <section style={card}>
-          <div style={eyebrow}>Operator Network</div>
-          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>Profiles organized by base state, capability, market reach, and execution fit.</h2>
+        {status ? <section style={panel}>{status}</section> : null}
 
-          {filtered.length ? (
-            <div style={{ display: "grid", gap: 14 }}>
-              {filtered.map((item, index) => (
-                <MemberCard key={memberId(item) || emailOf(item) || `${nameOf(item)}-${index}`} row={item} viewer={email} />
-              ))}
-            </div>
-          ) : (
-            <div style={glass}>
-              <h3 style={{ marginTop: 0 }}>No matching members found.</h3>
-              <p style={muted}>
-                Adjust filters or complete more member profiles so VaultForge can better align opportunities, operators, and execution capacity.
-              </p>
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-                <Link href="/profile" style={button}>Edit Profile</Link>
-                <Link href="/dashboard" style={ghost}>Dashboard</Link>
-              </div>
-            </div>
-          )}
+        {!status && filtered.length === 0 ? (
+          <section style={panel}>
+            <h3 style={{ marginTop: 0 }}>No members match this filter.</h3>
+            <p style={muted}>
+              The selected state may not be saved as a base/from state on any profile yet. Markets still display as context, but the state buttons only match Based In.
+            </p>
+          </section>
+        ) : null}
+
+        <section style={{ display: "grid", gap: 14 }}>
+          {filtered.map((member, index) => (
+            <MemberCard key={memberId(member) || memberEmail(member) || index} member={member} viewer={email} />
+          ))}
         </section>
-
-        {status ? <section style={card}>{status}</section> : null}
       </div>
     </main>
   );
