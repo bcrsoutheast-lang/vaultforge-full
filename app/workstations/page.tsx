@@ -88,6 +88,8 @@ export default function WorkstationsPage() {
           <Folder href="/archived-rooms" tag="STANDARDIZE" title="Archived Rooms" body="Paused, completed, cold, or parked rooms that should not clutter active flow." tone="#cbd5e1" />
           <Folder href="/deleted-rooms" tag="SORT" title="Deleted Rooms" body="Removed rooms with restore control before final cleanup." tone="#f87171" />
           <Folder href="/intelligence" tag="KAIZEN" title="Intelligence" body="The Resolution Engine: diagnosis, scoring, routing logic, risk warnings, and execution guidance." tone="#e8c46b" />
+          <Folder href="/room-folders" tag="5S MAP" title="Room Folders" body="Physical folder map for every Opportunity and Pressure stage." tone="#56d8ff" />
+          <Folder href="/room-system-guide" tag="HELP" title="How This Works" body="A simple card explaining rooms, stage buttons, folders, and the river flow." tone="#9df3bf" />
         </section>
       </div>
     </main>
