@@ -169,6 +169,16 @@ function marketOf(row: Row) {
   return [city, state].filter(Boolean).join(", ") || field(row, "location", "address", "property_address") || "Market not listed";
 }
 
+const CORE_STATES = [
+  "Georgia",
+  "Tennessee",
+  "Alabama",
+  "Florida",
+  "North Carolina",
+  "South Carolina",
+  "Texas",
+];
+
 const STATE_ALIASES: Record<string, string> = {
   ga: "Georgia",
   georgia: "Georgia",
@@ -176,14 +186,14 @@ const STATE_ALIASES: Record<string, string> = {
   florida: "Florida",
   tn: "Tennessee",
   tennessee: "Tennessee",
-  nc: "North Carolina",
-  "north-carolina": "North Carolina",
-  "north carolina": "North Carolina",
-  sc: "South Carolina",
-  "south-carolina": "South Carolina",
-  "south carolina": "South Carolina",
   al: "Alabama",
   alabama: "Alabama",
+  nc: "North Carolina",
+  "north carolina": "North Carolina",
+  "north-carolina": "North Carolina",
+  sc: "South Carolina",
+  "south carolina": "South Carolina",
+  "south-carolina": "South Carolina",
   tx: "Texas",
   texas: "Texas",
 };
@@ -191,28 +201,43 @@ const STATE_ALIASES: Record<string, string> = {
 function normalizeStateName(value: unknown) {
   const raw = clean(value);
   if (!raw) return "";
-  const lower = raw.toLowerCase().trim();
-  if (STATE_ALIASES[lower]) return STATE_ALIASES[lower];
-  const noPunct = lower.replace(/[^a-z]+/g, " ").trim();
-  if (STATE_ALIASES[noPunct]) return STATE_ALIASES[noPunct];
-  const dash = noPunct.replace(/\s+/g, "-");
-  if (STATE_ALIASES[dash]) return STATE_ALIASES[dash];
 
-  return raw
-    .split(/\s+/)
-    .map((part) => (part ? part.slice(0, 1).toUpperCase() + part.slice(1).toLowerCase() : ""))
-    .join(" ");
+  const lower = raw.toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  const dash = lower.replace(/\s+/g, "-");
+
+  return STATE_ALIASES[raw.toLowerCase()] || STATE_ALIASES[lower] || STATE_ALIASES[dash] || "";
 }
 
 function stateOf(row: Row) {
-  const direct = field(row, "state", "market_state", "property_state", "deal_state", "operating_state", "location_state");
-  if (direct) return normalizeStateName(direct);
+  const direct = normalizeStateName(field(row, "state", "market_state", "property_state", "deal_state", "operating_state", "location_state"));
+  if (direct) return direct;
 
   const market = marketOf(row);
   const parts = market.split(",").map((part) => clean(part)).filter(Boolean);
-  const last = parts[parts.length - 1];
 
-  return normalizeStateName(last || "Unlisted");
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const state = normalizeStateName(parts[index]);
+    if (state) return state;
+  }
+
+  const combined = market.toLowerCase();
+  for (const state of CORE_STATES) {
+    if (combined.includes(state.toLowerCase())) return state;
+  }
+
+  return "Unlisted";
+}
+
+function countyOf(row: Row) {
+  const direct = field(row, "county", "county_name", "market_county", "submarket", "area", "city");
+  if (direct) return direct;
+
+  const market = marketOf(row);
+  const parts = market.split(",").map((part) => clean(part)).filter(Boolean);
+
+  if (parts.length >= 2) return parts[0];
+
+  return field(row, "location", "address", "property_address") || "Unlisted";
 }
 
 function ownerOf(row: Row) {
@@ -735,12 +760,12 @@ function WorkstationCard({
   );
 }
 
-function StateBucketCard({
+function StateButton({
   bucket,
   active,
   onClick,
 }: {
-  bucket: { state: string; total: number; deals: number; pains: number; signals: number; photos: number };
+  bucket: { state: string; total: number; deals: number; pains: number; signals: number };
   active: boolean;
   onClick: () => void;
 }) {
@@ -750,7 +775,7 @@ function StateBucketCard({
       onClick={onClick}
       style={{
         textAlign: "left",
-        border: active ? "1px solid rgba(232,196,107,.70)" : "1px solid rgba(255,255,255,.12)",
+        border: active ? "1px solid rgba(232,196,107,.72)" : "1px solid rgba(255,255,255,.12)",
         borderRadius: 24,
         padding: 18,
         background: active
@@ -761,9 +786,9 @@ function StateBucketCard({
         boxShadow: active ? "0 0 38px rgba(232,196,107,.18)" : "0 18px 54px rgba(0,0,0,.22)",
       }}
     >
-      <div style={{ ...label, color: active ? "#f8e7b0" : "#9df3bf" }}>Market Bucket</div>
-      <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 1000, marginTop: 10 }}>{bucket.state}</div>
-      <div style={{ fontSize: 52, lineHeight: 1, fontWeight: 1000, marginTop: 16, color: "#f8e7b0" }}>{bucket.total}</div>
+      <div style={{ ...label, color: active ? "#f8e7b0" : "#9df3bf" }}>State Market</div>
+      <div style={{ fontSize: 30, lineHeight: 1, fontWeight: 1000, marginTop: 10 }}>{bucket.state}</div>
+      <div style={{ fontSize: 48, lineHeight: 1, fontWeight: 1000, marginTop: 14, color: "#f8e7b0" }}>{bucket.total}</div>
       <div style={{ ...muted, fontSize: 13, marginTop: 5 }}>total workstations</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 14 }}>
@@ -775,12 +800,44 @@ function StateBucketCard({
   );
 }
 
+function CountyButton({
+  bucket,
+  active,
+  onClick,
+}: {
+  bucket: { county: string; total: number; deals: number; pains: number; signals: number };
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        textAlign: "left",
+        border: active ? "1px solid rgba(157,243,191,.60)" : "1px solid rgba(255,255,255,.12)",
+        borderRadius: 20,
+        padding: 15,
+        background: active ? "rgba(157,243,191,.13)" : "rgba(255,255,255,.045)",
+        color: "white",
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ ...label, color: "#9df3bf", fontSize: 10 }}>County / Market</div>
+      <div style={{ fontSize: 24, fontWeight: 1000, marginTop: 8 }}>{bucket.county}</div>
+      <div style={{ fontSize: 32, fontWeight: 1000, color: "#f8e7b0", marginTop: 8 }}>{bucket.total}</div>
+      <div style={{ ...muted, fontSize: 12 }}>{bucket.deals} deals · {bucket.pains} pain · {bucket.signals} signals</div>
+    </button>
+  );
+}
+
 export default function ProjectsPage() {
   const [email, setEmail] = useState("");
   const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading workstations...");
   const [folder, setFolder] = useState<FolderMode>("active");
   const [selectedState, setSelectedState] = useState("All");
+  const [selectedCounty, setSelectedCounty] = useState("All");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
@@ -959,17 +1016,16 @@ export default function ProjectsPage() {
       const archived = archivedIds.has(key);
 
       if (selectedState !== "All" && stateOf(item) !== selectedState) return false;
+      if (selectedCounty !== "All" && countyOf(item) !== selectedCounty) return false;
 
       if (folder === "saved") return saved && !archived;
       if (folder === "archived") return archived;
       return !archived;
     });
-  }, [items, savedIds, archivedIds, deletedIds, folder, selectedState]);
+  }, [items, savedIds, archivedIds, deletedIds, folder, selectedState, selectedCounty]);
 
-  const stateBuckets = useMemo(() => {
-    const map = new Map<string, { state: string; total: number; deals: number; pains: number; signals: number; photos: number }>();
-
-    const liveItems = items.filter((item) => {
+  const bucketBaseItems = useMemo(() => {
+    return items.filter((item) => {
       const key = canonicalKey(item);
       if (!key || deletedIds.has(key)) return false;
 
@@ -980,17 +1036,32 @@ export default function ProjectsPage() {
       if (folder === "archived") return archived;
       return !archived;
     });
+  }, [items, savedIds, archivedIds, deletedIds, folder]);
 
-    for (const item of liveItems) {
-      const state = stateOf(item) || "Unlisted";
-      const current = map.get(state) || {
+  const stateBuckets = useMemo(() => {
+    return CORE_STATES.map((state) => {
+      const stateItems = bucketBaseItems.filter((item) => stateOf(item) === state);
+
+      return {
         state,
-        total: 0,
-        deals: 0,
-        pains: 0,
-        signals: 0,
-        photos: 0,
+        total: stateItems.length,
+        deals: stateItems.filter((item) => sourceOf(item) === "deal").length,
+        pains: stateItems.filter((item) => sourceOf(item) === "pain").length,
+        signals: stateItems.filter((item) => sourceOf(item) === "signal" || signalIdOf(item)).length,
       };
+    });
+  }, [bucketBaseItems]);
+
+  const countyBuckets = useMemo(() => {
+    if (selectedState === "All") return [];
+
+    const map = new Map<string, { county: string; total: number; deals: number; pains: number; signals: number }>();
+
+    for (const item of bucketBaseItems) {
+      if (stateOf(item) !== selectedState) continue;
+
+      const county = countyOf(item) || "Unlisted";
+      const current = map.get(county) || { county, total: 0, deals: 0, pains: 0, signals: 0 };
 
       current.total += 1;
 
@@ -999,17 +1070,15 @@ export default function ProjectsPage() {
       else if (source === "pain") current.pains += 1;
       else current.signals += 1;
 
-      if (photosOf(item).length) current.photos += 1;
-
-      map.set(state, current);
+      map.set(county, current);
     }
 
     return Array.from(map.values()).sort((a, b) => {
-      if (a.state === "Unlisted") return 1;
-      if (b.state === "Unlisted") return -1;
-      return b.total - a.total || a.state.localeCompare(b.state);
+      if (a.county === "Unlisted") return 1;
+      if (b.county === "Unlisted") return -1;
+      return b.total - a.total || a.county.localeCompare(b.county);
     });
-  }, [items, savedIds, archivedIds, deletedIds, folder]);
+  }, [bucketBaseItems, selectedState]);
 
   const counts = useMemo(() => {
     const allLiveItems = items.filter((item) => {
@@ -1045,7 +1114,7 @@ export default function ProjectsPage() {
         .vf-workstation-card * { box-sizing: border-box; }
         a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
         @media (max-width: 900px) {
-          .vf-grid, .vf-actions, .vf-card-top, .vf-card-bottom, .vf-workstation-layout, .vf-state-grid { grid-template-columns: 1fr !important; }
+          .vf-grid, .vf-actions, .vf-card-top, .vf-card-bottom, .vf-workstation-layout, .vf-state-grid, .vf-county-grid { grid-template-columns: 1fr !important; }
           .vf-actions { display: grid !important; gap: 10px !important; }
           .vf-actions > * { width: 100%; box-sizing: border-box; justify-content: center; }
           .vf-metrics { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
@@ -1082,40 +1151,76 @@ export default function ProjectsPage() {
           </div>
 
           <p style={{ ...muted, marginTop: 14, fontSize: 14 }}>
-            Signed in: {email || "unknown"} · Archived: {counts.archived} · Market: {selectedState}
+            Signed in: {email || "unknown"} · Archived: {counts.archived} · State: {selectedState} · Market: {selectedCounty}
           </p>
         </section>
 
         <section style={card}>
-          <div style={label}>Market Buckets</div>
+          <div style={label}>State Buckets</div>
           <h2 style={{ fontSize: "clamp(34px,6vw,62px)", lineHeight: 0.95, letterSpacing: "-.05em", margin: "10px 0 10px" }}>
             Pick a state. Open the pressure.
           </h2>
           <p style={{ ...muted, fontSize: 18 }}>
-            Deals and pain records are grouped by operating state so members can move through Georgia, Florida, Tennessee, Texas, and other markets without one giant pile.
+            Workstations are grouped by operating state first. Choose a state, then drill into county/city buckets.
           </p>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14, marginBottom: 16 }}>
-            <button type="button" onClick={() => setSelectedState("All")} style={selectedState === "All" ? button : ghost}>
-              All Markets ({stateBuckets.reduce((sum, bucket) => sum + bucket.total, 0)})
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedState("All");
+                setSelectedCounty("All");
+              }}
+              style={selectedState === "All" ? button : ghost}
+            >
+              All States ({stateBuckets.reduce((sum, bucket) => sum + bucket.total, 0)})
             </button>
           </div>
 
-          {stateBuckets.length ? (
-            <div className="vf-state-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
-              {stateBuckets.map((bucket) => (
-                <StateBucketCard
-                  key={bucket.state}
-                  bucket={bucket}
-                  active={selectedState === bucket.state}
-                  onClick={() => setSelectedState(bucket.state)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div style={{ ...glass, color: "#f8e7b0" }}>No market buckets yet.</div>
-          )}
+          <div className="vf-state-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
+            {stateBuckets.map((bucket) => (
+              <StateButton
+                key={bucket.state}
+                bucket={bucket}
+                active={selectedState === bucket.state}
+                onClick={() => {
+                  setSelectedState(bucket.state);
+                  setSelectedCounty("All");
+                }}
+              />
+            ))}
+          </div>
         </section>
+
+        {selectedState !== "All" ? (
+          <section style={card}>
+            <div style={label}>{selectedState} County / Market Buckets</div>
+            <h2 style={{ fontSize: "clamp(30px,5vw,54px)", lineHeight: 0.95, letterSpacing: "-.05em", margin: "10px 0 10px" }}>
+              Drill into the local market.
+            </h2>
+
+            <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14, marginBottom: 16 }}>
+              <button type="button" onClick={() => setSelectedCounty("All")} style={selectedCounty === "All" ? button : ghost}>
+                All {selectedState} ({countyBuckets.reduce((sum, bucket) => sum + bucket.total, 0)})
+              </button>
+            </div>
+
+            {countyBuckets.length ? (
+              <div className="vf-county-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
+                {countyBuckets.map((bucket) => (
+                  <CountyButton
+                    key={bucket.county}
+                    bucket={bucket}
+                    active={selectedCounty === bucket.county}
+                    onClick={() => setSelectedCounty(bucket.county)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={{ ...glass, color: "#f8e7b0" }}>No county/city buckets for this state yet.</div>
+            )}
+          </section>
+        ) : null}
 
         {status ? (
           <section style={{ ...card, color: "#f8e7b0" }}>
