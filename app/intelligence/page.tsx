@@ -1,29 +1,83 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import { useEffect, useMemo, useState } from "react";
 
-type Row = Record<string, any>;
+type Insight = Record<string, any>;
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
+const pageStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(181,92,255,.18), transparent 28%), radial-gradient(circle at top right, rgba(232,196,107,.12), transparent 26%), radial-gradient(circle at bottom left, rgba(157,243,191,.10), transparent 22%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
+  color: "white",
+  padding: "24px 16px 100px",
+  fontFamily: "Arial, sans-serif",
+};
 
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
+const wrap: React.CSSProperties = {
+  maxWidth: 1480,
+  margin: "0 auto",
+};
+
+const hero: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.20)",
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(255,255,255,.03), rgba(157,243,191,.05))",
+  borderRadius: 34,
+  padding: 26,
+  marginBottom: 22,
+  boxShadow: "0 35px 120px rgba(0,0,0,.42)",
+};
+
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))",
+  gap: 18,
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.12)",
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.08), rgba(255,255,255,.03), rgba(157,243,191,.04))",
+  borderRadius: 28,
+  overflow: "hidden",
+  boxShadow: "0 24px 80px rgba(0,0,0,.34)",
+};
+
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "14px 18px",
+  borderRadius: 999,
+  textDecoration: "none",
+  border: "none",
+  cursor: "pointer",
+  fontWeight: 900,
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
+  color: "#111",
+  marginRight: 10,
+  marginBottom: 10,
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  color: "white",
+  border: "1px solid rgba(255,255,255,.12)",
+};
+
+function clean(v: unknown) {
+  return String(v || "").trim();
 }
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
-
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${name}=`));
-
   if (!match) return "";
-
   try {
     return decodeURIComponent(match.slice(name.length + 1));
   } catch {
@@ -31,441 +85,306 @@ function readCookie(name: string) {
   }
 }
 
-function getEmail() {
+function currentEmail() {
   if (typeof window === "undefined") return "";
-
-  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-
-  for (const key of keys) {
-    const localValue = cleanEmail(window.localStorage.getItem(key));
-    if (localValue.includes("@")) return localValue;
-
-    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
-    if (sessionValue.includes("@")) return sessionValue;
-  }
-
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
+  return String(
+    localStorage.getItem("vf_email") ||
+      sessionStorage.getItem("vf_email") ||
+      readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("vf_admin_email") ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
 }
 
-async function safeJson(res: Response) {
+function numberValue(value: unknown) {
+  const raw = clean(value).replace(/[^0-9.-]/g, "");
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function ask(item: Insight) {
+  return numberValue(item.asking_price || item.price || item.ask);
+}
+
+function arv(item: Insight) {
+  return numberValue(item.arv || item.value || item.after_repair_value);
+}
+
+function repairs(item: Insight) {
+  return numberValue(item.repairs || item.repair_estimate);
+}
+
+function spread(item: Insight) {
+  const a = ask(item);
+  const v = arv(item);
+  const r = repairs(item);
+  if (!a || !v) return 0;
+  return v - a - r;
+}
+
+function margin(item: Insight) {
+  const v = arv(item);
+  if (!v) return 0;
+  return Math.round((spread(item) / v) * 100);
+}
+
+function text(item: Insight) {
+  return [
+    item.title,
+    item.summary,
+    Array.isArray(item.reasoning) ? item.reasoning.join(" ") : item.reasoning,
+    item.market,
+    item.priority,
+    item.best_move,
+    item.kind,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function severity(item: Insight) {
+  const t = text(item);
+  let score = 34;
+  if (t.includes("urgent")) score += 24;
+  if (t.includes("foreclosure")) score += 28;
+  if (t.includes("deadline")) score += 20;
+  if (t.includes("capital")) score += 12;
+  if (t.includes("stalled")) score += 10;
+  return Math.max(0, Math.min(100, score));
+}
+
+function opportunity(item: Insight) {
+  let score = 40;
+  if (spread(item) > 0) score += 18;
+  if (margin(item) >= 25) score += 22;
+  if (margin(item) >= 15 && margin(item) < 25) score += 10;
+  if (item.photo) score += 8;
+  return Math.max(0, Math.min(100, score));
+}
+
+function classification(item: Insight) {
+  const opp = opportunity(item);
+  const sev = severity(item);
+
+  if (item.kind === "pain") {
+    if (sev >= 80) return "Critical Pressure";
+    if (sev >= 60) return "Fixable Pressure";
+    return "Monitor Pressure";
+  }
+
+  if (opp >= 75) return "A Opportunity";
+  if (opp >= 58) return "B Opportunity";
+  if (opp >= 42) return "Rewrite Needed";
+  return "Trap Risk";
+}
+
+function strategy(item: Insight) {
+  const t = text(item);
+
+  if (item.kind === "pain") {
+    if (t.includes("capital")) return "Bridge capital + operator stabilization";
+    if (t.includes("contractor")) return "Contractor-led execution rescue";
+    if (t.includes("foreclosure")) return "Fast close rescue path";
+    return "Pressure triage + controlled routing";
+  }
+
+  if (t.includes("seller finance")) return "Creative finance structure";
+  if (t.includes("land")) return "Builder / developer route";
+  if (margin(item) >= 25) return "Fix-flip or private investor route";
+  if (margin(item) > 0) return "Buyer-specific route";
+  return "Rewrite pricing or terms";
+}
+
+function bestMove(item: Insight) {
+  if (item.kind === "pain") return "Identify bottleneck, stabilize pressure, then route operators.";
+  if (margin(item) >= 25) return "Verify numbers and privately route qualified buyers.";
+  return "Rewrite structure before broad exposure.";
+}
+
+function worstMove(item: Insight) {
+  if (item.kind === "pain") return "Treating this like a normal lead instead of a pressure event.";
+  return "Publicly blasting weak or unverified opportunity data.";
+}
+
+function aiRead(item: Insight) {
+  return `VaultForge Intelligence Room classifies this as ${classification(item)}. Strategy path: ${strategy(item)}. Best move: ${bestMove(item)}.`;
+}
+
+function trashKey(email: string) {
+  return `vf_smart_ai_deleted_${email || "guest"}`;
+}
+
+function loadTrash(email: string) {
+  if (typeof window === "undefined") return [];
   try {
-    return await res.json();
+    const raw = localStorage.getItem(trashKey(email));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return {};
+    return [];
   }
 }
 
-function meta(row: Row) {
-  return typeof row?.metadata === "object" && row.metadata ? row.metadata : {};
+function saveTrash(email: string, ids: string[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(trashKey(email), JSON.stringify(ids));
 }
 
-function first(...values: unknown[]) {
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      const found = value.find((item) => clean(item));
-      if (found !== undefined) return clean(found);
-      continue;
-    }
-
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
+function itemKey(item: Insight) {
+  return [item.kind || "", item.id || "", item.title || "", item.market || ""].join("|");
 }
 
-function signalIdOf(row: Row) {
-  const m = meta(row);
-  return first(row.signal_id, row.signalId, row.id, m.signal_id);
-}
-
-function itemIdOf(row: Row) {
-  const m = meta(row);
-  return first(row.item_id, row.itemId, row.pain_id, row.deal_id, row.project_id, m.item_id, m.pain_id, m.deal_id, m.project_id);
-}
-
-function titleOf(row: Row) {
-  const m = meta(row);
-  return first(row.title, row.signal_title, row.pain_title, row.alert_title, row.subject, m.title, m.signal_title, m.pain_title, "VaultForge Intelligence");
-}
-
-function noteOf(row: Row) {
-  const m = meta(row);
-  return first(row.ai_summary, row.summary, row.note, row.notes, row.description, row.message, row.route_summary, m.ai_summary, m.summary, m.note, m.notes, m.description, m.message, m.route_summary, "Intelligence record ready for review.");
-}
-
-function urgencyOf(row: Row) {
-  const m = meta(row);
-  return first(row.urgency, row.urgency_level, row.priority, m.urgency, m.urgency_level, m.priority, "Normal");
-}
-
-function marketOf(row: Row) {
-  const m = meta(row);
-  const city = first(row.city, m.city);
-  const state = first(row.state, row.operating_state, row.market, m.state, m.operating_state, m.market);
-  return [city, state].filter(Boolean).join(", ") || state || first(row.location, m.location, "Market not listed");
-}
-
-function assetOf(row: Row) {
-  const m = meta(row);
-  return first(row.asset_type, row.property_type, m.asset_type, m.property_type, "Asset");
-}
-
-function sourceOf(row: Row) {
-  const m = meta(row);
-  return first(row.source, row.source_table, row.event_type, row.type, m.source, m.source_table, m.event_type, m.type, "Signal");
-}
-
-function ownerOf(row: Row) {
-  const m = meta(row);
-  return cleanEmail(first(row.owner_email, row.member_email, row.submitted_by_email, row.created_by_email, m.owner_email, m.member_email, m.submitted_by_email, m.created_by_email));
-}
-
-function photosOf(row: Row) {
-  const m = meta(row);
-  const values = [
-    row.image_url,
-    row.photo_url,
-    row.primary_photo_url,
-    m.image_url,
-    m.photo_url,
-    ...(Array.isArray(row.photo_urls) ? row.photo_urls : []),
-    ...(Array.isArray(row.photos) ? row.photos : []),
-    ...(Array.isArray(m.photo_urls) ? m.photo_urls : []),
-    ...(Array.isArray(m.photos) ? m.photos : []),
-  ];
-
-  return Array.from(
-    new Set(
-      values
-        .map((item: any) => {
-          if (typeof item === "string") return clean(item);
-          if (item && typeof item === "object") return clean(item.url || item.publicUrl || item.photo_url || item.image_url);
-          return "";
-        })
-        .filter((url) => url.startsWith("http"))
-    )
-  );
-}
-
-function scoreOf(row: Row) {
-  const m = meta(row);
-  let score = Number(row.priority_score || row.confidence_score || row.match_score || m.priority_score || m.confidence_score || m.match_score || 0);
-
-  if (!Number.isFinite(score) || score <= 0) score = 56;
-
-  const urgency = urgencyOf(row).toLowerCase();
-  if (urgency.includes("emergency")) score += 22;
-  else if (urgency.includes("urgent") || urgency.includes("high")) score += 14;
-
-  if (photosOf(row).length) score += 5;
-  if (ownerOf(row)) score += 5;
-  if (marketOf(row) !== "Market not listed") score += 5;
-
-  return Math.min(100, Math.max(0, Math.round(score)));
-}
-
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(56,189,248,.12), transparent 26%), radial-gradient(circle at 52% 45%, rgba(157,243,191,.07), transparent 24%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
-  color: "white",
-  padding: "22px 16px 96px",
-  fontFamily: "Arial, sans-serif",
-};
-
-const wrap: React.CSSProperties = {
-  width: "min(1220px,100%)",
-  margin: "0 auto",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 30,
-  padding: 24,
-  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
-  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
-  marginBottom: 18,
-};
-
-const glass: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 22,
-  padding: 18,
-  background: "rgba(255,255,255,.045)",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: ".18em",
-  textTransform: "uppercase",
-  fontWeight: 950,
-  fontSize: 12,
-};
-
-const muted: React.CSSProperties = {
-  color: "#cbd5e1",
-  lineHeight: 1.55,
-};
-
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: 50,
-  borderRadius: 999,
-  padding: "12px 18px",
-  border: 0,
-  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-  color: "#06100a",
-  fontWeight: 950,
-  textDecoration: "none",
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.16)",
-  color: "white",
-};
-
-const commandBar: React.CSSProperties = {
-  position: "sticky",
-  top: 10,
-  zIndex: 40,
-  border: "1px solid rgba(232,196,107,.28)",
-  borderRadius: 24,
-  padding: 12,
-  background: "linear-gradient(145deg,rgba(2,6,23,.92),rgba(7,19,38,.86))",
-  boxShadow: "0 18px 70px rgba(0,0,0,.42)",
-  backdropFilter: "blur(14px)",
-  marginBottom: 16,
-};
-
-const smallButton: React.CSSProperties = {
-  ...button,
-  minHeight: 40,
-  padding: "9px 12px",
-  fontSize: 13,
-};
-
-const smallGhost: React.CSSProperties = {
-  ...ghost,
-  minHeight: 40,
-  padding: "9px 12px",
-  fontSize: 13,
-};
-
-const closeButton: React.CSSProperties = {
-  ...smallGhost,
-  color: "#fecaca",
-  border: "1px solid rgba(248,113,113,.34)",
-  background: "rgba(248,113,113,.10)",
-};
-
-const chip: React.CSSProperties = {
-  border: "1px solid rgba(157,243,191,.22)",
-  borderRadius: 999,
-  padding: "7px 10px",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  margin: "0 7px 7px 0",
-  fontSize: 12,
-  fontWeight: 850,
-  display: "inline-flex",
-};
-
-function Metric({ label, value, tone }: { label: string; value: string; tone: "blue" | "green" | "gold" | "red" }) {
-  const color = tone === "blue" ? "#38bdf8" : tone === "green" ? "#4ade80" : tone === "red" ? "#f87171" : "#e8c46b";
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const safe = Math.max(0, Math.min(100, Math.round(value)));
 
   return (
-    <section style={glass}>
-      <div style={{ color, fontWeight: 950, letterSpacing: ".14em", textTransform: "uppercase", fontSize: 12 }}>{label}</div>
-      <div style={{ fontSize: 52, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>{value}</div>
-    </section>
-  );
-}
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 12 }}>
+        <span>{label}</span>
+        <span>{safe}%</span>
+      </div>
 
-function IntelligenceCard({ row, viewer }: { row: Row; viewer: string }) {
-  const signalId = signalIdOf(row);
-  const itemId = itemIdOf(row);
-  const photos = photosOf(row);
-  const owner = ownerOf(row);
-  const score = scoreOf(row);
-
-  const messageHref = signalId
-    ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${itemId ? `&item_id=${encodeURIComponent(itemId)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=intelligence`
-    : "/messages";
-
-  return (
-    <article style={glass}>
-      <div style={{ display: "grid", gridTemplateColumns: "170px 1fr", gap: 18 }}>
+      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 7 }}>
         <div
           style={{
-            borderRadius: 20,
-            overflow: "hidden",
-            border: "1px solid rgba(232,196,107,.18)",
-            background: "rgba(0,0,0,.20)",
-            minHeight: 150,
+            width: `${safe}%`,
+            height: "100%",
+            borderRadius: 999,
+            background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)",
           }}
-        >
-          {photos[0] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photos[0]} alt="Intelligence asset" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          ) : (
-            <div style={{ height: 150, display: "grid", placeItems: "center", color: "#94a3b8", fontWeight: 850, textAlign: "center" }}>
-              Intelligence<br />Record
-            </div>
-          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+function InsightCard({
+  item,
+  onDelete,
+  onRestore,
+  deletedMode,
+}: {
+  item: Insight;
+  onDelete: (item: Insight) => void;
+  onRestore: (item: Insight) => void;
+  deletedMode: boolean;
+}) {
+  const cls = classification(item);
+
+  return (
+    <article style={card}>
+      {item.photo && (
+        <img
+          src={item.photo}
+          alt={item.title || "VaultForge intelligence"}
+          style={{ width: "100%", height: 240, objectFit: "cover", display: "block" }}
+        />
+      )}
+
+      <div style={{ padding: 22 }}>
+        <div style={{ color: "#e8c46b", letterSpacing: 3, fontWeight: 900, fontSize: 12, marginBottom: 10, textTransform: "uppercase" }}>
+          {item.kind === "pain" ? "Pressure Intelligence" : "Opportunity Intelligence"}
         </div>
 
-        <div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span style={chip}>{sourceOf(row)}</span>
-            <span style={{ ...chip, color: "#ffd0d0", borderColor: "rgba(248,113,113,.28)", background: "rgba(248,113,113,.08)" }}>
-              {urgencyOf(row)}
-            </span>
-            <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.26)", background: "rgba(232,196,107,.08)" }}>
-              Score {score}
-            </span>
-            <span style={{ ...chip, color: "#8fd3ff", borderColor: "rgba(56,189,248,.28)", background: "rgba(56,189,248,.08)" }}>
-              {assetOf(row)}
-            </span>
-          </div>
+        <h2 style={{ fontSize: 44, lineHeight: 0.92, margin: "0 0 16px" }}>{item.title || "Untitled"}</h2>
 
-          <h3 style={{ fontSize: 30, lineHeight: 1.02, margin: "14px 0 10px" }}>{titleOf(row)}</h3>
-          <p style={muted}>{noteOf(row)}</p>
+        <div style={{ marginBottom: 14 }}>
+          <span style={{ display: "inline-flex", border: "1px solid rgba(157,243,191,.30)", borderRadius: 999, padding: "7px 10px", color: "#9df3bf", background: "rgba(157,243,191,.08)", fontWeight: 900, marginRight: 8, marginBottom: 8 }}>
+            {cls}
+          </span>
 
-          <div style={{ marginTop: 12 }}>
-            {signalId ? <span style={chip}>Signal: {signalId}</span> : null}
-            {itemId ? <span style={chip}>Item: {itemId}</span> : null}
-            <span style={chip}>Market: {marketOf(row)}</span>
-            {owner ? <span style={chip}>Owner: {owner}</span> : null}
-          </div>
+          <span style={{ display: "inline-flex", border: "1px solid rgba(232,196,107,.30)", borderRadius: 999, padding: "7px 10px", color: "#f5d978", background: "rgba(232,196,107,.08)", fontWeight: 900, marginRight: 8, marginBottom: 8 }}>
+            Strategy: {strategy(item)}
+          </span>
+        </div>
 
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={button}>Open Signal</Link> : null}
-            {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
-            <Link href={messageHref} style={ghost}>Message Owner</Link>
-            <Link href="/activity" style={ghost}>Activity</Link>
-          </div>
+        <ScoreBar label={item.kind === "pain" ? "Pressure Severity" : "Opportunity Strength"} value={item.kind === "pain" ? severity(item) : opportunity(item)} />
+
+        <p style={{ color: "rgba(255,255,255,.82)", lineHeight: 1.6, fontSize: 17, marginTop: 18 }}>{aiRead(item)}</p>
+
+        <div style={{ marginTop: 18, border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: 14, background: "rgba(255,255,255,.03)" }}>
+          <div style={{ color: "#9df3bf", fontWeight: 900, marginBottom: 8 }}>Best Move</div>
+          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>{bestMove(item)}</div>
+          <div style={{ color: "#fecaca", fontWeight: 900, marginTop: 14, marginBottom: 8 }}>Worst Move</div>
+          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>{worstMove(item)}</div>
+        </div>
+
+        <div style={{ marginTop: 22 }}>
+          {item.href && <Link href={item.href} style={button}>Open Room</Link>}
+
+          {!deletedMode ? (
+            <button type="button" style={ghost} onClick={() => onDelete(item)}>Remove From Desk</button>
+          ) : (
+            <button type="button" style={ghost} onClick={() => onRestore(item)}>Restore</button>
+          )}
         </div>
       </div>
     </article>
   );
 }
 
-
-function CommandExitBar() {
-  function goBack() {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-    if (typeof window !== "undefined") window.location.href = "/dashboard";
-  }
-
-  return (
-    <section style={commandBar}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 11 }}>
-            VaultForge Command Exit
-          </div>
-          <div style={{ color: "rgba(255,255,255,.70)", fontSize: 13, marginTop: 4 }}>
-            Intelligence room is open. AI keeps routing in the background.
-          </div>
-        </div>
-
-        <div className="vf-command-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" onClick={goBack} style={closeButton}>Back</button>
-          <Link href="/dashboard" style={smallButton}>Dashboard</Link>
-          <Link href="/projects" style={smallGhost}>Workstations</Link>
-          <Link href="/alerts" style={smallGhost}>Alerts</Link>
-          <Link href="/smart-ai" style={smallGhost}>Smart AI</Link>
-          <Link href="/messages" style={smallGhost}>Messages</Link>
-          <Link href="/pain-feed" style={smallGhost}>Pain Feed</Link>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export default function IntelligencePage() {
+export default function SmartAIPage() {
+  const [items, setItems] = useState<Insight[]>([]);
+  const [status, setStatus] = useState("Loading Intelligence Engine...");
+  const [mode, setMode] = useState("active");
   const [email, setEmail] = useState("");
-  const [items, setItems] = useState<Row[]>([]);
-  const [status, setStatus] = useState("Loading intelligence desk...");
-
-  async function load() {
-    const viewer = getEmail();
-    setEmail(viewer);
-    setStatus("Loading intelligence desk...");
-
-    try {
-      const urls = [
-        `/api/intelligence/feed?email=${encodeURIComponent(viewer)}&owner=0`,
-        `/api/pain/feed?email=${encodeURIComponent(viewer)}&owner=0`,
-        `/api/routing/actions?email=${encodeURIComponent(viewer)}&owner=0`,
-      ];
-
-      const collected: Row[] = [];
-
-      for (const url of urls) {
-        try {
-          const res = await fetch(url, {
-            cache: "no-store",
-            headers: { "x-vf-email": viewer || "", "x-vf-admin": "0" },
-          });
-
-          const data = await safeJson(res);
-          const list = [
-            ...(Array.isArray(data.intelligence) ? data.intelligence : []),
-            ...(Array.isArray(data.signals) ? data.signals : []),
-            ...(Array.isArray(data.pains) ? data.pains : []),
-            ...(Array.isArray(data.actions) ? data.actions : []),
-            ...(Array.isArray(data.items) ? data.items : []),
-            ...(Array.isArray(data.data) ? data.data : []),
-          ];
-
-          collected.push(...list);
-        } catch {
-          // keep other feeds loading
-        }
-      }
-
-      const seen = new Set<string>();
-      const unique = collected.filter((item) => {
-        const key = first(signalIdOf(item), itemIdOf(item), item.id, titleOf(item) + noteOf(item));
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      setItems(unique);
-      setStatus(unique.length ? "" : "No intelligence records connected yet.");
-    } catch (error: any) {
-      setStatus(error?.message || "Could not load intelligence desk.");
-    }
-  }
 
   useEffect(() => {
+    async function load() {
+      try {
+        const viewer = currentEmail();
+        setEmail(viewer);
+
+        const res = await fetch(`/api/smart-ai?email=${encodeURIComponent(viewer)}`, {
+          cache: "no-store",
+          headers: { "x-vf-email": viewer },
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || data?.ok === false) throw new Error(data?.error || "Could not load Intelligence Engine.");
+
+        setItems(Array.isArray(data?.insights) ? data.insights : []);
+        setStatus("");
+      } catch {
+        setStatus("Intelligence Engine could not load.");
+      }
+    }
+
     load();
   }, []);
 
-  const counts = useMemo(() => {
-    const urgent = items.filter((item) => {
-      const u = urgencyOf(item).toLowerCase();
-      return u.includes("urgent") || u.includes("high") || u.includes("emergency");
-    }).length;
+  const deletedIds = useMemo(() => loadTrash(email), [email]);
 
-    const routed = items.filter((item) => sourceOf(item).toLowerCase().includes("routing") || sourceOf(item).toLowerCase().includes("route")).length;
-    const withPhotos = items.filter((item) => photosOf(item).length).length;
+  const activeItems = useMemo(() => {
+    return items.filter((item) => !deletedIds.includes(itemKey(item)));
+  }, [items, deletedIds]);
 
-    return { total: items.length, urgent, routed, withPhotos };
-  }, [items]);
+  const deletedItems = useMemo(() => {
+    return items.filter((item) => deletedIds.includes(itemKey(item)));
+  }, [items, deletedIds]);
+
+  function deleteItem(item: Insight) {
+    const next = Array.from(new Set([...deletedIds, itemKey(item)]));
+    saveTrash(email, next);
+    setMode("active");
+  }
+
+  function restoreItem(item: Insight) {
+    const next = deletedIds.filter((id) => id !== itemKey(item));
+    saveTrash(email, next);
+    setMode("deleted");
+  }
+
+  const visible = mode === "deleted" ? deletedItems : activeItems;
+  const pressureCount = activeItems.filter((x) => x.kind === "pain").length;
+  const opportunityCount = activeItems.filter((x) => x.kind !== "pain").length;
 
   return (
-    <main style={page}>
+    <main style={pageStyle}>
       <style>{`
         a:hover, button:hover {
           transform: translateY(-1px);
@@ -473,101 +392,80 @@ export default function IntelligencePage() {
           filter: brightness(1.06);
         }
 
-        @media (max-width: 820px) {
-          .vf-grid,
-          .vf-four,
-          .vf-actions,
-          article > div {
+        @media (max-width: 720px) {
+          .vf-smart-actions {
+            display: grid !important;
             grid-template-columns: 1fr !important;
           }
 
-          .vf-actions {
-            display: grid !important;
-            gap: 10px !important;
-          }
-
-          .vf-actions > *,
-          .vf-command-actions > * {
+          .vf-smart-actions > * {
             width: 100%;
             box-sizing: border-box;
-            justify-content: center;
-          }
-
-          .vf-command-actions {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            gap: 8px !important;
+            margin-right: 0 !important;
           }
         }
       `}</style>
 
       <div style={wrap}>
-        <CommandExitBar />
+        <section style={hero}>
+          <div style={{ color: "#e8c46b", letterSpacing: 5, fontWeight: 900, marginBottom: 12, textTransform: "uppercase" }}>
+            VaultForge Intelligence Room
+          </div>
 
-        <VaultForgeMemberNav
-          title="Intelligence"
-          subtitle="Private real estate intelligence desk for signals, pressure, routing, pain, and execution."
-          active="intelligence"
-        />
-
-        <section style={card}>
-          <div style={eyebrow}>VaultForge Intelligence Desk</div>
-          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
-            Market command.
+          <h1 style={{ fontSize: "clamp(64px,12vw,140px)", lineHeight: 0.88, margin: "0 0 18px", letterSpacing: -5 }}>
+            Intelligence.
           </h1>
-          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            This is the intelligence layer: active pressure, pain signals, routing movement,
-            owner contact, member fit, and execution opportunity.
+
+          <p style={{ color: "rgba(255,255,255,.78)", fontSize: 22, lineHeight: 1.6, maxWidth: 1100 }}>
+            This is the institutional intelligence layer. The Intelligence Room classifies pressure, rewrites opportunities, diagnoses weak structures, identifies execution paths, scores risk, and routes operator intelligence into one institutional command layer.
           </p>
 
-          <div style={{ marginTop: 16 }}>
-            <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>Records: {counts.total}</span>
-            <span style={chip}>Urgent: {counts.urgent}</span>
-            <span style={chip}>Routed: {counts.routed}</span>
+          <div style={{ marginTop: 22 }}>
+            <span style={{ marginRight: 18, color: "#9df3bf", fontWeight: 900 }}>Pressure Signals: {pressureCount}</span>
+            <span style={{ color: "#f5d978", fontWeight: 900 }}>Opportunity Signals: {opportunityCount}</span>
           </div>
 
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
-            <Link href="/dashboard" style={ghost}>Dashboard</Link>
-            <Link href="/signals" style={button}>Signals</Link>
-            <Link href="/pain-feed" style={ghost}>Pain Feed</Link>
-            <Link href="/routing-inbox" style={ghost}>Routing</Link>
-            <button type="button" onClick={load} style={ghost}>Refresh</button>
+          <div className="vf-smart-actions" style={{ marginTop: 24 }}>
+            <button type="button" style={mode === "active" ? button : ghost} onClick={() => setMode("active")}>
+              Active Desk ({activeItems.length})
+            </button>
+
+            <button type="button" style={mode === "deleted" ? button : ghost} onClick={() => setMode("deleted")}>
+              Removed ({deletedItems.length})
+            </button>
+
+            <Link href="/dashboard" style={ghost}>Command</Link>
+            <Link href="/submit" style={ghost}>Opportunity Intake</Link>
+            <Link href="/pain" style={ghost}>Pressure Intake</Link>
           </div>
         </section>
 
-        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
-          <Metric label="Records" value={String(counts.total)} tone="blue" />
-          <Metric label="Urgent" value={String(counts.urgent)} tone="red" />
-          <Metric label="Routed" value={String(counts.routed)} tone="gold" />
-          <Metric label="With Photos" value={String(counts.withPhotos)} tone="green" />
+        {status && (
+          <section style={hero}>
+            <strong>{status}</strong>
+          </section>
+        )}
+
+        {!status && visible.length === 0 && (
+          <section style={hero}>
+            <strong>No intelligence records visible.</strong>
+            <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
+              Add Opportunity or Pressure records, then return here to classify, triage, and route them.
+            </p>
+          </section>
+        )}
+
+        <section style={grid}>
+          {visible.map((item, index) => (
+            <InsightCard
+              key={`${itemKey(item)}-${index}`}
+              item={item}
+              deletedMode={mode === "deleted"}
+              onDelete={deleteItem}
+              onRestore={restoreItem}
+            />
+          ))}
         </section>
-
-        <section style={card}>
-          <div style={eyebrow}>Intelligence Queue</div>
-          <h2 style={{ fontSize: 42, lineHeight: 1, margin: "10px 0 18px" }}>What the network should watch.</h2>
-
-          {items.length ? (
-            <div style={{ display: "grid", gap: 14 }}>
-              {items.map((item, index) => (
-                <IntelligenceCard key={clean(item.id) || `${signalIdOf(item)}-${index}`} row={item} viewer={email} />
-              ))}
-            </div>
-          ) : (
-            <div style={glass}>
-              <h3 style={{ marginTop: 0 }}>No intelligence records yet.</h3>
-              <p style={muted}>
-                Submit Pain, create signals, route records, or open activity to feed this command layer.
-              </p>
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-                <Link href="/pain" style={button}>Submit Pain</Link>
-                <Link href="/signals" style={ghost}>Signals</Link>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {status ? <section style={card}>{status}</section> : null}
       </div>
     </main>
   );
