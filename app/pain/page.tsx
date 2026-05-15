@@ -209,6 +209,7 @@ const defaultForm: Record<string, any> = {
   help_requested: "Need buyer, private capital, operator, or structured exit.",
   notes: "",
   operating_state: "Georgia",
+  county: "",
   city: "",
   area: "",
   asset_type: "Residential",
@@ -303,7 +304,7 @@ function bestStack(form: Record<string, any>) {
 function bestNextMove(form: Record<string, any>) {
   const bottleneck = bestBottleneck(form);
   const stack = bestStack(form);
-  const market = [clean(form.city), clean(form.operating_state)].filter(Boolean).join(", ") || "the target market";
+  const market = [clean(form.city), clean(form.county), clean(form.operating_state)].filter(Boolean).join(", ") || "the target market";
 
   if (bottleneck === "Time Pressure") return `Escalate as urgent: confirm deadline, access, seller contact, and route to ${stack.slice(0, 2).join(" + ")} in ${market}.`;
   if (bottleneck === "Capital Gap") return `Package the numbers, confirm exact funding gap, then route to ${stack.includes("Private Lender") ? "private lender / capital partner" : "capital partner"}.`;
@@ -336,7 +337,7 @@ function readinessRead(form: Record<string, any>, photoCount: number) {
   if (hasText(form.title)) score += 10;
   if (hasText(form.help_requested)) score += 12;
   if (hasText(form.notes)) score += 12;
-  if (hasText(form.city) && hasText(form.operating_state)) score += 10;
+  if (hasText(form.city) && hasText(form.county) && hasText(form.operating_state)) score += 10;
   if (hasText(form.address) || hasText(form.area)) score += 6;
   if (hasText(form.timeline)) score += 8;
   if (hasText(form.asking_price) || hasText(form.arv_value) || hasText(form.capital_needed)) score += 12;
@@ -362,7 +363,7 @@ function capitalRiskRead(form: Record<string, any>) {
 }
 
 function intelligenceRead(form: Record<string, any>, selectedPain: { title: string }, photoCount: number) {
-  const market = [clean(form.city), clean(form.operating_state)].filter(Boolean).join(", ") || "market not listed";
+  const market = [clean(form.city), clean(form.county), clean(form.operating_state)].filter(Boolean).join(", ") || "market not listed";
   const bottleneck = bestBottleneck(form);
   const stack = bestStack(form);
   const ask = moneyText(form.asking_price);
@@ -388,6 +389,8 @@ function missingEinsteinPrompts(form: Record<string, any>, photoCount: number) {
   if (!hasText(form.title)) missing.push("title the problem clearly");
   if (!hasText(form.help_requested)) missing.push("say exactly what help is needed");
   if (!hasText(form.timeline)) missing.push("add timeline or deadline");
+  if (!hasText(form.operating_state)) missing.push("select state");
+  if (!hasText(form.county)) missing.push("add county");
   if (!hasText(form.city)) missing.push("add city/market");
   if (!hasText(form.notes)) missing.push("add the real situation/context");
   if (!photoCount) missing.push("add photos if possible");
@@ -479,6 +482,18 @@ export default function PainPage() {
     setLinks({});
 
     try {
+      if (!clean(form.operating_state)) {
+        throw new Error("State is required.");
+      }
+
+      if (!clean(form.county)) {
+        throw new Error("County is required.");
+      }
+
+      if (!clean(form.city)) {
+        throw new Error("City is required.");
+      }
+
       const photoUrls: string[] = [];
       const photoWarnings: string[] = [];
 
@@ -505,6 +520,10 @@ export default function PainPage() {
         },
         body: JSON.stringify({
           ...form,
+          state: form.operating_state,
+          county: form.county,
+          county_name: form.county,
+          market_county: form.county,
           email,
           member_email: email,
           submitted_by: email,
@@ -589,6 +608,7 @@ export default function PainPage() {
             <span style={chip}>Signed in: {email || "unknown"}</span>
             <span style={chip}>Asset: {form.asset_type}</span>
             <span style={chip}>State: {form.operating_state}</span>
+            <span style={chip}>County: {form.county || "needed"}</span>
             <span style={chip}>Einstein Mode: Live intake intelligence</span>
           </div>
         </section>
@@ -773,6 +793,9 @@ export default function PainPage() {
             <select style={input} value={form.operating_state} onChange={(e) => update("operating_state", e.target.value)}>
               {STATES.map((state) => <option key={state}>{state}</option>)}
             </select>
+
+            <label style={{ ...label, marginTop: 18 }}>County</label>
+            <input style={input} value={form.county || ""} onChange={(e) => update("county", e.target.value)} placeholder="County, parish, or local market bucket" />
 
             <label style={{ ...label, marginTop: 18 }}>City</label>
             <input style={input} value={form.city} onChange={(e) => update("city", e.target.value)} placeholder="City / market" />
