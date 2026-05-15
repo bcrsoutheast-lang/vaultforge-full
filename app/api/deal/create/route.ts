@@ -236,7 +236,7 @@ function makeSummary(body: AnyRecord) {
   const market = [city, state].filter(Boolean).join(", ") || field(body, "market") || "Market not listed";
   const strategy = field(body, "strategy") || "Strategy not listed";
   const exit = field(body, "exit_strategy") || "Exit not listed";
-  const ask = moneyLike(body, "asking_price", "price", "ask", "purchase_price");
+  const ask = moneyLike(body, "asking_price", "price", "purchase_price");
   const arv = moneyLike(body, "arv", "arv_value", "estimated_value", "after_repair_value");
   const repairs = moneyLike(body, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
   const beds = field(body, "beds", "bedrooms");
@@ -282,7 +282,7 @@ function buildRows(body: AnyRecord, email: string) {
   const city = field(body, "city");
   const state = field(body, "state") || "Georgia";
 
-  const askingPrice = moneyLike(body, "asking_price", "price", "ask", "purchase_price");
+  const askingPrice = moneyLike(body, "asking_price", "price", "purchase_price");
   const arv = moneyLike(body, "arv", "arv_value", "estimated_value", "after_repair_value");
   const repairEstimate = moneyLike(body, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget");
   const beds = field(body, "beds", "bedrooms");
@@ -323,7 +323,6 @@ function buildRows(body: AnyRecord, email: string) {
 
     price: askingPrice,
     asking_price: askingPrice,
-    ask: askingPrice,
     purchase_price: askingPrice,
     arv,
     arv_value: arv,
