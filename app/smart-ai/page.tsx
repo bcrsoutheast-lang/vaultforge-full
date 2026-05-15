@@ -168,7 +168,7 @@ function InsightCard({
             textTransform: "uppercase",
           }}
         >
-          AI Background Intelligence
+          {item.kind === "pain" ? "Pain Room Match" : "Deal Room Match"} · {item.market || "Market not listed"}
         </div>
 
         <h2
@@ -381,6 +381,10 @@ export default function SmartAIPage() {
             <button type="button" style={ghost} onClick={() => window.location.reload()}>
               Refresh
             </button>
+
+            <Link href="/dashboard" style={button}>
+              Dashboard
+            </Link>
 
             <Link href="/submit" style={ghost}>
               Create Deal
