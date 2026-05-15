@@ -362,17 +362,44 @@ function mergeNoBlankOverwrite(remote: Record<string, any>, local: Record<string
     "city",
     "state",
     "markets",
+    "specific_markets",
+    "market_notes",
+    "home_state",
+    "based_state",
+    "base_state",
+    "from_state",
     "buy_box",
     "funding_capacity",
+    "capital_capacity",
     "strategy",
+    "strategy_notes",
+    "notes",
     "profile_photo_url",
+    "photo_url",
+    "avatar_url",
     "member_types",
+    "member_type",
+    "roles",
     "buy_box_states",
+    "market_states",
+    "deal_states",
+    "states",
+    "operating_states",
     "buy_box_types",
+    "property_types",
+    "asset_types",
     "buy_box_strategies",
+    "strategies",
     "needs",
+    "deal_needs",
+    "what_i_need",
     "can_provide",
+    "what_i_provide",
+    "provides",
+    "capabilities",
     "distress_signals",
+    "pain_signals",
+    "problem_signals",
     "alert_types",
     "alert_frequency",
     "max_alerts_per_day",
@@ -596,7 +623,14 @@ function profileToForm(profile: Record<string, any>, email: string, current: Rec
   const loadedStates = arrayFirstNonEmpty(
     profile.buy_box_states,
     profile.market_states,
+    profile.deal_states,
+    profile.states,
+    profile.operating_states,
     profile.markets,
+    profile.home_state,
+    profile.based_state,
+    profile.base_state,
+    profile.from_state,
     profile.state
   );
 
@@ -654,12 +688,35 @@ function profileToForm(profile: Record<string, any>, email: string, current: Rec
     company: firstNonEmpty(profile.company, current.company) as string,
     role: firstNonEmpty(profile.role, profile.member_role, loadedMemberTypes[0], current.role) as string,
     city: firstNonEmpty(profile.city, current.city) as string,
-    state: allowedStateValue(firstNonEmpty(profile.state, loadedStates[0], current.state, "Georgia")),
-    markets: firstNonEmpty(profile.markets, joinList(loadedStates), current.markets) as string,
+    state: allowedStateValue(
+      firstNonEmpty(
+        profile.state,
+        profile.home_state,
+        profile.based_state,
+        profile.base_state,
+        profile.from_state,
+        loadedStates[0],
+        current.state,
+        "Georgia"
+      )
+    ),
+    markets: firstNonEmpty(
+      profile.markets,
+      profile.specific_markets,
+      profile.market_notes,
+      joinList(loadedStates),
+      current.markets
+    ) as string,
     member_types: loadedMemberTypes.length ? loadedMemberTypes : asArray(current.member_types).length ? asArray(current.member_types) : ["Buyer"],
     buy_box: firstNonEmpty(profile.buy_box, profile.buyBox, current.buy_box) as string,
     funding_capacity: firstNonEmpty(profile.funding_capacity, profile.fundingCapacity, current.funding_capacity) as string,
-    strategy: firstNonEmpty(profile.strategy, current.strategy) as string,
+    strategy: firstNonEmpty(
+      profile.strategy_notes,
+      profile.notes,
+      profile.strategy,
+      profile.buy_box_focus,
+      current.strategy
+    ) as string,
     profile_photo_url: profilePhoto || "",
     alert_frequency: firstNonEmpty(profile.alert_frequency, current.alert_frequency, "daily_digest") as string,
     max_alerts_per_day: String(firstNonEmpty(profile.max_alerts_per_day, current.max_alerts_per_day, "10")),
@@ -789,30 +846,93 @@ export default function ProfilePage() {
       const email = form.email || getEmail();
       const primaryRole = asArray(form.member_types)[0] || form.role;
 
+      const selectedStates = allowedStateList(form.buy_box_states);
+      const homeState = allowedStateValue(form.state || selectedStates[0] || "Georgia");
+      const specificMarkets = firstNonEmpty(form.markets, joinList(selectedStates)) as string;
+      const strategyNotes = firstNonEmpty(form.strategy, form.strategy_notes, form.notes, form.buy_box) as string;
+      const selectedPropertyTypes = asArray(form.buy_box_types);
+      const selectedStrategies = asArray(form.buy_box_strategies);
+      const selectedNeeds = asArray(form.needs);
+      const selectedProvides = asArray(form.can_provide);
+      const selectedDistress = asArray(form.distress_signals);
+      const selectedAlerts = asArray(form.alert_types);
+
       const payload = {
         ...form,
         email,
+        auth_user_id: email,
+
+        full_name: form.full_name,
+        phone: form.phone,
+        company: form.company,
+        company_name: form.company,
+        city: form.city,
+
         role: primaryRole,
         member_role: primaryRole,
-        state: allowedStateValue(form.state || asArray(form.buy_box_states)[0] || "Georgia"),
-        markets: joinList(allowedStateList(form.buy_box_states)),
-        market_states: allowedStateList(form.buy_box_states),
         member_types: asArray(form.member_types),
-        buy_box_states: allowedStateList(form.buy_box_states),
-        buy_box_types: asArray(form.buy_box_types),
-        property_types: asArray(form.buy_box_types),
-        asset_types: asArray(form.buy_box_types),
-        buy_box_strategies: asArray(form.buy_box_strategies),
-        strategies: asArray(form.buy_box_strategies),
-        needs: asArray(form.needs),
-        deal_needs: asArray(form.needs),
-        what_i_need: asArray(form.needs),
-        can_provide: asArray(form.can_provide),
-        what_i_provide: asArray(form.can_provide),
-        distress_signals: asArray(form.distress_signals),
-        pain_signals: asArray(form.distress_signals),
-        alert_types: asArray(form.alert_types),
+        member_type: asArray(form.member_types),
+        roles: asArray(form.member_types),
+
+        state: homeState,
+        home_state: homeState,
+        based_state: homeState,
+        base_state: homeState,
+        from_state: homeState,
+        member_state: homeState,
+        primary_state: homeState,
+        location_state: homeState,
+        market_primary: homeState,
+        primary_market: homeState,
+
+        markets: specificMarkets,
+        specific_markets: specificMarkets,
+        market_notes: specificMarkets,
+        market_states: selectedStates,
+        deal_states: selectedStates,
+        states: selectedStates,
+        operating_states: selectedStates,
+        buy_box_states: selectedStates,
+
+        buy_box_types: selectedPropertyTypes,
+        property_types: selectedPropertyTypes,
+        asset_types: selectedPropertyTypes,
+        asset_focus: selectedPropertyTypes,
+
+        buy_box_strategies: selectedStrategies,
+        strategies: selectedStrategies,
+        strategy: strategyNotes,
+        strategy_notes: strategyNotes,
+        notes: strategyNotes,
+
+        buy_box: form.buy_box,
+        buy_box_focus: form.buy_box,
+        funding_capacity: form.funding_capacity,
+        capital_capacity: form.funding_capacity,
+
+        needs: selectedNeeds,
+        deal_needs: selectedNeeds,
+        what_i_need: selectedNeeds,
+
+        can_provide: selectedProvides,
+        what_i_provide: selectedProvides,
+        provides: selectedProvides,
+        capabilities: selectedProvides,
+
+        distress_signals: selectedDistress,
+        pain_signals: selectedDistress,
+        problem_signals: selectedDistress,
+
+        alert_types: selectedAlerts,
+        alert_frequency: form.alert_frequency,
         max_alerts_per_day: Number(form.max_alerts_per_day || 10),
+
+        profile_photo_url: form.profile_photo_url,
+        photo_url: form.profile_photo_url,
+        avatar_url: form.profile_photo_url,
+
+        profile_complete: progress >= 70,
+        updated_at: new Date().toISOString(),
       };
 
       const res = await fetch("/api/profile", {
