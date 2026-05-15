@@ -179,6 +179,7 @@ export default function DashboardPage() {
             <Link href="/workstations" style={ghost}>Workstations</Link>
             <Link href="/intelligence" style={ghost}>Intelligence</Link>
             <Link href="/messages" style={ghost}>Messages</Link>
+            <Link href="/room-system-guide" style={ghost}>How It Works</Link>
             <Link href="/profile-dashboard" style={ghost}>Profile</Link>
           </div>
 
@@ -199,6 +200,7 @@ export default function DashboardPage() {
           <CommandCard href="/saved-rooms" tag="CONTROL" title="Saved Rooms" body="Your keep pile. Anything worth monitoring, revisiting, or controlling without cluttering active flow." tone="#9df3bf" />
           <CommandCard href="/workstations" tag="5S" title="Workstations" body="Clean launcher for every folder and lane. No giant messy feed unless you choose the lane." tone="#e8c46b" />
           <CommandCard href="/profile-dashboard" tag="ME" title="Profile Dashboard" body="Member identity, access, operating markets, specialties, folders, and personal command lanes." tone="#9df3bf" />
+          <CommandCard href="/room-system-guide" tag="HELP" title="How Rooms Work" body="Simple operating card explaining stage buttons, folders, movement, and the river flow." tone="#e8c46b" />
         </section>
       </div>
     </main>
