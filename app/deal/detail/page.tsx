@@ -130,7 +130,7 @@ function assetType(deal: Deal | null) {
 }
 
 function strategyOf(deal: Deal | null) {
-  return from(deal, "strategy", "exit_strategy", "deal_strategy") || "Strategy not listed";
+  return from(deal, "strategy", "exit_strategy", "deal_strategy") || "Awaiting strategy classification";
 }
 
 function ownerOf(deal: Deal | null) {
@@ -180,11 +180,11 @@ function sizeText(deal: Deal | null) {
 }
 
 function routeNeed(deal: Deal | null) {
-  return from(deal, "routing_needs", "deal_needs", "needs", "route_context") || "Owner review / buyer route";
+  return from(deal, "routing_needs", "deal_needs", "needs", "route_context") || "Owner review pending";
 }
 
 function pressureText(deal: Deal | null) {
-  return from(deal, "distress_signals", "seller_pressure", "pain_signals", "urgency", "urgency_level", "seller_situation") || "No urgent pressure listed.";
+  return from(deal, "distress_signals", "seller_pressure", "pain_signals", "urgency", "urgency_level", "seller_situation") || "No urgent pressure detected yet.";
 }
 
 function summaryText(deal: Deal | null) {
@@ -202,6 +202,46 @@ function summaryText(deal: Deal | null) {
     `Routing read: ${routeNeed(deal)}.`,
     `Pressure: ${pressureText(deal)}.`,
   ];
+
+  return parts.join(" ");
+}
+
+function smartSummaryText(deal: Deal | null) {
+  const saved = first(
+    from(deal, "ai_route_summary", "route_summary", "routing_summary", "ai_summary"),
+    from(deal, "description", "notes", "note")
+  );
+
+  if (saved) return saved;
+
+  const parts: string[] = [];
+  parts.push(`${assetType(deal)} opportunity in ${marketText(deal)}.`);
+
+  const strategy = strategyOf(deal);
+  if (strategy && strategy !== "Awaiting strategy classification") {
+    parts.push(`Strategy reads as ${strategy}.`);
+  } else {
+    parts.push("Strategy classification is still pending.");
+  }
+
+  const ask = askValue(deal);
+  const arv = arvValue(deal);
+  const repairs = repairsValue(deal);
+
+  if (ask || arv || repairs) {
+    parts.push(
+      `Known economics: ask ${money(ask)}, ARV ${money(arv)}, repairs ${money(repairs)}, spread ${spreadText(deal)}.`
+    );
+  } else {
+    parts.push("Underwriting is pending: ask, ARV, and repairs still need confirmation.");
+  }
+
+  const route = routeNeed(deal);
+  if (route && route !== "Owner review pending") {
+    parts.push(`Routing read: ${route}.`);
+  } else {
+    parts.push("Routing requires owner review before broad circulation.");
+  }
 
   return parts.join(" ");
 }
@@ -349,6 +389,34 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
+const compactNav: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  marginBottom: 14,
+};
+
+const smallGhost: React.CSSProperties = {
+  ...ghost,
+  minHeight: 38,
+  padding: "8px 12px",
+  fontSize: 13,
+};
+
+const smallGold: React.CSSProperties = {
+  ...button,
+  minHeight: 38,
+  padding: "8px 12px",
+  fontSize: 13,
+};
+
+const dangerButton: React.CSSProperties = {
+  ...smallGhost,
+  border: "1px solid rgba(248,113,113,.35)",
+  color: "#fecaca",
+  background: "rgba(248,113,113,.10)",
+};
+
 const chip: React.CSSProperties = {
   border: "1px solid rgba(157,243,191,.22)",
   borderRadius: 999,
@@ -405,6 +473,7 @@ export default function DealDetailPage() {
   const [status, setStatus] = useState("Loading deal...");
   const [dealId, setDealId] = useState("");
   const [returnTo, setReturnTo] = useState("/smart-ai");
+  const [roomHidden, setRoomHidden] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -448,6 +517,23 @@ export default function DealDetailPage() {
     load();
   }, []);
 
+  function hideFromWorkstations() {
+    if (typeof window === "undefined") return;
+
+    const key = "vf_smart_ai_deleted_" + (ownerOf(deal) || "guest");
+    const itemKey = ["deal", dealId || from(deal, "id", "deal_id"), titleOf(deal), marketText(deal)].join("|");
+
+    try {
+      const raw = window.localStorage.getItem(key);
+      const list = raw ? JSON.parse(raw) : [];
+      const next = Array.isArray(list) ? Array.from(new Set([...list, itemKey])) : [itemKey];
+      window.localStorage.setItem(key, JSON.stringify(next));
+      setRoomHidden(true);
+    } catch {
+      setRoomHidden(true);
+    }
+  }
+
   const photos = useMemo(() => photosOf(deal), [deal]);
   const signalId = from(deal, "signal_id", "canonical_event_id", "routing_id");
   const owner = ownerOf(deal);
@@ -489,8 +575,21 @@ export default function DealDetailPage() {
           </div>
 
           <div style={{ padding: "8px 4px" }}>
+            <div style={compactNav}>
+              <Link href={returnTo} style={smallGold}>Workstations</Link>
+              <Link href="/dashboard" style={smallGhost}>Dashboard</Link>
+              <Link href="/projects" style={smallGhost}>Projects</Link>
+              <Link href="/messages" style={smallGhost}>Messages</Link>
+              <Link href="/smart-ai" style={smallGhost}>Smart AI</Link>
+              {deal ? (
+                <button type="button" onClick={hideFromWorkstations} style={dangerButton}>
+                  {roomHidden ? "Hidden" : "Hide"}
+                </button>
+              ) : null}
+            </div>
+
             <div style={label}>VaultForge Deal Command Room</div>
-            <h1 style={{ fontSize: "clamp(42px,8vw,84px)", lineHeight: 0.9, letterSpacing: "-.065em", margin: "12px 0 12px" }}>
+            <h1 style={{ fontSize: "clamp(40px,8vw,76px)", lineHeight: 0.92, letterSpacing: "-.065em", margin: "10px 0 12px" }}>
               {deal ? titleOf(deal) : "Deal Room"}
             </h1>
 
@@ -501,29 +600,18 @@ export default function DealDetailPage() {
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
                   <span style={chip}>{assetType(deal)}</span>
                   <span style={chip}>{marketText(deal)}</span>
-                  <span style={chip}>{strategyOf(deal)}</span>
+                  {strategyOf(deal) !== "Awaiting strategy classification" ? <span style={chip}>{strategyOf(deal)}</span> : null}
                   {owner ? <span style={chip}>Owner: {owner}</span> : null}
                 </div>
 
                 <div style={{ border: "1px solid rgba(232,196,107,.22)", borderRadius: 22, padding: 16, background: "rgba(232,196,107,.06)", marginBottom: 14 }}>
-                  <div style={label}>Executive Summary</div>
-                  <p style={{ ...muted, margin: "9px 0 0", fontSize: 17 }}>{summaryText(deal)}</p>
+                  <div style={label}>AI Summary</div>
+                  <p style={{ ...muted, margin: "9px 0 0", fontSize: 17 }}>{smartSummaryText(deal)}</p>
                 </div>
 
                 <div style={{ border: "1px solid rgba(157,243,191,.23)", borderRadius: 22, padding: 16, background: "rgba(157,243,191,.065)", marginBottom: 14 }}>
                   <div style={{ ...label, color: "#9df3bf" }}>Best Next Move</div>
                   <p style={{ color: "#dfffea", margin: "9px 0 0", fontSize: 17, lineHeight: 1.55, fontWeight: 800 }}>{bestNextMove(deal)}</p>
-                </div>
-
-                <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Link href={returnTo} style={button}>Back to Workstations</Link>
-                  <Link href="/dashboard" style={ghost}>Dashboard</Link>
-                  <Link href="/projects" style={ghost}>Projects</Link>
-                  <Link href="/messages" style={ghost}>Messages</Link>
-                  <Link href="/smart-ai" style={ghost}>Smart AI</Link>
-                  <Link href="/submit" style={ghost}>Create Deal</Link>
-                  {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Signal Room</Link> : null}
-                  {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
                 </div>
               </>
             ) : null}
@@ -533,9 +621,9 @@ export default function DealDetailPage() {
         {deal ? (
           <>
             <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginBottom: 16 }}>
-              <Mini labelText="Ask" value={money(askValue(deal))} />
-              <Mini labelText="ARV" value={money(arvValue(deal))} />
-              <Mini labelText="Repairs" value={money(repairsValue(deal))} />
+              <Mini labelText="Ask" value={askValue(deal) ? money(askValue(deal)) : "Pending underwriting"} />
+              <Mini labelText="ARV" value={arvValue(deal) ? money(arvValue(deal)) : "Pending underwriting"} />
+              <Mini labelText="Repairs" value={repairsValue(deal) ? money(repairsValue(deal)) : "Pending scope"} />
               <Mini labelText="Spread" value={spreadText(deal)} tone={spreadToneValue as any} />
             </section>
 
@@ -609,9 +697,9 @@ export default function DealDetailPage() {
             </section>
 
             <section style={card}>
-              <div style={label}>Room Navigation</div>
+              <div style={label}>Room Controls</div>
               <p style={{ ...muted, marginTop: 8 }}>
-                Move back to the operating desk, dashboard, projects, or messages without getting trapped in the deal room.
+                Keep the room moving without getting trapped.
               </p>
               <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
                 <Link href={returnTo} style={button}>Return to Workstations</Link>
@@ -619,6 +707,9 @@ export default function DealDetailPage() {
                 <Link href="/projects" style={ghost}>Projects</Link>
                 <Link href="/smart-ai" style={ghost}>Smart AI</Link>
                 <Link href="/messages" style={ghost}>Messages</Link>
+                <button type="button" onClick={hideFromWorkstations} style={dangerButton}>
+                  {roomHidden ? "Hidden from Workstations" : "Hide from Workstations"}
+                </button>
               </div>
             </section>
 
