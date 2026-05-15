@@ -81,7 +81,7 @@ const links = [
   { label: "Submit Opportunity", href: "/submit", key: "submit", tag: "UPSIDE" },
   { label: "Submit Pressure", href: "/pain", key: "pain", tag: "FIX" },
   { label: "Workstations", href: "/projects", key: "projects", tag: "ROOMS" },
-  { label: "Intelligence", href: "/smart-ai", key: "smart-ai", tag: "AI" },
+  { label: "Intelligence", href: "/intelligence", key: "intelligence", tag: "AI" },
   { label: "Messages", href: "/messages", key: "messages", tag: "COMMS" },
   { label: "Network", href: "/members", key: "members", tag: "OPS" },
 ];
