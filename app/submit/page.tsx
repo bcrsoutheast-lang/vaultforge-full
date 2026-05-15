@@ -188,6 +188,40 @@ const ghost: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.16)",
 };
 
+const commandBar: React.CSSProperties = {
+  position: "sticky",
+  top: 10,
+  zIndex: 40,
+  border: "1px solid rgba(232,196,107,.28)",
+  borderRadius: 24,
+  padding: 12,
+  background: "linear-gradient(145deg,rgba(2,6,23,.92),rgba(7,19,38,.86))",
+  boxShadow: "0 18px 70px rgba(0,0,0,.42)",
+  backdropFilter: "blur(14px)",
+  marginBottom: 16,
+};
+
+const smallButton: React.CSSProperties = {
+  ...button,
+  minHeight: 40,
+  padding: "9px 12px",
+  fontSize: 13,
+};
+
+const smallGhost: React.CSSProperties = {
+  ...ghost,
+  minHeight: 40,
+  padding: "9px 12px",
+  fontSize: 13,
+};
+
+const closeButton: React.CSSProperties = {
+  ...smallGhost,
+  color: "#fecaca",
+  border: "1px solid rgba(248,113,113,.34)",
+  background: "rgba(248,113,113,.10)",
+};
+
 const pill: React.CSSProperties = {
   border: "1px solid rgba(157,243,191,.25)",
   background: "rgba(157,243,191,.075)",
@@ -398,6 +432,42 @@ function Grid({ children }: { children: React.ReactNode }) {
     >
       {children}
     </div>
+  );
+}
+
+
+function CommandExitBar() {
+  function goBack() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    if (typeof window !== "undefined") window.location.href = "/dashboard";
+  }
+
+  return (
+    <section style={commandBar}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 11 }}>
+            VaultForge Create Room Exit
+          </div>
+          <div style={{ color: "rgba(255,255,255,.70)", fontSize: 13, marginTop: 4 }}>
+            Create Deal room is open. Save the deal or exit back to the command center.
+          </div>
+        </div>
+
+        <div className="vf-command-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" onClick={goBack} style={closeButton}>Back</button>
+          <Link href="/dashboard" style={smallButton}>Dashboard</Link>
+          <Link href="/projects" style={smallGhost}>Workstations</Link>
+          <Link href="/pain" style={smallGhost}>Submit Pain</Link>
+          <Link href="/messages" style={smallGhost}>Messages</Link>
+          <Link href="/smart-ai" style={smallGhost}>Smart AI</Link>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -749,14 +819,23 @@ export default function SubmitDealPage() {
             grid-template-columns: 1fr !important;
           }
 
-          .vf-actions > * {
+          .vf-actions > *,
+          .vf-command-actions > * {
             width: 100%;
             box-sizing: border-box;
+          }
+
+          .vf-command-actions {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
           }
         }
       `}</style>
 
       <div style={wrap}>
+        <CommandExitBar />
+
         <section style={card}>
           <div style={label}>Submit Deal</div>
           <h1 style={{ fontSize: "clamp(48px,9vw,92px)", lineHeight: 0.9, letterSpacing: "-.07em", margin: "12px 0 14px" }}>
@@ -771,7 +850,7 @@ export default function SubmitDealPage() {
             <Link href="/dashboard" style={ghost}>Dashboard</Link>
             <Link href="/projects" style={ghost}>Projects</Link>
             <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
+
           </div>
         </section>
 
