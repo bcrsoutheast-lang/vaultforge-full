@@ -31,6 +31,7 @@ const pressure = [
 ];
 
 const page: React.CSSProperties = {
+  
   minHeight: "100vh",
   background:
     "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
