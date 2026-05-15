@@ -162,12 +162,8 @@ function participantsOf(r: Row): string[] {
     ? m.participants.map(lower)
     : [];
 
-  const participantEmails = Array.isArray(r.participants)
-    ? r.participants.map(lower)
-    : [];
-
   return Array.from(
-    new Set([...raw, ...metadataParticipants, ...participantEmails].filter((v) => v.includes("@")))
+    new Set([...raw, ...metadataParticipants].filter((v) => v.includes("@")))
   );
 }
 
@@ -338,7 +334,7 @@ function normalize(r: Row): Row {
     lane_label: label(s),
     from_email: from,
     to_email: to,
-    participants,
+    // participants moved into metadata only,
     subject: titleOf(r),
     title: titleOf(r),
     message: bodyOf(r),
@@ -536,7 +532,7 @@ function insertRow(input: Row): Row {
     is_deleted: false,
     created_at: now,
     updated_at: now,
-    participants,
+    // participants moved into metadata only,
     metadata: {
       thread_key: key,
       source: s,
@@ -546,7 +542,7 @@ function insertRow(input: Row): Row {
       subject,
       signal_id: signalId || null,
       item_id: itemId || null,
-      participants,
+      // participants moved into metadata only,
       created_at: now,
       updated_at: now,
     },
