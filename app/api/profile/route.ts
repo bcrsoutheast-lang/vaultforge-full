@@ -16,48 +16,98 @@ function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function arr(value: unknown): string[] {
+function valuesOf(value: unknown): string[] {
+  if (value === null || value === undefined) return [];
+
   if (Array.isArray(value)) {
-    return value.map((item) => clean(item)).filter(Boolean);
+    return value.flatMap((item) => valuesOf(item));
   }
 
-  if (typeof value === "string") {
-    const text = value.trim();
+  if (typeof value === "object") {
+    return [];
+  }
 
-    if (!text) return [];
+  const raw = clean(value);
+  if (!raw) return [];
 
+  if (
+    (raw.startsWith("[") && raw.endsWith("]")) ||
+    (raw.startsWith("{") && raw.endsWith("}"))
+  ) {
     try {
-      const parsed = JSON.parse(text);
-      if (Array.isArray(parsed)) return parsed.map((item) => clean(item)).filter(Boolean);
+      const parsed = JSON.parse(raw);
+      return valuesOf(parsed);
     } catch {
       // Continue to delimiter split.
     }
-
-    return text
-      .split(/[,\n|;]/)
-      .map((item) => clean(item))
-      .filter(Boolean);
   }
 
-  return [];
+  return raw
+    .replaceAll("\\n", ",")
+    .replaceAll("\n", ",")
+    .replaceAll("|", ",")
+    .replaceAll(";", ",")
+    .split(",")
+    .map(clean)
+    .filter(Boolean);
 }
 
 function unique(values: string[]) {
-  const seen = new Map<string, string>();
+  const map = new Map<string, string>();
 
   for (const value of values) {
     const text = clean(value);
     if (!text) continue;
-    seen.set(text.toLowerCase(), text);
+    map.set(text.toLowerCase(), text);
   }
 
-  return Array.from(seen.values());
+  return Array.from(map.values());
+}
+
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const list = valuesOf(value);
+    if (list.length) return list[0];
+
+    const text = clean(value);
+    if (text && typeof value !== "object") return text;
+  }
+
+  return "";
 }
 
 function bool(value: unknown) {
   if (typeof value === "boolean") return value;
   const text = clean(value).toLowerCase();
   return ["1", "true", "yes", "y", "on", "accepted", "active", "paid", "member"].includes(text);
+}
+
+function fieldBlank(value: unknown) {
+  if (Array.isArray(value)) return value.length === 0;
+  if (value && typeof value === "object") return Object.keys(value as AnyRow).length === 0;
+  return !clean(value);
+}
+
+function mergeNoBlank(existing: AnyRow, incoming: AnyRow) {
+  const next: AnyRow = { ...existing };
+
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === undefined) continue;
+
+    const existingValue = next[key];
+
+    if (fieldBlank(value) && !fieldBlank(existingValue)) {
+      continue;
+    }
+
+    next[key] = value;
+  }
+
+  return next;
+}
+
+function metadataOf(row: AnyRow) {
+  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
 function supabase() {
@@ -93,166 +143,278 @@ function selectEmail(request: NextRequest, body: AnyRow = {}) {
   );
 }
 
-function firstText(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
-}
-
-function completion(body: AnyRow, email: string) {
-  const fullName = firstText(body.full_name, body.fullName, body.name, body.display_name);
-  const phone = firstText(body.phone);
-  const role = firstText(body.role, body.member_role, arr(body.member_types)[0], arr(body.member_type)[0]);
-  const city = firstText(body.city);
-  const state = firstText(body.state, body.home_state, arr(body.buy_box_states)[0], arr(body.market_states)[0], arr(body.states)[0]);
+function profileCompleteFrom(payload: AnyRow, email: string) {
+  const fullName = firstText(payload.full_name, payload.fullName, payload.name, payload.display_name);
+  const phone = firstText(payload.phone);
+  const role = firstText(payload.role, payload.member_role, valuesOf(payload.member_types)[0], valuesOf(payload.member_type)[0], valuesOf(payload.roles)[0]);
+  const city = firstText(payload.city);
+  const state = firstText(payload.state, payload.home_state, payload.based_state, valuesOf(payload.buy_box_states)[0], valuesOf(payload.market_states)[0], valuesOf(payload.states)[0]);
 
   return Boolean(email && fullName && phone && role && city && state);
 }
 
-function profilePayload(email: string, body: AnyRow) {
-  const fullName = firstText(body.full_name, body.fullName, body.name, body.display_name);
-  const company = firstText(body.company, body.company_name, body.business_name);
-  const phone = firstText(body.phone);
-  const city = firstText(body.city);
-  const state = firstText(body.state, body.home_state, body.market_primary, body.primary_market, arr(body.buy_box_states)[0], arr(body.market_states)[0], arr(body.states)[0]);
-  const photo = firstText(body.profile_photo_url, body.profilePhotoUrl, body.photo_url, body.avatar_url, body.image_url);
+function canonicalPayload(email: string, body: AnyRow, existing: AnyRow = {}) {
+  const existingMeta = metadataOf(existing);
 
-  const memberTypes = unique([
-    ...arr(body.member_types),
-    ...arr(body.member_type),
-    ...arr(body.roles),
-    firstText(body.role, body.member_role),
+  const mergedInput = mergeNoBlank(
+    {
+      ...existingMeta,
+      ...existing,
+    },
+    body
+  );
+
+  const fullName = firstText(
+    mergedInput.full_name,
+    mergedInput.fullName,
+    mergedInput.name,
+    mergedInput.display_name
+  );
+
+  const company = firstText(
+    mergedInput.company,
+    mergedInput.company_name,
+    mergedInput.business_name
+  );
+
+  const phone = firstText(mergedInput.phone);
+  const city = firstText(mergedInput.city);
+
+  const homeState = firstText(
+    mergedInput.home_state,
+    mergedInput.based_state,
+    mergedInput.base_state,
+    mergedInput.from_state,
+    mergedInput.member_state,
+    mergedInput.primary_state,
+    mergedInput.location_state,
+    mergedInput.state,
+    mergedInput.market_primary,
+    mergedInput.primary_market,
+    valuesOf(mergedInput.buy_box_states)[0],
+    valuesOf(mergedInput.market_states)[0],
+    valuesOf(mergedInput.states)[0],
+    "Georgia"
+  );
+
+  const selectedStates = unique([
+    ...valuesOf(mergedInput.buy_box_states),
+    ...valuesOf(mergedInput.market_states),
+    ...valuesOf(mergedInput.deal_states),
+    ...valuesOf(mergedInput.states),
+    ...valuesOf(mergedInput.operating_states),
+    ...valuesOf(mergedInput.service_states),
+    ...valuesOf(mergedInput.target_states),
+    homeState,
   ]);
 
-  const marketStates = unique([
-    ...arr(body.buy_box_states),
-    ...arr(body.market_states),
-    ...arr(body.deal_states),
-    ...arr(body.markets),
-    ...arr(body.states),
-    ...arr(body.operating_states),
-    state,
+  const specificMarkets = firstText(
+    mergedInput.specific_markets,
+    mergedInput.market_notes,
+    mergedInput.markets_text,
+    typeof mergedInput.markets === "string" && !mergedInput.markets.trim().startsWith("[")
+      ? mergedInput.markets
+      : "",
+    selectedStates.join(",")
+  );
+
+  const memberTypes = unique([
+    ...valuesOf(mergedInput.member_types),
+    ...valuesOf(mergedInput.member_type),
+    ...valuesOf(mergedInput.roles),
+    firstText(mergedInput.role, mergedInput.member_role),
   ]);
 
   const propertyTypes = unique([
-    ...arr(body.buy_box_types),
-    ...arr(body.property_types),
-    ...arr(body.asset_types),
-    ...arr(body.asset_focus),
+    ...valuesOf(mergedInput.buy_box_types),
+    ...valuesOf(mergedInput.property_types),
+    ...valuesOf(mergedInput.asset_types),
+    ...valuesOf(mergedInput.asset_focus),
   ]);
 
   const strategies = unique([
-    ...arr(body.buy_box_strategies),
-    ...arr(body.strategies),
-    ...arr(body.strategy),
+    ...valuesOf(mergedInput.buy_box_strategies),
+    ...valuesOf(mergedInput.strategies),
+    ...valuesOf(mergedInput.strategy),
   ]);
 
   const needs = unique([
-    ...arr(body.needs),
-    ...arr(body.deal_needs),
-    ...arr(body.what_i_need),
+    ...valuesOf(mergedInput.needs),
+    ...valuesOf(mergedInput.deal_needs),
+    ...valuesOf(mergedInput.what_i_need),
+    ...valuesOf(mergedInput.looking_for),
   ]);
 
   const canProvide = unique([
-    ...arr(body.can_provide),
-    ...arr(body.what_i_provide),
-    ...arr(body.provides),
-    ...arr(body.capabilities),
+    ...valuesOf(mergedInput.can_provide),
+    ...valuesOf(mergedInput.what_i_provide),
+    ...valuesOf(mergedInput.provides),
+    ...valuesOf(mergedInput.capabilities),
   ]);
 
   const painSignals = unique([
-    ...arr(body.distress_signals),
-    ...arr(body.pain_signals),
-    ...arr(body.problem_signals),
+    ...valuesOf(mergedInput.distress_signals),
+    ...valuesOf(mergedInput.pain_signals),
+    ...valuesOf(mergedInput.problem_signals),
   ]);
 
   const alertTypes = unique([
-    ...arr(body.alert_types),
+    ...valuesOf(mergedInput.alert_types),
   ]);
 
-  const buyBox = firstText(body.buy_box, body.buyBox, body.buy_box_focus);
-  const fundingCapacity = firstText(body.funding_capacity, body.fundingCapacity, body.capital_capacity);
-  const strategyNotes = firstText(body.strategy_notes, body.notes, body.strategy, body.buy_box);
+  const buyBox = firstText(mergedInput.buy_box, mergedInput.buyBox, mergedInput.buy_box_focus);
+  const fundingCapacity = firstText(
+    mergedInput.funding_capacity,
+    mergedInput.fundingCapacity,
+    mergedInput.capital_capacity
+  );
 
-  const profileComplete = completion(
-    {
-      ...body,
-      full_name: fullName,
-      phone,
-      role: memberTypes[0],
-      city,
-      state,
-    },
-    email,
+  const strategyNotes = firstText(
+    mergedInput.strategy_notes,
+    mergedInput.notes,
+    typeof mergedInput.strategy === "string" ? mergedInput.strategy : "",
+    buyBox
+  );
+
+  const photo = firstText(
+    mergedInput.profile_photo_url,
+    mergedInput.profilePhotoUrl,
+    mergedInput.photo_url,
+    mergedInput.avatar_url,
+    mergedInput.image_url
   );
 
   const now = new Date().toISOString();
 
-  const metadata = {
-    email,
-    full_name: fullName,
-    company,
-    phone,
-    city,
-    state,
-    profile_photo_url: photo,
-    member_types: memberTypes,
-    market_states: marketStates,
-    buy_box_states: marketStates,
-    deal_states: marketStates,
-    property_types: propertyTypes,
-    asset_types: propertyTypes,
-    buy_box_types: propertyTypes,
-    strategies,
-    buy_box_strategies: strategies,
-    needs,
-    deal_needs: needs,
-    what_i_need: needs,
-    can_provide: canProvide,
-    what_i_provide: canProvide,
-    pain_signals: painSignals,
-    distress_signals: painSignals,
-    alert_types: alertTypes,
-    alert_frequency: firstText(body.alert_frequency, "daily_digest"),
-    max_alerts_per_day: Number(body.max_alerts_per_day || 10),
-    buy_box: buyBox,
-    funding_capacity: fundingCapacity,
-    strategy_notes: strategyNotes,
-    updated_from: "vaultforge_profile_canonical_api_fix",
-    updated_at: now,
-  };
+  const profileComplete = profileCompleteFrom(
+    {
+      email,
+      full_name: fullName,
+      phone,
+      role: memberTypes[0],
+      city,
+      state: homeState,
+    },
+    email
+  );
 
-  return {
+  const metadata = mergeNoBlank(existingMeta, {
     email,
-    auth_user_id: firstText(body.auth_user_id, body.user_id, email),
-
     full_name: fullName,
     company,
     company_name: company,
     phone,
     city,
-    state,
+
+    state: homeState,
+    home_state: homeState,
+    based_state: homeState,
+    base_state: homeState,
+    from_state: homeState,
+    member_state: homeState,
+    primary_state: homeState,
+    location_state: homeState,
+    market_primary: homeState,
+    primary_market: homeState,
+
+    markets: specificMarkets,
+    specific_markets: specificMarkets,
+    market_notes: specificMarkets,
+    market_states: selectedStates,
+    buy_box_states: selectedStates,
+    deal_states: selectedStates,
+    states: selectedStates,
+    operating_states: selectedStates,
 
     profile_photo_url: photo,
     photo_url: photo,
     avatar_url: photo,
+    image_url: photo,
 
-    home_state: state,
-    market_primary: state,
-    primary_market: state,
+    member_types: memberTypes,
+    member_type: memberTypes,
+    roles: memberTypes,
+    role: memberTypes[0] || firstText(mergedInput.role, mergedInput.member_role),
+    member_role: memberTypes[0] || firstText(mergedInput.role, mergedInput.member_role),
 
-    markets: marketStates,
-    market_states: marketStates,
-    deal_states: marketStates,
-    states: marketStates,
-    operating_states: marketStates,
-    buy_box_states: marketStates,
+    property_types: propertyTypes,
+    asset_types: propertyTypes,
+    buy_box_types: propertyTypes,
+    asset_focus: propertyTypes,
 
-    role: memberTypes[0] || firstText(body.role, body.member_role),
-    member_role: memberTypes[0] || firstText(body.role, body.member_role),
+    strategies,
+    buy_box_strategies: strategies,
+
+    needs,
+    deal_needs: needs,
+    what_i_need: needs,
+
+    can_provide: canProvide,
+    what_i_provide: canProvide,
+    provides: canProvide,
+    capabilities: canProvide,
+
+    pain_signals: painSignals,
+    distress_signals: painSignals,
+    problem_signals: painSignals,
+
+    alert_types: alertTypes,
+    alert_frequency: firstText(mergedInput.alert_frequency, "daily_digest"),
+    max_alerts_per_day: Number(mergedInput.max_alerts_per_day || 10),
+
+    buy_box: buyBox,
+    buy_box_focus: buyBox,
+    funding_capacity: fundingCapacity,
+    capital_capacity: fundingCapacity,
+    strategy_notes: strategyNotes,
+    notes: strategyNotes,
+
+    profile_complete: profileComplete,
+    updated_from: "vaultforge_profile_non_destructive_persistence",
+    updated_at: now,
+  });
+
+  return mergeNoBlank(existing, {
+    email,
+    auth_user_id: firstText(mergedInput.auth_user_id, mergedInput.user_id, existing.auth_user_id, email),
+
+    full_name: fullName,
+    name: fullName,
+    display_name: fullName,
+
+    company,
+    company_name: company,
+    business_name: company,
+    phone,
+    city,
+
+    state: homeState,
+    home_state: homeState,
+    based_state: homeState,
+    base_state: homeState,
+    from_state: homeState,
+    member_state: homeState,
+    primary_state: homeState,
+    location_state: homeState,
+    market_primary: homeState,
+    primary_market: homeState,
+
+    markets: specificMarkets,
+    specific_markets: specificMarkets,
+    market_notes: specificMarkets,
+    market_states: selectedStates,
+    deal_states: selectedStates,
+    states: selectedStates,
+    operating_states: selectedStates,
+    buy_box_states: selectedStates,
+
+    profile_photo_url: photo,
+    photo_url: photo,
+    avatar_url: photo,
+    image_url: photo,
+
+    role: memberTypes[0] || firstText(mergedInput.role, mergedInput.member_role),
+    member_role: memberTypes[0] || firstText(mergedInput.role, mergedInput.member_role),
     member_types: memberTypes,
     member_type: memberTypes,
     roles: memberTypes,
@@ -264,7 +426,9 @@ function profilePayload(email: string, body: AnyRow) {
 
     buy_box_strategies: strategies,
     strategies,
-    strategy: strategies,
+    strategy: strategyNotes,
+    strategy_notes: strategyNotes,
+    notes: strategyNotes,
 
     needs,
     deal_needs: needs,
@@ -280,150 +444,185 @@ function profilePayload(email: string, body: AnyRow) {
     problem_signals: painSignals,
 
     alert_types: alertTypes,
-    alert_frequency: firstText(body.alert_frequency, "daily_digest"),
-    max_alerts_per_day: Number(body.max_alerts_per_day || 10),
+    alert_frequency: firstText(mergedInput.alert_frequency, "daily_digest"),
+    max_alerts_per_day: Number(mergedInput.max_alerts_per_day || 10),
 
     buy_box: buyBox,
     buy_box_focus: buyBox,
     funding_capacity: fundingCapacity,
     capital_capacity: fundingCapacity,
-    strategy_notes: strategyNotes,
-    notes: strategyNotes,
 
     profile_complete: profileComplete,
-    access_status: firstText(body.access_status, "member"),
-    payment_status: firstText(body.payment_status, "member"),
-    member_status: profileComplete ? "profile_saved" : "profile_started",
-    is_active: true,
-    is_suspended: false,
-    routing_score: Number(body.routing_score || 0),
+    access_status: firstText(mergedInput.access_status, existing.access_status, "member"),
+    payment_status: firstText(mergedInput.payment_status, existing.payment_status, "member"),
+    member_status: firstText(
+      mergedInput.member_status,
+      existing.member_status,
+      profileComplete ? "profile_saved" : "profile_started"
+    ),
+    is_active: existing.is_active ?? true,
+    is_suspended: existing.is_suspended ?? false,
+    routing_score: Number(mergedInput.routing_score || existing.routing_score || 0),
     metadata,
     updated_at: now,
-  };
+  });
 }
 
 function normalizeProfile(row: AnyRow, email = "") {
   if (!row) return { email };
 
-  const metadata = typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+  const metadata = metadataOf(row);
+  const source = { ...metadata, ...row };
+
+  const homeState = firstText(
+    source.home_state,
+    source.based_state,
+    source.base_state,
+    source.from_state,
+    source.member_state,
+    source.primary_state,
+    source.location_state,
+    source.state,
+    source.market_primary,
+    source.primary_market,
+    "Georgia"
+  );
 
   const marketStates = unique([
-    ...arr(row.buy_box_states),
-    ...arr(row.market_states),
-    ...arr(row.deal_states),
-    ...arr(row.markets),
-    ...arr(row.states),
-    ...arr(row.operating_states),
-    ...arr(metadata.buy_box_states),
-    ...arr(metadata.market_states),
-    ...arr(metadata.deal_states),
-    ...arr(metadata.markets),
-    ...arr(metadata.states),
-    ...arr(metadata.operating_states),
-    firstText(row.state, row.home_state, metadata.state, metadata.home_state),
+    ...valuesOf(source.buy_box_states),
+    ...valuesOf(source.market_states),
+    ...valuesOf(source.deal_states),
+    ...valuesOf(source.states),
+    ...valuesOf(source.operating_states),
+    homeState,
   ]);
 
   const memberTypes = unique([
-    ...arr(row.member_types),
-    ...arr(row.member_type),
-    ...arr(row.roles),
-    ...arr(metadata.member_types),
-    ...arr(metadata.member_type),
-    ...arr(metadata.roles),
-    firstText(row.role, row.member_role, metadata.role, metadata.member_role),
+    ...valuesOf(source.member_types),
+    ...valuesOf(source.member_type),
+    ...valuesOf(source.roles),
+    firstText(source.role, source.member_role),
   ]);
 
   const propertyTypes = unique([
-    ...arr(row.buy_box_types),
-    ...arr(row.property_types),
-    ...arr(row.asset_types),
-    ...arr(row.asset_focus),
-    ...arr(metadata.buy_box_types),
-    ...arr(metadata.property_types),
-    ...arr(metadata.asset_types),
-    ...arr(metadata.asset_focus),
+    ...valuesOf(source.buy_box_types),
+    ...valuesOf(source.property_types),
+    ...valuesOf(source.asset_types),
+    ...valuesOf(source.asset_focus),
   ]);
 
   const strategies = unique([
-    ...arr(row.buy_box_strategies),
-    ...arr(row.strategies),
-    ...arr(row.strategy),
-    ...arr(metadata.buy_box_strategies),
-    ...arr(metadata.strategies),
-    ...arr(metadata.strategy),
+    ...valuesOf(source.buy_box_strategies),
+    ...valuesOf(source.strategies),
+    ...valuesOf(source.strategy),
   ]);
 
   const needs = unique([
-    ...arr(row.needs),
-    ...arr(row.deal_needs),
-    ...arr(row.what_i_need),
-    ...arr(metadata.needs),
-    ...arr(metadata.deal_needs),
-    ...arr(metadata.what_i_need),
+    ...valuesOf(source.needs),
+    ...valuesOf(source.deal_needs),
+    ...valuesOf(source.what_i_need),
   ]);
 
   const canProvide = unique([
-    ...arr(row.can_provide),
-    ...arr(row.what_i_provide),
-    ...arr(row.provides),
-    ...arr(row.capabilities),
-    ...arr(metadata.can_provide),
-    ...arr(metadata.what_i_provide),
-    ...arr(metadata.provides),
-    ...arr(metadata.capabilities),
+    ...valuesOf(source.can_provide),
+    ...valuesOf(source.what_i_provide),
+    ...valuesOf(source.provides),
+    ...valuesOf(source.capabilities),
   ]);
 
   const painSignals = unique([
-    ...arr(row.distress_signals),
-    ...arr(row.pain_signals),
-    ...arr(row.problem_signals),
-    ...arr(metadata.distress_signals),
-    ...arr(metadata.pain_signals),
-    ...arr(metadata.problem_signals),
+    ...valuesOf(source.distress_signals),
+    ...valuesOf(source.pain_signals),
+    ...valuesOf(source.problem_signals),
   ]);
 
   const alertTypes = unique([
-    ...arr(row.alert_types),
-    ...arr(metadata.alert_types),
+    ...valuesOf(source.alert_types),
   ]);
 
+  const marketsText = firstText(
+    source.specific_markets,
+    source.market_notes,
+    typeof source.markets === "string" ? source.markets : "",
+    marketStates.join(",")
+  );
+
+  const photo = firstText(
+    source.profile_photo_url,
+    source.photo_url,
+    source.avatar_url,
+    source.image_url
+  );
+
   return {
-    ...metadata,
-    ...row,
-    email: cleanEmail(row.email || metadata.email || email),
-    full_name: firstText(row.full_name, row.name, row.display_name, metadata.full_name, metadata.name),
-    company: firstText(row.company, row.company_name, metadata.company),
-    phone: firstText(row.phone, metadata.phone),
-    city: firstText(row.city, metadata.city),
-    state: firstText(row.state, row.home_state, row.market_primary, metadata.state, metadata.home_state, marketStates[0], "Georgia"),
-    home_state: firstText(row.home_state, row.state, metadata.home_state, metadata.state, marketStates[0], "Georgia"),
-    profile_photo_url: firstText(row.profile_photo_url, row.photo_url, row.avatar_url, metadata.profile_photo_url),
-    member_types: memberTypes,
-    role: firstText(row.role, row.member_role, memberTypes[0], metadata.role),
-    member_role: firstText(row.member_role, row.role, memberTypes[0], metadata.member_role),
+    ...source,
+    email: cleanEmail(source.email || email),
+    full_name: firstText(source.full_name, source.name, source.display_name),
+    company: firstText(source.company, source.company_name, source.business_name),
+    phone: firstText(source.phone),
+    city: firstText(source.city),
+
+    state: homeState,
+    home_state: homeState,
+    based_state: homeState,
+    base_state: homeState,
+    from_state: homeState,
+    member_state: homeState,
+    primary_state: homeState,
+    location_state: homeState,
+
+    markets: marketsText,
+    specific_markets: marketsText,
+    market_notes: marketsText,
     buy_box_states: marketStates,
     market_states: marketStates,
-    markets: marketStates,
     deal_states: marketStates,
+    states: marketStates,
+    operating_states: marketStates,
+
+    profile_photo_url: photo,
+    photo_url: photo,
+    avatar_url: photo,
+    image_url: photo,
+
+    member_types: memberTypes,
+    member_type: memberTypes,
+    roles: memberTypes,
+    role: firstText(source.role, source.member_role, memberTypes[0]),
+    member_role: firstText(source.member_role, source.role, memberTypes[0]),
+
     buy_box_types: propertyTypes,
     property_types: propertyTypes,
     asset_types: propertyTypes,
+
     buy_box_strategies: strategies,
     strategies,
-    strategy: firstText(row.strategy_notes, row.strategy, metadata.strategy_notes, metadata.strategy),
+    strategy: firstText(source.strategy_notes, source.notes, typeof source.strategy === "string" ? source.strategy : ""),
+    strategy_notes: firstText(source.strategy_notes, source.notes, typeof source.strategy === "string" ? source.strategy : ""),
+
     needs,
+    deal_needs: needs,
+    what_i_need: needs,
+
     can_provide: canProvide,
+    what_i_provide: canProvide,
+    provides: canProvide,
+    capabilities: canProvide,
+
     distress_signals: painSignals,
     pain_signals: painSignals,
+    problem_signals: painSignals,
+
     alert_types: alertTypes,
-    alert_frequency: firstText(row.alert_frequency, metadata.alert_frequency, "daily_digest"),
-    max_alerts_per_day: Number(row.max_alerts_per_day || metadata.max_alerts_per_day || 10),
-    buy_box: firstText(row.buy_box, row.buy_box_focus, metadata.buy_box),
-    funding_capacity: firstText(row.funding_capacity, row.capital_capacity, metadata.funding_capacity),
-    profile_complete: bool(row.profile_complete ?? metadata.profile_complete),
-    access_status: firstText(row.access_status, metadata.access_status, "member"),
-    payment_status: firstText(row.payment_status, metadata.payment_status, "member"),
-    member_status: firstText(row.member_status, metadata.member_status, "profile_saved"),
+    alert_frequency: firstText(source.alert_frequency, "daily_digest"),
+    max_alerts_per_day: Number(source.max_alerts_per_day || 10),
+
+    buy_box: firstText(source.buy_box, source.buy_box_focus),
+    funding_capacity: firstText(source.funding_capacity, source.capital_capacity),
+    profile_complete: bool(source.profile_complete),
+    access_status: firstText(source.access_status, "member"),
+    payment_status: firstText(source.payment_status, "member"),
+    member_status: firstText(source.member_status, "profile_saved"),
   };
 }
 
@@ -440,28 +639,23 @@ function candidateRows(payload: AnyRow) {
     email: payload.email,
     auth_user_id: payload.auth_user_id,
     full_name: payload.full_name,
+    name: payload.name,
+    display_name: payload.display_name,
     company: payload.company,
     company_name: payload.company_name,
     phone: payload.phone,
     city: payload.city,
     state: payload.state,
-    profile_photo_url: payload.profile_photo_url,
-    photo_url: payload.photo_url,
-    avatar_url: payload.avatar_url,
     home_state: payload.home_state,
-    market_primary: payload.market_primary,
-    primary_market: payload.primary_market,
     markets: payload.markets,
     market_states: payload.market_states,
-    deal_states: payload.deal_states,
     states: payload.states,
     operating_states: payload.operating_states,
     buy_box_states: payload.buy_box_states,
-    member_types: payload.member_types,
-    member_type: payload.member_type,
-    roles: payload.roles,
     role: payload.role,
     member_role: payload.member_role,
+    member_types: payload.member_types,
+    roles: payload.roles,
     buy_box_types: payload.buy_box_types,
     property_types: payload.property_types,
     asset_types: payload.asset_types,
@@ -472,15 +666,11 @@ function candidateRows(payload: AnyRow) {
     deal_needs: payload.deal_needs,
     can_provide: payload.can_provide,
     what_i_provide: payload.what_i_provide,
-    distress_signals: payload.distress_signals,
-    pain_signals: payload.pain_signals,
-    alert_types: payload.alert_types,
-    alert_frequency: payload.alert_frequency,
-    max_alerts_per_day: payload.max_alerts_per_day,
+    profile_photo_url: payload.profile_photo_url,
+    photo_url: payload.photo_url,
+    avatar_url: payload.avatar_url,
     buy_box: payload.buy_box,
-    buy_box_focus: payload.buy_box_focus,
     funding_capacity: payload.funding_capacity,
-    capital_capacity: payload.capital_capacity,
     strategy_notes: payload.strategy_notes,
     notes: payload.notes,
     profile_complete: payload.profile_complete,
@@ -489,7 +679,6 @@ function candidateRows(payload: AnyRow) {
     member_status: payload.member_status,
     is_active: payload.is_active,
     is_suspended: payload.is_suspended,
-    routing_score: payload.routing_score,
     metadata: payload.metadata,
     updated_at: payload.updated_at,
   });
@@ -498,19 +687,16 @@ function candidateRows(payload: AnyRow) {
     email: payload.email,
     auth_user_id: payload.auth_user_id,
     full_name: payload.full_name,
-    phone: payload.phone,
-    city: payload.city,
     state: payload.state,
-    role: payload.role,
-    member_types: payload.member_types,
+    home_state: payload.home_state,
     markets: payload.markets,
+    member_types: payload.member_types,
+    role: payload.role,
     profile_complete: payload.profile_complete,
     access_status: payload.access_status,
     payment_status: payload.payment_status,
     member_status: payload.member_status,
     is_active: payload.is_active,
-    is_suspended: payload.is_suspended,
-    routing_score: payload.routing_score,
     metadata: payload.metadata,
     updated_at: payload.updated_at,
   });
@@ -524,21 +710,7 @@ function candidateRows(payload: AnyRow) {
     payment_status: payload.payment_status,
     member_status: payload.member_status,
     is_active: payload.is_active,
-    is_suspended: payload.is_suspended,
     metadata: payload.metadata,
-    updated_at: payload.updated_at,
-  });
-
-  const minimalNoMetadata = cleanUndefined({
-    email: payload.email,
-    auth_user_id: payload.auth_user_id,
-    full_name: payload.full_name,
-    profile_complete: payload.profile_complete,
-    access_status: payload.access_status,
-    payment_status: payload.payment_status,
-    member_status: payload.member_status,
-    is_active: payload.is_active,
-    is_suspended: payload.is_suspended,
     updated_at: payload.updated_at,
   });
 
@@ -546,10 +718,11 @@ function candidateRows(payload: AnyRow) {
     email: payload.email,
     full_name: payload.full_name,
     profile_complete: payload.profile_complete,
+    metadata: payload.metadata,
     updated_at: payload.updated_at,
   });
 
-  return [rich, medium, safe, minimalWithMetadata, minimalNoMetadata, bareMinimum];
+  return [rich, medium, safe, minimalWithMetadata, bareMinimum];
 }
 
 async function findExisting(db: any, table: string, email: string) {
@@ -593,12 +766,17 @@ async function loadProfile(db: any, email: string) {
 
 async function saveIntoTable(db: any, table: string, email: string, payload: AnyRow) {
   const existing = await findExisting(db, table, email);
+  const existingRow = existing.data || {};
   const attempts: AnyRow[] = [];
 
   for (const candidate of candidateRows(payload)) {
+    const nonDestructiveCandidate = existing.data
+      ? mergeNoBlank(existingRow, candidate)
+      : candidate;
+
     const row = existing.data
-      ? candidate
-      : { ...candidate, created_at: new Date().toISOString() };
+      ? nonDestructiveCandidate
+      : { ...nonDestructiveCandidate, created_at: new Date().toISOString() };
 
     const result = existing.data
       ? await db.from(table).update(row).eq("email", email).select("*").single()
@@ -686,7 +864,8 @@ export async function POST(request: NextRequest) {
     }
 
     const db = supabase();
-    const payload = profilePayload(email, body);
+    const existing = await loadProfile(db, email);
+    const payload = canonicalPayload(email, body, existing.row || {});
     const result = await saveProfile(db, email, payload);
 
     if (!result.ok || !result.row) {
