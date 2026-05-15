@@ -404,14 +404,23 @@ export default function DealDetailPage() {
   const [deal, setDeal] = useState<Deal | null>(null);
   const [status, setStatus] = useState("Loading deal...");
   const [dealId, setDealId] = useState("");
+  const [returnTo, setReturnTo] = useState("/smart-ai");
 
   useEffect(() => {
     async function load() {
       try {
         const params = new URLSearchParams(window.location.search);
         const id = clean(params.get("id"));
+        const fromParam = clean(params.get("from"));
+        const safeFrom =
+          fromParam.startsWith("/") &&
+          !fromParam.startsWith("//") &&
+          !fromParam.includes("://")
+            ? fromParam
+            : "/smart-ai";
 
         setDealId(id);
+        setReturnTo(safeFrom);
 
         if (!id) {
           setStatus("Missing deal id.");
@@ -507,9 +516,12 @@ export default function DealDetailPage() {
                 </div>
 
                 <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <Link href="/projects" style={button}>Back to Projects</Link>
-                  <Link href="/submit" style={ghost}>Create Deal</Link>
+                  <Link href={returnTo} style={button}>Back to Workstations</Link>
                   <Link href="/dashboard" style={ghost}>Dashboard</Link>
+                  <Link href="/projects" style={ghost}>Projects</Link>
+                  <Link href="/messages" style={ghost}>Messages</Link>
+                  <Link href="/smart-ai" style={ghost}>Smart AI</Link>
+                  <Link href="/submit" style={ghost}>Create Deal</Link>
                   {signalId ? <Link href={`/signals/${encodeURIComponent(signalId)}`} style={ghost}>Signal Room</Link> : null}
                   {signalId ? <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={ghost}>Routing Room</Link> : null}
                 </div>
@@ -593,6 +605,20 @@ export default function DealDetailPage() {
                   <DetailRow labelText="Cap Rate" value={from(deal, "cap_rate")} />
                   <DetailRow labelText="Contact" value={[from(deal, "contact_name", "seller_name", "owner_name"), from(deal, "contact_phone", "seller_phone", "owner_phone"), from(deal, "contact_email", "seller_email", "owner_contact_email")].filter(Boolean).join(" / ")} />
                 </div>
+              </div>
+            </section>
+
+            <section style={card}>
+              <div style={label}>Room Navigation</div>
+              <p style={{ ...muted, marginTop: 8 }}>
+                Move back to the operating desk, dashboard, projects, or messages without getting trapped in the deal room.
+              </p>
+              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                <Link href={returnTo} style={button}>Return to Workstations</Link>
+                <Link href="/dashboard" style={ghost}>Dashboard</Link>
+                <Link href="/projects" style={ghost}>Projects</Link>
+                <Link href="/smart-ai" style={ghost}>Smart AI</Link>
+                <Link href="/messages" style={ghost}>Messages</Link>
               </div>
             </section>
 
