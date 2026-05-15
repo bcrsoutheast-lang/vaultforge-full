@@ -189,7 +189,12 @@ export default function VaultForgeRoomCommandBar({
 
   const tone = useMemo(() => toneForStage(stage), [stage]);
 
-  function toggleSet(key: string, nextValue: boolean, setter: (value: boolean) => void) {
+  function toggleSet(
+    key: string,
+    nextValue: boolean,
+    setter: (value: boolean) => void,
+    actionName?: string
+  ) {
     const next = readSet(key);
 
     if (nextValue) next.add(cleanId);
@@ -197,17 +202,60 @@ export default function VaultForgeRoomCommandBar({
 
     writeSet(key, next);
     setter(nextValue);
+
+    const inferredAction =
+      actionName ||
+      (key.includes("saved")
+        ? nextValue
+          ? "save"
+          : "unsave"
+        : key.includes("archived")
+        ? nextValue
+          ? "archive"
+          : "restore_archive"
+        : key.includes("deleted")
+        ? nextValue
+          ? "delete"
+          : "restore_deleted"
+        : "room_control");
+
+    recordRoomAction(inferredAction, stage, stage);
   }
 
-  function changeStage(nextStage: string) {
+  async function recordRoomAction(action: string, nextStage?: string, previousStage?: string) {
+    try {
+      await fetch("/api/rooms/control", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": "",
+        },
+        body: JSON.stringify({
+          action,
+          lane,
+          room_id: cleanId,
+          title: roomTitle,
+          stage: nextStage || stage,
+          previous_stage: previousStage || stage,
+        }),
+      });
+    } catch {
+      // The room still updates locally even if the backend event table is not ready.
+    }
+  }
+
+  async function changeStage(nextStage: string) {
+    const previousStage = stage;
     const map = readStageMap(lane);
     map[cleanId] = nextStage;
     writeStageMap(lane, map);
     setStage(nextStage);
+    recordRoomAction("stage_change", nextStage, previousStage);
 
-    if (nextStage === "Archived") toggleSet(archiveKey, true, setArchived);
-    if (nextStage === "Dead") toggleSet(deleteKey, true, setDeleted);
-    if (nextStage === "Solved" || nextStage === "Closed") toggleSet(archiveKey, false, setArchived);
+    if (nextStage === "Archived") toggleSet(archiveKey, true, setArchived, "archive");
+    if (nextStage === "Dead") toggleSet(deleteKey, true, setDeleted, "delete");
+    if (nextStage === "Solved" || nextStage === "Closed") toggleSet(archiveKey, false, setArchived, "restore_archive");
   }
 
   const threadHref = `/messages/new?source=room-command&type=${encodeURIComponent(lane)}&folder=rooms&folder_key=rooms&item_id=${encodeURIComponent(cleanId)}${ownerEmail ? `&to=${encodeURIComponent(ownerEmail)}` : ""}&title=${encodeURIComponent(roomTitle)}&subject=${encodeURIComponent(`Room Command: ${roomTitle}`)}`;
