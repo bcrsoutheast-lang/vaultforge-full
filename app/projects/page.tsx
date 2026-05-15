@@ -130,7 +130,7 @@ function sourceOf(row: Row) {
   const source = first(row.source_kind, row.source_table, row._source_table, row.source, field(row, "canonical_kind")).toLowerCase();
 
   if (source.includes("deal") || field(row, "deal_id", "asking_price", "price", "arv", "arv_value", "estimated_value")) return "deal";
-  if (source.includes("pain") || field(row, "pain_id", "pain_type")) return "pain";
+  if (source.includes("pain") || field(row, "pain_id", "pain_type", "problem_type")) return "pain";
 
   return "signal";
 }
@@ -169,15 +169,7 @@ function marketOf(row: Row) {
   return [city, state].filter(Boolean).join(", ") || field(row, "location", "address", "property_address") || "Market not listed";
 }
 
-const CORE_STATES = [
-  "Georgia",
-  "Tennessee",
-  "Alabama",
-  "Florida",
-  "North Carolina",
-  "South Carolina",
-  "Texas",
-];
+const CORE_STATES = ["Georgia", "Tennessee", "Alabama", "Florida", "North Carolina", "South Carolina", "Texas"];
 
 const STATE_ALIASES: Record<string, string> = {
   ga: "Georgia",
@@ -283,11 +275,7 @@ function money(value: unknown) {
   const number = Number(text.replace(/[^\d.-]/g, ""));
   if (!Number.isFinite(number)) return text;
 
-  return number.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
+  return number.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
 function numberValue(value: unknown) {
@@ -462,14 +450,26 @@ function repairsOf(row: Row) {
   return field(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget", "repair_budget", "repair_scope");
 }
 
-function spreadText(row: Row) {
+function spreadNumber(row: Row) {
   const ask = numberValue(askOf(row));
   const arv = numberValue(arvOf(row));
   const repairs = numberValue(repairsOf(row));
 
-  if (!Number.isFinite(arv) || !Number.isFinite(ask)) return "Needs numbers";
-  const spread = arv - ask - (Number.isFinite(repairs) ? repairs : 0);
+  if (!Number.isFinite(arv) || !Number.isFinite(ask)) return NaN;
+  return arv - ask - (Number.isFinite(repairs) ? repairs : 0);
+}
+
+function spreadText(row: Row) {
+  const spread = spreadNumber(row);
+  if (!Number.isFinite(spread)) return "Needs numbers";
   return money(spread);
+}
+
+function marginScore(row: Row) {
+  const spread = spreadNumber(row);
+  const arv = numberValue(arvOf(row));
+  if (!Number.isFinite(spread) || !Number.isFinite(arv) || !arv) return 0;
+  return Math.round((spread / arv) * 100);
 }
 
 function routingNeed(row: Row) {
@@ -481,7 +481,7 @@ function pressureText(row: Row) {
 }
 
 function likelyRoute(row: Row) {
-  const text = `${routingNeed(row)} ${pressureText(row)} ${field(row, "strategy", "exit_strategy", "deal_strategy")} ${assetOf(row)}`.toLowerCase();
+  const text = `${routingNeed(row)} ${pressureText(row)} ${field(row, "strategy", "exit_strategy", "deal_strategy")} ${assetOf(row)} ${noteOf(row)}`.toLowerCase();
   const source = sourceOf(row);
 
   if (text.includes("lender") || text.includes("fund") || text.includes("capital")) return "Capital / Lender Route";
@@ -495,15 +495,107 @@ function likelyRoute(row: Row) {
   return "Owner-Controlled Review";
 }
 
+function situationDiagnosis(row: Row) {
+  const source = sourceOf(row);
+  const text = `${pressureText(row)} ${routingNeed(row)} ${noteOf(row)} ${assetOf(row)}`.toLowerCase();
+
+  if (text.includes("foreclosure") || text.includes("deadline")) return "Timeline compression / distressed exit";
+  if (text.includes("capital") || text.includes("funding") || text.includes("lender")) return "Capital stack or liquidity gap";
+  if (text.includes("contractor") || text.includes("repair") || text.includes("scope")) return "Execution or contractor bottleneck";
+  if (text.includes("tenant") || text.includes("occupied")) return "Occupancy/access risk";
+  if (text.includes("permit") || text.includes("code") || text.includes("city")) return "Municipal/code execution issue";
+  if (text.includes("title") || text.includes("probate") || text.includes("lien")) return "Title/legal constraint";
+  if (source === "deal" && Number.isFinite(spreadNumber(row)) && spreadNumber(row) > 0) return "Opportunity with monetizable spread";
+  if (source === "deal") return "Opportunity requiring underwriting";
+  if (source === "pain") return "Pressure signal requiring triage";
+  return "Signal requiring owner review";
+}
+
+function rootCause(row: Row) {
+  const diagnosis = situationDiagnosis(row);
+
+  if (diagnosis.includes("Timeline")) return "Time is the main enemy. Certainty, authority, and speed matter more than perfect pricing.";
+  if (diagnosis.includes("Capital")) return "The current path is undercapitalized or blocked by liquidity/debt constraints.";
+  if (diagnosis.includes("Execution")) return "The work cannot move until scope, labor, access, and operator responsibility are clarified.";
+  if (diagnosis.includes("Occupancy")) return "Access, lease status, or occupant control can block inspection, lending, and closing.";
+  if (diagnosis.includes("Municipal")) return "Local approval or code friction must be solved before underwriting is reliable.";
+  if (diagnosis.includes("Title")) return "Authority, lien, or legal uncertainty can kill the route if not verified first.";
+  if (diagnosis.includes("spread")) return "There may be enough economics to justify controlled routing after verification.";
+  return "The signal is incomplete. More intelligence is needed before hard routing.";
+}
+
+function solutionPaths(row: Row) {
+  const text = `${situationDiagnosis(row)} ${likelyRoute(row)} ${noteOf(row)} ${assetOf(row)}`.toLowerCase();
+  const paths: string[] = [];
+
+  if (sourceOf(row) === "deal") {
+    paths.push("Private buyer/operator route");
+    if (marginScore(row) >= 20) paths.push("Fix/flip or rental buyer execution");
+    if (marginScore(row) > 0 && marginScore(row) < 20) paths.push("Renegotiate or buyer-specific disposition");
+    if (text.includes("seller") || text.includes("creative")) paths.push("Seller finance / creative structure");
+    if (text.includes("land")) paths.push("Builder/developer route");
+  } else {
+    paths.push("Triage and stabilize pressure");
+    if (text.includes("capital")) paths.push("Bridge capital / JV rescue");
+    if (text.includes("contractor")) paths.push("Contractor-led stabilization");
+    if (text.includes("buyer")) paths.push("Private buyer/disposition route");
+    if (text.includes("title")) paths.push("Title/legal verification first");
+  }
+
+  paths.push("Abandon or pause if risk blockers cannot be cleared");
+  return Array.from(new Set(paths)).slice(0, 4);
+}
+
+function capitalStack(row: Row) {
+  const text = `${situationDiagnosis(row)} ${noteOf(row)} ${assetOf(row)}`.toLowerCase();
+
+  if (text.includes("capital") || text.includes("funding")) return "Private lender + JV equity + staged draw plan";
+  if (text.includes("foreclosure") || text.includes("deadline")) return "Cash operator or bridge rescue first";
+  if (text.includes("contractor") || text.includes("repair")) return "Hard money/private money after contractor scope";
+  if (text.includes("land")) return "Cash, seller carry, builder deposit, or entitlement JV";
+  if (text.includes("commercial")) return "Commercial debt, bridge, seller carry, or operator equity";
+  return "Cash, private lending, seller carry, JV equity, or hybrid after verification";
+}
+
+function failureIndex(row: Row) {
+  let score = 25;
+  const text = `${pressureText(row)} ${noteOf(row)} ${routingNeed(row)}`.toLowerCase();
+
+  if (text.includes("urgent")) score += 20;
+  if (text.includes("foreclosure")) score += 28;
+  if (text.includes("deadline")) score += 18;
+  if (text.includes("title") || text.includes("probate") || text.includes("lien")) score += 20;
+  if (text.includes("tenant") || text.includes("occupied")) score += 12;
+  if (text.includes("permit") || text.includes("code")) score += 12;
+  if (sourceOf(row) === "deal" && Number.isFinite(spreadNumber(row)) && spreadNumber(row) <= 0) score += 18;
+  if (!photosOf(row).length) score += 6;
+  if (!routingNeed(row)) score += 6;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
 function bestNextMove(row: Row) {
+  const diagnosis = situationDiagnosis(row);
   const route = likelyRoute(row);
   const need = routingNeed(row);
-  const source = sourceOf(row);
 
+  if (diagnosis.includes("Title")) return "Verify title, ownership authority, payoff, and decision-maker before routing operators.";
+  if (diagnosis.includes("Timeline")) return "Confirm the deadline and route only to operators who can perform immediately.";
+  if (diagnosis.includes("Capital")) return "Package numbers and gap amount, then route to lender/JV/creative finance operator.";
+  if (diagnosis.includes("Execution")) return "Get photos, access, and contractor scope before buyer or lender exposure.";
   if (need) return `Route first to ${route.replace(" Route", "").toLowerCase()} and verify: ${need}.`;
-  if (source === "deal") return `Package key numbers, verify spread, then route through ${route.toLowerCase()}.`;
-  if (source === "pain") return `Clarify blocker, timeline, and owner goal, then open the ${route.toLowerCase()}.`;
-  return `Review the signal, confirm owner context, then choose controlled routing.`;
+  if (sourceOf(row) === "deal") return "Package key numbers, verify spread, then route privately through the best operator lane.";
+  if (sourceOf(row) === "pain") return "Clarify blocker, timeline, and owner goal, then open the problem-solver route.";
+  return "Review the signal, confirm owner context, then choose controlled routing.";
+}
+
+function worstMove(row: Row) {
+  const diagnosis = situationDiagnosis(row);
+  if (diagnosis.includes("Title")) return "Do not blast to buyers before authority/title is verified.";
+  if (diagnosis.includes("Timeline")) return "Do not wait for perfect data if the deadline is real.";
+  if (diagnosis.includes("Execution")) return "Do not quote or route hard without repair/scope confidence.";
+  if (sourceOf(row) === "deal" && Number.isFinite(spreadNumber(row)) && spreadNumber(row) <= 0) return "Do not market as a normal deal; rewrite pricing or terms first.";
+  return "Do not treat this like a public listing. Keep routing controlled until strategy is clear.";
 }
 
 function operatingScore(row: Row) {
@@ -519,7 +611,7 @@ function operatingScore(row: Row) {
 }
 
 function urgencyScore(row: Row) {
-  const text = `${pressureText(row)} ${field(row, "seller_situation", "timeline", "deadline")}`.toLowerCase();
+  const text = `${pressureText(row)} ${field(row, "seller_situation", "timeline", "deadline")} ${noteOf(row)}`.toLowerCase();
   let score = 36;
   if (text.includes("urgent")) score += 28;
   if (text.includes("fast close")) score += 24;
@@ -537,13 +629,14 @@ function missingInfo(row: Row) {
   if (sourceOf(row) === "deal" && !askOf(row)) missing.push("ask");
   if (sourceOf(row) === "deal" && !arvOf(row)) missing.push("ARV/value");
   if (!photosOf(row).length) missing.push("photos");
-  return missing.slice(0, 4);
+  if (!field(row, "owner_email", "member_email", "contact_email", "owner_contact_email")) missing.push("source contact");
+  return missing.slice(0, 5);
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(56,189,248,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(56,189,248,.10), transparent 26%), radial-gradient(circle at bottom right, rgba(181,92,255,.10), transparent 24%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
   padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
@@ -675,6 +768,17 @@ function Bar({ labelText, value }: { labelText: string; value: number }) {
   );
 }
 
+function IntelligenceBox({ title, value, tone = "gold" }: { title: string; value: string; tone?: "gold" | "green" | "red" | "blue" }) {
+  const color = tone === "green" ? "#9df3bf" : tone === "red" ? "#fecaca" : tone === "blue" ? "#56d8ff" : "#e8c46b";
+
+  return (
+    <section style={{ border: `1px solid ${color}55`, borderRadius: 16, padding: 12, background: "rgba(255,255,255,.025)" }}>
+      <div style={{ ...label, color, fontSize: 10 }}>{title}</div>
+      <p style={{ ...muted, margin: "7px 0 0", fontSize: 14, lineHeight: 1.5 }}>{value}</p>
+    </section>
+  );
+}
+
 function WorkstationCard({
   row,
   viewer,
@@ -705,6 +809,8 @@ function WorkstationCard({
   const owner = ownerOf(row);
   const missing = missingInfo(row);
   const route = likelyRoute(row);
+  const diagnosis = situationDiagnosis(row);
+  const paths = solutionPaths(row);
 
   const contactHref = signalId
     ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=project&type=project&folder=projects&folder_key=projects&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`
@@ -732,9 +838,10 @@ function WorkstationCard({
 
         <div style={{ padding: 18 }}>
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            <span style={chip}>{source === "deal" ? "Deal" : source === "pain" ? "Pain" : "Signal"}</span>
+            <span style={chip}>{source === "deal" ? "Opportunity" : source === "pain" ? "Pressure" : "Signal"}</span>
             <span style={chip}>{assetOf(row)}</span>
             <span style={chip}>{statusOf(row)}</span>
+            <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.34)", background: "rgba(232,196,107,.10)" }}>Failure {failureIndex(row)}%</span>
             {isSaved ? <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.34)", background: "rgba(232,196,107,.10)" }}>Saved</span> : null}
             {isArchived ? <span style={{ ...chip, color: "#cbd5e1", borderColor: "rgba(148,163,184,.24)", background: "rgba(148,163,184,.07)" }}>Archived</span> : null}
           </div>
@@ -756,6 +863,7 @@ function WorkstationCard({
               <div style={{ display: "grid", gap: 10, marginTop: 13 }}>
                 <Bar labelText="Operating" value={operatingScore(row)} />
                 <Bar labelText="Urgency" value={urgencyScore(row)} />
+                <Bar labelText="Failure" value={failureIndex(row)} />
               </div>
             </div>
           </div>
@@ -765,8 +873,15 @@ function WorkstationCard({
             <Mini labelText="ARV/Value" value={money(arvOf(row))} />
             <Mini labelText="Repairs" value={money(repairsOf(row))} />
             <Mini labelText="Spread" value={spreadText(row)} />
-            <Mini labelText="Beds/Baths" value={[field(row, "beds", "bedrooms"), field(row, "baths", "bathrooms")].filter(Boolean).join(" / ") || "Not listed"} />
-            <Mini labelText="Size" value={field(row, "square_feet", "sqft", "building_sqft", "acres", "land_acres") || "Not listed"} />
+            <Mini labelText="Margin" value={marginScore(row) ? `${marginScore(row)}%` : "Needs data"} />
+            <Mini labelText="Capital" value={capitalStack(row)} />
+          </div>
+
+          <div className="vf-card-bottom" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 12, marginTop: 12 }}>
+            <IntelligenceBox title="Situation Diagnosis" value={diagnosis} tone={source === "pain" ? "red" : "blue"} />
+            <IntelligenceBox title="Root Cause" value={rootCause(row)} tone="gold" />
+            <IntelligenceBox title="Worst Move" value={worstMove(row)} tone="red" />
+            <IntelligenceBox title="Solution Paths" value={paths.join(" • ")} tone="green" />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1.4fr .8fr", gap: 12, marginTop: 12 }} className="vf-card-bottom">
@@ -782,8 +897,8 @@ function WorkstationCard({
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
-            <Link href={detailHref} style={button}>{source === "deal" ? "Open Deal" : source === "pain" ? "Open Pain Room" : "Open Workstation"}</Link>
-            <Link href={contactHref} style={ghost}>Contact Owner</Link>
+            <Link href={detailHref} style={button}>{source === "deal" ? "Open Opportunity" : source === "pain" ? "Open Pressure Room" : "Open Workstation"}</Link>
+            <Link href={contactHref} style={ghost}>Contact Source</Link>
             {!isSaved ? <button type="button" onClick={onSave} style={ghost}>Save</button> : <button type="button" onClick={onUnsave} style={ghost}>Unsave</button>}
             {!isArchived ? <button type="button" onClick={onArchive} style={ghost}>Archive</button> : <button type="button" onClick={onRestore} style={ghost}>Restore</button>}
             {(isSaved || isArchived) ? <button type="button" onClick={onDelete} style={dangerGhost}>Delete</button> : null}
@@ -826,8 +941,8 @@ function StateButton({
       <div style={{ ...muted, fontSize: 13, marginTop: 5 }}>total workstations</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 14 }}>
-        <Mini labelText="Deals" value={bucket.deals} />
-        <Mini labelText="Pain" value={bucket.pains} />
+        <Mini labelText="Opp" value={bucket.deals} />
+        <Mini labelText="Pressure" value={bucket.pains} />
         <Mini labelText="Signals" value={bucket.signals} />
       </div>
     </button>
@@ -860,11 +975,10 @@ function CountyButton({
       <div style={{ ...label, color: "#9df3bf", fontSize: 10 }}>County / Market</div>
       <div style={{ fontSize: 24, fontWeight: 1000, marginTop: 8 }}>{bucket.county}</div>
       <div style={{ fontSize: 32, fontWeight: 1000, color: "#f8e7b0", marginTop: 8 }}>{bucket.total}</div>
-      <div style={{ ...muted, fontSize: 12 }}>{bucket.deals} deals · {bucket.pains} pain · {bucket.signals} signals</div>
+      <div style={{ ...muted, fontSize: 12 }}>{bucket.deals} opp · {bucket.pains} pressure · {bucket.signals} signals</div>
     </button>
   );
 }
-
 
 function CommandExitBar() {
   function goBack() {
@@ -891,10 +1005,10 @@ function CommandExitBar() {
         <div className="vf-command-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button type="button" onClick={goBack} style={closeButton}>Back</button>
           <Link href="/dashboard" style={smallButton}>Dashboard</Link>
-          <Link href="/submit" style={smallGhost}>Create Deal</Link>
-          <Link href="/pain" style={smallGhost}>Submit Pain</Link>
-          <Link href="/pain-feed" style={smallGhost}>Pain Feed</Link>
-          <Link href="/smart-ai" style={smallGhost}>Smart AI</Link>
+          <Link href="/submit" style={smallGhost}>Submit Opportunity</Link>
+          <Link href="/pain" style={smallGhost}>Submit Pressure</Link>
+          <Link href="/pain-feed" style={smallGhost}>Pressure Feed</Link>
+          <Link href="/smart-ai" style={smallGhost}>Surgeon AI</Link>
           <Link href="/messages" style={smallGhost}>Messages</Link>
         </div>
       </div>
@@ -1000,7 +1114,7 @@ export default function ProjectsPage() {
 
       const unique = Array.from(secondPass.values());
       setItems(unique);
-      setStatus(unique.length ? "" : "No deal or pain workstations found yet.");
+      setStatus(unique.length ? "" : "No opportunity or pressure workstations found yet.");
     } catch (error: any) {
       setStatus(error?.message || "Could not load workstations.");
     }
@@ -1175,6 +1289,7 @@ export default function ProjectsPage() {
       withPhotos: visibleItems.filter((item) => photosOf(item).length).length,
       saved: activeSavedItems.length,
       archived: archivedItems.length,
+      avgFailure: visibleItems.length ? Math.round(visibleItems.reduce((sum, item) => sum + failureIndex(item), 0) / visibleItems.length) : 0,
     };
   }, [items, visibleItems, savedIds, archivedIds, deletedIds]);
 
@@ -1209,21 +1324,22 @@ export default function ProjectsPage() {
         <CommandExitBar />
 
         <section style={card}>
-          <div style={label}>VaultForge Project Desk</div>
+          <div style={label}>VaultForge Operating Workstations</div>
           <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
             Workstations.
           </h1>
           <p style={{ ...muted, fontSize: 20 }}>
-            Deal and pain records share one execution desk. Each card keeps the important facts visible: photo, route, best next move, ask, ARV, repairs, spread, owner, market, and action buttons.
+            Opportunity and Pressure records share one execution desk. Each card now reads like a decision engine: diagnosis, root cause, failure index, capital stack, solution paths, best move, worst move, and route stack.
           </p>
 
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6,minmax(0,1fr))", gap: 10, marginTop: 18 }}>
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", gap: 10, marginTop: 18 }}>
             <Mini labelText="Showing" value={counts.total} />
-            <Mini labelText="Deals" value={counts.deals} />
-            <Mini labelText="Pain" value={counts.pains} />
+            <Mini labelText="Opportunity" value={counts.deals} />
+            <Mini labelText="Pressure" value={counts.pains} />
             <Mini labelText="Signals" value={counts.signals} />
             <Mini labelText="Photos" value={counts.withPhotos} />
             <Mini labelText="Saved" value={counts.saved} />
+            <Mini labelText="Avg Failure" value={`${counts.avgFailure}%`} />
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
@@ -1231,8 +1347,8 @@ export default function ProjectsPage() {
             <button type="button" onClick={() => setFolder("saved")} style={folder === "saved" ? button : ghost}>Saved</button>
             <button type="button" onClick={() => setFolder("archived")} style={folder === "archived" ? button : ghost}>Archived</button>
             <button type="button" onClick={load} style={ghost}>Refresh</button>
-            <Link href="/submit" style={ghost}>Create Deal</Link>
-            <Link href="/pain" style={ghost}>Submit Pain</Link>
+            <Link href="/submit" style={ghost}>Submit Opportunity</Link>
+            <Link href="/pain" style={ghost}>Submit Pressure</Link>
           </div>
 
           <p style={{ ...muted, marginTop: 14, fontSize: 14 }}>
@@ -1307,11 +1423,7 @@ export default function ProjectsPage() {
           </section>
         ) : null}
 
-        {status ? (
-          <section style={{ ...card, color: "#f8e7b0" }}>
-            {status}
-          </section>
-        ) : null}
+        {status ? <section style={{ ...card, color: "#f8e7b0" }}>{status}</section> : null}
 
         <section style={{ display: "grid", gap: 16 }}>
           {visibleItems.map((item, index) => {
