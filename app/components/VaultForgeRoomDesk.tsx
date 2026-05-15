@@ -658,12 +658,16 @@ function RoomCard({
   onRestore,
   onDelete,
   onRestoreDeleted,
+  stage,
+  onStageChange,
 }: {
   row: Row;
   viewer: string;
   isSaved: boolean;
   isArchived: boolean;
   isDeleted: boolean;
+  stage: string;
+  onStageChange: (stage: string) => void;
   onSave: () => void;
   onUnsave: () => void;
   onArchive: () => void;
@@ -680,6 +684,9 @@ function RoomCard({
   const route = likelyRoute(row);
   const diagnosis = situationDiagnosis(row);
   const paths = solutionPaths(row);
+  const currentStage = stage || defaultStageFor(row);
+  const tone = stageTone(currentStage);
+  const stages = stageOptionsFor(row);
 
   const contactHref = signalId
     ? `/connect/${encodeURIComponent(signalId)}?email=${encodeURIComponent(viewer)}${id ? `&item_id=${encodeURIComponent(id)}` : ""}${owner ? `&to=${encodeURIComponent(owner)}` : ""}&source=room&type=room&folder=rooms&folder_key=rooms&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(titleOf(row))}`
@@ -701,6 +708,7 @@ function RoomCard({
             <span style={chip}>{source === "deal" ? "Opportunity Room" : source === "pain" ? "Pressure Room" : "Signal"}</span>
             <span style={chip}>{assetOf(row)}</span>
             <span style={chip}>{statusOf(row)}</span>
+            <span style={{ ...chip, color: tone.color, borderColor: tone.border, background: tone.bg }}>Stage: {currentStage}</span>
             <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.34)", background: "rgba(232,196,107,.10)" }}>Failure {failureIndex(row)}%</span>
             {isSaved ? <span style={{ ...chip, color: "#f8e7b0", borderColor: "rgba(232,196,107,.34)", background: "rgba(232,196,107,.10)" }}>Saved</span> : null}
             {isArchived ? <span style={{ ...chip, color: "#cbd5e1", borderColor: "rgba(148,163,184,.24)", background: "rgba(148,163,184,.07)" }}>Archived</span> : null}
@@ -756,9 +764,43 @@ function RoomCard({
             </section>
           </div>
 
+          <section style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: 12, background: "rgba(0,0,0,.16)", marginTop: 12 }}>
+            <div style={{ ...label, fontSize: 10 }}>Room Control</div>
+            <p style={{ ...muted, margin: "7px 0 11px", fontSize: 13 }}>
+              Move this room through the operating system. This keeps work sorted, visible, and flowing.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {stages.map((stageName) => {
+                const activeStage = stageName === currentStage;
+                const stageColor = stageTone(stageName);
+
+                return (
+                  <button
+                    key={stageName}
+                    type="button"
+                    onClick={() => onStageChange(stageName)}
+                    style={{
+                      border: activeStage ? `1px solid ${stageColor.color}` : `1px solid ${stageColor.border}`,
+                      background: activeStage ? stageColor.bg : "rgba(255,255,255,.035)",
+                      color: activeStage ? stageColor.color : "#cbd5e1",
+                      borderRadius: 999,
+                      padding: "8px 10px",
+                      fontSize: 12,
+                      fontWeight: 900,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {stageName}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           <div className="vf-actions" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
             <Link href={roomHref(row)} style={button}>{source === "deal" ? "Open Opportunity Room" : source === "pain" ? "Open Pressure Room" : "Open Signal"}</Link>
             <Link href={contactHref} style={ghost}>Contact Source</Link>
+            <Link href={`/messages/new?source=room-control&type=${encodeURIComponent(source)}&folder=rooms&folder_key=rooms&item_id=${encodeURIComponent(id)}&title=${encodeURIComponent(titleOf(row))}&subject=${encodeURIComponent(`Room Control: ${titleOf(row)}`)}`} style={ghost}>Internal Thread</Link>
             {isDeleted ? (
               <button type="button" onClick={onRestoreDeleted} style={button}>Restore From Deleted</button>
             ) : (
@@ -869,6 +911,121 @@ function folderOptions(lane: Lane) {
   ] as [FolderMode, string][];
 }
 
+type StageMap = Record<string, string>;
+
+function stageStorageKey(lane: Lane) {
+  return `vf_room_stage_${lane}`;
+}
+
+function readStageMap(lane: Lane): StageMap {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(stageStorageKey(lane));
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStageMap(lane: Lane, value: StageMap) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(stageStorageKey(lane), JSON.stringify(value));
+}
+
+function defaultStageFor(row: Row) {
+  const source = sourceOf(row);
+  const status = statusOf(row).toLowerCase();
+
+  if (status.includes("closed")) return "Closed";
+  if (status.includes("solved") || status.includes("resolved")) return "Solved";
+  if (status.includes("funded")) return "Funded";
+  if (status.includes("assigned")) return "Assigned";
+  if (status.includes("escalated")) return "Escalated";
+  if (status.includes("dead") || status.includes("rejected")) return "Dead";
+  if (source === "pain") return "Active Pressure";
+  if (source === "deal") return "Active Opportunity";
+  return "Active";
+}
+
+function stageOptionsFor(row: Row) {
+  const source = sourceOf(row);
+
+  if (source === "pain") {
+    return [
+      "Active Pressure",
+      "Critical",
+      "Funding Gap",
+      "Legal / Title",
+      "Contractor Failure",
+      "Distressed Seller",
+      "City / Permit",
+      "Needs Buyer",
+      "Needs Operator",
+      "Escalated",
+      "Solved",
+      "Archived",
+    ];
+  }
+
+  if (source === "deal") {
+    return [
+      "Active Opportunity",
+      "Underwrite",
+      "Hot",
+      "Needs Buyer",
+      "Needs Capital",
+      "Needs Operator",
+      "Routed",
+      "Assigned",
+      "Funded",
+      "Closed",
+      "Dead",
+      "Archived",
+    ];
+  }
+
+  return ["Active", "Routed", "Assigned", "Escalated", "Archived"];
+}
+
+function stageTone(stage: string) {
+  const lower = stage.toLowerCase();
+
+  if (lower.includes("critical") || lower.includes("dead") || lower.includes("legal") || lower.includes("failure")) {
+    return { color: "#fecaca", border: "rgba(248,113,113,.42)", bg: "rgba(248,113,113,.08)" };
+  }
+
+  if (lower.includes("hot") || lower.includes("funded") || lower.includes("closed") || lower.includes("solved")) {
+    return { color: "#9df3bf", border: "rgba(157,243,191,.36)", bg: "rgba(157,243,191,.075)" };
+  }
+
+  if (lower.includes("capital") || lower.includes("buyer") || lower.includes("operator") || lower.includes("underwrite")) {
+    return { color: "#f8e7b0", border: "rgba(232,196,107,.36)", bg: "rgba(232,196,107,.075)" };
+  }
+
+  if (lower.includes("assigned") || lower.includes("routed")) {
+    return { color: "#56d8ff", border: "rgba(86,216,255,.34)", bg: "rgba(86,216,255,.070)" };
+  }
+
+  return { color: "#cbd5e1", border: "rgba(203,213,225,.24)", bg: "rgba(203,213,225,.050)" };
+}
+
+function stageFolderMatch(row: Row, stage: string, folder: FolderMode) {
+  const lower = stage.toLowerCase();
+
+  if (folder === "hot") return lower.includes("hot");
+  if (folder === "urgent") return lower.includes("critical") || urgencyScore(row) >= 70 || failureIndex(row) >= 70;
+  if (folder === "underwrite") return lower.includes("underwrite") || folderFor(row).includes("underwrite");
+  if (folder === "needs_buyer") return lower.includes("buyer") || folderFor(row).includes("needs_buyer");
+  if (folder === "needs_capital") return lower.includes("capital") || lower.includes("funding") || folderFor(row).includes("needs_capital");
+  if (folder === "needs_operator") return lower.includes("operator") || lower.includes("contractor") || folderFor(row).includes("needs_operator");
+  if (folder === "routed") return lower.includes("routed") || lower.includes("assigned") || folderFor(row).includes("routed");
+  if (folder === "solved") return lower.includes("solved") || lower.includes("closed");
+  return folderFor(row).includes(folder);
+}
+
+
 export default function VaultForgeRoomDesk({
   lane,
   title,
@@ -889,6 +1046,7 @@ export default function VaultForgeRoomDesk({
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [stageMap, setStageMap] = useState<StageMap>({});
 
   async function load() {
     const viewer = getEmail();
@@ -974,6 +1132,7 @@ export default function VaultForgeRoomDesk({
     setSavedIds(readSet("vf_room_saved_ids"));
     setArchivedIds(readSet("vf_room_archived_ids"));
     setDeletedIds(readSet("vf_room_deleted_ids"));
+    setStageMap(readStageMap(lane));
 
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -1010,6 +1169,29 @@ export default function VaultForgeRoomDesk({
       const params = new URLSearchParams(window.location.search);
       params.set("folder", nextFolder);
       window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+    }
+  }
+
+  function setRoomStage(row: Row, nextStage: string) {
+    const key = canonicalKey(row);
+    if (!key) return;
+
+    const next = { ...stageMap, [key]: nextStage };
+    setStageMap(next);
+    writeStageMap(lane, next);
+
+    if (nextStage === "Archived") {
+      archiveRoom(row);
+    }
+
+    if (nextStage === "Dead") {
+      deleteRoom(row);
+    }
+
+    if (nextStage === "Solved" || nextStage === "Closed") {
+      const nextArchived = new Set(archivedIds);
+      nextArchived.delete(key);
+      persistArchived(nextArchived);
     }
   }
 
@@ -1107,11 +1289,14 @@ export default function VaultForgeRoomDesk({
       if (folder === "deleted") return deleted;
       if (folder === "active") return !archived;
       if (folder === "solved") return folders.includes("solved") && !archived;
-      if (source === "deal" || source === "pain") return folders.includes(folder) && !archived;
+      if (source === "deal" || source === "pain") {
+        const stage = stageMap[key] || defaultStageFor(item);
+        return stageFolderMatch(item, stage, folder) && !archived;
+      }
 
       return !archived;
     });
-  }, [laneItems, savedIds, archivedIds, deletedIds, folder, selectedState, selectedCounty]);
+  }, [laneItems, savedIds, archivedIds, deletedIds, stageMap, folder, selectedState, selectedCounty]);
 
   const bucketBaseItems = useMemo(() => {
     const currentFolder: FolderMode = folder;
@@ -1182,8 +1367,9 @@ export default function VaultForgeRoomDesk({
       if (folderKey === "saved") return saved && !archived;
       if (folderKey === "archived") return archived;
       if (folderKey === "active") return !archived;
-      if (folderKey === "solved") return folderFor(item).includes("solved") && !archived;
-      return folderFor(item).includes(folderKey) && !archived;
+      const stage = stageMap[key] || defaultStageFor(item);
+      if (folderKey === "solved") return stageFolderMatch(item, stage, "solved") && !archived;
+      return stageFolderMatch(item, stage, folderKey) && !archived;
     }).length;
   }
 
@@ -1324,6 +1510,8 @@ export default function VaultForgeRoomDesk({
                 isSaved={savedIds.has(key)}
                 isArchived={archivedIds.has(key)}
                 isDeleted={deletedIds.has(key)}
+                stage={stageMap[key] || defaultStageFor(item)}
+                onStageChange={(nextStage) => setRoomStage(item, nextStage)}
                 onSave={() => saveRoom(item)}
                 onUnsave={() => unsaveRoom(item)}
                 onArchive={() => archiveRoom(item)}
