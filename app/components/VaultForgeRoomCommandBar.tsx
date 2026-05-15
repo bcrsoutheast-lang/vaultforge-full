@@ -282,7 +282,7 @@ export default function VaultForgeRoomCommandBar({
     }
   }
 
-  async function changeStage(nextStage / Move: string) {
+  async function changeStage(nextStage: string) {
     const previousStage = stage;
     const map = readStageMap(lane);
     map[cleanId] = nextStage;
