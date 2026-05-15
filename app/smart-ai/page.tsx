@@ -1,3 +1,4 @@
+\
 "use client";
 
 import Link from "next/link";
@@ -8,36 +9,40 @@ type Insight = Record<string, any>;
 const pageStyle: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
+    "radial-gradient(circle at top left, rgba(181,92,255,.18), transparent 28%), radial-gradient(circle at top right, rgba(232,196,107,.12), transparent 26%), radial-gradient(circle at bottom left, rgba(157,243,191,.10), transparent 22%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
   color: "white",
-  padding: "28px 18px 100px",
+  padding: "24px 16px 100px",
   fontFamily: "Arial, sans-serif",
 };
 
 const wrap: React.CSSProperties = {
-  maxWidth: 1400,
+  maxWidth: 1480,
   margin: "0 auto",
 };
 
 const hero: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.20)",
-  background: "rgba(255,255,255,.03)",
-  borderRadius: 32,
-  padding: 24,
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(255,255,255,.03), rgba(157,243,191,.05))",
+  borderRadius: 34,
+  padding: 26,
   marginBottom: 22,
+  boxShadow: "0 35px 120px rgba(0,0,0,.42)",
 };
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))",
   gap: 18,
 };
 
 const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.10)",
-  background: "rgba(255,255,255,.03)",
-  borderRadius: 26,
+  border: "1px solid rgba(255,255,255,.12)",
+  background:
+    "linear-gradient(145deg, rgba(181,92,255,.08), rgba(255,255,255,.03), rgba(157,243,191,.04))",
+  borderRadius: 28,
   overflow: "hidden",
+  boxShadow: "0 24px 80px rgba(0,0,0,.34)",
 };
 
 const button: React.CSSProperties = {
@@ -50,7 +55,7 @@ const button: React.CSSProperties = {
   border: "none",
   cursor: "pointer",
   fontWeight: 900,
-  background: "#f5d978",
+  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
   color: "#111",
   marginRight: 10,
   marginBottom: 10,
@@ -63,77 +68,153 @@ const ghost: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.12)",
 };
 
-const commandBar: React.CSSProperties = {
-  position: "sticky",
-  top: 10,
-  zIndex: 40,
-  border: "1px solid rgba(232,196,107,.28)",
-  borderRadius: 24,
-  padding: 12,
-  background: "linear-gradient(145deg,rgba(2,6,23,.92),rgba(7,19,38,.86))",
-  boxShadow: "0 18px 70px rgba(0,0,0,.42)",
-  backdropFilter: "blur(14px)",
-  marginBottom: 16,
-};
-
-const smallButton: React.CSSProperties = {
-  ...button,
-  minHeight: 40,
-  padding: "9px 12px",
-  fontSize: 13,
-};
-
-const smallGhost: React.CSSProperties = {
-  ...ghost,
-  minHeight: 40,
-  padding: "9px 12px",
-  fontSize: 13,
-};
-
-const closeButton: React.CSSProperties = {
-  ...smallGhost,
-  color: "#fecaca",
-  border: "1px solid rgba(248,113,113,.34)",
-  background: "rgba(248,113,113,.10)",
-};
-
-const red: React.CSSProperties = {
-  ...button,
-  background: "rgba(255,80,80,.18)",
-  color: "#ffd2d2",
-  border: "1px solid rgba(255,120,120,.30)",
-};
+function clean(v: unknown) {
+  return String(v || "").trim();
+}
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
-
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${name}=`));
-
   if (!match) return "";
-
-  try {
-    return decodeURIComponent(match.slice(name.length + 1));
-  } catch {
-    return match.slice(name.length + 1);
-  }
+  return decodeURIComponent(match.slice(name.length + 1));
 }
 
 function currentEmail() {
   if (typeof window === "undefined") return "";
-
   return String(
     localStorage.getItem("vf_email") ||
       sessionStorage.getItem("vf_email") ||
       readCookie("vf_email") ||
-      readCookie("vf_member_email") ||
-      readCookie("vf_admin_email") ||
       ""
   )
     .trim()
     .toLowerCase();
+}
+
+function numberValue(value: unknown) {
+  const raw = clean(value).replace(/[^0-9.-]/g, "");
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function ask(item: Insight) {
+  return numberValue(item.asking_price || item.price || item.ask);
+}
+
+function arv(item: Insight) {
+  return numberValue(item.arv || item.value || item.after_repair_value);
+}
+
+function repairs(item: Insight) {
+  return numberValue(item.repairs || item.repair_estimate);
+}
+
+function spread(item: Insight) {
+  const a = ask(item);
+  const v = arv(item);
+  const r = repairs(item);
+  if (!a || !v) return 0;
+  return v - a - r;
+}
+
+function margin(item: Insight) {
+  const v = arv(item);
+  if (!v) return 0;
+  return Math.round((spread(item) / v) * 100);
+}
+
+function text(item: Insight) {
+  return [
+    item.title,
+    item.summary,
+    item.reasoning,
+    item.market,
+    item.priority,
+    item.best_move,
+    item.kind,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function severity(item: Insight) {
+  const t = text(item);
+  let score = 34;
+  if (t.includes("urgent")) score += 24;
+  if (t.includes("foreclosure")) score += 28;
+  if (t.includes("deadline")) score += 20;
+  if (t.includes("capital")) score += 12;
+  if (t.includes("stalled")) score += 10;
+  return Math.max(0, Math.min(100, score));
+}
+
+function opportunity(item: Insight) {
+  let score = 40;
+  if (spread(item) > 0) score += 18;
+  if (margin(item) >= 25) score += 22;
+  if (margin(item) >= 15 && margin(item) < 25) score += 10;
+  if (item.photo) score += 8;
+  return Math.max(0, Math.min(100, score));
+}
+
+function classification(item: Insight) {
+  const opp = opportunity(item);
+  const sev = severity(item);
+
+  if (item.kind === "pain") {
+    if (sev >= 80) return "Critical Pressure";
+    if (sev >= 60) return "Fixable Pressure";
+    return "Monitor Pressure";
+  }
+
+  if (opp >= 75) return "A Opportunity";
+  if (opp >= 58) return "B Opportunity";
+  if (opp >= 42) return "Rewrite Needed";
+  return "Trap Risk";
+}
+
+function strategy(item: Insight) {
+  const t = text(item);
+
+  if (item.kind === "pain") {
+    if (t.includes("capital")) return "Bridge capital + operator stabilization";
+    if (t.includes("contractor")) return "Contractor-led execution rescue";
+    if (t.includes("foreclosure")) return "Fast close rescue path";
+    return "Pressure triage + controlled routing";
+  }
+
+  if (t.includes("seller finance")) return "Creative finance structure";
+  if (t.includes("land")) return "Builder / developer route";
+  if (margin(item) >= 25) return "Fix-flip or private investor route";
+  if (margin(item) > 0) return "Buyer-specific route";
+  return "Rewrite pricing or terms";
+}
+
+function bestMove(item: Insight) {
+  if (item.kind === "pain") {
+    return "Identify bottleneck, stabilize pressure, then route operators.";
+  }
+
+  if (margin(item) >= 25) {
+    return "Verify numbers and privately route qualified buyers.";
+  }
+
+  return "Rewrite structure before broad exposure.";
+}
+
+function worstMove(item: Insight) {
+  if (item.kind === "pain") {
+    return "Treating this like a normal lead instead of a pressure event.";
+  }
+
+  return "Publicly blasting weak or unverified opportunity data.";
+}
+
+function aiRead(item: Insight) {
+  return `VaultForge Surgeon AI classifies this as ${classification(item)}. Strategy path: ${strategy(item)}. Best move: ${bestMove(item)}.`;
 }
 
 function trashKey(email: string) {
@@ -144,8 +225,7 @@ function loadTrash(email: string) {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(trashKey(email));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
@@ -165,6 +245,28 @@ function itemKey(item: Insight) {
   ].join("|");
 }
 
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 12 }}>
+        <span>{label}</span>
+        <span>{value}%</span>
+      </div>
+
+      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 7 }}>
+        <div
+          style={{
+            width: `${value}%`,
+            height: "100%",
+            borderRadius: 999,
+            background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function InsightCard({
   item,
   onDelete,
@@ -176,6 +278,8 @@ function InsightCard({
   onRestore: (item: Insight) => void;
   deletedMode: boolean;
 }) {
+  const cls = classification(item);
+
   return (
     <article style={card}>
       {item.photo && (
@@ -202,7 +306,7 @@ function InsightCard({
             textTransform: "uppercase",
           }}
         >
-          {item.kind === "pain" ? "Pain Room Match" : "Deal Room Match"} · {item.market || "Market not listed"}
+          {item.kind === "pain" ? "Pressure Intelligence" : "Opportunity Intelligence"}
         </div>
 
         <h2
@@ -215,67 +319,92 @@ function InsightCard({
           {item.title || "Untitled"}
         </h2>
 
-        <div style={{ marginBottom: 12 }}>
-          {item.score !== undefined && (
-            <span
-              style={{
-                display: "inline-flex",
-                border: "1px solid rgba(157,243,191,.30)",
-                borderRadius: 999,
-                padding: "7px 10px",
-                color: "#9df3bf",
-                background: "rgba(157,243,191,.08)",
-                fontWeight: 900,
-                marginRight: 8,
-                marginBottom: 8,
-              }}
-            >
-              AI Fit: {item.score}
-            </span>
-          )}
-          {item.priority && (
-            <span
-              style={{
-                display: "inline-flex",
-                border: "1px solid rgba(232,196,107,.30)",
-                borderRadius: 999,
-                padding: "7px 10px",
-                color: "#f5d978",
-                background: "rgba(232,196,107,.08)",
-                fontWeight: 900,
-                marginRight: 8,
-                marginBottom: 8,
-              }}
-            >
-              {item.priority}
-            </span>
-          )}
+        <div style={{ marginBottom: 14 }}>
+          <span
+            style={{
+              display: "inline-flex",
+              border: "1px solid rgba(157,243,191,.30)",
+              borderRadius: 999,
+              padding: "7px 10px",
+              color: "#9df3bf",
+              background: "rgba(157,243,191,.08)",
+              fontWeight: 900,
+              marginRight: 8,
+              marginBottom: 8,
+            }}
+          >
+            {cls}
+          </span>
+
+          <span
+            style={{
+              display: "inline-flex",
+              border: "1px solid rgba(232,196,107,.30)",
+              borderRadius: 999,
+              padding: "7px 10px",
+              color: "#f5d978",
+              background: "rgba(232,196,107,.08)",
+              fontWeight: 900,
+              marginRight: 8,
+              marginBottom: 8,
+            }}
+          >
+            Strategy: {strategy(item)}
+          </span>
         </div>
+
+        <ScoreBar
+          label={item.kind === "pain" ? "Pressure Severity" : "Opportunity Strength"}
+          value={item.kind === "pain" ? severity(item) : opportunity(item)}
+        />
 
         <p
           style={{
-            color: "rgba(255,255,255,.78)",
-            lineHeight: 1.55,
-            fontSize: 18,
+            color: "rgba(255,255,255,.82)",
+            lineHeight: 1.6,
+            fontSize: 17,
+            marginTop: 18,
           }}
         >
-          {item.summary || item.best_move || (Array.isArray(item.reasoning) ? item.reasoning.join(" · ") : "") || "No summary yet."}
+          {aiRead(item)}
         </p>
 
-        <div style={{ marginTop: 20 }}>
+        <div
+          style={{
+            marginTop: 18,
+            border: "1px solid rgba(255,255,255,.10)",
+            borderRadius: 18,
+            padding: 14,
+            background: "rgba(255,255,255,.03)",
+          }}
+        >
+          <div style={{ color: "#9df3bf", fontWeight: 900, marginBottom: 8 }}>
+            Best Move
+          </div>
+
+          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>
+            {bestMove(item)}
+          </div>
+
+          <div style={{ color: "#fecaca", fontWeight: 900, marginTop: 14, marginBottom: 8 }}>
+            Worst Move
+          </div>
+
+          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>
+            {worstMove(item)}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 22 }}>
           {item.href && (
             <Link href={item.href} style={button}>
-              {item.href === "/projects" ? "Open Projects" : "Open Room"}
+              Open Intelligence Room
             </Link>
           )}
 
-          <Link href="/dashboard" style={ghost}>
-            Dashboard
-          </Link>
-
           {!deletedMode ? (
-            <button type="button" style={red} onClick={() => onDelete(item)}>
-              Delete
+            <button type="button" style={ghost} onClick={() => onDelete(item)}>
+              Remove From Desk
             </button>
           ) : (
             <button type="button" style={ghost} onClick={() => onRestore(item)}>
@@ -288,45 +417,9 @@ function InsightCard({
   );
 }
 
-
-function CommandExitBar() {
-  function goBack() {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-    if (typeof window !== "undefined") window.location.href = "/dashboard";
-  }
-
-  return (
-    <section style={commandBar}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 11 }}>
-            VaultForge Command Exit
-          </div>
-          <div style={{ color: "rgba(255,255,255,.70)", fontSize: 13, marginTop: 4 }}>
-            Smart AI room is open. AI keeps routing in the background.
-          </div>
-        </div>
-
-        <div className="vf-command-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" onClick={goBack} style={closeButton}>Back</button>
-          <Link href="/dashboard" style={smallButton}>Dashboard</Link>
-          <Link href="/projects" style={smallGhost}>Workstations</Link>
-          <Link href="/alerts" style={smallGhost}>Alerts</Link>
-          <Link href="/smart-ai" style={smallGhost}>Smart AI</Link>
-          <Link href="/messages" style={smallGhost}>Messages</Link>
-          <Link href="/pain-feed" style={smallGhost}>Pain Feed</Link>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export default function SmartAIPage() {
   const [items, setItems] = useState<Insight[]>([]);
-  const [status, setStatus] = useState("Loading workstation...");
+  const [status, setStatus] = useState("Loading Surgeon AI...");
   const [mode, setMode] = useState("active");
   const [email, setEmail] = useState("");
 
@@ -335,12 +428,6 @@ export default function SmartAIPage() {
       try {
         const viewer = currentEmail();
         setEmail(viewer);
-
-        if (!viewer) {
-          setItems([]);
-          setStatus("Log in to view Smart AI.");
-          return;
-        }
 
         const res = await fetch(`/api/smart-ai?email=${encodeURIComponent(viewer)}`, {
           cache: "no-store",
@@ -352,13 +439,13 @@ export default function SmartAIPage() {
         const data = await res.json();
 
         if (!res.ok || data?.ok === false) {
-          throw new Error(data?.error || "Smart AI could not load.");
+          throw new Error(data?.error || "Could not load Surgeon AI.");
         }
 
         setItems(Array.isArray(data?.insights) ? data.insights : []);
         setStatus("");
       } catch {
-        setStatus("Could not load workstation.");
+        setStatus("Surgeon AI could not load.");
       }
     }
 
@@ -387,18 +474,14 @@ export default function SmartAIPage() {
     setMode("deleted");
   }
 
-  function clearTrash() {
-    saveTrash(email, []);
-    setMode("active");
-  }
-
   const visible = mode === "deleted" ? deletedItems : activeItems;
+
+  const pressureCount = activeItems.filter((x) => x.kind === "pain").length;
+  const opportunityCount = activeItems.filter((x) => x.kind !== "pain").length;
 
   return (
     <main style={pageStyle}>
       <div style={wrap}>
-        <CommandExitBar />
-
         <section style={hero}>
           <div
             style={{
@@ -409,29 +492,42 @@ export default function SmartAIPage() {
               textTransform: "uppercase",
             }}
           >
-            VaultForge Project Desk
+            VaultForge Surgeon AI
           </div>
 
           <h1
             style={{
-              fontSize: "clamp(60px,12vw,120px)",
-              lineHeight: 0.9,
-              margin: "0 0 20px",
+              fontSize: "clamp(64px,12vw,140px)",
+              lineHeight: 0.88,
+              margin: "0 0 18px",
+              letterSpacing: -5,
             }}
           >
-            Workstations.
+            Intelligence.
           </h1>
 
           <p
             style={{
-              color: "rgba(255,255,255,.75)",
+              color: "rgba(255,255,255,.78)",
               fontSize: 22,
-              lineHeight: 1.5,
+              lineHeight: 1.6,
+              maxWidth: 1100,
             }}
           >
-            Deal and pain records share one execution desk. Delete keeps the
-            workspace clean without permanently removing database records.
+            This is not a listings feed. Surgeon AI classifies pressure, rewrites
+            opportunities, diagnoses weak structures, identifies execution paths,
+            scores risk, and routes operator intelligence into one institutional desk.
           </p>
+
+          <div style={{ marginTop: 22 }}>
+            <span style={{ marginRight: 18, color: "#9df3bf", fontWeight: 900 }}>
+              Pressure Signals: {pressureCount}
+            </span>
+
+            <span style={{ color: "#f5d978", fontWeight: 900 }}>
+              Opportunity Signals: {opportunityCount}
+            </span>
+          </div>
 
           <div style={{ marginTop: 24 }}>
             <button
@@ -439,7 +535,7 @@ export default function SmartAIPage() {
               style={mode === "active" ? button : ghost}
               onClick={() => setMode("active")}
             >
-              Active ({activeItems.length})
+              Active Desk ({activeItems.length})
             </button>
 
             <button
@@ -447,55 +543,26 @@ export default function SmartAIPage() {
               style={mode === "deleted" ? button : ghost}
               onClick={() => setMode("deleted")}
             >
-              Deleted ({deletedItems.length})
+              Removed ({deletedItems.length})
             </button>
 
-            <button type="button" style={ghost} onClick={() => window.location.reload()}>
-              Refresh
-            </button>
-
-            <Link href="/dashboard" style={button}>
-              Dashboard
+            <Link href="/dashboard" style={ghost}>
+              Command
             </Link>
 
             <Link href="/submit" style={ghost}>
-              Create Deal
+              Opportunity Intake
             </Link>
 
             <Link href="/pain" style={ghost}>
-              Submit Pain
+              Pressure Intake
             </Link>
-
-            {mode === "deleted" && (
-              <button type="button" style={red} onClick={clearTrash}>
-                Empty Trash
-              </button>
-            )}
-          </div>
-
-          <div
-            style={{
-              marginTop: 18,
-              color: "rgba(255,255,255,.65)",
-              fontSize: 16,
-            }}
-          >
-            Signed in: {email || "guest"} · Deleted: {deletedItems.length}
           </div>
         </section>
 
         {status && (
           <section style={hero}>
             <strong>{status}</strong>
-          </section>
-        )}
-
-        {!status && visible.length === 0 && (
-          <section style={hero}>
-            <strong>No Smart AI records visible.</strong>
-            <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
-              Active may be empty if all records are deleted, hidden, or the API has no scored insights yet. Use Deleted to restore items or Refresh after adding deals/pain.
-            </p>
           </section>
         )}
 
