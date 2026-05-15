@@ -378,8 +378,8 @@ function situationDiagnosis(row: Row) {
   const source = sourceOf(row);
   const text = textContext(row);
   if (text.includes("foreclosure") || text.includes("deadline")) return "Timeline compression / distressed exit";
-  if (text.includes("capital") || text.includes("funding") || text.includes("lender")) return "Capital stack or liquidity gap";
-  if (text.includes("contractor") || text.includes("repair") || text.includes("scope")) return "Execution or contractor bottleneck";
+  if (text.includes("capital") || text.includes("funding") || text.includes("lender")) return "Capital stack || liquidity gap";
+  if (text.includes("contractor") || text.includes("repair") || text.includes("scope")) return "Execution || contractor bottleneck";
   if (text.includes("tenant") || text.includes("occupied")) return "Occupancy/access risk";
   if (text.includes("permit") || text.includes("code") || text.includes("city")) return "Municipal/code execution issue";
   if (text.includes("title") || text.includes("probate") || text.includes("lien")) return "Title/legal constraint";
@@ -391,12 +391,12 @@ function situationDiagnosis(row: Row) {
 
 function rootCause(row: Row) {
   const diagnosis = situationDiagnosis(row);
-  if (diagnosis.includes("Timeline")) return "Time is the main enemy. Certainty, authority, and speed matter more than perfect pricing.";
-  if (diagnosis.includes("Capital")) return "The current path is undercapitalized or blocked by liquidity/debt constraints.";
-  if (diagnosis.includes("Execution")) return "The work cannot move until scope, labor, access, and operator responsibility are clarified.";
-  if (diagnosis.includes("Occupancy")) return "Access, lease status, or occupant control can block inspection, lending, and closing.";
-  if (diagnosis.includes("Municipal")) return "Local approval or code friction must be solved before underwriting is reliable.";
-  if (diagnosis.includes("Title")) return "Authority, lien, or legal uncertainty can kill the route if not verified first.";
+  if (diagnosis.includes("Timeline")) return "Time is the main enemy. Certainty, authority, && speed matter more than perfect pricing.";
+  if (diagnosis.includes("Capital")) return "The current path is undercapitalized || blocked by liquidity/debt constraints.";
+  if (diagnosis.includes("Execution")) return "The work cannot move until scope, labor, access, && operator responsibility are clarified.";
+  if (diagnosis.includes("Occupancy")) return "Access, lease status, || occupant control can block inspection, lending, && closing.";
+  if (diagnosis.includes("Municipal")) return "Local approval || code friction must be solved before underwriting is reliable.";
+  if (diagnosis.includes("Title")) return "Authority, lien, || legal uncertainty can kill the route if not verified first.";
   if (diagnosis.includes("spread")) return "There may be enough economics to justify controlled routing after verification.";
   return "The signal is incomplete. More intelligence is needed before hard routing.";
 }
@@ -406,29 +406,29 @@ function solutionPaths(row: Row) {
   const paths: string[] = [];
   if (sourceOf(row) === "deal") {
     paths.push("Private buyer/operator route");
-    if (marginScore(row) >= 20) paths.push("Fix/flip or rental buyer execution");
-    if (marginScore(row) > 0 && marginScore(row) < 20) paths.push("Renegotiate or buyer-specific disposition");
+    if (marginScore(row) >= 20) paths.push("Fix/flip || rental buyer execution");
+    if (marginScore(row) > 0 && marginScore(row) < 20) paths.push("Renegotiate || buyer-specific disposition");
     if (text.includes("seller") || text.includes("creative")) paths.push("Seller finance / creative structure");
     if (text.includes("land")) paths.push("Builder/developer route");
   } else {
-    paths.push("Triage and stabilize pressure");
+    paths.push("Triage && stabilize pressure");
     if (text.includes("capital")) paths.push("Bridge capital / JV rescue");
     if (text.includes("contractor")) paths.push("Contractor-led stabilization");
     if (text.includes("buyer")) paths.push("Private buyer/disposition route");
     if (text.includes("title")) paths.push("Title/legal verification first");
   }
-  paths.push("Abandon or pause if risk blockers cannot be cleared");
+  paths.push("Abandon || pause if risk blockers cannot be cleared");
   return Array.from(new Set(paths)).slice(0, 4);
 }
 
 function capitalStack(row: Row) {
   const text = textContext(row);
   if (text.includes("capital") || text.includes("funding")) return "Private lender + JV equity + staged draw plan";
-  if (text.includes("foreclosure") || text.includes("deadline")) return "Cash operator or bridge rescue first";
+  if (text.includes("foreclosure") || text.includes("deadline")) return "Cash operator || bridge rescue first";
   if (text.includes("contractor") || text.includes("repair")) return "Hard money/private money after contractor scope";
-  if (text.includes("land")) return "Cash, seller carry, builder deposit, or entitlement JV";
-  if (text.includes("commercial")) return "Commercial debt, bridge, seller carry, or operator equity";
-  return "Cash, private lending, seller carry, JV equity, or hybrid after verification";
+  if (text.includes("land")) return "Cash, seller carry, builder deposit, || entitlement JV";
+  if (text.includes("commercial")) return "Commercial debt, bridge, seller carry, || operator equity";
+  return "Cash, private lending, seller carry, JV equity, || hybrid after verification";
 }
 
 function failureIndex(row: Row) {
@@ -450,13 +450,13 @@ function bestNextMove(row: Row) {
   const diagnosis = situationDiagnosis(row);
   const route = likelyRoute(row);
   const need = routingNeed(row);
-  if (diagnosis.includes("Title")) return "Verify title, ownership authority, payoff, and decision-maker before routing operators.";
-  if (diagnosis.includes("Timeline")) return "Confirm the deadline and route only to operators who can perform immediately.";
-  if (diagnosis.includes("Capital")) return "Package numbers and gap amount, then route to lender/JV/creative finance operator.";
-  if (diagnosis.includes("Execution")) return "Get photos, access, and contractor scope before buyer or lender exposure.";
-  if (need) return `Route first to ${route.replace(" Route", "").toLowerCase()} and verify: ${need}.`;
+  if (diagnosis.includes("Title")) return "Verify title, ownership authority, payoff, && decision-maker before routing operators.";
+  if (diagnosis.includes("Timeline")) return "Confirm the deadline && route only to operators who can perform immediately.";
+  if (diagnosis.includes("Capital")) return "Package numbers && gap amount, then route to lender/JV/creative finance operator.";
+  if (diagnosis.includes("Execution")) return "Get photos, access, && contractor scope before buyer || lender exposure.";
+  if (need) return `Route first to ${route.replace(" Route", "").toLowerCase()} && verify: ${need}.`;
   if (sourceOf(row) === "deal") return "Package key numbers, verify spread, then route privately through the best operator lane.";
-  if (sourceOf(row) === "pain") return "Clarify blocker, timeline, and owner goal, then open the problem-solver route.";
+  if (sourceOf(row) === "pain") return "Clarify blocker, timeline, && owner goal, then open the problem-solver route.";
   return "Review the signal, confirm owner context, then choose controlled routing.";
 }
 
@@ -464,8 +464,8 @@ function worstMove(row: Row) {
   const diagnosis = situationDiagnosis(row);
   if (diagnosis.includes("Title")) return "Do not blast to buyers before authority/title is verified.";
   if (diagnosis.includes("Timeline")) return "Do not wait for perfect data if the deadline is real.";
-  if (diagnosis.includes("Execution")) return "Do not quote or route hard without repair/scope confidence.";
-  if (sourceOf(row) === "deal" && Number.isFinite(spreadNumber(row)) && spreadNumber(row) <= 0) return "Do not market as a normal deal; rewrite pricing or terms first.";
+  if (diagnosis.includes("Execution")) return "Do not quote || route hard without repair/scope confidence.";
+  if (sourceOf(row) === "deal" && Number.isFinite(spreadNumber(row)) && spreadNumber(row) <= 0) return "Do not market as a normal deal; rewrite pricing || terms first.";
   return "Do not treat this like a public listing. Keep routing controlled until strategy is clear.";
 }
 
@@ -1114,14 +1114,24 @@ export default function VaultForgeRoomDesk({
   }, [laneItems, savedIds, archivedIds, deletedIds, folder, selectedState, selectedCounty]);
 
   const bucketBaseItems = useMemo(() => {
+    const currentFolder: FolderMode = folder;
+
     return laneItems.filter((item) => {
       const key = canonicalKey(item);
       if (!key) return false;
-      if (folder !== "deleted" && deletedIds.has(key)) return false;
-      if (folder === "deleted" && !deletedIds.has(key)) return false;
-      if (folder === "archived") return archivedIds.has(key);
-      if (folder === "saved") return savedIds.has(key) && !archivedIds.has(key);
-      if (folder !== "deleted" && folder !== "archived" && archivedIds.has(key)) return false;
+
+      const isDeleted = deletedIds.has(key);
+      const isArchived = archivedIds.has(key);
+      const isSaved = savedIds.has(key);
+
+      if (currentFolder === "deleted") return isDeleted;
+      if (isDeleted) return false;
+
+      if (currentFolder === "archived") return isArchived;
+      if (currentFolder === "saved") return isSaved && !isArchived;
+
+      if (isArchived) return false;
+
       return true;
     });
   }, [laneItems, savedIds, archivedIds, deletedIds, folder]);
