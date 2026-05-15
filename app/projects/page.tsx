@@ -606,6 +606,40 @@ const dangerGhost: React.CSSProperties = {
   background: "rgba(248,113,113,.08)",
 };
 
+const commandBar: React.CSSProperties = {
+  position: "sticky",
+  top: 10,
+  zIndex: 40,
+  border: "1px solid rgba(232,196,107,.28)",
+  borderRadius: 24,
+  padding: 12,
+  background: "linear-gradient(145deg,rgba(2,6,23,.92),rgba(7,19,38,.86))",
+  boxShadow: "0 18px 70px rgba(0,0,0,.42)",
+  backdropFilter: "blur(14px)",
+  marginBottom: 16,
+};
+
+const smallButton: React.CSSProperties = {
+  ...button,
+  minHeight: 40,
+  padding: "9px 12px",
+  fontSize: 13,
+};
+
+const smallGhost: React.CSSProperties = {
+  ...ghost,
+  minHeight: 40,
+  padding: "9px 12px",
+  fontSize: 13,
+};
+
+const closeButton: React.CSSProperties = {
+  ...smallGhost,
+  color: "#fecaca",
+  border: "1px solid rgba(248,113,113,.34)",
+  background: "rgba(248,113,113,.10)",
+};
+
 const chip: React.CSSProperties = {
   border: "1px solid rgba(157,243,191,.22)",
   borderRadius: 999,
@@ -828,6 +862,43 @@ function CountyButton({
       <div style={{ fontSize: 32, fontWeight: 1000, color: "#f8e7b0", marginTop: 8 }}>{bucket.total}</div>
       <div style={{ ...muted, fontSize: 12 }}>{bucket.deals} deals · {bucket.pains} pain · {bucket.signals} signals</div>
     </button>
+  );
+}
+
+
+function CommandExitBar() {
+  function goBack() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    if (typeof window !== "undefined") window.location.href = "/dashboard";
+  }
+
+  return (
+    <section style={commandBar}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 11 }}>
+            VaultForge Workstation Exit
+          </div>
+          <div style={{ color: "rgba(255,255,255,.70)", fontSize: 13, marginTop: 4 }}>
+            Workstations are open. Use this command bar to move without getting trapped.
+          </div>
+        </div>
+
+        <div className="vf-command-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" onClick={goBack} style={closeButton}>Back</button>
+          <Link href="/dashboard" style={smallButton}>Dashboard</Link>
+          <Link href="/submit" style={smallGhost}>Create Deal</Link>
+          <Link href="/pain" style={smallGhost}>Submit Pain</Link>
+          <Link href="/pain-feed" style={smallGhost}>Pain Feed</Link>
+          <Link href="/smart-ai" style={smallGhost}>Smart AI</Link>
+          <Link href="/messages" style={smallGhost}>Messages</Link>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1115,6 +1186,18 @@ export default function ProjectsPage() {
         a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
         @media (max-width: 900px) {
           .vf-grid, .vf-actions, .vf-card-top, .vf-card-bottom, .vf-workstation-layout, .vf-state-grid, .vf-county-grid { grid-template-columns: 1fr !important; }
+
+          .vf-command-actions {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+          }
+
+          .vf-command-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+            justify-content: center;
+          }
           .vf-actions { display: grid !important; gap: 10px !important; }
           .vf-actions > * { width: 100%; box-sizing: border-box; justify-content: center; }
           .vf-metrics { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
@@ -1123,6 +1206,8 @@ export default function ProjectsPage() {
       `}</style>
 
       <div style={wrap}>
+        <CommandExitBar />
+
         <section style={card}>
           <div style={label}>VaultForge Project Desk</div>
           <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
