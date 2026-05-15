@@ -412,7 +412,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 22 }}>
-                <Link href="/projects" style={goldButton}>Open Workstation Folders</Link>
+                <Link href="/projects?folder=active" style={goldButton}>Open Workstation Folders</Link>
                 <Link href="/submit" style={ghostButton}>Submit Opportunity</Link>
                 <Link href="/pain" style={ghostButton}>Submit Pressure</Link>
                 <Link href="/intelligence" style={ghostButton}>Intelligence</Link>
@@ -474,7 +474,7 @@ export default function DashboardPage() {
             <CommandCard
               title="Opportunity Rooms"
               body="Open the upside lane: deal rooms, acquisition intelligence, structure, capital path, exit strategy, buyer/operator fit, and opportunity scoring."
-              href="/projects"
+              href="/projects?folder=opportunity"
               tag="UPSIDE"
               tone="blue"
             />
@@ -482,7 +482,7 @@ export default function DashboardPage() {
             <CommandCard
               title="Pressure Rooms"
               body="Open the problem-solving lane: distress, urgency, funding gaps, contractor breakdowns, seller pressure, timeline collapse, and resolution strategy."
-              href="/projects"
+              href="/projects?folder=pressure"
               tag="FIX"
               tone="red"
             />
