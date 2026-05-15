@@ -56,7 +56,7 @@ async function tryCreateBucket(client: any, bucket: string) {
       allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/heic", "image/heif"],
     });
   } catch {
-    // Bucket may already exist or anon key may not have bucket-create permission.
+    // Bucket may already exist or key may not have bucket-create permission.
   }
 }
 
@@ -95,15 +95,17 @@ export async function POST(request: Request) {
     .toLowerCase()
     .replace(/[^a-z0-9@._-]+/g, "-");
 
-  const buffer = await file.arrayBuffer();
   const ext = file.type.includes("png")
     ? "png"
     : file.type.includes("webp")
     ? "webp"
     : file.type.includes("gif")
     ? "gif"
+    : file.type.includes("heic") || file.type.includes("heif")
+    ? "heic"
     : "jpg";
 
+  const bytes = new Uint8Array(await file.arrayBuffer());
   const filePath = `${email || "unknown"}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeName(file.name || `pain.${ext}`)}`;
   const attempts: Record<string, any>[] = [];
 
@@ -111,7 +113,7 @@ export async function POST(request: Request) {
     await tryCreateBucket(client, bucket);
 
     try {
-      const { error } = await client.storage.from(bucket).upload(filePath, buffer, {
+      const { error } = await client.storage.from(bucket).upload(filePath, bytes, {
         contentType: file.type || `image/${ext}`,
         upsert: true,
       });
@@ -134,6 +136,7 @@ export async function POST(request: Request) {
           main_photo_url: publicUrl,
           bucket,
           path: filePath,
+          attempts,
         });
       }
     } catch (error: any) {
@@ -141,9 +144,12 @@ export async function POST(request: Request) {
     }
   }
 
-  return json({
-    ok: false,
-    error: "Photo upload failed because Supabase Storage bucket or policy is not allowing upload. Pain record can still save without photos.",
-    attempts,
-  }, 200);
+  return json(
+    {
+      ok: false,
+      error: "Photo upload failed because Supabase Storage bucket or policy is not allowing upload. Pain record can still save without photos.",
+      attempts,
+    },
+    200
+  );
 }
