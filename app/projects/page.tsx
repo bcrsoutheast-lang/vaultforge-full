@@ -169,6 +169,52 @@ function marketOf(row: Row) {
   return [city, state].filter(Boolean).join(", ") || field(row, "location", "address", "property_address") || "Market not listed";
 }
 
+const STATE_ALIASES: Record<string, string> = {
+  ga: "Georgia",
+  georgia: "Georgia",
+  fl: "Florida",
+  florida: "Florida",
+  tn: "Tennessee",
+  tennessee: "Tennessee",
+  nc: "North Carolina",
+  "north-carolina": "North Carolina",
+  "north carolina": "North Carolina",
+  sc: "South Carolina",
+  "south-carolina": "South Carolina",
+  "south carolina": "South Carolina",
+  al: "Alabama",
+  alabama: "Alabama",
+  tx: "Texas",
+  texas: "Texas",
+};
+
+function normalizeStateName(value: unknown) {
+  const raw = clean(value);
+  if (!raw) return "";
+  const lower = raw.toLowerCase().trim();
+  if (STATE_ALIASES[lower]) return STATE_ALIASES[lower];
+  const noPunct = lower.replace(/[^a-z]+/g, " ").trim();
+  if (STATE_ALIASES[noPunct]) return STATE_ALIASES[noPunct];
+  const dash = noPunct.replace(/\s+/g, "-");
+  if (STATE_ALIASES[dash]) return STATE_ALIASES[dash];
+
+  return raw
+    .split(/\s+/)
+    .map((part) => (part ? part.slice(0, 1).toUpperCase() + part.slice(1).toLowerCase() : ""))
+    .join(" ");
+}
+
+function stateOf(row: Row) {
+  const direct = field(row, "state", "market_state", "property_state", "deal_state", "operating_state", "location_state");
+  if (direct) return normalizeStateName(direct);
+
+  const market = marketOf(row);
+  const parts = market.split(",").map((part) => clean(part)).filter(Boolean);
+  const last = parts[parts.length - 1];
+
+  return normalizeStateName(last || "Unlisted");
+}
+
 function ownerOf(row: Row) {
   return cleanEmail(field(row, "owner_email", "member_email", "user_email", "submitted_by_email", "created_by_email", "submitted_by", "email"));
 }
@@ -689,11 +735,52 @@ function WorkstationCard({
   );
 }
 
+function StateBucketCard({
+  bucket,
+  active,
+  onClick,
+}: {
+  bucket: { state: string; total: number; deals: number; pains: number; signals: number; photos: number };
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        textAlign: "left",
+        border: active ? "1px solid rgba(232,196,107,.70)" : "1px solid rgba(255,255,255,.12)",
+        borderRadius: 24,
+        padding: 18,
+        background: active
+          ? "linear-gradient(145deg,rgba(232,196,107,.22),rgba(157,243,191,.08))"
+          : "linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.025))",
+        color: "white",
+        cursor: "pointer",
+        boxShadow: active ? "0 0 38px rgba(232,196,107,.18)" : "0 18px 54px rgba(0,0,0,.22)",
+      }}
+    >
+      <div style={{ ...label, color: active ? "#f8e7b0" : "#9df3bf" }}>Market Bucket</div>
+      <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 1000, marginTop: 10 }}>{bucket.state}</div>
+      <div style={{ fontSize: 52, lineHeight: 1, fontWeight: 1000, marginTop: 16, color: "#f8e7b0" }}>{bucket.total}</div>
+      <div style={{ ...muted, fontSize: 13, marginTop: 5 }}>total workstations</div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 14 }}>
+        <Mini labelText="Deals" value={bucket.deals} />
+        <Mini labelText="Pain" value={bucket.pains} />
+        <Mini labelText="Signals" value={bucket.signals} />
+      </div>
+    </button>
+  );
+}
+
 export default function ProjectsPage() {
   const [email, setEmail] = useState("");
   const [items, setItems] = useState<Row[]>([]);
   const [status, setStatus] = useState("Loading workstations...");
   const [folder, setFolder] = useState<FolderMode>("active");
+  const [selectedState, setSelectedState] = useState("All");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
@@ -871,9 +958,56 @@ export default function ProjectsPage() {
       const saved = savedIds.has(key);
       const archived = archivedIds.has(key);
 
+      if (selectedState !== "All" && stateOf(item) !== selectedState) return false;
+
       if (folder === "saved") return saved && !archived;
       if (folder === "archived") return archived;
       return !archived;
+    });
+  }, [items, savedIds, archivedIds, deletedIds, folder, selectedState]);
+
+  const stateBuckets = useMemo(() => {
+    const map = new Map<string, { state: string; total: number; deals: number; pains: number; signals: number; photos: number }>();
+
+    const liveItems = items.filter((item) => {
+      const key = canonicalKey(item);
+      if (!key || deletedIds.has(key)) return false;
+
+      const saved = savedIds.has(key);
+      const archived = archivedIds.has(key);
+
+      if (folder === "saved") return saved && !archived;
+      if (folder === "archived") return archived;
+      return !archived;
+    });
+
+    for (const item of liveItems) {
+      const state = stateOf(item) || "Unlisted";
+      const current = map.get(state) || {
+        state,
+        total: 0,
+        deals: 0,
+        pains: 0,
+        signals: 0,
+        photos: 0,
+      };
+
+      current.total += 1;
+
+      const source = sourceOf(item);
+      if (source === "deal") current.deals += 1;
+      else if (source === "pain") current.pains += 1;
+      else current.signals += 1;
+
+      if (photosOf(item).length) current.photos += 1;
+
+      map.set(state, current);
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.state === "Unlisted") return 1;
+      if (b.state === "Unlisted") return -1;
+      return b.total - a.total || a.state.localeCompare(b.state);
     });
   }, [items, savedIds, archivedIds, deletedIds, folder]);
 
@@ -911,7 +1045,7 @@ export default function ProjectsPage() {
         .vf-workstation-card * { box-sizing: border-box; }
         a:hover, button:hover { transform: translateY(-1px); transition: all .18s ease; filter: brightness(1.06); }
         @media (max-width: 900px) {
-          .vf-grid, .vf-actions, .vf-card-top, .vf-card-bottom, .vf-workstation-layout { grid-template-columns: 1fr !important; }
+          .vf-grid, .vf-actions, .vf-card-top, .vf-card-bottom, .vf-workstation-layout, .vf-state-grid { grid-template-columns: 1fr !important; }
           .vf-actions { display: grid !important; gap: 10px !important; }
           .vf-actions > * { width: 100%; box-sizing: border-box; justify-content: center; }
           .vf-metrics { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
@@ -948,8 +1082,39 @@ export default function ProjectsPage() {
           </div>
 
           <p style={{ ...muted, marginTop: 14, fontSize: 14 }}>
-            Signed in: {email || "unknown"} · Archived: {counts.archived}
+            Signed in: {email || "unknown"} · Archived: {counts.archived} · Market: {selectedState}
           </p>
+        </section>
+
+        <section style={card}>
+          <div style={label}>Market Buckets</div>
+          <h2 style={{ fontSize: "clamp(34px,6vw,62px)", lineHeight: 0.95, letterSpacing: "-.05em", margin: "10px 0 10px" }}>
+            Pick a state. Open the pressure.
+          </h2>
+          <p style={{ ...muted, fontSize: 18 }}>
+            Deals and pain records are grouped by operating state so members can move through Georgia, Florida, Tennessee, Texas, and other markets without one giant pile.
+          </p>
+
+          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14, marginBottom: 16 }}>
+            <button type="button" onClick={() => setSelectedState("All")} style={selectedState === "All" ? button : ghost}>
+              All Markets ({stateBuckets.reduce((sum, bucket) => sum + bucket.total, 0)})
+            </button>
+          </div>
+
+          {stateBuckets.length ? (
+            <div className="vf-state-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
+              {stateBuckets.map((bucket) => (
+                <StateBucketCard
+                  key={bucket.state}
+                  bucket={bucket}
+                  active={selectedState === bucket.state}
+                  onClick={() => setSelectedState(bucket.state)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div style={{ ...glass, color: "#f8e7b0" }}>No market buckets yet.</div>
+          )}
         </section>
 
         {status ? (
