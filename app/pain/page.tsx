@@ -191,6 +191,40 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
+const commandBar: React.CSSProperties = {
+  position: "sticky",
+  top: 10,
+  zIndex: 40,
+  border: "1px solid rgba(232,196,107,.28)",
+  borderRadius: 24,
+  padding: 12,
+  background: "linear-gradient(145deg,rgba(2,6,23,.92),rgba(7,19,38,.86))",
+  boxShadow: "0 18px 70px rgba(0,0,0,.42)",
+  backdropFilter: "blur(14px)",
+  marginBottom: 16,
+};
+
+const smallButton: React.CSSProperties = {
+  ...button,
+  minHeight: 40,
+  padding: "9px 12px",
+  fontSize: 13,
+};
+
+const smallGhost: React.CSSProperties = {
+  ...ghost,
+  minHeight: 40,
+  padding: "9px 12px",
+  fontSize: 13,
+};
+
+const closeButton: React.CSSProperties = {
+  ...smallGhost,
+  color: "#fecaca",
+  border: "1px solid rgba(248,113,113,.34)",
+  background: "rgba(248,113,113,.10)",
+};
+
 const chip: React.CSSProperties = {
   display: "inline-flex",
   border: "1px solid rgba(157,243,191,.25)",
@@ -398,6 +432,43 @@ function missingEinsteinPrompts(form: Record<string, any>, photoCount: number) {
   return missing.slice(0, 5);
 }
 
+
+function CommandExitBar() {
+  function goBack() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    if (typeof window !== "undefined") window.location.href = "/dashboard";
+  }
+
+  return (
+    <section style={commandBar}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ color: "#e8c46b", letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 950, fontSize: 11 }}>
+            VaultForge Pain Room Exit
+          </div>
+          <div style={{ color: "rgba(255,255,255,.70)", fontSize: 13, marginTop: 4 }}>
+            Pain Button is open. Save the signal or exit back to the command center.
+          </div>
+        </div>
+
+        <div className="vf-command-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" onClick={goBack} style={closeButton}>Back</button>
+          <Link href="/dashboard" style={smallButton}>Dashboard</Link>
+          <Link href="/pain-feed" style={smallGhost}>Pain Feed</Link>
+          <Link href="/projects" style={smallGhost}>Workstations</Link>
+          <Link href="/submit" style={smallGhost}>Create Deal</Link>
+          <Link href="/messages" style={smallGhost}>Messages</Link>
+          <Link href="/smart-ai" style={smallGhost}>Smart AI</Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function PainPage() {
   const [email, setEmail] = useState("");
   const [form, setForm] = useState<Record<string, any>>(defaultForm);
@@ -581,15 +652,24 @@ export default function PainPage() {
             grid-template-columns: 1fr !important;
             gap: 10px !important;
           }
-          .vf-actions > * {
+          .vf-actions > *,
+          .vf-command-actions > * {
             width: 100%;
             box-sizing: border-box;
             justify-content: center;
+          }
+
+          .vf-command-actions {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
           }
         }
       `}</style>
 
       <div style={wrap}>
+        <CommandExitBar />
+
         <VaultForgeMemberNav
           title="Pain Button"
           subtitle="Submit a real estate problem, deal, capital gap, or execution signal."
