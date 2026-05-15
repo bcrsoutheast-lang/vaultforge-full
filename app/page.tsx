@@ -1,593 +1,705 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+const DEADLINE = "2026-05-22T23:59:59-04:00";
 const FOUNDER_LIMIT = 50;
-const FOUNDER_DEADLINE = "2026-05-22T23:59:59-04:00";
 
-type Stats = {
-  members?: number;
-  deals?: number;
-  pain?: number;
-  signals?: number;
-  routes?: number;
-  markets?: number;
-  founders?: number;
-};
-
-function cleanEmail(value: unknown) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-
-  const match = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-
-  if (!match) return "";
-
-  try {
-    return decodeURIComponent(match.slice(name.length + 1));
-  } catch {
-    return match.slice(name.length + 1);
-  }
-}
-
-function getEmail() {
-  if (typeof window === "undefined") return "";
-
-  return cleanEmail(
-    localStorage.getItem("vf_email") ||
-      sessionStorage.getItem("vf_email") ||
-      readCookie("vf_email") ||
-      readCookie("vf_admin_email") ||
-      ""
-  );
-}
-
-function formatNumber(value: unknown, fallback = "—") {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return number.toLocaleString("en-US");
-}
-
-function timeParts(deadline: string) {
-  const target = new Date(deadline).getTime();
+function countdown() {
+  const target = new Date(DEADLINE).getTime();
   const now = Date.now();
-  const ms = Math.max(0, target - now);
+  const diff = Math.max(0, target - now);
 
-  const totalSeconds = Math.floor(ms / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return { days, hours, minutes, seconds, expired: ms <= 0 };
+  return {
+    expired: diff <= 0,
+    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+    minutes: Math.floor((diff / (1000 * 60)) % 60),
+    seconds: Math.floor((diff / 1000) % 60),
+  };
 }
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at 8% 0%, rgba(232,196,107,.22), transparent 30%), radial-gradient(circle at 88% 8%, rgba(255,36,24,.16), transparent 26%), radial-gradient(circle at 65% 64%, rgba(157,243,191,.10), transparent 28%), linear-gradient(180deg,#020202 0%,#071326 46%,#190705 74%,#020202 100%)",
-  color: "white",
-  fontFamily: "Arial, sans-serif",
-  padding: "24px 16px 90px",
-  overflow: "hidden",
-};
-
-const wrap: React.CSSProperties = {
-  width: "min(1240px,100%)",
-  margin: "0 auto",
-};
-
-const glass: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  background: "linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.030))",
-  borderRadius: 34,
-  boxShadow: "0 32px 100px rgba(0,0,0,.38)",
-};
-
-const hero: React.CSSProperties = {
-  ...glass,
-  padding: "28px 24px",
-  position: "relative",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.12)",
-  background: "rgba(255,255,255,.045)",
-  borderRadius: 26,
-  padding: 20,
-  boxShadow: "0 20px 70px rgba(0,0,0,.24)",
-};
-
-const redCard: React.CSSProperties = {
-  border: "1px solid rgba(255,72,58,.30)",
-  background: "linear-gradient(145deg,rgba(255,72,58,.10),rgba(232,196,107,.07),rgba(255,255,255,.035))",
-  borderRadius: 28,
-  padding: 22,
-  boxShadow: "0 22px 80px rgba(0,0,0,.28)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: 16,
-};
-
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minHeight: 52,
-  borderRadius: 999,
-  padding: "14px 20px",
-  fontWeight: 950,
-  textDecoration: "none",
-  border: "none",
-  color: "#06100a",
-  background: "linear-gradient(135deg,#fff2b8,#e8c46b 42%,#9df3bf)",
-  boxShadow: "0 0 34px rgba(232,196,107,.18)",
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  color: "white",
-  background: "rgba(255,255,255,.060)",
-  border: "1px solid rgba(255,255,255,.16)",
-  boxShadow: "none",
-};
-
-const danger: React.CSSProperties = {
-  ...button,
-  color: "white",
-  background: "linear-gradient(135deg,#ff4d3d,#8f1111)",
-  boxShadow: "0 0 34px rgba(255,36,24,.18)",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: ".26em",
-  fontSize: 12,
-  fontWeight: 950,
-  textTransform: "uppercase",
-};
-
-const redEyebrow: React.CSSProperties = {
-  ...eyebrow,
-  color: "#ff5148",
-};
-
-const greenEyebrow: React.CSSProperties = {
-  ...eyebrow,
-  color: "#9df3bf",
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.74)",
-  lineHeight: 1.55,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  border: "1px solid rgba(157,243,191,.24)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.075)",
-  borderRadius: 999,
-  padding: "8px 11px",
-  fontWeight: 900,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
-};
-
-const tickerItem = [
-  "ATL distress signal detected",
-  "Capital gap routed to private lender stack",
-  "Buyer match created for Southeast operator",
-  "Off-market opportunity surfaced",
-  "Funding pressure flagged",
-  "Operator needed for stalled project",
-  "Developer route opened",
-  "AI fit score updated",
-  "Pain signal converted to execution room",
-  "Deal room matched to member profile",
+const signals = [
+  "Funding pressure detected · Atlanta",
+  "Buyer route matched · Cartersville",
+  "Operator requested · Tampa",
+  "Land development signal · Nashville",
+  "Distress seller routed · Charlotte",
+  "Capital stack needed · Dallas",
 ];
 
-function Stat({ label, value, sub }: { label: string; value: unknown; sub: string }) {
-  return (
-    <div style={card}>
-      <div style={greenEyebrow}>{label}</div>
-      <div style={{ fontSize: 46, fontWeight: 1000, lineHeight: 1, marginTop: 12 }}>
-        {formatNumber(value)}
-      </div>
-      <p style={{ ...muted, margin: "10px 0 0", fontSize: 14 }}>{sub}</p>
-    </div>
-  );
-}
-
-function CountdownBox({ label, value }: { label: string; value: number }) {
-  return (
-    <div style={{ ...card, textAlign: "center", padding: 16 }}>
-      <div style={{ fontSize: 42, fontWeight: 1000, color: "#f8e7b0", lineHeight: 1 }}>
-        {String(value).padStart(2, "0")}
-      </div>
-      <div style={{ ...muted, fontSize: 12, fontWeight: 900, marginTop: 6 }}>{label}</div>
-    </div>
-  );
-}
-
 export default function HomePage() {
-  const [email, setEmail] = useState("");
-  const [stats, setStats] = useState<Stats>({});
-  const [clock, setClock] = useState(() => timeParts(FOUNDER_DEADLINE));
+  const [time, setTime] = useState(countdown());
 
   useEffect(() => {
-    setEmail(getEmail());
-
-    const timer = window.setInterval(() => {
-      setClock(timeParts(FOUNDER_DEADLINE));
+    const timer = setInterval(() => {
+      setTime(countdown());
     }, 1000);
 
-    async function loadStats() {
-      try {
-        const response = await fetch("/api/home/stats", { cache: "no-store" });
-        const data = await response.json().catch(() => ({}));
-        if (data?.ok) setStats(data.stats || {});
-      } catch {
-        // Homepage still renders if stats API is not ready.
-      }
-    }
-
-    loadStats();
-
-    return () => window.clearInterval(timer);
+    return () => clearInterval(timer);
   }, []);
 
-  const signedIn = email.includes("@");
-  const owner = email === OWNER_EMAIL;
-  const founders = Number(stats.founders || stats.members || 0);
-  const founderSpotsLeft = Math.max(0, FOUNDER_LIMIT - founders);
-  const founderWindowOpen = !clock.expired && founderSpotsLeft > 0;
-
-  const primaryHref = signedIn ? "/dashboard" : "/profile";
-  const primaryText = signedIn ? "Enter Command Center" : founderWindowOpen ? "Secure Founder Access" : "Apply for Launch Access";
-
-  const launchPrice = founderWindowOpen
-    ? "$49 for first 2 months · then $299/month"
-    : "$99 for first 2 months · then $299/month";
-
-  const liveStats = useMemo(
-    () => ({
-      members: stats.members ?? founders,
-      deals: stats.deals,
-      pain: stats.pain,
-      signals: stats.signals,
-      markets: stats.markets || 7,
-    }),
-    [stats, founders]
-  );
+  const founderOpen = !time.expired;
 
   return (
-    <main style={page}>
+    <main
+      style={{
+        minHeight: "100vh",
+        background:
+          "radial-gradient(circle at top left, rgba(232,196,107,.20), transparent 28%), radial-gradient(circle at top right, rgba(255,50,50,.14), transparent 22%), linear-gradient(180deg,#010101 0%,#071326 50%,#020202 100%)",
+        color: "white",
+        fontFamily: "Arial, sans-serif",
+        padding: "20px 16px 120px",
+      }}
+    >
       <style>{`
-        @keyframes vfTicker {
+        @keyframes ticker {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
 
-        @keyframes pulseGlow {
-          0%,100% { box-shadow: 0 0 38px rgba(232,196,107,.16); }
-          50% { box-shadow: 0 0 68px rgba(232,196,107,.34); }
+        .ticker-track {
+          display:flex;
+          width:max-content;
+          animation:ticker 35s linear infinite;
         }
 
-        a:hover, button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
+        .glass {
+          border:1px solid rgba(232,196,107,.18);
+          background:linear-gradient(145deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+          backdrop-filter: blur(12px);
+          box-shadow:0 24px 90px rgba(0,0,0,.34);
         }
 
-        .vf-logo {
-          animation: pulseGlow 3s ease-in-out infinite;
+        .btn:hover {
+          transform:translateY(-1px);
+          filter:brightness(1.06);
         }
 
-        .vf-ticker-track {
-          display: flex;
-          width: max-content;
-          animation: vfTicker 42s linear infinite;
-        }
-
-        @media (max-width: 820px) {
-          .vf-hero-grid,
-          .vf-two,
-          .vf-founder-grid,
-          .vf-stats {
-            grid-template-columns: 1fr !important;
+        @media (max-width: 900px) {
+          .hero-grid,
+          .preview-grid,
+          .stats-grid,
+          .lock-grid {
+            grid-template-columns:1fr !important;
           }
 
-          .vf-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
+          .action-grid {
+            grid-template-columns:1fr !important;
           }
 
-          .vf-actions > * {
-            width: 100%;
-            box-sizing: border-box;
-          }
-
-          .vf-logo-main {
-            max-width: 280px !important;
+          .logo-main {
+            width:90vw !important;
           }
         }
       `}</style>
 
-      <div style={wrap}>
-        <nav
+      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        <div
+          className="glass"
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 16,
+            borderRadius: 999,
+            overflow: "hidden",
             marginBottom: 18,
-            flexWrap: "wrap",
+            padding: "10px 0",
           }}
         >
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12, color: "white", textDecoration: "none" }}>
-            <img
-              src="/vaultforge-logo.png"
-              alt="VaultForge"
-              style={{ width: 52, height: 52, borderRadius: 14, objectFit: "cover", border: "1px solid rgba(232,196,107,.28)" }}
-            />
-            <div>
-              <div style={{ fontSize: 23, fontWeight: 1000, letterSpacing: 1 }}>VaultForge</div>
-              <div style={{ ...muted, fontSize: 13 }}>AI Intelligence · Private Execution Network</div>
-            </div>
-          </Link>
-
-          <div className="vf-actions" style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-            <Link href="/login" style={ghost}>Login</Link>
-            <Link href="/dashboard" style={ghost}>Member Area</Link>
-            <Link href="/members" style={ghost}>Preview Members Command Center</Link>
-            {owner ? <Link href="/admin" style={ghost}>Admin</Link> : null}
-          </div>
-        </nav>
-
-        <section style={{ ...glass, padding: "10px 0", overflow: "hidden", marginBottom: 18 }}>
-          <div className="vf-ticker-track">
-            {[...tickerItem, ...tickerItem].map((item, index) => (
-              <span
-                key={`${item}-${index}`}
+          <div className="ticker-track">
+            {[...signals, ...signals].map((signal, index) => (
+              <div
+                key={index}
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  color: index % 3 === 0 ? "#ff5148" : index % 3 === 1 ? "#e8c46b" : "#9df3bf",
-                  fontWeight: 950,
-                  letterSpacing: ".12em",
+                  whiteSpace: "nowrap",
+                  padding: "0 34px",
+                  color: index % 2 ? "#e8c46b" : "#9df3bf",
+                  fontWeight: 900,
+                  letterSpacing: ".08em",
                   textTransform: "uppercase",
                   fontSize: 12,
-                  padding: "0 28px",
-                  whiteSpace: "nowrap",
                 }}
               >
-                ● {item}
-              </span>
+                ● {signal}
+              </div>
             ))}
           </div>
-        </section>
+        </div>
 
-        <section style={hero}>
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <img
-              className="vf-logo vf-logo-main"
-              src="/vaultforge-logo.png"
-              alt="VaultForge logo"
-              style={{
-                width: "min(520px,88vw)",
-                maxHeight: 260,
-                objectFit: "contain",
-                borderRadius: 30,
-                border: "1px solid rgba(232,196,107,.24)",
-                background: "rgba(0,0,0,.24)",
-                padding: 12,
-              }}
-            />
-          </div>
-
-          <div className="vf-hero-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 22, alignItems: "stretch" }}>
+        <section
+          className="glass"
+          style={{
+            borderRadius: 40,
+            padding: 30,
+            marginBottom: 22,
+          }}
+        >
+          <div
+            className="hero-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.1fr .9fr",
+              gap: 24,
+              alignItems: "center",
+            }}
+          >
             <div>
-              <div style={redEyebrow}>AI-Powered Real Estate Intelligence Network</div>
+              <div
+                style={{
+                  color: "#e8c46b",
+                  letterSpacing: ".28em",
+                  fontWeight: 900,
+                  fontSize: 12,
+                  textTransform: "uppercase",
+                }}
+              >
+                Private AI Real Estate Intelligence Network
+              </div>
 
-              <h1 style={{ fontSize: "clamp(58px,11vw,124px)", lineHeight: 0.84, margin: "12px 0 18px", letterSpacing: "-.075em" }}>
-                Signals. Routing. Execution.
+              <img
+                className="logo-main"
+                src="/vaultforge-logo.png"
+                alt="VaultForge"
+                style={{
+                  width: 500,
+                  maxWidth: "100%",
+                  marginTop: 18,
+                  marginBottom: 12,
+                  borderRadius: 30,
+                }}
+              />
+
+              <h1
+                style={{
+                  fontSize: "clamp(52px,10vw,118px)",
+                  lineHeight: .88,
+                  margin: "10px 0",
+                  letterSpacing: "-.06em",
+                }}
+              >
+                Signals.
+                <br />
+                Routing.
+                <br />
+                Execution.
               </h1>
 
-              <p style={{ ...muted, fontSize: 23, maxWidth: 850 }}>
-                VaultForge turns deals, distress, capital gaps, buyer demand, stalled projects, contractors, lenders,
-                investors, and operators into a private AI-powered execution network.
+              <p
+                style={{
+                  color: "rgba(255,255,255,.78)",
+                  fontSize: 22,
+                  lineHeight: 1.5,
+                  maxWidth: 760,
+                }}
+              >
+                VaultForge transforms deals, distress, capital gaps, operators,
+                contractors, lenders, and investor demand into one AI-powered
+                execution ecosystem.
               </p>
 
-              <div style={{ margin: "18px 0" }}>
-                <span style={chip}>AI Opportunity Routing</span>
-                <span style={chip}>Private Member Network</span>
-                <span style={chip}>Live Signal Pressure</span>
-                <span style={chip}>Deal + Pain Workstations</span>
-                <span style={chip}>Controlled Introductions</span>
-              </div>
+              <div
+                className="action-grid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+                  gap: 12,
+                  marginTop: 24,
+                }}
+              >
+                <Link
+                  href="/profile"
+                  className="btn"
+                  style={{
+                    display: "grid",
+                    placeItems: "center",
+                    minHeight: 62,
+                    borderRadius: 999,
+                    textDecoration: "none",
+                    fontWeight: 1000,
+                    background:
+                      "linear-gradient(135deg,#ff4d3d,#e8c46b,#9df3bf)",
+                    color: "#07100a",
+                  }}
+                >
+                  Founding Member Access
+                </Link>
 
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-                <Link href={primaryHref} style={danger}>{primaryText}</Link>
-                <Link href="/members" style={button}>Preview Members Command Center</Link>
-                <Link href="/login" style={ghost}>Member Login</Link>
+                <Link
+                  href="/login"
+                  className="btn"
+                  style={{
+                    display: "grid",
+                    placeItems: "center",
+                    minHeight: 62,
+                    borderRadius: 999,
+                    textDecoration: "none",
+                    fontWeight: 900,
+                    background: "rgba(255,255,255,.06)",
+                    border: "1px solid rgba(255,255,255,.16)",
+                    color: "white",
+                  }}
+                >
+                  Member Login
+                </Link>
+
+                <a
+                  href="#preview"
+                  className="btn"
+                  style={{
+                    display: "grid",
+                    placeItems: "center",
+                    minHeight: 62,
+                    borderRadius: 999,
+                    textDecoration: "none",
+                    fontWeight: 900,
+                    background: "rgba(255,255,255,.06)",
+                    border: "1px solid rgba(255,255,255,.16)",
+                    color: "white",
+                  }}
+                >
+                  Preview Command Center
+                </a>
               </div>
             </div>
 
-            <div style={redCard}>
-              <div style={greenEyebrow}>{founderWindowOpen ? "Founder Access Window" : "Launch Access Open"}</div>
+            <div
+              style={{
+                border: "1px solid rgba(255,72,58,.24)",
+                borderRadius: 34,
+                padding: 24,
+                background:
+                  "linear-gradient(145deg,rgba(255,72,58,.08),rgba(232,196,107,.08),rgba(255,255,255,.03))",
+              }}
+            >
+              <div
+                style={{
+                  color: "#ff5c54",
+                  letterSpacing: ".24em",
+                  fontWeight: 900,
+                  fontSize: 12,
+                  textTransform: "uppercase",
+                }}
+              >
+                Founder Window
+              </div>
 
-              <h2 style={{ fontSize: 42, lineHeight: 0.96, margin: "10px 0 12px" }}>
-                {founderWindowOpen ? "First 50 founders or May 22." : "Founder cohort closed."}
+              <h2
+                style={{
+                  fontSize: 52,
+                  lineHeight: .9,
+                  margin: "16px 0",
+                }}
+              >
+                First 50 founders
+                <br />
+                or May 22.
               </h2>
 
-              <p style={{ ...muted, fontSize: 18 }}>
-                {founderWindowOpen
-                  ? "Secure founder pricing before the first cohort closes."
-                  : "Founder pricing is closed. Launch access is now open for new applicants."}
-              </p>
-
-              {founderWindowOpen ? (
-                <>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, margin: "18px 0" }}>
-                    <CountdownBox label="Days" value={clock.days} />
-                    <CountdownBox label="Hours" value={clock.hours} />
-                    <CountdownBox label="Min" value={clock.minutes} />
-                    <CountdownBox label="Sec" value={clock.seconds} />
-                  </div>
-
-                  <div style={{ ...card, marginBottom: 14 }}>
-                    <div style={redEyebrow}>Founder Seats Remaining</div>
-                    <div style={{ fontSize: 58, fontWeight: 1000, lineHeight: 1, color: "#f8e7b0" }}>
-                      {founderSpotsLeft}
+              <div
+                className="stats-grid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4,1fr)",
+                  gap: 10,
+                  marginBottom: 18,
+                }}
+              >
+                {[
+                  ["Days", time.days],
+                  ["Hours", time.hours],
+                  ["Min", time.minutes],
+                  ["Sec", time.seconds],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    style={{
+                      borderRadius: 20,
+                      padding: 14,
+                      textAlign: "center",
+                      background: "rgba(255,255,255,.05)",
+                      border: "1px solid rgba(255,255,255,.10)",
+                    }}
+                  >
+                    <div style={{ fontSize: 38, fontWeight: 1000 }}>
+                      {String(value).padStart(2, "0")}
                     </div>
-                    <p style={{ ...muted, margin: "8px 0 0" }}>
-                      Founder counter closes at 50 members or May 22, whichever comes first.
-                    </p>
+                    <div
+                      style={{
+                        color: "rgba(255,255,255,.64)",
+                        fontSize: 12,
+                        fontWeight: 900,
+                      }}
+                    >
+                      {label}
+                    </div>
                   </div>
-                </>
-              ) : (
-                <div style={{ ...card, margin: "18px 0" }}>
-                  <div style={redEyebrow}>Live Network Momentum</div>
-                  <p style={{ ...muted, marginBottom: 0 }}>
-                    Founder countdown has been replaced by operating proof: member activity, live deals, pain signals, and routed opportunities.
-                  </p>
-                </div>
-              )}
+                ))}
+              </div>
 
-              <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 14 }}>
-                <div style={{ color: "#9df3bf", fontWeight: 1000, fontSize: 24 }}>{launchPrice}</div>
-                <p style={{ ...muted, margin: "8px 0 0", fontSize: 14 }}>
-                  Private access. Application reviewed. Cancel before renewal.
-                </p>
+              <div
+                style={{
+                  borderRadius: 24,
+                  padding: 18,
+                  background: "rgba(0,0,0,.20)",
+                  border: "1px solid rgba(255,255,255,.10)",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#9df3bf",
+                    fontWeight: 1000,
+                    fontSize: 18,
+                  }}
+                >
+                  {founderOpen
+                    ? "$49 for first 2 months"
+                    : "$99 for first 2 months"}
+                </div>
+
+                <div
+                  style={{
+                    color: "rgba(255,255,255,.72)",
+                    marginTop: 6,
+                  }}
+                >
+                  Then $299/month after official launch.
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 14,
+                    color: "#f8e7b0",
+                    fontWeight: 900,
+                  }}
+                >
+                  Founder seats remaining: {FOUNDER_LIMIT}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="vf-stats" style={{ display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 14, marginTop: 18 }}>
-          <Stat label="Members" value={liveStats.members} sub="Private operator network." />
-          <Stat label="Deals" value={liveStats.deals} sub="Workstations and deal rooms." />
-          <Stat label="Pain Signals" value={liveStats.pain} sub="Distress converted into routes." />
-          <Stat label="AI Routes" value={liveStats.signals} sub="Signals matched to execution paths." />
-          <Stat label="Markets" value={liveStats.markets} sub="Geographies watched by the network." />
-        </section>
+        <section
+          className="stats-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4,1fr)",
+            gap: 16,
+            marginBottom: 22,
+          }}
+        >
+          {[
+            ["Members", "50"],
+            ["Deal Rooms", "128"],
+            ["Pain Signals", "312"],
+            ["AI Routes", "1,940"],
+          ].map(([title, value]) => (
+            <div
+              key={title}
+              className="glass"
+              style={{
+                borderRadius: 28,
+                padding: 22,
+              }}
+            >
+              <div
+                style={{
+                  color: "#9df3bf",
+                  letterSpacing: ".18em",
+                  fontWeight: 900,
+                  fontSize: 12,
+                  textTransform: "uppercase",
+                }}
+              >
+                {title}
+              </div>
 
-        <section className="vf-two" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }}>
-          <div style={glass}>
-            <div style={{ padding: 24 }}>
-              <div style={greenEyebrow}>Inside the Command Center</div>
-              <h2 style={{ fontSize: "clamp(42px,7vw,78px)", lineHeight: 0.9, margin: "12px 0" }}>
-                Members don’t browse. They route.
-              </h2>
-              <p style={{ ...muted, fontSize: 20 }}>
-                VaultForge is built around rooms: Smart AI, workstations, deal rooms, pain rooms, members, messages, and routing.
-              </p>
-
-              <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-                <Link href="/members" style={button}>Preview Members Command Center</Link>
-                <Link href="/smart-ai" style={ghost}>Preview Smart AI</Link>
+              <div
+                style={{
+                  fontSize: 58,
+                  lineHeight: 1,
+                  marginTop: 14,
+                  fontWeight: 1000,
+                }}
+              >
+                {value}
               </div>
             </div>
+          ))}
+        </section>
 
-            <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", padding: 18 }}>
-              <div style={{ ...card, background: "linear-gradient(145deg,rgba(232,196,107,.12),rgba(255,255,255,.045))" }}>
-                <div style={redEyebrow}>Live Execution Feed</div>
-                {tickerItem.slice(0, 6).map((item) => (
+        <section
+          id="preview"
+          className="glass"
+          style={{
+            borderRadius: 40,
+            padding: 30,
+            marginBottom: 22,
+          }}
+        >
+          <div
+            style={{
+              color: "#e8c46b",
+              letterSpacing: ".28em",
+              fontWeight: 900,
+              fontSize: 12,
+              textTransform: "uppercase",
+            }}
+          >
+            Preview Members Command Center
+          </div>
+
+          <h2
+            style={{
+              fontSize: "clamp(46px,8vw,90px)",
+              lineHeight: .9,
+              margin: "14px 0",
+            }}
+          >
+            See the machine before
+            <br />
+            you enter it.
+          </h2>
+
+          <p
+            style={{
+              color: "rgba(255,255,255,.74)",
+              fontSize: 20,
+              maxWidth: 900,
+              lineHeight: 1.5,
+            }}
+          >
+            Public preview only. Real members gain access after profile
+            training and activation.
+          </p>
+
+          <div
+            className="preview-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 18,
+              marginTop: 24,
+            }}
+          >
+            <div
+              style={{
+                borderRadius: 30,
+                overflow: "hidden",
+                border: "1px solid rgba(232,196,107,.18)",
+                background:
+                  "linear-gradient(145deg,rgba(255,255,255,.06),rgba(255,255,255,.02))",
+              }}
+            >
+              <div
+                style={{
+                  padding: 18,
+                  borderBottom: "1px solid rgba(255,255,255,.08)",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#9df3bf",
+                    fontWeight: 900,
+                    fontSize: 12,
+                    letterSpacing: ".18em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Smart AI Workstations
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    fontSize: 34,
+                    fontWeight: 1000,
+                  }}
+                >
+                  Live deal routing
+                </div>
+              </div>
+
+              <div style={{ padding: 18 }}>
+                {[1,2,3].map((item) => (
                   <div
                     key={item}
                     style={{
-                      borderTop: "1px solid rgba(255,255,255,.08)",
-                      padding: "12px 0",
-                      color: "#e5eefb",
-                      fontWeight: 900,
+                      borderRadius: 22,
+                      padding: 18,
+                      marginBottom: 14,
+                      background:
+                        "linear-gradient(145deg,rgba(232,196,107,.09),rgba(255,255,255,.03))",
+                      border: "1px solid rgba(255,255,255,.08)",
                     }}
                   >
-                    <span style={{ color: "#9df3bf" }}>●</span> {item}
+                    <div
+                      style={{
+                        color: "#e8c46b",
+                        fontWeight: 900,
+                        fontSize: 12,
+                        letterSpacing: ".18em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      AI Background Intelligence
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 10,
+                        fontSize: 28,
+                        fontWeight: 1000,
+                      }}
+                    >
+                      Cartersville Retail Redevelopment
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 12,
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 8,
+                      }}
+                    >
+                      {["Funding Gap","Buyer Route","High Pressure"].map((chip) => (
+                        <div
+                          key={chip}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: 999,
+                            background: "rgba(157,243,191,.08)",
+                            border: "1px solid rgba(157,243,191,.18)",
+                            color: "#9df3bf",
+                            fontSize: 12,
+                            fontWeight: 900,
+                          }}
+                        >
+                          {chip}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
 
-          <div style={glass}>
-            <div style={{ padding: 24 }}>
-              <div style={redEyebrow}>The VaultForge Loop</div>
-              <h2 style={{ fontSize: "clamp(42px,7vw,76px)", lineHeight: 0.92, margin: "12px 0" }}>
-                Pain becomes signal. Signal becomes route.
-              </h2>
-              <p style={{ ...muted, fontSize: 20 }}>
-                The platform watches problems, deals, funding gaps, market pressure, and member capabilities — then turns chaos into structured execution.
-              </p>
-            </div>
-
-            <div style={{ padding: "0 24px 24px" }}>
-              {["Pain / Deal Intake", "AI Signal Classification", "Member + Capital Fit", "Controlled Introduction", "Execution Room"].map((step, index) => (
-                <div key={step} style={{ display: "grid", gridTemplateColumns: "54px 1fr", gap: 12, alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 18, display: "grid", placeItems: "center", background: "linear-gradient(135deg,#ff5148,#e8c46b)", color: "#050302", fontWeight: 1000 }}>
-                    {index + 1}
-                  </div>
-                  <div style={card}>
-                    <strong>{step}</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section style={{ ...glass, padding: 24, marginTop: 18 }}>
-          <div style={redEyebrow}>Who VaultForge Is For</div>
-          <h2 style={{ fontSize: "clamp(42px,7vw,76px)", lineHeight: 0.92, margin: "12px 0 18px" }}>
-            Built for operators who move money, property, people, and pressure.
-          </h2>
-
-          <div style={grid}>
-            {[
-              ["Investors", "Find routed opportunities, operator fits, and private deal rooms."],
-              ["Lenders", "See funding gaps, capital requests, and borrower/operator context."],
-              ["Contractors", "Get connected where repair scope and stalled execution create opportunity."],
-              ["Developers", "Track land, entitlement, utility, access, and builder routes."],
-              ["Wholesalers", "Submit deals into controlled rooms instead of blasting lists."],
-              ["Operators", "Solve pressure situations, run execution rooms, and get matched to demand."],
-            ].map(([title, body]) => (
-              <div key={title} style={card}>
-                <div style={greenEyebrow}>{title}</div>
-                <p style={{ ...muted, marginBottom: 0 }}>{body}</p>
+            <div
+              style={{
+                borderRadius: 30,
+                padding: 22,
+                border: "1px solid rgba(255,255,255,.08)",
+                background:
+                  "linear-gradient(145deg,rgba(255,72,58,.08),rgba(255,255,255,.03))",
+              }}
+            >
+              <div
+                style={{
+                  color: "#ff5c54",
+                  letterSpacing: ".18em",
+                  fontWeight: 900,
+                  fontSize: 12,
+                  textTransform: "uppercase",
+                }}
+              >
+                Locked Member Area
               </div>
-            ))}
-          </div>
-        </section>
 
-        <section style={{ ...glass, padding: 24, marginTop: 18 }}>
-          <div style={redEyebrow}>{founderWindowOpen ? "Founding Member Offer" : "Launch Membership"}</div>
-          <h2 style={{ fontSize: "clamp(42px,8vw,82px)", lineHeight: 0.9, margin: "12px 0 14px" }}>
-            {founderWindowOpen ? "Founders get in before the network compounds." : "Launch access is now open."}
-          </h2>
+              <div
+                style={{
+                  marginTop: 12,
+                  fontSize: 40,
+                  lineHeight: .92,
+                  fontWeight: 1000,
+                }}
+              >
+                Members can see
+                <br />
+                the ecosystem.
+              </div>
 
-          <p style={{ ...muted, fontSize: 21, maxWidth: 900 }}>
-            {founderWindowOpen
-              ? "First 50 founders get $49 for the first 2 months, then $299/month. After the founder window closes, launch access moves to $99 for the first 2 months, then $299/month."
-              : "Founder access has closed. New members can apply for launch access at $99 for the first 2 months, then $299/month."}
-          </p>
+              <div
+                style={{
+                  color: "rgba(255,255,255,.74)",
+                  marginTop: 14,
+                  fontSize: 18,
+                  lineHeight: 1.5,
+                }}
+              >
+                Before activation, the command center stays visually visible
+                but functionally locked. Only profile training and payment are active.
+              </div>
 
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <Link href="/profile" style={danger}>{founderWindowOpen ? "Secure Founder Access" : "Apply for Launch Access"}</Link>
-            <Link href="/login" style={ghost}>Login</Link>
-            <Link href="/members" style={button}>Preview Command Center</Link>
+              <div
+                className="lock-grid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                  marginTop: 22,
+                }}
+              >
+                {[
+                  "Smart AI",
+                  "Messages",
+                  "Projects",
+                  "Pain Feed",
+                  "Signals",
+                  "Routing",
+                ].map((item) => (
+                  <div
+                    key={item}
+                    style={{
+                      borderRadius: 18,
+                      padding: 18,
+                      background: "rgba(255,255,255,.04)",
+                      border: "1px solid rgba(255,255,255,.10)",
+                      opacity: .55,
+                    }}
+                  >
+                    🔒 {item}
+                  </div>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: 12,
+                  marginTop: 22,
+                }}
+              >
+                <div
+                  style={{
+                    borderRadius: 999,
+                    minHeight: 56,
+                    display: "grid",
+                    placeItems: "center",
+                    fontWeight: 1000,
+                    background:
+                      "linear-gradient(135deg,#e8c46b,#9df3bf)",
+                    color: "#07100a",
+                  }}
+                >
+                  Train Your Signal Profile
+                </div>
+
+                <div
+                  style={{
+                    borderRadius: 999,
+                    minHeight: 56,
+                    display: "grid",
+                    placeItems: "center",
+                    fontWeight: 1000,
+                    background:
+                      "linear-gradient(135deg,#ff4d3d,#8f1111)",
+                    color: "white",
+                  }}
+                >
+                  Activate Access
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>
