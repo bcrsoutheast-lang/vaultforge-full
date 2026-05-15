@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 
 type Deal = Record<string, any>;
 
@@ -369,11 +369,13 @@ function ContactCard({ deal, id }: { deal: Deal; id: string }) {
   );
 }
 
-function resolveId(paramsId: string, queryId: string | null) {
-  if (queryId) return queryId;
-  if (paramsId) return paramsId;
+function resolveBrowserId(paramsId: string) {
+  if (typeof window === "undefined") return paramsId || "";
 
-  if (typeof window === "undefined") return "";
+  const queryId = new URLSearchParams(window.location.search).get("id") || "";
+  if (queryId) return queryId;
+
+  if (paramsId) return paramsId;
 
   const pathParts = window.location.pathname.split("/").filter(Boolean);
   return decodeURIComponent(pathParts[pathParts.length - 1] || "");
@@ -381,9 +383,9 @@ function resolveId(paramsId: string, queryId: string | null) {
 
 export default function DealRoomPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
-  const id = resolveId(String(params?.id || ""), searchParams.get("id"));
+  const paramsId = String(params?.id || "");
 
+  const [dealId, setDealId] = useState("");
   const [deal, setDeal] = useState<Deal | null>(null);
   const [status, setStatus] = useState("");
   const [messageStatus, setMessageStatus] = useState("");
@@ -413,10 +415,9 @@ export default function DealRoomPage() {
         setDeal(null);
         setStatus(data?.error || data?.details || "Could not load deal.");
       } else {
-        setDeal(data?.deal || data?.record || data?.item || null);
-        if (!data?.deal && !data?.record && !data?.item) {
-          setStatus("Deal record not found.");
-        }
+        const found = data?.deal || data?.record || data?.item || null;
+        setDeal(found);
+        if (!found) setStatus("Deal record not found.");
       }
     } catch {
       setDeal(null);
@@ -440,7 +441,7 @@ export default function DealRoomPage() {
         method: "POST",
         headers: requestHeaders(),
         body: JSON.stringify({
-          deal_id: id,
+          deal_id: dealId,
           to_email: ownerEmail,
           subject: `Inquiry on ${deal?.title || "VaultForge deal"}`,
           body: message.trim(),
@@ -461,8 +462,10 @@ export default function DealRoomPage() {
   }
 
   useEffect(() => {
-    loadDeal(id);
-  }, [id]);
+    const resolved = resolveBrowserId(paramsId);
+    setDealId(resolved);
+    loadDeal(resolved);
+  }, [paramsId]);
 
   const photos: string[] = useMemo(() => {
     if (!deal) return [];
@@ -563,7 +566,7 @@ export default function DealRoomPage() {
 
             <AiDealSummary deal={deal} />
 
-            <ContactCard deal={deal} id={id} />
+            <ContactCard deal={deal} id={dealId} />
 
             <section style={section}>
               <div style={eyebrow}>Photo Gallery</div>
