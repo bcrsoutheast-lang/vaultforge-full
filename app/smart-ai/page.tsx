@@ -1,4 +1,3 @@
-\
 "use client";
 
 import Link from "next/link";
@@ -79,7 +78,11 @@ function readCookie(name: string) {
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${name}=`));
   if (!match) return "";
-  return decodeURIComponent(match.slice(name.length + 1));
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
 }
 
 function currentEmail() {
@@ -88,6 +91,8 @@ function currentEmail() {
     localStorage.getItem("vf_email") ||
       sessionStorage.getItem("vf_email") ||
       readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("vf_admin_email") ||
       ""
   )
     .trim()
@@ -130,7 +135,7 @@ function text(item: Insight) {
   return [
     item.title,
     item.summary,
-    item.reasoning,
+    Array.isArray(item.reasoning) ? item.reasoning.join(" ") : item.reasoning,
     item.market,
     item.priority,
     item.best_move,
@@ -194,22 +199,13 @@ function strategy(item: Insight) {
 }
 
 function bestMove(item: Insight) {
-  if (item.kind === "pain") {
-    return "Identify bottleneck, stabilize pressure, then route operators.";
-  }
-
-  if (margin(item) >= 25) {
-    return "Verify numbers and privately route qualified buyers.";
-  }
-
+  if (item.kind === "pain") return "Identify bottleneck, stabilize pressure, then route operators.";
+  if (margin(item) >= 25) return "Verify numbers and privately route qualified buyers.";
   return "Rewrite structure before broad exposure.";
 }
 
 function worstMove(item: Insight) {
-  if (item.kind === "pain") {
-    return "Treating this like a normal lead instead of a pressure event.";
-  }
-
+  if (item.kind === "pain") return "Treating this like a normal lead instead of a pressure event.";
   return "Publicly blasting weak or unverified opportunity data.";
 }
 
@@ -225,7 +221,8 @@ function loadTrash(email: string) {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(trashKey(email));
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
@@ -237,26 +234,23 @@ function saveTrash(email: string, ids: string[]) {
 }
 
 function itemKey(item: Insight) {
-  return [
-    item.kind || "",
-    item.id || "",
-    item.title || "",
-    item.market || "",
-  ].join("|");
+  return [item.kind || "", item.id || "", item.title || "", item.market || ""].join("|");
 }
 
 function ScoreBar({ label, value }: { label: string; value: number }) {
+  const safe = Math.max(0, Math.min(100, Math.round(value)));
+
   return (
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 12 }}>
         <span>{label}</span>
-        <span>{value}%</span>
+        <span>{safe}%</span>
       </div>
 
       <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 7 }}>
         <div
           style={{
-            width: `${value}%`,
+            width: `${safe}%`,
             height: "100%",
             borderRadius: 999,
             background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)",
@@ -285,131 +279,46 @@ function InsightCard({
       {item.photo && (
         <img
           src={item.photo}
-          alt={item.title}
-          style={{
-            width: "100%",
-            height: 240,
-            objectFit: "cover",
-            display: "block",
-          }}
+          alt={item.title || "VaultForge intelligence"}
+          style={{ width: "100%", height: 240, objectFit: "cover", display: "block" }}
         />
       )}
 
       <div style={{ padding: 22 }}>
-        <div
-          style={{
-            color: "#e8c46b",
-            letterSpacing: 3,
-            fontWeight: 900,
-            fontSize: 12,
-            marginBottom: 10,
-            textTransform: "uppercase",
-          }}
-        >
+        <div style={{ color: "#e8c46b", letterSpacing: 3, fontWeight: 900, fontSize: 12, marginBottom: 10, textTransform: "uppercase" }}>
           {item.kind === "pain" ? "Pressure Intelligence" : "Opportunity Intelligence"}
         </div>
 
-        <h2
-          style={{
-            fontSize: 44,
-            lineHeight: 0.92,
-            margin: "0 0 16px",
-          }}
-        >
-          {item.title || "Untitled"}
-        </h2>
+        <h2 style={{ fontSize: 44, lineHeight: 0.92, margin: "0 0 16px" }}>{item.title || "Untitled"}</h2>
 
         <div style={{ marginBottom: 14 }}>
-          <span
-            style={{
-              display: "inline-flex",
-              border: "1px solid rgba(157,243,191,.30)",
-              borderRadius: 999,
-              padding: "7px 10px",
-              color: "#9df3bf",
-              background: "rgba(157,243,191,.08)",
-              fontWeight: 900,
-              marginRight: 8,
-              marginBottom: 8,
-            }}
-          >
+          <span style={{ display: "inline-flex", border: "1px solid rgba(157,243,191,.30)", borderRadius: 999, padding: "7px 10px", color: "#9df3bf", background: "rgba(157,243,191,.08)", fontWeight: 900, marginRight: 8, marginBottom: 8 }}>
             {cls}
           </span>
 
-          <span
-            style={{
-              display: "inline-flex",
-              border: "1px solid rgba(232,196,107,.30)",
-              borderRadius: 999,
-              padding: "7px 10px",
-              color: "#f5d978",
-              background: "rgba(232,196,107,.08)",
-              fontWeight: 900,
-              marginRight: 8,
-              marginBottom: 8,
-            }}
-          >
+          <span style={{ display: "inline-flex", border: "1px solid rgba(232,196,107,.30)", borderRadius: 999, padding: "7px 10px", color: "#f5d978", background: "rgba(232,196,107,.08)", fontWeight: 900, marginRight: 8, marginBottom: 8 }}>
             Strategy: {strategy(item)}
           </span>
         </div>
 
-        <ScoreBar
-          label={item.kind === "pain" ? "Pressure Severity" : "Opportunity Strength"}
-          value={item.kind === "pain" ? severity(item) : opportunity(item)}
-        />
+        <ScoreBar label={item.kind === "pain" ? "Pressure Severity" : "Opportunity Strength"} value={item.kind === "pain" ? severity(item) : opportunity(item)} />
 
-        <p
-          style={{
-            color: "rgba(255,255,255,.82)",
-            lineHeight: 1.6,
-            fontSize: 17,
-            marginTop: 18,
-          }}
-        >
-          {aiRead(item)}
-        </p>
+        <p style={{ color: "rgba(255,255,255,.82)", lineHeight: 1.6, fontSize: 17, marginTop: 18 }}>{aiRead(item)}</p>
 
-        <div
-          style={{
-            marginTop: 18,
-            border: "1px solid rgba(255,255,255,.10)",
-            borderRadius: 18,
-            padding: 14,
-            background: "rgba(255,255,255,.03)",
-          }}
-        >
-          <div style={{ color: "#9df3bf", fontWeight: 900, marginBottom: 8 }}>
-            Best Move
-          </div>
-
-          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>
-            {bestMove(item)}
-          </div>
-
-          <div style={{ color: "#fecaca", fontWeight: 900, marginTop: 14, marginBottom: 8 }}>
-            Worst Move
-          </div>
-
-          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>
-            {worstMove(item)}
-          </div>
+        <div style={{ marginTop: 18, border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: 14, background: "rgba(255,255,255,.03)" }}>
+          <div style={{ color: "#9df3bf", fontWeight: 900, marginBottom: 8 }}>Best Move</div>
+          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>{bestMove(item)}</div>
+          <div style={{ color: "#fecaca", fontWeight: 900, marginTop: 14, marginBottom: 8 }}>Worst Move</div>
+          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>{worstMove(item)}</div>
         </div>
 
         <div style={{ marginTop: 22 }}>
-          {item.href && (
-            <Link href={item.href} style={button}>
-              Open Intelligence Room
-            </Link>
-          )}
+          {item.href && <Link href={item.href} style={button}>Open Intelligence Room</Link>}
 
           {!deletedMode ? (
-            <button type="button" style={ghost} onClick={() => onDelete(item)}>
-              Remove From Desk
-            </button>
+            <button type="button" style={ghost} onClick={() => onDelete(item)}>Remove From Desk</button>
           ) : (
-            <button type="button" style={ghost} onClick={() => onRestore(item)}>
-              Restore
-            </button>
+            <button type="button" style={ghost} onClick={() => onRestore(item)}>Restore</button>
           )}
         </div>
       </div>
@@ -431,16 +340,12 @@ export default function SmartAIPage() {
 
         const res = await fetch(`/api/smart-ai?email=${encodeURIComponent(viewer)}`, {
           cache: "no-store",
-          headers: {
-            "x-vf-email": viewer,
-          },
+          headers: { "x-vf-email": viewer },
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
-        if (!res.ok || data?.ok === false) {
-          throw new Error(data?.error || "Could not load Surgeon AI.");
-        }
+        if (!res.ok || data?.ok === false) throw new Error(data?.error || "Could not load Surgeon AI.");
 
         setItems(Array.isArray(data?.insights) ? data.insights : []);
         setStatus("");
@@ -475,94 +380,78 @@ export default function SmartAIPage() {
   }
 
   const visible = mode === "deleted" ? deletedItems : activeItems;
-
   const pressureCount = activeItems.filter((x) => x.kind === "pain").length;
   const opportunityCount = activeItems.filter((x) => x.kind !== "pain").length;
 
   return (
     <main style={pageStyle}>
+      <style>{`
+        a:hover, button:hover {
+          transform: translateY(-1px);
+          transition: all .18s ease;
+          filter: brightness(1.06);
+        }
+
+        @media (max-width: 720px) {
+          .vf-smart-actions {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+          }
+
+          .vf-smart-actions > * {
+            width: 100%;
+            box-sizing: border-box;
+            margin-right: 0 !important;
+          }
+        }
+      `}</style>
+
       <div style={wrap}>
         <section style={hero}>
-          <div
-            style={{
-              color: "#e8c46b",
-              letterSpacing: 5,
-              fontWeight: 900,
-              marginBottom: 12,
-              textTransform: "uppercase",
-            }}
-          >
+          <div style={{ color: "#e8c46b", letterSpacing: 5, fontWeight: 900, marginBottom: 12, textTransform: "uppercase" }}>
             VaultForge Surgeon AI
           </div>
 
-          <h1
-            style={{
-              fontSize: "clamp(64px,12vw,140px)",
-              lineHeight: 0.88,
-              margin: "0 0 18px",
-              letterSpacing: -5,
-            }}
-          >
+          <h1 style={{ fontSize: "clamp(64px,12vw,140px)", lineHeight: 0.88, margin: "0 0 18px", letterSpacing: -5 }}>
             Intelligence.
           </h1>
 
-          <p
-            style={{
-              color: "rgba(255,255,255,.78)",
-              fontSize: 22,
-              lineHeight: 1.6,
-              maxWidth: 1100,
-            }}
-          >
-            This is not a listings feed. Surgeon AI classifies pressure, rewrites
-            opportunities, diagnoses weak structures, identifies execution paths,
-            scores risk, and routes operator intelligence into one institutional desk.
+          <p style={{ color: "rgba(255,255,255,.78)", fontSize: 22, lineHeight: 1.6, maxWidth: 1100 }}>
+            This is not a listings feed. Surgeon AI classifies pressure, rewrites opportunities, diagnoses weak structures, identifies execution paths, scores risk, and routes operator intelligence into one institutional desk.
           </p>
 
           <div style={{ marginTop: 22 }}>
-            <span style={{ marginRight: 18, color: "#9df3bf", fontWeight: 900 }}>
-              Pressure Signals: {pressureCount}
-            </span>
-
-            <span style={{ color: "#f5d978", fontWeight: 900 }}>
-              Opportunity Signals: {opportunityCount}
-            </span>
+            <span style={{ marginRight: 18, color: "#9df3bf", fontWeight: 900 }}>Pressure Signals: {pressureCount}</span>
+            <span style={{ color: "#f5d978", fontWeight: 900 }}>Opportunity Signals: {opportunityCount}</span>
           </div>
 
-          <div style={{ marginTop: 24 }}>
-            <button
-              type="button"
-              style={mode === "active" ? button : ghost}
-              onClick={() => setMode("active")}
-            >
+          <div className="vf-smart-actions" style={{ marginTop: 24 }}>
+            <button type="button" style={mode === "active" ? button : ghost} onClick={() => setMode("active")}>
               Active Desk ({activeItems.length})
             </button>
 
-            <button
-              type="button"
-              style={mode === "deleted" ? button : ghost}
-              onClick={() => setMode("deleted")}
-            >
+            <button type="button" style={mode === "deleted" ? button : ghost} onClick={() => setMode("deleted")}>
               Removed ({deletedItems.length})
             </button>
 
-            <Link href="/dashboard" style={ghost}>
-              Command
-            </Link>
-
-            <Link href="/submit" style={ghost}>
-              Opportunity Intake
-            </Link>
-
-            <Link href="/pain" style={ghost}>
-              Pressure Intake
-            </Link>
+            <Link href="/dashboard" style={ghost}>Command</Link>
+            <Link href="/submit" style={ghost}>Opportunity Intake</Link>
+            <Link href="/pain" style={ghost}>Pressure Intake</Link>
           </div>
         </section>
 
         {status && (
           <section style={hero}>
             <strong>{status}</strong>
+          </section>
+        )}
+
+        {!status && visible.length === 0 && (
+          <section style={hero}>
+            <strong>No intelligence records visible.</strong>
+            <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
+              Add Opportunity or Pressure records, then return here to classify, triage, and route them.
+            </p>
           </section>
         )}
 
