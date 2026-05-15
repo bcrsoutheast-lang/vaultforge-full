@@ -16,6 +16,29 @@ const OPERATING_STATES = [
   "Texas",
 ];
 
+const STATE_ALIASES: Record<string, string> = {
+  ga: "Georgia",
+  georgia: "Georgia",
+  fl: "Florida",
+  florida: "Florida",
+  nc: "North Carolina",
+  "north carolina": "North Carolina",
+  sc: "South Carolina",
+  "south carolina": "South Carolina",
+  tn: "Tennessee",
+  tennessee: "Tennessee",
+  al: "Alabama",
+  alabama: "Alabama",
+  tx: "Texas",
+  texas: "Texas",
+};
+
+function normalizeState(value: unknown) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  return STATE_ALIASES[raw] || "";
+}
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -158,10 +181,7 @@ function statesOf(row: Row) {
   ]);
 
   const normalized = raw
-    .map((state) => {
-      const found = OPERATING_STATES.find((allowed) => allowed.toLowerCase() === state.toLowerCase());
-      return found || "";
-    })
+    .map((state) => normalizeState(state))
     .filter(Boolean);
 
   return unique(normalized);
@@ -190,9 +210,7 @@ function basedStateOf(row: Row) {
     m.market_state
   );
 
-  const found = OPERATING_STATES.find((allowed) => allowed.toLowerCase() === raw.toLowerCase());
-
-  return found || "";
+  return normalizeState(raw);
 }
 
 function basedStateDisplay(row: Row) {
