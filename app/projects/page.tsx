@@ -818,9 +818,9 @@ function WorkstationCard({
 
   const detailHref =
     source === "deal" && dealId
-      ? `/deal/detail?id=${encodeURIComponent(dealId)}`
+      ? `/opportunity-room/${encodeURIComponent(dealId)}`
       : source === "pain" && painId
-      ? `/pain-room/${encodeURIComponent(painId)}`
+      ? `/pressure-room/${encodeURIComponent(painId)}`
       : signalId
       ? `/signals/${encodeURIComponent(signalId)}`
       : "/projects";
@@ -897,7 +897,7 @@ function WorkstationCard({
           </div>
 
           <div className="vf-actions" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
-            <Link href={detailHref} style={button}>{source === "deal" ? "Open Opportunity" : source === "pain" ? "Open Pressure Room" : "Open Workstation"}</Link>
+            <Link href={detailHref} style={button}>{source === "deal" ? "Open Opportunity Room" : source === "pain" ? "Open Pressure Room" : "Open Workstation"}</Link>
             <Link href={contactHref} style={ghost}>Contact Source</Link>
             {!isSaved ? <button type="button" onClick={onSave} style={ghost}>Save</button> : <button type="button" onClick={onUnsave} style={ghost}>Unsave</button>}
             {!isArchived ? <button type="button" onClick={onArchive} style={ghost}>Archive</button> : <button type="button" onClick={onRestore} style={ghost}>Restore</button>}
