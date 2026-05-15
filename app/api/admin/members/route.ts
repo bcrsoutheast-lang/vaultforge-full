@@ -551,6 +551,32 @@ function hasRealEmail(row: AnyRow) {
 }
 
 function safeNetworkMember(member: AnyRow) {
+  const metadata =
+    member && typeof member.metadata === "object" && member.metadata ? member.metadata : {};
+
+  const baseState =
+    member.home_state ||
+    member.based_state ||
+    member.base_state ||
+    member.from_state ||
+    member.member_state ||
+    member.primary_state ||
+    member.location_state ||
+    member.state ||
+    member.market_primary ||
+    member.primary_market ||
+    metadata.home_state ||
+    metadata.based_state ||
+    metadata.base_state ||
+    metadata.from_state ||
+    metadata.member_state ||
+    metadata.primary_state ||
+    metadata.location_state ||
+    metadata.state ||
+    metadata.market_primary ||
+    metadata.primary_market ||
+    "";
+
   return {
     id: member.id || member._source_id || member.email,
     email: member.email,
@@ -560,6 +586,15 @@ function safeNetworkMember(member: AnyRow) {
     company_name: member.company_name || member.company || member.business_name || member.organization || member.firm || "",
     headline: member.headline || member.tagline || member.bio || member.about || member.summary || "",
     bio: member.bio || member.about || member.summary || member.notes || "",
+
+    home_state: baseState,
+    based_state: baseState,
+    base_state: baseState,
+    from_state: baseState,
+    member_state: baseState,
+    primary_state: baseState,
+    location_state: baseState,
+    state: baseState,
 
     member_type: member.member_type || member.member_types || member.roles || member.role || member.primary_role || "",
     member_types: member.member_types || member.member_type || member.roles || member.role || member.primary_role || "",
