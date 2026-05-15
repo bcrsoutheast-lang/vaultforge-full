@@ -255,6 +255,11 @@ const defaultForm: Record<string, any> = {
   asking_price: "",
   arv_value: "",
   repairs_needed: "",
+  contact_name: "",
+  contact_phone: "",
+  contact_email: "",
+  preferred_contact: "Call first",
+  contact_notes: "",
 };
 
 
@@ -598,6 +603,18 @@ export default function PainPage() {
           email,
           member_email: email,
           submitted_by: email,
+          owner_name: form.contact_name,
+          owner_phone: form.contact_phone,
+          owner_contact_email: form.contact_email,
+          seller_name: form.contact_name,
+          seller_phone: form.contact_phone,
+          seller_email: form.contact_email,
+          contact_name: form.contact_name,
+          contact_phone: form.contact_phone,
+          contact_email: form.contact_email,
+          preferred_contact: form.preferred_contact,
+          contact_notes: form.contact_notes,
+          seller_contact_notes: form.contact_notes,
           photo_urls: photoUrls,
           photos: photoUrls,
           photo_upload_warning: photoWarnings.join(" | "),
@@ -926,6 +943,47 @@ export default function PainPage() {
             <label style={{ ...label, marginTop: 18 }}>Repairs / Remaining Work</label>
             <input style={input} value={form.repairs_needed} onChange={(e) => update("repairs_needed", e.target.value)} placeholder="$45,000 or scope summary" />
           </div>
+        </section>
+
+
+        <section style={card}>
+          <p style={goldEyebrow}>Contact / Source</p>
+          <p style={{ color: "#cbd5e1", fontSize: 18, lineHeight: 1.5 }}>
+            Capture who should be contacted from inside the Pain Room. Keep this private to the execution workflow.
+          </p>
+
+          <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 16 }}>
+            <div>
+              <label style={label}>Contact Name</label>
+              <input style={input} value={form.contact_name || ""} onChange={(e) => update("contact_name", e.target.value)} placeholder="Owner, seller, agent, source, or operator" />
+            </div>
+            <div>
+              <label style={label}>Contact Phone</label>
+              <input style={input} type="tel" value={form.contact_phone || ""} onChange={(e) => update("contact_phone", e.target.value)} placeholder="Phone number" />
+            </div>
+            <div>
+              <label style={label}>Contact Email</label>
+              <input style={input} type="email" value={form.contact_email || ""} onChange={(e) => update("contact_email", e.target.value)} placeholder="Email address" />
+            </div>
+            <div>
+              <label style={label}>Preferred Contact</label>
+              <select style={input} value={form.preferred_contact || "Call first"} onChange={(e) => update("preferred_contact", e.target.value)}>
+                <option>Call first</option>
+                <option>Text first</option>
+                <option>Email first</option>
+                <option>Message through VaultForge</option>
+                <option>Owner review before contact</option>
+              </select>
+            </div>
+          </section>
+
+          <label style={{ ...label, marginTop: 18 }}>Contact Notes</label>
+          <textarea
+            style={{ ...input, minHeight: 110 }}
+            value={form.contact_notes || ""}
+            onChange={(e) => update("contact_notes", e.target.value)}
+            placeholder="Best time to call, access instructions, sensitivity, who controls the property, referral source, or special instructions."
+          />
         </section>
 
         <section style={card}>
