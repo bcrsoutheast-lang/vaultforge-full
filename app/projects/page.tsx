@@ -1018,7 +1018,7 @@ function CommandExitBar() {
           <Link href="/submit" style={smallGhost}>Submit Opportunity</Link>
           <Link href="/pain" style={smallGhost}>Submit Pressure</Link>
           <Link href="/pain-feed" style={smallGhost}>Pressure Feed</Link>
-          <Link href="/smart-ai" style={smallGhost}>Surgeon AI</Link>
+          <Link href="/intelligence" style={smallGhost}>Intelligence</Link>
           <Link href="/messages" style={smallGhost}>Messages</Link>
         </div>
       </div>
