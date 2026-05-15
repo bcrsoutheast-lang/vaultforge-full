@@ -132,8 +132,7 @@ function asArray(value: unknown): string[] {
   }
 
   return raw
-    .split(/[,
-|;]/)
+    .split(/[,\\n|;]/)
     .map(clean)
     .filter(Boolean);
 }
