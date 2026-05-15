@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import VaultForgeRoomCommandBar from "../../components/VaultForgeRoomCommandBar";
 
 type Row = Record<string, any>;
 
@@ -928,6 +929,15 @@ export default function PainRoomPage() {
       `}</style>
 
       <div style={wrap}>
+        {pain ? (
+          <VaultForgeRoomCommandBar
+            lane="pressure"
+            roomId={idOf(pain)}
+            title={titleOf(pain)}
+            ownerEmail={contactEmailOf(pain) || ownerOf(pain)}
+          />
+        ) : null}
+
         <section className="vf-main-grid" style={{ display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: 16, marginBottom: 16 }}>
           <div style={{ ...panel, padding: 0, overflow: "hidden" }}>
             {heroPhoto ? (
