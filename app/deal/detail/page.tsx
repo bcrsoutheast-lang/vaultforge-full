@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import VaultForgeRoomCommandBar from "../../components/VaultForgeRoomCommandBar";
 
 type Deal = Record<string, any>;
 
@@ -778,10 +779,20 @@ export default function DealRoomPage() {
       <div style={wrap}>
         <nav style={nav}>
           <Link href="/dashboard" style={ghost}>Command</Link>
-          <Link href="/projects" style={ghost}>Workstations</Link>
+          <Link href="/workstations" style={ghost}>Workstations</Link>
+          <Link href="/opportunity-rooms" style={ghost}>Opportunity Rooms</Link>
           <Link href="/buy-bucket" style={ghost}>Buy Bucket</Link>
           <Link href="/submit" style={navLink}>Submit Opportunity</Link>
         </nav>
+
+        {deal ? (
+          <VaultForgeRoomCommandBar
+            lane="opportunity"
+            roomId={dealId}
+            title={titleOf(deal)}
+            ownerEmail={String(valueOf(deal, ["owner_contact_email", "contact_email", "seller_email", "owner_email", "member_email"]) || "")}
+          />
+        ) : null}
 
         {loading ? <section style={section}>Loading opportunity room...</section> : null}
 
