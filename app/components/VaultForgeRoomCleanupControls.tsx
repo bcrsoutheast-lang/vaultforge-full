@@ -19,7 +19,7 @@ const shell: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
   borderRadius: 24,
   padding: 16,
-  background: "linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.03))",
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
   marginBottom: 18,
 };
 
@@ -44,6 +44,7 @@ const btn: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
+  textAlign: "center",
 };
 
 const ghost: React.CSSProperties = {
@@ -115,6 +116,7 @@ export default function VaultForgeRoomCleanupControls({
     };
 
     setStatus(copy[action]);
+
     fetch("/api/room/actions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -147,6 +149,7 @@ export default function VaultForgeRoomCleanupControls({
             display: grid !important;
             grid-template-columns: 1fr !important;
           }
+
           .vf-room-clean-actions > * {
             width: 100%;
             box-sizing: border-box;
