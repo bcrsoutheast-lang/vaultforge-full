@@ -25,7 +25,7 @@ export default function DashboardPage() {
       <div style={{ width: "min(1180px,100%)", margin: "0 auto" }}>
         <VaultForgeMemberNav
           title="Command Center"
-          subtitle="Members get the full VaultForge experience. Owner controls stay hidden."
+          subtitle="Rooms, workstations, intelligence, messages, and network. Owner controls stay hidden."
           active="dashboard"
         />
 
@@ -62,7 +62,7 @@ export default function DashboardPage() {
               lineHeight: 1.55,
             }}
           >
-            Opportunity Rooms, Pressure Rooms, intelligence routing, workstations, messaging, and execution flow all operate inside one clean system.
+            Opportunity Rooms, Pressure Rooms, intelligence routing, workstations, messaging, and network flow all operate inside one clean system.
           </p>
 
           <div
