@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 
-export default function RedirectToDashboard() {
+export default function ProfileRedirectPage() {
   useEffect(() => {
-    window.location.replace("/dashboard");
+    window.location.replace("/profile-dashboard");
   }, []);
 
   return (
@@ -18,7 +18,7 @@ export default function RedirectToDashboard() {
         fontFamily: "Arial, sans-serif",
       }}
     >
-      Redirecting to Command Center...
+      Opening Member Profile...
     </main>
   );
 }
