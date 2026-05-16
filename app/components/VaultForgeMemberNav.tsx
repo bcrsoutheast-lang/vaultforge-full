@@ -24,6 +24,7 @@ function workspaceFromPath(pathname: string) {
   if (pathname.includes("pain")) return "Submit Pressure";
   if (pathname.includes("intelligence") || pathname.includes("smart-ai")) return "Intelligence";
   if (pathname.includes("messages")) return "Messages";
+  if (pathname.includes("profile-dashboard") || pathname === "/profile") return "Profile";
   if (pathname.includes("members") || pathname.includes("network")) return "Network";
   return "Command Center";
 }
@@ -38,6 +39,7 @@ function isActive(pathname: string, href: string, key: string, active = "") {
   if (cleanHref === "/pressure-rooms") return pathname.startsWith("/pressure-rooms") || pathname.startsWith("/pressure-room");
   if (cleanHref === "/workstations") return pathname.startsWith("/workstations") || pathname.startsWith("/projects");
   if (cleanHref === "/intelligence") return pathname.startsWith("/intelligence") || pathname.startsWith("/smart-ai");
+  if (cleanHref === "/profile-dashboard") return pathname.startsWith("/profile-dashboard") || pathname === "/profile";
   if (cleanHref === "/members") return pathname.startsWith("/members") || pathname.startsWith("/network");
   return pathname.startsWith(cleanHref);
 }
@@ -50,6 +52,7 @@ const memberLinks = [
   { label: "Intelligence", href: "/intelligence", key: "intelligence", tag: "AI" },
   { label: "Messages", href: "/messages", key: "messages", tag: "COMMS" },
   { label: "Network", href: "/members", key: "members", tag: "OPS" },
+  { label: "Profile", href: "/profile-dashboard", key: "profile", tag: "ME" },
 ];
 
 const shell: React.CSSProperties = {
@@ -123,7 +126,7 @@ const pill: React.CSSProperties = {
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(7,minmax(0,1fr))",
+  gridTemplateColumns: "repeat(8,minmax(0,1fr))",
   gap: 9,
 };
 
@@ -201,7 +204,7 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
           </div>
 
           <div style={{ color: "#94a3b8", lineHeight: 1.35, marginTop: 8, fontSize: 14 }}>
-            {subtitle || "Rooms, workstations, intelligence, messages, and network flow."}
+            {subtitle || "Rooms, workstations, intelligence, messages, network, and profile."}
           </div>
         </div>
 
