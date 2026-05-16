@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export default function MemberDashboardRedirect() {
+export default function ProfileRedirectPage() {
   useEffect(() => {
     window.location.replace("/profile-dashboard");
   }, []);
