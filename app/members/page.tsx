@@ -167,6 +167,113 @@ function memberFit(profile: MemberProfile) {
   return "Network member";
 }
 
+function aiMatchPreview(profile: MemberProfile) {
+  const roles = profile.roles || [];
+  const states = profile.states_operated || [];
+  const capabilities = profile.capabilities || [];
+  const pressure = profile.pressure_solutions || [];
+  const strategies = profile.strategies || [];
+  const buyBox = profile.buy_box || [];
+  const stateFrom = clean(profile.state_from);
+
+  const reasons: string[] = [];
+
+  if (stateFrom) {
+    reasons.push(`listed in ${stateFrom} for member lookup`);
+  }
+
+  if (states.length) {
+    reasons.push(`operates in ${states.slice(0, 3).join(", ")}${states.length > 3 ? " +" : ""}`);
+  }
+
+  if (roles.includes("Lender") || roles.includes("Private Money") || roles.includes("Capital Partner")) {
+    reasons.push("capital-side member for funding gaps and private-money routes");
+  }
+
+  if (roles.includes("Buyer") || roles.includes("Investor")) {
+    reasons.push("buyer/investor profile for opportunity routing");
+  }
+
+  if (roles.includes("Contractor") || roles.includes("Operator")) {
+    reasons.push("operator/execution profile for pressure and rehab rooms");
+  }
+
+  if (capabilities.includes("Title Problem Solving")) {
+    reasons.push("can help with title/problem-solving pressure");
+  }
+
+  if (capabilities.includes("Contractor Crew") || capabilities.includes("Full Rehab")) {
+    reasons.push("can support rehab, contractor failure, or execution breakdowns");
+  }
+
+  if (pressure.length) {
+    reasons.push(`pressure fit: ${pressure.slice(0, 2).join(", ")}`);
+  }
+
+  if (strategies.includes("Distressed") || buyBox.includes("Residential")) {
+    reasons.push("usable for distressed/residential opportunity matching");
+  }
+
+  if (!reasons.length) {
+    return "AI needs more profile data before confident matching.";
+  }
+
+  return `AI match: ${reasons.slice(0, 4).join(" · ")}.`;
+}
+
+function matchScore(profile: MemberProfile) {
+  const roles = profile.roles || [];
+  const states = profile.states_operated || [];
+  const capabilities = profile.capabilities || [];
+  const pressure = profile.pressure_solutions || [];
+  const strategies = profile.strategies || [];
+  const buyBox = profile.buy_box || [];
+
+  let score = 0;
+
+  if (clean(profile.state_from)) score += 15;
+  if (states.length) score += 20;
+  if (roles.length) score += 20;
+  if (capabilities.length) score += 15;
+  if (pressure.length) score += 10;
+  if (strategies.length) score += 10;
+  if (buyBox.length) score += 10;
+
+  return Math.min(100, score);
+}
+
+function bestRoomRoutes(profile: MemberProfile) {
+  const roles = profile.roles || [];
+  const capabilities = profile.capabilities || [];
+  const pressure = profile.pressure_solutions || [];
+  const routes: [string, string][] = [];
+
+  if (roles.includes("Buyer") || roles.includes("Investor")) {
+    routes.push(["/opportunity-rooms/hot", "Hot Opportunities"]);
+    routes.push(["/opportunity-rooms/needs-buyer", "Needs Buyer"]);
+  }
+
+  if (roles.includes("Lender") || roles.includes("Private Money") || capabilities.includes("Private Lending")) {
+    routes.push(["/opportunity-rooms/needs-capital", "Needs Capital"]);
+    routes.push(["/pressure-rooms/funding-gap", "Funding Gap"]);
+  }
+
+  if (roles.includes("Contractor") || roles.includes("Operator") || capabilities.includes("Contractor Crew")) {
+    routes.push(["/opportunity-rooms/needs-operator", "Needs Operator"]);
+    routes.push(["/pressure-rooms/needs-operator", "Pressure Operator"]);
+  }
+
+  if (pressure.length) {
+    routes.push(["/pressure-rooms/urgent", "Critical Pressure"]);
+  }
+
+  if (!routes.length) {
+    routes.push(["/room-folders", "Room Folders"]);
+  }
+
+  return routes.slice(0, 4);
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -336,6 +443,61 @@ function MemberCard({ profile }: { profile: MemberProfile }) {
         ))}
       </div>
 
+      <section
+        style={{
+          border: "1px solid rgba(232,196,107,.22)",
+          borderRadius: 18,
+          padding: 13,
+          background: "rgba(232,196,107,.055)",
+          marginTop: 14,
+        }}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 12, alignItems: "center" }}>
+          <div
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: 18,
+              border: "1px solid rgba(232,196,107,.34)",
+              display: "grid",
+              placeItems: "center",
+              color: "#f8e7b0",
+              fontWeight: 1000,
+              background: "rgba(0,0,0,.20)",
+            }}
+          >
+            {matchScore(profile)}%
+          </div>
+          <div>
+            <div style={{ ...label, color: "#f8e7b0" }}>AI Match Preview</div>
+            <p style={{ ...muted, margin: "6px 0 0", fontSize: 14 }}>
+              {aiMatchPreview(profile)}
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          {bestRoomRoutes(profile).map(([href, text]) => (
+            <Link
+              key={href}
+              href={href}
+              style={{
+                border: "1px solid rgba(232,196,107,.22)",
+                borderRadius: 999,
+                padding: "7px 10px",
+                color: "#f8e7b0",
+                textDecoration: "none",
+                background: "rgba(232,196,107,.06)",
+                fontWeight: 850,
+                fontSize: 12,
+              }}
+            >
+              {text}
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginTop: 16 }}>
         <Link href={contactHref} style={button}>Message / Request Intro</Link>
         <Link href={`/members?state=${encodeURIComponent(state)}`} style={ghost}>View {state}</Link>
@@ -463,7 +625,7 @@ export default function MembersPage() {
       <div style={wrap}>
         <VaultForgeMemberNav
           title="Network"
-          subtitle="Find members by State From, role, operating states, capabilities, and pressure-solving fit."
+          subtitle="Find members by State From, role, operating states, capabilities, pressure-solving fit, and AI match preview."
           active="members"
         />
 
@@ -473,7 +635,7 @@ export default function MembersPage() {
             Find the right operator.
           </h1>
           <p style={{ ...muted, fontSize: 19, margin: 0 }}>
-            State From controls where members are listed. States Operated In controls AI routing and market matching.
+            State From controls member lookup. States Operated In and capabilities power AI Match Preview.
           </p>
 
           <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 16 }}>
