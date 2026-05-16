@@ -2,82 +2,28 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-type Insight = Record<string, any>;
+type Signal = Record<string, any>;
 
-const pageStyle: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(181,92,255,.18), transparent 28%), radial-gradient(circle at top right, rgba(232,196,107,.12), transparent 26%), radial-gradient(circle at bottom left, rgba(157,243,191,.10), transparent 22%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
-  color: "white",
-  padding: "24px 16px 100px",
-  fontFamily: "Arial, sans-serif",
-};
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1480,
-  margin: "0 auto",
-};
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.20)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(255,255,255,.03), rgba(157,243,191,.05))",
-  borderRadius: 34,
-  padding: 26,
-  marginBottom: 22,
-  boxShadow: "0 35px 120px rgba(0,0,0,.42)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))",
-  gap: 18,
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.12)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.08), rgba(255,255,255,.03), rgba(157,243,191,.04))",
-  borderRadius: 28,
-  overflow: "hidden",
-  boxShadow: "0 24px 80px rgba(0,0,0,.34)",
-};
-
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "14px 18px",
-  borderRadius: 999,
-  textDecoration: "none",
-  border: "none",
-  cursor: "pointer",
-  fontWeight: 900,
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#111",
-  marginRight: 10,
-  marginBottom: 10,
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  background: "rgba(255,255,255,.06)",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.12)",
-};
-
-function clean(v: unknown) {
-  return String(v || "").trim();
+function lower(value: unknown) {
+  return clean(value).toLowerCase();
 }
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
+
   const match = document.cookie
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${name}=`));
+
   if (!match) return "";
+
   try {
     return decodeURIComponent(match.slice(name.length + 1));
   } catch {
@@ -85,306 +31,354 @@ function readCookie(name: string) {
   }
 }
 
-function currentEmail() {
+function getEmail() {
   if (typeof window === "undefined") return "";
-  return String(
-    localStorage.getItem("vf_email") ||
-      sessionStorage.getItem("vf_email") ||
-      readCookie("vf_email") ||
-      readCookie("vf_member_email") ||
-      readCookie("vf_admin_email") ||
-      ""
-  )
-    .trim()
-    .toLowerCase();
-}
 
-function numberValue(value: unknown) {
-  const raw = clean(value).replace(/[^0-9.-]/g, "");
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : 0;
-}
+  const keys = ["vf_email", "vf_member_email", "memberEmail", "email"];
 
-function ask(item: Insight) {
-  return numberValue(item.asking_price || item.price || item.ask);
-}
+  for (const key of keys) {
+    try {
+      const localValue = clean(window.localStorage.getItem(key)).toLowerCase();
+      if (localValue.includes("@")) return localValue;
 
-function arv(item: Insight) {
-  return numberValue(item.arv || item.value || item.after_repair_value);
-}
-
-function repairs(item: Insight) {
-  return numberValue(item.repairs || item.repair_estimate);
-}
-
-function spread(item: Insight) {
-  const a = ask(item);
-  const v = arv(item);
-  const r = repairs(item);
-  if (!a || !v) return 0;
-  return v - a - r;
-}
-
-function margin(item: Insight) {
-  const v = arv(item);
-  if (!v) return 0;
-  return Math.round((spread(item) / v) * 100);
-}
-
-function text(item: Insight) {
-  return [
-    item.title,
-    item.summary,
-    Array.isArray(item.reasoning) ? item.reasoning.join(" ") : item.reasoning,
-    item.market,
-    item.priority,
-    item.best_move,
-    item.kind,
-  ]
-    .join(" ")
-    .toLowerCase();
-}
-
-function severity(item: Insight) {
-  const t = text(item);
-  let score = 34;
-  if (t.includes("urgent")) score += 24;
-  if (t.includes("foreclosure")) score += 28;
-  if (t.includes("deadline")) score += 20;
-  if (t.includes("capital")) score += 12;
-  if (t.includes("stalled")) score += 10;
-  return Math.max(0, Math.min(100, score));
-}
-
-function opportunity(item: Insight) {
-  let score = 40;
-  if (spread(item) > 0) score += 18;
-  if (margin(item) >= 25) score += 22;
-  if (margin(item) >= 15 && margin(item) < 25) score += 10;
-  if (item.photo) score += 8;
-  return Math.max(0, Math.min(100, score));
-}
-
-function classification(item: Insight) {
-  const opp = opportunity(item);
-  const sev = severity(item);
-
-  if (item.kind === "pain") {
-    if (sev >= 80) return "Critical Pressure";
-    if (sev >= 60) return "Fixable Pressure";
-    return "Monitor Pressure";
+      const sessionValue = clean(window.sessionStorage.getItem(key)).toLowerCase();
+      if (sessionValue.includes("@")) return sessionValue;
+    } catch {
+      // Continue.
+    }
   }
 
-  if (opp >= 75) return "A Opportunity";
-  if (opp >= 58) return "B Opportunity";
-  if (opp >= 42) return "Rewrite Needed";
-  return "Trap Risk";
+  const cookieValue = clean(readCookie("vf_email") || readCookie("vf_member_email")).toLowerCase();
+  return cookieValue.includes("@") ? cookieValue : "";
 }
 
-function strategy(item: Insight) {
-  const t = text(item);
-
-  if (item.kind === "pain") {
-    if (t.includes("capital")) return "Bridge capital + operator stabilization";
-    if (t.includes("contractor")) return "Contractor-led execution rescue";
-    if (t.includes("foreclosure")) return "Fast close rescue path";
-    return "Pressure triage + controlled routing";
-  }
-
-  if (t.includes("seller finance")) return "Creative finance structure";
-  if (t.includes("land")) return "Builder / developer route";
-  if (margin(item) >= 25) return "Fix-flip or private investor route";
-  if (margin(item) > 0) return "Buyer-specific route";
-  return "Rewrite pricing or terms";
-}
-
-function bestMove(item: Insight) {
-  if (item.kind === "pain") return "Identify bottleneck, stabilize pressure, then route operators.";
-  if (margin(item) >= 25) return "Verify numbers and privately route qualified buyers.";
-  return "Rewrite structure before broad exposure.";
-}
-
-function worstMove(item: Insight) {
-  if (item.kind === "pain") return "Treating this like a normal lead instead of a pressure event.";
-  return "Publicly blasting weak or unverified opportunity data.";
-}
-
-function aiRead(item: Insight) {
-  return `VaultForge Intelligence Room classifies this as ${classification(item)}. Strategy path: ${strategy(item)}. Best move: ${bestMove(item)}.`;
-}
-
-function trashKey(email: string) {
-  return `vf_smart_ai_deleted_${email || "guest"}`;
-}
-
-function loadTrash(email: string) {
-  if (typeof window === "undefined") return [];
+async function safeJson(response: Response) {
   try {
-    const raw = localStorage.getItem(trashKey(email));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    return await response.json();
   } catch {
-    return [];
+    return {};
   }
 }
 
-function saveTrash(email: string, ids: string[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(trashKey(email), JSON.stringify(ids));
+function meta(row: Signal) {
+  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
 }
 
-function itemKey(item: Insight) {
-  return [item.kind || "", item.id || "", item.title || "", item.market || ""].join("|");
+function first(...values: unknown[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
+    }
+
+    const text = clean(value);
+    if (text) return text;
+  }
+
+  return "";
 }
 
-function ScoreBar({ label, value }: { label: string; value: number }) {
-  const safe = Math.max(0, Math.min(100, Math.round(value)));
+function idOf(row: Signal) {
+  const m = meta(row);
+  return first(row.id, row.signal_id, row.item_id, row.deal_id, row.pain_id, m.id, m.signal_id, m.item_id, m.deal_id, m.pain_id);
+}
 
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 900, fontSize: 12 }}>
-        <span>{label}</span>
-        <span>{safe}%</span>
-      </div>
+function titleOf(row: Signal) {
+  const m = meta(row);
+  return first(row.title, row.signal_title, row.deal_title, row.pain_title, row.project_title, row.headline, row.name, row.address, m.title, m.signal_title, m.deal_title, m.pain_title, "VaultForge Signal");
+}
 
-      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginTop: 7 }}>
-        <div
-          style={{
-            width: `${safe}%`,
-            height: "100%",
-            borderRadius: 999,
-            background: "linear-gradient(90deg,#ff6b6b,#f8e7b0,#56d8ff)",
-          }}
-        />
-      </div>
-    </div>
+function typeOf(row: Signal) {
+  const text = [
+    row.type,
+    row.signal_type,
+    row.source,
+    row.folder,
+    row.room_type,
+    row.problem_type,
+    row.pain_type,
+    row.category,
+    meta(row).type,
+    meta(row).signal_type,
+    meta(row).source,
+  ]
+    .map(lower)
+    .join(" ");
+
+  if (text.includes("pain") || text.includes("pressure")) return "pressure";
+  return "opportunity";
+}
+
+function strengthOf(row: Signal) {
+  const m = meta(row);
+  const raw = Number(first(row.opportunity_strength, row.strength, row.score, row.confidence_score, m.opportunity_strength, m.strength, m.score, m.confidence_score));
+  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
+  return typeOf(row) === "pressure" ? 70 : 40;
+}
+
+function labelOf(row: Signal) {
+  const m = meta(row);
+  return first(row.ai_label, row.label, row.classification, row.risk_label, m.ai_label, m.label, m.classification, typeOf(row) === "pressure" ? "Pressure Signal" : "Trap Risk");
+}
+
+function strategyOf(row: Signal) {
+  const m = meta(row);
+  return first(row.strategy, row.recommendation, row.ai_recommendation, m.strategy, m.recommendation, m.ai_recommendation, "Rewrite pricing or terms");
+}
+
+function summaryOf(row: Signal) {
+  const m = meta(row);
+  return first(
+    row.summary,
+    row.ai_summary,
+    row.description,
+    row.note,
+    row.notes,
+    row.route_summary,
+    m.summary,
+    m.ai_summary,
+    m.description,
+    m.route_summary,
+    "VaultForge Intelligence Room classified this signal and prepared it for controlled room routing."
   );
 }
 
-function InsightCard({
-  item,
-  onDelete,
-  onRestore,
-  deletedMode,
-}: {
-  item: Insight;
-  onDelete: (item: Insight) => void;
-  onRestore: (item: Insight) => void;
-  deletedMode: boolean;
-}) {
-  const cls = classification(item);
+function bestMove(row: Signal) {
+  const m = meta(row);
+  return first(row.best_move, row.next_best_move, m.best_move, m.next_best_move, "Rewrite structure before broad exposure.");
+}
+
+function worstMove(row: Signal) {
+  const m = meta(row);
+  return first(row.worst_move, row.risk_warning, m.worst_move, m.risk_warning, "Publicly blasting weak or unverified opportunity data.");
+}
+
+function roomHref(row: Signal) {
+  const id = idOf(row);
+  if (!id) return "/dashboard";
+
+  if (typeOf(row) === "pressure") return `/pain-room/${encodeURIComponent(id)}`;
+  return `/signals/${encodeURIComponent(id)}`;
+}
+
+function normalizeSignals(data: any) {
+  const rows = [
+    ...(Array.isArray(data.signals) ? data.signals : []),
+    ...(Array.isArray(data.items) ? data.items : []),
+    ...(Array.isArray(data.feed) ? data.feed : []),
+    ...(Array.isArray(data.results) ? data.results : []),
+    ...(Array.isArray(data.rows) ? data.rows : []),
+    ...(Array.isArray(data.data) ? data.data : []),
+    ...(Array.isArray(data.opportunities) ? data.opportunities : []),
+    ...(Array.isArray(data.pains) ? data.pains : []),
+    ...(Array.isArray(data.deals) ? data.deals : []),
+  ];
+
+  if (!rows.length && data && typeof data === "object" && !Array.isArray(data)) {
+    const single = data.signal || data.item || data.record || data.deal || data.pain;
+    if (single) rows.push(single);
+  }
+
+  const byKey = new Map<string, Signal>();
+  rows.forEach((row: Signal, index: number) => {
+    const key = idOf(row) || `${titleOf(row)}-${index}`;
+    byKey.set(key, row);
+  });
+
+  return Array.from(byKey.values());
+}
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 86% 12%, rgba(168,85,247,.14), transparent 30%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  color: "white",
+  padding: "22px 16px 96px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const wrap: React.CSSProperties = {
+  width: "min(1180px,100%)",
+  margin: "0 auto",
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 24,
+  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
+  marginBottom: 18,
+};
+
+const label: React.CSSProperties = {
+  color: "#e8c46b",
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+  fontWeight: 950,
+  fontSize: 12,
+};
+
+const muted: React.CSSProperties = {
+  color: "#cbd5e1",
+  lineHeight: 1.55,
+};
+
+const button: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+  minHeight: 46,
+  borderRadius: 999,
+  padding: "11px 16px",
+  border: 0,
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+};
+
+const ghost: React.CSSProperties = {
+  ...button,
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.16)",
+  color: "white",
+};
+
+const pill: React.CSSProperties = {
+  border: "1px solid rgba(86,216,255,.24)",
+  borderRadius: 999,
+  padding: "8px 11px",
+  color: "#56d8ff",
+  background: "rgba(86,216,255,.07)",
+  fontWeight: 900,
+  fontSize: 13,
+  display: "inline-flex",
+};
+
+function SignalCard({ row }: { row: Signal }) {
+  const strength = strengthOf(row);
+  const type = typeOf(row);
+  const barColor = type === "pressure" ? "#fca5a5" : "#56d8ff";
 
   return (
     <article style={card}>
-      {item.photo && (
-        <img
-          src={item.photo}
-          alt={item.title || "VaultForge intelligence"}
-          style={{ width: "100%", height: 240, objectFit: "cover", display: "block" }}
-        />
-      )}
+      <div style={label}>{type === "pressure" ? "Pressure Intelligence" : "Opportunity Intelligence"}</div>
 
-      <div style={{ padding: 22 }}>
-        <div style={{ color: "#e8c46b", letterSpacing: 3, fontWeight: 900, fontSize: 12, marginBottom: 10, textTransform: "uppercase" }}>
-          {item.kind === "pain" ? "Pressure Intelligence" : "Opportunity Intelligence"}
-        </div>
+      <h2 style={{ fontSize: "clamp(34px,5vw,54px)", lineHeight: .95, letterSpacing: "-.045em", margin: "10px 0 10px" }}>
+        {titleOf(row)}
+      </h2>
 
-        <h2 style={{ fontSize: 44, lineHeight: 0.92, margin: "0 0 16px" }}>{item.title || "Untitled"}</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+        <span style={{ ...pill, color: type === "pressure" ? "#fecaca" : "#9df3bf", borderColor: type === "pressure" ? "rgba(248,113,113,.24)" : "rgba(157,243,191,.24)", background: type === "pressure" ? "rgba(248,113,113,.06)" : "rgba(157,243,191,.06)" }}>
+          {labelOf(row)}
+        </span>
+        <span style={{ ...pill, color: "#f8e7b0", borderColor: "rgba(232,196,107,.24)", background: "rgba(232,196,107,.06)" }}>
+          Strategy: {strategyOf(row)}
+        </span>
+      </div>
 
-        <div style={{ marginBottom: 14 }}>
-          <span style={{ display: "inline-flex", border: "1px solid rgba(157,243,191,.30)", borderRadius: 999, padding: "7px 10px", color: "#9df3bf", background: "rgba(157,243,191,.08)", fontWeight: 900, marginRight: 8, marginBottom: 8 }}>
-            {cls}
-          </span>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 6 }}>
+        <strong style={{ fontSize: 13 }}>{type === "pressure" ? "Pressure Strength" : "Opportunity Strength"}</strong>
+        <strong style={{ fontSize: 13 }}>{strength}%</strong>
+      </div>
 
-          <span style={{ display: "inline-flex", border: "1px solid rgba(232,196,107,.30)", borderRadius: 999, padding: "7px 10px", color: "#f5d978", background: "rgba(232,196,107,.08)", fontWeight: 900, marginRight: 8, marginBottom: 8 }}>
-            Strategy: {strategy(item)}
-          </span>
-        </div>
+      <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.12)", overflow: "hidden", marginBottom: 14 }}>
+        <div style={{ width: `${strength}%`, height: "100%", borderRadius: 999, background: `linear-gradient(90deg,#fb7185,${barColor})` }} />
+      </div>
 
-        <ScoreBar label={item.kind === "pain" ? "Pressure Severity" : "Opportunity Strength"} value={item.kind === "pain" ? severity(item) : opportunity(item)} />
+      <p style={{ ...muted, marginTop: 0 }}>
+        {summaryOf(row)}
+      </p>
 
-        <p style={{ color: "rgba(255,255,255,.82)", lineHeight: 1.6, fontSize: 17, marginTop: 18 }}>{aiRead(item)}</p>
+      <section
+        style={{
+          border: "1px solid rgba(255,255,255,.10)",
+          borderRadius: 18,
+          padding: 14,
+          background: "rgba(255,255,255,.035)",
+          marginTop: 14,
+        }}
+      >
+        <strong style={{ color: "#9df3bf" }}>Best Move</strong>
+        <p style={{ ...muted, margin: "6px 0 12px" }}>{bestMove(row)}</p>
 
-        <div style={{ marginTop: 18, border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: 14, background: "rgba(255,255,255,.03)" }}>
-          <div style={{ color: "#9df3bf", fontWeight: 900, marginBottom: 8 }}>Best Move</div>
-          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>{bestMove(item)}</div>
-          <div style={{ color: "#fecaca", fontWeight: 900, marginTop: 14, marginBottom: 8 }}>Worst Move</div>
-          <div style={{ color: "rgba(255,255,255,.78)", lineHeight: 1.5 }}>{worstMove(item)}</div>
-        </div>
+        <strong style={{ color: "#fecaca" }}>Worst Move</strong>
+        <p style={{ ...muted, margin: "6px 0 0" }}>{worstMove(row)}</p>
+      </section>
 
-        <div style={{ marginTop: 22 }}>
-          {item.href && <Link href={item.href} style={button}>Open Room</Link>}
-
-          {!deletedMode ? (
-            <button type="button" style={ghost} onClick={() => onDelete(item)}>Remove From Desk</button>
-          ) : (
-            <button type="button" style={ghost} onClick={() => onRestore(item)}>Restore</button>
-          )}
-        </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
+        <Link href={roomHref(row)} style={button}>Open Room</Link>
+        <Link href="/dashboard" style={ghost}>Exit</Link>
       </div>
     </article>
   );
 }
 
-export default function SmartAIPage() {
-  const [items, setItems] = useState<Insight[]>([]);
-  const [status, setStatus] = useState("Loading Intelligence Engine...");
-  const [mode, setMode] = useState("active");
-  const [email, setEmail] = useState("");
+export default function IntelligencePage() {
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [desk, setDesk] = useState("active");
+  const [status, setStatus] = useState("Loading intelligence desk...");
 
   useEffect(() => {
-    async function load() {
-      try {
-        const viewer = currentEmail();
-        setEmail(viewer);
+    async function loadSignals() {
+      const email = getEmail();
 
-        const res = await fetch(`/api/smart-ai?email=${encodeURIComponent(viewer)}`, {
-          cache: "no-store",
-          headers: { "x-vf-email": viewer },
-        });
+      const endpoints = [
+        `/api/intelligence/feed?email=${encodeURIComponent(email)}&owner=0`,
+        `/api/signals?email=${encodeURIComponent(email)}&owner=0`,
+        `/api/deal/feed?email=${encodeURIComponent(email)}&owner=0`,
+        `/api/pain/feed?email=${encodeURIComponent(email)}&owner=0`,
+        `/api/dashboard/live?email=${encodeURIComponent(email)}&owner=0`,
+      ];
 
-        const data = await res.json().catch(() => ({}));
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            cache: "no-store",
+            credentials: "include",
+            headers: {
+              "x-vf-email": email,
+              "x-vf-admin": "0",
+            },
+          });
 
-        if (!res.ok || data?.ok === false) throw new Error(data?.error || "Could not load Intelligence Engine.");
+          const data = await safeJson(response);
+          const rows = normalizeSignals(data);
 
-        setItems(Array.isArray(data?.insights) ? data.insights : []);
-        setStatus("");
-      } catch {
-        setStatus("Intelligence Engine could not load.");
+          if (response.ok && rows.length) {
+            setSignals(rows);
+            setStatus("");
+            return;
+          }
+        } catch {
+          // Try next.
+        }
       }
+
+      setSignals([]);
+      setStatus("No intelligence signals found yet. Submit an opportunity or pain item to generate intelligence.");
     }
 
-    load();
+    loadSignals();
   }, []);
 
-  const deletedIds = useMemo(() => loadTrash(email), [email]);
+  const counts = useMemo(() => {
+    const pressure = signals.filter((row) => typeOf(row) === "pressure").length;
+    const opportunity = signals.filter((row) => typeOf(row) !== "pressure").length;
+    return { pressure, opportunity, total: signals.length };
+  }, [signals]);
 
-  const activeItems = useMemo(() => {
-    return items.filter((item) => !deletedIds.includes(itemKey(item)));
-  }, [items, deletedIds]);
-
-  const deletedItems = useMemo(() => {
-    return items.filter((item) => deletedIds.includes(itemKey(item)));
-  }, [items, deletedIds]);
-
-  function deleteItem(item: Insight) {
-    const next = Array.from(new Set([...deletedIds, itemKey(item)]));
-    saveTrash(email, next);
-    setMode("active");
-  }
-
-  function restoreItem(item: Insight) {
-    const next = deletedIds.filter((id) => id !== itemKey(item));
-    saveTrash(email, next);
-    setMode("deleted");
-  }
-
-  const visible = mode === "deleted" ? deletedItems : activeItems;
-  const pressureCount = activeItems.filter((x) => x.kind === "pain").length;
-  const opportunityCount = activeItems.filter((x) => x.kind !== "pain").length;
+  const filtered = useMemo(() => {
+    if (desk === "removed") return [];
+    if (desk === "pressure") return signals.filter((row) => typeOf(row) === "pressure");
+    if (desk === "opportunity") return signals.filter((row) => typeOf(row) !== "pressure");
+    return signals;
+  }, [signals, desk]);
 
   return (
-    <main style={pageStyle}>
+    <main style={page}>
       <style>{`
         a:hover, button:hover {
           transform: translateY(-1px);
@@ -392,78 +386,76 @@ export default function SmartAIPage() {
           filter: brightness(1.06);
         }
 
-        @media (max-width: 720px) {
-          .vf-smart-actions {
+        @media(max-width:760px) {
+          .vf-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .vf-actions {
             display: grid !important;
             grid-template-columns: 1fr !important;
           }
 
-          .vf-smart-actions > * {
+          .vf-actions > * {
             width: 100%;
             box-sizing: border-box;
-            margin-right: 0 !important;
           }
         }
       `}</style>
 
       <div style={wrap}>
-        <section style={hero}>
-          <div style={{ color: "#e8c46b", letterSpacing: 5, fontWeight: 900, marginBottom: 12, textTransform: "uppercase" }}>
-            VaultForge Intelligence Room
-          </div>
+        <VaultForgeMemberNav
+          title="Intelligence"
+          subtitle="Institutional intelligence layer for pressure, opportunity, signal, and routing review."
+          active="intelligence"
+        />
 
-          <h1 style={{ fontSize: "clamp(64px,12vw,140px)", lineHeight: 0.88, margin: "0 0 18px", letterSpacing: -5 }}>
+        <section style={card}>
+          <div style={label}>VaultForge Intelligence Room</div>
+          <h1
+            style={{
+              fontSize: "clamp(56px,11vw,116px)",
+              lineHeight: 0.86,
+              letterSpacing: "-.075em",
+              margin: "12px 0 18px",
+            }}
+          >
             Intelligence.
           </h1>
 
-          <p style={{ color: "rgba(255,255,255,.78)", fontSize: 22, lineHeight: 1.6, maxWidth: 1100 }}>
-            This is the institutional intelligence layer. The Intelligence Room classifies pressure, rewrites opportunities, diagnoses weak structures, identifies execution paths, scores risk, and routes operator intelligence into one institutional command layer.
+          <p style={{ ...muted, fontSize: 20, marginTop: 0 }}>
+            This is the institutional intelligence layer. VaultForge classifies pressure, rewrites opportunities, diagnoses weak structures, scores risk, and routes operator intelligence into one command layer.
           </p>
 
-          <div style={{ marginTop: 22 }}>
-            <span style={{ marginRight: 18, color: "#9df3bf", fontWeight: 900 }}>Pressure Signals: {pressureCount}</span>
-            <span style={{ color: "#f5d978", fontWeight: 900 }}>Opportunity Signals: {opportunityCount}</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, margin: "18px 0" }}>
+            <strong style={{ color: "#9df3bf", fontSize: 22 }}>Pressure Signals: {counts.pressure}</strong>
+            <strong style={{ color: "#f8e7b0", fontSize: 22 }}>Opportunity Signals: {counts.opportunity}</strong>
           </div>
 
-          <div className="vf-smart-actions" style={{ marginTop: 24 }}>
-            <button type="button" style={mode === "active" ? button : ghost} onClick={() => setMode("active")}>
-              Active Desk ({activeItems.length})
-            </button>
-
-            <button type="button" style={mode === "deleted" ? button : ghost} onClick={() => setMode("deleted")}>
-              Removed ({deletedItems.length})
-            </button>
-
+          <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <button type="button" onClick={() => setDesk("active")} style={desk === "active" ? button : ghost}>Active Desk ({counts.total})</button>
+            <button type="button" onClick={() => setDesk("removed")} style={desk === "removed" ? button : ghost}>Removed (0)</button>
             <Link href="/dashboard" style={ghost}>Command</Link>
-            <Link href="/submit" style={ghost}>Opportunity Intake</Link>
-            <Link href="/pain" style={ghost}>Pressure Intake</Link>
+            <Link href="/opportunity-rooms" style={ghost}>Opportunity Rooms</Link>
+            <Link href="/pressure-rooms" style={ghost}>Pressure Rooms</Link>
+            <Link href="/dashboard" style={button}>Exit</Link>
           </div>
         </section>
 
-        {status && (
-          <section style={hero}>
-            <strong>{status}</strong>
+        {status ? (
+          <section style={card}>
+            <p style={{ ...muted, margin: 0 }}>{status}</p>
+            <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+              <Link href="/submit" style={button}>Submit Opportunity</Link>
+              <Link href="/pain" style={button}>Submit Pain</Link>
+              <Link href="/dashboard" style={ghost}>Exit</Link>
+            </div>
           </section>
-        )}
+        ) : null}
 
-        {!status && visible.length === 0 && (
-          <section style={hero}>
-            <strong>No intelligence records visible.</strong>
-            <p style={{ color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
-              Add Opportunity or Pressure records, then return here to classify, triage, and route them.
-            </p>
-          </section>
-        )}
-
-        <section style={grid}>
-          {visible.map((item, index) => (
-            <InsightCard
-              key={`${itemKey(item)}-${index}`}
-              item={item}
-              deletedMode={mode === "deleted"}
-              onDelete={deleteItem}
-              onRestore={restoreItem}
-            />
+        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 18 }}>
+          {filtered.map((row, index) => (
+            <SignalCard key={`${idOf(row) || titleOf(row)}-${index}`} row={row} />
           ))}
         </section>
       </div>
