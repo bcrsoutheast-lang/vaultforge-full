@@ -114,22 +114,40 @@ export function applyRoomAction(input: Partial<RoomRecord> & { room_id: string }
   const next = upsertRoom(input);
 
   if (action === "save") {
-    next.saved = true; next.archived = false; next.deleted = false; next.status = "saved";
+    next.saved = true;
+    next.archived = false;
+    next.deleted = false;
+    next.status = "saved";
   }
+
   if (action === "unsave") {
-    next.saved = false; next.status = next.archived ? "archived" : "active";
+    next.saved = false;
+    next.status = next.archived ? "archived" : "active";
   }
+
   if (action === "archive") {
-    next.archived = true; next.saved = false; next.deleted = false; next.status = "archived";
+    next.archived = true;
+    next.saved = false;
+    next.deleted = false;
+    next.status = "archived";
   }
+
   if (action === "unarchive") {
-    next.archived = false; next.status = next.saved ? "saved" : "active";
+    next.archived = false;
+    next.status = next.saved ? "saved" : "active";
   }
+
   if (action === "delete") {
-    next.deleted = true; next.saved = false; next.archived = false; next.status = "deleted";
+    next.deleted = true;
+    next.saved = false;
+    next.archived = false;
+    next.status = "deleted";
   }
+
   if (action === "restore") {
-    next.deleted = false; next.archived = false; next.status = next.saved ? "saved" : "active";
+    next.deleted = false;
+    next.archived = false;
+    next.status = next.saved ? "saved" : "active";
   }
 
   next.updated_at = new Date().toISOString();
@@ -137,14 +155,17 @@ export function applyRoomAction(input: Partial<RoomRecord> & { room_id: string }
   const rows = readAll();
   rows[roomKey(next.room_kind, next.room_id)] = next;
   writeAll(rows);
+
   return next;
 }
 
 export function listRooms(status: RoomStatus | "all") {
   const rows = Object.values(readAll());
+
   if (status === "all") return rows;
-  if (status === "saved") return rows.filter((r) => r.saved && !r.deleted);
-  if (status === "archived") return rows.filter((r) => r.archived && !r.deleted);
-  if (status === "deleted") return rows.filter((r) => r.deleted);
-  return rows.filter((r) => !r.saved && !r.archived && !r.deleted);
+  if (status === "saved") return rows.filter((row) => row.saved && !row.deleted);
+  if (status === "archived") return rows.filter((row) => row.archived && !row.deleted);
+  if (status === "deleted") return rows.filter((row) => row.deleted);
+
+  return rows.filter((row) => !row.saved && !row.archived && !row.deleted);
 }
