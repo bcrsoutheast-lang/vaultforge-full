@@ -169,6 +169,10 @@ export default function NewMessagePage() {
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("");
   const [sentThread, setSentThread] = useState("");
+  const [resolvedTitle, setResolvedTitle] = useState("");
+  const [resolvedRoomType, setResolvedRoomType] = useState("");
+  const [resolvedFolder, setResolvedFolder] = useState("");
+  const [resolvedBackLink, setResolvedBackLink] = useState("");
 
   const context = useMemo(() => {
     const q = getQuery();
@@ -202,13 +206,152 @@ export default function NewMessagePage() {
     };
   }, []);
 
+  function effectiveTitle() {
+    return clean(resolvedTitle || context.title || context.subject || "VaultForge Room");
+  }
+
+  function effectiveRoomType() {
+    return clean(resolvedRoomType || context.roomType || "VaultForge Room");
+  }
+
+  function effectiveFolder() {
+    return clean(resolvedFolder || context.folder || "general");
+  }
+
+  function effectiveRoomLink() {
+    return clean(resolvedBackLink || context.sourceRoute || "");
+  }
+
+  async function resolveRoomContext(roomId: string, viewer: string) {
+    const currentTitle = clean(context.title);
+    const currentSubject = clean(context.subject);
+
+    if (
+      currentTitle &&
+      currentTitle !== "VaultForge Room" &&
+      currentTitle !== "Deal Room" &&
+      currentTitle !== "Opportunity Room"
+    ) {
+      setResolvedTitle(currentTitle);
+      return;
+    }
+
+    if (
+      currentSubject &&
+      currentSubject !== "VaultForge Room" &&
+      currentSubject !== "Deal Room" &&
+      currentSubject !== "Opportunity Room"
+    ) {
+      setResolvedTitle(currentSubject);
+    }
+
+    if (!roomId) return;
+
+    const lower = `${context.source} ${context.type} ${context.folder} ${context.roomType}`.toLowerCase();
+    const shouldTryPain =
+      lower.includes("pain") ||
+      lower.includes("pressure");
+
+    const lookups = shouldTryPain
+      ? [
+          {
+            kind: "pressure",
+            url: `/api/pain/feed?id=${encodeURIComponent(roomId)}&email=${encodeURIComponent(viewer)}&owner=0`,
+          },
+          {
+            kind: "opportunity",
+            url: `/api/deal/detail?id=${encodeURIComponent(roomId)}`,
+          },
+        ]
+      : [
+          {
+            kind: "opportunity",
+            url: `/api/deal/detail?id=${encodeURIComponent(roomId)}`,
+          },
+          {
+            kind: "pressure",
+            url: `/api/pain/feed?id=${encodeURIComponent(roomId)}&email=${encodeURIComponent(viewer)}&owner=0`,
+          },
+        ];
+
+    for (const item of lookups) {
+      try {
+        const response = await fetch(item.url, {
+          cache: "no-store",
+          credentials: "include",
+          headers: {
+            "x-vf-email": viewer,
+            "x-vf-admin": "0",
+          },
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || data?.ok === false) continue;
+
+        const row =
+          data.deal ||
+          data.record ||
+          data.item ||
+          data.pain ||
+          (Array.isArray(data.pains) ? data.pains[0] : null) ||
+          null;
+
+        if (!row || typeof row !== "object") continue;
+
+        const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+
+        const foundTitle = clean(
+          row.title ||
+            row.deal_title ||
+            row.pain_title ||
+            row.project_title ||
+            row.headline ||
+            row.name ||
+            row.address ||
+            meta.title ||
+            meta.deal_title ||
+            meta.pain_title
+        );
+
+        if (foundTitle) {
+          setResolvedTitle(foundTitle);
+        }
+
+        if (item.kind === "pressure") {
+          setResolvedRoomType("Pressure Room");
+          setResolvedFolder("pain");
+          setResolvedBackLink(`/pain-room/${encodeURIComponent(roomId)}`);
+        } else {
+          setResolvedRoomType("Opportunity Room");
+          setResolvedFolder("deals");
+          setResolvedBackLink(`/deal/detail?id=${encodeURIComponent(roomId)}`);
+        }
+
+        return;
+      } catch {
+        // Try next lookup.
+      }
+    }
+  }
+
   useEffect(() => {
     const viewer = getEmail();
     setFromEmail(viewer);
-    setToEmail(context.recipient || "owner@vaultforge.local");
+    setToEmail(context.recipient || "bcrsoutheast@gmail.com");
 
-    const opener = context.title !== "VaultForge Room"
-      ? `I'm requesting info / intro on ${context.title}.`
+    const roomId = context.roomId || context.itemId || context.signalId;
+    resolveRoomContext(roomId, viewer);
+
+    const startingTitle =
+      context.title && context.title !== "VaultForge Room"
+        ? context.title
+        : context.subject && context.subject !== "VaultForge Room"
+        ? context.subject
+        : "";
+
+    const opener = startingTitle
+      ? `I'm requesting info / intro on ${startingTitle}.`
       : "I'm requesting info / intro from VaultForge.";
 
     setMessage(opener);
@@ -231,25 +374,25 @@ export default function NewMessagePage() {
       type: context.type || context.source || "room-message",
       folder: context.folder,
       folder_key: context.folder,
-      subject: context.subject,
-      title: context.subject,
+      subject: effectiveTitle(),
+      title: effectiveTitle(),
       message,
       body: message,
       note: message,
       metadata: {
-        room_title: context.title,
-        room_type: context.roomType,
+        room_title: effectiveTitle(),
+        room_type: effectiveRoomType(),
         room_id: context.roomId,
         item_id: context.itemId || null,
         signal_id: context.signalId || null,
-        source_route: context.sourceRoute || null,
+        source_route: effectiveRoomLink() || null,
         source: context.source || null,
         type: context.type || null,
-        folder: context.folder,
+        folder: effectiveFolder(),
         match_reason: context.matchReason || null,
         from_email: fromEmail,
         to_email: toEmail,
-        subject: context.subject,
+        subject: effectiveTitle(),
       },
     };
 
@@ -289,8 +432,8 @@ export default function NewMessagePage() {
   }
 
   const roomLink =
-    context.sourceRoute ||
-    (context.source?.includes("pain") || context.type?.includes("pressure")
+    effectiveRoomLink() ||
+    (effectiveRoomType().toLowerCase().includes("pressure")
       ? context.roomId
         ? `/pain-room/${encodeURIComponent(context.roomId)}`
         : "/pressure-rooms"
@@ -336,7 +479,7 @@ export default function NewMessagePage() {
         <section style={card}>
           <div style={label}>VaultForge Message Context</div>
           <h1 style={{ fontSize: "clamp(44px,8vw,82px)", lineHeight: 0.9, letterSpacing: "-.06em", margin: "10px 0 14px" }}>
-            {context.title}
+            {effectiveTitle()}
           </h1>
 
           <p style={{ ...muted, fontSize: 18, margin: 0 }}>
@@ -346,7 +489,7 @@ export default function NewMessagePage() {
           <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 10, marginTop: 16 }}>
             <section style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 13, background: "rgba(255,255,255,.04)" }}>
               <div style={label}>Room Type</div>
-              <strong>{context.roomType}</strong>
+              <strong>{effectiveRoomType()}</strong>
             </section>
             <section style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 13, background: "rgba(255,255,255,.04)" }}>
               <div style={label}>Room ID</div>
@@ -354,11 +497,11 @@ export default function NewMessagePage() {
             </section>
             <section style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 13, background: "rgba(255,255,255,.04)" }}>
               <div style={label}>Folder</div>
-              <strong>{context.folder}</strong>
+              <strong>{effectiveFolder()}</strong>
             </section>
             <section style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 13, background: "rgba(255,255,255,.04)" }}>
               <div style={label}>Subject</div>
-              <strong>{context.subject}</strong>
+              <strong>{effectiveTitle()}</strong>
             </section>
           </div>
 
@@ -376,7 +519,7 @@ export default function NewMessagePage() {
           <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
             <input style={input} value={fromEmail} onChange={(event) => setFromEmail(event.target.value)} placeholder="From email" />
             <input style={input} value={toEmail} onChange={(event) => setToEmail(event.target.value)} placeholder="To email" />
-            <input style={input} value={context.subject} readOnly />
+            <input style={input} value={effectiveTitle()} readOnly />
             <textarea
               style={{ ...input, minHeight: 150, resize: "vertical" }}
               value={message}
