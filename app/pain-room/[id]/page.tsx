@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeRoomCommandBar from "../../components/VaultForgeRoomCommandBar";
+import VaultForgeRoomMemberMatch from "../../components/VaultForgeRoomMemberMatch";
 
 type Row = Record<string, any>;
 
@@ -935,6 +936,15 @@ export default function PainRoomPage() {
             roomId={idOf(pain)}
             title={titleOf(pain)}
             ownerEmail={contactEmailOf(pain) || ownerOf(pain)}
+          />
+        ) : null}
+
+        {pain ? (
+          <VaultForgeRoomMemberMatch
+            lane="pressure"
+            room={pain}
+            roomId={idOf(pain)}
+            title="AI Pressure Match"
           />
         ) : null}
 
