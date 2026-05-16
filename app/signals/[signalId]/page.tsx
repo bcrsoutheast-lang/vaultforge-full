@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import VaultForgeSignalCommandStack from "../../components/VaultForgeSignalCommandStack";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
@@ -306,7 +307,19 @@ export default function SignalRoomPage() {
   const photos = photosOf(signal).filter(validImageUrl);
   const ownerEmail = ownerEmailOf(signal);
   const bars = useMemo(() => signalBars(state, signal), [state, signal]);
-  const messageHref = `/connect/${encodeURIComponent(signalId)}?source=signal&signal_id=${encodeURIComponent(signalId)}&to=${encodeURIComponent(ownerEmail || OWNER_EMAIL)}&subject=${encodeURIComponent(`Request info: ${signalTitle(signal, signalId)}`)}`;
+  const currentSignalTitle = signalTitle(signal, signalId);
+  const messageHref =
+    `/messages/new?to=${encodeURIComponent(ownerEmail || OWNER_EMAIL)}` +
+    `&subject=${encodeURIComponent(currentSignalTitle)}` +
+    `&room_title=${encodeURIComponent(currentSignalTitle)}` +
+    `&title=${encodeURIComponent(currentSignalTitle)}` +
+    `&room_type=${encodeURIComponent("Signal Room")}` +
+    `&room_id=${encodeURIComponent(signalId)}` +
+    `&signal_id=${encodeURIComponent(signalId)}` +
+    `&source=${encodeURIComponent("signal-room")}` +
+    `&type=${encodeURIComponent("signal")}` +
+    `&folder=${encodeURIComponent("signals")}` +
+    `&source_route=${encodeURIComponent(`/signals/${signalId}`)}`;
 
   return (
     <main style={styles.page}>
@@ -392,6 +405,8 @@ export default function SignalRoomPage() {
             <SignalBar key={bar.label} labelText={bar.label} value={bar.value} note={bar.note} tone={tone} />
           ))}
         </section>
+
+        <VaultForgeSignalCommandStack signal={signal || {}} signalId={signalId} />
 
         <section className="vf-two-grid" style={styles.twoGrid}>
           <section style={styles.panel}>
