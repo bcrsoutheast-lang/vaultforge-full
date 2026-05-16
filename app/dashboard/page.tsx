@@ -146,8 +146,7 @@ function typeOf(row: Item) {
     .join(" ");
 
   if (text.includes("pain") || text.includes("pressure")) return "pressure";
-  if (text.includes("routing")) return "routing";
-  if (text.includes("capital")) return "capital";
+  if (text.includes("routing") || text.includes("signal")) return "routing";
   return "opportunity";
 }
 
@@ -167,10 +166,7 @@ function scoreOf(row: Item) {
     )
   );
 
-  if (Number.isFinite(raw) && raw > 0) {
-    return Math.max(0, Math.min(100, Math.round(raw)));
-  }
-
+  if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
   if (typeOf(row) === "pressure") return 84;
   return 76;
 }
@@ -180,15 +176,8 @@ function roomHref(row: Item, index: number) {
   const type = typeOf(row);
 
   if (!id) return "/dashboard";
-
-  if (type === "pressure") {
-    return `/pain-room/${encodeURIComponent(id)}`;
-  }
-
-  if (type === "routing") {
-    return `/routing-room/${encodeURIComponent(id)}`;
-  }
-
+  if (type === "pressure") return `/pain-room/${encodeURIComponent(id)}`;
+  if (type === "routing") return `/routing-room/${encodeURIComponent(id)}`;
   return `/deal/detail?id=${encodeURIComponent(id)}`;
 }
 
@@ -206,11 +195,7 @@ function normalizeRows(data: any) {
   ];
 
   const byId = new Map<string, Item>();
-
-  rows.forEach((row: Item, index: number) => {
-    byId.set(idOf(row, index), row);
-  });
-
+  rows.forEach((row: Item, index: number) => byId.set(idOf(row, index), row));
   return Array.from(byId.values());
 }
 
@@ -315,6 +300,7 @@ export default function DashboardPage() {
       total: alerts.length,
       pressure: alerts.filter((row) => typeOf(row) === "pressure").length,
       opportunity: alerts.filter((row) => typeOf(row) === "opportunity").length,
+      routing: alerts.filter((row) => typeOf(row) === "routing").length,
     };
   }, [alerts]);
 
@@ -335,7 +321,8 @@ export default function DashboardPage() {
 
         @media(max-width:760px) {
           .vf-grid,
-          .vf-live-grid {
+          .vf-live-grid,
+          .vf-alert-rooms {
             grid-template-columns: 1fr !important;
           }
         }
@@ -397,7 +384,7 @@ export default function DashboardPage() {
             }}
           >
             Opportunity Rooms, Pressure Rooms, intelligence routing, workstations,
-            messaging, network, and live operational alerts all operate inside one clean system.
+            messaging, network, alert rooms, and live operational triggers operate inside one clean system.
           </p>
 
           <div
@@ -447,6 +434,51 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        <section style={{ ...panel, marginBottom: 20 }}>
+          <div
+            style={{
+              color: "#e8c46b",
+              letterSpacing: ".18em",
+              textTransform: "uppercase",
+              fontWeight: 950,
+              fontSize: 12,
+              marginBottom: 10,
+            }}
+          >
+            Alert Rooms
+          </div>
+
+          <h2
+            style={{
+              fontSize: "clamp(42px,8vw,82px)",
+              lineHeight: 0.9,
+              letterSpacing: "-.06em",
+              margin: "0 0 18px",
+            }}
+          >
+            Alert command lanes.
+          </h2>
+
+          <div className="vf-alert-rooms" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12 }}>
+            <Link href="/alerts?lane=new" style={navCard}>
+              <strong>New Matches</strong>
+              <p style={{ color: "#cbd5e1" }}>Unread triggers and fresh fits.</p>
+            </Link>
+            <Link href="/alerts?lane=opportunity" style={navCard}>
+              <strong>Opportunity Alerts</strong>
+              <p style={{ color: "#cbd5e1" }}>Buyer, capital, and deal matches.</p>
+            </Link>
+            <Link href="/alerts?lane=pressure" style={navCard}>
+              <strong>Pressure Alerts</strong>
+              <p style={{ color: "#cbd5e1" }}>Urgent pain and problem rooms.</p>
+            </Link>
+            <Link href="/alerts?lane=saved" style={navCard}>
+              <strong>Saved Alerts</strong>
+              <p style={{ color: "#cbd5e1" }}>Kept for later review.</p>
+            </Link>
+          </div>
+        </section>
+
         <section style={panel}>
           <div
             style={{
@@ -484,170 +516,54 @@ export default function DashboardPage() {
               </h2>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
-            >
-              <div
-                style={{
-                  border: "1px solid rgba(157,243,191,.22)",
-                  borderRadius: 999,
-                  padding: "10px 14px",
-                  color: "#9df3bf",
-                  background: "rgba(157,243,191,.06)",
-                  fontWeight: 900,
-                }}
-              >
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ border: "1px solid rgba(157,243,191,.22)", borderRadius: 999, padding: "10px 14px", color: "#9df3bf", background: "rgba(157,243,191,.06)", fontWeight: 900 }}>
                 Opportunity: {counts.opportunity}
               </div>
-
-              <div
-                style={{
-                  border: "1px solid rgba(248,113,113,.22)",
-                  borderRadius: 999,
-                  padding: "10px 14px",
-                  color: "#fecaca",
-                  background: "rgba(248,113,113,.06)",
-                  fontWeight: 900,
-                }}
-              >
+              <div style={{ border: "1px solid rgba(248,113,113,.22)", borderRadius: 999, padding: "10px 14px", color: "#fecaca", background: "rgba(248,113,113,.06)", fontWeight: 900 }}>
                 Pressure: {counts.pressure}
+              </div>
+              <div style={{ border: "1px solid rgba(86,216,255,.22)", borderRadius: 999, padding: "10px 14px", color: "#56d8ff", background: "rgba(86,216,255,.06)", fontWeight: 900 }}>
+                Routing: {counts.routing}
               </div>
             </div>
           </div>
 
           {status ? (
-            <div
-              style={{
-                border: "1px solid rgba(255,255,255,.10)",
-                borderRadius: 22,
-                padding: 18,
-                color: "#cbd5e1",
-              }}
-            >
+            <div style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 22, padding: 18, color: "#cbd5e1" }}>
               {status}
             </div>
           ) : null}
 
-          <div
-            className="vf-live-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-              gap: 16,
-            }}
-          >
+          <div className="vf-live-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 16 }}>
             {alerts.map((row, index) => {
               const score = scoreOf(row);
-
               return (
                 <article key={`${idOf(row, index)}-${index}`} style={liveCard}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      marginBottom: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div
-                      style={{
-                        border: "1px solid rgba(248,113,113,.22)",
-                        borderRadius: 999,
-                        padding: "8px 12px",
-                        color: "#fecaca",
-                        background: "rgba(248,113,113,.06)",
-                        fontWeight: 900,
-                        textTransform: "uppercase",
-                        fontSize: 12,
-                        letterSpacing: ".08em",
-                      }}
-                    >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                    <div style={{ border: "1px solid rgba(248,113,113,.22)", borderRadius: 999, padding: "8px 12px", color: "#fecaca", background: "rgba(248,113,113,.06)", fontWeight: 900, textTransform: "uppercase", fontSize: 12, letterSpacing: ".08em" }}>
                       {typeOf(row)}
                     </div>
-
-                    <div
-                      style={{
-                        border: "1px solid rgba(232,196,107,.22)",
-                        borderRadius: 999,
-                        padding: "8px 12px",
-                        color: "#f8e7b0",
-                        background: "rgba(232,196,107,.06)",
-                        fontWeight: 900,
-                      }}
-                    >
+                    <div style={{ border: "1px solid rgba(232,196,107,.22)", borderRadius: 999, padding: "8px 12px", color: "#f8e7b0", background: "rgba(232,196,107,.06)", fontWeight: 900 }}>
                       {score}% fit
                     </div>
                   </div>
 
-                  <h3
-                    style={{
-                      fontSize: "clamp(28px,5vw,48px)",
-                      lineHeight: 0.95,
-                      letterSpacing: "-.04em",
-                      margin: "0 0 12px",
-                    }}
-                  >
+                  <h3 style={{ fontSize: "clamp(28px,5vw,48px)", lineHeight: 0.95, letterSpacing: "-.04em", margin: "0 0 12px" }}>
                     {titleOf(row)}
                   </h3>
 
-                  <p
-                    style={{
-                      color: "#cbd5e1",
-                      lineHeight: 1.55,
-                      marginTop: 0,
-                    }}
-                  >
+                  <p style={{ color: "#cbd5e1", lineHeight: 1.55, marginTop: 0 }}>
                     {summaryOf(row)}
                   </p>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      flexWrap: "wrap",
-                      marginTop: 14,
-                    }}
-                  >
-                    <Link
-                      href={roomHref(row, index)}
-                      style={{
-                        display: "inline-flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        minHeight: 44,
-                        borderRadius: 999,
-                        padding: "10px 16px",
-                        textDecoration: "none",
-                        fontWeight: 900,
-                        background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-                        color: "#06100a",
-                      }}
-                    >
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                    <Link href={roomHref(row, index)} style={{ display: "inline-flex", justifyContent: "center", alignItems: "center", minHeight: 44, borderRadius: 999, padding: "10px 16px", textDecoration: "none", fontWeight: 900, background: "linear-gradient(135deg,#f8e7b0,#e8c46b)", color: "#06100a" }}>
                       Open Room
                     </Link>
 
-                    <Link
-                      href="/alerts"
-                      style={{
-                        display: "inline-flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        minHeight: 44,
-                        borderRadius: 999,
-                        padding: "10px 16px",
-                        textDecoration: "none",
-                        fontWeight: 900,
-                        background: "rgba(255,255,255,.06)",
-                        border: "1px solid rgba(255,255,255,.14)",
-                        color: "white",
-                      }}
-                    >
-                      Alert Feed
+                    <Link href={`/alerts?lane=${encodeURIComponent(typeOf(row))}`} style={{ display: "inline-flex", justifyContent: "center", alignItems: "center", minHeight: 44, borderRadius: 999, padding: "10px 16px", textDecoration: "none", fontWeight: 900, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.14)", color: "white" }}>
+                      Alert Room
                     </Link>
                   </div>
                 </article>
