@@ -1,8 +1,9 @@
-"use client";
+use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeMemberNav from "../../components/VaultForgeMemberNav";
+import VaultForgeRoutingCommandStack from "../../components/VaultForgeRoutingCommandStack";
 
 type Row = Record<string, any>;
 
@@ -388,7 +389,7 @@ export default function RoutingRoomPage({ params }: { params: { signalId: string
   const data = useMemo(() => derive(row || { signal_id: signalId }, signalId), [row, signalId]);
 
   const connectHref = data.signalId
-    ? `/connect/${encodeURIComponent(data.signalId)}?email=${encodeURIComponent(email)}${data.itemId ? `&item_id=${encodeURIComponent(data.itemId)}` : ""}`
+    ? `/messages/new?source=routing-room&room_type=Routing%20Room&room_id=${encodeURIComponent(data.signalId)}?email=${encodeURIComponent(email)}${data.itemId ? `&item_id=${encodeURIComponent(data.itemId)}` : ""}`
     : "/messages";
 
   return (
@@ -427,6 +428,10 @@ export default function RoutingRoomPage({ params }: { params: { signalId: string
           subtitle="Member-fit routing, controlled communication, and next execution step."
           active="routing"
         />
+
+        {row ? (
+          <VaultForgeRoutingCommandStack room={row} signalId={signalId} />
+        ) : null}
 
         <section style={card}>
           <div className="vf-two" style={{ display: "grid", gridTemplateColumns: "1.25fr .75fr", gap: 20, alignItems: "start" }}>
