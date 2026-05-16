@@ -2,51 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { getBrowserEmail, isOwnerBrowser } from "../lib/vf-owner";
 
 type Props = {
   title?: string;
   subtitle?: string;
   active?: string;
 };
-
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
-
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
-}
-
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-  if (!match) return "";
-  try {
-    return decodeURIComponent(match.slice(name.length + 1));
-  } catch {
-    return match.slice(name.length + 1);
-  }
-}
-
-function getEmail() {
-  if (typeof window === "undefined") return "";
-
-  const keys = ["vf_email", "vf_member_email", "vf_admin_email", "email", "memberEmail"];
-  for (const key of keys) {
-    const localValue = cleanEmail(window.localStorage.getItem(key));
-    if (localValue.includes("@")) return localValue;
-
-    const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
-    if (sessionValue.includes("@")) return sessionValue;
-  }
-
-  return cleanEmail(readCookie("vf_email") || readCookie("vf_member_email") || readCookie("vf_admin_email"));
-}
 
 function workspaceFromPath(pathname: string) {
   if (pathname === "/" || pathname.includes("dashboard")) return "Command Center";
@@ -168,14 +130,15 @@ const grid: React.CSSProperties = {
 export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Props) {
   const [email, setEmail] = useState("");
   const [pathname, setPathname] = useState("/");
+  const [owner, setOwner] = useState(false);
 
   useEffect(() => {
-    setEmail(getEmail());
+    setEmail(getBrowserEmail());
+    setOwner(isOwnerBrowser());
     if (typeof window !== "undefined") setPathname(window.location.pathname || "/");
   }, []);
 
   const workspace = useMemo(() => title || workspaceFromPath(pathname), [title, pathname]);
-  const isOwner = email === OWNER_EMAIL;
 
   return (
     <header style={shell}>
@@ -245,7 +208,7 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
         <div className="vf-command-right" style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
           <span style={pill}>{email || "Signed in"}</span>
 
-          {isOwner ? (
+          {owner ? (
             <span
               className="vf-command-pill"
               style={{ ...pill, color: "#fecaca", borderColor: "rgba(248,113,113,.34)", background: "rgba(248,113,113,.08)" }}
