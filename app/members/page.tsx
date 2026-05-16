@@ -274,6 +274,138 @@ function bestRoomRoutes(profile: MemberProfile) {
   return routes.slice(0, 4);
 }
 
+function bestFitLane(profile: MemberProfile) {
+  const roles = profile.roles || [];
+  const capabilities = profile.capabilities || [];
+  const pressure = profile.pressure_solutions || [];
+
+  if (roles.includes("Lender") || roles.includes("Private Money") || roles.includes("Capital Partner") || capabilities.includes("Private Lending")) {
+    return "Capital";
+  }
+
+  if (roles.includes("Contractor") || roles.includes("Operator") || capabilities.includes("Contractor Crew") || capabilities.includes("Full Rehab")) {
+    return "Operator";
+  }
+
+  if (roles.includes("Buyer") || roles.includes("Investor")) {
+    return "Buyer";
+  }
+
+  if (pressure.length) {
+    return "Pressure Solver";
+  }
+
+  return "Unclassified";
+}
+
+function confidenceLabel(score: number) {
+  if (score >= 85) return "High confidence";
+  if (score >= 65) return "Good confidence";
+  if (score >= 45) return "Developing";
+  return "Low confidence";
+}
+
+function routeWarnings(profile: MemberProfile) {
+  const roles = profile.roles || [];
+  const states = profile.states_operated || [];
+  const capabilities = profile.capabilities || [];
+  const warnings: string[] = [];
+
+  if (!clean(profile.state_from)) warnings.push("member lookup state missing");
+  if (!states.length) warnings.push("AI routing markets missing");
+  if (!roles.length) warnings.push("role stack missing");
+  if (!capabilities.length) warnings.push("execution/capital capabilities missing");
+
+  if (roles.includes("Lender") || roles.includes("Private Money")) {
+    if (!capabilities.includes("Private Lending") && !capabilities.includes("Hard Money")) {
+      warnings.push("capital capability should be confirmed before routing funding requests");
+    }
+  }
+
+  if (roles.includes("Contractor") || roles.includes("Operator")) {
+    if (!capabilities.includes("Contractor Crew") && !capabilities.includes("Full Rehab")) {
+      warnings.push("operator execution capability should be verified");
+    }
+  }
+
+  if (!warnings.length) return "No major profile warning.";
+  return warnings.slice(0, 3).join(" · ");
+}
+
+function doNotRoute(profile: MemberProfile) {
+  const lane = bestFitLane(profile);
+  const roles = profile.roles || [];
+  const capabilities = profile.capabilities || [];
+
+  if (lane === "Capital") return "Do not route contractor/operator execution unless they also show field capability.";
+  if (lane === "Operator") return "Do not route pure capital requests unless funding capability is listed.";
+  if (lane === "Buyer") return "Do not route legal/title rescue unless pressure-solving capability is listed.";
+  if (lane === "Pressure Solver") return "Do not route acquisition-only rooms unless buyer/investor role is listed.";
+  if (!roles.length && !capabilities.length) return "Do not route live rooms yet. Profile is undertrained.";
+
+  return "Avoid routing outside selected states operated in.";
+}
+
+function stateRoutingReason(profile: MemberProfile) {
+  const stateFrom = clean(profile.state_from);
+  const states = profile.states_operated || [];
+
+  if (stateFrom && states.length) {
+    return `Listed in ${stateFrom}; route rooms in ${states.slice(0, 4).join(", ")}${states.length > 4 ? " +" : ""}.`;
+  }
+
+  if (stateFrom) return `Listed in ${stateFrom}; add States Operated In for AI routing.`;
+  if (states.length) return `Routes to ${states.slice(0, 4).join(", ")} but State From is missing for directory lookup.`;
+  return "State From and States Operated In need completion.";
+}
+
+function capabilityReason(profile: MemberProfile) {
+  const roles = profile.roles || [];
+  const capabilities = profile.capabilities || [];
+  const pressure = profile.pressure_solutions || [];
+  const parts: string[] = [];
+
+  if (roles.length) parts.push(`roles: ${roles.slice(0, 3).join(", ")}`);
+  if (capabilities.length) parts.push(`capabilities: ${capabilities.slice(0, 3).join(", ")}`);
+  if (pressure.length) parts.push(`pressure: ${pressure.slice(0, 2).join(", ")}`);
+
+  return parts.length ? parts.join(" · ") : "No capability signal yet.";
+}
+
+function vaultForgeRecommendation(profile: MemberProfile) {
+  const lane = bestFitLane(profile);
+  const states = profile.states_operated || [];
+  const score = matchScore(profile);
+
+  if (score < 45) {
+    return "Hold from live routing until profile has state, role, and capability data.";
+  }
+
+  if (lane === "Capital") {
+    return states.length
+      ? `Use for funding gaps and Needs Capital rooms in ${states.slice(0, 2).join(", ")}.`
+      : "Use for capital routes after operating states are added.";
+  }
+
+  if (lane === "Operator") {
+    return states.length
+      ? `Use for contractor failure, rehab, and Needs Operator rooms in ${states.slice(0, 2).join(", ")}.`
+      : "Use for execution routes after operating states are added.";
+  }
+
+  if (lane === "Buyer") {
+    return states.length
+      ? `Use for Hot Opportunities and Needs Buyer rooms in ${states.slice(0, 2).join(", ")}.`
+      : "Use for buyer routes after operating states are added.";
+  }
+
+  if (lane === "Pressure Solver") {
+    return "Use for urgent Pressure Rooms matching their listed problem-solving tags.";
+  }
+
+  return "Keep in network, but require more profile data before confident AI routing.";
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -455,8 +587,8 @@ function MemberCard({ profile }: { profile: MemberProfile }) {
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 12, alignItems: "center" }}>
           <div
             style={{
-              width: 58,
-              height: 58,
+              width: 62,
+              height: 62,
               borderRadius: 18,
               border: "1px solid rgba(232,196,107,.34)",
               display: "grid",
@@ -469,10 +601,36 @@ function MemberCard({ profile }: { profile: MemberProfile }) {
             {matchScore(profile)}%
           </div>
           <div>
-            <div style={{ ...label, color: "#f8e7b0" }}>AI Match Preview</div>
+            <div style={{ ...label, color: "#f8e7b0" }}>AI Match Engine v2</div>
+            <p style={{ ...muted, margin: "6px 0 0", fontSize: 14 }}>
+              <strong style={{ color: "#f8e7b0" }}>{bestFitLane(profile)}</strong> · {confidenceLabel(matchScore(profile))}
+            </p>
             <p style={{ ...muted, margin: "6px 0 0", fontSize: 14 }}>
               {aiMatchPreview(profile)}
             </p>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+          <div style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 14, padding: 10, background: "rgba(0,0,0,.14)" }}>
+            <div style={{ ...label, color: "#56d8ff", fontSize: 10 }}>State Routing Reason</div>
+            <p style={{ ...muted, margin: "5px 0 0", fontSize: 13 }}>{stateRoutingReason(profile)}</p>
+          </div>
+
+          <div style={{ border: "1px solid rgba(255,255,255,.10)", borderRadius: 14, padding: 10, background: "rgba(0,0,0,.14)" }}>
+            <div style={{ ...label, color: "#9df3bf", fontSize: 10 }}>Capability Reason</div>
+            <p style={{ ...muted, margin: "5px 0 0", fontSize: 13 }}>{capabilityReason(profile)}</p>
+          </div>
+
+          <div style={{ border: "1px solid rgba(248,113,113,.20)", borderRadius: 14, padding: 10, background: "rgba(248,113,113,.055)" }}>
+            <div style={{ ...label, color: "#fecaca", fontSize: 10 }}>Risk / Do Not Route</div>
+            <p style={{ ...muted, margin: "5px 0 0", fontSize: 13 }}>{routeWarnings(profile)}</p>
+            <p style={{ ...muted, margin: "5px 0 0", fontSize: 13 }}>{doNotRoute(profile)}</p>
+          </div>
+
+          <div style={{ border: "1px solid rgba(232,196,107,.24)", borderRadius: 14, padding: 10, background: "rgba(232,196,107,.06)" }}>
+            <div style={{ ...label, color: "#f8e7b0", fontSize: 10 }}>VaultForge Recommendation</div>
+            <p style={{ ...muted, margin: "5px 0 0", fontSize: 13 }}>{vaultForgeRecommendation(profile)}</p>
           </div>
         </div>
 
@@ -635,7 +793,7 @@ export default function MembersPage() {
             Find the right operator.
           </h1>
           <p style={{ ...muted, fontSize: 19, margin: 0 }}>
-            State From controls member lookup. States Operated In and capabilities power AI Match Preview.
+            State From controls member lookup. States Operated In and capabilities power AI Match Engine v2.
           </p>
 
           <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 16 }}>
