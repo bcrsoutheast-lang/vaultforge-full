@@ -2,135 +2,24 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-
-type RoomKind = "opportunity" | "pressure" | "routing" | "signal" | "general";
+import { applyRoomAction, clean, roomFolder, roomKind, roomRoute, roomType, upsertRoom, type RoomRecord } from "../lib/vaultforgeRoomState";
 
 type Props = {
   roomId?: string;
   roomTitle?: string;
   roomType?: string;
-  sourceRoute?: string;
+  kind?: string;
   folder?: string;
-  kind?: RoomKind;
-  ownerEmail?: string;
-  viewerEmail?: string;
-  backHref?: string;
+  sourceRoute?: string;
   laneHref?: string;
+  ownerEmail?: string;
 };
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
-
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
-}
-
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-
-  const match = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-
-  if (!match) return "";
-
-  try {
-    return decodeURIComponent(match.slice(name.length + 1));
-  } catch {
-    return match.slice(name.length + 1);
-  }
-}
-
-function getViewerEmail(fallback?: string) {
-  if (typeof window === "undefined") return cleanEmail(fallback);
-
-  const keys = ["vf_email", "vf_member_email", "memberEmail", "email"];
-
-  for (const key of keys) {
-    try {
-      const localValue = cleanEmail(window.localStorage.getItem(key));
-      if (localValue.includes("@")) return localValue;
-
-      const sessionValue = cleanEmail(window.sessionStorage.getItem(key));
-      if (sessionValue.includes("@")) return sessionValue;
-    } catch {
-      // Continue.
-    }
-  }
-
-  const cookieValue = cleanEmail(readCookie("vf_email") || readCookie("vf_member_email"));
-  return cookieValue.includes("@") ? cookieValue : cleanEmail(fallback);
-}
-
-function actionKey(roomId: string) {
-  return `vaultforge_room_action_state_${roomId || "unknown"}`;
-}
-
-function readState(roomId: string) {
-  if (typeof window === "undefined") {
-    return {
-      saved: false,
-      archived: false,
-      deleted: false,
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(actionKey(roomId)) || "{}");
-    return {
-      saved: Boolean(parsed.saved),
-      archived: Boolean(parsed.archived),
-      deleted: Boolean(parsed.deleted),
-    };
-  } catch {
-    return {
-      saved: false,
-      archived: false,
-      deleted: false,
-    };
-  }
-}
-
-function writeState(roomId: string, next: { saved: boolean; archived: boolean; deleted: boolean }) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(actionKey(roomId), JSON.stringify(next));
-  } catch {
-    // Ignore.
-  }
-}
-
-function inferredRoomType(kind?: RoomKind, roomType?: string) {
-  const typed = clean(roomType);
-  if (typed) return typed;
-
-  if (kind === "opportunity") return "Opportunity Room";
-  if (kind === "pressure") return "Pressure Room";
-  if (kind === "routing") return "Routing Room";
-  if (kind === "signal") return "Signal Room";
-  return "VaultForge Room";
-}
-
-function inferredFolder(kind?: RoomKind, folder?: string) {
-  const value = clean(folder);
-  if (value) return value;
-
-  if (kind === "opportunity") return "opportunity";
-  if (kind === "pressure") return "pressure";
-  if (kind === "routing") return "routing";
-  if (kind === "signal") return "signals";
-  return "general";
-}
-
-const wrap: React.CSSProperties = {
+const shell: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 26,
-  padding: 18,
-  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
-  boxShadow: "0 22px 70px rgba(0,0,0,.22)",
+  borderRadius: 24,
+  padding: 16,
+  background: "linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.03))",
   marginBottom: 18,
 };
 
@@ -142,225 +31,155 @@ const label: React.CSSProperties = {
   fontSize: 12,
 };
 
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: 46,
+const btn: React.CSSProperties = {
+  minHeight: 44,
   borderRadius: 999,
-  padding: "11px 16px",
-  textDecoration: "none",
-  fontWeight: 950,
+  padding: "10px 14px",
+  border: 0,
   background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
-  border: 0,
+  fontWeight: 950,
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
   cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
-  ...button,
+  ...btn,
   background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.16)",
   color: "white",
+  border: "1px solid rgba(255,255,255,.16)",
 };
 
 const danger: React.CSSProperties = {
   ...ghost,
-  border: "1px solid rgba(248,113,113,.35)",
   color: "#fecaca",
+  border: "1px solid rgba(248,113,113,.35)",
 };
 
 export default function VaultForgeRoomCleanupControls({
   roomId = "",
   roomTitle = "",
-  roomType = "",
-  sourceRoute = "",
-  folder = "",
+  roomType: providedType = "",
   kind = "general",
-  ownerEmail = "bcrsoutheast@gmail.com",
-  viewerEmail = "",
-  backHref = "/dashboard",
+  folder = "",
+  sourceRoute = "",
   laneHref = "/dashboard",
+  ownerEmail = "bcrsoutheast@gmail.com",
 }: Props) {
-  const safeRoomId = clean(roomId) || "unknown-room";
-  const safeTitle = clean(roomTitle) || "VaultForge Room";
-  const safeRoomType = inferredRoomType(kind, roomType);
-  const safeFolder = inferredFolder(kind, folder);
-  const safeSourceRoute = clean(sourceRoute) || backHref || "/dashboard";
-  const safeViewer = getViewerEmail(viewerEmail);
+  const resolvedKind = roomKind(kind || providedType || folder);
+  const id = clean(roomId) || "unknown-room";
+  const title = clean(roomTitle) || roomType(resolvedKind);
+  const type = clean(providedType) || roomType(resolvedKind);
+  const source = clean(sourceRoute) || roomRoute(resolvedKind, id);
 
-  const [state, setState] = useState(() => readState(safeRoomId));
+  const initial = useMemo(() => upsertRoom({
+    room_id: id,
+    room_title: title,
+    room_type: type,
+    room_kind: resolvedKind,
+    folder: clean(folder) || roomFolder(resolvedKind),
+    source_route: source,
+  }), [id, title, type, resolvedKind, folder, source]);
+
+  const [record, setRecord] = useState<RoomRecord>(initial);
   const [status, setStatus] = useState("");
 
-  const messageHref = useMemo(() => {
-    return (
-      `/messages/new?to=${encodeURIComponent(ownerEmail)}` +
-      `&subject=${encodeURIComponent(safeTitle)}` +
-      `&room_title=${encodeURIComponent(safeTitle)}` +
-      `&title=${encodeURIComponent(safeTitle)}` +
-      `&room_type=${encodeURIComponent(safeRoomType)}` +
-      `&room_id=${encodeURIComponent(safeRoomId)}` +
-      `&item_id=${encodeURIComponent(safeRoomId)}` +
-      `&signal_id=${encodeURIComponent(safeRoomId)}` +
-      `&source=${encodeURIComponent(`${kind}-room`)}` +
-      `&type=${encodeURIComponent(kind)}` +
-      `&folder=${encodeURIComponent(safeFolder)}` +
-      `&source_route=${encodeURIComponent(safeSourceRoute)}`
-    );
-  }, [ownerEmail, safeTitle, safeRoomType, safeRoomId, safeFolder, safeSourceRoute, kind]);
+  const messageHref =
+    `/messages/new?to=${encodeURIComponent(ownerEmail)}` +
+    `&subject=${encodeURIComponent(record.room_title)}` +
+    `&room_title=${encodeURIComponent(record.room_title)}` +
+    `&title=${encodeURIComponent(record.room_title)}` +
+    `&room_type=${encodeURIComponent(record.room_type)}` +
+    `&room_id=${encodeURIComponent(record.room_id)}` +
+    `&item_id=${encodeURIComponent(record.room_id)}` +
+    `&signal_id=${encodeURIComponent(record.room_id)}` +
+    `&source=${encodeURIComponent(`${record.room_kind}-room`)}` +
+    `&type=${encodeURIComponent(record.room_kind)}` +
+    `&folder=${encodeURIComponent(record.folder)}` +
+    `&source_route=${encodeURIComponent(record.source_route)}`;
 
-  async function pushAction(action: "save" | "archive" | "delete" | "restore") {
-    const next = { ...state };
+  function run(action: "save" | "unsave" | "archive" | "unarchive" | "delete" | "restore") {
+    const next = applyRoomAction(record, action);
+    setRecord(next);
 
-    if (action === "save") {
-      next.saved = !state.saved;
-      next.archived = false;
-      next.deleted = false;
-    }
+    const copy: Record<string, string> = {
+      save: "Saved. It now lives in Saved Rooms.",
+      unsave: "Removed from Saved Rooms.",
+      archive: "Archived. It leaves active workflow.",
+      unarchive: "Returned from Archived.",
+      delete: "Deleted/hidden. It leaves normal workflow.",
+      restore: "Restored to active workflow.",
+    };
 
-    if (action === "archive") {
-      next.archived = !state.archived;
-      next.deleted = false;
-    }
-
-    if (action === "delete") {
-      next.deleted = true;
-      next.archived = false;
-      next.saved = false;
-    }
-
-    if (action === "restore") {
-      next.deleted = false;
-      next.archived = false;
-    }
-
-    setState(next);
-    writeState(safeRoomId, next);
-
-    setStatus(
-      action === "delete"
-        ? "Room hidden from active workflow."
-        : action === "archive"
-        ? next.archived
-          ? "Room moved to Archived."
-          : "Room returned from Archived."
-        : action === "save"
-        ? next.saved
-          ? "Room saved."
-          : "Room unsaved."
-        : "Room restored."
-    );
-
-    try {
-      await fetch("/api/room/actions", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": safeViewer,
-          "x-vf-admin": "0",
-        },
-        body: JSON.stringify({
-          action,
-          room_id: safeRoomId,
-          room_title: safeTitle,
-          room_type: safeRoomType,
-          folder: safeFolder,
-          source_route: safeSourceRoute,
-          viewer_email: safeViewer,
-          state: next,
-        }),
-      });
-    } catch {
-      // Local cleanup still works even if persistence endpoint/table is not ready.
-    }
+    setStatus(copy[action]);
+    fetch("/api/room/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...next }),
+    }).catch(() => {});
   }
 
-  if (state.deleted) {
+  if (record.deleted) {
     return (
-      <section style={{ ...wrap, borderColor: "rgba(248,113,113,.35)" }}>
-        <div style={label}>Room Hidden</div>
-        <h2 style={{ margin: "8px 0 10px", fontSize: 32, letterSpacing: "-.04em" }}>
-          This room is hidden from active workflow.
-        </h2>
-        <p style={{ color: "#cbd5e1", lineHeight: 1.55, marginTop: 0 }}>
-          Restore it to place it back into active room flow, or return to the lane.
-        </p>
-
-        <div className="vf-room-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          <button type="button" onClick={() => pushAction("restore")} style={button}>
-            Restore Room
-          </button>
-          <a href={laneHref} style={ghost}>
-            Back To Lane
-          </a>
-          <a href="/dashboard" style={ghost}>
-            Command
-          </a>
+      <section style={{ ...shell, borderColor: "rgba(248,113,113,.35)" }}>
+        <div style={label}>Deleted / Hidden</div>
+        <h3 style={{ margin: "8px 0", fontSize: 28 }}>This room is out of active workflow.</h3>
+        <p style={{ color: "#cbd5e1" }}>Restore it or leave it inside Deleted Rooms to keep the workspace clean.</p>
+        <div className="vf-room-clean-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <button type="button" onClick={() => run("restore")} style={btn}>Restore Room</button>
+          <Link href="/deleted-rooms" style={ghost}>Deleted Folder</Link>
+          <Link href={laneHref} style={ghost}>Back To Lane</Link>
+          <Link href="/dashboard" style={ghost}>Command</Link>
         </div>
-
         {status ? <p style={{ color: "#f8e7b0", fontWeight: 900 }}>{status}</p> : null}
       </section>
     );
   }
 
   return (
-    <section style={wrap}>
+    <section style={shell}>
       <style>{`
         @media(max-width:760px) {
-          .vf-room-actions {
+          .vf-room-clean-actions {
             display: grid !important;
             grid-template-columns: 1fr !important;
           }
-
-          .vf-room-actions > * {
+          .vf-room-clean-actions > * {
             width: 100%;
             box-sizing: border-box;
           }
         }
       `}</style>
 
-      <div style={label}>Room Cleanup Controls</div>
-
-      <p style={{ color: "#cbd5e1", lineHeight: 1.55, margin: "8px 0 14px" }}>
-        Save, archive, hide/delete, or start an internal thread without losing the room context.
+      <div style={label}>5S Room Controls</div>
+      <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>
+        Save what matters. Archive what is done. Delete/hide what should leave active workflow.
       </p>
 
-      <div className="vf-room-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-        <button type="button" onClick={() => pushAction("save")} style={state.saved ? button : ghost}>
-          {state.saved ? "Saved" : "Save Room"}
+      <div className="vf-room-clean-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        <button type="button" onClick={() => run(record.saved ? "unsave" : "save")} style={record.saved ? btn : ghost}>
+          {record.saved ? "Saved" : "Save Room"}
         </button>
-
-        <button type="button" onClick={() => pushAction("archive")} style={state.archived ? button : ghost}>
-          {state.archived ? "Archived" : "Archive Room"}
+        <button type="button" onClick={() => run(record.archived ? "unarchive" : "archive")} style={record.archived ? btn : ghost}>
+          {record.archived ? "Archived" : "Archive Room"}
         </button>
-
-        <button type="button" onClick={() => pushAction("delete")} style={danger}>
-          Delete / Hide Room
-        </button>
-
-        <Link href={messageHref} style={button}>
-          Request Info / Intro
-        </Link>
-
-        <Link href={messageHref} style={ghost}>
-          Internal Thread
-        </Link>
-
-        <a href={laneHref} style={ghost}>
-          Back To Lane
-        </a>
-
-        <a href="/dashboard" style={ghost}>
-          Command
-        </a>
+        <button type="button" onClick={() => run("delete")} style={danger}>Delete / Hide Room</button>
+        <Link href={messageHref} style={btn}>Request Info / Intro</Link>
+        <Link href={messageHref} style={ghost}>Internal Thread</Link>
+        <Link href="/saved-rooms" style={ghost}>Saved Folder</Link>
+        <Link href="/archived-rooms" style={ghost}>Archived Folder</Link>
+        <Link href="/deleted-rooms" style={ghost}>Deleted Folder</Link>
+        <Link href={laneHref} style={ghost}>Back To Lane</Link>
+        <Link href="/dashboard" style={ghost}>Command</Link>
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-        <span style={chip}>{safeRoomType}</span>
-        <span style={chip}>Folder: {safeFolder}</span>
-        <span style={chip}>Room: {safeRoomId}</span>
+        <span style={chip}>{record.room_type}</span>
+        <span style={chip}>Status: {record.status}</span>
+        <span style={chip}>Room: {record.room_id}</span>
       </div>
 
       {status ? <p style={{ color: "#f8e7b0", fontWeight: 900 }}>{status}</p> : null}
@@ -376,5 +195,4 @@ const chip: React.CSSProperties = {
   background: "rgba(157,243,191,.08)",
   fontWeight: 900,
   fontSize: 12,
-  overflowWrap: "anywhere",
 };
