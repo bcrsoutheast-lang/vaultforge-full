@@ -125,6 +125,9 @@ function normalizeRows(data: any) {
     ...(Array.isArray(data.pain_requests) ? data.pain_requests : []),
     ...(Array.isArray(data.items) ? data.items : []),
     ...(Array.isArray(data.rooms) ? data.rooms : []),
+    ...(Array.isArray(data.pressure_rooms) ? data.pressure_rooms : []),
+    ...(Array.isArray(data.requests) ? data.requests : []),
+    ...(Array.isArray(data.cards) ? data.cards : []),
     ...(Array.isArray(data.data) ? data.data : []),
   ];
 
@@ -235,7 +238,10 @@ export default function PressureRoomsPage() {
 
       const endpoints = [
         `/api/pain/feed?folder=${encodeURIComponent(current)}`,
+        `/api/pain/feed`,
         `/api/pressure/feed?folder=${encodeURIComponent(current)}`,
+        `/api/pressure/feed`,
+        `/api/dashboard/live`,
       ];
 
       for (const endpoint of endpoints) {
@@ -255,14 +261,14 @@ export default function PressureRoomsPage() {
       }
 
       setRows([]);
-      setStatus("No pressure rooms found in this folder yet.");
+      setStatus("No pressure rooms found yet. Open Pain Feed or submit a Pain item to create one.");
     }
 
     load();
   }, []);
 
   const filtered = useMemo(() => rows.filter((row) => matchesFolder(row, folder)), [rows, folder]);
-  const shown = filtered.length ? filtered : rows.length && folder === "active" ? rows : [];
+  const shown = filtered.length ? filtered : rows;
 
   return (
     <main style={page}>
@@ -306,6 +312,15 @@ export default function PressureRoomsPage() {
         </section>
 
         {status ? <section style={card}><p style={{ ...muted, margin: 0 }}>{status}</p></section> : null}
+
+        {!status && !filtered.length && rows.length ? (
+          <section style={card}>
+            <div style={labelStyle}>Folder Empty / Showing Unstaged Rooms</div>
+            <p style={{ ...muted, margin: 0 }}>
+              No rooms are staged in {label(folder)} yet, so VaultForge is showing available pressure rooms. Use room stage buttons to move rooms into folders.
+            </p>
+          </section>
+        ) : null}
 
         <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 16 }}>
           {shown.map((row, index) => (
