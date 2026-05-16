@@ -126,6 +126,9 @@ function normalizeRows(data: any) {
     ...(Array.isArray(data.projects) ? data.projects : []),
     ...(Array.isArray(data.items) ? data.items : []),
     ...(Array.isArray(data.rooms) ? data.rooms : []),
+    ...(Array.isArray(data.opportunities) ? data.opportunities : []),
+    ...(Array.isArray(data.saved) ? data.saved : []),
+    ...(Array.isArray(data.cards) ? data.cards : []),
     ...(Array.isArray(data.data) ? data.data : []),
   ];
 
@@ -236,8 +239,12 @@ export default function OpportunityRoomsPage() {
 
       const endpoints = [
         `/api/deal/feed?folder=${encodeURIComponent(current)}`,
+        `/api/deal/feed`,
         `/api/projects?folder=${encodeURIComponent(current)}`,
+        `/api/projects`,
         `/api/deals?folder=${encodeURIComponent(current)}`,
+        `/api/deals`,
+        `/api/dashboard/live`,
       ];
 
       for (const endpoint of endpoints) {
@@ -257,7 +264,7 @@ export default function OpportunityRoomsPage() {
       }
 
       setRows([]);
-      setStatus("No opportunity rooms found in this folder yet.");
+      setStatus("No opportunity rooms found yet. Open Projects or Submit Opportunity to create one.");
     }
 
     load();
@@ -265,7 +272,7 @@ export default function OpportunityRoomsPage() {
 
   const filtered = useMemo(() => rows.filter((row) => matchesFolder(row, folder)), [rows, folder]);
 
-  const shown = filtered.length ? filtered : rows.length && folder === "active" ? rows : [];
+  const shown = filtered.length ? filtered : rows;
 
   return (
     <main style={page}>
@@ -309,6 +316,15 @@ export default function OpportunityRoomsPage() {
         </section>
 
         {status ? <section style={card}><p style={{ ...muted, margin: 0 }}>{status}</p></section> : null}
+
+        {!status && !filtered.length && rows.length ? (
+          <section style={card}>
+            <div style={labelStyle}>Folder Empty / Showing Unstaged Rooms</div>
+            <p style={{ ...muted, margin: 0 }}>
+              No rooms are staged in {label(folder)} yet, so VaultForge is showing available opportunity rooms. Use room stage buttons to move rooms into folders.
+            </p>
+          </section>
+        ) : null}
 
         <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 16 }}>
           {shown.map((row, index) => (
