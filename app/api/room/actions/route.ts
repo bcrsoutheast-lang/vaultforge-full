@@ -7,10 +7,6 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function json(data: Record<string, unknown>, status = 200) {
-  return NextResponse.json(data, { status });
-}
-
 export async function POST(request: Request) {
   let payload: Record<string, any> = {};
 
@@ -20,36 +16,18 @@ export async function POST(request: Request) {
     payload = {};
   }
 
-  const action = clean(payload.action);
-  const roomId = clean(payload.room_id || payload.roomId || payload.id);
-  const roomTitle = clean(payload.room_title || payload.title);
-  const roomType = clean(payload.room_type || payload.type || "VaultForge Room");
-  const folder = clean(payload.folder || "general");
-  const viewerEmail =
-    clean(payload.viewer_email) ||
-    clean(request.headers.get("x-vf-email")) ||
-    clean(payload.email);
-
+  const roomId = clean(payload.room_id || payload.id);
   if (!roomId) {
-    return json(
-      {
-        ok: false,
-        error: "Missing room_id.",
-      },
-      400
-    );
+    return NextResponse.json({ ok: false, error: "Missing room_id." }, { status: 400 });
   }
 
-  return json({
+  return NextResponse.json({
     ok: true,
-    saved: true,
-    action,
+    action: clean(payload.action),
     room_id: roomId,
-    room_title: roomTitle,
-    room_type: roomType,
-    folder,
-    viewer_email: viewerEmail,
-    note:
-      "Room action accepted. Client-side cleanup state is active. Server persistence can be wired to Supabase when room action table is finalized.",
+    room_title: clean(payload.room_title),
+    room_type: clean(payload.room_type),
+    status: clean(payload.status),
+    note: "5S room action accepted. Client cleanup is active; Supabase persistence can be attached later.",
   });
 }
