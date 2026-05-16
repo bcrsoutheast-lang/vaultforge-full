@@ -146,6 +146,24 @@ function roomState(room: Record<string, any>) {
   );
 }
 
+function roomTitle(room: Record<string, any>, fallback: string) {
+  return clean(
+    room.title ||
+      room.deal_title ||
+      room.pain_title ||
+      room.project_title ||
+      room.name ||
+      room.headline ||
+      room.address ||
+      fallback
+  );
+}
+
+function sourceRouteForRoom(lane: Lane, roomId: string) {
+  if (lane === "pressure") return `/pain-room/${encodeURIComponent(roomId)}`;
+  return `/deal/detail?id=${encodeURIComponent(roomId)}`;
+}
+
 function roomNeeds(room: Record<string, any>, lane: Lane) {
   const hay = textFromRoom(room);
   const needs = new Set<string>();
@@ -363,7 +381,22 @@ function MemberMatchCard({
   const name = clean(profile.full_name) || clean(profile.email) || "VaultForge Member";
   const email = clean(profile.email);
   const state = clean(profile.state_from) || "State not listed";
-  const messageHref = `/messages/new?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(`Room Match: ${clean(room.title || room.name || roomId)}`)}&source=room-match&type=${encodeURIComponent(lane)}&item_id=${encodeURIComponent(roomId)}&title=${encodeURIComponent(name)}`;
+  const currentRoomTitle = roomTitle(room, roomId);
+  const currentRoomType = lane === "pressure" ? "Pressure Room" : "Opportunity Room";
+  const currentSourceRoute = sourceRouteForRoom(lane, roomId);
+  const matchReason = `${match.lane} · ${match.score}% · ${match.reasons.slice(0, 3).join(" · ")}`;
+
+  const messageHref =
+    `/messages/new?to=${encodeURIComponent(email)}` +
+    `&subject=${encodeURIComponent(currentRoomTitle)}` +
+    `&source=room-match&type=${encodeURIComponent(lane)}` +
+    `&item_id=${encodeURIComponent(roomId)}` +
+    `&room_id=${encodeURIComponent(roomId)}` +
+    `&room_type=${encodeURIComponent(currentRoomType)}` +
+    `&room_title=${encodeURIComponent(currentRoomTitle)}` +
+    `&title=${encodeURIComponent(currentRoomTitle)}` +
+    `&source_route=${encodeURIComponent(currentSourceRoute)}` +
+    `&match_reason=${encodeURIComponent(matchReason)}`;
 
   return (
     <article
@@ -612,7 +645,22 @@ export default function VaultForgeRoomMemberMatch({
                     const match = item.match;
                     const name = clean(profile.full_name) || clean(profile.email) || "VaultForge Member";
                     const email = clean(profile.email);
-                    const messageHref = `/messages/new?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(`Overflow Room Match: ${clean(room?.title || room?.name || roomId)}`)}&source=room-match-overflow&type=${encodeURIComponent(lane)}&item_id=${encodeURIComponent(roomId)}&title=${encodeURIComponent(name)}`;
+                    const overflowRoomTitle = roomTitle(room || {}, roomId);
+                    const overflowRoomType = lane === "pressure" ? "Pressure Room" : "Opportunity Room";
+                    const overflowSourceRoute = sourceRouteForRoom(lane, roomId);
+                    const overflowReason = `${match.lane} · ${match.score}% · ${match.reasons.slice(0, 3).join(" · ")}`;
+
+                    const messageHref =
+                      `/messages/new?to=${encodeURIComponent(email)}` +
+                      `&subject=${encodeURIComponent(overflowRoomTitle)}` +
+                      `&source=room-match-overflow&type=${encodeURIComponent(lane)}` +
+                      `&item_id=${encodeURIComponent(roomId)}` +
+                      `&room_id=${encodeURIComponent(roomId)}` +
+                      `&room_type=${encodeURIComponent(overflowRoomType)}` +
+                      `&room_title=${encodeURIComponent(overflowRoomTitle)}` +
+                      `&title=${encodeURIComponent(overflowRoomTitle)}` +
+                      `&source_route=${encodeURIComponent(overflowSourceRoute)}` +
+                      `&match_reason=${encodeURIComponent(overflowReason)}`;
 
                     return (
                       <article
