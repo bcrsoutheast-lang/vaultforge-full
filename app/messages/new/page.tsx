@@ -3,6 +3,20 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+type RoomContext = {
+  to: string;
+  from: string;
+  subject: string;
+  title: string;
+  roomType: string;
+  roomId: string;
+  signalId: string;
+  folder: string;
+  source: string;
+  sourceRoute: string;
+  matchReason: string;
+};
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -31,7 +45,7 @@ function readCookie(name: string) {
 function getEmail() {
   if (typeof window === "undefined") return "";
 
-  const keys = ["memberEmail", "vf_member_email", "email", "vf_email"];
+  const keys = ["vf_email", "vf_member_email", "memberEmail", "email"];
 
   for (const key of keys) {
     try {
@@ -45,58 +59,227 @@ function getEmail() {
     }
   }
 
-  const cookieKeys = ["vf_member_email", "memberEmail", "email", "vf_email"];
+  const cookieValue = cleanEmail(readCookie("vf_email") || readCookie("vf_member_email"));
+  return cookieValue.includes("@") ? cookieValue : "";
+}
 
-  for (const key of cookieKeys) {
-    const value = cleanEmail(readCookie(key));
-    if (value.includes("@")) return value;
+function first(...values: unknown[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const found = value.find((item) => clean(item));
+      if (found !== undefined) return clean(found);
+      continue;
+    }
+
+    const text = clean(value);
+    if (text) return text;
   }
 
   return "";
 }
 
-function getQuery() {
-  if (typeof window === "undefined") return new URLSearchParams();
-  return new URLSearchParams(window.location.search);
-}
-
-function safeDecode(value: string | null) {
+function safeDecode(value: string) {
   try {
-    return clean(value ? decodeURIComponent(value) : "");
+    return decodeURIComponent(value);
   } catch {
-    return clean(value || "");
+    return value;
   }
 }
 
-function labelFromSource(source: string, type: string) {
-  const key = `${source} ${type}`.toLowerCase();
+function parseReferrerContext() {
+  if (typeof document === "undefined") {
+    return {
+      roomId: "",
+      roomType: "",
+      sourceRoute: "",
+      source: "",
+      folder: "",
+    };
+  }
 
-  if (key.includes("pain") || key.includes("pressure")) return "Pressure Room";
-  if (key.includes("deal") || key.includes("opportunity")) return "Opportunity Room";
-  if (key.includes("signal")) return "Signal Room";
-  if (key.includes("routing")) return "Routing Room";
-  if (key.includes("project")) return "Project Room";
-  if (key.includes("network") || key.includes("member")) return "Network Member";
-  return "VaultForge Room";
+  const ref = clean(document.referrer);
+  if (!ref) {
+    return {
+      roomId: "",
+      roomType: "",
+      sourceRoute: "",
+      source: "",
+      folder: "",
+    };
+  }
+
+  try {
+    const url = new URL(ref);
+    const path = url.pathname;
+    const parts = path.split("/").filter(Boolean).map(safeDecode);
+
+    if (path.includes("/pain-room/")) {
+      const id = clean(parts[parts.length - 1]);
+      return {
+        roomId: id,
+        roomType: "Pressure Room",
+        sourceRoute: `/pain-room/${encodeURIComponent(id)}`,
+        source: "pressure-room",
+        folder: "pain",
+      };
+    }
+
+    if (path.includes("/routing-room/")) {
+      const id = clean(parts[parts.length - 1]);
+      return {
+        roomId: id,
+        roomType: "Routing Room",
+        sourceRoute: `/routing-room/${encodeURIComponent(id)}`,
+        source: "routing-room",
+        folder: "routing",
+      };
+    }
+
+    if (path.includes("/signals/")) {
+      const id = clean(parts[parts.length - 1]);
+      return {
+        roomId: id,
+        roomType: "Signal Room",
+        sourceRoute: `/signals/${encodeURIComponent(id)}`,
+        source: "signal-room",
+        folder: "signals",
+      };
+    }
+
+    if (path.includes("/deal/detail")) {
+      const id = clean(url.searchParams.get("id"));
+      return {
+        roomId: id,
+        roomType: "Opportunity Room",
+        sourceRoute: id ? `/deal/detail?id=${encodeURIComponent(id)}` : "/deal/detail",
+        source: "opportunity-room",
+        folder: "deals",
+      };
+    }
+  } catch {
+    // Continue.
+  }
+
+  return {
+    roomId: "",
+    roomType: "",
+    sourceRoute: "",
+    source: "",
+    folder: "",
+  };
 }
 
-function folderFromSource(source: string, type: string) {
-  const key = `${source} ${type}`.toLowerCase();
+function readQueryContext(): RoomContext {
+  if (typeof window === "undefined") {
+    return {
+      to: "bcrsoutheast@gmail.com",
+      from: "",
+      subject: "VaultForge Room",
+      title: "VaultForge Room",
+      roomType: "VaultForge Room",
+      roomId: "",
+      signalId: "",
+      folder: "general",
+      source: "message",
+      sourceRoute: "",
+      matchReason: "",
+    };
+  }
 
-  if (key.includes("pain") || key.includes("pressure")) return "pain";
-  if (key.includes("deal") || key.includes("opportunity")) return "deals";
-  if (key.includes("signal")) return "signals";
-  if (key.includes("routing")) return "routing";
-  if (key.includes("project")) return "projects";
-  if (key.includes("network") || key.includes("member")) return "members";
-  if (key.includes("alert")) return "alerts";
-  return "general";
+  const params = new URLSearchParams(window.location.search);
+  const ref = parseReferrerContext();
+
+  const roomId =
+    clean(params.get("room_id")) ||
+    clean(params.get("item_id")) ||
+    clean(params.get("deal_id")) ||
+    clean(params.get("pain_id")) ||
+    clean(params.get("signal_id")) ||
+    ref.roomId;
+
+  const roomType =
+    clean(params.get("room_type")) ||
+    clean(params.get("type")) ||
+    ref.roomType ||
+    "VaultForge Room";
+
+  const title =
+    clean(params.get("room_title")) ||
+    clean(params.get("title")) ||
+    clean(params.get("subject")) ||
+    "VaultForge Room";
+
+  return {
+    to: clean(params.get("to")) || "bcrsoutheast@gmail.com",
+    from: getEmail(),
+    subject: clean(params.get("subject")) || title || "VaultForge Room",
+    title,
+    roomType,
+    roomId,
+    signalId: clean(params.get("signal_id")) || roomId,
+    folder: clean(params.get("folder")) || ref.folder || "general",
+    source: clean(params.get("source")) || ref.source || "message",
+    sourceRoute: clean(params.get("source_route")) || ref.sourceRoute || "",
+    matchReason: clean(params.get("match_reason")),
+  };
+}
+
+async function safeJson(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function getRow(data: any) {
+  return (
+    data.deal ||
+    data.project ||
+    data.pain ||
+    data.record ||
+    data.item ||
+    data.room ||
+    data.signal ||
+    data.action ||
+    (Array.isArray(data.deals) ? data.deals[0] : null) ||
+    (Array.isArray(data.projects) ? data.projects[0] : null) ||
+    (Array.isArray(data.pains) ? data.pains[0] : null) ||
+    (Array.isArray(data.items) ? data.items[0] : null) ||
+    (Array.isArray(data.feed) ? data.feed[0] : null) ||
+    (Array.isArray(data.rows) ? data.rows[0] : null) ||
+    (Array.isArray(data.data) ? data.data[0] : null) ||
+    null
+  );
+}
+
+function roomTitleFromRow(row: any) {
+  if (!row || typeof row !== "object") return "";
+
+  const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+
+  return first(
+    row.title,
+    row.deal_title,
+    row.pain_title,
+    row.project_title,
+    row.signal_title,
+    row.headline,
+    row.name,
+    row.address,
+    meta.title,
+    meta.deal_title,
+    meta.pain_title,
+    meta.project_title,
+    meta.signal_title,
+    meta.address
+  );
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 28%), radial-gradient(circle at 88% 8%, rgba(86,216,255,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 30%), radial-gradient(circle at 88% 8%, rgba(86,216,255,.10), transparent 26%), linear-gradient(180deg,#020617,#071326 55%,#020617)",
   color: "white",
   padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
@@ -107,228 +290,157 @@ const wrap: React.CSSProperties = {
   margin: "0 auto",
 };
 
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 28,
-  padding: 22,
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.22)",
+  borderRadius: 30,
+  padding: 24,
   background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
   boxShadow: "0 28px 86px rgba(0,0,0,.30)",
-  marginBottom: 18,
+  marginBottom: 20,
 };
 
 const label: React.CSSProperties = {
   color: "#e8c46b",
-  letterSpacing: ".16em",
+  letterSpacing: ".18em",
   textTransform: "uppercase",
   fontWeight: 950,
-  fontSize: 11,
-};
-
-const muted: React.CSSProperties = {
-  color: "#cbd5e1",
-  lineHeight: 1.55,
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,.14)",
-  background: "rgba(0,0,0,.24)",
-  color: "white",
-  padding: 13,
-  fontSize: 15,
-  outline: "none",
+  fontSize: 12,
 };
 
 const button: React.CSSProperties = {
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
   minHeight: 48,
   borderRadius: 999,
-  padding: "12px 17px",
+  padding: "12px 16px",
+  textDecoration: "none",
+  fontWeight: 950,
   background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
-  fontWeight: 950,
-  textDecoration: "none",
   border: 0,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
   cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
   ...button,
-  border: "1px solid rgba(255,255,255,.14)",
-  background: "rgba(255,255,255,.060)",
+  background: "rgba(255,255,255,.06)",
+  border: "1px solid rgba(255,255,255,.16)",
   color: "white",
 };
 
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid rgba(255,255,255,.12)",
+  borderRadius: 18,
+  background: "rgba(2,6,23,.72)",
+  color: "white",
+  minHeight: 52,
+  padding: "14px 16px",
+  fontSize: 16,
+  outline: "none",
+};
+
+const textarea: React.CSSProperties = {
+  ...input,
+  minHeight: 170,
+  resize: "vertical",
+  lineHeight: 1.5,
+};
+
 export default function NewMessagePage() {
-  const [fromEmail, setFromEmail] = useState("");
-  const [toEmail, setToEmail] = useState("");
+  const initial = useMemo(readQueryContext, []);
+  const [context, setContext] = useState<RoomContext>(initial);
+  const [fromEmail, setFromEmail] = useState(initial.from);
+  const [toEmail, setToEmail] = useState(initial.to);
+  const [subject, setSubject] = useState(initial.subject);
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("");
   const [sentThread, setSentThread] = useState("");
-  const [resolvedTitle, setResolvedTitle] = useState("");
-  const [resolvedRoomType, setResolvedRoomType] = useState("");
-  const [resolvedFolder, setResolvedFolder] = useState("");
-  const [resolvedBackLink, setResolvedBackLink] = useState("");
 
-  const context = useMemo(() => {
-    const q = getQuery();
+  async function resolveRoomTitle(ctx: RoomContext) {
+    if (!ctx.roomId) return;
 
-    const source = safeDecode(q.get("source"));
-    const type = safeDecode(q.get("type"));
-    const itemId = safeDecode(q.get("item_id") || q.get("itemId") || q.get("deal_id") || q.get("pain_id") || q.get("project_id"));
-    const signalId = safeDecode(q.get("signal_id") || q.get("signalId"));
-    const roomId = itemId || signalId || safeDecode(q.get("id"));
-    const title = safeDecode(q.get("title") || q.get("room_title") || q.get("deal_title") || q.get("pain_title") || q.get("subject")) || "VaultForge Room";
-    const subject = safeDecode(q.get("subject")) || title;
-    const folder = safeDecode(q.get("folder") || q.get("folder_key")) || folderFromSource(source, type);
-    const roomType = safeDecode(q.get("room_type")) || labelFromSource(source, type);
-    const sourceRoute = safeDecode(q.get("source_route") || q.get("return_to") || q.get("room_url"));
-    const matchReason = safeDecode(q.get("match_reason"));
-    const recipient = cleanEmail(q.get("to") || q.get("recipient") || q.get("owner_email") || q.get("target_email"));
-
-    return {
-      source,
-      type,
-      itemId,
-      signalId,
-      roomId,
-      title,
-      subject,
-      folder,
-      roomType,
-      sourceRoute,
-      matchReason,
-      recipient,
-    };
-  }, []);
-
-  function effectiveTitle() {
-    return clean(resolvedTitle || context.title || context.subject || "VaultForge Room");
-  }
-
-  function effectiveRoomType() {
-    return clean(resolvedRoomType || context.roomType || "VaultForge Room");
-  }
-
-  function effectiveFolder() {
-    return clean(resolvedFolder || context.folder || "general");
-  }
-
-  function effectiveRoomLink() {
-    return clean(resolvedBackLink || context.sourceRoute || "");
-  }
-
-  async function resolveRoomContext(roomId: string, viewer: string) {
-    const currentTitle = clean(context.title);
-    const currentSubject = clean(context.subject);
-
+    const currentTitle = clean(ctx.title);
     if (
       currentTitle &&
       currentTitle !== "VaultForge Room" &&
       currentTitle !== "Deal Room" &&
-      currentTitle !== "Opportunity Room"
+      currentTitle !== "Opportunity Room" &&
+      currentTitle !== "Pressure Room" &&
+      currentTitle !== "Routing Room" &&
+      currentTitle !== "Signal Room"
     ) {
-      setResolvedTitle(currentTitle);
       return;
     }
 
-    if (
-      currentSubject &&
-      currentSubject !== "VaultForge Room" &&
-      currentSubject !== "Deal Room" &&
-      currentSubject !== "Opportunity Room"
-    ) {
-      setResolvedTitle(currentSubject);
-    }
+    const email = getEmail();
 
-    if (!roomId) return;
+    const kind = clean(ctx.roomType).toLowerCase();
+    const source = clean(ctx.source).toLowerCase();
 
-    const lower = `${context.source} ${context.type} ${context.folder} ${context.roomType}`.toLowerCase();
-    const shouldTryPain =
-      lower.includes("pain") ||
-      lower.includes("pressure");
+    const pressureFirst = kind.includes("pressure") || source.includes("pressure") || source.includes("pain") || ctx.sourceRoute.includes("/pain-room/");
+    const routingFirst = kind.includes("routing") || source.includes("routing") || ctx.sourceRoute.includes("/routing-room/");
+    const signalFirst = kind.includes("signal") || source.includes("signal") || ctx.sourceRoute.includes("/signals/");
 
-    const lookups = shouldTryPain
+    const lookups = pressureFirst
       ? [
-          {
-            kind: "pressure",
-            url: `/api/pain/feed?id=${encodeURIComponent(roomId)}&email=${encodeURIComponent(viewer)}&owner=0`,
-          },
-          {
-            kind: "opportunity",
-            url: `/api/deal/detail?id=${encodeURIComponent(roomId)}`,
-          },
+          { type: "Pressure Room", folder: "pain", route: `/pain-room/${encodeURIComponent(ctx.roomId)}`, url: `/api/pain/feed?id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
+          { type: "Opportunity Room", folder: "deals", route: `/deal/detail?id=${encodeURIComponent(ctx.roomId)}`, url: `/api/deal/detail?id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
+          { type: "Opportunity Room", folder: "deals", route: `/deal/detail?id=${encodeURIComponent(ctx.roomId)}`, url: `/api/deal/feed?id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
+        ]
+      : routingFirst
+      ? [
+          { type: "Routing Room", folder: "routing", route: `/routing-room/${encodeURIComponent(ctx.roomId)}`, url: `/api/routing/actions?signal_id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
+          { type: "Signal Room", folder: "signals", route: `/signals/${encodeURIComponent(ctx.roomId)}`, url: `/api/signals/${encodeURIComponent(ctx.roomId)}?email=${encodeURIComponent(email)}&owner=0` },
+          { type: "Pressure Room", folder: "pain", route: `/pain-room/${encodeURIComponent(ctx.roomId)}`, url: `/api/pain/feed?id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
+        ]
+      : signalFirst
+      ? [
+          { type: "Signal Room", folder: "signals", route: `/signals/${encodeURIComponent(ctx.roomId)}`, url: `/api/signals/${encodeURIComponent(ctx.roomId)}?email=${encodeURIComponent(email)}&owner=0` },
+          { type: "Routing Room", folder: "routing", route: `/routing-room/${encodeURIComponent(ctx.roomId)}`, url: `/api/routing/actions?signal_id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
         ]
       : [
-          {
-            kind: "opportunity",
-            url: `/api/deal/detail?id=${encodeURIComponent(roomId)}`,
-          },
-          {
-            kind: "pressure",
-            url: `/api/pain/feed?id=${encodeURIComponent(roomId)}&email=${encodeURIComponent(viewer)}&owner=0`,
-          },
+          { type: "Opportunity Room", folder: "deals", route: `/deal/detail?id=${encodeURIComponent(ctx.roomId)}`, url: `/api/deal/detail?id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
+          { type: "Opportunity Room", folder: "deals", route: `/deal/detail?id=${encodeURIComponent(ctx.roomId)}`, url: `/api/deal/feed?id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
+          { type: "Pressure Room", folder: "pain", route: `/pain-room/${encodeURIComponent(ctx.roomId)}`, url: `/api/pain/feed?id=${encodeURIComponent(ctx.roomId)}&email=${encodeURIComponent(email)}&owner=0` },
         ];
 
-    for (const item of lookups) {
+    for (const lookup of lookups) {
       try {
-        const response = await fetch(item.url, {
+        const response = await fetch(lookup.url, {
           cache: "no-store",
           credentials: "include",
           headers: {
-            "x-vf-email": viewer,
+            "x-vf-email": email,
             "x-vf-admin": "0",
           },
         });
 
-        const data = await response.json().catch(() => ({}));
+        const data = await safeJson(response);
+        const row = getRow(data);
+        const foundTitle = roomTitleFromRow(row);
 
-        if (!response.ok || data?.ok === false) continue;
+        if (response.ok && foundTitle) {
+          setContext((prev) => ({
+            ...prev,
+            title: foundTitle,
+            subject: foundTitle,
+            roomType: lookup.type,
+            folder: lookup.folder,
+            sourceRoute: prev.sourceRoute || lookup.route,
+          }));
 
-        const row =
-          data.deal ||
-          data.record ||
-          data.item ||
-          data.pain ||
-          (Array.isArray(data.pains) ? data.pains[0] : null) ||
-          null;
+          setSubject(foundTitle);
 
-        if (!row || typeof row !== "object") continue;
+          setMessage((old) => {
+            if (old && !old.includes("VaultForge")) return old;
+            return `I'm requesting info / intro on ${foundTitle}.`;
+          });
 
-        const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
-
-        const foundTitle = clean(
-          row.title ||
-            row.deal_title ||
-            row.pain_title ||
-            row.project_title ||
-            row.headline ||
-            row.name ||
-            row.address ||
-            meta.title ||
-            meta.deal_title ||
-            meta.pain_title
-        );
-
-        if (foundTitle) {
-          setResolvedTitle(foundTitle);
+          return;
         }
-
-        if (item.kind === "pressure") {
-          setResolvedRoomType("Pressure Room");
-          setResolvedFolder("pain");
-          setResolvedBackLink(`/pain-room/${encodeURIComponent(roomId)}`);
-        } else {
-          setResolvedRoomType("Opportunity Room");
-          setResolvedFolder("deals");
-          setResolvedBackLink(`/deal/detail?id=${encodeURIComponent(roomId)}`);
-        }
-
-        return;
       } catch {
         // Try next lookup.
       }
@@ -337,109 +449,82 @@ export default function NewMessagePage() {
 
   useEffect(() => {
     const viewer = getEmail();
-    setFromEmail(viewer);
-    setToEmail(context.recipient || "bcrsoutheast@gmail.com");
+    setFromEmail(viewer || initial.from);
+    setToEmail(initial.to || "bcrsoutheast@gmail.com");
 
-    const roomId = context.roomId || context.itemId || context.signalId;
-    resolveRoomContext(roomId, viewer);
-
-    const startingTitle =
-      context.title && context.title !== "VaultForge Room"
-        ? context.title
-        : context.subject && context.subject !== "VaultForge Room"
-        ? context.subject
-        : "";
-
-    const opener = startingTitle
-      ? `I'm requesting info / intro on ${startingTitle}.`
-      : "I'm requesting info / intro from VaultForge.";
+    const startingTitle = clean(initial.title);
+    const opener =
+      startingTitle && startingTitle !== "VaultForge Room"
+        ? `I'm requesting info / intro on ${startingTitle}.`
+        : "I'm requesting info / intro from VaultForge.";
 
     setMessage(opener);
-  }, [context]);
+    resolveRoomTitle(initial);
+  }, []);
+
+  const displayTitle = clean(context.title) || "VaultForge Room";
+  const displaySubject = clean(subject) || displayTitle;
+  const displayRoomType = clean(context.roomType) || "VaultForge Room";
+  const displayFolder = clean(context.folder) || "general";
+  const displayRoomId = clean(context.roomId) || "Not listed";
+  const backHref = clean(context.sourceRoute) || "/dashboard";
 
   async function sendMessage() {
-    setStatus("Sending...");
+    setStatus("Sending message...");
 
     const payload = {
       from_email: fromEmail,
-      sender_email: fromEmail,
-      email: fromEmail,
       to_email: toEmail,
-      recipient_email: toEmail,
-      target_email: toEmail,
-      owner_email: toEmail,
-      item_id: context.itemId || context.roomId || null,
-      signal_id: context.signalId || null,
-      source: context.source || context.type || context.folder || "message",
-      type: context.type || context.source || "room-message",
-      folder: context.folder,
-      folder_key: context.folder,
-      subject: effectiveTitle(),
-      title: effectiveTitle(),
-      message,
+      subject: displaySubject,
+      title: displaySubject,
       body: message,
-      note: message,
+      message,
+      source: context.source || "room-message",
+      type: context.source || "room-message",
+      folder: displayFolder,
+      room_title: displayTitle,
+      room_type: displayRoomType,
+      room_id: context.roomId || null,
+      item_id: context.roomId || null,
+      signal_id: context.signalId || null,
+      source_route: context.sourceRoute || null,
+      match_reason: context.matchReason || null,
       metadata: {
-        room_title: effectiveTitle(),
-        room_type: effectiveRoomType(),
-        room_id: context.roomId,
-        item_id: context.itemId || null,
-        signal_id: context.signalId || null,
-        source_route: effectiveRoomLink() || null,
-        source: context.source || null,
-        type: context.type || null,
-        folder: effectiveFolder(),
+        room_title: displayTitle,
+        room_type: displayRoomType,
+        room_id: context.roomId || null,
+        folder: displayFolder,
+        source_route: context.sourceRoute || null,
         match_reason: context.matchReason || null,
-        from_email: fromEmail,
-        to_email: toEmail,
-        subject: effectiveTitle(),
       },
     };
 
-    const endpoints = ["/api/message-command", "/api/messages/new", "/api/simple-messages"];
+    try {
+      const response = await fetch("/api/messages/new", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": fromEmail,
+          "x-vf-admin": "0",
+        },
+        body: JSON.stringify(payload),
+      });
 
-    for (const endpoint of endpoints) {
-      try {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "x-vf-email": fromEmail,
-          },
-          body: JSON.stringify(payload),
-        });
+      const data = await safeJson(response);
 
-        const data = await response.json().catch(() => ({}));
-
-        if (response.ok && data?.ok !== false) {
-          const thread =
-            clean(data.thread_id) ||
-            clean(data.thread?.thread_id) ||
-            clean(data.message?.thread_id) ||
-            `${context.folder || "general"}-${context.roomId || Date.now()}`;
-
-          setSentThread(thread);
-          setStatus("Message sent with room context.");
-          return;
-        }
-      } catch {
-        // Try next endpoint.
+      if (!response.ok || data?.ok === false) {
+        setStatus(clean(data?.error || data?.message) || "Message could not be saved.");
+        return;
       }
+
+      setStatus("Message sent and tied to room context.");
+      setSentThread(clean(data.thread_key || data.threadId || data.id));
+    } catch (error: any) {
+      setStatus(clean(error?.message) || "Message could not be sent.");
     }
-
-    setStatus("Message saved locally could not be confirmed by backend. Try Message Command if it does not appear.");
   }
-
-  const roomLink =
-    effectiveRoomLink() ||
-    (effectiveRoomType().toLowerCase().includes("pressure")
-      ? context.roomId
-        ? `/pain-room/${encodeURIComponent(context.roomId)}`
-        : "/pressure-rooms"
-      : context.roomId
-      ? `/deal/detail?id=${encodeURIComponent(context.roomId)}`
-      : "/dashboard");
 
   return (
     <main style={page}>
@@ -450,18 +535,16 @@ export default function NewMessagePage() {
           filter: brightness(1.06);
         }
 
-        input::placeholder, textarea::placeholder {
-          color: rgba(255,255,255,.45);
-        }
-
         @media(max-width:760px) {
-          .vf-grid, .vf-actions {
+          .vf-grid {
             grid-template-columns: 1fr !important;
           }
+
           .vf-actions {
             display: grid !important;
-            gap: 10px !important;
+            grid-template-columns: 1fr !important;
           }
+
           .vf-actions > * {
             width: 100%;
             box-sizing: border-box;
@@ -470,71 +553,75 @@ export default function NewMessagePage() {
       `}</style>
 
       <div style={wrap}>
-        <nav style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+        <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
           <Link href="/message-command" style={ghost}>Message Command</Link>
-          <Link href={roomLink} style={ghost}>Back to Room</Link>
-        </nav>
+          <Link href={backHref} style={ghost}>Back To Room</Link>
+        </div>
 
-        <section style={card}>
-          <div style={label}>VaultForge Message Context</div>
-          <h1 style={{ fontSize: "clamp(44px,8vw,82px)", lineHeight: 0.9, letterSpacing: "-.06em", margin: "10px 0 14px" }}>
-            {effectiveTitle()}
+        <section style={panel}>
+          <div style={label}>VaultForge Request Info / Intro</div>
+
+          <h1
+            style={{
+              fontSize: "clamp(50px,9vw,92px)",
+              lineHeight: 0.88,
+              letterSpacing: "-.075em",
+              margin: "12px 0 18px",
+            }}
+          >
+            {displayTitle}
           </h1>
 
-          <p style={{ ...muted, fontSize: 18, margin: 0 }}>
-            This message is tied to the originating room so the thread does not lose the deal, pain, signal, or routing context.
+          <p style={{ color: "#cbd5e1", lineHeight: 1.6, fontSize: 19, marginTop: 0 }}>
+            This message is tied to the originating room so the thread does not lose the deal, pain, signal, routing, or intro context.
           </p>
 
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 10, marginTop: 16 }}>
-            <section style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 13, background: "rgba(255,255,255,.04)" }}>
-              <div style={label}>Room Type</div>
-              <strong>{effectiveRoomType()}</strong>
-            </section>
-            <section style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 13, background: "rgba(255,255,255,.04)" }}>
-              <div style={label}>Room ID</div>
-              <strong>{context.roomId || "Not listed"}</strong>
-            </section>
-            <section style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 13, background: "rgba(255,255,255,.04)" }}>
-              <div style={label}>Folder</div>
-              <strong>{effectiveFolder()}</strong>
-            </section>
-            <section style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 18, padding: 13, background: "rgba(255,255,255,.04)" }}>
-              <div style={label}>Subject</div>
-              <strong>{effectiveTitle()}</strong>
-            </section>
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 18 }}>
+            {[
+              ["Room Type", displayRoomType],
+              ["Room ID", displayRoomId],
+              ["Folder", displayFolder],
+              ["Subject", displaySubject],
+            ].map(([name, value]) => (
+              <div
+                key={name}
+                style={{
+                  border: "1px solid rgba(255,255,255,.12)",
+                  borderRadius: 18,
+                  padding: 14,
+                  background: "rgba(255,255,255,.04)",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                <div style={label}>{name}</div>
+                <strong>{value}</strong>
+              </div>
+            ))}
           </div>
-
-          {context.matchReason ? (
-            <section style={{ border: "1px solid rgba(232,196,107,.24)", borderRadius: 18, padding: 13, background: "rgba(232,196,107,.06)", marginTop: 12 }}>
-              <div style={label}>Match Reason</div>
-              <p style={{ ...muted, margin: "6px 0 0" }}>{context.matchReason}</p>
-            </section>
-          ) : null}
         </section>
 
-        <section style={card}>
+        <section style={panel}>
           <div style={label}>Send Message</div>
 
-          <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+          <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
             <input style={input} value={fromEmail} onChange={(event) => setFromEmail(event.target.value)} placeholder="From email" />
             <input style={input} value={toEmail} onChange={(event) => setToEmail(event.target.value)} placeholder="To email" />
-            <input style={input} value={effectiveTitle()} readOnly />
-            <textarea
-              style={{ ...input, minHeight: 150, resize: "vertical" }}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Write message..."
-            />
+            <input style={input} value={displaySubject} onChange={(event) => setSubject(event.target.value)} placeholder="Subject" />
+            <textarea style={textarea} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message" />
           </div>
 
-          <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
+          <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
             <button type="button" onClick={sendMessage} style={button}>Send Message</button>
-            <Link href={roomLink} style={ghost}>Back to Room</Link>
+            <Link href={backHref} style={ghost}>Back To Room</Link>
             {sentThread ? <Link href={`/message-command/${encodeURIComponent(sentThread)}`} style={ghost}>Open Thread</Link> : null}
           </div>
 
-          {status ? <p style={{ color: status.includes("sent") ? "#9df3bf" : "#f8e7b0", fontWeight: 900 }}>{status}</p> : null}
+          {status ? (
+            <p style={{ color: status.toLowerCase().includes("sent") ? "#9df3bf" : "#f8e7b0", fontWeight: 900, marginTop: 14 }}>
+              {status}
+            </p>
+          ) : null}
         </section>
       </div>
     </main>
