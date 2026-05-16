@@ -2,29 +2,36 @@
 
 import Link from "next/link";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import VaultForgeOwnerControls from "../components/VaultForgeOwnerControls";
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "linear-gradient(180deg,#020303,#071326 55%,#020303)",
+  color: "white",
+  padding: "22px 16px 96px",
+  fontFamily: "Arial, sans-serif",
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.24)",
+  borderRadius: 30,
+  padding: 24,
+  background: "linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.03))",
+};
 
 export default function DashboardPage() {
   return (
-    <main style={{
-      minHeight: "100vh",
-      background: "linear-gradient(180deg,#020303,#071326 55%,#020303)",
-      color: "white",
-      padding: "22px 16px 96px",
-      fontFamily: "Arial, sans-serif"
-    }}>
+    <main style={page}>
       <div style={{ width: "min(1180px,100%)", margin: "0 auto" }}>
         <VaultForgeMemberNav
-          title="Member Command"
-          subtitle="Member operating system: rooms, folders, profile, messages, intelligence, and network."
+          title="Command Center"
+          subtitle="One operating system. Owner tools appear only for the owner account."
           active="dashboard"
         />
 
-        <section style={{
-          border: "1px solid rgba(232,196,107,.24)",
-          borderRadius: 30,
-          padding: 24,
-          background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))"
-        }}>
+        <VaultForgeOwnerControls />
+
+        <section style={card}>
           <div style={{
             color: "#e8c46b",
             letterSpacing: ".18em",
@@ -32,7 +39,7 @@ export default function DashboardPage() {
             fontWeight: 950,
             fontSize: 12
           }}>
-            VaultForge Member Command
+            VaultForge Command
           </div>
 
           <h1 style={{
@@ -41,7 +48,7 @@ export default function DashboardPage() {
             letterSpacing: "-.07em",
             margin: "12px 0 18px"
           }}>
-            Command Center.
+            One clean operating system.
           </h1>
 
           <p style={{
@@ -49,7 +56,7 @@ export default function DashboardPage() {
             fontSize: 20,
             lineHeight: 1.55
           }}>
-            Member-side operating system. Admin command is separate at /admin-command.
+            Members and owner now operate inside the same environment. When the owner email logs in, hidden orchestration controls appear automatically.
           </p>
 
           <div style={{
@@ -64,7 +71,8 @@ export default function DashboardPage() {
               ["/workstations", "Workstations"],
               ["/profile-dashboard", "Profile Dashboard"],
               ["/intelligence", "Intelligence"],
-              ["/messages", "Messages"]
+              ["/messages", "Messages"],
+              ["/members", "Network"]
             ].map(([href, label]) => (
               <Link key={href} href={href} style={{
                 border: "1px solid rgba(232,196,107,.24)",
