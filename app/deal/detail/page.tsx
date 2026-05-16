@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import VaultForgeRoomCommandBar from "../../components/VaultForgeRoomCommandBar";
+import VaultForgeRoomMemberMatch from "../../components/VaultForgeRoomMemberMatch";
 
 type Deal = Record<string, any>;
 
@@ -791,6 +792,15 @@ export default function DealRoomPage() {
             roomId={dealId}
             title={titleOf(deal)}
             ownerEmail={String(valueOf(deal, ["owner_contact_email", "contact_email", "seller_email", "owner_email", "member_email"]) || "")}
+          />
+        ) : null}
+
+        {deal ? (
+          <VaultForgeRoomMemberMatch
+            lane="opportunity"
+            room={deal}
+            roomId={dealId}
+            title="AI Opportunity Match"
           />
         ) : null}
 
