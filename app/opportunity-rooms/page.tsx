@@ -27,6 +27,50 @@ function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+
+  const match = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!match) return "";
+
+  try {
+    return decodeURIComponent(match.slice(name.length + 1));
+  } catch {
+    return match.slice(name.length + 1);
+  }
+}
+
+function getEmail() {
+  if (typeof window === "undefined") return "";
+
+  const keys = ["vf_email", "vf_member_email", "memberEmail", "email"];
+
+  for (const key of keys) {
+    try {
+      const localValue = clean(window.localStorage.getItem(key)).toLowerCase();
+      if (localValue.includes("@")) return localValue;
+
+      const sessionValue = clean(window.sessionStorage.getItem(key)).toLowerCase();
+      if (sessionValue.includes("@")) return sessionValue;
+    } catch {
+      // Continue.
+    }
+  }
+
+  const cookieValue = clean(readCookie("vf_email") || readCookie("vf_member_email")).toLowerCase();
+  return cookieValue.includes("@") ? cookieValue : "";
+}
+
+function withEmail(url: string, email: string, folder: string) {
+  const joiner = url.includes("?") ? "&" : "?";
+  return `${url}${joiner}email=${encodeURIComponent(email)}&member_email=${encodeURIComponent(email)}&owner=0&folder=${encodeURIComponent(folder)}`;
+}
+
+
 function label(value: string) {
   return clean(value || "active")
     .replace(/[-_]+/g, " ")
@@ -130,6 +174,9 @@ function normalizeRows(data: any) {
     ...(Array.isArray(data.saved) ? data.saved : []),
     ...(Array.isArray(data.cards) ? data.cards : []),
     ...(Array.isArray(data.data) ? data.data : []),
+    ...(Array.isArray(data.feed) ? data.feed : []),
+    ...(Array.isArray(data.results) ? data.results : []),
+    ...(Array.isArray(data.rows) ? data.rows : []),
   ];
 
   if (!rows.length && data && typeof data === "object" && !Array.isArray(data)) {
@@ -237,19 +284,30 @@ export default function OpportunityRoomsPage() {
     async function load() {
       setStatus("Loading opportunity rooms...");
 
+      const viewer = getEmail();
+
       const endpoints = [
+        withEmail(`/api/deal/feed`, viewer, current),
+        withEmail(`/api/projects`, viewer, current),
+        withEmail(`/api/deals`, viewer, current),
+        withEmail(`/api/dashboard/live`, viewer, current),
         `/api/deal/feed?folder=${encodeURIComponent(current)}`,
-        `/api/deal/feed`,
         `/api/projects?folder=${encodeURIComponent(current)}`,
-        `/api/projects`,
         `/api/deals?folder=${encodeURIComponent(current)}`,
-        `/api/deals`,
-        `/api/dashboard/live`,
+        `/api/deal/feed`,
+        `/api/projects`,
       ];
 
       for (const endpoint of endpoints) {
         try {
-          const response = await fetch(endpoint, { cache: "no-store", credentials: "include" });
+          const response = await fetch(endpoint, {
+            cache: "no-store",
+            credentials: "include",
+            headers: {
+              "x-vf-email": getEmail(),
+              "x-vf-admin": "0",
+            },
+          });
           const data = await safeJson(response);
           const normalized = normalizeRows(data);
 
@@ -264,7 +322,7 @@ export default function OpportunityRoomsPage() {
       }
 
       setRows([]);
-      setStatus("No opportunity rooms found yet. Open Projects or Submit Opportunity to create one.");
+      setStatus("No opportunity rooms found from the room feeds yet. Open Projects to view existing opportunity cards while feed mapping is finalized.");
     }
 
     load();
@@ -299,7 +357,7 @@ export default function OpportunityRoomsPage() {
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
             {folders.map(([key, name]) => (
-              <Link
+              <a
                 key={key}
                 href={`/opportunity-rooms?folder=${encodeURIComponent(key)}`}
                 style={{
@@ -310,12 +368,20 @@ export default function OpportunityRoomsPage() {
                 }}
               >
                 {name}
-              </Link>
+              </a>
             ))}
           </div>
         </section>
 
-        {status ? <section style={card}><p style={{ ...muted, margin: 0 }}>{status}</p></section> : null}
+        {status ? (
+          <section style={card}>
+            <p style={{ ...muted, margin: 0 }}>{status}</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+              <Link href="/projects" style={button}>Open Projects</Link>
+              <Link href="/submit" style={button}>Submit Opportunity</Link>
+            </div>
+          </section>
+        ) : null}
 
         {!status && !filtered.length && rows.length ? (
           <section style={card}>
