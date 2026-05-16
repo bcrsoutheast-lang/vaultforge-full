@@ -1,3 +1,5 @@
+"use client";
+
 use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -389,7 +391,7 @@ export default function RoutingRoomPage({ params }: { params: { signalId: string
   const data = useMemo(() => derive(row || { signal_id: signalId }, signalId), [row, signalId]);
 
   const connectHref = data.signalId
-    ? `/messages/new?source=routing-room&room_type=Routing%20Room&room_id=${encodeURIComponent(data.signalId)}?email=${encodeURIComponent(email)}${data.itemId ? `&item_id=${encodeURIComponent(data.itemId)}` : ""}`
+    ? `/connect/${encodeURIComponent(data.signalId)}?email=${encodeURIComponent(email)}${data.itemId ? `&item_id=${encodeURIComponent(data.itemId)}` : ""}`
     : "/messages";
 
   return (
