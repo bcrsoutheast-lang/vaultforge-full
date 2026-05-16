@@ -1,14 +1,5 @@
-"use client";
-
-import VaultForgeRoomDesk from "../components/VaultForgeRoomDesk";
+import VaultForgeRoomFolderPage from "../components/VaultForgeRoomFolderPage";
 
 export default function DeletedRoomsPage() {
-  return (
-    <VaultForgeRoomDesk
-      lane="all"
-      title="Deleted Rooms"
-      subtitle="Deleted room control: recover what was removed or empty the deleted folder to keep the system clean."
-      defaultFolder="deleted"
-    />
-  );
+  return <VaultForgeRoomFolderPage status="deleted" />;
 }
