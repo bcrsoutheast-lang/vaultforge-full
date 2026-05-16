@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getBrowserEmail, isOwnerEmail } from "../lib/vf-owner";
+import { getBrowserEmail, isOwnerBrowser } from "../lib/vf-owner";
 
 const wrap: React.CSSProperties = {
   border: "1px solid rgba(248,113,113,.26)",
@@ -24,10 +24,12 @@ const button: React.CSSProperties = {
 
 export default function VaultForgeHiddenOwnerBar() {
   const [owner, setOwner] = useState(false);
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
-    const email = getBrowserEmail();
-    setOwner(isOwnerEmail(email));
+    const activeEmail = getBrowserEmail();
+    setEmail(activeEmail);
+    setOwner(isOwnerBrowser());
   }, []);
 
   if (!owner) return null;
@@ -69,7 +71,7 @@ export default function VaultForgeHiddenOwnerBar() {
           marginBottom: 0,
         }}
       >
-        Members see the full VaultForge operating system. Owner tools stay hidden unless logged in as the owner email.
+        Owner tools are visible because the active email is {email}.
       </p>
     </section>
   );
