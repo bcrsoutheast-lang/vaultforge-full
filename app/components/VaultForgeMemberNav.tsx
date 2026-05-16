@@ -62,7 +62,6 @@ function workspaceFromPath(pathname: string) {
   if (pathname.includes("pain")) return "Submit Pressure";
   if (pathname.includes("intelligence") || pathname.includes("smart-ai")) return "Intelligence";
   if (pathname.includes("messages")) return "Messages";
-  if (pathname.includes("profile-dashboard") || pathname === "/profile") return "Profile Dashboard";
   if (pathname.includes("members") || pathname.includes("network")) return "Network";
   return "Command Center";
 }
@@ -77,7 +76,6 @@ function isActive(pathname: string, href: string, key: string, active = "") {
   if (cleanHref === "/pressure-rooms") return pathname.startsWith("/pressure-rooms") || pathname.startsWith("/pressure-room");
   if (cleanHref === "/workstations") return pathname.startsWith("/workstations") || pathname.startsWith("/projects");
   if (cleanHref === "/intelligence") return pathname.startsWith("/intelligence") || pathname.startsWith("/smart-ai");
-  if (cleanHref === "/profile-dashboard") return pathname.startsWith("/profile-dashboard") || pathname === "/profile";
   if (cleanHref === "/members") return pathname.startsWith("/members") || pathname.startsWith("/network");
   return pathname.startsWith(cleanHref);
 }
@@ -89,7 +87,6 @@ const memberLinks = [
   { label: "Workstations", href: "/workstations", key: "workstations", tag: "5S" },
   { label: "Intelligence", href: "/intelligence", key: "intelligence", tag: "AI" },
   { label: "Messages", href: "/messages", key: "messages", tag: "COMMS" },
-  { label: "Profile", href: "/profile-dashboard", key: "profile", tag: "ME" },
   { label: "Network", href: "/members", key: "members", tag: "OPS" },
 ];
 
@@ -164,7 +161,7 @@ const pill: React.CSSProperties = {
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+  gridTemplateColumns: "repeat(7,minmax(0,1fr))",
   gap: 9,
 };
 
@@ -241,7 +238,7 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
           </div>
 
           <div style={{ color: "#94a3b8", lineHeight: 1.35, marginTop: 8, fontSize: 14 }}>
-            {subtitle || "Member rooms, folders, profile, messages, and network flow."}
+            {subtitle || "Rooms, workstations, intelligence, messages, and network flow."}
           </div>
         </div>
 
@@ -249,13 +246,12 @@ export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Pr
           <span style={pill}>{email || "Signed in"}</span>
 
           {isOwner ? (
-            <Link
-              href="/admin-command"
+            <span
               className="vf-command-pill"
               style={{ ...pill, color: "#fecaca", borderColor: "rgba(248,113,113,.34)", background: "rgba(248,113,113,.08)" }}
             >
-              Admin Command
-            </Link>
+              Owner Mode
+            </span>
           ) : null}
 
           <Link href="/logout" className="vf-command-pill" style={{ ...pill, color: "#ffd0d0", borderColor: "rgba(255,120,120,.28)", background: "rgba(255,120,120,.065)" }}>Logout</Link>
