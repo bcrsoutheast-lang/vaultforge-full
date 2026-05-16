@@ -24,7 +24,7 @@ function parseList(value: unknown) {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
   } catch {
-    // continue
+    // Continue.
   }
 
   return text
@@ -57,7 +57,7 @@ function readAllLocalProfiles() {
       }
     }
   } catch {
-    // ignore
+    // Ignore.
   }
 
   return profiles;
@@ -80,9 +80,6 @@ function normalizeProfile(row: MemberProfile): MemberProfile {
     photo_url: clean(row.photo_url || row.avatar_url || intelligence.photo_url || intelligence.avatar_url),
     full_name: clean(row.full_name || row.name || row.display_name || intelligence.full_name || intelligence.name || email),
     company: clean(row.company || row.company_name || intelligence.company || intelligence.company_name),
-    phone: clean(row.phone || row.phone_number || intelligence.phone),
-    website: clean(row.website || intelligence.website),
-    bio: clean(row.bio || row.description || intelligence.bio),
     state_from: clean(row.state_from || row.home_state || row.based_state || intelligence.state_from || intelligence.home_state),
     city_from: clean(row.city_from || row.city || intelligence.city_from || intelligence.city),
     states_operated: uniq([
@@ -153,29 +150,13 @@ function roomNeeds(room: Record<string, any>, lane: Lane) {
   const hay = textFromRoom(room);
   const needs = new Set<string>();
 
-  if (lane === "opportunity") {
-    needs.add("Buyer");
-  }
+  if (lane === "opportunity") needs.add("Buyer");
+  if (lane === "pressure") needs.add("Pressure Solver");
 
-  if (lane === "pressure") {
-    needs.add("Pressure Solver");
-  }
-
-  if (hay.includes("capital") || hay.includes("fund") || hay.includes("lender") || hay.includes("loan")) {
-    needs.add("Capital");
-  }
-
-  if (hay.includes("buyer") || hay.includes("exit") || hay.includes("disposition")) {
-    needs.add("Buyer");
-  }
-
-  if (hay.includes("contractor") || hay.includes("operator") || hay.includes("rehab") || hay.includes("construction")) {
-    needs.add("Operator");
-  }
-
-  if (hay.includes("title") || hay.includes("probate") || hay.includes("foreclosure") || hay.includes("tenant") || hay.includes("city") || hay.includes("permit")) {
-    needs.add("Pressure Solver");
-  }
+  if (hay.includes("capital") || hay.includes("fund") || hay.includes("lender") || hay.includes("loan")) needs.add("Capital");
+  if (hay.includes("buyer") || hay.includes("exit") || hay.includes("disposition")) needs.add("Buyer");
+  if (hay.includes("contractor") || hay.includes("operator") || hay.includes("rehab") || hay.includes("construction")) needs.add("Operator");
+  if (hay.includes("title") || hay.includes("probate") || hay.includes("foreclosure") || hay.includes("tenant") || hay.includes("city") || hay.includes("permit")) needs.add("Pressure Solver");
 
   return Array.from(needs);
 }
@@ -185,22 +166,10 @@ function memberLane(profile: MemberProfile) {
   const capabilities = profile.capabilities || [];
   const pressure = profile.pressure_solutions || [];
 
-  if (roles.includes("Lender") || roles.includes("Private Money") || roles.includes("Capital Partner") || capabilities.includes("Private Lending") || capabilities.includes("Hard Money")) {
-    return "Capital";
-  }
-
-  if (roles.includes("Contractor") || roles.includes("Operator") || capabilities.includes("Contractor Crew") || capabilities.includes("Full Rehab")) {
-    return "Operator";
-  }
-
-  if (roles.includes("Buyer") || roles.includes("Investor")) {
-    return "Buyer";
-  }
-
-  if (pressure.length) {
-    return "Pressure Solver";
-  }
-
+  if (roles.includes("Lender") || roles.includes("Private Money") || roles.includes("Capital Partner") || capabilities.includes("Private Lending") || capabilities.includes("Hard Money")) return "Capital";
+  if (roles.includes("Contractor") || roles.includes("Operator") || capabilities.includes("Contractor Crew") || capabilities.includes("Full Rehab")) return "Operator";
+  if (roles.includes("Buyer") || roles.includes("Investor")) return "Buyer";
+  if (pressure.length) return "Pressure Solver";
   return "Network";
 }
 
@@ -223,7 +192,7 @@ function scoreMatch(profile: MemberProfile, room: Record<string, any>, lane: Lan
     score += 26;
     reasons.push(`operates in ${state}`);
   } else if (state && states.length) {
-    warnings.push(`does not list ${state} as operated market`);
+    warnings.push(`does not list ${state}`);
   } else if (!states.length) {
     warnings.push("no operated states listed");
   }
@@ -270,10 +239,7 @@ function scoreMatch(profile: MemberProfile, room: Record<string, any>, lane: Lan
 
   if (!roles.length) warnings.push("role stack missing");
   if (!capabilities.length) warnings.push("capabilities missing");
-
-  if (score < 30 && reasons.length === 0) {
-    reasons.push("limited profile data for this room");
-  }
+  if (!reasons.length) reasons.push("limited profile data for this room");
 
   return {
     score: Math.min(100, score),
@@ -288,7 +254,53 @@ function fitLabel(score: number) {
   if (score >= 80) return "Strong Match";
   if (score >= 60) return "Good Match";
   if (score >= 40) return "Possible Match";
-  return "Weak / Needs Review";
+  return "Needs Review";
+}
+
+function slotPriority(lane: string, needs: string[]) {
+  if (needs.includes(lane)) return 1;
+  if (lane === "Capital" && needs.includes("Capital")) return 1;
+  if (lane === "Operator" && needs.includes("Operator")) return 1;
+  if (lane === "Buyer" && needs.includes("Buyer")) return 1;
+  if (lane === "Pressure Solver" && needs.includes("Pressure Solver")) return 1;
+  return 2;
+}
+
+function chooseCommandStack(members: MemberProfile[], room: Record<string, any>, lane: Lane) {
+  const ranked = members
+    .map((profile) => ({
+      profile,
+      match: scoreMatch(profile, room, lane),
+    }))
+    .sort((a, b) => {
+      const aPriority = slotPriority(a.match.lane, a.match.needs);
+      const bPriority = slotPriority(b.match.lane, b.match.needs);
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return b.match.score - a.match.score;
+    });
+
+  const used = new Set<string>();
+  const byLane = (targetLane: string) => {
+    const found = ranked.find((item) => item.match.lane === targetLane && !used.has(cleanEmail(item.profile.email || item.profile.full_name)));
+    if (!found) return null;
+    used.add(cleanEmail(found.profile.email || found.profile.full_name));
+    return found;
+  };
+
+  const primary = ranked[0] || null;
+  if (primary) used.add(cleanEmail(primary.profile.email || primary.profile.full_name));
+
+  const slots = [
+    { slot: "Primary Match", item: primary },
+    { slot: "Capital Fit", item: byLane("Capital") },
+    { slot: "Operator Fit", item: byLane("Operator") },
+    { slot: "Buyer Fit", item: byLane("Buyer") },
+    { slot: "Pressure Specialist", item: byLane("Pressure Solver") },
+  ].filter((slot) => slot.item);
+
+  const overflow = ranked.filter((item) => !used.has(cleanEmail(item.profile.email || item.profile.full_name)));
+
+  return { ranked, slots, overflow };
 }
 
 const shell: React.CSSProperties = {
@@ -339,11 +351,13 @@ function MemberMatchCard({
   room,
   lane,
   roomId,
+  slot,
 }: {
   profile: MemberProfile;
   room: Record<string, any>;
   lane: Lane;
   roomId: string;
+  slot: string;
 }) {
   const match = scoreMatch(profile, room, lane);
   const name = clean(profile.full_name) || clean(profile.email) || "VaultForge Member";
@@ -360,12 +374,12 @@ function MemberMatchCard({
         background: "rgba(255,255,255,.04)",
       }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: "70px 1fr", gap: 12, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "60px 1fr auto", gap: 10, alignItems: "start" }}>
         <div
           style={{
-            width: 62,
-            height: 62,
-            borderRadius: 20,
+            width: 54,
+            height: 54,
+            borderRadius: 18,
             border: "1px solid rgba(232,196,107,.30)",
             display: "grid",
             placeItems: "center",
@@ -383,56 +397,54 @@ function MemberMatchCard({
         </div>
 
         <div>
-          <div style={label}>{match.lane} · {fitLabel(match.score)}</div>
-          <h3 style={{ fontSize: 22, margin: "6px 0 4px", lineHeight: 1 }}>{name}</h3>
+          <div style={label}>{slot}</div>
+          <h3 style={{ fontSize: 20, margin: "5px 0 4px", lineHeight: 1 }}>{name}</h3>
           <p style={{ ...muted, margin: 0, fontSize: 13 }}>
-            {profile.company ? `${profile.company} · ` : ""}Based in {state}
+            {match.lane} · {fitLabel(match.score)} · Based in {state}
           </p>
+        </div>
+
+        <div
+          style={{
+            width: 50,
+            height: 48,
+            borderRadius: 16,
+            border: "1px solid rgba(232,196,107,.28)",
+            display: "grid",
+            placeItems: "center",
+            color: "#f8e7b0",
+            fontWeight: 1000,
+            background: "rgba(232,196,107,.06)",
+          }}
+        >
+          {match.score}%
         </div>
       </div>
 
       <section
         style={{
-          border: "1px solid rgba(232,196,107,.18)",
-          borderRadius: 16,
-          padding: 11,
-          marginTop: 12,
-          background: "rgba(232,196,107,.045)",
+          border: "1px solid rgba(232,196,107,.16)",
+          borderRadius: 14,
+          padding: 10,
+          marginTop: 10,
+          background: "rgba(232,196,107,.035)",
         }}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "54px 1fr", gap: 10, alignItems: "center" }}>
-          <div
-            style={{
-              height: 48,
-              borderRadius: 16,
-              border: "1px solid rgba(232,196,107,.28)",
-              display: "grid",
-              placeItems: "center",
-              color: "#f8e7b0",
-              fontWeight: 1000,
-            }}
-          >
-            {match.score}%
-          </div>
-
-          <div>
-            <div style={{ ...label, color: "#f8e7b0" }}>Why this member fits</div>
-            <p style={{ ...muted, margin: "5px 0 0", fontSize: 13 }}>
-              {match.reasons.join(" · ")}
-            </p>
-          </div>
-        </div>
+        <div style={{ ...label, color: "#f8e7b0", fontSize: 10 }}>Why This Fit Is Shown</div>
+        <p style={{ ...muted, margin: "5px 0 0", fontSize: 13 }}>
+          {match.reasons.slice(0, 4).join(" · ")}
+        </p>
 
         {match.warnings.length ? (
-          <p style={{ color: "#fecaca", margin: "8px 0 0", fontSize: 12, lineHeight: 1.45 }}>
-            Warning: {match.warnings.slice(0, 2).join(" · ")}
+          <p style={{ color: "#fecaca", margin: "7px 0 0", fontSize: 12, lineHeight: 1.45 }}>
+            Check: {match.warnings.slice(0, 2).join(" · ")}
           </p>
         ) : null}
       </section>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 11 }}>
         <Link href={messageHref} style={button}>Request Intro</Link>
-        <Link href="/members" style={ghost}>Open Network</Link>
+        <Link href="/members" style={ghost}>Network</Link>
       </div>
     </article>
   );
@@ -492,18 +504,12 @@ export default function VaultForgeRoomMemberMatch({
     loadMembers();
   }, []);
 
-  const ranked = useMemo(() => {
-    return members
-      .map((profile) => ({
-        profile,
-        match: scoreMatch(profile, room || {}, lane),
-      }))
-      .sort((a, b) => b.match.score - a.match.score)
-      .slice(0, 6)
-      .map((item) => item.profile);
-  }, [members, room, lane]);
-
+  const commandStack = useMemo(() => chooseCommandStack(members, room || {}, lane), [members, room, lane]);
   const needs = roomNeeds(room || {}, lane);
+  const hiddenCount = Math.max(0, commandStack.overflow.length);
+  const avgScore = commandStack.slots.length
+    ? Math.round(commandStack.slots.reduce((sum, slot) => sum + (slot.item?.match.score || 0), 0) / commandStack.slots.length)
+    : 0;
 
   return (
     <section style={shell}>
@@ -529,27 +535,67 @@ export default function VaultForgeRoomMemberMatch({
 
       <div style={label}>{title}</div>
       <h2 style={{ fontSize: "clamp(30px,5vw,50px)", lineHeight: 0.95, letterSpacing: "-.045em", margin: "8px 0 10px" }}>
-        Suggested members for this room.
+        Match command stack.
       </h2>
 
       <p style={{ ...muted, fontSize: 15, marginTop: 0 }}>
-        VaultForge reads this room, detects needs ({needs.join(", ") || "general network"}), then compares member state coverage, role stack, capabilities, and pressure-solving tags.
+        VaultForge detected needs ({needs.join(", ") || "general network"}) and shows only the highest-value role slots to prevent match clutter.
       </p>
+
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          marginBottom: 12,
+        }}
+      >
+        <span style={{ border: "1px solid rgba(157,243,191,.24)", borderRadius: 999, padding: "7px 10px", color: "#9df3bf", fontWeight: 900 }}>
+          {commandStack.slots.length} visible matches
+        </span>
+        <span style={{ border: "1px solid rgba(232,196,107,.24)", borderRadius: 999, padding: "7px 10px", color: "#f8e7b0", fontWeight: 900 }}>
+          {avgScore}% average fit
+        </span>
+        <span style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "7px 10px", color: "#cbd5e1", fontWeight: 900 }}>
+          +{hiddenCount} overflow hidden
+        </span>
+      </div>
 
       {status ? (
         <p style={{ ...muted }}>{status}</p>
       ) : (
-        <div className="vf-room-match-grid">
-          {ranked.map((profile, index) => (
-            <MemberMatchCard
-              key={`${profile.email || profile.full_name || "member"}-${index}`}
-              profile={profile}
-              room={room || {}}
-              lane={lane}
-              roomId={roomId}
-            />
-          ))}
-        </div>
+        <>
+          <div className="vf-room-match-grid">
+            {commandStack.slots.map((slot) => (
+              <MemberMatchCard
+                key={`${slot.slot}-${slot.item?.profile.email || slot.item?.profile.full_name}`}
+                slot={slot.slot}
+                profile={slot.item!.profile}
+                room={room || {}}
+                lane={lane}
+                roomId={roomId}
+              />
+            ))}
+          </div>
+
+          {hiddenCount ? (
+            <section
+              style={{
+                border: "1px solid rgba(255,255,255,.12)",
+                borderRadius: 18,
+                padding: 13,
+                background: "rgba(255,255,255,.035)",
+                marginTop: 12,
+              }}
+            >
+              <div style={label}>Overflow Matches Hidden</div>
+              <p style={{ ...muted, margin: "7px 0 0", fontSize: 14 }}>
+                {hiddenCount} additional compatible member{hiddenCount === 1 ? "" : "s"} were not shown to keep this room clean. Open Network to search the full pool.
+              </p>
+              <Link href="/members" style={{ ...ghost, marginTop: 10 }}>Open Full Network</Link>
+            </section>
+          ) : null}
+        </>
       )}
     </section>
   );
