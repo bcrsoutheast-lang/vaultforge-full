@@ -1,821 +1,443 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
-export const dynamic = "force-dynamic";
+type MemberProfile = Record<string, any>;
 
-type Member = Record<string, any>;
-
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-
-const STATE_OPTIONS = [
+const STATES = [
   "Georgia",
+  "Tennessee",
+  "Alabama",
   "Florida",
   "North Carolina",
   "South Carolina",
-  "Tennessee",
-  "Alabama",
   "Texas",
 ];
 
-const ROLE_OPTIONS = [
-  "All",
+const ROLES = [
   "Buyer",
-  "Seller",
+  "Investor",
+  "Wholesaler",
   "Lender",
   "Private Money",
-  "Hard Money Lender",
   "Contractor",
-  "Wholesaler",
-  "Investor",
-  "Developer",
   "Operator",
-  "Partner",
+  "Developer",
   "Realtor",
   "Broker",
+  "Property Manager",
+  "Capital Partner",
+  "JV Partner",
+  "Deal Source",
 ];
 
-const STATE_MAP: Record<string, string> = {
-  ga: "Georgia",
-  georgia: "Georgia",
-  fl: "Florida",
-  florida: "Florida",
-  nc: "North Carolina",
-  "north carolina": "North Carolina",
-  sc: "South Carolina",
-  "south carolina": "South Carolina",
-  tn: "Tennessee",
-  tennessee: "Tennessee",
-  al: "Alabama",
-  alabama: "Alabama",
-  tx: "Texas",
-  texas: "Texas",
-};
-
 function clean(value: unknown) {
-  return String(value ?? "").trim();
-}
-
-function lower(value: unknown) {
-  return clean(value).toLowerCase();
+  return String(value || "").trim();
 }
 
 function cleanEmail(value: unknown) {
-  return lower(value);
+  return clean(value).toLowerCase();
 }
 
-function normalizeState(value: unknown) {
-  const raw = lower(value);
-  if (!raw || raw === "all" || raw === "national") return "";
-  return STATE_MAP[raw] || "";
+function parseList(value: unknown) {
+  if (Array.isArray(value)) return value.map(clean).filter(Boolean);
+
+  const text = clean(value);
+  if (!text) return [];
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
+  } catch {
+    // continue
+  }
+
+  return text
+    .split(/[,\n|;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
-function unique(values: string[]) {
-  const map = new Map<string, string>();
-
-  for (const value of values) {
-    const text = clean(value);
-    if (!text) continue;
-    map.set(text.toLowerCase(), text);
-  }
-
-  return Array.from(map.values());
+function uniq(items: string[]) {
+  return Array.from(new Set(items.map(clean).filter(Boolean)));
 }
 
-function valuesOf(value: unknown): string[] {
-  if (value === null || value === undefined) return [];
+function readAllLocalProfiles() {
+  if (typeof window === "undefined") return [];
 
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => valuesOf(item));
-  }
+  const profiles: MemberProfile[] = [];
 
-  if (typeof value === "object") {
-    return [];
-  }
+  try {
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index) || "";
 
-  const raw = clean(value);
-  if (!raw) return [];
+      if (!key.startsWith("vaultforge_final_member_profile_")) continue;
 
-  if (
-    (raw.startsWith("[") && raw.endsWith("]")) ||
-    (raw.startsWith("{") && raw.endsWith("}"))
-  ) {
-    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+
       const parsed = JSON.parse(raw);
-      return valuesOf(parsed);
-    } catch {
-      // Continue to delimiter split.
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        profiles.push(parsed);
+      }
     }
-  }
-
-  return raw
-    .replaceAll("\\n", ",")
-    .replaceAll("\n", ",")
-    .replaceAll("|", ",")
-    .replaceAll(";", ",")
-    .split(",")
-    .map(clean)
-    .filter(Boolean);
-}
-
-function first(...values: unknown[]) {
-  for (const value of values) {
-    const list = valuesOf(value);
-    if (list.length) return list[0];
-
-    const text = clean(value);
-    if (text && typeof value !== "object") return text;
-  }
-
-  return "";
-}
-
-function meta(row: Member) {
-  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
-}
-
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-
-  const match = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-
-  if (!match) return "";
-
-  try {
-    return decodeURIComponent(match.slice(name.length + 1));
   } catch {
-    return match.slice(name.length + 1);
-  }
-}
-
-function currentEmail() {
-  if (typeof window === "undefined") return "";
-
-  try {
-    return cleanEmail(
-      window.localStorage.getItem("vf_email") ||
-        window.sessionStorage.getItem("vf_email") ||
-        readCookie("vf_email") ||
-        readCookie("vf_admin_email")
-    );
-  } catch {
-    return cleanEmail(readCookie("vf_email") || readCookie("vf_admin_email"));
-  }
-}
-
-function isOwnerEmail(email: string) {
-  return cleanEmail(email) === OWNER_EMAIL;
-}
-
-function isOwnerSession(email: string) {
-  return (
-    isOwnerEmail(email) ||
-    readCookie("vf_admin") === "1" ||
-    readCookie("isAdmin") === "true" ||
-    isOwnerEmail(readCookie("vf_admin_email"))
-  );
-}
-
-function memberEmail(row: Member) {
-  const m = meta(row);
-
-  return cleanEmail(
-    first(
-      row.email,
-      row.member_email,
-      row.user_email,
-      row.owner_email,
-      row.contact_email,
-      m.email,
-      m.member_email,
-      m.user_email,
-      m.owner_email,
-      m.contact_email
-    )
-  );
-}
-
-function hasRealEmail(row: Member) {
-  const email = memberEmail(row);
-  return email.includes("@") && !email.endsWith("@example.com") && email !== "test@test.com";
-}
-
-function memberId(row: Member) {
-  const m = meta(row);
-
-  return first(
-    row.id,
-    row.profile_id,
-    row.member_id,
-    row.auth_user_id,
-    row._source_id,
-    row.email,
-    m.id,
-    m.profile_id,
-    m.member_id,
-    m.auth_user_id
-  );
-}
-
-function memberName(row: Member) {
-  const m = meta(row);
-
-  return first(
-    row.full_name,
-    row.name,
-    row.display_name,
-    row.member_name,
-    row.company,
-    m.full_name,
-    m.name,
-    m.display_name,
-    m.member_name,
-    memberEmail(row),
-    "VaultForge Member"
-  );
-}
-
-function companyName(row: Member) {
-  const m = meta(row);
-
-  return first(
-    row.company,
-    row.company_name,
-    row.business_name,
-    row.organization,
-    row.firm,
-    m.company,
-    m.company_name,
-    m.business_name,
-    m.organization,
-    "VaultForge"
-  );
-}
-
-function memberPhoto(row: Member) {
-  const m = meta(row);
-
-  return first(
-    row.profile_photo_url,
-    row.photo_url,
-    row.avatar_url,
-    row.image_url,
-    m.profile_photo_url,
-    m.photo_url,
-    m.avatar_url,
-    m.image_url
-  );
-}
-
-function memberRoles(row: Member) {
-  const m = meta(row);
-
-  return unique([
-    ...valuesOf(row.member_types),
-    ...valuesOf(row.member_type),
-    ...valuesOf(row.roles),
-    ...valuesOf(row.role),
-    ...valuesOf(row.primary_role),
-    ...valuesOf(row.member_role),
-    ...valuesOf(m.member_types),
-    ...valuesOf(m.member_type),
-    ...valuesOf(m.roles),
-    ...valuesOf(m.role),
-    ...valuesOf(m.primary_role),
-    ...valuesOf(m.member_role),
-  ]).slice(0, 10);
-}
-
-function basedState(row: Member) {
-  const m = meta(row);
-
-  const candidates = [
-    row.home_state,
-    row.based_state,
-    row.base_state,
-    row.from_state,
-    row.member_state,
-    row.primary_state,
-    row.location_state,
-    row.state,
-    row.market_primary,
-    row.primary_market,
-    m.home_state,
-    m.based_state,
-    m.base_state,
-    m.from_state,
-    m.member_state,
-    m.primary_state,
-    m.location_state,
-    m.state,
-    m.market_primary,
-    m.primary_market,
-  ];
-
-  for (const candidate of candidates) {
-    const state = normalizeState(first(candidate));
-    if (state) return state;
+    // ignore local parse issues
   }
 
-  return "";
+  return profiles;
 }
 
-function marketStates(row: Member) {
-  const m = meta(row);
+function normalizeProfile(row: MemberProfile): MemberProfile {
+  const intelligence = row.profile_intelligence || row.intelligence_profile || row.metadata || {};
 
-  const values = [
-    ...valuesOf(row.markets),
-    ...valuesOf(row.market_states),
-    ...valuesOf(row.buy_box_states),
-    ...valuesOf(row.deal_states),
-    ...valuesOf(row.states),
-    ...valuesOf(row.operating_states),
-    ...valuesOf(row.service_states),
-    ...valuesOf(row.target_states),
-    ...valuesOf(row.work_states),
-    ...valuesOf(m.markets),
-    ...valuesOf(m.market_states),
-    ...valuesOf(m.buy_box_states),
-    ...valuesOf(m.deal_states),
-    ...valuesOf(m.states),
-    ...valuesOf(m.operating_states),
-    ...valuesOf(m.service_states),
-    ...valuesOf(m.target_states),
-    ...valuesOf(m.work_states),
-    basedState(row),
-  ]
-    .map(normalizeState)
-    .filter(Boolean);
-
-  return unique(values);
-}
-
-function strategies(row: Member) {
-  const m = meta(row);
-
-  return unique([
-    ...valuesOf(row.strategies),
-    ...valuesOf(row.strategy),
-    ...valuesOf(row.buy_box_strategies),
-    ...valuesOf(row.asset_focus),
-    ...valuesOf(row.property_types),
-    ...valuesOf(row.asset_types),
-    ...valuesOf(m.strategies),
-    ...valuesOf(m.strategy),
-    ...valuesOf(m.buy_box_strategies),
-    ...valuesOf(m.asset_focus),
-    ...valuesOf(m.property_types),
-    ...valuesOf(m.asset_types),
-  ]).slice(0, 10);
-}
-
-function canProvide(row: Member) {
-  const m = meta(row);
-
-  return unique([
-    ...valuesOf(row.can_provide),
-    ...valuesOf(row.what_i_provide),
-    ...valuesOf(row.provides),
-    ...valuesOf(row.capabilities),
-    ...valuesOf(row.services),
-    ...valuesOf(m.can_provide),
-    ...valuesOf(m.what_i_provide),
-    ...valuesOf(m.provides),
-    ...valuesOf(m.capabilities),
-    ...valuesOf(m.services),
-  ]).slice(0, 10);
-}
-
-function needs(row: Member) {
-  const m = meta(row);
-
-  return unique([
-    ...valuesOf(row.needs),
-    ...valuesOf(row.deal_needs),
-    ...valuesOf(row.what_i_need),
-    ...valuesOf(row.looking_for),
-    ...valuesOf(row.routing_needs),
-    ...valuesOf(m.needs),
-    ...valuesOf(m.deal_needs),
-    ...valuesOf(m.what_i_need),
-    ...valuesOf(m.looking_for),
-    ...valuesOf(m.routing_needs),
-  ]).slice(0, 10);
-}
-
-function memberBio(row: Member) {
-  const m = meta(row);
-
-  return first(
-    row.bio,
-    row.about,
-    row.summary,
-    row.description,
-    row.strategy_summary,
-    row.buy_box,
-    row.notes,
-    m.bio,
-    m.about,
-    m.summary,
-    m.description,
-    m.strategy_summary,
-    m.buy_box,
-    m.notes,
-    "Private member profile ready for network alignment."
+  const email = cleanEmail(
+    row.email ||
+      row.member_email ||
+      row.user_email ||
+      intelligence.email ||
+      intelligence.member_email
   );
-}
 
-function isAccepted(row: Member) {
-  const text = [
-    row.access_status,
-    row.member_status,
-    row.status,
-    row.payment_status,
-    row.network_status,
-    row.admin_bucket,
-    row.is_active,
-    meta(row).access_status,
-    meta(row).member_status,
-    meta(row).status,
-    meta(row).payment_status,
-    meta(row).network_status,
-  ]
-    .map((item) => lower(item))
-    .join(" ");
-
-  return (
-    text.includes("active") ||
-    text.includes("accepted") ||
-    text.includes("paid") ||
-    text.includes("member") ||
-    text.includes("true")
+  const stateFrom = clean(
+    row.state_from ||
+      row.home_state ||
+      row.based_state ||
+      intelligence.state_from ||
+      intelligence.home_state
   );
+
+  const statesOperated = uniq([
+    ...parseList(row.states_operated),
+    ...parseList(row.operating_states),
+    ...parseList(row.service_states),
+    ...parseList(intelligence.states_operated),
+    ...parseList(intelligence.operating_states),
+  ]);
+
+  return {
+    ...row,
+    email,
+    photo_url: clean(row.photo_url || row.avatar_url || intelligence.photo_url || intelligence.avatar_url),
+    full_name: clean(row.full_name || row.name || row.display_name || intelligence.full_name || intelligence.name || email),
+    company: clean(row.company || row.company_name || intelligence.company || intelligence.company_name),
+    phone: clean(row.phone || row.phone_number || intelligence.phone),
+    website: clean(row.website || intelligence.website),
+    bio: clean(row.bio || row.description || intelligence.bio),
+    state_from: stateFrom,
+    city_from: clean(row.city_from || row.city || intelligence.city_from || intelligence.city),
+    states_operated: statesOperated,
+    counties_operated: clean(row.counties_operated || intelligence.counties_operated || row.counties || row.markets),
+    roles: uniq([...parseList(row.roles), ...parseList(row.member_type), ...parseList(intelligence.roles)]),
+    buy_box: uniq([...parseList(row.buy_box), ...parseList(row.asset_types), ...parseList(intelligence.buy_box)]),
+    strategies: uniq([...parseList(row.strategies), ...parseList(row.strategy), ...parseList(intelligence.strategies)]),
+    capabilities: uniq([...parseList(row.capabilities), ...parseList(row.execution), ...parseList(intelligence.capabilities), ...parseList(intelligence.execution)]),
+    pressure_solutions: uniq([...parseList(row.pressure_solutions), ...parseList(row.pressure), ...parseList(intelligence.pressure_solutions), ...parseList(intelligence.pressure)]),
+  };
 }
 
-function networkScore(row: Member) {
-  let score = Number(row.score || row.match_score || row.alignment_score || row.routing_score || 0);
-
-  if (!Number.isFinite(score) || score <= 0) score = 45;
-  if (basedState(row)) score += 18;
-  if (marketStates(row).length) score += 10;
-  if (memberRoles(row).length) score += 8;
-  if (strategies(row).length) score += 6;
-  if (canProvide(row).length) score += 8;
-  if (needs(row).length) score += 5;
-  if (isAccepted(row)) score += 5;
-
-  return Math.min(100, Math.max(0, Math.round(score)));
+function initials(value: string) {
+  const text = clean(value);
+  if (!text) return "VF";
+  const name = text.includes("@") ? text.split("@")[0] : text;
+  const parts = name.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0] || "V"}${parts[1][0] || "F"}`.toUpperCase();
+  return name.slice(0, 2).toUpperCase();
 }
 
-async function safeJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return {};
+function memberFit(profile: MemberProfile) {
+  if ((profile.roles || []).includes("Lender") || (profile.roles || []).includes("Private Money")) {
+    return "Capital route";
   }
+
+  if ((profile.roles || []).includes("Contractor") || (profile.roles || []).includes("Operator")) {
+    return "Execution route";
+  }
+
+  if ((profile.roles || []).includes("Buyer") || (profile.roles || []).includes("Investor")) {
+    return "Opportunity route";
+  }
+
+  if ((profile.pressure_solutions || []).length) {
+    return "Pressure solver";
+  }
+
+  return "Network member";
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.14), transparent 28%), radial-gradient(circle at 88% 10%, rgba(74,222,128,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
+    "radial-gradient(circle at top left, rgba(232,196,107,.15), transparent 28%), radial-gradient(circle at 88% 8%, rgba(86,216,255,.10), transparent 26%), linear-gradient(180deg,#020303,#071326 55%,#020303)",
   color: "white",
-  padding: "22px 16px 96px",
+  padding: "22px 16px 100px",
   fontFamily: "Arial, sans-serif",
 };
 
 const wrap: React.CSSProperties = {
-  width: "min(1220px,100%)",
+  width: "min(1280px,100%)",
   margin: "0 auto",
 };
 
-const panel: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 30,
-  padding: 24,
-  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
-  boxShadow: "0 28px 86px rgba(0,0,0,.30)",
-  marginBottom: 18,
-};
-
 const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.12)",
-  borderRadius: 24,
+  border: "1px solid rgba(232,196,107,.22)",
+  borderRadius: 28,
+  background: "linear-gradient(145deg,rgba(255,255,255,.065),rgba(255,255,255,.025))",
   padding: 20,
-  background: "rgba(255,255,255,.045)",
+  marginBottom: 16,
+  boxShadow: "0 22px 70px rgba(0,0,0,.28)",
 };
 
-const eyebrow: React.CSSProperties = {
+const label: React.CSSProperties = {
   color: "#e8c46b",
-  letterSpacing: ".18em",
+  letterSpacing: ".16em",
   textTransform: "uppercase",
   fontWeight: 950,
-  fontSize: 12,
+  fontSize: 11,
 };
 
 const muted: React.CSSProperties = {
   color: "#cbd5e1",
-  lineHeight: 1.55,
-};
-
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: 50,
-  borderRadius: 999,
-  padding: "12px 18px",
-  border: 0,
-  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-  color: "#06100a",
-  fontWeight: 950,
-  textDecoration: "none",
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.16)",
-  color: "white",
-};
-
-const chip: React.CSSProperties = {
-  border: "1px solid rgba(157,243,191,.22)",
-  borderRadius: 999,
-  padding: "7px 10px",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
-  margin: "0 7px 7px 0",
-  fontSize: 12,
-  fontWeight: 850,
-  display: "inline-flex",
-};
-
-const blueChip: React.CSSProperties = {
-  ...chip,
-  color: "#8fd3ff",
-  borderColor: "rgba(56,189,248,.30)",
-  background: "rgba(56,189,248,.08)",
+  lineHeight: 1.5,
 };
 
 const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.16)",
-  background: "rgba(255,255,255,.08)",
+  borderRadius: 15,
+  border: "1px solid rgba(255,255,255,.14)",
+  background: "rgba(0,0,0,.24)",
   color: "white",
-  padding: 15,
-  fontSize: 16,
+  padding: 12,
+  fontSize: 14,
   outline: "none",
 };
 
-function PillList({
-  items,
-  empty,
-  blue = false,
-}: {
-  items: string[];
-  empty: string;
-  blue?: boolean;
-}) {
-  const list = items.length ? items : [empty];
+const button: React.CSSProperties = {
+  minHeight: 42,
+  borderRadius: 999,
+  padding: "10px 14px",
+  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
+  color: "#06100a",
+  fontWeight: 950,
+  textDecoration: "none",
+  border: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+};
 
+const ghost: React.CSSProperties = {
+  ...button,
+  border: "1px solid rgba(255,255,255,.14)",
+  background: "rgba(255,255,255,.060)",
+  color: "white",
+};
+
+function Chip({
+  active,
+  children,
+  onClick,
+  tone = "#9df3bf",
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+  tone?: string;
+}) {
   return (
-    <>
-      {list.map((item) => (
-        <span key={item} style={blue && items.length ? blueChip : chip}>
-          {item}
-        </span>
-      ))}
-    </>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: active ? `1px solid ${tone}` : "1px solid rgba(255,255,255,.13)",
+        background: active ? "rgba(157,243,191,.10)" : "rgba(255,255,255,.035)",
+        color: active ? tone : "#cbd5e1",
+        borderRadius: 999,
+        padding: "8px 11px",
+        fontWeight: 900,
+        fontSize: 13,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
-function MemberCard({ member, viewer }: { member: Member; viewer: string }) {
-  const email = memberEmail(member);
-  const home = basedState(member);
-  const markets = marketStates(member);
-  const roles = memberRoles(member);
-  const photo = memberPhoto(member);
-  const score = networkScore(member);
-  const id = memberId(member) || email || memberName(member);
-  const connectHref = `/connect/member-${encodeURIComponent(id)}?email=${encodeURIComponent(viewer)}${email ? `&to=${encodeURIComponent(email)}` : ""}&source=member&subject=${encodeURIComponent("VaultForge member connection request")}`;
+function MemberCard({ profile }: { profile: MemberProfile }) {
+  const name = clean(profile.full_name) || clean(profile.email) || "VaultForge Member";
+  const state = clean(profile.state_from) || "State not listed";
+  const city = clean(profile.city_from);
+  const roles = profile.roles || [];
+  const states = profile.states_operated || [];
+  const capabilities = profile.capabilities || [];
+  const pressure = profile.pressure_solutions || [];
+  const email = clean(profile.email);
+
+  const contactHref = `/messages/new?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(`VaultForge Network: ${name}`)}&source=network&type=member&title=${encodeURIComponent(name)}`;
 
   return (
     <article style={card}>
-      <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "86px 1fr", gap: 14, alignItems: "start" }}>
         <div
           style={{
-            minHeight: 150,
-            borderRadius: 22,
-            overflow: "hidden",
-            border: "1px solid rgba(232,196,107,.18)",
-            background: "rgba(0,0,0,.20)",
+            width: 78,
+            height: 78,
+            borderRadius: 24,
+            border: "1px solid rgba(232,196,107,.34)",
             display: "grid",
             placeItems: "center",
-            color: "#94a3b8",
-            fontWeight: 850,
-            textAlign: "center",
+            overflow: "hidden",
+            background: "rgba(255,255,255,.05)",
+            color: "#f8e7b0",
+            fontWeight: 1000,
+            fontSize: 24,
           }}
         >
-          {photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photo} alt={memberName(member)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          {profile.photo_url ? (
+            <img src={profile.photo_url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
-            <>Member<br />Profile</>
+            initials(name)
           )}
         </div>
 
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-            <div>
-              <div style={eyebrow}>Member Profile</div>
-              <h3 style={{ fontSize: 36, lineHeight: 1.02, margin: "8px 0" }}>{memberName(member)}</h3>
-              <p style={{ ...muted, margin: "0 0 8px", fontWeight: 900, color: "white" }}>{companyName(member)}</p>
-              {email ? <p style={{ ...muted, margin: 0, fontWeight: 850 }}>{email}</p> : null}
-            </div>
+        <section>
+          <div style={label}>{memberFit(profile)}</div>
+          <h2 style={{ margin: "6px 0 6px", fontSize: 28, lineHeight: 1 }}>{name}</h2>
+          <p style={{ ...muted, margin: 0 }}>
+            {profile.company ? `${profile.company} · ` : ""}
+            Based in {city ? `${city}, ` : ""}{state}
+          </p>
+          <p style={{ ...muted, marginTop: 8, fontSize: 14 }}>
+            AI routing markets: {states.length ? states.join(", ") : "Not listed"}
+          </p>
+        </section>
+      </div>
 
-            <div style={{ border: "1px solid rgba(232,196,107,.28)", borderRadius: 20, minWidth: 86, padding: 14, textAlign: "center", background: "rgba(232,196,107,.06)" }}>
-              <div style={{ fontSize: 42, lineHeight: 1, fontWeight: 1000, color: "#f8e7b0" }}>{score}</div>
-              <div style={{ color: "#cbd5e1", fontSize: 12, marginTop: 6, fontWeight: 850 }}>Network fit</div>
-            </div>
-          </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 14 }}>
+        {roles.slice(0, 8).map((item: string) => (
+          <span key={item} style={{ border: "1px solid rgba(157,243,191,.24)", borderRadius: 999, padding: "6px 9px", color: "#9df3bf", background: "rgba(157,243,191,.06)", fontWeight: 800, fontSize: 12 }}>
+            {item}
+          </span>
+        ))}
+        {capabilities.slice(0, 6).map((item: string) => (
+          <span key={item} style={{ border: "1px solid rgba(86,216,255,.24)", borderRadius: 999, padding: "6px 9px", color: "#56d8ff", background: "rgba(86,216,255,.06)", fontWeight: 800, fontSize: 12 }}>
+            {item}
+          </span>
+        ))}
+        {pressure.slice(0, 5).map((item: string) => (
+          <span key={item} style={{ border: "1px solid rgba(248,113,113,.24)", borderRadius: 999, padding: "6px 9px", color: "#fecaca", background: "rgba(248,113,113,.06)", fontWeight: 800, fontSize: 12 }}>
+            {item}
+          </span>
+        ))}
+      </div>
 
-          <div style={{ marginTop: 14 }}>
-            <span style={chip}>Network: {isAccepted(member) ? "Accepted" : "Pending"}</span>
-            <PillList items={roles} empty="Member" />
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <div style={eyebrow}>Based In</div>
-            <span style={home ? blueChip : chip}>{home || "Base state not listed"}</span>
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <div style={eyebrow}>Markets / Reach</div>
-            <PillList items={markets} empty="No markets listed" blue />
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <div style={eyebrow}>Strategy / Asset Focus</div>
-            <PillList items={strategies(member)} empty="No strategy listed" />
-          </div>
-
-          <p style={{ ...muted, marginTop: 16 }}>{memberBio(member)}</p>
-
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 16 }}>
-            <div style={card}>
-              <div style={eyebrow}>Can Provide</div>
-              <div style={{ marginTop: 10 }}>
-                <PillList items={canProvide(member)} empty="No provider abilities listed yet." />
-              </div>
-            </div>
-
-            <div style={card}>
-              <div style={eyebrow}>Needs / Watches</div>
-              <div style={{ marginTop: 10 }}>
-                <PillList items={needs(member)} empty="No needs listed yet." />
-              </div>
-            </div>
-          </div>
-
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            <Link href={connectHref} style={button}>Message / Request Connection</Link>
-            <Link href="/projects" style={ghost}>View Projects</Link>
-            <Link href="/dashboard" style={ghost}>Dashboard</Link>
-          </div>
-        </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginTop: 16 }}>
+        <Link href={contactHref} style={button}>Message / Request Intro</Link>
+        <Link href={`/members?state=${encodeURIComponent(state)}`} style={ghost}>View {state}</Link>
       </div>
     </article>
   );
 }
 
 export default function MembersPage() {
-  const [email, setEmail] = useState("");
-  const [owner, setOwner] = useState(false);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [status, setStatus] = useState("Loading member network...");
+  const [members, setMembers] = useState<MemberProfile[]>([]);
   const [query, setQuery] = useState("");
-  const [stateFilter, setStateFilter] = useState("All");
-  const [roleFilter, setRoleFilter] = useState("All");
-  const [source, setSource] = useState("");
-
-  async function load() {
-    setStatus("Loading member network...");
-
-    try {
-      const viewer = currentEmail();
-      const ownerMode = isOwnerSession(viewer);
-
-      setEmail(viewer);
-      setOwner(ownerMode);
-
-      if (!viewer) {
-        setMembers([]);
-        setSource("not logged in");
-        setStatus("Log in to view the member network.");
-        return;
-      }
-
-      const urls = [
-        `/api/admin/members?email=${encodeURIComponent(viewer)}&owner=${ownerMode ? "1" : "0"}`,
-        `/api/members?email=${encodeURIComponent(viewer)}&owner=${ownerMode ? "1" : "0"}`,
-        `/api/profile/me?email=${encodeURIComponent(viewer)}`,
-      ];
-
-      for (const url of urls) {
-        try {
-          const response = await fetch(url, {
-            cache: "no-store",
-            headers: {
-              "x-vf-email": viewer,
-              "x-vf-admin": ownerMode ? "1" : "0",
-            },
-          });
-
-          const data = await safeJson(response);
-
-          const list = [
-            ...(Array.isArray(data.members) ? data.members : []),
-            ...(Array.isArray(data.profiles) ? data.profiles : []),
-            ...(Array.isArray(data.items) ? data.items : []),
-            ...(Array.isArray(data.data) ? data.data : []),
-            ...(data.profile ? [data.profile] : []),
-          ];
-
-          if (list.length) {
-            setMembers(list.filter(hasRealEmail));
-            setSource(url);
-            setStatus("");
-            return;
-          }
-        } catch {
-          // Try next source.
-        }
-      }
-
-      setMembers([]);
-      setSource("no source returned records");
-      setStatus("No member records loaded yet.");
-    } catch (error: any) {
-      setStatus(error?.message || "Could not load member network.");
-    }
-  }
+  const [stateFrom, setStateFrom] = useState("All");
+  const [operatingState, setOperatingState] = useState("All");
+  const [role, setRole] = useState("All");
+  const [status, setStatus] = useState("Loading network...");
 
   useEffect(() => {
-    load();
+    async function loadMembers() {
+      const local = readAllLocalProfiles().map(normalizeProfile);
+
+      try {
+        const response = await fetch("/api/admin/members", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const data = await response.json().catch(() => ({}));
+        const rows = [
+          ...(Array.isArray(data.members) ? data.members : []),
+          ...(Array.isArray(data.profiles) ? data.profiles : []),
+          ...(Array.isArray(data.items) ? data.items : []),
+          ...(Array.isArray(data.data) ? data.data : []),
+        ].map(normalizeProfile);
+
+        const byEmail = new Map<string, MemberProfile>();
+
+        [...rows, ...local].forEach((profile) => {
+          const key = cleanEmail(profile.email) || `${profile.full_name}-${profile.state_from}-${Math.random()}`;
+          if (!key) return;
+          byEmail.set(key, { ...(byEmail.get(key) || {}), ...profile });
+        });
+
+        const finalMembers = Array.from(byEmail.values()).filter((profile) => clean(profile.full_name) || clean(profile.email));
+
+        setMembers(finalMembers);
+        setStatus(finalMembers.length ? "" : "No member profiles found yet. Fill out Profile to populate the Network.");
+      } catch {
+        setMembers(local);
+        setStatus(local.length ? "" : "No member profiles found yet. Fill out Profile to populate the Network.");
+      }
+    }
+
+    loadMembers();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedState = clean(params.get("state"));
+    if (requestedState) setStateFrom(requestedState);
   }, []);
 
   const filtered = useMemo(() => {
-    const selectedState = normalizeState(stateFilter);
-    const selectedRole = roleFilter.toLowerCase();
-    const q = query.trim().toLowerCase();
+    const q = query.toLowerCase();
 
-    return members.filter((member) => {
-      const home = basedState(member);
-      const roles = memberRoles(member);
-      const stateMatches = !selectedState || home === selectedState;
-
-      const roleMatches =
-        selectedRole === "all" ||
-        roles.some((role) => role.toLowerCase() === selectedRole);
-
-      const searchable = [
-        memberName(member),
-        companyName(member),
-        memberEmail(member),
-        memberBio(member),
-        home,
-        ...marketStates(member),
-        ...roles,
-        ...strategies(member),
-        ...canProvide(member),
-        ...needs(member),
+    return members.filter((profile) => {
+      const haystack = [
+        profile.full_name,
+        profile.company,
+        profile.email,
+        profile.phone,
+        profile.state_from,
+        profile.city_from,
+        profile.counties_operated,
+        ...(profile.states_operated || []),
+        ...(profile.roles || []),
+        ...(profile.buy_box || []),
+        ...(profile.strategies || []),
+        ...(profile.capabilities || []),
+        ...(profile.pressure_solutions || []),
       ]
         .join(" ")
         .toLowerCase();
 
-      const queryMatches = !q || searchable.includes(q);
+      if (q && !haystack.includes(q)) return false;
+      if (stateFrom !== "All" && profile.state_from !== stateFrom) return false;
+      if (operatingState !== "All" && !(profile.states_operated || []).includes(operatingState)) return false;
+      if (role !== "All" && !(profile.roles || []).includes(role)) return false;
 
-      return stateMatches && roleMatches && queryMatches;
+      return true;
     });
-  }, [members, query, stateFilter, roleFilter]);
+  }, [members, query, stateFrom, operatingState, role]);
 
   const counts = useMemo(() => {
     return {
-      total: members.length,
-      showing: filtered.length,
-      baseReady: members.filter((member) => basedState(member)).length,
-      accepted: members.filter(isAccepted).length,
+      total: filtered.length,
+      buyers: filtered.filter((profile) => (profile.roles || []).includes("Buyer") || (profile.roles || []).includes("Investor")).length,
+      capital: filtered.filter((profile) => (profile.roles || []).includes("Lender") || (profile.roles || []).includes("Private Money")).length,
+      operators: filtered.filter((profile) => (profile.roles || []).includes("Operator") || (profile.roles || []).includes("Contractor")).length,
     };
-  }, [members, filtered]);
+  }, [filtered]);
 
   return (
     <main style={page}>
@@ -826,125 +448,110 @@ export default function MembersPage() {
           filter: brightness(1.06);
         }
 
-        input, select {
-          color-scheme: dark;
+        input::placeholder {
+          color: rgba(255,255,255,.45);
         }
 
-        @media (max-width: 820px) {
+        @media(max-width:760px) {
           .vf-grid,
-          .vf-four,
-          .vf-actions,
-          article > div {
+          .vf-filters {
             grid-template-columns: 1fr !important;
-          }
-
-          .vf-actions {
-            display: grid !important;
-            gap: 10px !important;
-          }
-
-          .vf-actions > * {
-            width: 100%;
-            box-sizing: border-box;
-            justify-content: center;
           }
         }
       `}</style>
 
       <div style={wrap}>
         <VaultForgeMemberNav
-          title="Members"
-          subtitle="Private operator network by base state, capability, execution style, and market reach."
+          title="Network"
+          subtitle="Find members by State From, role, operating states, capabilities, and pressure-solving fit."
           active="members"
         />
 
-        <section style={panel}>
-          <div style={eyebrow}>VaultForge Network</div>
-
-          <h1 style={{ fontSize: "clamp(52px,10vw,96px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "12px 0 18px" }}>
-            Private operator network.
+        <section style={card}>
+          <div style={label}>VaultForge Network Directory</div>
+          <h1 style={{ fontSize: "clamp(52px,10vw,98px)", lineHeight: 0.88, letterSpacing: "-.07em", margin: "10px 0 14px" }}>
+            Find the right operator.
           </h1>
-
-          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            State buttons filter only by where each member is based. Markets and operating states stay visible for AI routing context.
+          <p style={{ ...muted, fontSize: 19, margin: 0 }}>
+            State From controls where members are listed. States Operated In controls AI routing and market matching.
           </p>
 
-          <div style={{ marginTop: 16 }}>
-            <span style={chip}>Signed in: {email || "unknown"}</span>
-            <span style={chip}>{owner ? "Owner view" : "Member view"}</span>
-            <span style={chip}>Members: {counts.total}</span>
-            <span style={chip}>Showing: {counts.showing}</span>
-            <span style={chip}>Base state ready: {counts.baseReady}</span>
-            <span style={chip}>Source: {source || "loading"}</span>
-          </div>
-
-          <div className="vf-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
-            <button type="button" onClick={load} style={button}>Refresh Members</button>
-            <Link href="/profile" style={ghost}>Edit Profile</Link>
-            <Link href="/messages" style={ghost}>Messages</Link>
-            <Link href="/dashboard" style={ghost}>Dashboard</Link>
+          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12, marginTop: 16 }}>
+            <Mini title="Showing" value={counts.total} />
+            <Mini title="Buyer / Investor" value={counts.buyers} />
+            <Mini title="Capital" value={counts.capital} />
+            <Mini title="Operator" value={counts.operators} />
           </div>
         </section>
 
-        <section className="vf-four" style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, marginBottom: 18 }}>
-          <section style={card}><div style={eyebrow}>Members</div><div style={{ fontSize: 48, fontWeight: 1000 }}>{counts.total}</div></section>
-          <section style={card}><div style={eyebrow}>Showing</div><div style={{ fontSize: 48, fontWeight: 1000 }}>{counts.showing}</div></section>
-          <section style={card}><div style={eyebrow}>Base State</div><div style={{ fontSize: 48, fontWeight: 1000 }}>{counts.baseReady}</div></section>
-          <section style={card}><div style={eyebrow}>Accepted</div><div style={{ fontSize: 48, fontWeight: 1000 }}>{counts.accepted}</div></section>
-        </section>
-
-        <section style={panel}>
-          <div style={eyebrow}>Search / Filter</div>
-
-          <div className="vf-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 14, marginTop: 16 }}>
+        <section style={card}>
+          <div style={label}>Search / Filter</div>
+          <div className="vf-filters" style={{ display: "grid", gridTemplateColumns: "1.3fr repeat(3,1fr)", gap: 10, marginTop: 12 }}>
             <input
+              style={input}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search members, base state, markets, roles, strategies..."
-              style={input}
+              placeholder="Search name, company, county, role, capability..."
             />
-
-            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} style={input}>
-              <option value="All" style={{ color: "#111" }}>All Roles</option>
-              {ROLE_OPTIONS.filter((role) => role !== "All").map((role) => (
-                <option key={role} value={role} style={{ color: "#111" }}>{role}</option>
+            <select style={input} value={stateFrom} onChange={(event) => setStateFrom(event.target.value)}>
+              <option value="All">State From: All</option>
+              {STATES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+            <select style={input} value={operatingState} onChange={(event) => setOperatingState(event.target.value)}>
+              <option value="All">Operates In: All</option>
+              {STATES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+            <select style={input} value={role} onChange={(event) => setRole(event.target.value)}>
+              <option value="All">Role: All</option>
+              {ROLES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
               ))}
             </select>
           </div>
 
-          <div style={{ marginTop: 14 }}>
-            <button type="button" onClick={() => setStateFilter("All")} style={stateFilter === "All" ? button : ghost}>All</button>
-            {STATE_OPTIONS.map((state) => (
-              <button key={state} type="button" onClick={() => setStateFilter(state)} style={stateFilter === state ? button : ghost}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+            {STATES.map((state) => (
+              <Chip key={state} active={stateFrom === state} tone="#56d8ff" onClick={() => setStateFrom(stateFrom === state ? "All" : state)}>
                 {state}
-              </button>
+              </Chip>
             ))}
           </div>
-
-          {stateFilter !== "All" ? (
-            <p style={{ ...muted, marginTop: 14 }}>
-              Showing members based in <strong style={{ color: "#f8e7b0" }}>{stateFilter}</strong>.
-            </p>
-          ) : null}
         </section>
 
-        {status ? <section style={panel}>{status}</section> : null}
+        {status ? <section style={card}><p style={{ ...muted, margin: 0 }}>{status}</p></section> : null}
 
-        {!status && filtered.length === 0 ? (
-          <section style={panel}>
-            <h3 style={{ marginTop: 0 }}>No members match this filter.</h3>
-            <p style={muted}>
-              The selected state is not saved as a Based In field on any loaded member profile. Markets still display, but they do not control the state buttons.
-            </p>
-          </section>
-        ) : null}
-
-        <section style={{ display: "grid", gap: 14 }}>
-          {filtered.map((member, index) => (
-            <MemberCard key={memberId(member) || memberEmail(member) || String(index)} member={member} viewer={email} />
+        <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 16 }}>
+          {filtered.map((profile, index) => (
+            <MemberCard key={`${profile.email || profile.full_name || "member"}-${index}`} profile={profile} />
           ))}
         </section>
       </div>
     </main>
+  );
+}
+
+function Mini({ title, value }: { title: string; value: unknown }) {
+  return (
+    <section
+      style={{
+        border: "1px solid rgba(255,255,255,.12)",
+        borderRadius: 18,
+        padding: 14,
+        background: "rgba(255,255,255,.045)",
+      }}
+    >
+      <div style={label}>{title}</div>
+      <div style={{ fontSize: 28, fontWeight: 1000, marginTop: 8 }}>{clean(value)}</div>
+    </section>
   );
 }
