@@ -15,14 +15,30 @@ type Match = {
 };
 
 export default function VaultForgeOpportunityCommandStack({
-  roomId,
-  roomTitle,
+  lane = "opportunity",
+  room = {},
+  roomId = "",
+  title = "AI Opportunity Match",
   matches = [],
 }: {
-  roomId: string;
-  roomTitle: string;
+  lane?: string;
+  room?: Record<string, any>;
+  roomId?: string;
+  title?: string;
   matches?: Match[];
 }) {
+  const finalRoomId =
+    clean(roomId) ||
+    clean(room.id || room.room_id || room.signal_id || room.item_id);
+
+  const roomTitle =
+    clean(
+      room.title ||
+        room.deal_title ||
+        room.pain_title ||
+        room.address
+    ) || title;
+
   const top = matches.slice(0, 4);
   const overflow = Math.max(0, matches.length - top.length);
 
@@ -165,8 +181,8 @@ export default function VaultForgeOpportunityCommandStack({
                     `/messages/new?to=${encodeURIComponent(clean(match.email))}` +
                     `&room_title=${encodeURIComponent(roomTitle)}` +
                     `&room_type=${encodeURIComponent("Opportunity Room")}` +
-                    `&room_id=${encodeURIComponent(roomId)}` +
-                    `&source_route=${encodeURIComponent(`/deal/detail?id=${roomId}`)}`
+                    `&room_id=${encodeURIComponent(finalRoomId)}` +
+                    `&source_route=${encodeURIComponent(`/deal/detail?id=${finalRoomId}`)}`
                   }
                   style={{
                     minHeight: 42,
