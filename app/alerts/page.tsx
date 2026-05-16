@@ -6,11 +6,28 @@ import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
 
 type AlertItem = Record<string, any>;
 
+type AlertAction = "seen" | "saved" | "archived" | "hidden";
+
+const lanes = [
+  ["new", "New Matches"],
+  ["opportunity", "Opportunity"],
+  ["pressure", "Pressure"],
+  ["routing", "Routing"],
+  ["messages", "Messages"],
+  ["saved", "Saved"],
+  ["archived", "Archived"],
+  ["hidden", "Hidden"],
+];
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
 
 function cleanEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
@@ -52,15 +69,15 @@ function getEmail() {
   return cookieValue.includes("@") ? cookieValue : "";
 }
 
-function seenKey(email: string) {
-  return `vaultforge_seen_alerts_${email || "guest"}`;
+function storeKey(email: string, action: AlertAction) {
+  return `vaultforge_${action}_alerts_${email || "guest"}`;
 }
 
-function getSeen(email: string) {
+function readSet(email: string, action: AlertAction) {
   if (typeof window === "undefined") return new Set<string>();
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(seenKey(email)) || "[]");
+    const parsed = JSON.parse(window.localStorage.getItem(storeKey(email, action)) || "[]");
     if (Array.isArray(parsed)) return new Set(parsed.map(clean).filter(Boolean));
   } catch {
     // Continue.
@@ -69,11 +86,11 @@ function getSeen(email: string) {
   return new Set<string>();
 }
 
-function saveSeen(email: string, ids: string[]) {
+function writeSet(email: string, action: AlertAction, set: Set<string>) {
   if (typeof window === "undefined") return;
 
   try {
-    window.localStorage.setItem(seenKey(email), JSON.stringify(Array.from(new Set(ids.map(clean).filter(Boolean)))));
+    window.localStorage.setItem(storeKey(email, action), JSON.stringify(Array.from(set)));
   } catch {
     // Ignore.
   }
@@ -100,6 +117,7 @@ function first(...values: unknown[]) {
 
 function alertId(row: AlertItem, index: number) {
   const m = meta(row);
+
   return first(
     row.alert_id,
     row.id,
@@ -123,11 +141,27 @@ function alertId(row: AlertItem, index: number) {
 
 function titleOf(row: AlertItem) {
   const m = meta(row);
-  return first(row.title, row.alert_title, row.deal_title, row.pain_title, row.signal_title, row.project_title, row.headline, row.name, row.address, m.title, m.deal_title, m.pain_title, "VaultForge Alert");
+
+  return first(
+    row.title,
+    row.alert_title,
+    row.deal_title,
+    row.pain_title,
+    row.signal_title,
+    row.project_title,
+    row.headline,
+    row.name,
+    row.address,
+    m.title,
+    m.deal_title,
+    m.pain_title,
+    "VaultForge Alert"
+  );
 }
 
 function summaryOf(row: AlertItem) {
   const m = meta(row);
+
   return first(
     row.summary,
     row.alert_summary,
@@ -140,7 +174,7 @@ function summaryOf(row: AlertItem) {
     m.alert_summary,
     m.ai_summary,
     m.route_summary,
-    "VaultForge found a possible match based on your states, role, strategy, capability, or pressure-solving profile."
+    "VaultForge found a possible match based on your states, roles, strategy, capability, or pressure-solving profile."
   );
 }
 
@@ -155,34 +189,51 @@ function typeOf(row: AlertItem) {
     row.problem_type,
     row.pain_type,
     row.category,
+    row.thread_key,
     meta(row).type,
     meta(row).source,
   ]
-    .map((value) => clean(value).toLowerCase())
+    .map(lower)
     .join(" ");
 
+  if (text.includes("message") || text.includes("thread")) return "messages";
   if (text.includes("pain") || text.includes("pressure")) return "pressure";
   if (text.includes("routing")) return "routing";
-  if (text.includes("signal")) return "signal";
+  if (text.includes("signal")) return "routing";
   return "opportunity";
 }
 
 function scoreOf(row: AlertItem) {
   const m = meta(row);
-  const raw = Number(first(row.match_score, row.score, row.confidence_score, row.priority_score, m.match_score, m.score, m.confidence_score, m.priority_score));
+
+  const raw = Number(
+    first(
+      row.match_score,
+      row.score,
+      row.confidence_score,
+      row.priority_score,
+      m.match_score,
+      m.score,
+      m.confidence_score,
+      m.priority_score
+    )
+  );
+
   if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.min(100, Math.round(raw)));
   if (typeOf(row) === "pressure") return 84;
+  if (typeOf(row) === "routing") return 80;
+  if (typeOf(row) === "messages") return 100;
   return 76;
 }
 
-function roomHref(row: AlertItem) {
-  const id = alertId(row, 0);
+function roomHref(row: AlertItem, index: number) {
+  const id = alertId(row, index);
   const type = typeOf(row);
 
   if (!id) return "/dashboard";
   if (type === "pressure") return `/pain-room/${encodeURIComponent(id)}`;
   if (type === "routing") return `/routing-room/${encodeURIComponent(id)}`;
-  if (type === "signal") return `/signals/${encodeURIComponent(id)}`;
+  if (type === "messages") return "/message-command";
   return `/deal/detail?id=${encodeURIComponent(id)}`;
 }
 
@@ -197,6 +248,8 @@ function normalizeRows(data: any) {
     ...(Array.isArray(data.data) ? data.data : []),
     ...(Array.isArray(data.deals) ? data.deals : []),
     ...(Array.isArray(data.pains) ? data.pains : []),
+    ...(Array.isArray(data.messages) ? data.messages : []),
+    ...(Array.isArray(data.threads) ? data.threads : []),
   ];
 
   const byId = new Map<string, AlertItem>();
@@ -256,14 +309,15 @@ const button: React.CSSProperties = {
   display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
-  minHeight: 46,
+  minHeight: 44,
   borderRadius: 999,
-  padding: "11px 16px",
+  padding: "10px 14px",
   border: 0,
   background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
   fontWeight: 950,
   textDecoration: "none",
+  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -271,6 +325,12 @@ const ghost: React.CSSProperties = {
   background: "rgba(255,255,255,.06)",
   border: "1px solid rgba(255,255,255,.16)",
   color: "white",
+};
+
+const danger: React.CSSProperties = {
+  ...ghost,
+  border: "1px solid rgba(248,113,113,.30)",
+  color: "#fecaca",
 };
 
 const pill: React.CSSProperties = {
@@ -284,31 +344,38 @@ const pill: React.CSSProperties = {
   display: "inline-flex",
 };
 
+function laneTitle(lane: string) {
+  return lanes.find(([key]) => key === lane)?.[1] || "New Matches";
+}
+
 function AlertCard({
   row,
   index,
-  email,
-  seen,
-  onMarkSeen,
+  status,
+  onAction,
 }: {
   row: AlertItem;
   index: number;
-  email: string;
-  seen: boolean;
-  onMarkSeen: (id: string) => void;
+  status: {
+    seen: boolean;
+    saved: boolean;
+    archived: boolean;
+    hidden: boolean;
+  };
+  onAction: (id: string, action: AlertAction) => void;
 }) {
   const id = alertId(row, index);
-  const href = roomHref(row);
+  const href = roomHref(row, index);
   const score = scoreOf(row);
   const type = typeOf(row);
+  const shouldPulse = !status.seen && !status.archived && !status.hidden;
 
   return (
     <article
       style={{
         ...card,
-        borderColor: seen ? "rgba(255,255,255,.14)" : "rgba(248,113,113,.45)",
-        boxShadow: seen ? card.boxShadow : "0 0 0 0 rgba(248,113,113,.45), 0 28px 86px rgba(0,0,0,.30)",
-        animation: seen ? "none" : "vfAlertCardPulse 1.45s ease-in-out infinite",
+        borderColor: shouldPulse ? "rgba(248,113,113,.45)" : "rgba(255,255,255,.14)",
+        animation: shouldPulse ? "vfAlertCardPulse 1.45s ease-in-out infinite" : "none",
       }}
     >
       <style>{`
@@ -319,11 +386,11 @@ function AlertCard({
         }
       `}</style>
 
-      <div style={label}>{seen ? "Viewed Alert" : "New Match Alert"}</div>
+      <div style={label}>{shouldPulse ? "New Alert" : status.saved ? "Saved Alert" : status.archived ? "Archived Alert" : status.hidden ? "Hidden Alert" : "Viewed Alert"}</div>
 
       <h2
         style={{
-          fontSize: "clamp(34px,5vw,54px)",
+          fontSize: "clamp(32px,5vw,52px)",
           lineHeight: 0.95,
           letterSpacing: "-.045em",
           margin: "10px 0 10px",
@@ -337,7 +404,8 @@ function AlertCard({
         <span style={{ ...pill, color: "#f8e7b0", borderColor: "rgba(232,196,107,.24)", background: "rgba(232,196,107,.06)" }}>
           {score}% fit
         </span>
-        {!seen ? <span style={{ ...pill, color: "#9df3bf", borderColor: "rgba(157,243,191,.24)", background: "rgba(157,243,191,.06)" }}>unread</span> : null}
+        {status.saved ? <span style={{ ...pill, color: "#9df3bf", borderColor: "rgba(157,243,191,.24)", background: "rgba(157,243,191,.06)" }}>saved</span> : null}
+        {!status.seen ? <span style={{ ...pill, color: "#9df3bf", borderColor: "rgba(157,243,191,.24)", background: "rgba(157,243,191,.06)" }}>unread</span> : null}
       </div>
 
       <p style={{ ...muted, marginTop: 0 }}>{summaryOf(row)}</p>
@@ -345,18 +413,26 @@ function AlertCard({
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
         <Link
           href={href}
-          onClick={() => onMarkSeen(id)}
+          onClick={() => onAction(id, "seen")}
           style={button}
         >
-          Open Alert
+          Open Room
         </Link>
 
-        <button
-          type="button"
-          onClick={() => onMarkSeen(id)}
-          style={ghost}
-        >
+        <button type="button" onClick={() => onAction(id, "seen")} style={ghost}>
           Mark Seen
+        </button>
+
+        <button type="button" onClick={() => onAction(id, "saved")} style={ghost}>
+          {status.saved ? "Unsave" : "Save"}
+        </button>
+
+        <button type="button" onClick={() => onAction(id, "archived")} style={ghost}>
+          {status.archived ? "Unarchive" : "Archive"}
+        </button>
+
+        <button type="button" onClick={() => onAction(id, "hidden")} style={danger}>
+          {status.hidden ? "Unhide" : "Hide"}
         </button>
       </div>
     </article>
@@ -366,28 +442,95 @@ function AlertCard({
 export default function AlertsPage() {
   const [email, setEmail] = useState("");
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [lane, setLane] = useState("new");
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
-  const [status, setStatus] = useState("Loading alerts...");
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [status, setStatus] = useState("Loading alert room...");
 
-  function markSeen(id: string) {
-    const next = new Set(seenIds);
-    next.add(id);
-    setSeenIds(next);
-    saveSeen(email, Array.from(next));
+  function getStatus(id: string) {
+    return {
+      seen: seenIds.has(id),
+      saved: savedIds.has(id),
+      archived: archivedIds.has(id),
+      hidden: hiddenIds.has(id),
+    };
+  }
+
+  function toggleSet(current: Set<string>, id: string) {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  }
+
+  function onAction(id: string, action: AlertAction) {
+    if (action === "seen") {
+      const next = new Set(seenIds);
+      next.add(id);
+      setSeenIds(next);
+      writeSet(email, "seen", next);
+      return;
+    }
+
+    if (action === "saved") {
+      const next = toggleSet(savedIds, id);
+      setSavedIds(next);
+      writeSet(email, "saved", next);
+
+      const seenNext = new Set(seenIds);
+      seenNext.add(id);
+      setSeenIds(seenNext);
+      writeSet(email, "seen", seenNext);
+      return;
+    }
+
+    if (action === "archived") {
+      const next = toggleSet(archivedIds, id);
+      setArchivedIds(next);
+      writeSet(email, "archived", next);
+
+      const seenNext = new Set(seenIds);
+      seenNext.add(id);
+      setSeenIds(seenNext);
+      writeSet(email, "seen", seenNext);
+      return;
+    }
+
+    if (action === "hidden") {
+      const next = toggleSet(hiddenIds, id);
+      setHiddenIds(next);
+      writeSet(email, "hidden", next);
+
+      const seenNext = new Set(seenIds);
+      seenNext.add(id);
+      setSeenIds(seenNext);
+      writeSet(email, "seen", seenNext);
+    }
   }
 
   function markAllSeen() {
     const ids = alerts.map((row, index) => alertId(row, index));
     const next = new Set([...Array.from(seenIds), ...ids]);
     setSeenIds(next);
-    saveSeen(email, Array.from(next));
+    writeSet(email, "seen", next);
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const startLane = clean(params.get("lane")) || clean(params.get("folder")) || "new";
+    setLane(startLane);
+  }, []);
 
   useEffect(() => {
     async function loadAlerts() {
       const viewer = getEmail();
       setEmail(viewer);
-      setSeenIds(getSeen(viewer));
+      setSeenIds(readSet(viewer, "seen"));
+      setSavedIds(readSet(viewer, "saved"));
+      setArchivedIds(readSet(viewer, "archived"));
+      setHiddenIds(readSet(viewer, "hidden"));
 
       const endpoints = [
         `/api/alerts/feed?email=${encodeURIComponent(viewer)}&owner=0`,
@@ -421,15 +564,51 @@ export default function AlertsPage() {
       }
 
       setAlerts([]);
-      setStatus("No live alerts found yet. New alerts will appear when VaultForge finds matching deals, pain rooms, signals, or routing opportunities.");
+      setStatus("No live alerts found yet. New alerts will appear when VaultForge finds matching deals, pain rooms, signals, routing activity, or messages.");
     }
 
     loadAlerts();
   }, []);
 
-  const unseen = useMemo(() => {
-    return alerts.filter((row, index) => !seenIds.has(alertId(row, index)));
-  }, [alerts, seenIds]);
+  const laneCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      new: 0,
+      opportunity: 0,
+      pressure: 0,
+      routing: 0,
+      messages: 0,
+      saved: 0,
+      archived: 0,
+      hidden: 0,
+    };
+
+    alerts.forEach((row, index) => {
+      const id = alertId(row, index);
+      const type = typeOf(row);
+
+      if (!seenIds.has(id) && !archivedIds.has(id) && !hiddenIds.has(id)) counts.new += 1;
+      if (!archivedIds.has(id) && !hiddenIds.has(id)) counts[type] = (counts[type] || 0) + 1;
+      if (savedIds.has(id)) counts.saved += 1;
+      if (archivedIds.has(id)) counts.archived += 1;
+      if (hiddenIds.has(id)) counts.hidden += 1;
+    });
+
+    return counts;
+  }, [alerts, seenIds, savedIds, archivedIds, hiddenIds]);
+
+  const filtered = useMemo(() => {
+    return alerts.filter((row, index) => {
+      const id = alertId(row, index);
+      const type = typeOf(row);
+      const rowStatus = getStatus(id);
+
+      if (lane === "new") return !rowStatus.seen && !rowStatus.archived && !rowStatus.hidden;
+      if (lane === "saved") return rowStatus.saved;
+      if (lane === "archived") return rowStatus.archived;
+      if (lane === "hidden") return rowStatus.hidden;
+      return type === lane && !rowStatus.archived && !rowStatus.hidden;
+    });
+  }, [alerts, lane, seenIds, savedIds, archivedIds, hiddenIds]);
 
   return (
     <main style={page}>
@@ -459,13 +638,13 @@ export default function AlertsPage() {
 
       <div style={wrap}>
         <VaultForgeMemberNav
-          title="Alerts"
-          subtitle="New match alerts pulse until viewed, then stop."
+          title="Alert Room"
+          subtitle="Alerts have their own room, folders, cleanup controls, and viewed/saved/archive state."
           active="alerts"
         />
 
         <section style={card}>
-          <div style={label}>VaultForge Alert Trigger Layer</div>
+          <div style={label}>VaultForge Alert Room</div>
 
           <h1
             style={{
@@ -475,11 +654,11 @@ export default function AlertsPage() {
               margin: "12px 0 18px",
             }}
           >
-            {unseen.length ? `${unseen.length} new alert${unseen.length === 1 ? "" : "s"}.` : "Alerts clear."}
+            {laneTitle(lane)}.
           </h1>
 
           <p style={{ ...muted, fontSize: 20, marginTop: 0 }}>
-            Alerts pulse only while they are new. Once a member clicks Open Alert or Mark Seen, VaultForge remembers it and the flashing stops.
+            Alerts are separated into rooms/folders. New alerts pulse until opened, marked seen, saved, archived, or hidden.
           </p>
 
           <div className="vf-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
@@ -490,25 +669,54 @@ export default function AlertsPage() {
           </div>
         </section>
 
+        <section style={card}>
+          <div style={label}>Alert Folders</div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+            {lanes.map(([key, name]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setLane(key)}
+                style={{
+                  ...ghost,
+                  background: key === lane ? "linear-gradient(135deg,#f8e7b0,#e8c46b)" : ghost.background,
+                  color: key === lane ? "#06100a" : "white",
+                  border: key === lane ? "0" : ghost.border,
+                }}
+              >
+                {name} ({laneCounts[key] || 0})
+              </button>
+            ))}
+          </div>
+        </section>
+
         {status ? (
           <section style={card}>
             <p style={{ ...muted, margin: 0 }}>{status}</p>
           </section>
         ) : null}
 
+        {!status && !filtered.length ? (
+          <section style={card}>
+            <div style={label}>Folder Empty</div>
+            <p style={{ ...muted, margin: "8px 0 0" }}>
+              No alerts are currently in {laneTitle(lane)}. Use the folders above or wait for a new match trigger.
+            </p>
+          </section>
+        ) : null}
+
         <section className="vf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 18 }}>
-          {alerts.map((row, index) => {
+          {filtered.map((row, index) => {
             const id = alertId(row, index);
-            const seen = seenIds.has(id);
 
             return (
               <AlertCard
                 key={`${id}-${index}`}
                 row={row}
                 index={index}
-                email={email}
-                seen={seen}
-                onMarkSeen={markSeen}
+                status={getStatus(id)}
+                onAction={onAction}
               />
             );
           })}
