@@ -14,19 +14,21 @@ type Match = {
   reason?: string;
 };
 
+type Props = {
+  lane?: string;
+  room?: Record<string, any>;
+  roomId?: string;
+  title?: string;
+  matches?: Match[];
+};
+
 export default function VaultForgeOpportunityCommandStack({
   lane = "opportunity",
   room = {},
   roomId = "",
   title = "AI Opportunity Match",
   matches = [],
-}: {
-  lane?: string;
-  room?: Record<string, any>;
-  roomId?: string;
-  title?: string;
-  matches?: Match[];
-}) {
+}: Props) {
   const finalRoomId =
     clean(roomId) ||
     clean(room.id || room.room_id || room.signal_id || room.item_id);
@@ -40,7 +42,6 @@ export default function VaultForgeOpportunityCommandStack({
     ) || title;
 
   const top = matches.slice(0, 4);
-  const overflow = Math.max(0, matches.length - top.length);
 
   return (
     <section
@@ -48,9 +49,9 @@ export default function VaultForgeOpportunityCommandStack({
         border: "1px solid rgba(232,196,107,.22)",
         borderRadius: 24,
         padding: 18,
+        marginTop: 18,
         background:
           "linear-gradient(145deg,rgba(232,196,107,.05),rgba(255,255,255,.03))",
-        marginTop: 18,
       }}
     >
       <div
@@ -76,25 +77,9 @@ export default function VaultForgeOpportunityCommandStack({
         Institutional member routing.
       </h2>
 
-      <p
-        style={{
-          color: "#cbd5e1",
-          lineHeight: 1.6,
-          marginTop: 0,
-        }}
-      >
-        VaultForge prioritizes capital, buyer, operator, and execution-fit
-        members instead of flooding the room with clutter.
-      </p>
-
-      <div
-        style={{
-          display: "grid",
-          gap: 12,
-        }}
-      >
+      <div style={{ display: "grid", gap: 12 }}>
         {top.map((match, index) => {
-          const roleLabel =
+          const label =
             index === 0
               ? "Primary Match"
               : index === 1
@@ -118,8 +103,8 @@ export default function VaultForgeOpportunityCommandStack({
                   display: "flex",
                   justifyContent: "space-between",
                   gap: 10,
-                  alignItems: "center",
                   flexWrap: "wrap",
+                  alignItems: "center",
                 }}
               >
                 <div>
@@ -132,7 +117,7 @@ export default function VaultForgeOpportunityCommandStack({
                       fontWeight: 900,
                     }}
                   >
-                    {roleLabel}
+                    {label}
                   </div>
 
                   <strong style={{ fontSize: 24 }}>
@@ -171,8 +156,8 @@ export default function VaultForgeOpportunityCommandStack({
               <div
                 style={{
                   display: "flex",
-                  flexWrap: "wrap",
                   gap: 8,
+                  flexWrap: "wrap",
                   marginTop: 12,
                 }}
               >
@@ -224,41 +209,6 @@ export default function VaultForgeOpportunityCommandStack({
           );
         })}
       </div>
-
-      {overflow > 0 ? (
-        <section
-          style={{
-            border: "1px solid rgba(255,255,255,.10)",
-            borderRadius: 18,
-            padding: 14,
-            background: "rgba(255,255,255,.03)",
-            marginTop: 14,
-          }}
-        >
-          <div
-            style={{
-              color: "#e8c46b",
-              fontSize: 11,
-              fontWeight: 900,
-              letterSpacing: ".16em",
-              textTransform: "uppercase",
-            }}
-          >
-            Overflow Matches Hidden
-          </div>
-
-          <p
-            style={{
-              color: "#cbd5e1",
-              margin: "8px 0 0",
-              lineHeight: 1.5,
-            }}
-          >
-            {overflow} additional compatible members were hidden to prevent
-            signal clutter in this opportunity room.
-          </p>
-        </section>
-      ) : null}
     </section>
   );
 }
