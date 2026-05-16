@@ -8,14 +8,17 @@ export default function RedirectToDashboard() {
   }, []);
 
   return (
-    <main style={{
-      minHeight: "100vh",
-      background: "#020303",
-      color: "white",
-      padding: 30,
-      fontFamily: "Arial, sans-serif"
-    }}>
-      Opening Dashboard...
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#020303",
+        color: "white",
+        display: "grid",
+        placeItems: "center",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
+      Redirecting to Command Center...
     </main>
   );
 }
