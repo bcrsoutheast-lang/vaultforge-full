@@ -390,6 +390,8 @@ const button: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
+  touchAction: "manipulation",
+  WebkitAppearance: "none",
 };
 
 const ghost: React.CSSProperties = {
@@ -611,9 +613,6 @@ export default function ProfileDashboardPage() {
         }
 
         .vf-sticky-save {
-          position: sticky;
-          bottom: 12px;
-          z-index: 30;
           margin-top: 14px;
         }
 
@@ -815,25 +814,14 @@ export default function ProfileDashboardPage() {
           />
         </section>
 
-        <section className="vf-sticky-save">
-          <div
-            style={{
-              border: "1px solid rgba(232,196,107,.34)",
-              borderRadius: 999,
-              background: "rgba(2,6,23,.92)",
-              boxShadow: "0 18px 60px rgba(0,0,0,.38)",
-              padding: 10,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 10,
-              backdropFilter: "blur(14px)",
-            }}
-          >
-            <div style={{ color: "#cbd5e1", fontSize: 13, paddingLeft: 10 }}>
+        <section className="vf-sticky-save" style={card}>
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ color: "#cbd5e1", fontSize: 15 }}>
               Profile strength: <strong style={{ color: "#9df3bf" }}>{score}%</strong>
             </div>
-            <button type="button" onClick={submitProfile} style={button}>Save Profile</button>
+            <button type="button" onClick={submitProfile} style={{ ...button, width: "100%" }}>
+              Save Profile
+            </button>
           </div>
         </section>
       </div>
