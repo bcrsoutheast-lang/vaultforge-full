@@ -463,6 +463,7 @@ export default function VaultForgeRoomMemberMatch({
 }) {
   const [members, setMembers] = useState<MemberProfile[]>([]);
   const [status, setStatus] = useState("Loading member matches...");
+  const [showOverflow, setShowOverflow] = useState(false);
 
   useEffect(() => {
     async function loadMembers() {
@@ -588,11 +589,63 @@ export default function VaultForgeRoomMemberMatch({
                 marginTop: 12,
               }}
             >
-              <div style={label}>Overflow Matches Hidden</div>
-              <p style={{ ...muted, margin: "7px 0 0", fontSize: 14 }}>
-                {hiddenCount} additional compatible member{hiddenCount === 1 ? "" : "s"} were not shown to keep this room clean. Open Network to search the full pool.
+              <div style={label}>Overflow Matches Controlled</div>
+              <p style={{ ...muted, margin: "7px 0 10px", fontSize: 14 }}>
+                {hiddenCount} additional compatible member{hiddenCount === 1 ? "" : "s"} are hidden to keep this room clean. Expand only when you need deeper routing options.
               </p>
-              <Link href="/members" style={{ ...ghost, marginTop: 10 }}>Open Full Network</Link>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowOverflow((value) => !value)}
+                  style={{ ...button, background: showOverflow ? "rgba(255,255,255,.075)" : button.background, color: showOverflow ? "white" : button.color, border: showOverflow ? "1px solid rgba(255,255,255,.16)" : 0 }}
+                >
+                  {showOverflow ? "Hide Overflow" : `Show ${hiddenCount} More`}
+                </button>
+                <Link href="/members" style={ghost}>Open Full Network</Link>
+              </div>
+
+              {showOverflow ? (
+                <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                  {commandStack.overflow.slice(0, 8).map((item, index) => {
+                    const profile = item.profile;
+                    const match = item.match;
+                    const name = clean(profile.full_name) || clean(profile.email) || "VaultForge Member";
+                    const email = clean(profile.email);
+                    const messageHref = `/messages/new?to=${encodeURIComponent(email)}&subject=${encodeURIComponent(`Overflow Room Match: ${clean(room?.title || room?.name || roomId)}`)}&source=room-match-overflow&type=${encodeURIComponent(lane)}&item_id=${encodeURIComponent(roomId)}&title=${encodeURIComponent(name)}`;
+
+                    return (
+                      <article
+                        key={`${email || name}-${index}`}
+                        style={{
+                          border: "1px solid rgba(255,255,255,.10)",
+                          borderRadius: 16,
+                          padding: 11,
+                          background: "rgba(0,0,0,.12)",
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto",
+                          gap: 10,
+                          alignItems: "center",
+                        }}
+                      >
+                        <div>
+                          <strong>{name}</strong>
+                          <p style={{ ...muted, margin: "4px 0 0", fontSize: 13 }}>
+                            {match.lane} · {match.score}% · {match.reasons.slice(0, 2).join(" · ")}
+                          </p>
+                        </div>
+                        <Link href={messageHref} style={{ ...ghost, minHeight: 36, padding: "8px 10px", fontSize: 12 }}>Intro</Link>
+                      </article>
+                    );
+                  })}
+
+                  {hiddenCount > 8 ? (
+                    <p style={{ ...muted, margin: 0, fontSize: 13 }}>
+                      Showing 8 overflow matches. Open the full Network for the rest.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </section>
           ) : null}
         </>
