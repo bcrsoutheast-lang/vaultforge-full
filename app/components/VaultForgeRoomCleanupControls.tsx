@@ -6,6 +6,7 @@ import {
   applyRoomAction,
   clean,
   deleteRoomForever,
+  getRoomRecord,
   roomFolder,
   roomKind,
   roomRoute,
@@ -26,25 +27,34 @@ type Props = {
 };
 
 const shell: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 24,
-  padding: 16,
-  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
+  border: "1px solid rgba(232,196,107,.32)",
+  borderRadius: 28,
+  padding: 18,
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 36%), linear-gradient(145deg,rgba(15,23,42,.96),rgba(2,6,23,.96))",
   marginBottom: 18,
+  boxShadow: "0 24px 80px rgba(0,0,0,.34)",
 };
 
 const label: React.CSSProperties = {
   color: "#e8c46b",
-  letterSpacing: ".16em",
+  letterSpacing: ".18em",
   textTransform: "uppercase",
   fontWeight: 950,
   fontSize: 12,
 };
 
+const titleStyle: React.CSSProperties = {
+  margin: "8px 0 8px",
+  fontSize: "clamp(28px,6vw,52px)",
+  lineHeight: 0.95,
+  letterSpacing: "-.045em",
+};
+
 const btn: React.CSSProperties = {
-  minHeight: 44,
+  minHeight: 48,
   borderRadius: 999,
-  padding: "10px 14px",
+  padding: "11px 16px",
   border: 0,
   background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
   color: "#06100a",
@@ -64,10 +74,25 @@ const ghost: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.16)",
 };
 
+const green: React.CSSProperties = {
+  ...ghost,
+  color: "#bbf7d0",
+  border: "1px solid rgba(34,197,94,.35)",
+  background: "rgba(34,197,94,.10)",
+};
+
+const blue: React.CSSProperties = {
+  ...ghost,
+  color: "#bae6fd",
+  border: "1px solid rgba(14,165,233,.35)",
+  background: "rgba(14,165,233,.10)",
+};
+
 const danger: React.CSSProperties = {
   ...ghost,
   color: "#fecaca",
-  border: "1px solid rgba(248,113,113,.35)",
+  border: "1px solid rgba(248,113,113,.38)",
+  background: "rgba(248,113,113,.10)",
 };
 
 const redSolid: React.CSSProperties = {
@@ -86,17 +111,12 @@ const chip: React.CSSProperties = {
   fontSize: 12,
 };
 
-function readLocalRecord(kind: string, id: string) {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = window.localStorage.getItem("vaultforge_5s_room_registry_v1") || "{}";
-    const rows = JSON.parse(raw);
-    const key = `${roomKind(kind)}:${clean(id) || "unknown"}`;
-    return rows?.[key] || null;
-  } catch {
-    return null;
-  }
+function actionCopy(action: string) {
+  if (action === "save") return "Saved. This room is now in Saved Rooms.";
+  if (action === "archive") return "Archived. This room leaves active workflow.";
+  if (action === "delete") return "Deleted/hidden. This room leaves normal workflow.";
+  if (action === "restore") return "Restored to active workflow.";
+  return "Action complete.";
 }
 
 export default function VaultForgeRoomCleanupControls({
@@ -116,7 +136,7 @@ export default function VaultForgeRoomCleanupControls({
   const source = clean(sourceRoute) || roomRoute(resolvedKind, id);
 
   const initial = useMemo(() => {
-    const existing = readLocalRecord(resolvedKind, id);
+    const existing = getRoomRecord(resolvedKind, id);
 
     return upsertRoom({
       room_id: id,
@@ -136,11 +156,15 @@ export default function VaultForgeRoomCleanupControls({
   const [status, setStatus] = useState("");
 
   useEffect(() => {
-    const existing = readLocalRecord(resolvedKind, id);
+    const refresh = () => {
+      const existing = getRoomRecord(resolvedKind, id);
+      if (existing) setRecord(existing);
+    };
 
-    if (existing) {
-      setRecord(existing);
-    }
+    refresh();
+    window.addEventListener("vaultforge-5s-room-change", refresh);
+
+    return () => window.removeEventListener("vaultforge-5s-room-change", refresh);
   }, [resolvedKind, id]);
 
   const messageHref =
@@ -160,15 +184,7 @@ export default function VaultForgeRoomCleanupControls({
   function run(action: "save" | "archive" | "delete" | "restore") {
     const next = applyRoomAction(record, action);
     setRecord(next);
-
-    const copy: Record<string, string> = {
-      save: "Saved. It now lives in Saved Rooms.",
-      archive: "Archived. It leaves active workflow.",
-      delete: "Deleted/hidden. It leaves normal workflow.",
-      restore: "Restored to active workflow.",
-    };
-
-    setStatus(copy[action]);
+    setStatus(actionCopy(action));
 
     fetch("/api/room/actions", {
       method: "POST",
@@ -182,67 +198,34 @@ export default function VaultForgeRoomCleanupControls({
     setStatus("Room permanently removed from local workflow state.");
 
     setTimeout(() => {
-      if (typeof window !== "undefined") {
-        window.location.href = "/deleted-rooms";
-      }
+      if (typeof window !== "undefined") window.location.href = "/deleted-rooms";
     }, 650);
   }
 
   if (record.deleted) {
     return (
-      <section style={{ ...shell, borderColor: "rgba(248,113,113,.35)" }}>
-        <div style={label}>Deleted / Hidden</div>
-
-        <h3 style={{ margin: "8px 0", fontSize: 28 }}>
-          This room is out of active workflow.
-        </h3>
-
+      <section style={{ ...shell, borderColor: "rgba(248,113,113,.42)" }}>
+        <div style={label}>5S Deleted Cell</div>
+        <h3 style={titleStyle}>This room is out of active workflow.</h3>
         <p style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
-          Restore it back into execution flow or permanently remove it from
-          Deleted Rooms to keep the command center clean.
+          Restore it if this room still matters. Permanently delete it when the room should leave the command system completely.
         </p>
 
-        <div
-          className="vf-room-clean-actions"
-          style={{ display: "flex", flexWrap: "wrap", gap: 10 }}
-        >
-          <button type="button" onClick={() => run("restore")} style={btn}>
-            Restore Room
-          </button>
-
-          <button type="button" onClick={hardDelete} style={redSolid}>
-            Permanent Delete
-          </button>
-
-          <Link href="/deleted-rooms" style={ghost}>
-            Deleted Folder
-          </Link>
-
-          <Link href={laneHref} style={ghost}>
-            Back To Lane
-          </Link>
-
-          <Link href="/dashboard" style={ghost}>
-            Command
-          </Link>
+        <div className="vf-room-clean-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <button type="button" onClick={() => run("restore")} style={btn}>Restore Room</button>
+          <button type="button" onClick={hardDelete} style={redSolid}>Permanent Delete</button>
+          <Link href="/deleted-rooms" style={ghost}>Deleted Folder</Link>
+          <Link href={laneHref} style={ghost}>Back To Lane</Link>
+          <Link href="/dashboard" style={ghost}>Command</Link>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-            marginTop: 12,
-          }}
-        >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
           <span style={chip}>{record.room_type}</span>
           <span style={chip}>Status: deleted</span>
           <span style={chip}>Room: {record.room_id}</span>
         </div>
 
-        {status ? (
-          <p style={{ color: "#f8e7b0", fontWeight: 900 }}>{status}</p>
-        ) : null}
+        {status ? <p style={{ color: "#f8e7b0", fontWeight: 900 }}>{status}</p> : null}
       </section>
     );
   }
@@ -255,7 +238,6 @@ export default function VaultForgeRoomCleanupControls({
             display: grid !important;
             grid-template-columns: 1fr !important;
           }
-
           .vf-room-clean-actions > * {
             width: 100%;
             box-sizing: border-box;
@@ -263,74 +245,54 @@ export default function VaultForgeRoomCleanupControls({
         }
       `}</style>
 
-      <div style={label}>5S Room Controls</div>
+      <div style={label}>5S Command Cell</div>
+      <h3 style={titleStyle}>Sort. Set. Shine. Standardize. Sustain.</h3>
 
-      <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>
-        One-way cleanup discipline: save what matters, archive what is done,
-        delete/hide what should leave active workflow.
+      <p style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
+        One-way operational discipline: save what matters, archive what is done, delete/hide what should leave active workflow.
       </p>
 
-      <div
-        className="vf-room-clean-actions"
-        style={{ display: "flex", flexWrap: "wrap", gap: 10 }}
-      >
-        <button type="button" onClick={() => run("save")} style={record.saved ? btn : ghost}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, margin: "14px 0" }}>
+        <div style={{ border: "1px solid rgba(232,196,107,.20)", borderRadius: 18, padding: 12, background: "rgba(232,196,107,.08)" }}>
+          <div style={label}>Sort</div>
+          <div style={{ color: "#cbd5e1", marginTop: 5 }}>Remove noise</div>
+        </div>
+        <div style={{ border: "1px solid rgba(14,165,233,.24)", borderRadius: 18, padding: 12, background: "rgba(14,165,233,.08)" }}>
+          <div style={{ ...label, color: "#67e8f9" }}>Set</div>
+          <div style={{ color: "#cbd5e1", marginTop: 5 }}>Place the room</div>
+        </div>
+        <div style={{ border: "1px solid rgba(34,197,94,.24)", borderRadius: 18, padding: 12, background: "rgba(34,197,94,.08)" }}>
+          <div style={{ ...label, color: "#86efac" }}>Sustain</div>
+          <div style={{ color: "#cbd5e1", marginTop: 5 }}>Keep flow clean</div>
+        </div>
+      </div>
+
+      <div className="vf-room-clean-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        <button type="button" onClick={() => run("save")} style={record.saved ? green : ghost}>
           Save Room
         </button>
-
-        <button type="button" onClick={() => run("archive")} style={record.archived ? btn : ghost}>
+        <button type="button" onClick={() => run("archive")} style={record.archived ? blue : ghost}>
           Archive Room
         </button>
-
         <button type="button" onClick={() => run("delete")} style={danger}>
           Delete / Hide Room
         </button>
-
-        <Link href={messageHref} style={btn}>
-          Request Info / Intro
-        </Link>
-
-        <Link href={messageHref} style={ghost}>
-          Internal Thread
-        </Link>
-
-        <Link href="/saved-rooms" style={ghost}>
-          Saved Folder
-        </Link>
-
-        <Link href="/archived-rooms" style={ghost}>
-          Archived Folder
-        </Link>
-
-        <Link href="/deleted-rooms" style={ghost}>
-          Deleted Folder
-        </Link>
-
-        <Link href={laneHref} style={ghost}>
-          Back To Lane
-        </Link>
-
-        <Link href="/dashboard" style={ghost}>
-          Command
-        </Link>
+        <Link href={messageHref} style={btn}>Request Info / Intro</Link>
+        <Link href={messageHref} style={ghost}>Internal Thread</Link>
+        <Link href="/saved-rooms" style={ghost}>Saved Folder</Link>
+        <Link href="/archived-rooms" style={ghost}>Archived Folder</Link>
+        <Link href="/deleted-rooms" style={ghost}>Deleted Folder</Link>
+        <Link href={laneHref} style={ghost}>Back To Lane</Link>
+        <Link href="/dashboard" style={ghost}>Command</Link>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          marginTop: 12,
-        }}
-      >
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
         <span style={chip}>{record.room_type}</span>
         <span style={chip}>Status: {record.status}</span>
         <span style={chip}>Room: {record.room_id}</span>
       </div>
 
-      {status ? (
-        <p style={{ color: "#f8e7b0", fontWeight: 900 }}>{status}</p>
-      ) : null}
+      {status ? <p style={{ color: "#f8e7b0", fontWeight: 900 }}>{status}</p> : null}
     </section>
   );
 }
