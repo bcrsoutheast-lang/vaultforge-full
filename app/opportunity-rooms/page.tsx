@@ -1,176 +1,257 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import VaultForgeCommandShell from "../components/VaultForgeCommandShell";
-import VaultForgeRoomTerminalCard from "../components/VaultForgeRoomTerminalCard";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-type Deal = Record<string, any>;
-
-type Folder = "active" | "saved" | "archived" | "hidden";
-
-function pick(obj: Deal, keys: string[], fallback = "") {
-  for (const key of keys) {
-    const value = obj?.[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return String(value);
-  }
-  return fallback;
-}
-
-function money(value: string) {
-  if (!value) return "";
-  if (value.includes("$")) return value;
-  const n = Number(String(value).replace(/[^0-9.-]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return value;
-  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `$${Math.round(n / 1000)}K`;
-  return `$${n.toLocaleString()}`;
-}
-
-function firstImage(row: Deal) {
-  const fields = [row.image_url, row.photo_url, row.cover_photo, row.primary_photo];
-  for (const field of fields) if (typeof field === "string" && field.startsWith("http")) return field;
-  const arrays = [row.photo_urls, row.photos, row.images];
-  for (const arr of arrays) {
-    if (Array.isArray(arr) && typeof arr[0] === "string") return arr[0];
-    if (typeof arr === "string" && arr.startsWith("[")) {
-      try {
-        const parsed = JSON.parse(arr);
-        if (Array.isArray(parsed) && typeof parsed[0] === "string") return parsed[0];
-      } catch {}
-    }
-  }
-  return "";
-}
-
-function statusOf(row: Deal): Folder {
-  const raw = pick(row, ["room_status", "status", "folder"], "active").toLowerCase();
-  if (raw.includes("save")) return "saved";
-  if (raw.includes("archive")) return "archived";
-  if (raw.includes("delete") || raw.includes("hide") || raw.includes("hidden")) return "hidden";
-  return "active";
-}
+const rooms = [
+  {
+    id: "opp-1",
+    title: "Goober House",
+    location: "Bartow County, GA",
+    strategy: "Fix & Flip",
+    asset: "Residential",
+    ask: "$210K",
+    arv: "$310K",
+    repairs: "$50K",
+    score: 84,
+    execution: 77,
+    risk: 42,
+    summary: "Strong spread with moderate rehab risk and southeast buyer fit.",
+    status: "ACTIVE",
+  },
+  {
+    id: "opp-2",
+    title: "Mountain Lion",
+    location: "Atlanta, GA",
+    strategy: "Value Add",
+    asset: "Multifamily",
+    ask: "$1.2M",
+    arv: "$1.8M",
+    repairs: "$240K",
+    score: 89,
+    execution: 82,
+    risk: 37,
+    summary: "High operator demand with strong upside and capital interest.",
+    status: "ROUTED",
+  },
+];
 
 export default function OpportunityRoomsPage() {
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [folder, setFolder] = useState<Folder>("active");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await fetch("/api/deal/feed", { cache: "no-store" });
-        const json = await res.json().catch(() => ({}));
-        const rows = Array.isArray(json) ? json : json.deals || json.items || json.rows || json.data || [];
-        if (alive) setDeals(Array.isArray(rows) ? rows : []);
-      } catch (err: any) {
-        if (alive) setError(err?.message || "Opportunity feed could not load.");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const filtered = useMemo(() => deals.filter((row) => statusOf(row) === folder), [deals, folder]);
-
-  const counts = useMemo(() => {
-    return deals.reduce(
-      (acc, row) => {
-        acc[statusOf(row)] += 1;
-        return acc;
-      },
-      { active: 0, saved: 0, archived: 0, hidden: 0 } as Record<Folder, number>,
-    );
-  }, [deals]);
-
   return (
-    <VaultForgeCommandShell title="Opportunity Rooms" subtitle="Deal flow · acquisition targets · execution pipeline">
-      <main style={page}>
-        <section style={hero}>
-          <div>
-            <div style={eyebrow}>VAULTFORGE OPPORTUNITY COMMAND</div>
-            <h1 style={h1}>Opportunity rooms are the only deal rooms.</h1>
-            <p style={lead}>
-              Alerts, routing, intelligence, and messages should attach behind the scenes to these rooms. This page is the consolidated deal-side command lane.
-            </p>
-          </div>
-          <div style={heroPanel}>
-            <div style={metricLabel}>Active Opportunities</div>
-            <div style={metricNumber}>{counts.active}</div>
-            <div style={metricSub}>Saved {counts.saved} · Archived {counts.archived} · Hidden {counts.hidden}</div>
-          </div>
-        </section>
+    <VaultForgeCommandShell
+      active="opportunity"
+      eyebrow="VAULTFORGE OPPORTUNITY FLOW"
+      title="Opportunity Rooms"
+      subtitle="High-signal investment opportunities with execution scoring, routing fit, and clean operational flow."
+    >
+      <style>{`
+        .vf-feed {
+          display:grid;
+          gap:16px;
+        }
 
-        <section style={toolbar}>
-          {(["active", "saved", "archived", "hidden"] as Folder[]).map((key) => (
-            <button key={key} onClick={() => setFolder(key)} style={folder === key ? tabActive : tab}>
-              {key === "hidden" ? "Hidden / Deleted" : key.toUpperCase()} <span style={{ opacity: .75 }}>{counts[key]}</span>
-            </button>
-          ))}
-          <Link href="/submit" style={primaryLink}>+ New Opportunity</Link>
-        </section>
+        .vf-card {
+          border:1px solid rgba(245,197,91,.18);
+          background:
+            radial-gradient(circle at top right, rgba(245,197,91,.08), transparent 26%),
+            linear-gradient(145deg, rgba(10,15,28,.96), rgba(2,6,23,.98));
+          border-radius:24px;
+          padding:18px;
+          display:grid;
+          grid-template-columns:140px minmax(0,1fr);
+          gap:18px;
+        }
 
-        {error ? <div style={errorBox}>{error}</div> : null}
-        {loading ? <div style={emptyBox}>Loading opportunity rooms...</div> : null}
-        {!loading && filtered.length === 0 ? <div style={emptyBox}>No {folder} opportunity rooms found.</div> : null}
+        .vf-photo {
+          border-radius:18px;
+          min-height:140px;
+          background:
+            radial-gradient(circle at top left, rgba(245,197,91,.18), transparent 28%),
+            linear-gradient(135deg,#111827,#020617);
+          border:1px solid rgba(148,163,184,.14);
+        }
 
-        <section style={grid}>
-          {filtered.map((row, index) => {
-            const id = pick(row, ["id", "deal_id", "room_id"], String(index));
-            const title = pick(row, ["title", "deal_title", "property_title", "name"], "Untitled Opportunity");
-            const city = pick(row, ["city", "market_city"]);
-            const state = pick(row, ["state", "market_state"]);
-            const county = pick(row, ["county"]);
-            const asset = pick(row, ["asset_type", "property_type", "type"]);
-            const asking = money(pick(row, ["asking_price", "price", "purchase_price"]));
-            const arv = money(pick(row, ["arv", "after_repair_value"]));
-            const score = pick(row, ["score", "ai_score", "fit_score"], "");
-            return (
-              <VaultForgeRoomTerminalCard
-                key={`${id}-${index}`}
-                type="opportunity"
-                title={title}
-                subtitle={pick(row, ["ai_summary", "summary", "description", "notes"], asset || "Opportunity room")}
-                location={[city, county, state].filter(Boolean).join(", ")}
-                valueLine={[asking && `Ask ${asking}`, arv && `ARV ${arv}`].filter(Boolean).join(" · ")}
-                score={score}
-                status={statusOf(row)}
-                urgency={pick(row, ["urgency", "priority", "severity"], "active")}
-                href={`/deal/detail?id=${encodeURIComponent(id)}`}
-                imageUrl={firstImage(row)}
-                meta={[asset, pick(row, ["strategy"]), pick(row, ["created_at", "inserted_at"])].filter(Boolean)}
-              />
-            );
-          })}
-        </section>
-      </main>
+        .vf-top {
+          display:flex;
+          justify-content:space-between;
+          gap:12px;
+          align-items:flex-start;
+          flex-wrap:wrap;
+        }
+
+        .vf-kicker {
+          color:#f5c55b;
+          font-size:11px;
+          font-weight:950;
+          letter-spacing:.14em;
+          text-transform:uppercase;
+        }
+
+        .vf-title {
+          margin:6px 0 6px;
+          font-size:34px;
+          line-height:.95;
+          letter-spacing:-.06em;
+          font-weight:950;
+        }
+
+        .vf-meta {
+          color:#cbd5e1;
+          font-size:14px;
+          line-height:1.45;
+        }
+
+        .vf-status {
+          border:1px solid rgba(34,197,94,.24);
+          background:rgba(34,197,94,.08);
+          color:#86efac;
+          border-radius:999px;
+          padding:8px 12px;
+          font-size:11px;
+          font-weight:950;
+          letter-spacing:.12em;
+        }
+
+        .vf-econ {
+          display:grid;
+          grid-template-columns:repeat(3,minmax(0,1fr));
+          gap:10px;
+          margin-top:14px;
+        }
+
+        .vf-box {
+          border:1px solid rgba(148,163,184,.14);
+          background:rgba(2,6,23,.56);
+          border-radius:14px;
+          padding:12px;
+        }
+
+        .vf-box-label {
+          color:#94a3b8;
+          font-size:10px;
+          font-weight:900;
+          letter-spacing:.08em;
+          text-transform:uppercase;
+          margin-bottom:5px;
+        }
+
+        .vf-box-value {
+          font-size:20px;
+          font-weight:950;
+        }
+
+        .vf-score-row {
+          display:flex;
+          flex-wrap:wrap;
+          gap:10px;
+          margin-top:14px;
+        }
+
+        .vf-pill {
+          border-radius:999px;
+          padding:8px 12px;
+          font-size:12px;
+          font-weight:900;
+          border:1px solid rgba(148,163,184,.14);
+          background:rgba(2,6,23,.58);
+        }
+
+        .vf-summary {
+          margin-top:14px;
+          color:#e2e8f0;
+          font-size:15px;
+          line-height:1.5;
+        }
+
+        .vf-actions {
+          display:flex;
+          flex-wrap:wrap;
+          gap:10px;
+          margin-top:16px;
+        }
+
+        .vf-actions a {
+          text-decoration:none;
+          color:#f8fafc;
+          border-radius:14px;
+          padding:10px 14px;
+          font-weight:900;
+          font-size:13px;
+          border:1px solid rgba(245,197,91,.24);
+          background:rgba(245,197,91,.08);
+        }
+
+        @media (max-width: 860px) {
+          .vf-card {
+            grid-template-columns:1fr;
+          }
+
+          .vf-econ {
+            grid-template-columns:1fr;
+          }
+
+          .vf-title {
+            font-size:28px;
+          }
+        }
+      `}</style>
+
+      <div className="vf-feed">
+        {rooms.map((room) => (
+          <article className="vf-card" key={room.id}>
+            <div className="vf-photo" />
+
+            <div>
+              <div className="vf-top">
+                <div>
+                  <div className="vf-kicker">Opportunity Room</div>
+                  <h2 className="vf-title">{room.title}</h2>
+                  <div className="vf-meta">
+                    {room.asset} · {room.strategy} · {room.location}
+                  </div>
+                </div>
+
+                <div className="vf-status">{room.status}</div>
+              </div>
+
+              <div className="vf-econ">
+                <div className="vf-box">
+                  <div className="vf-box-label">Ask</div>
+                  <div className="vf-box-value">{room.ask}</div>
+                </div>
+
+                <div className="vf-box">
+                  <div className="vf-box-label">ARV</div>
+                  <div className="vf-box-value">{room.arv}</div>
+                </div>
+
+                <div className="vf-box">
+                  <div className="vf-box-label">Repairs</div>
+                  <div className="vf-box-value">{room.repairs}</div>
+                </div>
+              </div>
+
+              <div className="vf-score-row">
+                <div className="vf-pill">Deal {room.score}</div>
+                <div className="vf-pill">Execution {room.execution}</div>
+                <div className="vf-pill">Risk {room.risk}</div>
+              </div>
+
+              <div className="vf-summary">
+                {room.summary}
+              </div>
+
+              <div className="vf-actions">
+                <Link href={`/deal/detail?id=${room.id}&title=${encodeURIComponent(room.title)}`}>Open Room</Link>
+                <Link href="/saved-rooms">Save</Link>
+                <Link href="/archived-rooms">Archive</Link>
+                <Link href="/deleted-rooms">Hide</Link>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
     </VaultForgeCommandShell>
   );
 }
-
-const page: React.CSSProperties = { minHeight: "100vh", padding: "22px", color: "#fff" };
-const hero: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 260px", gap: 18, border: "1px solid rgba(245,200,76,.26)", borderRadius: 24, padding: 22, background: "linear-gradient(135deg, rgba(245,200,76,.1), rgba(7,12,16,.92))", boxShadow: "0 0 35px rgba(245,200,76,.08)", marginBottom: 18 };
-const eyebrow: React.CSSProperties = { color: "#f5c84c", fontWeight: 950, letterSpacing: ".24em", fontSize: 12, marginBottom: 10 };
-const h1: React.CSSProperties = { margin: 0, fontSize: "clamp(32px, 6vw, 72px)", lineHeight: .92, letterSpacing: "-.06em" };
-const lead: React.CSSProperties = { maxWidth: 820, color: "#cbd5e1", fontSize: 18, lineHeight: 1.55, margin: "18px 0 0" };
-const heroPanel: React.CSSProperties = { border: "1px solid rgba(255,255,255,.12)", background: "rgba(0,0,0,.28)", borderRadius: 20, padding: 18, alignSelf: "stretch", display: "flex", flexDirection: "column", justifyContent: "center" };
-const metricLabel: React.CSSProperties = { color: "#9aa4b2", textTransform: "uppercase", letterSpacing: ".16em", fontSize: 11, fontWeight: 900 };
-const metricNumber: React.CSSProperties = { color: "#f5c84c", fontSize: 58, fontWeight: 950, lineHeight: 1, marginTop: 8 };
-const metricSub: React.CSSProperties = { color: "#cbd5e1", fontSize: 13, marginTop: 10 };
-const toolbar: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 16 };
-const tab: React.CSSProperties = { border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.045)", color: "#cbd5e1", borderRadius: 999, padding: "10px 13px", fontWeight: 900, cursor: "pointer" };
-const tabActive: React.CSSProperties = { ...tab, borderColor: "rgba(245,200,76,.65)", color: "#111827", background: "linear-gradient(135deg,#f5c84c,#fff2a8)" };
-const primaryLink: React.CSSProperties = { marginLeft: "auto", border: "1px solid rgba(245,200,76,.45)", background: "rgba(245,200,76,.12)", color: "#f5c84c", borderRadius: 999, padding: "10px 14px", fontWeight: 950, textDecoration: "none" };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 };
-const emptyBox: React.CSSProperties = { border: "1px dashed rgba(255,255,255,.18)", borderRadius: 18, padding: 28, color: "#cbd5e1", background: "rgba(255,255,255,.035)", marginBottom: 14 };
-const errorBox: React.CSSProperties = { border: "1px solid rgba(255,59,48,.38)", borderRadius: 18, padding: 16, color: "#ffd1ce", background: "rgba(255,59,48,.1)", marginBottom: 14 };
