@@ -1,6 +1,7 @@
 "use client";
 
 export type RoomStatus = "active" | "saved" | "archived" | "deleted";
+
 export type RoomKind =
   | "opportunity"
   | "pressure"
@@ -112,10 +113,12 @@ export function getRoomRecord(kind: RoomKind | string, id: string) {
 
 export function roomActionStatus(kind: RoomKind | string, id: string): RoomStatus {
   const row = getRoomRecord(kind, id);
+
   if (!row) return "active";
   if (row.deleted) return "deleted";
   if (row.archived) return "archived";
   if (row.saved) return "saved";
+
   return row.status || "active";
 }
 
@@ -160,7 +163,7 @@ export function applyRoomAction(
 
   if (action === "unsave") {
     next.saved = false;
-    next.status = next.archived ? "archived" : "active";
+    next.status = "active";
   }
 
   if (action === "archive") {
@@ -172,7 +175,7 @@ export function applyRoomAction(
 
   if (action === "unarchive") {
     next.archived = false;
-    next.status = next.saved ? "saved" : "active";
+    next.status = "active";
   }
 
   if (action === "delete") {
@@ -185,7 +188,8 @@ export function applyRoomAction(
   if (action === "restore") {
     next.deleted = false;
     next.archived = false;
-    next.status = next.saved ? "saved" : "active";
+    next.saved = false;
+    next.status = "active";
   }
 
   next.updated_at = new Date().toISOString();
@@ -213,14 +217,7 @@ export function getAllRooms() {
 }
 
 export function getRoomsByFolder(folder: string) {
-  const target = clean(folder).toLowerCase();
-
-  return Object.values(readAll()).filter((room) => {
-    const roomFolderValue = clean(room.folder).toLowerCase();
-    const roomStatusValue = clean(room.status).toLowerCase();
-
-    return roomFolderValue === target || roomStatusValue === target;
-  });
+  return listRooms(folder as RoomStatus);
 }
 
 export function deleteRoomForever(roomId: string) {
