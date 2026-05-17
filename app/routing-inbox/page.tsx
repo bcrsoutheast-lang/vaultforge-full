@@ -1,264 +1,262 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import VaultForgeCommandShell from "../components/VaultForgeCommandShell";
+import VaultForgeRoutingActions from "../components/VaultForgeRoutingActions";
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-function lower(value: unknown) {
-  return clean(value).toLowerCase();
-}
+type RoutingRoom = Record<string, any>;
+type StatusMap = Record<string, string>;
 
-function first(...values: unknown[]) {
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      const found = value.find((item) => clean(item));
-      if (found !== undefined) return clean(found);
-      continue;
-    }
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 28%), radial-gradient(circle at bottom right, rgba(143,26,26,.22), transparent 30%), linear-gradient(180deg,#030509,#07111f 50%,#030509)",
+  color: "#f8f1df",
+  padding: "26px 16px 80px",
+  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+};
 
-    const text = clean(value);
-    if (text) return text;
-  }
-
-  return "";
-}
-
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-
-  const match = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-
-  if (!match) return "";
-
-  try {
-    return decodeURIComponent(match.slice(name.length + 1));
-  } catch {
-    return match.slice(name.length + 1);
-  }
-}
-
-function getEmail() {
-  if (typeof window === "undefined") return "";
-
-  const keys = ["vf_email", "vf_member_email", "memberEmail", "email"];
-
-  for (const key of keys) {
-    try {
-      const localValue = lower(window.localStorage.getItem(key));
-      if (localValue.includes("@")) return localValue;
-
-      const sessionValue = lower(window.sessionStorage.getItem(key));
-      if (sessionValue.includes("@")) return sessionValue;
-    } catch {
-      // Continue.
-    }
-  }
-
-  const cookieValue = lower(readCookie("vf_email") || readCookie("vf_member_email"));
-  return cookieValue.includes("@") ? cookieValue : "";
-}
-
-function meta(row: Record<string, any>) {
-  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
-}
-
-async function safeJson(response: Response) {
-  try {
-    return await response.json();
-  } catch {
-    return {};
-  }
-}
-
+const shell: React.CSSProperties = { maxWidth: 1220, margin: "0 auto" };
 const panel: React.CSSProperties = {
   border: "1px solid rgba(232,196,107,.22)",
-  borderRadius: 30,
-  padding: 24,
-  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
-  boxShadow: "0 24px 80px rgba(0,0,0,.30)",
-  marginBottom: 18,
+  borderRadius: 26,
+  background: "linear-gradient(180deg,rgba(11,18,32,.94),rgba(5,8,15,.96))",
+  boxShadow: "0 24px 70px rgba(0,0,0,.45)",
 };
 
-const label: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: ".18em",
-  textTransform: "uppercase",
-  fontWeight: 950,
-  fontSize: 12,
-};
-
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: 46,
-  borderRadius: 999,
-  padding: "11px 16px",
-  textDecoration: "none",
-  fontWeight: 950,
-  background: "linear-gradient(135deg,#f8e7b0,#e8c46b)",
-  color: "#06100a",
-  border: 0,
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.16)",
-  color: "white",
-};
-
-const chip: React.CSSProperties = {
-  border: "1px solid rgba(157,243,191,.24)",
-  borderRadius: 999,
-  padding: "7px 10px",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.08)",
-  fontWeight: 900,
-  fontSize: 12,
-};
-
-
-type RouteRow = Record<string, any>;
-
-function idOf(row: RouteRow, index = 0) {
-  const m = meta(row);
-  return first(row.signal_id, row.id, row.routing_id, row.action_id, row.item_id, m.signal_id, m.id, m.routing_id, `route-${index}`);
+function str(value: unknown, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
 }
 
-function itemIdOf(row: RouteRow, index = 0) {
-  const m = meta(row);
-  return first(row.item_id, row.deal_id, row.pain_id, row.project_id, m.item_id, m.deal_id, m.pain_id, `item-${index}`);
+function idOf(item: RoutingRoom) {
+  return str(item.signal_id || item.routing_id || item.id || item.item_id || item.room_id || item.thread_key || item.title, "routing-room");
 }
 
-function titleOf(row: RouteRow) {
-  const m = meta(row);
-  return first(row.title, row.deal_title, row.pain_title, row.project_title, row.signal_title, row.headline, m.title, m.deal_title, m.pain_title, "Routing Path");
+function titleOf(item: RoutingRoom) {
+  return str(item.title || item.signal_title || item.name || item.summary || item.headline, "Routing execution room");
 }
 
-function roleOf(row: RouteRow) {
-  const m = meta(row);
-  return first(row.role, row.match_role, row.target_role, row.route_role, m.role, m.match_role, "Member Fit");
+function stageOf(item: RoutingRoom) {
+  return str(item.execution_stage || item.stage || item.status || item.routing_stage, "Routing Review");
 }
 
-function scoreOf(row: RouteRow) {
-  const m = meta(row);
-  const raw = Number(first(row.score, row.match_score, row.routing_score, m.score, m.match_score));
-  return Number.isFinite(raw) && raw > 0 ? Math.max(0, Math.min(100, Math.round(raw))) : 65;
+function marketOf(item: RoutingRoom) {
+  const city = str(item.city || item.market_city);
+  const state = str(item.state || item.market_state);
+  const county = str(item.county);
+  return [city, county, state].filter(Boolean).join(", ") || "Market pending";
 }
 
-function normalizeRows(data: any) {
-  const rows = [
-    ...(Array.isArray(data.routes) ? data.routes : []),
-    ...(Array.isArray(data.actions) ? data.actions : []),
-    ...(Array.isArray(data.routing_actions) ? data.routing_actions : []),
-    ...(Array.isArray(data.items) ? data.items : []),
-    ...(Array.isArray(data.rows) ? data.rows : []),
-    ...(Array.isArray(data.data) ? data.data : []),
+function scoreOf(item: RoutingRoom) {
+  const raw = item.routing_score ?? item.score ?? item.priority_score ?? item.urgency_score ?? item.match_score;
+  const n = Number(raw);
+  if (Number.isFinite(n)) return Math.max(0, Math.min(100, Math.round(n)));
+  return 72;
+}
+
+async function readJson(url: string) {
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function baseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}` ||
+    "http://localhost:3000"
+  );
+}
+
+function normalizeList(payload: any): RoutingRoom[] {
+  const candidates = [
+    payload?.routing,
+    payload?.rooms,
+    payload?.actions,
+    payload?.items,
+    payload?.signals,
+    payload?.data,
+    Array.isArray(payload) ? payload : null,
+  ];
+  const found = candidates.find(Array.isArray) || [];
+  return found.filter(Boolean).map((item: any) => ({ ...item }));
+}
+
+async function loadRoutingRooms() {
+  const root = baseUrl();
+  const endpoints = [
+    `${root}/api/routing/actions`,
+    `${root}/api/routing/generate`,
+    `${root}/api/intelligence/feed`,
+    `${root}/api/signals`,
   ];
 
-  if (!rows.length && data && typeof data === "object" && !Array.isArray(data)) {
-    const single = data.route || data.action || data.record || data.item;
-    if (single) rows.push(single);
+  const merged: RoutingRoom[] = [];
+  const seen = new Set<string>();
+
+  for (const endpoint of endpoints) {
+    const payload = await readJson(endpoint);
+    for (const item of normalizeList(payload)) {
+      const id = idOf(item);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      merged.push(item);
+    }
+    if (merged.length >= 18) break;
   }
 
-  return rows;
+  if (merged.length) return merged;
+
+  return [
+    {
+      id: "routing-command-sample",
+      title: "Routing command room waiting on live signals",
+      summary: "No live routing rows were returned yet. This placeholder keeps the command lane visible while the routing feed is connected.",
+      state: "GA",
+      county: "Operational",
+      execution_stage: "System Ready",
+      routing_score: 64,
+    },
+  ];
 }
 
-function RouteCard({ row, index }: { row: RouteRow; index: number }) {
-  const signalId = idOf(row, index);
-  const itemId = itemIdOf(row, index);
-  const title = titleOf(row);
+async function loadStatuses(ids: string[]) {
+  if (!ids.length) return {} as StatusMap;
+  const root = baseUrl();
+  const query = encodeURIComponent(ids.join(","));
+  const payload = await readJson(`${root}/api/room/status?room_type=routing&room_ids=${query}`);
+  const rows = payload?.statuses || payload?.rooms || payload?.data || [];
+  const map: StatusMap = {};
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      const id = str(row.room_id || row.id);
+      if (id) map[id] = str(row.status, "active");
+    }
+  } else if (rows && typeof rows === "object") {
+    for (const [key, value] of Object.entries(rows)) map[key] = str(value, "active");
+  }
+  return map;
+}
 
-  const messageHref =
-    `/messages/new?to=${encodeURIComponent("bcrsoutheast@gmail.com")}` +
-    `&subject=${encodeURIComponent(title)}` +
-    `&room_title=${encodeURIComponent(title)}` +
-    `&title=${encodeURIComponent(title)}` +
-    `&room_type=${encodeURIComponent("Routing Room")}` +
-    `&room_id=${encodeURIComponent(signalId)}` +
-    `&signal_id=${encodeURIComponent(signalId)}` +
-    `&item_id=${encodeURIComponent(itemId)}` +
-    `&source=${encodeURIComponent("routing-inbox")}` +
-    `&type=${encodeURIComponent("routing")}` +
-    `&folder=${encodeURIComponent("routing")}` +
-    `&source_route=${encodeURIComponent(`/routing-room/${signalId}`)}`;
+function groupByStatus(items: RoutingRoom[], statuses: StatusMap, wanted: string) {
+  return items.filter((item) => (statuses[idOf(item)] || "active") === wanted);
+}
+
+function RoomCard({ item, status }: { item: RoutingRoom; status: string }) {
+  const id = idOf(item);
+  const title = titleOf(item);
+  const score = scoreOf(item);
+  const stage = stageOf(item);
+  const href = `/routing-room/${encodeURIComponent(id)}`;
 
   return (
-    <article style={panel}>
-      <div style={label}>Member-Fit Path</div>
-      <h2 style={{ fontSize: "clamp(34px,6vw,64px)", lineHeight: 0.92, letterSpacing: "-.055em", margin: "10px 0 12px", overflowWrap: "anywhere" }}>{title}</h2>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-        <span style={chip}>{roleOf(row)}</span>
-        <span style={chip}>Score {scoreOf(row)}</span>
-        <span style={chip}>Item: {itemId}</span>
+    <article
+      style={{
+        ...panel,
+        padding: 18,
+        display: "grid",
+        gap: 14,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg,rgba(232,196,107,.08),transparent 42%,rgba(142,22,22,.09))", pointerEvents: "none" }} />
+      <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
+        <div>
+          <div style={{ color: "#e8c46b", fontSize: 11, fontWeight: 1000, letterSpacing: ".16em", textTransform: "uppercase" }}>
+            Routing / Execution Signal
+          </div>
+          <h2 style={{ margin: "8px 0 6px", fontSize: 24, lineHeight: 1.05 }}>{title}</h2>
+          <div style={{ color: "rgba(248,241,223,.72)", fontSize: 13, fontWeight: 800 }}>{marketOf(item)}</div>
+        </div>
+        <div style={{ minWidth: 86, textAlign: "center", border: "1px solid rgba(232,196,107,.28)", borderRadius: 18, padding: "10px 12px", background: "rgba(0,0,0,.25)" }}>
+          <div style={{ fontSize: 28, fontWeight: 1000, color: score >= 80 ? "#ffcf6b" : "#f8f1df" }}>{score}</div>
+          <div style={{ fontSize: 10, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(248,241,223,.58)", fontWeight: 900 }}>Fit</div>
+        </div>
       </div>
-      <p style={{ color: "#cbd5e1", lineHeight: 1.55, marginTop: 0 }}>Routing shows who fits, why they fit, and what intro path should happen next.</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-        <Link href={`/routing-room/${encodeURIComponent(signalId)}`} style={button}>Open Routing Room</Link>
-        <Link href={`/deal/detail?id=${encodeURIComponent(itemId)}`} style={ghost}>Open Source Room</Link>
-        <Link href={messageHref} style={ghost}>Request Info / Intro</Link>
+
+      <p style={{ position: "relative", margin: 0, color: "rgba(248,241,223,.78)", fontSize: 14, lineHeight: 1.55 }}>
+        {str(item.ai_summary || item.summary || item.notes || item.description, "Routing room is ready for owner review, member fit scoring, introduction staging, and execution follow-through.")}
+      </p>
+
+      <div style={{ position: "relative", display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {[stage, str(item.member_type || item.target_member_type, "Member Fit"), str(item.capital_stage || item.capital_need, "Capital Check"), str(item.operator_stage || item.operator_need, "Operator Check")].map((tag) => (
+          <span key={tag} style={{ border: "1px solid rgba(232,196,107,.22)", borderRadius: 999, padding: "7px 10px", background: "rgba(255,255,255,.04)", color: "rgba(248,241,223,.78)", fontSize: 12, fontWeight: 900 }}>
+            {tag}
+          </span>
+        ))}
+      </div>
+
+      <div style={{ position: "relative", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <Link href={href} style={{ color: "#05070c", background: "linear-gradient(135deg,#f3d27c,#b98722)", textDecoration: "none", borderRadius: 999, padding: "11px 14px", fontWeight: 1000, fontSize: 12, letterSpacing: ".08em", textTransform: "uppercase" }}>
+          Open Routing Room
+        </Link>
+        <VaultForgeRoutingActions roomId={id} initialStatus={status} compact />
       </div>
     </article>
   );
 }
 
-export default function RoutingInboxPage() {
-  const [routes, setRoutes] = useState<RouteRow[]>([]);
-  const [status, setStatus] = useState("Loading routing paths...");
+function Folder({ title, subtitle, items, statuses }: { title: string; subtitle: string; items: RoutingRoom[]; statuses: StatusMap }) {
+  return (
+    <section style={{ marginTop: 22 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "end", marginBottom: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 24 }}>{title}</h2>
+          <p style={{ margin: "6px 0 0", color: "rgba(248,241,223,.62)", fontSize: 13 }}>{subtitle}</p>
+        </div>
+        <div style={{ color: "#e8c46b", fontWeight: 1000, fontSize: 26 }}>{items.length}</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 14 }}>
+        {items.length ? items.map((item) => <RoomCard key={idOf(item)} item={item} status={statuses[idOf(item)] || "active"} />) : (
+          <div style={{ ...panel, padding: 20, color: "rgba(248,241,223,.62)", fontWeight: 800 }}>No rooms in this folder.</div>
+        )}
+      </div>
+    </section>
+  );
+}
 
-  useEffect(() => {
-    async function loadRoutes() {
-      const email = getEmail();
-      const endpoints = [
-        `/api/routing/actions?email=${encodeURIComponent(email)}&owner=0`,
-        `/api/routing/generate?email=${encodeURIComponent(email)}&owner=0`,
-      ];
+export default async function RoutingInboxPage() {
+  const rooms = await loadRoutingRooms();
+  const ids = rooms.map(idOf);
+  const statuses = await loadStatuses(ids);
 
-      const collected: RouteRow[] = [];
-
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint, { cache: "no-store", credentials: "include", headers: { "x-vf-email": email, "x-vf-admin": "0" } });
-          const data = await safeJson(response);
-          const rows = normalizeRows(data);
-          if (response.ok && rows.length) collected.push(...rows);
-        } catch {}
-      }
-
-      setRoutes(collected);
-      setStatus(collected.length ? "" : "No routing paths found yet. Routing will populate when opportunities or pressure rooms generate member-fit paths.");
-    }
-
-    loadRoutes();
-  }, []);
+  const active = groupByStatus(rooms, statuses, "active");
+  const saved = groupByStatus(rooms, statuses, "saved");
+  const archived = groupByStatus(rooms, statuses, "archived");
+  const hidden = groupByStatus(rooms, statuses, "deleted");
 
   return (
-    <VaultForgeCommandShell active="routing" title="Routing Queue." subtitle="Member-fit paths, intro opportunities, and execution lanes live here.">
-      <section style={panel}>
-        <div style={label}>VaultForge Routing Center</div>
-        <h2 style={{ fontSize: "clamp(42px,8vw,82px)", lineHeight: 0.9, letterSpacing: "-.06em", margin: "12px 0 16px" }}>Execution coordination lane.</h2>
-        <p style={{ color: "#cbd5e1", lineHeight: 1.65, fontSize: 19, marginTop: 0, maxWidth: 920 }}>Routing is not the deal room. Routing shows member-fit paths and intro logic.</p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-          <Link href="/introductions" style={button}>Introductions</Link>
-          <Link href="/message-command" style={ghost}>Messages</Link>
-          <Link href="/dashboard" style={ghost}>Command</Link>
-        </div>
-      </section>
+    <main style={page}>
+      <div style={shell}>
+        <nav style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
+          {[ ["Dashboard", "/dashboard"], ["Projects", "/projects"], ["Pressure", "/pressure-rooms"], ["Alerts", "/alerts"], ["Intelligence", "/intelligence"], ["Messages", "/message-command"] ].map(([label, href]) => (
+            <Link key={href} href={href} style={{ color: "rgba(248,241,223,.82)", textDecoration: "none", border: "1px solid rgba(232,196,107,.18)", borderRadius: 999, padding: "8px 11px", background: "rgba(255,255,255,.04)", fontSize: 12, fontWeight: 900 }}>{label}</Link>
+          ))}
+        </nav>
 
-      {status ? <section style={panel}><div style={label}>Empty Routing Queue</div><p style={{ color: "#cbd5e1" }}>{status}</p></section> : null}
+        <section style={{ ...panel, padding: 24 }}>
+          <div style={{ color: "#e8c46b", fontSize: 12, fontWeight: 1000, letterSpacing: ".18em", textTransform: "uppercase" }}>
+            VaultForge Routing Command
+          </div>
+          <h1 style={{ margin: "10px 0", fontSize: "clamp(34px,7vw,72px)", lineHeight: .9, letterSpacing: "-.06em" }}>
+            Execution routing inbox.
+          </h1>
+          <p style={{ margin: 0, maxWidth: 860, color: "rgba(248,241,223,.72)", lineHeight: 1.6, fontSize: 15 }}>
+            Routing rooms now follow the same command-center cleanup model as Opportunities, Pressure, and Alerts: active execution, saved review, archived completion, and hidden clutter control.
+          </p>
+        </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 18 }}>
-        {routes.map((row, index) => <RouteCard key={`${idOf(row, index)}-${index}`} row={row} index={index} />)}
-      </section>
-    </VaultForgeCommandShell>
+        <Folder title="Active Routing" subtitle="Rooms that still need review, staging, capital, operator, or introduction action." items={active} statuses={statuses} />
+        <Folder title="Saved Routing" subtitle="Execution rooms bookmarked for follow-up." items={saved} statuses={statuses} />
+        <Folder title="Archived Routing" subtitle="Reviewed or completed routing rooms." items={archived} statuses={statuses} />
+        <Folder title="Hidden Routing" subtitle="Clutter removed from active command flow. Restore brings it back." items={hidden} statuses={statuses} />
+      </div>
+    </main>
   );
 }
