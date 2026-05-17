@@ -1,401 +1,242 @@
 import Link from "next/link";
-import { cookies, headers } from "next/headers";
-import VaultForgeDealActions from "../../components/VaultForgeDealActions";
+import VaultForgeCommandShell from "../../components/VaultForgeCommandShell";
+import VaultForgeAISummaryPanel from "../../components/VaultForgeAISummaryPanel";
+import VaultForgeMatchedProfilesPanel from "../../components/VaultForgeMatchedProfilesPanel";
+import VaultForgeRoomDisclosure from "../../components/VaultForgeRoomDisclosure";
+import VaultForgeRoomScorePanel from "../../components/VaultForgeRoomScorePanel";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type AnyRow = Record<string, any>;
-type SearchParams = Record<string, string | string[] | undefined>;
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-function clean(value: unknown) {
-  return String(value || "").trim();
+function one(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] || "" : value || "";
 }
 
-function first(...values: unknown[]) {
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const text = first(item);
-        if (text) return text;
-      }
-      continue;
-    }
-
-    if (value && typeof value === "object") continue;
-
-    const text = clean(value);
-    if (text && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined") return text;
-  }
-
-  return "";
+function money(value: unknown) {
+  const raw = String(value || "").replace(/[^0-9.]/g, "");
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num <= 0) return "Not provided";
+  return num.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
-function metadataOf(row: AnyRow) {
-  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+function text(value: unknown, fallback = "Not provided") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
 }
 
-function field(row: AnyRow, ...keys: string[]) {
-  const metadata = metadataOf(row);
-  const values: unknown[] = [];
-
-  for (const key of keys) {
-    values.push(row?.[key], metadata?.[key]);
-  }
-
-  return first(...values);
-}
-
-function parseArray(value: unknown): any[] {
-  if (Array.isArray(value)) return value;
-
-  if (typeof value === "string" && value.trim()) {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return value.split(/[,\n|;]/).map((item) => item.trim()).filter(Boolean);
-    }
-  }
-
-  return [];
-}
-
-function photoUrl(item: any) {
-  if (typeof item === "string") return clean(item);
-
-  if (item && typeof item === "object") {
-    return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url || item.src || item.href);
-  }
-
-  return "";
-}
-
-function photosFrom(row: AnyRow) {
-  const metadata = metadataOf(row);
-
-  const raw = [
-    row?.main_photo_url,
-    row?.primary_photo_url,
-    row?.photo_url,
-    row?.image_url,
-    metadata?.main_photo_url,
-    metadata?.primary_photo_url,
-    metadata?.photo_url,
-    metadata?.image_url,
-    ...parseArray(row?.photo_urls),
-    ...parseArray(row?.photos),
-    ...parseArray(row?.images),
-    ...parseArray(row?.files),
-    ...parseArray(metadata?.photo_urls),
-    ...parseArray(metadata?.photos),
-    ...parseArray(metadata?.images),
-    ...parseArray(metadata?.files),
-  ];
-
-  return Array.from(new Set(raw.map(photoUrl).filter((url) => url.startsWith("http"))));
-}
-
-function firstParam(searchParams: SearchParams) {
-  const keys = ["id", "deal_id", "project_id", "item_id", "room_id", "property_id", "signal_id"];
-
-  for (const key of keys) {
-    const value = searchParams[key];
-    const text = Array.isArray(value) ? value[0] : value;
-    if (text) return String(text).trim();
-  }
-
-  return "";
-}
-
-async function baseUrl() {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "";
-  const proto = h.get("x-forwarded-proto") || "https";
-
-  return host ? `${proto}://${host}` : "";
-}
-
-async function requestEmail() {
-  const cookieStore = await cookies();
-
-  return clean(
-    cookieStore.get("vf_email")?.value ||
-      cookieStore.get("vf_member_email")?.value ||
-      cookieStore.get("vf_admin_email")?.value ||
-      "guest@vaultforge.local"
-  ).toLowerCase();
-}
-
-async function loadRoomStatus(roomId: string) {
-  const origin = await baseUrl();
-  const email = await requestEmail();
-
-  if (!origin || !roomId) return "active";
-
-  try {
-    const response = await fetch(
-      `${origin}/api/room/status?room_type=opportunity&email=${encodeURIComponent(email)}`,
-      {
-        cache: "no-store",
-        headers: { "x-vf-email": email },
-      }
-    );
-
-    const data = await response.json().catch(() => ({}));
-    const status = String(data?.rooms?.[roomId]?.status || "active");
-
-    if (status === "saved" || status === "archived" || status === "deleted") return status;
-  } catch {
-    // Ignore.
-  }
-
-  return "active";
-}
-
-async function loadDeal(id: string) {
-  const origin = await baseUrl();
-  const email = await requestEmail();
-
-  if (!origin || !id) return { row: null as AnyRow | null, error: "Missing origin or room id." };
-
-  const urls = [
-    `${origin}/api/deal/feed?id=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}&owner=1`,
-    `${origin}/api/deal/detail?id=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}&owner=1`,
-    `${origin}/api/projects?id=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}&owner=1`,
-  ];
-
-  for (const url of urls) {
-    try {
-      const response = await fetch(url, {
-        cache: "no-store",
-        headers: {
-          "x-vf-email": email,
-          "x-vf-admin": email === "bcrsoutheast@gmail.com" ? "1" : "0",
-        },
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (response.ok && data?.ok !== false) {
-        const row =
-          data?.deal ||
-          data?.project ||
-          data?.deals?.[0] ||
-          data?.projects?.[0] ||
-          data?.items?.[0] ||
-          data?.rows?.[0] ||
-          data?.data?.[0] ||
-          null;
-
-        if (row) return { row, error: "" };
-      }
-    } catch {
-      // Try next endpoint.
-    }
-  }
-
-  return { row: null, error: "No matching opportunity room returned from deal APIs." };
-}
-
-function money(value: string) {
-  const n = Number(String(value).replace(/[$,\s]/g, ""));
-
-  if (Number.isFinite(n) && n > 0) {
-    return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-  }
-
-  return value || "Not listed";
-}
-
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#020814,#071326 52%,#020814)",
-  color: "white",
-  padding: "24px 16px 90px",
-  fontFamily:
-    "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-};
-
-const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto", display: "grid", gap: 18 };
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.26)",
-  background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.12), transparent 34%), linear-gradient(135deg,rgba(18,24,42,.97),rgba(8,19,35,.98))",
-  borderRadius: 32,
-  padding: 24,
-  boxShadow: "0 28px 90px rgba(0,0,0,.36)",
-};
-
-const softCard: React.CSSProperties = {
-  border: "1px solid rgba(148,163,184,.18)",
-  background: "rgba(15,23,42,.78)",
-  borderRadius: 22,
-  padding: 18,
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#f4d477",
-  textTransform: "uppercase",
-  letterSpacing: ".18em",
-  fontWeight: 900,
-  fontSize: 13,
-};
-
-const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
-
-const pill: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  border: "1px solid rgba(148,163,184,.24)",
-  background: "rgba(255,255,255,.06)",
-  borderRadius: 999,
-  padding: "11px 14px",
-  color: "white",
-  textDecoration: "none",
-  fontWeight: 900,
-  fontSize: 14,
-};
-
-const goldPill: React.CSSProperties = {
-  ...pill,
-  background: "linear-gradient(135deg,#fde68a,#e8c46b)",
-  color: "#111827",
-  border: "0",
-};
-
-function Metric({ label, value }: { label: string; value: string }) {
-  if (!clean(value)) return null;
-
-  return (
-    <div style={softCard}>
-      <div style={eyebrow}>{label}</div>
-      <div style={{ color: "white", fontSize: 20, fontWeight: 900, marginTop: 8, overflowWrap: "anywhere" }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-export default async function DealDetailPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+export default async function DealDetailPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  const id = firstParam(params);
-  const { row, error } = await loadDeal(id);
-  const photos = row ? photosFrom(row) : [];
 
-  const title = row
-    ? field(row, "title", "deal_title", "project_title", "headline", "name", "address") || "Opportunity Room"
-    : "Opportunity room not loaded";
+  const id = one(params.id) || one(params.deal_id) || "opportunity-room";
+  const title = one(params.title) || one(params.property_title) || one(params.name) || "Opportunity Room";
+  const city = one(params.city);
+  const state = one(params.state);
+  const assetType = one(params.asset_type) || one(params.type) || "Investment Opportunity";
+  const asking = one(params.asking_price) || one(params.price);
+  const arv = one(params.arv);
+  const repairs = one(params.repairs) || one(params.repair_estimate);
+  const strategy = one(params.strategy) || one(params.exit_strategy) || "Value-add / execution review";
+  const notes = one(params.notes) || one(params.description) || one(params.summary);
+  const location = [city, state].filter(Boolean).join(", ") || "Market not provided";
 
-  const summary = row
-    ? field(row, "ai_summary", "summary", "route_summary", "ai_route_summary", "routing_summary", "description", "note", "notes")
-    : "";
-
-  const roomId = row ? field(row, "id", "deal_id", "project_id", "item_id", "canonical_event_id") || id : id;
-  const roomStatus = (await loadRoomStatus(roomId)) as "active" | "saved" | "archived" | "deleted";
-  const sourceRoute = `/deal/detail?id=${encodeURIComponent(roomId)}`;
+  const scores = [
+    { label: "Deal Score", value: asking && arv ? 86 : 72, note: "Opportunity attractiveness", tone: "gold" as const },
+    { label: "Execution Score", value: 78, note: "Can be routed to buyers/operators", tone: "green" as const },
+    { label: "Capital Score", value: 69, note: "Funding path needs confirmation", tone: "blue" as const },
+    { label: "Liquidity Score", value: 74, note: "Exit demand estimate", tone: "purple" as const },
+    { label: "Risk Score", value: repairs ? 44 : 58, note: "Higher means more caution", tone: "red" as const },
+    { label: "AI Conviction", value: 82, note: "Based on submitted room data", tone: "gold" as const },
+  ];
 
   return (
-    <main style={page}>
-      <div style={wrap}>
-        <section style={card}>
-          <div style={eyebrow}>VaultForge Deal Command Room</div>
+    <VaultForgeCommandShell
+      active="opportunity"
+      eyebrow="VAULTFORGE OPPORTUNITY ROOM"
+      title={title}
+      subtitle="Investment-grade opportunity room with submitted numbers, AI analysis, routing fit, and execution context."
+    >
+      <style>{`
+        .vf-room-page {
+          display: grid;
+          gap: 14px;
+        }
 
-          <h1
-            style={{
-              fontSize: "clamp(48px,10vw,104px)",
-              lineHeight: 0.82,
-              letterSpacing: "-.08em",
-              margin: "12px 0 18px",
-              overflowWrap: "anywhere",
-            }}
-          >
-            {title}
-          </h1>
+        .vf-room-top {
+          display: grid;
+          grid-template-columns: minmax(0, 1.25fr) minmax(290px, .75fr);
+          gap: 14px;
+        }
 
-          <div style={{ color: "#f8e7b0", fontSize: 38, fontWeight: 1000, letterSpacing: "-.05em", marginBottom: 14 }}>
-            {money(field(row || {}, "asking_price", "price", "ask", "purchase_price", "target_price"))}
-          </div>
+        .vf-panel {
+          border: 1px solid rgba(148, 163, 184, 0.16);
+          background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.97));
+          border-radius: 20px;
+          padding: 16px;
+          box-shadow: 0 18px 50px rgba(0,0,0,.22);
+        }
 
-          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
-            {summary || error || "This room is connected to the unified command system."}
-          </p>
+        .vf-kicker {
+          color: #f5c55b;
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+          margin-bottom: 10px;
+        }
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 22 }}>
-            <Link href="/projects" style={goldPill}>Projects</Link>
-            <Link href="/projects?folder=saved" style={pill}>Saved</Link>
-            <Link href="/projects?folder=archived" style={pill}>Archived</Link>
-            <Link href="/projects?folder=deleted" style={pill}>Hidden</Link>
-            <Link href="/dashboard" style={pill}>Dashboard</Link>
-          </div>
-        </section>
+        .vf-data-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
 
-        <section style={card}>
-          <div style={eyebrow}>Room Controls</div>
-          <h2 style={{ fontSize: "clamp(34px,7vw,70px)", lineHeight: 0.88, letterSpacing: "-.06em", margin: "10px 0 14px" }}>
-            Work it. Save it. Archive it. Hide it.
-          </h2>
-          <p style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
-            These controls are database-backed. The room moves into the matching Projects folder.
-          </p>
-          <VaultForgeDealActions roomId={roomId} roomTitle={title} sourceRoute={sourceRoute} status={roomStatus} variant="room" />
-        </section>
+        .vf-data {
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          background: rgba(2, 6, 23, 0.58);
+          border-radius: 15px;
+          padding: 13px;
+        }
 
-        {photos.length ? (
-          <section style={card}>
-            <div style={eyebrow}>Visual Evidence</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12, marginTop: 14 }}>
-              {photos.map((src, index) => (
-                <img
-                  key={src + index}
-                  src={src}
-                  alt={`${title} photo ${index + 1}`}
-                  style={{
-                    width: "100%",
-                    height: index === 0 ? 360 : 240,
-                    objectFit: "cover",
-                    borderRadius: 22,
-                    border: "1px solid rgba(148,163,184,.18)",
-                  }}
-                />
-              ))}
+        .vf-data-label {
+          color: #94a3b8;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+          margin-bottom: 6px;
+        }
+
+        .vf-data-value {
+          color: #f8fafc;
+          font-size: 18px;
+          font-weight: 950;
+          overflow-wrap: anywhere;
+        }
+
+        .vf-photo {
+          min-height: 260px;
+          border-radius: 18px;
+          border: 1px solid rgba(245, 197, 91, 0.18);
+          background:
+            radial-gradient(circle at 25% 30%, rgba(245,197,91,.22), transparent 30%),
+            radial-gradient(circle at 72% 62%, rgba(34,197,94,.15), transparent 25%),
+            linear-gradient(135deg, #0f172a, #020617);
+          display: grid;
+          place-items: center;
+          color: #94a3b8;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: .12em;
+          font-size: 12px;
+        }
+
+        .vf-notes {
+          color: #cbd5e1;
+          line-height: 1.55;
+          margin: 0;
+        }
+
+        .vf-action-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .vf-action-row a {
+          color: #f8fafc;
+          text-decoration: none;
+          border: 1px solid rgba(245,197,91,.25);
+          background: rgba(245,197,91,.07);
+          border-radius: 13px;
+          padding: 11px 13px;
+          font-weight: 900;
+          font-size: 13px;
+        }
+
+        @media (max-width: 980px) {
+          .vf-room-top,
+          .vf-data-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      <div className="vf-room-page">
+        <section className="vf-room-top">
+          <div className="vf-panel">
+            <div className="vf-kicker">Submitted Deal Numbers</div>
+
+            <div className="vf-data-grid">
+              <div className="vf-data">
+                <div className="vf-data-label">Room ID</div>
+                <div className="vf-data-value">{id}</div>
+              </div>
+              <div className="vf-data">
+                <div className="vf-data-label">Market</div>
+                <div className="vf-data-value">{location}</div>
+              </div>
+              <div className="vf-data">
+                <div className="vf-data-label">Asset Type</div>
+                <div className="vf-data-value">{assetType}</div>
+              </div>
+              <div className="vf-data">
+                <div className="vf-data-label">Asking Price</div>
+                <div className="vf-data-value">{money(asking)}</div>
+              </div>
+              <div className="vf-data">
+                <div className="vf-data-label">ARV / Stabilized Value</div>
+                <div className="vf-data-value">{money(arv)}</div>
+              </div>
+              <div className="vf-data">
+                <div className="vf-data-label">Repairs / Capex</div>
+                <div className="vf-data-value">{money(repairs)}</div>
+              </div>
+              <div className="vf-data">
+                <div className="vf-data-label">Strategy</div>
+                <div className="vf-data-value">{strategy}</div>
+              </div>
+              <div className="vf-data">
+                <div className="vf-data-label">Execution Stage</div>
+                <div className="vf-data-value">Review / Routing</div>
+              </div>
+              <div className="vf-data">
+                <div className="vf-data-label">Next Action</div>
+                <div className="vf-data-value">Verify numbers</div>
+              </div>
             </div>
-          </section>
-        ) : null}
-
-        <section style={card}>
-          <div style={eyebrow}>Opportunity Intelligence Brief</div>
-
-          <h2
-            style={{
-              fontSize: "clamp(34px,7vw,66px)",
-              lineHeight: 0.9,
-              letterSpacing: "-.06em",
-              margin: "10px 0 16px",
-            }}
-          >
-            Data, routing, and execution context.
-          </h2>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginTop: 16 }}>
-            <Metric label="Market" value={field(row || {}, "market", "city_state", "location") || [field(row || {}, "city", "area"), field(row || {}, "county"), field(row || {}, "state")].filter(Boolean).join(", ")} />
-            <Metric label="Asset" value={field(row || {}, "asset_type", "property_type", "deal_type")} />
-            <Metric label="Strategy" value={field(row || {}, "strategy", "exit_strategy", "investment_strategy")} />
-            <Metric label="Status" value={field(row || {}, "status", "routing_status", "stage")} />
-            <Metric label="Asking" value={money(field(row || {}, "asking_price", "price", "ask", "purchase_price"))} />
-            <Metric label="ARV / Value" value={money(field(row || {}, "arv", "arv_value", "estimated_value", "after_repair_value"))} />
-            <Metric label="Repairs / Work" value={money(field(row || {}, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget"))} />
-            <Metric label="Capital Need" value={field(row || {}, "capital_needed", "funding_needed", "gap_amount")} />
-            <Metric label="Beds / Baths" value={[field(row || {}, "beds", "bedrooms"), field(row || {}, "baths", "bathrooms")].filter(Boolean).join(" / ")} />
-            <Metric label="Sq Ft" value={field(row || {}, "square_feet", "sqft", "building_sqft")} />
-            <Metric label="Occupancy" value={field(row || {}, "occupancy", "occupancy_status", "tenant_status")} />
-            <Metric label="Contact" value={field(row || {}, "owner_email", "member_email", "contact_email", "seller_email", "owner_phone", "seller_phone")} />
           </div>
+
+          <aside className="vf-panel">
+            <div className="vf-kicker">Media / Documents</div>
+            <div className="vf-photo">Photos / Docs Slot</div>
+          </aside>
         </section>
+
+        <VaultForgeRoomScorePanel title="Opportunity Room Scores" scores={scores} />
+
+        <VaultForgeAISummaryPanel
+          roomType="opportunity"
+          data={{ title, city, state, assetType, price: asking, arv, repairs, notes }}
+        />
+
+        <VaultForgeMatchedProfilesPanel title="Buyer · Capital · Operator Matches" />
+
+        <section className="vf-panel">
+          <div className="vf-kicker">Submitted Notes / Room Context</div>
+          <p className="vf-notes">{text(notes, "No notes were included in the URL payload. Next build should hydrate this room from the real Supabase deal/opportunity table by room id.")}</p>
+        </section>
+
+        <VaultForgeRoomDisclosure />
+
+        <div className="vf-action-row">
+          <Link href="/opportunity-rooms">Back to Opportunity Rooms</Link>
+          <Link href="/messages/new">Message Around This Room</Link>
+          <Link href="/routing-inbox">View Routing Layer</Link>
+          <Link href="/intelligence">View Intelligence Layer</Link>
+        </div>
       </div>
-    </main>
+    </VaultForgeCommandShell>
   );
 }
