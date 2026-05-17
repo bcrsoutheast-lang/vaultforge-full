@@ -105,6 +105,20 @@ export function roomKey(kind: RoomKind | string, id: string) {
   return `${roomKind(kind)}:${clean(id) || "unknown"}`;
 }
 
+export function getRoomRecord(kind: RoomKind | string, id: string) {
+  const rows = readAll();
+  return rows[roomKey(kind, id)] || null;
+}
+
+export function roomActionStatus(kind: RoomKind | string, id: string): RoomStatus {
+  const row = getRoomRecord(kind, id);
+  if (!row) return "active";
+  if (row.deleted) return "deleted";
+  if (row.archived) return "archived";
+  if (row.saved) return "saved";
+  return row.status || "active";
+}
+
 export function upsertRoom(input: Partial<RoomRecord> & { room_id: string }) {
   const kind = roomKind(input.room_kind || input.room_type || input.folder);
   const id = clean(input.room_id) || "unknown";
