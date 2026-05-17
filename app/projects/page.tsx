@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import VaultForgeCommandShell from "../components/VaultForgeCommandShell";
 import VaultForgeDealActions from "../components/VaultForgeDealActions";
-import { roomActionStatus, type RoomStatus } from "../lib/vaultforgeRoomState";
 
 type Deal = Record<string, any>;
+type Folder = "active" | "saved" | "archived" | "deleted";
 
-const folders: Array<[RoomStatus, string, string]> = [
+const folders: Array<[Folder, string, string]> = [
   ["active", "Active", "Live deal work"],
   ["saved", "Saved", "Follow-up"],
   ["archived", "Archived", "Parked/done"],
@@ -69,7 +69,9 @@ function summaryOf(row: Deal) {
 function money(row: Deal) {
   const raw = field(row, "asking_price", "price", "ask", "purchase_price", "target_price");
   const n = Number(String(raw).replace(/[$,\s]/g, ""));
+
   if (Number.isFinite(n) && n > 0) return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
   return "Price not listed";
 }
 
@@ -108,6 +110,33 @@ function photo(row: Deal) {
   }
 
   return "";
+}
+
+function readEmail() {
+  if (typeof window === "undefined") return "";
+
+  for (const key of ["vf_email", "vf_member_email", "memberEmail", "email"]) {
+    try {
+      const value = clean(window.localStorage.getItem(key));
+      if (value.includes("@")) return value.toLowerCase();
+    } catch {
+      // Continue.
+    }
+  }
+
+  const match =
+    document.cookie.match(/(?:^|;\s*)vf_email=([^;]+)/) ||
+    document.cookie.match(/(?:^|;\s*)vf_member_email=([^;]+)/);
+
+  if (match) {
+    try {
+      return decodeURIComponent(match[1] || "").toLowerCase();
+    } catch {
+      return String(match[1] || "").toLowerCase();
+    }
+  }
+
+  return "guest@vaultforge.local";
 }
 
 async function safeJson(response: Response) {
@@ -157,6 +186,7 @@ const btn: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
+  cursor: "pointer",
 };
 
 const ghost: React.CSSProperties = {
@@ -166,7 +196,17 @@ const ghost: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.16)",
 };
 
-function DealCard({ row, index }: { row: Deal; index: number }) {
+function DealCard({
+  row,
+  index,
+  status,
+  onChanged,
+}: {
+  row: Deal;
+  index: number;
+  status: Folder;
+  onChanged: () => void;
+}) {
   const id = idOf(row, index);
   const title = titleOf(row);
   const img = photo(row);
@@ -215,13 +255,12 @@ function DealCard({ row, index }: { row: Deal; index: number }) {
           <span style={chip}>{market(row)}</span>
           <span style={chip}>{asset(row)}</span>
           <span style={chip}>{strategy(row)}</span>
+          <span style={chip}>Status: {status === "deleted" ? "Hidden" : status}</span>
         </div>
 
-        <p style={{ color: "#cbd5e1", lineHeight: 1.6, fontSize: 16 }}>
-          {summaryOf(row)}
-        </p>
+        <p style={{ color: "#cbd5e1", lineHeight: 1.6, fontSize: 16 }}>{summaryOf(row)}</p>
 
-        <VaultForgeDealActions roomId={id} roomTitle={title} sourceRoute={route} variant="card" afterAction="stay" />
+        <VaultForgeDealActions roomId={id} roomTitle={title} sourceRoute={route} status={status} variant="card" onChanged={onChanged} />
       </div>
     </article>
   );
@@ -229,21 +268,40 @@ function DealCard({ row, index }: { row: Deal; index: number }) {
 
 export default function ProjectsPage() {
   const [rows, setRows] = useState<Deal[]>([]);
-  const [folder, setFolder] = useState<RoomStatus>("active");
-  const [tick, setTick] = useState(0);
+  const [folder, setFolder] = useState<Folder>("active");
+  const [roomStatus, setRoomStatus] = useState<Record<string, Folder>>({});
   const [status, setStatus] = useState("Loading deal rooms...");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const requested = params.get("folder") as RoomStatus | null;
+    const requested = params.get("folder") as Folder | null;
     if (requested && ["active", "saved", "archived", "deleted"].includes(requested)) setFolder(requested);
   }, []);
 
   useEffect(() => {
-    const refresh = () => setTick((value) => value + 1);
-    window.addEventListener("vaultforge-5s-room-change", refresh);
-    return () => window.removeEventListener("vaultforge-5s-room-change", refresh);
-  }, []);
+    async function loadStatuses() {
+      const email = readEmail();
+      const response = await fetch(`/api/room/status?room_type=opportunity&email=${encodeURIComponent(email)}`, {
+        cache: "no-store",
+        headers: { "x-vf-email": email },
+      });
+
+      const data = await safeJson(response);
+      const next: Record<string, Folder> = {};
+
+      if (data?.rooms && typeof data.rooms === "object") {
+        for (const [id, row] of Object.entries<any>(data.rooms)) {
+          const value = String(row?.status || "active") as Folder;
+          if (["active", "saved", "archived", "deleted"].includes(value)) next[id] = value;
+        }
+      }
+
+      setRoomStatus(next);
+    }
+
+    loadStatuses();
+  }, [reloadKey]);
 
   useEffect(() => {
     async function load() {
@@ -283,12 +341,17 @@ export default function ProjectsPage() {
     load();
   }, []);
 
-  const filtered = useMemo(() => {
-    return rows.filter((row, index) => roomActionStatus("opportunity", idOf(row, index)) === folder);
-  }, [rows, folder, tick]);
+  function statusFor(row: Deal, index: number): Folder {
+    const id = idOf(row, index);
+    return roomStatus[id] || "active";
+  }
 
-  function countFor(nextFolder: RoomStatus) {
-    return rows.filter((row, index) => roomActionStatus("opportunity", idOf(row, index)) === nextFolder).length;
+  const filtered = useMemo(() => {
+    return rows.filter((row, index) => statusFor(row, index) === folder);
+  }, [rows, folder, roomStatus]);
+
+  function countFor(nextFolder: Folder) {
+    return rows.filter((row, index) => statusFor(row, index) === nextFolder).length;
   }
 
   const folderTitle = folder === "deleted" ? "Hidden" : folder[0].toUpperCase() + folder.slice(1);
@@ -307,7 +370,7 @@ export default function ProjectsPage() {
         </h1>
 
         <p style={{ color: "#cbd5e1", fontSize: 20, lineHeight: 1.6, maxWidth: 950 }}>
-          This is the clean command board: open the room, work the room, save it, archive it, or hide it.
+          This board is now database-backed. Save, archive, or hide a room and it moves out of Active.
         </p>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
@@ -316,15 +379,16 @@ export default function ProjectsPage() {
               key={key}
               type="button"
               onClick={() => setFolder(key)}
-              style={{
-                ...(folder === key ? btn : ghost),
-                minWidth: 128,
-              }}
+              style={{ ...(folder === key ? btn : ghost), minWidth: 128 }}
               title={desc}
             >
               {name} ({countFor(key)})
             </button>
           ))}
+
+          <button type="button" onClick={() => setReloadKey((value) => value + 1)} style={ghost}>
+            Refresh
+          </button>
 
           <Link href="/submit" style={ghost}>Create Deal</Link>
           <Link href="/dashboard" style={ghost}>Dashboard</Link>
@@ -352,7 +416,13 @@ export default function ProjectsPage() {
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18 }}>
         {filtered.map((row, index) => (
-          <DealCard key={`${idOf(row, index)}-${index}`} row={row} index={index} />
+          <DealCard
+            key={`${idOf(row, index)}-${index}`}
+            row={row}
+            index={index}
+            status={statusFor(row, index)}
+            onChanged={() => setReloadKey((value) => value + 1)}
+          />
         ))}
       </section>
     </VaultForgeCommandShell>
