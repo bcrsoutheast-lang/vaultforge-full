@@ -4,19 +4,26 @@ import Link from "next/link";
 import { useMemo } from "react";
 import VaultForgeRoomCleanupControls from "../../components/VaultForgeRoomCleanupControls";
 
-
 function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function getRoomId() {
+function shortId(value: string) {
+  const text = clean(value);
+  if (!text) return "Not listed";
+  if (text.length <= 18) return text;
+  return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
+function getDealId() {
   if (typeof window === "undefined") return "";
   return clean(new URLSearchParams(window.location.search).get("id"));
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
-  background: "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 30%), linear-gradient(180deg,#020617,#071326 55%,#020617)",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 30%), linear-gradient(180deg,#020617,#071326 55%,#020617)",
   color: "white",
   padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
@@ -58,44 +65,56 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
-export default function RoomPage() {
-  const id = useMemo(getRoomId, []);
-  const title = "Opportunity Room " + (id || "");
-  const sourceRoute = `/deal/detail?id=${encodeURIComponent(id)}`;
+export default function DealDetailPage() {
+  const dealId = useMemo(getDealId, []);
+  const title = `Opportunity Room: ${shortId(dealId)}`;
 
   return (
     <main style={page}>
       <div style={wrap}>
         <section style={panel}>
-          <div style={label}>VaultForge Opportunity Room</div>
-          <h1 style={{ fontSize: "clamp(52px,10vw,104px)", lineHeight: .88, letterSpacing: "-.075em", margin: "12px 0 18px" }}>
+          <div style={label}>VaultForge Opportunity Execution Room</div>
+
+          <h1
+            style={{
+              fontSize: "clamp(44px,9vw,86px)",
+              lineHeight: 0.9,
+              letterSpacing: "-.065em",
+              margin: "12px 0 18px",
+              overflowWrap: "anywhere",
+            }}
+          >
             {title}
           </h1>
+
           <p style={{ color: "#cbd5e1", lineHeight: 1.65, fontSize: 20, marginTop: 0 }}>
-            Opportunity is the deal workspace. It should not act like routing, alerts, or intelligence.
+            This is the deal-side execution room. It should move toward underwriting, buyer demand, capital fit, operator execution, or owner review.
           </p>
+
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-            <Link href="/opportunity-rooms" style={ghost}>Back To Lane</Link>
+            <Link href="/opportunity-rooms" style={ghost}>Back To Opportunity Rooms</Link>
+            <Link href="/projects" style={ghost}>Projects</Link>
             <Link href="/dashboard" style={ghost}>Command</Link>
           </div>
         </section>
 
         <VaultForgeRoomCleanupControls
-          roomId={id}
+          roomId={dealId}
           roomTitle={title}
           roomType="Opportunity Room"
           kind="opportunity"
           folder="opportunity"
-          sourceRoute={sourceRoute}
+          sourceRoute={`/deal/detail?id=${encodeURIComponent(dealId)}`}
           laneHref="/opportunity-rooms"
         />
 
-        
-
         <section style={panel}>
-          <div style={label}>Room Identity Locked</div>
-          <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>
-            This room uses the shared 5S cleanup controls. Save, archive, delete/hide, request intro, and internal thread all carry the same room title/type/id context.
+          <div style={label}>Opportunity Command</div>
+          <h2 style={{ fontSize: 40, margin: "10px 0", letterSpacing: "-.04em" }}>
+            Work the upside.
+          </h2>
+          <p style={{ color: "#cbd5e1", lineHeight: 1.6, margin: 0 }}>
+            Use this room to determine whether the opportunity needs buyer matching, capital routing, operator help, underwriting cleanup, or archive/delete from active flow.
           </p>
         </section>
       </div>
