@@ -164,15 +164,23 @@ export default function VaultForgeDealActions({
     }
   }
 
-  const grid =
+  const actionLayout: React.CSSProperties =
     variant === "room"
-      ? { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10 }
-      : { display: "flex", flexWrap: "wrap", gap: 10 };
+      ? {
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+          gap: 10,
+        }
+      : {
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 10,
+        };
 
   if (record.deleted) {
     return (
       <div style={{ display: "grid", gap: 10 }}>
-        <div style={grid}>
+        <div style={actionLayout}>
           <button type="button" onClick={() => doAction("restore")} style={green}>
             Restore Active
           </button>
@@ -197,7 +205,7 @@ export default function VaultForgeDealActions({
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      <div style={grid}>
+      <div style={actionLayout}>
         {variant !== "compact" ? (
           <Link href={route} style={btn}>
             Open Room
@@ -216,7 +224,12 @@ export default function VaultForgeDealActions({
           Hide
         </button>
 
-        <Link href={`/messages/new?subject=${encodeURIComponent(title)}&room_id=${encodeURIComponent(id)}&room_type=${encodeURIComponent("Opportunity Room")}&source_route=${encodeURIComponent(route)}`} style={ghost}>
+        <Link
+          href={`/messages/new?subject=${encodeURIComponent(title)}&room_id=${encodeURIComponent(
+            id
+          )}&room_type=${encodeURIComponent("Opportunity Room")}&source_route=${encodeURIComponent(route)}`}
+          style={ghost}
+        >
           Message
         </Link>
 
