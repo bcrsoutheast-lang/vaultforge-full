@@ -1,122 +1,184 @@
 import Link from "next/link";
-import { cookies, headers } from "next/headers";
+import VaultForgeRoutingActions from "../../components/VaultForgeRoutingActions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type AnyRow = Record<string, any>;
+type Room = Record<string, any>;
 
-function clean(value: unknown) { return String(value || "").trim(); }
-function first(...values: unknown[]) {
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const text = first(item);
-        if (text) return text;
-      }
-      continue;
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at bottom right, rgba(142,22,22,.26), transparent 32%), linear-gradient(180deg,#030509,#07111f 52%,#030509)",
+  color: "#f8f1df",
+  padding: "26px 16px 90px",
+  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+};
+
+const shell: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.22)",
+  borderRadius: 26,
+  background: "linear-gradient(180deg,rgba(11,18,32,.94),rgba(5,8,15,.96))",
+  boxShadow: "0 24px 70px rgba(0,0,0,.45)",
+};
+
+function str(value: unknown, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function baseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}` ||
+    "http://localhost:3000"
+  );
+}
+
+async function readJson(url: string) {
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeList(payload: any): Room[] {
+  const candidates = [payload?.routing, payload?.rooms, payload?.actions, payload?.items, payload?.signals, payload?.data, Array.isArray(payload) ? payload : null];
+  return (candidates.find(Array.isArray) || []).filter(Boolean);
+}
+
+function idOf(item: Room) {
+  return str(item.signal_id || item.routing_id || item.id || item.item_id || item.room_id || item.thread_key || item.title);
+}
+
+async function loadRoom(signalId: string) {
+  const root = baseUrl();
+  const encoded = encodeURIComponent(signalId);
+  const endpoints = [
+    `${root}/api/intelligence/item/${encoded}`,
+    `${root}/api/routing/actions`,
+    `${root}/api/intelligence/feed`,
+    `${root}/api/signals`,
+  ];
+
+  for (const endpoint of endpoints) {
+    const payload = await readJson(endpoint);
+    if (!payload) continue;
+    if (!Array.isArray(payload) && (payload?.id || payload?.signal_id || payload?.room_id)) {
+      const candidate = payload?.item || payload?.room || payload?.data || payload;
+      if (idOf(candidate) === signalId || endpoint.includes("/item/")) return candidate;
     }
-    if (value && typeof value === "object") continue;
-    const text = clean(value);
-    if (text && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined") return text;
-  }
-  return "";
-}
-function metadataOf(row: AnyRow) { return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {}; }
-function field(row: AnyRow, ...keys: string[]) {
-  const metadata = metadataOf(row);
-  const values: unknown[] = [];
-  for (const key of keys) {
-    values.push(row?.[key]);
-    values.push(metadata?.[key]);
-  }
-  return first(...values);
-}
-async function baseUrl() {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "";
-  const proto = h.get("x-forwarded-proto") || "https";
-  return host ? `${proto}://${host}` : "";
-}
-async function requestEmail() {
-  const cookieStore = await cookies();
-  return clean(cookieStore.get("vf_email")?.value || cookieStore.get("vf_member_email")?.value || cookieStore.get("vf_admin_email")?.value || "bcrsoutheast@gmail.com").toLowerCase();
-}
-async function getJson(path: string) {
-  const origin = await baseUrl();
-  const email = await requestEmail();
-  if (!origin) return { ok: false, error: "Missing origin." };
-  const join = path.includes("?") ? "&" : "?";
-  const response = await fetch(`${origin}${path}${join}email=${encodeURIComponent(email)}&owner=1`, {
-    cache: "no-store",
-    headers: { "x-vf-email": email, "x-vf-admin": email === "bcrsoutheast@gmail.com" ? "1" : "0" },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data?.ok === false) return { ok: false, error: clean(data?.error || data?.details || `Request failed with ${response.status}.`), data };
-  return { ok: true, data };
-}
-async function loadRouting(signalId: string) {
-  const routing = await getJson(`/api/routing/actions?signal_id=${encodeURIComponent(signalId)}`);
-  const actions: AnyRow[] = Array.isArray(routing.data?.actions) ? routing.data.actions : [];
-  const action = actions[0] || null;
-  const itemId = action ? field(action, "item_id", "deal_id", "project_id", "property_id", "pain_id") : "";
-  const title = action ? field(action, "title") : "";
-
-  let source: AnyRow | null = null;
-  let sourceType = "";
-  let sourceError = "";
-
-  const painId = field(action || {}, "pain_id") || itemId;
-  if (painId) {
-    const pain = await getJson(`/api/pain/feed?id=${encodeURIComponent(painId)}`);
-    const painRow = pain.data?.pain || pain.data?.pains?.[0] || pain.data?.items?.[0] || pain.data?.data?.[0] || null;
-    if (painRow) {
-      source = painRow;
-      sourceType = "pressure";
-    } else if (!pain.ok) sourceError = pain.error;
-  }
-
-  if (!source && itemId) {
-    const deal = await getJson(`/api/deal/feed?id=${encodeURIComponent(itemId)}`);
-    const dealRow = deal.data?.deal || deal.data?.deals?.[0] || deal.data?.projects?.[0] || deal.data?.items?.[0] || null;
-    if (dealRow) {
-      source = dealRow;
-      sourceType = "opportunity";
-    } else if (!deal.ok) sourceError = deal.error;
+    for (const item of normalizeList(payload)) {
+      if (idOf(item) === signalId) return item;
+    }
   }
 
   return {
-    action,
-    actions,
-    source,
-    sourceType,
-    error: routing.ok ? sourceError : routing.error,
-    fallbackTitle: title || signalId,
+    id: signalId,
+    title: "Routing execution room",
+    summary: "This routing room is ready for execution review. Live source details were not returned by the current APIs yet, but the room-state controls are active.",
+    execution_stage: "Execution Review",
+    state: "Pending",
+    county: "Pending",
+    routing_score: 72,
   };
 }
-const page: React.CSSProperties = { minHeight: "100vh", background: "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#020814,#071326 52%,#020814)", color: "white", padding: "24px 16px 90px", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
-const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto", display: "grid", gap: 18 };
-const card: React.CSSProperties = { border: "1px solid rgba(232,196,107,.22)", background: "linear-gradient(135deg,rgba(18,24,42,.96),rgba(8,19,35,.96))", borderRadius: 24, padding: 24, boxShadow: "0 24px 70px rgba(0,0,0,.28)" };
-const softCard: React.CSSProperties = { border: "1px solid rgba(148,163,184,.18)", background: "rgba(15,23,42,.78)", borderRadius: 22, padding: 18 };
-const eyebrow: React.CSSProperties = { color: "#f4d477", textTransform: "uppercase", letterSpacing: ".18em", fontWeight: 900, fontSize: 13 };
-const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
-const pill: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(148,163,184,.24)", background: "rgba(255,255,255,.06)", borderRadius: 999, padding: "11px 14px", color: "white", textDecoration: "none", fontWeight: 900, fontSize: 14 };
-const goldPill: React.CSSProperties = { ...pill, background: "linear-gradient(135deg,#fde68a,#e8c46b)", color: "#111827", border: "0" };
-function display(value: string, fallback = "Not listed") { return clean(value) || fallback; }
-function Metric({ label, value }: { label: string; value: string }) { return <div style={{ border: "1px solid rgba(148,163,184,.16)", background: "rgba(2,6,23,.38)", borderRadius: 16, padding: 12 }}><div style={{ color: "#94a3b8", fontSize: 11, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 900 }}>{label}</div><div style={{ color: "white", fontSize: 16, fontWeight: 900, marginTop: 4, overflowWrap: "anywhere" }}>{display(value)}</div></div>; }
-function parseArray(value: unknown): any[] { if (Array.isArray(value)) return value; if (typeof value === "string" && value.trim()) { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return value.split(/[,\n|;]/).map((x) => x.trim()).filter(Boolean); } } return []; }
-function textList(...values: unknown[]) { const out: string[] = []; values.forEach((value) => { if (Array.isArray(value)) value.forEach((item) => out.push(clean(item))); else out.push(...clean(value).split(/\n|•|\d+\.\s+|;/g)); }); return Array.from(new Set(out.map(clean).filter(Boolean))).slice(0, 10); }
-function photosFrom(row: AnyRow) { const m = metadataOf(row); const raw = [row?.image_url, row?.photo_url, row?.main_photo_url, m?.image_url, m?.photo_url, m?.main_photo_url, ...parseArray(row?.photo_urls), ...parseArray(row?.photos), ...parseArray(m?.photo_urls), ...parseArray(m?.photos)]; return Array.from(new Set(raw.map((item: any) => typeof item === "string" ? clean(item) : clean(item?.url || item?.publicUrl || item?.public_url || item?.photo_url || item?.image_url)).filter((url) => url.startsWith("http")))); }
+
+async function loadStatus(signalId: string) {
+  const root = baseUrl();
+  const payload = await readJson(`${root}/api/room/status?room_type=routing&room_ids=${encodeURIComponent(signalId)}`);
+  const rows = payload?.statuses || payload?.rooms || payload?.data || [];
+  if (Array.isArray(rows)) {
+    const row = rows.find((r: any) => str(r.room_id || r.id) === signalId);
+    return str(row?.status, "active");
+  }
+  if (rows && typeof rows === "object") return str(rows[signalId], "active");
+  return "active";
+}
+
+function titleOf(room: Room) {
+  return str(room.title || room.signal_title || room.name || room.summary || room.headline, "Routing execution room");
+}
+
+function scoreOf(room: Room) {
+  const raw = room.routing_score ?? room.score ?? room.priority_score ?? room.urgency_score ?? room.match_score;
+  const n = Number(raw);
+  if (Number.isFinite(n)) return Math.max(0, Math.min(100, Math.round(n)));
+  return 72;
+}
+
+function DetailBlock({ title, value }: { title: string; value: string }) {
+  return (
+    <div style={{ ...panel, padding: 16 }}>
+      <div style={{ color: "rgba(232,196,107,.75)", fontSize: 11, fontWeight: 1000, letterSpacing: ".14em", textTransform: "uppercase" }}>{title}</div>
+      <div style={{ marginTop: 8, color: "#f8f1df", fontSize: 16, fontWeight: 900, lineHeight: 1.35 }}>{value}</div>
+    </div>
+  );
+}
+
 export default async function RoutingRoomPage({ params }: { params: Promise<{ signalId: string }> }) {
   const { signalId } = await params;
-  const { action, actions, source, sourceType, error, fallbackTitle } = await loadRouting(signalId);
-  const sourceTitle = source ? field(source, "title", "deal_title", "project_title", "pain_title", "problem_title", "headline", "address") : "";
-  const title = field(action || {}, "title") || sourceTitle || `Routing Room ${fallbackTitle}`;
-  const actionNote = field(action || {}, "note", "notes", "reason", "route_summary", "routing_summary");
-  const sourceSummary = source ? field(source, "ai_summary", "summary", "route_summary", "ai_route_summary", "routing_summary", "description", "note", "notes", "requested_help", "help_requested") : "";
-  const photos = source ? photosFrom(source) : [];
-  const sourceId = source ? field(source, "id", "deal_id", "project_id", "pain_id", "item_id", "canonical_event_id") : field(action || {}, "item_id", "deal_id", "pain_id");
-  const sourceHref = sourceType === "pressure" ? `/pain-room/${encodeURIComponent(sourceId)}` : sourceType === "opportunity" ? `/deal/detail?id=${encodeURIComponent(sourceId)}` : "";
-  const nextMoves = source ? textList(metadataOf(source).best_actions, source.best_actions, metadataOf(source).suggested_routes, source.suggested_routes) : [];
-  return <main style={page}><div style={wrap}><section style={card}><div style={eyebrow}>VaultForge Routing Execution Room</div><h1 style={{ fontSize: "clamp(42px,9vw,84px)", lineHeight: .88, letterSpacing: "-.06em", margin: "12px 0 18px", overflowWrap: "anywhere" }}>{title}</h1><p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>{actionNote || sourceSummary || error || "Routing room opened, but no routing action/source payload resolved for this signal id yet."}</p><div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 22 }}><Link href="/routing-inbox" style={pill}>Back To Routing Inbox</Link><Link href="/intelligence" style={pill}>Intelligence</Link><Link href="/dashboard" style={pill}>Command</Link>{sourceHref ? <Link href={sourceHref} style={pill}>Open Source Room</Link> : null}<Link href={`/message-command/${encodeURIComponent("routing:" + signalId)}`} style={goldPill}>Internal Thread</Link></div></section><section style={card}><div style={eyebrow}>Routing Action Overlay</div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginTop: 16 }}><Metric label="Signal" value={signalId} /><Metric label="Action" value={field(action || {}, "action", "routing_action")} /><Metric label="Status" value={field(action || {}, "status", "routing_status")} /><Metric label="Priority" value={field(action || {}, "priority")} /><Metric label="Target Role" value={field(action || {}, "target_role", "role_needed")} /><Metric label="Target Email" value={field(action || {}, "target_email", "member_email")} /><Metric label="Item ID" value={sourceId} /><Metric label="Source Type" value={sourceType || "not resolved"} /></div></section><section style={card}><div style={eyebrow}>Source Intelligence Under This Routing Action</div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14 }}><div style={softCard}><h3 style={{ margin: "0 0 10px", fontSize: 24 }}>Source Summary</h3><p style={muted}>{sourceSummary || "No source room intelligence resolved from deal/pain feed yet."}</p></div><div style={softCard}><h3 style={{ margin: "0 0 10px", fontSize: 24 }}>Routing Need</h3><p style={muted}>{field(source || {}, "routing_needs", "deal_needs", "needs", "requested_help", "help_requested") || actionNote || "No routing need resolved yet."}</p></div></div>{nextMoves.length ? <div style={{ ...softCard, marginTop: 16 }}><h3 style={{ margin: "0 0 10px", fontSize: 24 }}>AI Next Moves / Suggested Routes</h3><ol style={{ margin: 0, paddingLeft: 22, color: "#cbd5e1", lineHeight: 1.7 }}>{nextMoves.map((step) => <li key={step}>{step}</li>)}</ol></div> : null}{photos.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginTop: 16 }}>{photos.map((src, index) => <img key={src + index} src={src} alt={`${title} photo ${index + 1}`} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(148,163,184,.18)" }} />)}</div> : <div style={{ ...softCard, marginTop: 16, color: "#cbd5e1" }}>No photos resolved from the source payload.</div>}</section><section style={card}><div style={eyebrow}>Routing Log</div><p style={muted}>{actions.length} routing action(s) returned for this signal.</p></section></div></main>;
+  const room = await loadRoom(signalId);
+  const status = await loadStatus(signalId);
+  const title = titleOf(room);
+  const score = scoreOf(room);
+  const market = [str(room.city || room.market_city), str(room.county), str(room.state || room.market_state)].filter(Boolean).join(", ") || "Market pending";
+
+  return (
+    <main style={page}>
+      <div style={shell}>
+        <nav style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
+          {[ ["Routing Inbox", "/routing-inbox"], ["Alerts", "/alerts"], ["Intelligence", "/intelligence"], ["Projects", "/projects"], ["Pressure", "/pressure-rooms"], ["Messages", "/message-command"] ].map(([label, href]) => (
+            <Link key={href} href={href} style={{ color: "rgba(248,241,223,.82)", textDecoration: "none", border: "1px solid rgba(232,196,107,.18)", borderRadius: 999, padding: "8px 11px", background: "rgba(255,255,255,.04)", fontSize: 12, fontWeight: 900 }}>{label}</Link>
+          ))}
+        </nav>
+
+        <section style={{ ...panel, padding: 24, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg,rgba(232,196,107,.09),transparent 45%,rgba(142,22,22,.13))", pointerEvents: "none" }} />
+          <div style={{ position: "relative", display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 18, alignItems: "start" }}>
+            <div>
+              <div style={{ color: "#e8c46b", fontSize: 12, fontWeight: 1000, letterSpacing: ".18em", textTransform: "uppercase" }}>
+                Routing Room / Execution Command
+              </div>
+              <h1 style={{ margin: "10px 0", fontSize: "clamp(34px,7vw,68px)", lineHeight: .9, letterSpacing: "-.06em" }}>{title}</h1>
+              <p style={{ margin: 0, maxWidth: 820, color: "rgba(248,241,223,.72)", lineHeight: 1.6, fontSize: 15 }}>
+                {str(room.ai_summary || room.summary || room.notes || room.description, "Review member fit, capital path, operator need, introduction readiness, and execution stage from this room.")}
+              </p>
+            </div>
+            <div style={{ minWidth: 112, textAlign: "center", border: "1px solid rgba(232,196,107,.30)", borderRadius: 22, padding: "14px 16px", background: "rgba(0,0,0,.28)" }}>
+              <div style={{ fontSize: 42, fontWeight: 1000, color: score >= 80 ? "#ffcf6b" : "#f8f1df" }}>{score}</div>
+              <div style={{ fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: "rgba(248,241,223,.58)", fontWeight: 1000 }}>Routing Fit</div>
+            </div>
+          </div>
+
+          <div style={{ position: "relative", marginTop: 18 }}>
+            <VaultForgeRoutingActions roomId={signalId} initialStatus={status} />
+          </div>
+        </section>
+
+        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 14, marginTop: 18 }}>
+          <DetailBlock title="Market" value={market} />
+          <DetailBlock title="Execution Stage" value={str(room.execution_stage || room.stage || room.status || room.routing_stage, "Routing Review")} />
+          <DetailBlock title="Capital Lane" value={str(room.capital_stage || room.capital_need || room.funding_need, "Capital check pending")} />
+          <DetailBlock title="Operator Lane" value={str(room.operator_stage || room.operator_need || room.contractor_need, "Operator check pending")} />
+        </section>
+
+        <section style={{ ...panel, padding: 20, marginTop: 18 }}>
+          <div style={{ color: "#e8c46b", fontSize: 12, fontWeight: 1000, letterSpacing: ".16em", textTransform: "uppercase" }}>Execution Checklist</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12, marginTop: 14 }}>
+            {["Confirm signal source", "Score member fit", "Check capital need", "Check operator need", "Stage introduction", "Move to execution"].map((step, index) => (
+              <div key={step} style={{ border: "1px solid rgba(232,196,107,.16)", borderRadius: 18, padding: 14, background: "rgba(255,255,255,.04)" }}>
+                <div style={{ color: "rgba(232,196,107,.75)", fontSize: 11, fontWeight: 1000, letterSpacing: ".14em", textTransform: "uppercase" }}>Step {index + 1}</div>
+                <div style={{ marginTop: 7, fontWeight: 950 }}>{step}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
 }
