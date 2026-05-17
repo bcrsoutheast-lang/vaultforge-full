@@ -1,12 +1,24 @@
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
+import VaultForgeRoomCleanupControls from "../../components/VaultForgeRoomCleanupControls";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type AnyRow = Record<string, any>;
-
 type SearchParams = Record<string, string | string[] | undefined>;
+
+type FiveSBrief = {
+  executionStage: string;
+  bottleneck: string;
+  nextMove: string;
+  riskFlag: string;
+  likelyBuyer: string;
+  capitalPath: string;
+  operatorNeed: string;
+  kaizenFocus: string;
+  priorityScore: number;
+};
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -21,13 +33,10 @@ function first(...values: unknown[]) {
       }
       continue;
     }
-
     if (value && typeof value === "object") continue;
-
     const text = clean(value);
     if (text && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined") return text;
   }
-
   return "";
 }
 
@@ -38,40 +47,37 @@ function metadataOf(row: AnyRow) {
 function field(row: AnyRow, ...keys: string[]) {
   const metadata = metadataOf(row);
   const values: unknown[] = [];
-
   for (const key of keys) {
     values.push(row?.[key]);
     values.push(metadata?.[key]);
   }
-
   return first(...values);
+}
+
+function numericField(row: AnyRow, ...keys: string[]) {
+  const text = field(row, ...keys).replace(/[$,%\s,]/g, "");
+  const num = Number(text);
+  return Number.isFinite(num) ? num : 0;
 }
 
 function parseArray(value: unknown): any[] {
   if (Array.isArray(value)) return value;
-
   if (typeof value === "string" && value.trim()) {
     try {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return value
-        .split(/[,\n|;]/)
-        .map((item) => item.trim())
-        .filter(Boolean);
+      return value.split(/[,\n|;]/).map((item) => item.trim()).filter(Boolean);
     }
   }
-
   return [];
 }
 
 function photoUrl(item: any) {
   if (typeof item === "string") return clean(item);
-
   if (item && typeof item === "object") {
     return clean(item.url || item.publicUrl || item.public_url || item.photo_url || item.image_url || item.src || item.href);
   }
-
   return "";
 }
 
@@ -95,19 +101,16 @@ function photosFrom(row: AnyRow) {
     ...parseArray(metadata?.images),
     ...parseArray(metadata?.files),
   ];
-
   return Array.from(new Set(raw.map(photoUrl).filter((url) => url.startsWith("http"))));
 }
 
 function firstParam(searchParams: SearchParams) {
   const keys = ["id", "deal_id", "project_id", "item_id", "room_id", "property_id", "signal_id"];
-
   for (const key of keys) {
     const value = searchParams[key];
     const text = Array.isArray(value) ? value[0] : value;
     if (text) return String(text).trim();
   }
-
   return "";
 }
 
@@ -157,6 +160,134 @@ async function loadDeal(id: string) {
   }
 }
 
+function splitList(...values: unknown[]) {
+  const text = first(...values);
+  if (!text) return [] as string[];
+  return text
+    .split(/\n|•|\d+\.\s+|;/g)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
+function lowerRoomText(row: AnyRow) {
+  const metadata = metadataOf(row);
+  return [
+    row?.title,
+    row?.deal_title,
+    row?.project_title,
+    row?.headline,
+    row?.summary,
+    row?.ai_summary,
+    row?.description,
+    row?.notes,
+    row?.strategy,
+    row?.exit_strategy,
+    row?.routing_needs,
+    row?.deal_needs,
+    row?.needs,
+    metadata?.title,
+    metadata?.summary,
+    metadata?.ai_summary,
+    metadata?.description,
+    metadata?.notes,
+    metadata?.strategy,
+    metadata?.routing_needs,
+    metadata?.needs,
+  ].map((value) => clean(value).toLowerCase()).filter(Boolean).join(" ");
+}
+
+function opportunityBrief(row: AnyRow): FiveSBrief {
+  const text = lowerRoomText(row);
+  const asking = numericField(row, "asking_price", "price", "ask", "purchase_price");
+  const arv = numericField(row, "arv", "arv_value", "estimated_value", "after_repair_value");
+  const repairs = numericField(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget");
+  const capitalNeed = numericField(row, "capital_needed", "funding_needed", "gap_amount");
+
+  let executionStage = "Active Review";
+  let bottleneck = "Verify the deal data, confirm the seller/owner context, then decide if this should move to buyer, capital, or operator routing.";
+  let nextMove = "Confirm numbers, photos, access, occupancy, and decision-maker contact before routing.";
+  let riskFlag = "Data completeness risk";
+  let likelyBuyer = "Local investor buyer";
+  let capitalPath = "Private capital or hard money review after numbers are verified.";
+  let operatorNeed = "Operator need not confirmed.";
+  let kaizenFocus = "Reduce uncertainty before moving the room deeper into execution.";
+  let priorityScore = 58;
+
+  if (text.includes("buyer")) {
+    executionStage = "Buyer Match";
+    bottleneck = "Buyer demand is the current bottleneck.";
+    nextMove = "Route to buyers who match market, asset type, price band, and strategy.";
+    likelyBuyer = "Cash buyer, landlord, local flipper, or operator-buyer.";
+    kaizenFocus = "Shorten the path from room review to qualified buyer response.";
+    priorityScore += 12;
+  }
+
+  if (text.includes("capital") || text.includes("funding") || text.includes("lender") || capitalNeed > 0) {
+    executionStage = "Capital Path";
+    bottleneck = "Capital structure or funding gap is the current bottleneck.";
+    nextMove = "Route to lenders/private capital with asking, ARV, repairs, timeline, and collateral clarity.";
+    capitalPath = "Private lender, hard money, bridge capital, gap capital, or JV capital.";
+    kaizenFocus = "Convert vague funding need into a clean capital request.";
+    priorityScore += 14;
+  }
+
+  if (text.includes("operator") || text.includes("contractor") || text.includes("rehab") || repairs > 0) {
+    executionStage = "Operator Match";
+    bottleneck = "Execution/operator capacity is the current bottleneck.";
+    nextMove = "Route to operators/contractors who can validate repairs, timeline, and execution risk.";
+    operatorNeed = "Operator, contractor, project manager, or boots-on-ground validation likely needed.";
+    kaizenFocus = "Reduce execution drag by matching capability to the room fast.";
+    priorityScore += 10;
+  }
+
+  if (text.includes("title") || text.includes("legal") || text.includes("probate") || text.includes("lien") || text.includes("code") || text.includes("permit")) {
+    executionStage = "Risk Review";
+    bottleneck = "Legal/title/city risk may block execution.";
+    nextMove = "Clarify title, lien, permit, probate, code, or legal issue before buyer/capital routing.";
+    riskFlag = "Legal/title/city risk";
+    kaizenFocus = "Remove deal-killing uncertainty before marketing or funding.";
+    priorityScore += 8;
+  }
+
+  if (text.includes("urgent") || text.includes("hot") || text.includes("deadline") || text.includes("foreclosure") || text.includes("tax sale")) {
+    executionStage = "Hot / Time Sensitive";
+    bottleneck = "Time compression is the current bottleneck.";
+    nextMove = "Escalate review, verify decision-maker contact, and route only to fast-response members.";
+    riskFlag = "Time-sensitive execution risk";
+    kaizenFocus = "Cut cycle time. Every handoff must be direct and accountable.";
+    priorityScore += 18;
+  }
+
+  if (asking && arv && arv > asking) {
+    const spread = arv - asking;
+    const spreadPct = Math.round((spread / arv) * 100);
+    if (spreadPct >= 20) {
+      priorityScore += 12;
+      riskFlag = riskFlag === "Data completeness risk" ? "Spread looks promising; verify repairs and access." : riskFlag;
+    }
+  }
+
+  if (!asking || !arv) {
+    riskFlag = "Missing price/ARV clarity";
+    kaizenFocus = "Get asking, ARV, repair estimate, and timeline into the room.";
+  }
+
+  priorityScore = Math.max(0, Math.min(100, priorityScore));
+
+  return {
+    executionStage,
+    bottleneck,
+    nextMove,
+    riskFlag,
+    likelyBuyer,
+    capitalPath,
+    operatorNeed,
+    kaizenFocus,
+    priorityScore,
+  };
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background: "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#020814,#071326 52%,#020814)",
@@ -172,6 +303,8 @@ const eyebrow: React.CSSProperties = { color: "#f4d477", textTransform: "upperca
 const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
 const pill: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(148,163,184,.24)", background: "rgba(255,255,255,.06)", borderRadius: 999, padding: "11px 14px", color: "white", textDecoration: "none", fontWeight: 900, fontSize: 14 };
 const goldPill: React.CSSProperties = { ...pill, background: "linear-gradient(135deg,#fde68a,#e8c46b)", color: "#111827", border: "0" };
+const greenPill: React.CSSProperties = { ...pill, color: "#86efac", border: "1px solid rgba(134,239,172,.28)", background: "rgba(34,197,94,.08)" };
+const redPill: React.CSSProperties = { ...pill, color: "#fecaca", border: "1px solid rgba(248,113,113,.28)", background: "rgba(248,113,113,.08)" };
 
 function display(value: string, fallback = "Not listed") {
   return clean(value) || fallback;
@@ -186,14 +319,17 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function splitList(...values: unknown[]) {
-  const text = first(...values);
-  if (!text) return [] as string[];
-  return text
-    .split(/\n|•|\d+\.\s+|;/g)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 10);
+function FiveSMetric({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "green" | "red" | "gold" }) {
+  const color = tone === "green" ? "#86efac" : tone === "red" ? "#fecaca" : tone === "gold" ? "#fde68a" : "white";
+  const border = tone === "green" ? "rgba(134,239,172,.24)" : tone === "red" ? "rgba(248,113,113,.24)" : tone === "gold" ? "rgba(253,230,138,.24)" : "rgba(148,163,184,.16)";
+  const bg = tone === "green" ? "rgba(34,197,94,.08)" : tone === "red" ? "rgba(248,113,113,.08)" : tone === "gold" ? "rgba(253,230,138,.08)" : "rgba(2,6,23,.38)";
+
+  return (
+    <div style={{ border: `1px solid ${border}`, background: bg, borderRadius: 16, padding: 12 }}>
+      <div style={{ color: "#94a3b8", fontSize: 11, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 900 }}>{label}</div>
+      <div style={{ color, fontSize: 18, fontWeight: 950, marginTop: 4, overflowWrap: "anywhere" }}>{display(String(value))}</div>
+    </div>
+  );
 }
 
 export default async function DealDetailPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -208,6 +344,7 @@ export default async function DealDetailPage({ searchParams }: { searchParams: P
   const nextMoves = row ? splitList(row.best_actions, row.ai_next_steps, row.next_steps, row.recommended_actions, metadataOf(row).best_actions, metadataOf(row).suggested_routes) : [];
   const roomId = row ? field(row, "id", "deal_id", "project_id", "item_id", "canonical_event_id") || id : id;
   const sourceTable = row ? field(row, "source_table", "_source_table") || "api/deal/feed" : "api/deal/feed";
+  const brief = row ? opportunityBrief(row) : null;
 
   return (
     <main style={page}>
@@ -223,6 +360,42 @@ export default async function DealDetailPage({ searchParams }: { searchParams: P
             <Link href={`/message-command/${encodeURIComponent("opportunity:" + roomId)}`} style={goldPill}>Internal Thread</Link>
           </div>
         </section>
+
+        {brief ? (
+          <section style={card}>
+            <div style={eyebrow}>5S / Kaizen Opportunity Intelligence</div>
+            <h2 style={{ fontSize: "clamp(32px,7vw,58px)", lineHeight: 0.95, letterSpacing: "-.05em", margin: "10px 0 16px" }}>
+              Sort the noise. Set the move. Execute the room.
+            </h2>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
+              <span style={brief.priorityScore >= 75 ? greenPill : brief.priorityScore >= 55 ? goldPill : redPill}>
+                Priority Score: {brief.priorityScore}
+              </span>
+              <span style={greenPill}>Stage: {brief.executionStage}</span>
+              <span style={redPill}>Risk: {brief.riskFlag}</span>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 }}>
+              <FiveSMetric label="Sort" value={brief.bottleneck} tone="red" />
+              <FiveSMetric label="Set In Order" value={brief.nextMove} tone="gold" />
+              <FiveSMetric label="Shine" value={brief.kaizenFocus} tone="green" />
+              <FiveSMetric label="Likely Buyer" value={brief.likelyBuyer} />
+              <FiveSMetric label="Capital Path" value={brief.capitalPath} />
+              <FiveSMetric label="Operator Need" value={brief.operatorNeed} />
+            </div>
+          </section>
+        ) : null}
+
+        <VaultForgeRoomCleanupControls
+          roomId={roomId}
+          roomTitle={title}
+          roomType="Opportunity Room"
+          kind="opportunity"
+          folder="opportunity"
+          sourceRoute={`/deal/detail?id=${encodeURIComponent(roomId)}`}
+          laneHref="/opportunity-rooms"
+        />
 
         <section style={card}>
           <div style={eyebrow}>Live Source Payload</div>
