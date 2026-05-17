@@ -5,12 +5,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 function firstParam(searchParams: Record<string, string | string[] | undefined>) {
-  const keys = ["id", "deal_id", "project_id", "item_id", "room_id"];
+  const keys = ["id", "deal_id", "project_id", "item_id", "room_id", "property_id"];
+
   for (const key of keys) {
     const value = searchParams[key];
     const text = Array.isArray(value) ? value[0] : value;
     if (text) return String(text);
   }
+
   return "";
 }
 
