@@ -5,18 +5,28 @@ import { useMemo } from "react";
 import VaultForgeRoomCleanupControls from "../../components/VaultForgeRoomCleanupControls";
 import VaultForgeRoutingCommandStack from "../../components/VaultForgeRoutingCommandStack";
 
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function getRoomId() {
+function shortId(value: string) {
+  const text = clean(value);
+  if (!text) return "Not listed";
+  if (text.length <= 18) return text;
+  return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
+function getPathId() {
   if (typeof window === "undefined") return "";
-  const parts = window.location.pathname.split("/").filter(Boolean); return decodeURIComponent(clean(parts[parts.length - 1]));
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  return decodeURIComponent(clean(parts[parts.length - 1]));
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
-  background: "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 30%), linear-gradient(180deg,#020617,#071326 55%,#020617)",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.13), transparent 30%), linear-gradient(180deg,#020617,#071326 55%,#020617)",
   color: "white",
   padding: "22px 16px 96px",
   fontFamily: "Arial, sans-serif",
@@ -58,46 +68,51 @@ const ghost: React.CSSProperties = {
   color: "white",
 };
 
-export default function RoomPage() {
-  const id = useMemo(getRoomId, []);
-  const title = "Routing Room " + (id || "");
-  const sourceRoute = `/routing-room/${encodeURIComponent(id)}`;
+
+export default function RoutingRoomPage() {
+  const signalId = useMemo(getPathId, []);
+  const title = `Routing Command: ${shortId(signalId)}`;
 
   return (
     <main style={page}>
       <div style={wrap}>
         <section style={panel}>
-          <div style={label}>VaultForge Routing Room</div>
-          <h1 style={{ fontSize: "clamp(52px,10vw,104px)", lineHeight: .88, letterSpacing: "-.075em", margin: "12px 0 18px" }}>
+          <div style={label}>VaultForge Routing Command Room</div>
+
+          <h1
+            style={{
+              fontSize: "clamp(44px,9vw,86px)",
+              lineHeight: 0.9,
+              letterSpacing: "-.065em",
+              margin: "12px 0 18px",
+              overflowWrap: "anywhere",
+            }}
+          >
             {title}
           </h1>
+
           <p style={{ color: "#cbd5e1", lineHeight: 1.65, fontSize: 20, marginTop: 0 }}>
-            Routing is the member-fit and intro path workspace. It is not the deal room.
+            This room decides who fits, why they fit, and whether the next move is intro, message, capital, buyer, operator, or owner review.
           </p>
+
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-            <Link href="/routing-inbox" style={ghost}>Back To Lane</Link>
+            <Link href="/routing-inbox" style={ghost}>Back To Routing Queue</Link>
+            <Link href="/introductions" style={ghost}>Introductions</Link>
             <Link href="/dashboard" style={ghost}>Command</Link>
           </div>
         </section>
 
         <VaultForgeRoomCleanupControls
-          roomId={id}
+          roomId={signalId}
           roomTitle={title}
           roomType="Routing Room"
           kind="routing"
           folder="routing"
-          sourceRoute={sourceRoute}
+          sourceRoute={`/routing-room/${encodeURIComponent(signalId)}`}
           laneHref="/routing-inbox"
         />
 
-        <VaultForgeRoutingCommandStack room={{ id, title }} signalId={id} />
-
-        <section style={panel}>
-          <div style={label}>Room Identity Locked</div>
-          <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>
-            This room uses the shared 5S cleanup controls. Save, archive, delete/hide, request intro, and internal thread all carry the same room title/type/id context.
-          </p>
-        </section>
+        <VaultForgeRoutingCommandStack room={{ id: signalId, title }} signalId={signalId} />
       </div>
     </main>
   );
