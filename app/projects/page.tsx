@@ -10,7 +10,7 @@ export default async function ProjectsPage() {
   return (
     <VaultForgeRoomListPage
       title="Projects"
-      subtitle="Project and deal rooms share the Opportunity lane. This page shows active opportunity records with clean front cards and opens the full execution room for the details."
+      subtitle="Projects and deals share the Opportunity lane. This page opens the same full execution rooms with deal numbers, AI analysis, routing context, profiles, and alerts inside."
       kind="opportunity"
       rooms={rooms}
     />
