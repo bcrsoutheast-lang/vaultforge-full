@@ -34,7 +34,7 @@ export function clean(value: unknown) {
 export function roomKind(value: unknown): RoomKind {
   const text = clean(value).toLowerCase();
 
-  if (text.includes("deal") || text.includes("opportunity")) return "opportunity";
+  if (text.includes("deal") || text.includes("opportunity") || text.includes("project")) return "opportunity";
   if (text.includes("pain") || text.includes("pressure")) return "pressure";
   if (text.includes("routing")) return "routing";
   if (text.includes("signal")) return "signal";
