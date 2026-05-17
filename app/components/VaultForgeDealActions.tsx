@@ -1,25 +1,49 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import {
-  applyRoomAction,
-  clean,
-  deleteRoomForever,
-  getRoomRecord,
-  roomRoute,
-  upsertRoom,
-  type RoomRecord,
-  type RoomStatus,
-} from "../lib/vaultforgeRoomState";
+import { useState } from "react";
 
 type Props = {
   roomId: string;
   roomTitle: string;
   sourceRoute?: string;
-  variant?: "card" | "room" | "compact";
-  afterAction?: "stay" | "folder" | "projects" | "workstations";
+  status?: "active" | "saved" | "archived" | "deleted";
+  variant?: "card" | "room";
+  onChanged?: () => void;
 };
+
+function clean(value: unknown) {
+  return String(value || "").trim();
+}
+
+function readEmail() {
+  if (typeof window === "undefined") return "";
+
+  const localKeys = ["vf_email", "vf_member_email", "memberEmail", "email"];
+
+  for (const key of localKeys) {
+    try {
+      const value = clean(window.localStorage.getItem(key));
+      if (value.includes("@")) return value.toLowerCase();
+    } catch {
+      // Continue.
+    }
+  }
+
+  const match =
+    document.cookie.match(/(?:^|;\s*)vf_email=([^;]+)/) ||
+    document.cookie.match(/(?:^|;\s*)vf_member_email=([^;]+)/);
+
+  if (match) {
+    try {
+      return decodeURIComponent(match[1] || "").toLowerCase();
+    } catch {
+      return String(match[1] || "").toLowerCase();
+    }
+  }
+
+  return "guest@vaultforge.local";
+}
 
 const btn: React.CSSProperties = {
   minHeight: 46,
@@ -44,18 +68,18 @@ const ghost: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,.16)",
 };
 
-const blue: React.CSSProperties = {
-  ...ghost,
-  color: "#bae6fd",
-  border: "1px solid rgba(56,189,248,.36)",
-  background: "rgba(56,189,248,.10)",
-};
-
 const green: React.CSSProperties = {
   ...ghost,
   color: "#bbf7d0",
-  border: "1px solid rgba(34,197,94,.36)",
+  border: "1px solid rgba(34,197,94,.38)",
   background: "rgba(34,197,94,.10)",
+};
+
+const blue: React.CSSProperties = {
+  ...ghost,
+  color: "#bae6fd",
+  border: "1px solid rgba(56,189,248,.38)",
+  background: "rgba(56,189,248,.10)",
 };
 
 const danger: React.CSSProperties = {
@@ -71,121 +95,101 @@ const redSolid: React.CSSProperties = {
   color: "white",
 };
 
-function targetFor(status: RoomStatus) {
-  if (status === "saved") return "/projects?folder=saved";
-  if (status === "archived") return "/projects?folder=archived";
-  if (status === "deleted") return "/projects?folder=deleted";
-  return "/projects?folder=active";
-}
-
 export default function VaultForgeDealActions({
   roomId,
   roomTitle,
   sourceRoute = "",
+  status = "active",
   variant = "card",
-  afterAction = "stay",
+  onChanged,
 }: Props) {
-  const id = clean(roomId) || "unknown-room";
-  const title = clean(roomTitle) || "Opportunity Room";
-  const route = clean(sourceRoute) || roomRoute("opportunity", id);
-
-  const initial = useMemo(() => {
-    const existing = getRoomRecord("opportunity", id);
-
-    return upsertRoom({
-      room_id: id,
-      room_title: existing?.room_title || title,
-      room_type: "Opportunity Room",
-      room_kind: "opportunity",
-      folder: "opportunity",
-      source_route: existing?.source_route || route,
-      status: existing?.status,
-      saved: existing?.saved,
-      archived: existing?.archived,
-      deleted: existing?.deleted,
-    });
-  }, [id, title, route]);
-
-  const [record, setRecord] = useState<RoomRecord>(initial);
+  const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
 
-  useEffect(() => {
-    const refresh = () => {
-      const existing = getRoomRecord("opportunity", id);
-      if (existing) setRecord(existing);
-    };
+  const id = clean(roomId);
+  const title = clean(roomTitle) || "Opportunity Room";
+  const route = clean(sourceRoute) || `/deal/detail?id=${encodeURIComponent(id)}`;
 
-    refresh();
-    window.addEventListener("vaultforge-5s-room-change", refresh);
+  async function run(action: "save" | "archive" | "delete" | "restore" | "permanent_delete") {
+    if (!id || busy) return;
 
-    return () => window.removeEventListener("vaultforge-5s-room-change", refresh);
-  }, [id]);
+    setBusy(action);
+    setNotice("");
 
-  function redirectIfNeeded(nextStatus: RoomStatus) {
-    if (afterAction === "stay" || typeof window === "undefined") return;
+    if (action === "permanent_delete") {
+      setNotice("Permanent delete is currently local-folder cleanup only. Use Hidden until database hard delete is added.");
+      setBusy("");
+      return;
+    }
 
-    let href = "/projects";
+    const email = readEmail();
 
-    if (afterAction === "folder") href = targetFor(nextStatus);
-    if (afterAction === "projects") href = "/projects";
-    if (afterAction === "workstations") href = "/workstations";
+    try {
+      const response = await fetch("/api/room/actions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vf-email": email,
+        },
+        body: JSON.stringify({
+          action,
+          user_email: email,
+          room_id: id,
+          room_type: "opportunity",
+          room_title: title,
+          source_route: route,
+        }),
+      });
 
-    window.setTimeout(() => {
-      window.location.href = href;
-    }, 450);
-  }
+      const data = await response.json().catch(() => ({}));
 
-  function doAction(action: "save" | "archive" | "delete" | "restore") {
-    const next = applyRoomAction(record, action);
-    setRecord(next);
+      if (!response.ok || data?.ok === false) {
+        setNotice(data?.error || data?.supabase_error || "Room action failed.");
+        return;
+      }
 
-    if (action === "save") setNotice("Saved. Moved to Saved.");
-    if (action === "archive") setNotice("Archived. Moved to Archived.");
-    if (action === "delete") setNotice("Hidden. Moved to Hidden.");
-    if (action === "restore") setNotice("Restored. Moved back to Active.");
+      if (action === "save") setNotice("Saved. Moving to Saved folder.");
+      if (action === "archive") setNotice("Archived. Moving to Archived folder.");
+      if (action === "delete") setNotice("Hidden. Moving to Hidden folder.");
+      if (action === "restore") setNotice("Restored to Active.");
 
-    fetch("/api/room/actions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...next }),
-    }).catch(() => {});
+      if (onChanged) onChanged();
 
-    redirectIfNeeded(next.status);
-  }
+      if (variant === "room") {
+        const next =
+          action === "save"
+            ? "/projects?folder=saved"
+            : action === "archive"
+              ? "/projects?folder=archived"
+              : action === "delete"
+                ? "/projects?folder=deleted"
+                : "/projects?folder=active";
 
-  function hardDelete() {
-    deleteRoomForever(record.room_id);
-    setNotice("Permanently removed from this device.");
-
-    if (afterAction !== "stay" && typeof window !== "undefined") {
-      window.setTimeout(() => {
-        window.location.href = "/projects?folder=deleted";
-      }, 450);
+        window.setTimeout(() => {
+          window.location.href = next;
+        }, 450);
+      }
+    } catch (error: any) {
+      setNotice(error?.message || "Room action failed.");
+    } finally {
+      setBusy("");
     }
   }
 
-  const actionLayout: React.CSSProperties =
+  const layout: React.CSSProperties =
     variant === "room"
-      ? {
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
-          gap: 10,
-        }
-      : {
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 10,
-        };
+      ? { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }
+      : { display: "flex", flexWrap: "wrap", gap: 10 };
 
-  if (record.deleted) {
+  if (status === "deleted") {
     return (
       <div style={{ display: "grid", gap: 10 }}>
-        <div style={actionLayout}>
-          <button type="button" onClick={() => doAction("restore")} style={green}>
+        <div style={layout}>
+          <button type="button" onClick={() => run("restore")} style={green} disabled={Boolean(busy)}>
             Restore Active
           </button>
 
-          <button type="button" onClick={hardDelete} style={redSolid}>
+          <button type="button" onClick={() => run("permanent_delete")} style={redSolid} disabled={Boolean(busy)}>
             Permanent Delete
           </button>
 
@@ -205,29 +209,29 @@ export default function VaultForgeDealActions({
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      <div style={actionLayout}>
-        {variant !== "compact" ? (
+      <div style={layout}>
+        {variant !== "room" ? (
           <Link href={route} style={btn}>
             Open Room
           </Link>
         ) : null}
 
-        <button type="button" onClick={() => doAction("save")} style={record.saved ? green : ghost}>
+        <button type="button" onClick={() => run("save")} style={status === "saved" ? green : ghost} disabled={Boolean(busy)}>
           Save
         </button>
 
-        <button type="button" onClick={() => doAction("archive")} style={record.archived ? blue : ghost}>
+        <button type="button" onClick={() => run("archive")} style={status === "archived" ? blue : ghost} disabled={Boolean(busy)}>
           Archive
         </button>
 
-        <button type="button" onClick={() => doAction("delete")} style={danger}>
+        <button type="button" onClick={() => run("delete")} style={danger} disabled={Boolean(busy)}>
           Hide
         </button>
 
         <Link
-          href={`/messages/new?subject=${encodeURIComponent(title)}&room_id=${encodeURIComponent(
-            id
-          )}&room_type=${encodeURIComponent("Opportunity Room")}&source_route=${encodeURIComponent(route)}`}
+          href={`/messages/new?subject=${encodeURIComponent(title)}&room_id=${encodeURIComponent(id)}&room_type=${encodeURIComponent(
+            "Opportunity Room"
+          )}&source_route=${encodeURIComponent(route)}`}
           style={ghost}
         >
           Message
