@@ -10,7 +10,7 @@ export default async function OpportunityRoomsPage() {
   return (
     <VaultForgeRoomListPage
       title="Opportunity Rooms"
-      subtitle="Active opportunity rooms pulled from the real deal/project/property tables. Front cards stay clean; deep numbers, AI analysis, profiles, alerts, and routing belong inside each room."
+      subtitle="The single deal/project/opportunity lane. Front cards stay clean; numbers, AI, routing, alerts, matched profiles, and execution context live inside each room."
       kind="opportunity"
       rooms={rooms}
     />
