@@ -8,18 +8,6 @@ export const revalidate = 0;
 type AnyRow = Record<string, any>;
 type SearchParams = Record<string, string | string[] | undefined>;
 
-type FiveSBrief = {
-  executionStage: string;
-  bottleneck: string;
-  nextMove: string;
-  riskFlag: string;
-  likelyBuyer: string;
-  capitalPath: string;
-  operatorNeed: string;
-  kaizenFocus: string;
-  priorityScore: number;
-};
-
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -52,12 +40,6 @@ function field(row: AnyRow, ...keys: string[]) {
     values.push(metadata?.[key]);
   }
   return first(...values);
-}
-
-function numericField(row: AnyRow, ...keys: string[]) {
-  const text = field(row, ...keys).replace(/[$,%\s,]/g, "");
-  const num = Number(text);
-  return Number.isFinite(num) ? num : 0;
 }
 
 function parseArray(value: unknown): any[] {
@@ -136,175 +118,93 @@ async function loadDeal(id: string) {
   const email = await requestEmail();
   if (!origin || !id) return { row: null as AnyRow | null, error: "Missing origin or room id." };
 
-  const url = `${origin}/api/deal/feed?id=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}&owner=1`;
+  const urls = [
+    `${origin}/api/deal/feed?id=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}&owner=1`,
+    `${origin}/api/deal/detail?id=${encodeURIComponent(id)}&email=${encodeURIComponent(email)}&owner=1`,
+  ];
 
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        "x-vf-email": email,
-        "x-vf-admin": email === "bcrsoutheast@gmail.com" ? "1" : "0",
-      },
-    });
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: {
+          "x-vf-email": email,
+          "x-vf-admin": email === "bcrsoutheast@gmail.com" ? "1" : "0",
+        },
+      });
 
-    const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(() => ({}));
 
-    if (!response.ok || data?.ok === false) {
-      return { row: null, error: clean(data?.error || data?.details || `Deal feed failed with ${response.status}.`) };
-    }
-
-    const row = data?.deal || data?.deals?.[0] || data?.projects?.[0] || data?.items?.[0] || null;
-    return { row, error: row ? "" : "No matching opportunity room returned from /api/deal/feed." };
-  } catch (error: any) {
-    return { row: null, error: error?.message || "Could not load opportunity room." };
-  }
-}
-
-function splitList(...values: unknown[]) {
-  const text = first(...values);
-  if (!text) return [] as string[];
-  return text
-    .split(/\n|•|\d+\.\s+|;/g)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 10);
-}
-
-function lowerRoomText(row: AnyRow) {
-  const metadata = metadataOf(row);
-  return [
-    row?.title,
-    row?.deal_title,
-    row?.project_title,
-    row?.headline,
-    row?.summary,
-    row?.ai_summary,
-    row?.description,
-    row?.notes,
-    row?.strategy,
-    row?.exit_strategy,
-    row?.routing_needs,
-    row?.deal_needs,
-    row?.needs,
-    metadata?.title,
-    metadata?.summary,
-    metadata?.ai_summary,
-    metadata?.description,
-    metadata?.notes,
-    metadata?.strategy,
-    metadata?.routing_needs,
-    metadata?.needs,
-  ].map((value) => clean(value).toLowerCase()).filter(Boolean).join(" ");
-}
-
-function opportunityBrief(row: AnyRow): FiveSBrief {
-  const text = lowerRoomText(row);
-  const asking = numericField(row, "asking_price", "price", "ask", "purchase_price");
-  const arv = numericField(row, "arv", "arv_value", "estimated_value", "after_repair_value");
-  const repairs = numericField(row, "repair_estimate", "repairs_needed", "estimated_repairs", "rehab_budget");
-  const capitalNeed = numericField(row, "capital_needed", "funding_needed", "gap_amount");
-
-  let executionStage = "Active Review";
-  let bottleneck = "Verify the deal data, confirm the seller/owner context, then decide if this should move to buyer, capital, or operator routing.";
-  let nextMove = "Confirm numbers, photos, access, occupancy, and decision-maker contact before routing.";
-  let riskFlag = "Data completeness risk";
-  let likelyBuyer = "Local investor buyer";
-  let capitalPath = "Private capital or hard money review after numbers are verified.";
-  let operatorNeed = "Operator need not confirmed.";
-  let kaizenFocus = "Reduce uncertainty before moving the room deeper into execution.";
-  let priorityScore = 58;
-
-  if (text.includes("buyer")) {
-    executionStage = "Buyer Match";
-    bottleneck = "Buyer demand is the current bottleneck.";
-    nextMove = "Route to buyers who match market, asset type, price band, and strategy.";
-    likelyBuyer = "Cash buyer, landlord, local flipper, or operator-buyer.";
-    kaizenFocus = "Shorten the path from room review to qualified buyer response.";
-    priorityScore += 12;
-  }
-
-  if (text.includes("capital") || text.includes("funding") || text.includes("lender") || capitalNeed > 0) {
-    executionStage = "Capital Path";
-    bottleneck = "Capital structure or funding gap is the current bottleneck.";
-    nextMove = "Route to lenders/private capital with asking, ARV, repairs, timeline, and collateral clarity.";
-    capitalPath = "Private lender, hard money, bridge capital, gap capital, or JV capital.";
-    kaizenFocus = "Convert vague funding need into a clean capital request.";
-    priorityScore += 14;
-  }
-
-  if (text.includes("operator") || text.includes("contractor") || text.includes("rehab") || repairs > 0) {
-    executionStage = "Operator Match";
-    bottleneck = "Execution/operator capacity is the current bottleneck.";
-    nextMove = "Route to operators/contractors who can validate repairs, timeline, and execution risk.";
-    operatorNeed = "Operator, contractor, project manager, or boots-on-ground validation likely needed.";
-    kaizenFocus = "Reduce execution drag by matching capability to the room fast.";
-    priorityScore += 10;
-  }
-
-  if (text.includes("title") || text.includes("legal") || text.includes("probate") || text.includes("lien") || text.includes("code") || text.includes("permit")) {
-    executionStage = "Risk Review";
-    bottleneck = "Legal/title/city risk may block execution.";
-    nextMove = "Clarify title, lien, permit, probate, code, or legal issue before buyer/capital routing.";
-    riskFlag = "Legal/title/city risk";
-    kaizenFocus = "Remove deal-killing uncertainty before marketing or funding.";
-    priorityScore += 8;
-  }
-
-  if (text.includes("urgent") || text.includes("hot") || text.includes("deadline") || text.includes("foreclosure") || text.includes("tax sale")) {
-    executionStage = "Hot / Time Sensitive";
-    bottleneck = "Time compression is the current bottleneck.";
-    nextMove = "Escalate review, verify decision-maker contact, and route only to fast-response members.";
-    riskFlag = "Time-sensitive execution risk";
-    kaizenFocus = "Cut cycle time. Every handoff must be direct and accountable.";
-    priorityScore += 18;
-  }
-
-  if (asking && arv && arv > asking) {
-    const spread = arv - asking;
-    const spreadPct = Math.round((spread / arv) * 100);
-    if (spreadPct >= 20) {
-      priorityScore += 12;
-      riskFlag = riskFlag === "Data completeness risk" ? "Spread looks promising; verify repairs and access." : riskFlag;
+      if (response.ok && data?.ok !== false) {
+        const row = data?.deal || data?.deals?.[0] || data?.projects?.[0] || data?.items?.[0] || null;
+        if (row) return { row, error: "" };
+      }
+    } catch {
+      // Try next API.
     }
   }
 
-  if (!asking || !arv) {
-    riskFlag = "Missing price/ARV clarity";
-    kaizenFocus = "Get asking, ARV, repair estimate, and timeline into the room.";
-  }
-
-  priorityScore = Math.max(0, Math.min(100, priorityScore));
-
-  return {
-    executionStage,
-    bottleneck,
-    nextMove,
-    riskFlag,
-    likelyBuyer,
-    capitalPath,
-    operatorNeed,
-    kaizenFocus,
-    priorityScore,
-  };
+  return { row: null, error: "No matching opportunity room returned from deal APIs." };
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
-  background: "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#020814,#071326 52%,#020814)",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#020814,#071326 52%,#020814)",
   color: "white",
   padding: "24px 16px 90px",
-  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  fontFamily:
+    "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
 };
 
 const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto", display: "grid", gap: 18 };
-const card: React.CSSProperties = { border: "1px solid rgba(232,196,107,.22)", background: "linear-gradient(135deg,rgba(18,24,42,.96),rgba(8,19,35,.96))", borderRadius: 24, padding: 24, boxShadow: "0 24px 70px rgba(0,0,0,.28)" };
-const softCard: React.CSSProperties = { border: "1px solid rgba(148,163,184,.18)", background: "rgba(15,23,42,.78)", borderRadius: 22, padding: 18 };
-const eyebrow: React.CSSProperties = { color: "#f4d477", textTransform: "uppercase", letterSpacing: ".18em", fontWeight: 900, fontSize: 13 };
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.22)",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.12), transparent 34%), linear-gradient(135deg,rgba(18,24,42,.96),rgba(8,19,35,.96))",
+  borderRadius: 28,
+  padding: 24,
+  boxShadow: "0 24px 70px rgba(0,0,0,.28)",
+};
+
+const softCard: React.CSSProperties = {
+  border: "1px solid rgba(148,163,184,.18)",
+  background: "rgba(15,23,42,.78)",
+  borderRadius: 22,
+  padding: 18,
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#f4d477",
+  textTransform: "uppercase",
+  letterSpacing: ".18em",
+  fontWeight: 900,
+  fontSize: 13,
+};
+
 const muted: React.CSSProperties = { color: "#cbd5e1", lineHeight: 1.55 };
-const pill: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(148,163,184,.24)", background: "rgba(255,255,255,.06)", borderRadius: 999, padding: "11px 14px", color: "white", textDecoration: "none", fontWeight: 900, fontSize: 14 };
-const goldPill: React.CSSProperties = { ...pill, background: "linear-gradient(135deg,#fde68a,#e8c46b)", color: "#111827", border: "0" };
-const greenPill: React.CSSProperties = { ...pill, color: "#86efac", border: "1px solid rgba(134,239,172,.28)", background: "rgba(34,197,94,.08)" };
-const redPill: React.CSSProperties = { ...pill, color: "#fecaca", border: "1px solid rgba(248,113,113,.28)", background: "rgba(248,113,113,.08)" };
+
+const pill: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid rgba(148,163,184,.24)",
+  background: "rgba(255,255,255,.06)",
+  borderRadius: 999,
+  padding: "11px 14px",
+  color: "white",
+  textDecoration: "none",
+  fontWeight: 900,
+  fontSize: 14,
+};
+
+const goldPill: React.CSSProperties = {
+  ...pill,
+  background: "linear-gradient(135deg,#fde68a,#e8c46b)",
+  color: "#111827",
+  border: "0",
+};
 
 function display(value: string, fallback = "Not listed") {
   return clean(value) || fallback;
@@ -312,22 +212,11 @@ function display(value: string, fallback = "Not listed") {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ border: "1px solid rgba(148,163,184,.16)", background: "rgba(2,6,23,.38)", borderRadius: 16, padding: 12 }}>
-      <div style={{ color: "#94a3b8", fontSize: 11, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 900 }}>{label}</div>
-      <div style={{ color: "white", fontSize: 16, fontWeight: 900, marginTop: 4, overflowWrap: "anywhere" }}>{display(value)}</div>
-    </div>
-  );
-}
-
-function FiveSMetric({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "green" | "red" | "gold" }) {
-  const color = tone === "green" ? "#86efac" : tone === "red" ? "#fecaca" : tone === "gold" ? "#fde68a" : "white";
-  const border = tone === "green" ? "rgba(134,239,172,.24)" : tone === "red" ? "rgba(248,113,113,.24)" : tone === "gold" ? "rgba(253,230,138,.24)" : "rgba(148,163,184,.16)";
-  const bg = tone === "green" ? "rgba(34,197,94,.08)" : tone === "red" ? "rgba(248,113,113,.08)" : tone === "gold" ? "rgba(253,230,138,.08)" : "rgba(2,6,23,.38)";
-
-  return (
-    <div style={{ border: `1px solid ${border}`, background: bg, borderRadius: 16, padding: 12 }}>
-      <div style={{ color: "#94a3b8", fontSize: 11, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 900 }}>{label}</div>
-      <div style={{ color, fontSize: 18, fontWeight: 950, marginTop: 4, overflowWrap: "anywhere" }}>{display(String(value))}</div>
+    <div style={softCard}>
+      <div style={eyebrow}>{label}</div>
+      <div style={{ color: "white", fontSize: 20, fontWeight: 900, marginTop: 8, overflowWrap: "anywhere" }}>
+        {display(value)}
+      </div>
     </div>
   );
 }
@@ -338,54 +227,60 @@ export default async function DealDetailPage({ searchParams }: { searchParams: P
   const { row, error } = await loadDeal(id);
   const photos = row ? photosFrom(row) : [];
 
-  const title = row ? field(row, "title", "deal_title", "project_title", "headline", "name", "address") || "Opportunity Room" : "Opportunity room not loaded";
-  const summary = row ? field(row, "ai_summary", "summary", "route_summary", "ai_route_summary", "routing_summary", "description", "note", "notes") : "";
-  const bestFit = row ? field(row, "ai_best_fit", "best_fit", "route_summary", "ai_route_summary", "routing_summary", "routing_needs", "deal_needs", "needs") : "";
-  const nextMoves = row ? splitList(row.best_actions, row.ai_next_steps, row.next_steps, row.recommended_actions, metadataOf(row).best_actions, metadataOf(row).suggested_routes) : [];
+  const title = row
+    ? field(row, "title", "deal_title", "project_title", "headline", "name", "address") || "Opportunity Room"
+    : "Opportunity room not loaded";
+
+  const summary = row
+    ? field(row, "ai_summary", "summary", "route_summary", "ai_route_summary", "routing_summary", "description", "note", "notes")
+    : "";
+
   const roomId = row ? field(row, "id", "deal_id", "project_id", "item_id", "canonical_event_id") || id : id;
-  const sourceTable = row ? field(row, "source_table", "_source_table") || "api/deal/feed" : "api/deal/feed";
-  const brief = row ? opportunityBrief(row) : null;
 
   return (
     <main style={page}>
       <div style={wrap}>
         <section style={card}>
-          <div style={eyebrow}>VaultForge Opportunity Execution Room</div>
-          <h1 style={{ fontSize: "clamp(42px,9vw,84px)", lineHeight: 0.88, letterSpacing: "-.06em", margin: "12px 0 18px", overflowWrap: "anywhere" }}>{title}</h1>
-          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>{summary || error || "This opportunity room opened, but the source API did not return a full payload for this id."}</p>
+          <div style={eyebrow}>VaultForge Unified Opportunity Room OS</div>
+
+          <h1
+            style={{
+              fontSize: "clamp(42px,9vw,90px)",
+              lineHeight: 0.84,
+              letterSpacing: "-.075em",
+              margin: "12px 0 18px",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {title}
+          </h1>
+
+          <p style={{ ...muted, fontSize: 20, maxWidth: 980 }}>
+            {summary || error || "This room is connected to the unified command system."}
+          </p>
+
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 22 }}>
-            <Link href="/opportunity-rooms" style={pill}>Back To Opportunity Lane</Link>
-            <Link href="/projects" style={pill}>Projects</Link>
-            <Link href="/dashboard" style={pill}>Command</Link>
-            <Link href={`/message-command/${encodeURIComponent("opportunity:" + roomId)}`} style={goldPill}>Internal Thread</Link>
+            <Link href="/workstations" style={goldPill}>
+              Return to Workstations
+            </Link>
+
+            <Link href="/opportunity-rooms" style={pill}>
+              Opportunity Lane
+            </Link>
+
+            <Link href="/projects" style={pill}>
+              Projects
+            </Link>
+
+            <Link href="/dashboard" style={pill}>
+              Dashboard
+            </Link>
+
+            <Link href={`/message-command/${encodeURIComponent("opportunity:" + roomId)}`} style={pill}>
+              Internal Thread
+            </Link>
           </div>
         </section>
-
-        {brief ? (
-          <section style={card}>
-            <div style={eyebrow}>5S / Kaizen Opportunity Intelligence</div>
-            <h2 style={{ fontSize: "clamp(32px,7vw,58px)", lineHeight: 0.95, letterSpacing: "-.05em", margin: "10px 0 16px" }}>
-              Sort the noise. Set the move. Execute the room.
-            </h2>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
-              <span style={brief.priorityScore >= 75 ? greenPill : brief.priorityScore >= 55 ? goldPill : redPill}>
-                Priority Score: {brief.priorityScore}
-              </span>
-              <span style={greenPill}>Stage: {brief.executionStage}</span>
-              <span style={redPill}>Risk: {brief.riskFlag}</span>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 }}>
-              <FiveSMetric label="Sort" value={brief.bottleneck} tone="red" />
-              <FiveSMetric label="Set In Order" value={brief.nextMove} tone="gold" />
-              <FiveSMetric label="Shine" value={brief.kaizenFocus} tone="green" />
-              <FiveSMetric label="Likely Buyer" value={brief.likelyBuyer} />
-              <FiveSMetric label="Capital Path" value={brief.capitalPath} />
-              <FiveSMetric label="Operator Need" value={brief.operatorNeed} />
-            </div>
-          </section>
-        ) : null}
 
         <VaultForgeRoomCleanupControls
           roomId={roomId}
@@ -394,32 +289,22 @@ export default async function DealDetailPage({ searchParams }: { searchParams: P
           kind="opportunity"
           folder="opportunity"
           sourceRoute={`/deal/detail?id=${encodeURIComponent(roomId)}`}
-          laneHref="/opportunity-rooms"
+          laneHref="/workstations"
         />
 
         <section style={card}>
-          <div style={eyebrow}>Live Source Payload</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-            <span style={{ ...pill, color: "#86efac", padding: "7px 10px", fontSize: 12 }}>Room: {roomId || "missing-id"}</span>
-            <span style={{ ...pill, color: "#93c5fd", padding: "7px 10px", fontSize: 12 }}>Source: {sourceTable}</span>
-            <span style={{ ...pill, color: error ? "#fecaca" : "#86efac", padding: "7px 10px", fontSize: 12 }}>{error ? "Needs API match" : "Loaded from /api/deal/feed"}</span>
-          </div>
-        </section>
-
-        <section style={card}>
           <div style={eyebrow}>Opportunity Intelligence Brief</div>
-          <h2 style={{ fontSize: "clamp(32px,7vw,58px)", lineHeight: 0.95, letterSpacing: "-.05em", margin: "10px 0 16px" }}>Deal data, AI summary, and routing context.</h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14 }}>
-            <div style={softCard}>
-              <h3 style={{ margin: "0 0 10px", fontSize: 24 }}>AI / Deal Summary</h3>
-              <p style={muted}>{summary || "No AI/deal summary resolved from this saved row yet."}</p>
-            </div>
-            <div style={softCard}>
-              <h3 style={{ margin: "0 0 10px", fontSize: 24 }}>Best Fit / Routing Need</h3>
-              <p style={muted}>{bestFit || "No best-fit or routing need resolved from this saved row yet."}</p>
-            </div>
-          </div>
+          <h2
+            style={{
+              fontSize: "clamp(34px,7vw,66px)",
+              lineHeight: 0.9,
+              letterSpacing: "-.06em",
+              margin: "10px 0 16px",
+            }}
+          >
+            Deal data, AI summary, and routing context.
+          </h2>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginTop: 16 }}>
             <Metric label="Market" value={field(row || {}, "market", "city_state") || [field(row || {}, "city"), field(row || {}, "state")].filter(Boolean).join(", ")} />
@@ -433,27 +318,27 @@ export default async function DealDetailPage({ searchParams }: { searchParams: P
             <Metric label="Beds / Baths" value={[field(row || {}, "beds", "bedrooms"), field(row || {}, "baths", "bathrooms")].filter(Boolean).join(" / ")} />
             <Metric label="Sq Ft" value={field(row || {}, "square_feet", "sqft", "building_sqft")} />
             <Metric label="Occupancy" value={field(row || {}, "occupancy", "occupancy_status", "tenant_status")} />
-            <Metric label="Zoning / Acres" value={[field(row || {}, "zoning", "zoning_type"), field(row || {}, "acres", "land_acres")].filter(Boolean).join(" / ")} />
+            <Metric label="Contact" value={field(row || {}, "owner_email", "member_email", "contact_email", "seller_email", "owner_phone", "seller_phone")} />
           </div>
 
-          {nextMoves.length ? (
-            <div style={{ ...softCard, marginTop: 16 }}>
-              <h3 style={{ margin: "0 0 10px", fontSize: 24 }}>AI Next Moves</h3>
-              <ol style={{ margin: 0, paddingLeft: 22, color: "#cbd5e1", lineHeight: 1.7 }}>
-                {nextMoves.map((step) => <li key={step}>{step}</li>)}
-              </ol>
-            </div>
-          ) : null}
-
           {photos.length ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginTop: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginTop: 18 }}>
               {photos.map((src, index) => (
-                <img key={src + index} src={src} alt={`${title} photo ${index + 1}`} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(148,163,184,.18)" }} />
+                <img
+                  key={src + index}
+                  src={src}
+                  alt={`${title} photo ${index + 1}`}
+                  style={{
+                    width: "100%",
+                    height: 220,
+                    objectFit: "cover",
+                    borderRadius: 18,
+                    border: "1px solid rgba(148,163,184,.18)",
+                  }}
+                />
               ))}
             </div>
-          ) : (
-            <div style={{ ...softCard, marginTop: 16, color: "#cbd5e1" }}>No photos resolved from this opportunity payload.</div>
-          )}
+          ) : null}
         </section>
       </div>
     </main>
