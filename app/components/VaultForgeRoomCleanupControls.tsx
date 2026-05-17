@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   applyRoomAction,
   clean,
@@ -86,6 +86,19 @@ const chip: React.CSSProperties = {
   fontSize: 12,
 };
 
+function readLocalRecord(kind: string, id: string) {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem("vaultforge_5s_room_registry_v1") || "{}";
+    const rows = JSON.parse(raw);
+    const key = `${roomKind(kind)}:${clean(id) || "unknown"}`;
+    return rows?.[key] || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function VaultForgeRoomCleanupControls({
   roomId = "",
   roomTitle = "",
@@ -102,21 +115,33 @@ export default function VaultForgeRoomCleanupControls({
   const type = clean(providedType) || roomType(resolvedKind);
   const source = clean(sourceRoute) || roomRoute(resolvedKind, id);
 
-  const initial = useMemo(
-    () =>
-      upsertRoom({
-        room_id: id,
-        room_title: title,
-        room_type: type,
-        room_kind: resolvedKind,
-        folder: clean(folder) || roomFolder(resolvedKind),
-        source_route: source,
-      }),
-    [id, title, type, resolvedKind, folder, source]
-  );
+  const initial = useMemo(() => {
+    const existing = readLocalRecord(resolvedKind, id);
+
+    return upsertRoom({
+      room_id: id,
+      room_title: existing?.room_title || title,
+      room_type: existing?.room_type || type,
+      room_kind: existing?.room_kind || resolvedKind,
+      folder: existing?.folder || clean(folder) || roomFolder(resolvedKind),
+      source_route: existing?.source_route || source,
+      status: existing?.status,
+      saved: existing?.saved,
+      archived: existing?.archived,
+      deleted: existing?.deleted,
+    });
+  }, [id, title, type, resolvedKind, folder, source]);
 
   const [record, setRecord] = useState<RoomRecord>(initial);
   const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    const existing = readLocalRecord(resolvedKind, id);
+
+    if (existing) {
+      setRecord(existing);
+    }
+  }, [resolvedKind, id]);
 
   const messageHref =
     `/messages/new?to=${encodeURIComponent(ownerEmail)}` +
@@ -132,15 +157,13 @@ export default function VaultForgeRoomCleanupControls({
     `&folder=${encodeURIComponent(record.folder)}` +
     `&source_route=${encodeURIComponent(record.source_route)}`;
 
-  function run(action: "save" | "unsave" | "archive" | "unarchive" | "delete" | "restore") {
+  function run(action: "save" | "archive" | "delete" | "restore") {
     const next = applyRoomAction(record, action);
     setRecord(next);
 
     const copy: Record<string, string> = {
       save: "Saved. It now lives in Saved Rooms.",
-      unsave: "Removed from Saved Rooms.",
       archive: "Archived. It leaves active workflow.",
-      unarchive: "Returned from Archived.",
       delete: "Deleted/hidden. It leaves normal workflow.",
       restore: "Restored to active workflow.",
     };
@@ -162,7 +185,7 @@ export default function VaultForgeRoomCleanupControls({
       if (typeof window !== "undefined") {
         window.location.href = "/deleted-rooms";
       }
-    }, 700);
+    }, 650);
   }
 
   if (record.deleted) {
@@ -243,28 +266,20 @@ export default function VaultForgeRoomCleanupControls({
       <div style={label}>5S Room Controls</div>
 
       <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>
-        Save what matters. Archive what is done. Delete/hide what should leave
-        active workflow.
+        One-way cleanup discipline: save what matters, archive what is done,
+        delete/hide what should leave active workflow.
       </p>
 
       <div
         className="vf-room-clean-actions"
         style={{ display: "flex", flexWrap: "wrap", gap: 10 }}
       >
-        <button
-          type="button"
-          onClick={() => run(record.saved ? "unsave" : "save")}
-          style={record.saved ? btn : ghost}
-        >
-          {record.saved ? "Saved" : "Save Room"}
+        <button type="button" onClick={() => run("save")} style={record.saved ? btn : ghost}>
+          Save Room
         </button>
 
-        <button
-          type="button"
-          onClick={() => run(record.archived ? "unarchive" : "archive")}
-          style={record.archived ? btn : ghost}
-        >
-          {record.archived ? "Archived" : "Archive Room"}
+        <button type="button" onClick={() => run("archive")} style={record.archived ? btn : ghost}>
+          Archive Room
         </button>
 
         <button type="button" onClick={() => run("delete")} style={danger}>
