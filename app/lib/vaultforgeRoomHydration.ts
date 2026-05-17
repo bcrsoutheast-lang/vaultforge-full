@@ -19,6 +19,8 @@ export type VaultForgeRoomRecord = {
   summary: string;
   notes: string;
   ai_summary: string;
+  ai_best_fit: string;
+  ai_next_steps: string[];
   route_reason: string;
   fit_score: string;
   asking: string;
@@ -45,46 +47,123 @@ function supabaseClient() {
 }
 
 export function clean(value: unknown) {
-  return String(value ?? "").trim();
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text || text.toLowerCase() === "null" || text.toLowerCase() === "undefined") return "";
+    return text;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  return "";
 }
 
 function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function firstText(...values: unknown[]) {
-  for (const value of values) {
-    const text = clean(value);
-    if (text && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined") return text;
+function parseJsonObject(value: unknown): Record<string, any> {
+  if (!value) return {};
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, any>;
+  if (typeof value !== "string") return {};
+
+  const text = value.trim();
+  if (!text || (!text.startsWith("{") && !text.startsWith("["))) return {};
+
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, any>;
+  } catch {
+    return {};
   }
-  return "";
+
+  return {};
 }
 
-function firstMoney(...values: unknown[]) {
-  const text = firstText(...values);
-  if (!text) return "";
-  return text.startsWith("$") ? text : text;
+function readPath(source: Record<string, any>, path: string) {
+  const parts = path.split(".");
+  let current: any = source;
+
+  for (const part of parts) {
+    if (!current || typeof current !== "object") return "";
+    current = current[part];
+  }
+
+  return current;
 }
 
-function readMeta(row: Record<string, any>) {
-  const candidates = [row.metadata, row.meta, row.payload, row.details, row.asset_specific, row.ai_payload];
-  const merged: Record<string, any> = {};
+function flattenPayload(row: Record<string, any>) {
+  const merged: Record<string, any> = { ...row };
 
-  for (const value of candidates) {
-    if (!value) continue;
-    if (typeof value === "object" && !Array.isArray(value)) Object.assign(merged, value);
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) Object.assign(merged, parsed);
-      } catch {}
-    }
+  const wrapperKeys = [
+    "metadata",
+    "meta",
+    "payload",
+    "details",
+    "asset_specific",
+    "ai_payload",
+    "analysis_payload",
+    "room_payload",
+    "source_payload",
+    "data",
+    "record",
+    "item",
+    "deal",
+    "project",
+    "pain",
+    "pressure",
+    "signal",
+    "alert",
+    "routing",
+  ];
+
+  for (const key of wrapperKeys) {
+    const objectValue = parseJsonObject(row[key]);
+    if (Object.keys(objectValue).length) Object.assign(merged, objectValue);
+  }
+
+  for (const key of wrapperKeys) {
+    const objectValue = parseJsonObject(merged[key]);
+    if (Object.keys(objectValue).length) Object.assign(merged, objectValue);
   }
 
   return merged;
 }
 
-function photoArray(...values: unknown[]) {
+function looksRaw(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return true;
+  if (trimmed.includes("\":") && trimmed.includes("{")) return true;
+  if (trimmed.length > 2200) return true;
+  return false;
+}
+
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const text = firstText(item);
+        if (text) return text;
+      }
+      continue;
+    }
+
+    if (value && typeof value === "object") continue;
+
+    const text = clean(value);
+    if (text && !looksRaw(text)) return text;
+  }
+
+  return "";
+}
+
+function moneyText(...values: unknown[]) {
+  const text = firstText(...values);
+  if (!text) return "";
+  return text;
+}
+
+function collectTextList(...values: unknown[]) {
   const out: string[] = [];
 
   function push(value: unknown) {
@@ -94,115 +173,263 @@ function photoArray(...values: unknown[]) {
       return;
     }
     if (typeof value === "object") {
-      const objectValue = value as Record<string, any>;
-      push(objectValue.url || objectValue.publicUrl || objectValue.public_url || objectValue.src);
+      const obj = value as Record<string, any>;
+      push(obj.text || obj.title || obj.label || obj.step || obj.action || obj.value);
       return;
     }
+
+    const text = clean(value);
+    if (!text || looksRaw(text)) return;
+
+    const split = text
+      .split(/\n|•|\d+\.\s+/g)
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (split.length > 1) out.push(...split);
+    else out.push(text);
+  }
+
+  values.forEach(push);
+  return Array.from(new Set(out)).slice(0, 8);
+}
+
+function photoArray(...values: unknown[]) {
+  const out: string[] = [];
+
+  function push(value: unknown) {
+    if (!value) return;
+
+    if (Array.isArray(value)) {
+      value.forEach(push);
+      return;
+    }
+
+    if (typeof value === "object") {
+      const objectValue = value as Record<string, any>;
+      push(objectValue.url || objectValue.publicUrl || objectValue.public_url || objectValue.src || objectValue.image_url || objectValue.photo_url);
+      return;
+    }
+
     const text = clean(value);
     if (!text) return;
+
     if (text.startsWith("[") || text.startsWith("{")) {
       try {
         push(JSON.parse(text));
         return;
-      } catch {}
+      } catch {
+        return;
+      }
     }
-    if (text.startsWith("http")) out.push(text);
+
+    text
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((part) => {
+        if (part.startsWith("http")) out.push(part);
+      });
   }
 
   values.forEach(push);
   return Array.from(new Set(out)).slice(0, 12);
 }
 
-function titleFrom(row: Record<string, any>, meta: Record<string, any>, fallback: string) {
+function titleFrom(row: Record<string, any>, kind: VaultForgeRoomKind) {
   return firstText(
     row.title,
     row.name,
     row.project_title,
     row.deal_title,
     row.property_title,
+    row.asset_title,
     row.pain_title,
+    row.problem_title,
     row.signal_title,
     row.alert_title,
     row.subject,
-    meta.title,
-    meta.name,
-    meta.project_title,
-    meta.deal_title,
-    meta.property_title,
-    meta.pain_title,
-    meta.signal_title,
-    meta.context_title,
+    row.headline,
+    readPath(row, "ai.title"),
+    readPath(row, "analysis.title"),
+    kind === "pressure" ? "Pressure Room" : kind === "routing" ? "Routing Room" : kind === "signal" ? "Signal Room" : kind === "alert" ? "Alert Room" : "Opportunity Room"
+  );
+}
+
+function kindFromTable(table: string, requested: VaultForgeRoomKind): VaultForgeRoomKind {
+  const t = table.toLowerCase();
+  if (t.includes("pain") || t.includes("pressure")) return "pressure";
+  if (t.includes("routing") || t.includes("route")) return "routing";
+  if (t.includes("signal") || t.includes("intelligence")) return "signal";
+  if (t.includes("alert")) return "alert";
+  if (t.includes("deal") || t.includes("project") || t.includes("property")) return "opportunity";
+  return requested;
+}
+
+function roomId(row: Record<string, any>, fallback = "") {
+  return firstText(
+    row.id,
+    row.uuid,
+    row.deal_id,
+    row.project_id,
+    row.property_id,
+    row.item_id,
+    row.room_id,
+    row.signal_id,
+    row.alert_id,
+    row.routing_id,
+    row.pain_id,
+    row.pressure_id,
+    row.source_id,
+    row.source_item_id,
+    row.source_room_id,
     fallback
   );
 }
 
-export function normalizeRoom(row: Record<string, any>, kind: VaultForgeRoomKind, sourceTable: string): VaultForgeRoomRecord {
-  const meta = readMeta(row);
-  const title = titleFrom(row, meta, kind === "pressure" ? "Pressure Room" : kind === "routing" ? "Routing Room" : kind === "signal" ? "Signal Room" : "Opportunity Room");
-  const city = firstText(row.city, row.market_city, row.property_city, meta.city, meta.market_city, meta.property_city);
-  const county = firstText(row.county, row.county_name, row.market_county, meta.county, meta.county_name, meta.market_county);
-  const state = firstText(row.state, row.market_state, row.property_state, meta.state, meta.market_state, meta.property_state);
+function linkedIds(row: Record<string, any>) {
+  return Array.from(
+    new Set(
+      [
+        row.id,
+        row.uuid,
+        row.deal_id,
+        row.project_id,
+        row.property_id,
+        row.item_id,
+        row.room_id,
+        row.signal_id,
+        row.alert_id,
+        row.routing_id,
+        row.pain_id,
+        row.pressure_id,
+        row.source_id,
+        row.source_item_id,
+        row.source_room_id,
+        row.related_id,
+        row.related_room_id,
+      ]
+        .map(clean)
+        .filter(Boolean)
+    )
+  );
+}
+
+export function normalizeRoom(rowInput: Record<string, any>, requestedKind: VaultForgeRoomKind, sourceTable: string): VaultForgeRoomRecord {
+  const row = flattenPayload(rowInput || {});
+  const actualKind = kindFromTable(sourceTable, requestedKind);
+  const city = firstText(row.city, row.market_city, row.property_city, row.location_city, readPath(row, "location.city"));
+  const county = firstText(row.county, row.county_name, row.market_county, row.property_county, readPath(row, "location.county"));
+  const state = firstText(row.state, row.market_state, row.property_state, row.location_state, readPath(row, "location.state"));
   const location = [city, county, state].filter(Boolean).join(" · ");
-  const assetType = firstText(row.asset_type, row.property_type, row.deal_type, row.type, meta.asset_type, meta.property_type, meta.deal_type, meta.type, kind === "pressure" ? "Pain" : "Deal");
-  const strategy = firstText(row.strategy, row.exit_strategy, row.investment_strategy, meta.strategy, meta.exit_strategy, meta.investment_strategy);
-  const notes = firstText(row.notes, row.description, row.body, row.message, row.problem, row.situation, meta.notes, meta.description, meta.body, meta.problem, meta.situation);
-  const aiSummary = firstText(row.ai_summary, row.ai_analysis, row.summary, row.analysis, meta.ai_summary, meta.ai_analysis, meta.summary, meta.analysis);
-  const asking = firstMoney(row.asking, row.asking_price, row.price, meta.asking, meta.asking_price, meta.price);
-  const arv = firstMoney(row.arv, row.after_repair_value, row.value, meta.arv, meta.after_repair_value, meta.value);
-  const repairs = firstMoney(row.repairs, row.repair_estimate, row.rehab, meta.repairs, meta.repair_estimate, meta.rehab);
-  const capitalNeeded = firstMoney(row.capital_needed, row.capital, row.funding_needed, meta.capital_needed, meta.capital, meta.funding_needed);
-  const urgency = firstText(row.urgency, row.priority, row.severity, meta.urgency, meta.priority, meta.severity, kind === "alert" ? "Trigger" : "Review");
-  const status = firstText(row.status, row.stage, row.access_status, meta.status, meta.stage, "active");
-  const routeReason = firstText(row.route_reason, row.reason, row.match_reason, meta.route_reason, meta.reason, meta.match_reason);
-  const fitScore = firstText(row.fit_score, row.score, row.confidence, meta.fit_score, meta.score, meta.confidence);
-  const photos = photoArray(row.photos, row.photo_urls, row.photo_url, row.image_url, row.images, meta.photos, meta.photo_urls, meta.photo_url, meta.image_url, meta.images);
+
+  const aiSummary = firstText(
+    row.ai_summary,
+    row.ai_analysis,
+    row.ai_best_summary,
+    row.analysis,
+    row.executive_summary,
+    row.summary_text,
+    readPath(row, "ai.summary"),
+    readPath(row, "ai.analysis"),
+    readPath(row, "analysis.summary"),
+    readPath(row, "intelligence.summary")
+  );
+
+  const notes = firstText(
+    row.notes,
+    row.note,
+    row.description,
+    row.body,
+    row.message,
+    row.problem,
+    row.situation,
+    row.context,
+    row.private_notes,
+    readPath(row, "details.notes"),
+    readPath(row, "details.description")
+  );
+
+  const aiBestFit = firstText(
+    row.ai_best_fit,
+    row.best_fit,
+    row.member_fit,
+    row.fit_summary,
+    row.match_summary,
+    row.route_reason,
+    row.match_reason,
+    readPath(row, "ai.best_fit"),
+    readPath(row, "routing.best_fit"),
+    readPath(row, "analysis.best_fit")
+  );
+
+  const strategy = firstText(row.strategy, row.exit_strategy, row.investment_strategy, row.deal_strategy, readPath(row, "deal.strategy"));
+  const assetType = firstText(row.asset_type, row.property_type, row.deal_type, row.project_type, row.problem_type, row.pain_type, row.type, actualKind === "pressure" ? "Pain / Pressure" : "Real Estate Opportunity");
+
+  const asking = moneyText(row.asking, row.asking_price, row.price, row.purchase_price, row.list_price);
+  const arv = moneyText(row.arv, row.after_repair_value, row.value, row.estimated_value);
+  const repairs = moneyText(row.repairs, row.repair_estimate, row.rehab, row.rehab_budget, row.work_needed);
+  const capitalNeeded = moneyText(row.capital_needed, row.capital, row.funding_needed, row.gap_amount, row.amount_needed);
 
   const summaryParts = [
     aiSummary,
     notes,
+    aiBestFit ? `Best fit: ${aiBestFit}.` : "",
     location ? `Market: ${location}.` : "",
     strategy ? `Strategy: ${strategy}.` : "",
-    asking || arv || repairs ? `Numbers: asking ${asking || "not listed"}, ARV/value ${arv || "not listed"}, repairs ${repairs || "not listed"}.` : "",
+    asking || arv || repairs ? `Numbers: asking ${asking || "not listed"}, ARV/value ${arv || "not listed"}, repairs/work ${repairs || "not listed"}.` : "",
     capitalNeeded ? `Capital need: ${capitalNeeded}.` : "",
   ].filter(Boolean);
 
+  const id = roomId(row, roomId(rowInput, ""));
+
   return {
-    id: firstText(row.id, row.deal_id, row.project_id, row.item_id, row.signal_id, row.alert_id, row.routing_id, meta.id, meta.deal_id, meta.project_id, meta.item_id, meta.signal_id) || "unknown-room",
-    kind,
+    id: id || "missing-room-id",
+    kind: actualKind,
     source_table: sourceTable,
-    title,
-    subtitle: location || firstText(row.market, meta.market, "Market not listed"),
+    title: titleFrom(row, actualKind),
+    subtitle: location || firstText(row.market, row.city_state, row.location, readPath(row, "location.label"), "Market not listed"),
     city,
     county,
     state,
-    address: firstText(row.address, row.property_address, meta.address, meta.property_address),
+    address: firstText(row.address, row.property_address, row.street_address, readPath(row, "location.address")),
     asset_type: assetType,
     strategy,
-    urgency,
-    status,
-    summary: summaryParts.join(" ") || "VaultForge found this room, but the saved row is missing several detail fields. Open the source workflow and confirm title, city, state, strategy, numbers, and notes are saving into the database row.",
+    urgency: firstText(row.urgency, row.priority, row.severity, row.alert_level, actualKind === "alert" ? "Trigger" : "Review"),
+    status: firstText(row.status, row.stage, row.access_status, row.member_status, "active"),
+    summary: summaryParts.join(" ") || "VaultForge found this room, but the saved row is missing the details needed for a complete intelligence brief.",
     notes,
     ai_summary: aiSummary,
-    route_reason: routeReason,
-    fit_score: fitScore,
+    ai_best_fit: aiBestFit,
+    ai_next_steps: collectTextList(row.ai_next_steps, row.next_steps, row.recommended_actions, readPath(row, "ai.next_steps"), readPath(row, "analysis.next_steps")),
+    route_reason: firstText(row.route_reason, row.reason, row.match_reason, row.routing_reason, readPath(row, "routing.reason")),
+    fit_score: firstText(row.fit_score, row.score, row.confidence, row.match_score, readPath(row, "routing.score")),
     asking,
     arv,
     repairs,
     capital_needed: capitalNeeded,
-    photos,
-    raw: row,
+    photos: photoArray(row.photos, row.photo_urls, row.photo_url, row.image_url, row.images, row.media, row.files),
+    raw: rowInput || {},
   };
 }
 
-async function queryById(table: string, id: string) {
+async function queryByColumn(table: string, column: string, value: string) {
   const supabase = supabaseClient();
-  if (!supabase || !id) return null;
+  if (!supabase || !value) return null;
 
-  const idColumns = ["id", "deal_id", "project_id", "item_id", "signal_id", "alert_id", "routing_id"];
+  const { data, error } = await supabase.from(table).select("*").eq(column, value).limit(1).maybeSingle();
+  if (!error && data) return data as Record<string, any>;
+  return null;
+}
 
-  for (const column of idColumns) {
-    const { data, error } = await supabase.from(table).select("*").eq(column, id).limit(1).maybeSingle();
-    if (!error && data) return data as Record<string, any>;
+async function queryById(table: string, id: string) {
+  if (!id) return null;
+
+  const columns = ["id", "uuid", "deal_id", "project_id", "property_id", "item_id", "room_id", "signal_id", "alert_id", "routing_id", "pain_id", "pressure_id", "source_id", "source_item_id", "source_room_id"];
+
+  for (const column of columns) {
+    const row = await queryByColumn(table, column, id);
+    if (row) return row;
   }
 
   return null;
@@ -212,72 +439,94 @@ async function queryLatest(table: string) {
   const supabase = supabaseClient();
   if (!supabase) return [] as Record<string, any>[];
 
-  const attempts = [
-    supabase.from(table).select("*").order("created_at", { ascending: false }).limit(25),
-    supabase.from(table).select("*").order("updated_at", { ascending: false }).limit(25),
-    supabase.from(table).select("*").limit(25),
-  ];
+  const orderColumns = ["created_at", "updated_at", "inserted_at", "id"];
 
-  for (const attempt of attempts) {
-    const { data, error } = await attempt;
+  for (const column of orderColumns) {
+    const { data, error } = await supabase.from(table).select("*").order(column, { ascending: false }).limit(30);
     if (!error && Array.isArray(data)) return data as Record<string, any>[];
   }
 
+  const { data, error } = await supabase.from(table).select("*").limit(30);
+  if (!error && Array.isArray(data)) return data as Record<string, any>[];
   return [];
 }
 
-const opportunityTables = ["vf_deals", "deals", "projects", "property_cards", "vf_projects"];
+const opportunityTables = ["vf_deals", "vf_projects", "projects", "deals", "property_cards", "vf_property_cards"];
 const pressureTables = ["vf_pain_requests", "pain_requests", "vf_pain", "pain", "vf_pressure_rooms"];
+const routingTables = ["vf_routing_actions", "routing_actions", "vf_routes", "routes", "vf_signals", "signals", "vf_intelligence_signals"];
 const signalTables = ["vf_signals", "signals", "vf_intelligence_signals", "intelligence_signals", "vf_alerts", "alerts"];
-const routingTables = ["vf_routing_actions", "routing_actions", "vf_routes", "routes", "vf_signals", "signals"];
-const alertTables = ["vf_alerts", "alerts", "vf_signals", "signals", "vf_routing_actions"];
+const alertTables = ["vf_alerts", "alerts", "vf_signals", "signals", "vf_routing_actions", "routing_actions"];
 
-export async function hydrateRoom(kind: VaultForgeRoomKind, id: string) {
-  const tables =
-    kind === "pressure" ? pressureTables :
-    kind === "routing" ? routingTables :
-    kind === "signal" ? signalTables :
-    kind === "alert" ? alertTables :
-    opportunityTables;
+function tablesFor(kind: VaultForgeRoomKind) {
+  if (kind === "pressure") return pressureTables;
+  if (kind === "routing") return routingTables;
+  if (kind === "signal") return signalTables;
+  if (kind === "alert") return alertTables;
+  return opportunityTables;
+}
 
-  for (const table of tables) {
-    const row = await queryById(table, id);
-    if (row) return normalizeRoom(row, kind, table);
-  }
+async function findSourceRoom(row: Record<string, any>, requestedKind: VaultForgeRoomKind) {
+  const ids = linkedIds(flattenPayload(row));
+  const sourceTables = requestedKind === "pressure" ? pressureTables : [...opportunityTables, ...pressureTables];
 
-  if (kind === "routing" || kind === "signal" || kind === "alert") {
-    for (const table of [...opportunityTables, ...pressureTables]) {
-      const row = await queryById(table, id);
-      if (row) return normalizeRoom(row, table.includes("pain") ? "pressure" : "opportunity", table);
+  for (const id of ids) {
+    for (const table of sourceTables) {
+      const source = await queryById(table, id);
+      if (source) return { row: source, table };
     }
   }
 
   return null;
 }
 
+export async function hydrateRoom(kind: VaultForgeRoomKind, id: string) {
+  const cleanId = clean(id);
+  const primaryTables = tablesFor(kind);
+
+  for (const table of primaryTables) {
+    const row = await queryById(table, cleanId);
+    if (!row) continue;
+
+    if (kind === "routing" || kind === "signal" || kind === "alert") {
+      const source = await findSourceRoom(row, kind);
+      if (source) return normalizeRoom(source.row, kindFromTable(source.table, kind), source.table);
+    }
+
+    return normalizeRoom(row, kind, table);
+  }
+
+  for (const table of [...opportunityTables, ...pressureTables, ...signalTables, ...routingTables, ...alertTables]) {
+    const row = await queryById(table, cleanId);
+    if (row) return normalizeRoom(row, kindFromTable(table, kind), table);
+  }
+
+  return null;
+}
+
 export async function listRooms(kind?: VaultForgeRoomKind) {
-  const roomKinds: VaultForgeRoomKind[] = kind && kind !== "unknown" ? [kind] : ["opportunity", "pressure", "routing", "signal", "alert"];
+  const requestedKinds: VaultForgeRoomKind[] = kind && kind !== "unknown" ? [kind] : ["opportunity", "pressure", "routing", "signal", "alert"];
   const rooms: VaultForgeRoomRecord[] = [];
   const seen = new Set<string>();
 
-  for (const roomKind of roomKinds) {
-    const tables =
-      roomKind === "pressure" ? pressureTables :
-      roomKind === "routing" ? routingTables :
-      roomKind === "signal" ? signalTables :
-      roomKind === "alert" ? alertTables :
-      opportunityTables;
-
-    for (const table of tables) {
+  for (const requestedKind of requestedKinds) {
+    for (const table of tablesFor(requestedKind)) {
       const rows = await queryLatest(table);
+
       for (const row of rows) {
-        const normalized = normalizeRoom(row, roomKind, table);
-        const key = `${normalized.kind}:${normalized.id}:${normalized.title}`.toLowerCase();
+        let normalized = normalizeRoom(row, requestedKind, table);
+
+        if (requestedKind === "routing" || requestedKind === "signal" || requestedKind === "alert") {
+          const source = await findSourceRoom(row, requestedKind);
+          if (source) normalized = normalizeRoom(source.row, kindFromTable(source.table, requestedKind), source.table);
+        }
+
+        const key = `${normalized.kind}:${normalized.id}`.toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
         rooms.push(normalized);
       }
-      if (rooms.length >= 25) break;
+
+      if (rooms.length >= 40) break;
     }
   }
 
