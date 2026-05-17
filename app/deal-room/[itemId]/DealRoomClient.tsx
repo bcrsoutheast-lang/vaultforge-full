@@ -83,23 +83,13 @@ export default function DealRoomClient() {
         </h1>
 
         <p style={{ color: "#cbd5e1", fontSize: 20, lineHeight: 1.6 }}>
-          Old Deal Room routes now open the unified VaultForge command room so
-          cleanup, archive, save, messaging, and intelligence all run from one
-          room system.
+          Old deal room routes now open the unified VaultForge command room.
         </p>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 20 }}>
-          <Link href={href} style={btn}>
-            Open Command Room
-          </Link>
-
-          <Link href="/projects" style={ghost}>
-            Projects
-          </Link>
-
-          <Link href="/dashboard" style={ghost}>
-            Dashboard
-          </Link>
+          <Link href={href} style={btn}>Open Command Room</Link>
+          <Link href="/projects" style={ghost}>Projects</Link>
+          <Link href="/dashboard" style={ghost}>Dashboard</Link>
         </div>
       </section>
     </main>
