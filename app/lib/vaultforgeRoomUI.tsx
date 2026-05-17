@@ -99,8 +99,10 @@ function moneyish(value: string) {
   const cleanText = clean(value);
   if (!cleanText) return "";
   if (cleanText.includes("$")) return cleanText;
+
   const numeric = Number(cleanText.replace(/[^0-9.]/g, ""));
   if (!Number.isFinite(numeric) || numeric <= 0) return cleanText;
+
   return numeric.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
@@ -173,12 +175,7 @@ function roomAISummary(room: VaultForgeRoomRecord) {
 }
 
 function roomMeta(room: VaultForgeRoomRecord) {
-  return [
-    room.asset_type,
-    room.strategy,
-    room.urgency,
-    room.status,
-  ]
+  return [room.asset_type, room.strategy, room.urgency, room.status]
     .map((item) => compact(item, 32))
     .filter(Boolean)
     .slice(0, 4);
@@ -262,13 +259,17 @@ function RoomCard({ room }: { room: VaultForgeRoomRecord }) {
   return (
     <article
       style={{
-        border: `1px solid ${isPain ? "rgba(255,59,48,.30)" : "rgba(232,196,107,.24)"}`,
+        border: `1px solid ${
+          isPain ? "rgba(255,59,48,.30)" : "rgba(232,196,107,.24)"
+        }`,
         background: isPain
           ? "radial-gradient(circle at top right, rgba(255,59,48,.14), transparent 26%), linear-gradient(145deg,rgba(35,8,8,.96),rgba(2,6,23,.98))"
           : "radial-gradient(circle at top right, rgba(232,196,107,.10), transparent 26%), linear-gradient(145deg,rgba(13,17,28,.98),rgba(2,6,23,.98))",
         borderRadius: 24,
         padding: 14,
-        boxShadow: `0 18px 60px ${isPain ? "rgba(255,59,48,.10)" : "rgba(232,196,107,.08)"}`,
+        boxShadow: `0 18px 60px ${
+          isPain ? "rgba(255,59,48,.10)" : "rgba(232,196,107,.08)"
+        }`,
       }}
     >
       <div
@@ -304,7 +305,12 @@ function RoomCard({ room }: { room: VaultForgeRoomRecord }) {
             <img
               src={photo}
               alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+              }}
             />
           ) : null}
         </Link>
@@ -425,9 +431,7 @@ export function VaultForgeRoomPage({
           >
             {display.title}
           </h1>
-          <p style={{ ...muted, fontSize: 18, maxWidth: 980 }}>
-            {roomAISummary(display)}
-          </p>
+          <p style={{ ...muted, fontSize: 18, maxWidth: 980 }}>{roomAISummary(display)}</p>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginTop: 18 }}>
             <Link href={backPath(display.kind)} style={pill}>
@@ -579,7 +583,8 @@ export function VaultForgeRoomPage({
           <div style={eyebrow}>5S Room Controls</div>
           <p style={muted}>
             Save what matters. Archive what is done. Hide what should leave active workflow.
-            Matching can route this room to multiple qualified buyers, operators, lenders, and execution profiles.
+            VaultForge matching may route this room to multiple qualified buyers, operators, lenders,
+            capital partners, and execution profiles at the same time.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             <Link href="/saved-rooms" style={pill}>
@@ -609,7 +614,7 @@ export function VaultForgeRoomListPage({
   kind: VaultForgeRoomKind;
   rooms: VaultForgeRoomRecord[];
 }) {
-  const cleanRooms = rooms.filter((room) => room.kind === kind || (kind === "opportunity" && room.kind === "opportunity"));
+  const cleanRooms = rooms.filter((room) => room.kind === kind);
 
   return (
     <main style={page}>
@@ -627,6 +632,11 @@ export function VaultForgeRoomListPage({
             {title}
           </h1>
           <p style={{ ...muted, fontSize: 18, maxWidth: 900 }}>{subtitle}</p>
+
+          <p style={{ ...muted, fontSize: 13, marginTop: 10 }}>
+            Matching notice: rooms may route to multiple qualified buyers, lenders, operators,
+            capital partners, and execution profiles. Front cards stay clean; full intelligence lives inside.
+          </p>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginTop: 16 }}>
             <Link href="/dashboard" style={pill}>
@@ -668,7 +678,7 @@ export function VaultForgeRoomListPage({
           {!cleanRooms.length ? (
             <p style={{ ...muted, marginTop: 14 }}>
               No records resolved from the current room hydrator. If you know deals exist, the next fix is table/column alias mapping in
-              <strong> app/lib/vaultforgeRoomHydration.ts</strong>, not more UI changes.
+              <strong> app/lib/vaultforgeRoomHydration.ts</strong>, not more front-card UI.
             </p>
           ) : null}
 
