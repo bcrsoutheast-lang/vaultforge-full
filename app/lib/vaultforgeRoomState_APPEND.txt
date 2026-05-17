@@ -1,0 +1,13 @@
+
+
+export function deleteRoomForever(roomId: string) {
+  const normalized = clean(roomId);
+  if (!normalized || typeof window === "undefined") return;
+
+  const state = loadRoomState();
+
+  if (state[normalized]) {
+    delete state[normalized];
+    saveRoomState(state);
+  }
+}
