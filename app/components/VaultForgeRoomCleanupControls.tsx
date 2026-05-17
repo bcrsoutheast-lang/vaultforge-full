@@ -90,6 +90,13 @@ const chip: React.CSSProperties = {
   fontSize: 12,
 };
 
+function folderTarget(action: "save" | "archive" | "delete" | "restore") {
+  if (action === "save") return "/saved-rooms";
+  if (action === "archive") return "/archived-rooms";
+  if (action === "delete") return "/deleted-rooms";
+  return "";
+}
+
 export default function VaultForgeRoomCleanupControls({
   roomId = "",
   roomTitle = "",
@@ -152,15 +159,23 @@ export default function VaultForgeRoomCleanupControls({
     `&folder=${encodeURIComponent(record.folder)}` +
     `&source_route=${encodeURIComponent(record.source_route)}`;
 
+  function redirectTo(href: string) {
+    if (!href || typeof window === "undefined") return;
+
+    window.setTimeout(() => {
+      window.location.href = href;
+    }, 450);
+  }
+
   function run(action: "save" | "archive" | "delete" | "restore") {
     const next = applyRoomAction(record, action);
     setRecord(next);
 
     const copy: Record<string, string> = {
-      save: "Saved. Room moved out of Active and into Saved.",
-      archive: "Archived. Room moved out of Active and into Archived.",
-      delete: "Deleted/hidden. Room moved out of Active and into Deleted.",
-      restore: "Restored. Room returned to Active.",
+      save: "Saved. Leaving this room and opening Saved Rooms.",
+      archive: "Archived. Leaving this room and opening Archived Rooms.",
+      delete: "Deleted/hidden. Leaving this room and opening Deleted Rooms.",
+      restore: "Restored. Returning to the active lane.",
     };
 
     setStatus(copy[action]);
@@ -170,34 +185,59 @@ export default function VaultForgeRoomCleanupControls({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, ...next }),
     }).catch(() => {});
+
+    const target = action === "restore" ? laneHref : folderTarget(action);
+    redirectTo(target);
   }
 
   function hardDelete() {
     deleteRoomForever(record.room_id);
     setStatus("Permanently removed from the 5S command system.");
 
-    setTimeout(() => {
-      if (typeof window !== "undefined") window.location.href = "/deleted-rooms";
-    }, 650);
+    redirectTo("/deleted-rooms");
   }
 
   if (record.deleted) {
     return (
       <section style={{ ...shell, borderColor: "rgba(248,113,113,.48)" }}>
         <div style={label}>5S Deleted Cell</div>
-        <h3 style={{ margin: "10px 0", fontSize: "clamp(34px,7vw,64px)", lineHeight: .9, letterSpacing: "-.06em" }}>
+
+        <h3
+          style={{
+            margin: "10px 0",
+            fontSize: "clamp(34px,7vw,64px)",
+            lineHeight: 0.9,
+            letterSpacing: "-.06em",
+          }}
+        >
           Removed from active flow.
         </h3>
+
         <p style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
-          Restore it if it belongs back in execution. Permanently delete it when the room should leave the command system completely.
+          Restore it if it belongs back in execution. Permanently delete it when
+          the room should leave the command system completely.
         </p>
 
         <div className="vf-room-clean-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          <button type="button" onClick={() => run("restore")} style={btn}>Restore To Active</button>
-          <button type="button" onClick={hardDelete} style={redSolid}>Permanent Delete</button>
-          <Link href="/deleted-rooms" style={ghost}>Deleted Folder</Link>
-          <Link href={laneHref} style={ghost}>Back To Lane</Link>
-          <Link href="/dashboard" style={ghost}>Command</Link>
+          <button type="button" onClick={() => run("restore")} style={btn}>
+            Restore To Active
+          </button>
+
+          <button type="button" onClick={hardDelete} style={redSolid}>
+            Permanent Delete
+          </button>
+
+          <Link href="/deleted-rooms" style={ghost}>
+            Deleted Folder
+          </Link>
+
+          <Link href={laneHref} style={ghost}>
+            Back To Lane
+          </Link>
+
+          <Link href="/dashboard" style={ghost}>
+            Command
+          </Link>
         </div>
 
         {status ? <p style={{ color: "#f8e7b0", fontWeight: 900 }}>{status}</p> : null}
@@ -213,6 +253,7 @@ export default function VaultForgeRoomCleanupControls({
             display: grid !important;
             grid-template-columns: 1fr !important;
           }
+
           .vf-room-clean-actions > * {
             width: 100%;
             box-sizing: border-box;
@@ -221,25 +262,63 @@ export default function VaultForgeRoomCleanupControls({
       `}</style>
 
       <div style={label}>5S Command Cell</div>
-      <h3 style={{ margin: "10px 0", fontSize: "clamp(34px,7vw,64px)", lineHeight: .9, letterSpacing: "-.06em" }}>
+
+      <h3
+        style={{
+          margin: "10px 0",
+          fontSize: "clamp(34px,7vw,64px)",
+          lineHeight: 0.9,
+          letterSpacing: "-.06em",
+        }}
+      >
         Clean the workflow.
       </h3>
 
       <p style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
-        Choose one action. The room leaves Active and moves into the matching folder.
+        Choose one action. The room leaves this screen and opens the matching
+        folder so you can see the move happen.
       </p>
 
       <div className="vf-room-clean-actions" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-        <button type="button" onClick={() => run("save")} style={ghost}>Save Room</button>
-        <button type="button" onClick={() => run("archive")} style={ghost}>Archive Room</button>
-        <button type="button" onClick={() => run("delete")} style={danger}>Delete / Hide Room</button>
-        <Link href={messageHref} style={btn}>Request Info / Intro</Link>
-        <Link href={messageHref} style={ghost}>Internal Thread</Link>
-        <Link href="/saved-rooms" style={ghost}>Saved Folder</Link>
-        <Link href="/archived-rooms" style={ghost}>Archived Folder</Link>
-        <Link href="/deleted-rooms" style={ghost}>Deleted Folder</Link>
-        <Link href={laneHref} style={ghost}>Back To Lane</Link>
-        <Link href="/dashboard" style={ghost}>Command</Link>
+        <button type="button" onClick={() => run("save")} style={ghost}>
+          Save Room
+        </button>
+
+        <button type="button" onClick={() => run("archive")} style={ghost}>
+          Archive Room
+        </button>
+
+        <button type="button" onClick={() => run("delete")} style={danger}>
+          Delete / Hide Room
+        </button>
+
+        <Link href={messageHref} style={btn}>
+          Request Info / Intro
+        </Link>
+
+        <Link href={messageHref} style={ghost}>
+          Internal Thread
+        </Link>
+
+        <Link href="/saved-rooms" style={ghost}>
+          Saved Folder
+        </Link>
+
+        <Link href="/archived-rooms" style={ghost}>
+          Archived Folder
+        </Link>
+
+        <Link href="/deleted-rooms" style={ghost}>
+          Deleted Folder
+        </Link>
+
+        <Link href={laneHref} style={ghost}>
+          Back To Lane
+        </Link>
+
+        <Link href="/dashboard" style={ghost}>
+          Command
+        </Link>
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
