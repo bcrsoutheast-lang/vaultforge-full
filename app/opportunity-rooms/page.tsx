@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import VaultForgeCommandShell from "../components/VaultForgeCommandShell";
+import { roomActionStatus } from "../lib/vaultforgeRoomState";
 
 type Room = Record<string, any>;
 
@@ -144,7 +145,7 @@ function strategyOf(row: Room) {
   return first(row.strategy, row.investment_strategy, row.exit_strategy, m.strategy, m.investment_strategy, "Strategy not listed");
 }
 
-function folderOf(row: Room) {
+function dataFolderOf(row: Room) {
   const m = meta(row);
   const text = [
     row.folder,
@@ -164,17 +165,25 @@ function folderOf(row: Room) {
     .map(lower)
     .join(" ");
 
-  if (text.includes("deleted") || text.includes("trash")) return "deleted";
-  if (text.includes("archived")) return "archived";
-  if (text.includes("saved")) return "saved";
   if (text.includes("funded") || text.includes("closed")) return "closed";
   if (text.includes("routed") || text.includes("assigned")) return "routed";
   if (text.includes("operator")) return "needs-operator";
   if (text.includes("capital") || text.includes("fund") || text.includes("lender")) return "needs-capital";
   if (text.includes("buyer")) return "needs-buyer";
   if (text.includes("underwrite") || text.includes("review")) return "underwrite";
-  if (text.includes("hot") || text.includes("urgent")) return "hot";
+  if (text.includes("hot" ) || text.includes("urgent")) return "hot";
   return "active";
+}
+
+function folderOf(row: Room, index = 0) {
+  const id = idOf(row, index);
+  const action = roomActionStatus("opportunity", id);
+
+  if (action === "saved") return "saved";
+  if (action === "archived") return "archived";
+  if (action === "deleted") return "deleted";
+
+  return dataFolderOf(row);
 }
 
 function labelFor(value: string) {
@@ -231,11 +240,12 @@ const folders = [
 ];
 
 const panel: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.22)",
+  border: "1px solid rgba(232,196,107,.28)",
   borderRadius: 30,
   padding: 24,
-  background: "linear-gradient(145deg,rgba(255,255,255,.070),rgba(255,255,255,.030))",
-  boxShadow: "0 24px 80px rgba(0,0,0,.30)",
+  background:
+    "radial-gradient(circle at top left, rgba(232,196,107,.12), transparent 36%), linear-gradient(145deg,rgba(15,23,42,.94),rgba(2,6,23,.94))",
+  boxShadow: "0 24px 80px rgba(0,0,0,.34)",
   marginBottom: 18,
 };
 
@@ -282,6 +292,7 @@ const chip: React.CSSProperties = {
 function OpportunityCard({ row, index }: { row: Room; index: number }) {
   const id = idOf(row, index);
   const title = titleOf(row);
+  const stage = folderOf(row, index);
 
   const messageHref =
     `/messages/new?to=${encodeURIComponent("bcrsoutheast@gmail.com")}` +
@@ -298,13 +309,13 @@ function OpportunityCard({ row, index }: { row: Room; index: number }) {
 
   return (
     <article style={panel}>
-      <div style={label}>{labelFor(folderOf(row))} Opportunity</div>
+      <div style={label}>{labelFor(stage)} Opportunity</div>
 
       <h2
         style={{
-          fontSize: "clamp(34px,6vw,64px)",
-          lineHeight: 0.92,
-          letterSpacing: "-.055em",
+          fontSize: "clamp(36px,7vw,72px)",
+          lineHeight: 0.88,
+          letterSpacing: "-.06em",
           margin: "10px 0 12px",
           overflowWrap: "anywhere",
         }}
@@ -316,9 +327,10 @@ function OpportunityCard({ row, index }: { row: Room; index: number }) {
         <span style={chip}>{marketOf(row)}</span>
         <span style={chip}>{assetOf(row)}</span>
         <span style={chip}>{strategyOf(row)}</span>
+        <span style={chip}>5S: {labelFor(stage)}</span>
       </div>
 
-      <p style={{ color: "#cbd5e1", lineHeight: 1.55, marginTop: 0 }}>
+      <p style={{ color: "#cbd5e1", lineHeight: 1.58, marginTop: 0, fontSize: 17 }}>
         {summaryOf(row)}
       </p>
 
@@ -343,11 +355,18 @@ export default function OpportunityRoomsPage() {
   const [folder, setFolder] = useState("active");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [status, setStatus] = useState("Loading opportunity rooms...");
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requested = clean(params.get("folder"));
     if (requested) setFolder(requested);
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => setRefreshTick((value) => value + 1);
+    window.addEventListener("vaultforge-5s-room-change", refresh);
+    return () => window.removeEventListener("vaultforge-5s-room-change", refresh);
   }, []);
 
   useEffect(() => {
@@ -376,9 +395,7 @@ export default function OpportunityRoomsPage() {
           const data = await safeJson(response);
           const rows = normalizeRows(data);
 
-          if (response.ok && rows.length) {
-            collected.push(...rows);
-          }
+          if (response.ok && rows.length) collected.push(...rows);
         } catch {
           // Try next endpoint.
         }
@@ -397,11 +414,19 @@ export default function OpportunityRoomsPage() {
 
   const filtered = useMemo(() => {
     if (folder === "active") {
-      return rooms.filter((row) => !["archived", "deleted"].includes(folderOf(row)));
+      return rooms.filter((row, index) => !["saved", "archived", "deleted"].includes(folderOf(row, index)));
     }
 
-    return rooms.filter((row) => folderOf(row) === folder);
-  }, [rooms, folder]);
+    return rooms.filter((row, index) => folderOf(row, index) === folder);
+  }, [rooms, folder, refreshTick]);
+
+  function countFor(key: string) {
+    if (key === "active") {
+      return rooms.filter((row, index) => !["saved", "archived", "deleted"].includes(folderOf(row, index))).length;
+    }
+
+    return rooms.filter((row, index) => folderOf(row, index) === key).length;
+  }
 
   return (
     <VaultForgeCommandShell
@@ -414,48 +439,29 @@ export default function OpportunityRoomsPage() {
 
         <h2
           style={{
-            fontSize: "clamp(42px,8vw,82px)",
-            lineHeight: 0.9,
-            letterSpacing: "-.06em",
+            fontSize: "clamp(44px,9vw,92px)",
+            lineHeight: 0.85,
+            letterSpacing: "-.07em",
             margin: "12px 0 16px",
           }}
         >
-          Deal-side operating lane.
+          5S deal-side operating lane.
         </h2>
 
-        <p
-          style={{
-            color: "#cbd5e1",
-            lineHeight: 1.65,
-            fontSize: 19,
-            marginTop: 0,
-            maxWidth: 920,
-          }}
-        >
-          Projects and deals live here as Opportunity Rooms. Dashboard stays clean; the actual operational cards sit inside this lane.
+        <p style={{ color: "#cbd5e1", lineHeight: 1.65, fontSize: 19, marginTop: 0, maxWidth: 920 }}>
+          Active rooms stay in front. Saved, archived, and deleted rooms leave the main workflow so the command center stays clean.
         </p>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-          <Link href="/submit" style={button}>
-            Submit Opportunity
-          </Link>
-
-          <Link href="/projects" style={ghost}>
-            Projects
-          </Link>
-
-          <Link href="/saved-rooms" style={ghost}>
-            Saved Rooms
-          </Link>
-
-          <Link href="/dashboard" style={ghost}>
-            Command
-          </Link>
+          <Link href="/submit" style={button}>Submit Opportunity</Link>
+          <Link href="/projects" style={ghost}>Projects</Link>
+          <Link href="/saved-rooms" style={ghost}>Saved Rooms</Link>
+          <Link href="/dashboard" style={ghost}>Command</Link>
         </div>
       </section>
 
       <section style={panel}>
-        <div style={label}>Opportunity Folders</div>
+        <div style={label}>Opportunity 5S Folders</div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
           {folders.map(([key, name]) => (
@@ -470,7 +476,7 @@ export default function OpportunityRoomsPage() {
                 border: folder === key ? 0 : ghost.border,
               }}
             >
-              {name} ({key === "active" ? rooms.filter((row) => !["archived", "deleted"].includes(folderOf(row))).length : rooms.filter((row) => folderOf(row) === key).length})
+              {name} ({countFor(key)})
             </button>
           ))}
         </div>
@@ -479,9 +485,7 @@ export default function OpportunityRoomsPage() {
       {status ? (
         <section style={panel}>
           <div style={label}>Empty Lane</div>
-          <p style={{ color: "#cbd5e1", lineHeight: 1.55, margin: "10px 0 0" }}>
-            {status}
-          </p>
+          <p style={{ color: "#cbd5e1", lineHeight: 1.55, margin: "10px 0 0" }}>{status}</p>
         </section>
       ) : null}
 
@@ -489,18 +493,12 @@ export default function OpportunityRoomsPage() {
         <section style={panel}>
           <div style={label}>Folder Empty</div>
           <p style={{ color: "#cbd5e1", lineHeight: 1.55, margin: "10px 0 0" }}>
-            No opportunity rooms are staged in {labelFor(folder)} yet.
+            No opportunity rooms are staged in {labelFor(folder)}.
           </p>
         </section>
       ) : null}
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
-          gap: 18,
-        }}
-      >
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 18 }}>
         {filtered.map((row, index) => (
           <OpportunityCard key={`${idOf(row, index)}-${index}`} row={row} index={index} />
         ))}
