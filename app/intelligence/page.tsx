@@ -13,7 +13,7 @@ export default async function IntelligencePage() {
   return (
     <VaultForgeRoomListPage
       title="Intelligence."
-      subtitle="The intelligence lane now hydrates real signal/project/pressure payloads instead of only showing framework text."
+      subtitle="The intelligence lane hydrates real signal, project, and pressure payloads into clean AI briefs instead of raw JSON or framework text."
       kind="signal"
       rooms={rooms}
     />
