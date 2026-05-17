@@ -1,169 +1,140 @@
 import Link from "next/link";
-import VaultForgeCommandShell from "../components/VaultForgeCommandShell";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const laneCard: React.CSSProperties = {
-  border: "1px solid rgba(245,197,91,.22)",
-  background: "linear-gradient(145deg,rgba(16,24,36,.92),rgba(2,6,23,.98))",
-  borderRadius: 24,
-  padding: 18,
-  boxShadow: "0 22px 60px rgba(0,0,0,.26)",
-};
-
-const redLaneCard: React.CSSProperties = {
-  ...laneCard,
-  border: "1px solid rgba(239,68,68,.28)",
-  background: "linear-gradient(145deg,rgba(35,8,8,.94),rgba(2,6,23,.98))",
-};
-
-const button: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  textDecoration: "none",
-  color: "#111827",
-  background: "linear-gradient(135deg,#fde68a,#e8c46b)",
-  borderRadius: 999,
-  padding: "12px 15px",
-  fontWeight: 950,
-};
-
-const ghost: React.CSSProperties = {
-  ...button,
-  color: "#f8fafc",
-  background: "rgba(255,255,255,.06)",
-  border: "1px solid rgba(255,255,255,.14)",
-};
-
 export default function DashboardPage() {
   return (
-    <VaultForgeCommandShell
-      active="dashboard"
-      eyebrow="VAULTFORGE MEMBER COMMAND"
-      title="Two lanes. No clutter."
-      subtitle="Deal Rooms handle opportunities. Pain is the intake. Pain Rooms handle execution problems. Alerts, routing, intelligence, profiles, and messages attach inside rooms."
-    >
-      <section style={{ display: "grid", gap: 14 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-            gap: 14,
-          }}
-        >
-          <article style={laneCard}>
-            <div
-              style={{
-                color: "#f5c55b",
-                fontSize: 12,
-                fontWeight: 950,
-                letterSpacing: ".16em",
-                textTransform: "uppercase",
-              }}
-            >
-              DEAL LANE
-            </div>
+    <main className="vf-page">
+      <style>{`
+        .vf-page{
+          min-height:100vh;
+          background:
+            radial-gradient(circle at top left,rgba(245,197,91,.12),transparent 30%),
+            radial-gradient(circle at top right,rgba(239,68,68,.12),transparent 28%),
+            linear-gradient(180deg,#02040a,#071018 52%,#02040a);
+          color:#fff;
+          padding:22px 14px 80px;
+          font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif
+        }
 
-            <h2
-              style={{
-                fontSize: "clamp(36px,7vw,64px)",
-                lineHeight: ".9",
-                letterSpacing: "-.07em",
-                margin: "12px 0",
-              }}
-            >
-              Deal Rooms
-            </h2>
+        .vf-wrap{
+          max-width:1180px;
+          margin:0 auto;
+          display:grid;
+          gap:16px
+        }
 
-            <p style={{ color: "#cbd5e1", lineHeight: 1.55 }}>
-              One lane for all deals, projects, opportunities, properties, underwriting, buyer fit,
-              capital fit, and operator routing.
-            </p>
+        .vf-hero,.vf-card{
+          border:1px solid rgba(245,197,91,.24);
+          background:linear-gradient(145deg,rgba(16,24,36,.94),rgba(2,6,23,.98));
+          border-radius:24px;
+          padding:20px;
+          box-shadow:0 24px 70px rgba(0,0,0,.28)
+        }
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-              <Link href="/deal-rooms" style={button}>
-                Open Deal Rooms
-              </Link>
+        .vf-kicker{
+          color:#f5c55b;
+          font-size:12px;
+          font-weight:950;
+          letter-spacing:.16em;
+          text-transform:uppercase
+        }
 
-              <Link href="/submit" style={ghost}>
-                Create Deal
-              </Link>
-            </div>
-          </article>
+        h1{
+          font-size:clamp(44px,9vw,88px);
+          line-height:.9;
+          letter-spacing:-.07em;
+          margin:10px 0 12px
+        }
 
-          <article style={redLaneCard}>
-            <div
-              style={{
-                color: "#fca5a5",
-                fontSize: 12,
-                fontWeight: 950,
-                letterSpacing: ".16em",
-                textTransform: "uppercase",
-              }}
-            >
-              PAIN EXECUTION
-            </div>
+        p{
+          color:#cbd5e1;
+          font-size:18px;
+          line-height:1.5;
+          max-width:920px
+        }
 
-            <h2
-              style={{
-                fontSize: "clamp(36px,7vw,64px)",
-                lineHeight: ".9",
-                letterSpacing: "-.07em",
-                margin: "12px 0",
-              }}
-            >
-              Pain + Pain Rooms
-            </h2>
+        .vf-grid{
+          display:grid;
+          grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+          gap:14px
+        }
 
-            <p style={{ color: "#fee2e2", lineHeight: 1.55 }}>
-              Pain is the intake form. Pain Rooms are the execution lane for distress, funding gaps,
-              operator problems, stalled projects, and urgent pressure.
-            </p>
+        .vf-card.pain{
+          border-color:rgba(239,68,68,.28);
+          background:linear-gradient(145deg,rgba(35,8,8,.94),rgba(2,6,23,.98))
+        }
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-              <Link href="/pain" style={button}>
-                Submit Pain
-              </Link>
+        .vf-card h2{
+          font-size:clamp(34px,7vw,62px);
+          line-height:.9;
+          letter-spacing:-.07em;
+          margin:10px 0
+        }
 
-              <Link href="/pain-rooms" style={ghost}>
-                Open Pain Rooms
-              </Link>
-            </div>
-          </article>
-        </div>
+        .vf-actions{
+          display:flex;
+          flex-wrap:wrap;
+          gap:10px;
+          margin-top:16px
+        }
 
-        <article style={laneCard}>
-          <div
-            style={{
-              color: "#f5c55b",
-              fontSize: 12,
-              fontWeight: 950,
-              letterSpacing: ".16em",
-              textTransform: "uppercase",
-            }}
-          >
-            5S OPERATING RULE
-          </div>
+        .vf-actions a{
+          color:#f8fafc;
+          text-decoration:none;
+          border:1px solid rgba(245,197,91,.25);
+          background:rgba(245,197,91,.07);
+          border-radius:999px;
+          padding:11px 14px;
+          font-weight:900;
+          font-size:13px
+        }
 
-          <h2
-            style={{
-              fontSize: "clamp(32px,6vw,54px)",
-              lineHeight: ".95",
-              letterSpacing: "-.06em",
-              margin: "12px 0",
-            }}
-          >
-            No Opportunity. No Projects. No Pain Feed.
-          </h2>
+        .vf-actions a.primary{
+          background:linear-gradient(135deg,#fde68a,#e8c46b);
+          color:#111827;
+          border:0
+        }
+      `}</style>
 
-          <p style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
-            Those old lanes are retired from the member product. They redirect into Deal Rooms or Pain Rooms.
-            Alerts, routing, intelligence, signals, scoring, and profiles are not separate lanes. They live inside rooms.
+      <div className="vf-wrap">
+        <section className="vf-hero">
+          <div className="vf-kicker">VaultForge Reset Dashboard</div>
+          <h1>Clean Product Reset</h1>
+          <p>
+            One room system. Deal Rooms and Pain Rooms live together under Rooms.
+            Pain stays as the intake form. Old Opportunity, Projects, Pain Feed, and Pressure screens are retired.
           </p>
-        </article>
-      </section>
-    </VaultForgeCommandShell>
+          <div className="vf-actions">
+            <Link href="/rooms" className="primary">Open Rooms</Link>
+            <Link href="/pain">Submit Pain</Link>
+            <Link href="/message-command">Messages</Link>
+          </div>
+        </section>
+
+        <section className="vf-grid">
+          <article className="vf-card">
+            <div className="vf-kicker">Deal Rooms</div>
+            <h2>Deals</h2>
+            <p>All deals, projects, opportunities, properties, and investments feed into one room system.</p>
+            <div className="vf-actions">
+              <Link href="/rooms" className="primary">Open Rooms</Link>
+              <Link href="/submit">Create Deal</Link>
+            </div>
+          </article>
+
+          <article className="vf-card pain">
+            <div className="vf-kicker" style={{color:"#fca5a5"}}>Pain Execution</div>
+            <h2>Pain</h2>
+            <p>Pain is intake. Pain Rooms are the execution lane for pressure, distress, funding gaps, and blockers.</p>
+            <div className="vf-actions">
+              <Link href="/pain" className="primary">Submit Pain</Link>
+              <Link href="/rooms">Open Pain Rooms</Link>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
   );
 }
