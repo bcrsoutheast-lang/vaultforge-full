@@ -1,29 +1,13 @@
-"use client";
+import { hydrateRoom } from "../../lib/vaultforgeRoomHydration";
+import { VaultForgeRoomPage } from "../../lib/vaultforgeRoomUI";
 
-import { useEffect } from "react";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
+type Params = Promise<{ id: string }>;
 
-export default function OpportunityRoomRedirect() {
-  useEffect(() => {
-    const parts = window.location.pathname.split("/").filter(Boolean);
-    const id = decodeURIComponent(clean(parts[parts.length - 1]));
-    const query = new URLSearchParams(window.location.search);
-    const finalId = clean(query.get("id")) || id;
-
-    if (finalId) {
-      window.location.replace(`/deal/detail?id=${encodeURIComponent(finalId)}`);
-      return;
-    }
-
-    window.location.replace("/opportunity-rooms");
-  }, []);
-
-  return (
-    <main style={{ minHeight: "100vh", background: "#020303", color: "white", padding: 30, fontFamily: "Arial, sans-serif" }}>
-      Opening Opportunity Room...
-    </main>
-  );
+export default async function OpportunityRoomPage({ params }: { params: Params }) {
+  const { id } = await params;
+  const room = await hydrateRoom("opportunity", id);
+  return <VaultForgeRoomPage room={room} kind="opportunity" id={id} />;
 }
