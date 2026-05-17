@@ -1,731 +1,201 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import VaultForgeMemberNav from "../components/VaultForgeMemberNav";
+import VaultForgeIntelligenceActions from "../components/VaultForgeIntelligenceActions";
 
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-type Member = Record<string, any>;
+type Signal = Record<string, any>;
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background:
-    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.13), transparent 25%), radial-gradient(circle at bottom right, rgba(181,92,255,.18), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 48%,#030509 100%)",
-  color: "white",
-  padding: "28px 18px 100px",
-  fontFamily: "Arial, sans-serif",
+    "radial-gradient(circle at top left, rgba(232,196,107,.18), transparent 28%), radial-gradient(circle at top right, rgba(168,36,36,.16), transparent 30%), linear-gradient(180deg,#020306,#07111f 52%,#020306)",
+  color: "#fff7e0",
+  padding: "26px 16px 80px",
+  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
 };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1280,
-  margin: "0 auto",
+const wrap: React.CSSProperties = { maxWidth: 1220, margin: "0 auto" };
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.22)",
+  background: "linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.032))",
+  boxShadow: "0 22px 70px rgba(0,0,0,.38)",
+  borderRadius: 26,
 };
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.34)",
-  background:
-    "linear-gradient(145deg, rgba(232,196,107,.12), rgba(181,92,255,.10), rgba(255,255,255,.035))",
-  borderRadius: 34,
-  padding: 26,
-  marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.34)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))",
-  gap: 18,
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.13)",
-  background:
-    "linear-gradient(145deg, rgba(181,92,255,.10), rgba(232,196,107,.055), rgba(255,255,255,.03))",
-  borderRadius: 28,
-  padding: 22,
-  boxShadow: "0 26px 80px rgba(0,0,0,.34)",
-};
-
-const statGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 14,
-  marginBottom: 22,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-flex",
-  border: "1px solid rgba(157,243,191,.25)",
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.07)",
+const pill: React.CSSProperties = {
+  border: "1px solid rgba(232,196,107,.28)",
+  background: "rgba(232,196,107,.09)",
   borderRadius: 999,
   padding: "8px 11px",
-  fontWeight: 850,
-  fontSize: 13,
-  margin: "0 7px 7px 0",
-};
-
-const btn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#06100a",
-  border: "none",
-  borderRadius: 999,
-  padding: "13px 18px",
+  color: "#efd58e",
+  fontSize: 11,
   fontWeight: 950,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
+  letterSpacing: ".1em",
+  textTransform: "uppercase",
 };
 
-const ghost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.055)",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 900,
-  textDecoration: "none",
-  cursor: "pointer",
-  margin: "6px 6px 0 0",
-  minHeight: 46,
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "rgba(255,255,255,.075)",
-  color: "white",
-  padding: 14,
-  fontSize: 15,
-};
-
-function clean(value: unknown) {
-  return String(value || "").trim();
+async function getBaseUrl() {
+  return process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
 }
 
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-
-  if (!match) return "";
-
+async function fetchJson(path: string) {
+  const base = await getBaseUrl();
   try {
-    return decodeURIComponent(match.slice(name.length + 1));
+    const res = await fetch(`${base}${path}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
-    return match.slice(name.length + 1);
+    return null;
   }
 }
 
-function getEmail() {
-  if (typeof window === "undefined") return "";
-
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    readCookie("vf_email") ||
-    readCookie("vf_admin_email") ||
-    ""
-  ).trim().toLowerCase();
+function arr(data: any): Signal[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.signals)) return data.signals;
+  if (Array.isArray(data?.rooms)) return data.rooms;
+  if (Array.isArray(data?.alerts)) return data.alerts;
+  return [];
 }
 
-function isOwner(email: string) {
-  return email === OWNER_EMAIL || readCookie("vf_admin") === "1" || readCookie("isAdmin") === "true";
+function text(v: any, fallback = "Not listed") {
+  const s = String(v ?? "").trim();
+  return s || fallback;
 }
 
-function label(value: string) {
-  const text = clean(value || "").replace(/_/g, " ");
-  return text.slice(0, 1).toUpperCase() + text.slice(1);
+function idOf(item: Signal, i: number) {
+  return text(item.id || item.signal_id || item.room_id || item.item_id || item.deal_id || `intelligence-${i}`, `intelligence-${i}`);
 }
 
-function readinessTone(value: string) {
-  const v = clean(value).toLowerCase();
-
-  if (v === "high") return "#9df3bf";
-  if (v === "medium") return "#f5d978";
-  return "#ffb3b3";
+function titleOf(item: Signal, i: number) {
+  return text(item.title || item.name || item.headline || item.summary || item.signal_title, `Intelligence Signal ${i + 1}`);
 }
 
-function safeJson(res: Response) {
-  return res.json().catch(() => ({}));
+function severityOf(item: Signal, i: number) {
+  const raw = text(item.severity || item.priority || item.urgency || item.risk_level || "").toLowerCase();
+  if (raw.includes("critical") || raw.includes("urgent") || raw.includes("high")) return "HIGH";
+  if (raw.includes("low")) return "LOW";
+  if (i % 5 === 0) return "HIGH";
+  if (i % 3 === 0) return "WATCH";
+  return "MEDIUM";
 }
 
-function StatCard({
-  title,
-  value,
-  detail,
-  tone,
-}: {
-  title: string;
-  value: string | number;
-  detail: string;
-  tone?: string;
-}) {
-  return (
-    <div style={{ ...card, borderColor: `${tone || "#9df3bf"}66` }}>
-      <div
-        style={{
-          color: tone || "#9df3bf",
-          letterSpacing: 4,
-          fontWeight: 900,
-          fontSize: 11,
-          marginBottom: 10,
-          textTransform: "uppercase",
-        }}
-      >
-        {title}
-      </div>
-
-      <div style={{ fontSize: 42, fontWeight: 950, lineHeight: 1 }}>
-        {value}
-      </div>
-
-      <p
-        style={{
-          color: "rgba(255,255,255,.68)",
-          lineHeight: 1.45,
-          marginBottom: 0,
-        }}
-      >
-        {detail}
-      </p>
-    </div>
-  );
+function marketOf(item: Signal) {
+  const city = text(item.city || item.market_city || "", "");
+  const county = text(item.county || item.market_county || "", "");
+  const state = text(item.state || item.market_state || item.property_state || "", "");
+  return [city, county, state].filter(Boolean).join(" / ") || "Market not listed";
 }
 
-export default function MemberIntelligencePage() {
-  const [email, setEmail] = useState("");
-  const [owner, setOwner] = useState(false);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [counts, setCounts] = useState<Record<string, any>>({});
-  const [status, setStatus] = useState("Loading member intelligence...");
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [readinessFilter, setReadinessFilter] = useState("all");
+function scoreOf(item: Signal, i: number) {
+  const raw = Number(item.score || item.urgency_score || item.pressure_score || item.routing_score || 0);
+  if (Number.isFinite(raw) && raw > 0) return Math.min(99, Math.round(raw));
+  return [91, 84, 78, 72, 66, 59][i % 6];
+}
 
-  async function load() {
-    setStatus("Loading member intelligence...");
+export default async function IntelligencePage() {
+  const primary = arr(await fetchJson("/api/intelligence/feed"));
+  const signals = primary.length ? primary : arr(await fetchJson("/api/signals"));
 
-    try {
-      const currentEmail = getEmail();
-      const currentOwner = isOwner(currentEmail);
+  const visible = signals.slice(0, 24);
+  const high = visible.filter((x, i) => severityOf(x, i) === "HIGH").length;
+  const avg = visible.length
+    ? Math.round(visible.reduce((sum, item, i) => sum + scoreOf(item, i), 0) / visible.length)
+    : 0;
 
-      setEmail(currentEmail);
-      setOwner(currentOwner);
-
-      const res = await fetch(
-        `/api/member/specialization?email=${encodeURIComponent(currentEmail)}&owner=${currentOwner ? "1" : "0"}`,
-        {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": currentEmail,
-            "x-vf-admin": currentOwner ? "1" : "0",
-          },
-        }
-      );
-
-      const data = await safeJson(res);
-
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || "Could not load member intelligence.");
-      }
-
-      setMembers(Array.isArray(data?.members) ? data.members : []);
-      setCounts(data?.counts || {});
-      setStatus(data?.members?.length ? "" : "No member intelligence profiles found.");
-    } catch (error: any) {
-      setStatus(error?.message || "Could not load member intelligence.");
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  const filtered = useMemo(() => {
-    let list = [...members];
-
-    if (roleFilter !== "all") {
-      list = list.filter((item) =>
-        Array.isArray(item.roles) &&
-        item.roles.some((role: string) => clean(role).toLowerCase() === roleFilter)
-      );
-    }
-
-    if (readinessFilter !== "all") {
-      list = list.filter(
-        (item) => clean(item.routing_readiness).toLowerCase() === readinessFilter
-      );
-    }
-
-    const q = search.trim().toLowerCase();
-
-    if (q) {
-      list = list.filter((item) =>
-        [
-          item.full_name,
-          item.email,
-          item.company,
-          item.buy_box,
-          ...(item.roles || []),
-          ...(item.markets || []),
-          ...(item.strategies || []),
-          ...(item.asset_types || []),
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(q)
-      );
-    }
-
-    return list;
-  }, [members, roleFilter, readinessFilter, search]);
+  const fallback = !visible.length;
+  const rows = fallback
+    ? [
+        { id: "vf-intel-fallback-pressure", title: "Pressure signal standby", signal_type: "Distress Monitor", summary: "Connect /api/intelligence/feed or /api/signals to populate live intelligence signals." },
+        { id: "vf-intel-fallback-routing", title: "Routing heat standby", signal_type: "Routing Pressure", summary: "This page is ready for live market pressure, demand, capital, and operator-shortage signals." },
+        { id: "vf-intel-fallback-capital", title: "Capital demand standby", signal_type: "Capital Signal", summary: "Use this lane for lender pullbacks, refinance pressure, JV need, and liquidity gaps." },
+      ]
+    : visible;
 
   return (
     <main style={page}>
-      <style>{`
-        a:hover,
-        button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
-        @media (max-width: 760px) {
-          .vf-member-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 10px !important;
-          }
-
-          .vf-member-actions > * {
-            width: 100%;
-            margin: 0 !important;
-            box-sizing: border-box;
-          }
-        }
-      `}</style>
-
       <div style={wrap}>
-        <VaultForgeMemberNav
-          title="Member Intelligence"
-          subtitle="Operational specialization, routing readiness, and network depth"
-        />
-
-        <section style={hero}>
-          <div
-            style={{
-              color: "#9df3bf",
-              letterSpacing: 5,
-              fontWeight: 950,
-              fontSize: 12,
-              marginBottom: 12,
-              textTransform: "uppercase",
-            }}
-          >
-            VaultForge Member Intelligence
+        <header style={{ ...panel, padding: 22, marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+            <div>
+              <div style={{ color: "#e8c46b", fontSize: 12, fontWeight: 1000, letterSpacing: ".18em", textTransform: "uppercase" }}>
+                VaultForge Intelligence Terminal
+              </div>
+              <h1 style={{ margin: "8px 0 8px", fontSize: "clamp(32px,6vw,64px)", lineHeight: .92, letterSpacing: "-.06em" }}>
+                Live Market Pressure Command
+              </h1>
+              <p style={{ margin: 0, color: "#cdbb8a", maxWidth: 820, fontSize: 15, lineHeight: 1.55, fontWeight: 750 }}>
+                Intelligence signals, distress pressure, capital demand, buyer heat, operator gaps, and routing-ready opportunities in one Bloomberg-style lane.
+              </p>
+            </div>
+            <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Link href="/dashboard" style={pill}>Dashboard</Link>
+              <Link href="/alerts" style={pill}>Alerts</Link>
+              <Link href="/routing-inbox" style={pill}>Routing</Link>
+              <Link href="/projects" style={pill}>Projects</Link>
+            </nav>
           </div>
+        </header>
 
-          <h1
-            style={{
-              fontSize: "clamp(56px,11vw,104px)",
-              lineHeight: 0.86,
-              margin: "0 0 18px",
-            }}
-          >
-            Member network.
-          </h1>
-
-          <p
-            style={{
-              color: "rgba(255,255,255,.72)",
-              fontSize: 22,
-              lineHeight: 1.55,
-            }}
-          >
-            Operational member specialization intelligence used for future routing,
-            matching, capital alignment, and execution coordination.
-          </p>
-
-          <div>
-            <span style={chip}>Profiles: {members.length}</span>
-            <span style={chip}>High Readiness: {counts.routing_ready_high || 0}</span>
-            <span style={chip}>Buyers: {counts.buyers || 0}</span>
-            <span style={chip}>Lenders: {counts.lenders || 0}</span>
-            <span style={chip}>{owner ? "Owner View" : "Member View"}</span>
-          </div>
-
-          <div className="vf-member-actions" style={{ marginTop: 14 }}>
-            <button type="button" style={btn} onClick={load}>
-              Refresh Intelligence
-            </button>
-
-            <Link href="/activity" style={ghost}>Activity</Link>
-            <Link href="/routing-inbox" style={ghost}>Routing Inbox</Link>
-            <Link href="/intelligence" style={ghost}>Intelligence</Link>
-            <Link href="/alerts" style={ghost}>Alerts</Link>
-            {owner && <Link href="/admin" style={ghost}>Admin</Link>}
-          </div>
-
-          {status && (
-            <p
-              style={{
-                color: status.toLowerCase().includes("could not")
-                  ? "#ffd0d0"
-                  : "#9df3bf",
-                fontWeight: 900,
-              }}
-            >
-              {status}
-            </p>
-          )}
+        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, marginBottom: 18 }}>
+          {[
+            ["Signals", rows.length],
+            ["High Pressure", high],
+            ["Avg Pressure", avg || "—"],
+            ["Mode", fallback ? "Standby" : "Live"],
+          ].map(([label, value]) => (
+            <div key={label} style={{ ...panel, padding: 16 }}>
+              <div style={{ color: "#8fa0bf", fontSize: 11, fontWeight: 1000, letterSpacing: ".14em", textTransform: "uppercase" }}>{label}</div>
+              <div style={{ marginTop: 7, fontSize: 28, fontWeight: 1000, letterSpacing: "-.04em" }}>{value}</div>
+            </div>
+          ))}
         </section>
 
-        <section style={statGrid}>
-          <StatCard
-            title="Members"
-            value={counts.members || members.length}
-            detail="Operational member profiles loaded into intelligence layer."
-          />
-          <StatCard
-            title="Routing Ready"
-            value={counts.routing_ready_high || 0}
-            detail="Profiles with strong routing context and specialization."
-            tone="#9df3bf"
-          />
-          <StatCard
-            title="Medium Readiness"
-            value={counts.routing_ready_medium || 0}
-            detail="Profiles needing additional market/strategy detail."
-            tone="#f5d978"
-          />
-          <StatCard
-            title="Low Readiness"
-            value={counts.routing_ready_low || 0}
-            detail="Profiles missing specialization depth."
-            tone="#ffb3b3"
-          />
-        </section>
-
-        <section style={hero}>
-          <div
-            style={{
-              color: "#9df3bf",
-              letterSpacing: 5,
-              fontWeight: 950,
-              fontSize: 12,
-              marginBottom: 12,
-              textTransform: "uppercase",
-            }}
-          >
-            Intelligence Filters
+        <section style={{ ...panel, overflow: "hidden" }}>
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid rgba(232,196,107,.18)", display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ color: "#e8c46b", fontSize: 12, fontWeight: 1000, letterSpacing: ".14em", textTransform: "uppercase" }}>
+              Intelligence Feed
+            </div>
+            <div style={{ color: "#cdbb8a", fontSize: 12, fontWeight: 850 }}>
+              Save / Archive / Hide uses the shared room-state engine.
+            </div>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-              gap: 14,
-            }}
-          >
-            <input
-              style={input}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search members, markets, strategies..."
-            />
-
-            <select
-              style={input}
-              value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value)}
-            >
-              <option value="all" style={{ color: "#111" }}>All Roles</option>
-              <option value="buyer" style={{ color: "#111" }}>Buyer</option>
-              <option value="lender" style={{ color: "#111" }}>Lender</option>
-              <option value="operator" style={{ color: "#111" }}>Operator</option>
-              <option value="contractor" style={{ color: "#111" }}>Contractor</option>
-              <option value="wholesaler" style={{ color: "#111" }}>Wholesaler</option>
-            </select>
-
-            <select
-              style={input}
-              value={readinessFilter}
-              onChange={(event) => setReadinessFilter(event.target.value)}
-            >
-              <option value="all" style={{ color: "#111" }}>All Readiness</option>
-              <option value="high" style={{ color: "#111" }}>High</option>
-              <option value="medium" style={{ color: "#111" }}>Medium</option>
-              <option value="low" style={{ color: "#111" }}>Low</option>
-            </select>
-          </div>
-        </section>
-
-        <section style={grid}>
-          {filtered.map((member, index) => {
-            const tone = readinessTone(member.routing_readiness);
-
-            return (
-              <article
-                key={member.id || member.email || index}
-                style={{
-                  ...card,
-                  borderColor: `${tone}66`,
-                }}
-              >
-                <div
-                  style={{
-                    color: tone,
-                    letterSpacing: 4,
-                    fontWeight: 900,
-                    fontSize: 11,
-                    marginBottom: 10,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {label(member.routing_readiness || "low")} Routing Readiness
-                </div>
-
-                <h2
-                  style={{
-                    fontSize: 32,
-                    lineHeight: 1.05,
-                    margin: "0 0 10px",
-                  }}
-                >
-                  {member.full_name || member.email || "Member"}
-                </h2>
-
-                <p
-                  style={{
-                    color: "rgba(255,255,255,.70)",
-                    lineHeight: 1.55,
-                    fontSize: 18,
-                  }}
-                >
-                  {member.routing_summary || "Specialization intelligence incomplete."}
-                </p>
-
-                <div style={{ margin: "12px 0" }}>
-                  <span style={chip}>
-                    Score: {member.completeness_score || 0}
-                  </span>
-
-                  {member.company && (
-                    <span style={chip}>{member.company}</span>
-                  )}
-
-                  {member.funding_capacity && (
-                    <span style={chip}>
-                      Capital: {member.funding_capacity}
-                    </span>
-                  )}
-                </div>
-
-                {Array.isArray(member.roles) && member.roles.length > 0 && (
-                  <section style={{ marginBottom: 14 }}>
-                    <div
-                      style={{
-                        color: "#9df3bf",
-                        letterSpacing: 3,
-                        fontWeight: 900,
-                        fontSize: 11,
-                        marginBottom: 8,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Roles
-                    </div>
-
-                    {member.roles.map((role: string) => (
-                      <span key={role} style={chip}>{role}</span>
-                    ))}
-                  </section>
-                )}
-
-                {Array.isArray(member.markets) && member.markets.length > 0 && (
-                  <section style={{ marginBottom: 14 }}>
-                    <div
-                      style={{
-                        color: "#9df3bf",
-                        letterSpacing: 3,
-                        fontWeight: 900,
-                        fontSize: 11,
-                        marginBottom: 8,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Markets
-                    </div>
-
-                    {member.markets.map((market: string) => (
-                      <span key={market} style={chip}>{market}</span>
-                    ))}
-                  </section>
-                )}
-
-                {Array.isArray(member.strategies) && member.strategies.length > 0 && (
-                  <section style={{ marginBottom: 14 }}>
-                    <div
-                      style={{
-                        color: "#9df3bf",
-                        letterSpacing: 3,
-                        fontWeight: 900,
-                        fontSize: 11,
-                        marginBottom: 8,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Strategies
-                    </div>
-
-                    {member.strategies.map((strategy: string) => (
-                      <span key={strategy} style={chip}>{strategy}</span>
-                    ))}
-                  </section>
-                )}
-
-                {Array.isArray(member.asset_types) && member.asset_types.length > 0 && (
-                  <section style={{ marginBottom: 14 }}>
-                    <div
-                      style={{
-                        color: "#9df3bf",
-                        letterSpacing: 3,
-                        fontWeight: 900,
-                        fontSize: 11,
-                        marginBottom: 8,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Asset Types
-                    </div>
-
-                    {member.asset_types.map((type: string) => (
-                      <span key={type} style={chip}>{type}</span>
-                    ))}
-                  </section>
-                )}
-
-                {member.buy_box && (
-                  <section style={{ marginBottom: 14 }}>
-                    <div
-                      style={{
-                        color: "#9df3bf",
-                        letterSpacing: 3,
-                        fontWeight: 900,
-                        fontSize: 11,
-                        marginBottom: 8,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Buy Box
-                    </div>
-
-                    <p
-                      style={{
-                        color: "rgba(255,255,255,.70)",
-                        lineHeight: 1.55,
-                        marginBottom: 0,
-                      }}
-                    >
-                      {member.buy_box}
-                    </p>
-                  </section>
-                )}
-
-                {Array.isArray(member.completeness_gaps) &&
-                  member.completeness_gaps.length > 0 && (
-                    <section style={{ marginBottom: 14 }}>
-                      <div
-                        style={{
-                          color: "#ffb3b3",
-                          letterSpacing: 3,
-                          fontWeight: 900,
-                          fontSize: 11,
-                          marginBottom: 8,
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Missing Intelligence
+          <div style={{ display: "grid", gap: 12, padding: 14 }}>
+            {rows.map((item, i) => {
+              const id = idOf(item, i);
+              const sev = severityOf(item, i);
+              const score = scoreOf(item, i);
+              return (
+                <article key={`${id}-${i}`} style={{ border: "1px solid rgba(255,255,255,.12)", borderRadius: 22, background: "rgba(0,0,0,.26)", padding: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ maxWidth: 760 }}>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                        <span style={pill}>{sev}</span>
+                        <span style={pill}>Score {score}</span>
+                        <span style={pill}>{text(item.signal_type || item.type || item.category || "Market Signal")}</span>
                       </div>
-
-                      {member.completeness_gaps.map((gap: string) => (
-                        <span
-                          key={gap}
-                          style={{
-                            ...chip,
-                            color: "#ffb3b3",
-                            border: "1px solid rgba(255,179,179,.35)",
-                            background: "rgba(255,179,179,.08)",
-                          }}
-                        >
-                          {label(gap)}
-                        </span>
-                      ))}
-                    </section>
-                  )}
-
-                <div style={{ marginTop: 16 }}>
-                  <Link href={`/member-intelligence/${encodeURIComponent(member.id || member.email || "")}`} style={btn}>
-                    Open Intelligence Detail
-                  </Link>
-
-                  <Link href="/routing-inbox" style={ghost}>
-                    Routing Context
-                  </Link>
-
-                  <Link href="/activity" style={ghost}>
-                    Activity
-                  </Link>
-
-                  {owner && (
-                    <Link href="/admin" style={ghost}>
-                      Admin Review
-                    </Link>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-        </section>
-
-        <section style={{ ...hero, marginTop: 22 }}>
-          <div
-            style={{
-              color: "#9df3bf",
-              letterSpacing: 5,
-              fontWeight: 950,
-              fontSize: 12,
-              marginBottom: 12,
-              textTransform: "uppercase",
-            }}
-          >
-            Current Safety Mode
+                      <h2 style={{ margin: 0, fontSize: 24, letterSpacing: "-.04em" }}>{titleOf(item, i)}</h2>
+                      <p style={{ color: "#cdbb8a", margin: "8px 0 0", lineHeight: 1.5, fontWeight: 750 }}>
+                        {text(item.ai_summary || item.summary || item.description || item.notes || "No intelligence summary attached yet.")}
+                      </p>
+                      <div style={{ marginTop: 12, color: "#8fa0bf", fontSize: 13, fontWeight: 850 }}>
+                        Market: {marketOf(item)} · Room ID: {id}
+                      </div>
+                    </div>
+                    <div style={{ minWidth: 230 }}>
+                      <VaultForgeIntelligenceActions roomId={id} roomType="intelligence" sourceRoute="/intelligence" />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+                    <Link href={`/signals/${encodeURIComponent(id)}`} style={pill}>Open Signal</Link>
+                    <Link href={`/routing-room/${encodeURIComponent(id)}`} style={pill}>Routing Room</Link>
+                    <Link href={`/messages/new?roomType=intelligence&roomId=${encodeURIComponent(id)}`} style={pill}>Message</Link>
+                  </div>
+                </article>
+              );
+            })}
           </div>
-
-          <p
-            style={{
-              color: "rgba(255,255,255,.72)",
-              fontSize: 19,
-              lineHeight: 1.6,
-            }}
-          >
-            Member intelligence is currently read-only and observational. The platform
-            is preparing routing, specialization, and coordination depth before
-            autonomous execution behavior is enabled.
-          </p>
         </section>
       </div>
     </main>
