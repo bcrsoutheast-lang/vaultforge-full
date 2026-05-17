@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,11 +9,8 @@ type ShellProps = {
   title?: string;
   subtitle?: string;
   eyebrow?: string;
+  email?: string;
 };
-
-function cleanEmail(value: unknown) {
-  return String(value || "").trim().toLowerCase();
-}
 
 const navItems = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", tag: "HOME" },
@@ -30,19 +26,14 @@ const navItems = [
   { key: "profile", label: "Profile", href: "/profile", tag: "ID" },
 ];
 
-export default async function VaultForgeCommandShell({
+export default function VaultForgeCommandShell({
   children,
   active = "dashboard",
   title = "VaultForge Command Center",
   subtitle = "Opportunity rooms and Pain rooms are the operating lanes. Alerts, routing, intelligence, and messages run as live background layers.",
   eyebrow = "VAULTFORGE AI COMMAND CENTER",
+  email = "member@vaultforge.local",
 }: ShellProps) {
-  const cookieStore = await cookies();
-  const email =
-    cleanEmail(cookieStore.get("vf_email")?.value) ||
-    cleanEmail(cookieStore.get("vf_member_email")?.value) ||
-    "member@vaultforge.local";
-
   return (
     <main className="vf-shell">
       <style>{`
