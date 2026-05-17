@@ -1,287 +1,164 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import VaultForgeCommandShell from "../components/VaultForgeCommandShell";
-import VaultForgePressureActions from "../components/VaultForgePressureActions";
+import VaultForgeRoomTerminalCard from "../components/VaultForgeRoomTerminalCard";
+
+export const dynamic = "force-dynamic";
 
 type Pain = Record<string, any>;
-type Folder = "active" | "saved" | "archived" | "deleted";
+type Folder = "active" | "saved" | "archived" | "hidden";
 
-const folders: Array<[Folder, string]> = [
-  ["active", "Active"],
-  ["saved", "Saved"],
-  ["archived", "Archived"],
-  ["deleted", "Hidden"],
-];
-
-function clean(value: unknown) {
-  return String(value || "").trim();
+function pick(obj: Pain, keys: string[], fallback = "") {
+  for (const key of keys) {
+    const value = obj?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return String(value);
+  }
+  return fallback;
 }
 
-function first(...values: unknown[]) {
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      const found = value.find((item) => clean(item));
-      if (found !== undefined) return clean(found);
-      continue;
+function firstImage(row: Pain) {
+  const fields = [row.image_url, row.photo_url, row.cover_photo, row.primary_photo];
+  for (const field of fields) if (typeof field === "string" && field.startsWith("http")) return field;
+  const arrays = [row.photo_urls, row.photos, row.images];
+  for (const arr of arrays) {
+    if (Array.isArray(arr) && typeof arr[0] === "string") return arr[0];
+    if (typeof arr === "string" && arr.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(arr);
+        if (Array.isArray(parsed) && typeof parsed[0] === "string") return parsed[0];
+      } catch {}
     }
-    if (value && typeof value === "object") continue;
-    const text = clean(value);
-    if (text) return text;
   }
   return "";
 }
 
-function meta(row: Pain) {
-  return row && typeof row.metadata === "object" && row.metadata ? row.metadata : {};
+function statusOf(row: Pain): Folder {
+  const raw = pick(row, ["room_status", "status", "folder"], "active").toLowerCase();
+  if (raw.includes("save")) return "saved";
+  if (raw.includes("archive")) return "archived";
+  if (raw.includes("delete") || raw.includes("hide") || raw.includes("hidden")) return "hidden";
+  return "active";
 }
 
-function field(row: Pain, ...keys: string[]) {
-  const m = meta(row);
-  const values: unknown[] = [];
-  for (const key of keys) values.push(row?.[key], m?.[key]);
-  return first(...values);
-}
-
-function idOf(row: Pain, index = 0) {
-  return field(row, "id", "pain_id", "request_id", "signal_id", "item_id", "room_id", "canonical_event_id") || `pressure-${index}`;
-}
-
-function titleOf(row: Pain) {
-  return field(row, "title", "pain_title", "problem_title", "headline", "name", "address") || "Pressure Room";
-}
-
-function summaryOf(row: Pain) {
-  return (
-    field(row, "ai_summary", "summary", "route_summary", "routing_summary", "description", "note", "notes", "seller_situation") ||
-    "Pressure room staged for problem solving, routing, capital, operator help, or rescue execution."
-  );
-}
-
-function market(row: Pain) {
-  const city = field(row, "city", "area");
-  const county = field(row, "county");
-  const state = field(row, "state");
-  const direct = field(row, "market", "city_state", "location");
-  if (direct) return direct;
-  return [city, county, state].filter(Boolean).join(", ") || "Market not listed";
-}
-
-function pressureType(row: Pain) {
-  return field(row, "pain_type", "problem_type", "asset_type", "property_type", "deal_type", "type") || "Pressure";
-}
-
-function urgency(row: Pain) {
-  return field(row, "urgency", "priority", "timeline", "status", "stage") || "Review";
-}
-
-function readEmail() {
-  if (typeof window === "undefined") return "";
-  for (const key of ["vf_email", "vf_member_email", "memberEmail", "email"]) {
-    try {
-      const value = clean(window.localStorage.getItem(key));
-      if (value.includes("@")) return value.toLowerCase();
-    } catch {}
-  }
-  const match =
-    document.cookie.match(/(?:^|;\s*)vf_email=([^;]+)/) ||
-    document.cookie.match(/(?:^|;\s*)vf_member_email=([^;]+)/);
-  if (match) {
-    try { return decodeURIComponent(match[1] || "").toLowerCase(); } catch { return String(match[1] || "").toLowerCase(); }
-  }
-  return "guest@vaultforge.local";
-}
-
-async function safeJson(response: Response) {
-  try { return await response.json(); } catch { return {}; }
-}
-
-const panel: React.CSSProperties = {
-  border: "1px solid rgba(248,113,113,.30)",
-  borderRadius: 34,
-  padding: 24,
-  background: "radial-gradient(circle at top left, rgba(248,113,113,.13), transparent 34%), linear-gradient(145deg,rgba(15,23,42,.97),rgba(2,6,23,.98))",
-  boxShadow: "0 28px 90px rgba(0,0,0,.36)",
-};
-
-const label: React.CSSProperties = {
-  color: "#fb7185",
-  letterSpacing: ".2em",
-  textTransform: "uppercase",
-  fontWeight: 950,
-  fontSize: 12,
-};
-
-const chip: React.CSSProperties = {
-  border: "1px solid rgba(248,113,113,.28)",
-  borderRadius: 999,
-  padding: "7px 10px",
-  color: "#fecaca",
-  background: "rgba(248,113,113,.08)",
-  fontWeight: 900,
-  fontSize: 12,
-};
-
-const btn: React.CSSProperties = {
-  minHeight: 48,
-  borderRadius: 999,
-  padding: "12px 16px",
-  border: 0,
-  background: "linear-gradient(135deg,#fecaca,#fb7185)",
-  color: "#21070a",
-  fontWeight: 950,
-  textDecoration: "none",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  ...btn,
-  background: "rgba(255,255,255,.06)",
-  color: "white",
-  border: "1px solid rgba(255,255,255,.16)",
-};
-
-function PressureCard({ row, index, status, onChanged }: { row: Pain; index: number; status: Folder; onChanged: () => void }) {
-  const id = idOf(row, index);
-  const title = titleOf(row);
-  const route = `/pain-room/${encodeURIComponent(id)}`;
-
-  return (
-    <article style={panel}>
-      <div style={label}>Pressure Command Room</div>
-      <h2 style={{ fontSize: "clamp(36px,7vw,70px)", lineHeight: 0.86, letterSpacing: "-.065em", margin: "10px 0", overflowWrap: "anywhere" }}>
-        {title}
-      </h2>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-        <span style={chip}>{market(row)}</span>
-        <span style={chip}>{pressureType(row)}</span>
-        <span style={chip}>{urgency(row)}</span>
-        <span style={chip}>Status: {status === "deleted" ? "Hidden" : status}</span>
-      </div>
-      <p style={{ color: "#cbd5e1", lineHeight: 1.6, fontSize: 16 }}>{summaryOf(row)}</p>
-      <VaultForgePressureActions roomId={id} roomTitle={title} sourceRoute={route} status={status} variant="card" onChanged={onChanged} />
-    </article>
-  );
+function urgencyOf(row: Pain) {
+  const raw = pick(row, ["urgency", "priority", "severity", "pain_level"], "high").toLowerCase();
+  if (raw.includes("critical") || raw.includes("emergency")) return "critical";
+  if (raw.includes("medium")) return "medium";
+  if (raw.includes("low")) return "low";
+  return "high";
 }
 
 export default function PressureRoomsPage() {
-  const [rows, setRows] = useState<Pain[]>([]);
+  const [items, setItems] = useState<Pain[]>([]);
+  const [loading, setLoading] = useState(true);
   const [folder, setFolder] = useState<Folder>("active");
-  const [roomStatus, setRoomStatus] = useState<Record<string, Folder>>({});
-  const [status, setStatus] = useState("Loading pressure rooms...");
-  const [reloadKey, setReloadKey] = useState(0);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const requested = params.get("folder") as Folder | null;
-    if (requested && ["active", "saved", "archived", "deleted"].includes(requested)) setFolder(requested);
-  }, []);
-
-  useEffect(() => {
-    async function loadStatuses() {
-      const email = readEmail();
-      const response = await fetch(`/api/room/status?room_type=pressure&email=${encodeURIComponent(email)}`, {
-        cache: "no-store",
-        headers: { "x-vf-email": email },
-      });
-      const data = await safeJson(response);
-      const next: Record<string, Folder> = {};
-      if (data?.rooms && typeof data.rooms === "object") {
-        for (const [id, row] of Object.entries<any>(data.rooms)) {
-          const value = String(row?.status || "active") as Folder;
-          if (["active", "saved", "archived", "deleted"].includes(value)) next[id] = value;
-        }
-      }
-      setRoomStatus(next);
-    }
-    loadStatuses();
-  }, [reloadKey]);
-
-  useEffect(() => {
+    let alive = true;
     async function load() {
-      const endpoints = ["/api/pain/feed", "/api/pain/rooms"];
-      const collected: Pain[] = [];
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint, { cache: "no-store", credentials: "include" });
-          const data = await safeJson(response);
-          collected.push(
-            ...(Array.isArray(data.pains) ? data.pains : []),
-            ...(Array.isArray(data.pressures) ? data.pressures : []),
-            ...(Array.isArray(data.pain_requests) ? data.pain_requests : []),
-            ...(Array.isArray(data.rooms) ? data.rooms : []),
-            ...(Array.isArray(data.feed) ? data.feed : []),
-            ...(Array.isArray(data.items) ? data.items : []),
-            ...(Array.isArray(data.rows) ? data.rows : []),
-            ...(Array.isArray(data.data) ? data.data : [])
-          );
-        } catch {}
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch("/api/pain/feed", { cache: "no-store" });
+        const json = await res.json().catch(() => ({}));
+        const rows = Array.isArray(json) ? json : json.pain || json.items || json.rows || json.data || [];
+        if (alive) setItems(Array.isArray(rows) ? rows : []);
+      } catch (err: any) {
+        if (alive) setError(err?.message || "Pressure feed could not load.");
+      } finally {
+        if (alive) setLoading(false);
       }
-      const map = new Map<string, Pain>();
-      collected.forEach((row, index) => {
-        const id = idOf(row, index);
-        if (!map.has(id)) map.set(id, row);
-      });
-      const finalRows = Array.from(map.values());
-      setRows(finalRows);
-      setStatus(finalRows.length ? "" : "No pressure rooms found yet.");
     }
     load();
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  function statusFor(row: Pain, index: number): Folder {
-    return roomStatus[idOf(row, index)] || "active";
-  }
-
-  const filtered = useMemo(() => rows.filter((row, index) => statusFor(row, index) === folder), [rows, folder, roomStatus]);
-
-  function countFor(nextFolder: Folder) {
-    return rows.filter((row, index) => statusFor(row, index) === nextFolder).length;
-  }
-
-  const folderTitle = folder === "deleted" ? "Hidden" : folder[0].toUpperCase() + folder.slice(1);
+  const filtered = useMemo(() => items.filter((row) => statusOf(row) === folder), [items, folder]);
+  const counts = useMemo(() => items.reduce((acc, row) => { acc[statusOf(row)] += 1; return acc; }, { active: 0, saved: 0, archived: 0, hidden: 0 } as Record<Folder, number>), [items]);
+  const criticalCount = useMemo(() => items.filter((row) => urgencyOf(row) === "critical").length, [items]);
 
   return (
-    <VaultForgeCommandShell active="pressure" title="Pressure command rooms." subtitle="Problems, distress, gaps, and execution pressure routed into clean operating rooms.">
-      <section style={panel}>
-        <div style={label}>VaultForge Pressure Workstation</div>
-        <h1 style={{ fontSize: "clamp(50px,10vw,108px)", lineHeight: 0.82, letterSpacing: "-.08em", margin: "12px 0" }}>
-          {folderTitle} pressure rooms.
-        </h1>
-        <p style={{ color: "#cbd5e1", fontSize: 20, lineHeight: 1.6, maxWidth: 950 }}>
-          Pressure rooms are database-backed. Save, archive, or hide a pressure room and it moves out of Active.
-        </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
-          {folders.map(([key, name]) => (
-            <button key={key} type="button" onClick={() => setFolder(key)} style={{ ...(folder === key ? btn : ghost), minWidth: 128 }}>
-              {name} ({countFor(key)})
+    <VaultForgeCommandShell title="Pressure Rooms" subtitle="Pain · distress · execution pressure">
+      <main style={page}>
+        <section style={hero}>
+          <div>
+            <div style={eyebrow}>VAULTFORGE PRESSURE COMMAND</div>
+            <h1 style={h1}>Pain rooms carry the pressure signals.</h1>
+            <p style={lead}>
+              Distress, capital gaps, stalled projects, motivated sellers, operator issues, and urgent execution problems live here. Alerts and routing should attach behind the scenes.
+            </p>
+          </div>
+          <div style={heroPanel}>
+            <div style={metricLabel}>Critical Pressure</div>
+            <div style={metricNumber}>{criticalCount}</div>
+            <div style={metricSub}>Active {counts.active} · Saved {counts.saved} · Archived {counts.archived}</div>
+          </div>
+        </section>
+
+        <section style={toolbar}>
+          {(["active", "saved", "archived", "hidden"] as Folder[]).map((key) => (
+            <button key={key} onClick={() => setFolder(key)} style={folder === key ? tabActive : tab}>
+              {key === "hidden" ? "Hidden / Deleted" : key.toUpperCase()} <span style={{ opacity: .75 }}>{counts[key]}</span>
             </button>
           ))}
-          <button type="button" onClick={() => setReloadKey((value) => value + 1)} style={ghost}>Refresh</button>
-          <Link href="/pain" style={ghost}>Submit Pain</Link>
-          <Link href="/dashboard" style={ghost}>Dashboard</Link>
-        </div>
-      </section>
-
-      {status ? <section style={panel}><div style={label}>Status</div><p style={{ color: "#cbd5e1", lineHeight: 1.6, fontSize: 18 }}>{status}</p></section> : null}
-
-      {!status && !filtered.length ? (
-        <section style={panel}>
-          <div style={label}>{folderTitle} Folder Clean</div>
-          <h2 style={{ fontSize: "clamp(34px,7vw,70px)", lineHeight: 0.9, letterSpacing: "-.06em", margin: "10px 0" }}>Nothing here.</h2>
-          <p style={{ color: "#cbd5e1", lineHeight: 1.6 }}>This folder is clean. Active pressure rooms are not shown inside Saved, Archived, or Hidden.</p>
+          <Link href="/pain" style={primaryLink}>+ New Pain Intake</Link>
         </section>
-      ) : null}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18 }}>
-        {filtered.map((row, index) => (
-          <PressureCard key={`${idOf(row, index)}-${index}`} row={row} index={index} status={statusFor(row, index)} onChanged={() => setReloadKey((value) => value + 1)} />
-        ))}
-      </section>
+        {error ? <div style={errorBox}>{error}</div> : null}
+        {loading ? <div style={emptyBox}>Loading pressure rooms...</div> : null}
+        {!loading && filtered.length === 0 ? <div style={emptyBox}>No {folder} pressure rooms found.</div> : null}
+
+        <section style={grid}>
+          {filtered.map((row, index) => {
+            const id = pick(row, ["id", "pain_id", "room_id"], String(index));
+            const title = pick(row, ["title", "pain_title", "problem_title", "name"], "Untitled Pressure Room");
+            const city = pick(row, ["city", "market_city"]);
+            const state = pick(row, ["state", "market_state"]);
+            const county = pick(row, ["county"]);
+            const painType = pick(row, ["pain_type", "problem_type", "category"]);
+            const score = pick(row, ["urgency_score", "score", "ai_score"], "");
+            const gap = pick(row, ["capital_gap", "funding_gap", "amount_needed"]);
+            return (
+              <VaultForgeRoomTerminalCard
+                key={`${id}-${index}`}
+                type="pain"
+                title={title}
+                subtitle={pick(row, ["ai_summary", "summary", "description", "notes"], painType || "Pressure room")}
+                location={[city, county, state].filter(Boolean).join(", ")}
+                valueLine={gap ? `Gap ${gap}` : pick(row, ["timeline", "deadline", "time_pressure"])}
+                score={score}
+                status={statusOf(row)}
+                urgency={urgencyOf(row)}
+                href={`/pain-room/${encodeURIComponent(id)}`}
+                imageUrl={firstImage(row)}
+                meta={[painType, pick(row, ["confidentiality"]), pick(row, ["created_at", "inserted_at"])].filter(Boolean)}
+              />
+            );
+          })}
+        </section>
+      </main>
     </VaultForgeCommandShell>
   );
 }
+
+const page: React.CSSProperties = { minHeight: "100vh", padding: "22px", color: "#fff" };
+const hero: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0,1fr) 260px", gap: 18, border: "1px solid rgba(255,59,48,.28)", borderRadius: 24, padding: 22, background: "linear-gradient(135deg, rgba(255,59,48,.12), rgba(7,12,16,.92))", boxShadow: "0 0 35px rgba(255,59,48,.08)", marginBottom: 18 };
+const eyebrow: React.CSSProperties = { color: "#ff6b61", fontWeight: 950, letterSpacing: ".24em", fontSize: 12, marginBottom: 10 };
+const h1: React.CSSProperties = { margin: 0, fontSize: "clamp(32px, 6vw, 72px)", lineHeight: .92, letterSpacing: "-.06em" };
+const lead: React.CSSProperties = { maxWidth: 820, color: "#cbd5e1", fontSize: 18, lineHeight: 1.55, margin: "18px 0 0" };
+const heroPanel: React.CSSProperties = { border: "1px solid rgba(255,255,255,.12)", background: "rgba(0,0,0,.28)", borderRadius: 20, padding: 18, alignSelf: "stretch", display: "flex", flexDirection: "column", justifyContent: "center" };
+const metricLabel: React.CSSProperties = { color: "#9aa4b2", textTransform: "uppercase", letterSpacing: ".16em", fontSize: 11, fontWeight: 900 };
+const metricNumber: React.CSSProperties = { color: "#ff3b30", fontSize: 58, fontWeight: 950, lineHeight: 1, marginTop: 8 };
+const metricSub: React.CSSProperties = { color: "#cbd5e1", fontSize: 13, marginTop: 10 };
+const toolbar: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 16 };
+const tab: React.CSSProperties = { border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.045)", color: "#cbd5e1", borderRadius: 999, padding: "10px 13px", fontWeight: 900, cursor: "pointer" };
+const tabActive: React.CSSProperties = { ...tab, borderColor: "rgba(255,59,48,.65)", color: "#fff", background: "linear-gradient(135deg,#7f1d1d,#ff3b30)" };
+const primaryLink: React.CSSProperties = { marginLeft: "auto", border: "1px solid rgba(255,59,48,.45)", background: "rgba(255,59,48,.12)", color: "#ff9a94", borderRadius: 999, padding: "10px 14px", fontWeight: 950, textDecoration: "none" };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 };
+const emptyBox: React.CSSProperties = { border: "1px dashed rgba(255,255,255,.18)", borderRadius: 18, padding: 28, color: "#cbd5e1", background: "rgba(255,255,255,.035)", marginBottom: 14 };
+const errorBox: React.CSSProperties = { border: "1px solid rgba(255,59,48,.38)", borderRadius: 18, padding: 16, color: "#ffd1ce", background: "rgba(255,59,48,.1)", marginBottom: 14 };
