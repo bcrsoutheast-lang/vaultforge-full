@@ -1,7 +1,7 @@
-import Link from "next/link";
+"use client";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 type ShellProps = {
   children?: React.ReactNode;
@@ -26,14 +26,49 @@ const navItems = [
   { key: "profile", label: "Profile", href: "/profile", tag: "ID" },
 ];
 
+function readCookie(name: string) {
+  if (typeof document === "undefined") return "";
+  const parts = document.cookie.split(";").map((part) => part.trim());
+  const found = parts.find((part) => part.startsWith(`${name}=`));
+  if (!found) return "";
+  return decodeURIComponent(found.slice(name.length + 1));
+}
+
+function cleanEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
 export default function VaultForgeCommandShell({
   children,
   active = "dashboard",
   title = "VaultForge Command Center",
   subtitle = "Opportunity rooms and Pain rooms are the operating lanes. Alerts, routing, intelligence, and messages run as live background layers.",
   eyebrow = "VAULTFORGE AI COMMAND CENTER",
-  email = "member@vaultforge.local",
+  email = "",
 }: ShellProps) {
+  const [clientEmail, setClientEmail] = useState(email);
+
+  useEffect(() => {
+    const cookieEmail =
+      readCookie("vf_email") ||
+      readCookie("vf_member_email") ||
+      readCookie("email") ||
+      "";
+
+    const localEmail =
+      window.localStorage.getItem("vf_email") ||
+      window.localStorage.getItem("vf_member_email") ||
+      window.localStorage.getItem("email") ||
+      "";
+
+    setClientEmail(cleanEmail(email || cookieEmail || localEmail || "member@vaultforge.local"));
+  }, [email]);
+
+  const displayEmail = useMemo(
+    () => cleanEmail(clientEmail || email || "member@vaultforge.local"),
+    [clientEmail, email]
+  );
+
   return (
     <main className="vf-shell">
       <style>{`
@@ -95,6 +130,13 @@ export default function VaultForgeCommandShell({
           padding: 14px;
           margin-bottom: 14px;
           overflow-wrap: anywhere;
+        }
+
+        .vf-user-email {
+          font-weight: 950;
+          margin-bottom: 4px;
+          font-size: 13px;
+          line-height: 1.3;
         }
 
         .vf-nav-link {
@@ -332,7 +374,7 @@ export default function VaultForgeCommandShell({
           </div>
 
           <div className="vf-user-box">
-            <div style={{ fontWeight: 950, marginBottom: 4 }}>{email}</div>
+            <div className="vf-user-email">{displayEmail}</div>
             <div style={{ color: "#22c55e", fontSize: 12, fontWeight: 950 }}>
               AI ROUTING ACTIVE
             </div>
@@ -373,7 +415,7 @@ export default function VaultForgeCommandShell({
           <div className="vf-mobile-nav">
             <div className="vf-mobile-top">
               <div className="vf-mobile-logo">VAULTFORGE</div>
-              <div className="vf-mobile-email">{email}</div>
+              <div className="vf-mobile-email">{displayEmail}</div>
             </div>
 
             <div className="vf-mobile-scroll">
