@@ -4,265 +4,75 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type RoomState = "active" | "saved" | "archived" | "deleted";
-type DealRoom = Record<string, any> & { id: string; roomState?: RoomState };
-
-type ProfileData = Record<string, any> & {
-  profilePhoto?: string;
-  companyLogo?: string;
-  fullName?: string;
-  company?: string;
-  email?: string;
-  phone?: string;
-  preferredContact?: string[];
-  memberTypes?: string[];
-  buyStates?: string[];
-  operateStates?: string[];
-  alertStates?: string[];
-  countiesByState?: Record<string, string[]>;
-  markets?: string[];
-  assetTypes?: string[];
-  dealTypes?: string[];
-  executionCapabilities?: string[];
-  capitalRoles?: string[];
-  routingRules?: string[];
-};
+type AnyDeal = Record<string, any>;
+type Profile = Record<string, any>;
 
 const ROOM_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
-const DETAIL_PREFIXES = ["vaultforge_clean_deal_room_", "vaultforge_deal_room_", "vf_deal_room_"];
 const STATE_KEY = "vaultforge_clean_room_states";
 const PROFILE_KEY = "vaultforge_profile_v2";
 
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 28, marginBottom: 22 };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 8, fontWeight: 900, fontSize: 20, marginBottom: 14 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,72px)", lineHeight: .92, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 22, lineHeight: 1.35, margin: 0 };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
-const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-
-function readArray(key: string): DealRoom[] {
-  try {
-    const raw = window.localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function getStates(): Record<string, RoomState> {
-  try { return JSON.parse(window.localStorage.getItem(STATE_KEY) || "{}"); } catch { return {}; }
-}
-
-function writeStates(states: Record<string, RoomState>) {
-  window.localStorage.setItem(STATE_KEY, JSON.stringify(states));
-}
-
-function dealId(deal: DealRoom) {
-  return String(deal.id || deal.roomId || deal.dealId || "");
-}
-
-function val(deal: DealRoom, keys: string[], fallback = "") {
-  for (const key of keys) {
-    const raw = deal?.[key];
-    if (raw !== undefined && raw !== null && String(raw).trim()) return String(raw);
-  }
-  return fallback;
-}
-
-function arr(deal: DealRoom, keys: string[]) {
-  for (const key of keys) {
-    const raw = deal?.[key];
-    if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
-    if (typeof raw === "string" && raw.trim()) return raw.split(",").map((item) => item.trim()).filter(Boolean);
-  }
-  return [];
-}
-
-function photo(deal: DealRoom) {
-  return val(deal, ["photoUrl", "imageUrl", "publicUrl", "photo", "photoDataUrl", "image", "url"], "");
-}
-
-function money(raw: string) {
-  const clean = String(raw || "").replace(/[^0-9.]/g, "");
-  if (!clean) return "Not listed";
-  const num = Number(clean);
-  return Number.isNaN(num) ? raw : `$${num.toLocaleString()}`;
-}
-
-function readProfile(): ProfileData | null {
-  try {
-    const raw = window.localStorage.getItem(PROFILE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeAsset(assetClass: string) {
-  const value = String(assetClass || "").toLowerCase();
-  if (value.includes("residential")) return "SFR";
-  if (value.includes("commercial")) return "Commercial";
-  if (value.includes("land")) return "Land";
-  return assetClass;
-}
-
-function getProfileFit(deal: DealRoom, profile: ProfileData | null) {
-  if (!profile) return null;
-  const routeTargets = arr(deal, ["routeTo", "routedTo"]);
-  const state = val(deal, ["state"], "");
-  const county = val(deal, ["county"], "");
-  const asset = normalizeAsset(val(deal, ["assetClass", "asset_class"], ""));
-  const memberTypes = Array.isArray(profile.memberTypes) ? profile.memberTypes.map(String) : [];
-  const profileStates = [profile.buyStates, profile.operateStates, profile.alertStates].flat().filter(Boolean).map(String);
-  const countyList = state && profile.countiesByState ? profile.countiesByState[state] || [] : [];
-  const assetTypes = Array.isArray(profile.assetTypes) ? profile.assetTypes.map(String) : [];
-  const roleFit = routeTargets.some((target) => memberTypes.map((x) => x.toLowerCase()).includes(target.toLowerCase())) || routeTargets.some((target) => target === "Buyer" && memberTypes.includes("Investor"));
-  const stateFit = state ? profileStates.includes(state) : false;
-  const countyFit = county ? countyList.includes(county) : false;
-  const assetFit = asset ? assetTypes.map((x) => x.toLowerCase()).includes(String(asset).toLowerCase()) || (asset === "SFR" && assetTypes.includes("Residential")) : false;
-  const score = [roleFit, stateFit, countyFit, assetFit].filter(Boolean).length * 25;
-  return {
-    score,
-    roleFit,
-    stateFit,
-    countyFit,
-    assetFit,
-    reason: [roleFit ? "role lane" : "role needs review", stateFit ? "state match" : "state not confirmed", countyFit ? "county match" : "county not selected", assetFit ? "asset fit" : "asset fit not confirmed"].join(" • "),
-  };
-}
-
-function loadDeals(): DealRoom[] {
-  const states = getStates();
-  const map = new Map<string, DealRoom>();
-  ROOM_KEYS.forEach((key) => {
-    readArray(key).forEach((deal) => {
-      const id = dealId(deal);
-      if (!id) return;
-      const existing = map.get(id) || {};
-      map.set(id, { ...existing, ...deal, id, roomState: states[id] || deal.roomState || "active" });
-    });
+function readJson<T>(key: string, fallback: T): T { try { const raw = window.localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; } }
+function writeJson(key: string, value: any) { window.localStorage.setItem(key, JSON.stringify(value)); }
+function idOf(d: AnyDeal) { return String(d.id || d.roomId || d.dealId || ""); }
+function first(d: AnyDeal, keys: string[], fallback = "") { for (const k of keys) { const v = d?.[k]; if (v !== undefined && v !== null && String(v).trim()) return String(v); } return fallback; }
+function list(d: AnyDeal, keys: string[]) { for (const k of keys) { const v = d?.[k]; if (Array.isArray(v)) return v.map(String); if (typeof v === "string" && v.trim()) return v.split(",").map((x) => x.trim()).filter(Boolean); } return []; }
+function photo(d: AnyDeal) { return first(d, ["photoUrl", "photoURL", "imageUrl", "publicUrl", "photo", "photoDataUrl", "image", "thumbnailUrl"]); }
+function money(v: string) { const clean = String(v || "").replace(/[^0-9.]/g, ""); if (!clean) return "Not listed"; const n = Number(clean); return Number.isFinite(n) ? `$${n.toLocaleString()}` : v; }
+function roomStates(): Record<string, RoomState> { return readJson(STATE_KEY, {} as Record<string, RoomState>); }
+function stateFor(id: string, d: AnyDeal): RoomState { return roomStates()[id] || d.roomState || "active"; }
+function readDeals(): AnyDeal[] {
+  const map = new Map<string, AnyDeal>();
+  const states = roomStates();
+  ROOM_KEYS.forEach((key) => readJson<AnyDeal[]>(key, []).forEach((d) => { const id = idOf(d); if (id && !map.has(id)) map.set(id, { ...d, id, roomState: states[id] || d.roomState || "active" }); }));
+  Object.keys(localStorage).filter((key) => key.startsWith("vaultforge_clean_deal_room_") || key.startsWith("vaultforge_deal_room_") || key.startsWith("vf_deal_room_")).forEach((key) => {
+    const d = readJson<AnyDeal | null>(key, null); const id = d ? idOf(d) : ""; if (id && !map.has(id)) map.set(id, { ...d, id, roomState: states[id] || d?.roomState || "active" });
   });
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const key = window.localStorage.key(i) || "";
-    const prefix = DETAIL_PREFIXES.find((item) => key.startsWith(item));
-    if (!prefix) continue;
-    try {
-      const raw = window.localStorage.getItem(key);
-      const deal = raw ? JSON.parse(raw) : null;
-      const id = dealId(deal || {}) || key.replace(prefix, "");
-      if (!id) continue;
-      const existing = map.get(id) || {};
-      map.set(id, { ...existing, ...deal, id, roomState: states[id] || deal?.roomState || "active" });
-    } catch {}
-  }
-  return Array.from(map.values())
-    .filter((deal) => deal.roomState !== "deleted" && deal.roomState !== "archived")
-    .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+  return Array.from(map.values()).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+}
+function syncDeal(deal: AnyDeal) {
+  const id = idOf(deal); if (!id) return;
+  writeJson(`vaultforge_clean_deal_room_${id}`, deal); writeJson(`vaultforge_deal_room_${id}`, deal); writeJson(`vf_deal_room_${id}`, deal);
+  ROOM_KEYS.forEach((key) => { const rows = readJson<AnyDeal[]>(key, []).filter((item) => idOf(item) !== id); writeJson(key, [deal, ...rows]); });
+  window.dispatchEvent(new Event("vaultforge-deal-change"));
+}
+function setState(deal: AnyDeal, state: RoomState) { const states = roomStates(); const id = idOf(deal); states[id] = state; writeJson(STATE_KEY, states); syncDeal({ ...deal, roomState: state, updatedAt: new Date().toISOString() }); }
+function profile() { return readJson<Profile>(PROFILE_KEY, {}); }
+function matchReasons(deal: AnyDeal, p: Profile) {
+  const reasons: string[] = [];
+  const state = first(deal, ["state"]); const county = first(deal, ["county"]); const asset = first(deal, ["assetClass", "assetType"]);
+  const states = [...(p.buyStates || []), ...(p.operateStates || []), ...(p.alertStates || []), ...(p.contactStates || [])];
+  if (state && states.includes(state)) reasons.push(`${state} market fit`);
+  if (county && p.countiesByState?.[state]?.includes?.(county)) reasons.push(`${county} County fit`);
+  if (asset && (p.assetTypes || []).some((x: string) => asset.toLowerCase().includes(String(x).toLowerCase()) || String(x).toLowerCase().includes(asset.toLowerCase()))) reasons.push(`${asset} asset fit`);
+  list(deal, ["routeTo", "routedTo"]).forEach((r) => { if ((p.memberTypes || []).includes(r) || (p.capitalRoles || []).includes(r)) reasons.push(`${r} route lane`); });
+  if ((p.routingRules || []).includes("Allow AI Routing")) reasons.push("AI routing allowed");
+  return reasons.length ? reasons : ["Profile saved for routing", "Review exact buy box", "Needs deeper Supabase member graph later"];
 }
 
-function syncDeal(deal: DealRoom) {
-  const id = dealId(deal);
-  if (!id) return;
-  DETAIL_PREFIXES.forEach((prefix) => window.localStorage.setItem(`${prefix}${id}`, JSON.stringify({ ...deal, id })));
-  ROOM_KEYS.forEach((key) => {
-    const rows = readArray(key).filter((item) => dealId(item) !== id);
-    window.localStorage.setItem(key, JSON.stringify([{ ...deal, id }, ...rows]));
-  });
-}
-
-function DealCard({ deal, profile, onChanged }: { deal: DealRoom; profile: ProfileData | null; onChanged: () => void }) {
-  const id = dealId(deal);
-  const img = photo(deal);
-  const routeTargets = arr(deal, ["routeTo", "routedTo"]);
-  const fit = getProfileFit(deal, profile);
-  const profileName = profile ? String(profile.company || profile.fullName || "Saved Profile") : "No saved profile";
-
-  function setRoomState(state: RoomState) {
-    const states = getStates();
-    states[id] = state;
-    writeStates(states);
-    syncDeal({ ...deal, id, roomState: state, updatedAt: new Date().toISOString() });
-    onChanged();
-  }
-
-  return (
-    <article style={{ ...card, marginBottom: 0, padding: 24 }}>
-      {img ? (
-        <img src={img} alt={val(deal, ["title", "name"], "Deal photo")} style={{ width: "100%", height: 220, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(207,216,230,.18)", marginBottom: 20 }} />
-      ) : (
-        <div style={{ height: 170, display: "grid", placeItems: "center", border: "1px dashed rgba(207,216,230,.22)", borderRadius: 22, color: "#c9d0dc", marginBottom: 20 }}>No photo saved</div>
-      )}
-      <div style={eyebrow}>{val(deal, ["assetClass", "asset_class"], "Deal")}</div>
-      <h2 style={{ fontSize: 34, margin: "0 0 10px", letterSpacing: -2 }}>{val(deal, ["title", "name"], "Untitled Deal")}</h2>
-      <p style={{ ...sub, fontSize: 18 }}>{[val(deal,["city"]), val(deal,["county"]), val(deal,["state"])].filter(Boolean).join(", ")}</p>
-      <p style={{ ...sub, fontSize: 20, marginTop: 20 }}>Ask: {money(val(deal,["askingPrice","ask"]))}<br />ARV/Value: {money(val(deal,["arv","value"]))}<br />Repairs: {money(val(deal,["repairs"]))}<br />Route: {routeTargets.join(", ") || "Not selected"}</p>
-      <div style={{ marginTop: 18, border: "1px solid rgba(245,197,66,.22)", background: "rgba(245,197,66,.05)", borderRadius: 18, padding: 16 }}>
-        <div style={{ ...eyebrow, fontSize: 14, letterSpacing: 4 }}>AI Routed Profile</div>
-        {profile ? <p style={{ ...sub, fontSize: 16 }}>{profileName}<br />Fit: {fit?.score || 0}% — {fit?.reason || "needs profile data"}</p> : <p style={{ ...sub, fontSize: 16 }}>No profile saved yet. Save Profile first so AI can route.</p>}
-      </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-        <Link href={`/deal-rooms/${encodeURIComponent(id)}`} style={goldBtn}>Open Room</Link>
-        <button type="button" onClick={() => setRoomState("saved")} style={btn}>Save</button>
-        <button type="button" onClick={() => setRoomState("archived")} style={btn}>Archive</button>
-        <button type="button" onClick={() => setRoomState("deleted")} style={redBtn}>Delete</button>
-      </div>
-    </article>
-  );
+function DealCard({ deal }: { deal: AnyDeal }) {
+  const [tick, setTick] = useState(0); const p = profile(); const id = idOf(deal); const img = photo(deal); const routes = list(deal, ["routeTo", "routedTo"]); const reasons = matchReasons(deal, p);
+  const currentState = stateFor(id, deal);
+  return <article className="vf-deal-card">
+    <div className="vf-photo">{img ? <img src={img} alt={first(deal,["title"],"Deal photo")} /> : <span>No photo</span>}</div>
+    <div className="vf-deal-body">
+      <div className="vf-eyebrow">{first(deal,["assetClass","asset_class"],"Deal Room")}</div>
+      <h2>{first(deal,["title","name"],"Untitled Deal")}</h2>
+      <p>{[first(deal,["city"]), first(deal,["county"]), first(deal,["state"])].filter(Boolean).join(" • ") || "Market not listed"}</p>
+      <div className="vf-pills"><span>{money(first(deal,["askingPrice","ask"]))}</span><span>ARV {money(first(deal,["arv","value"]))}</span><span>{routes.length || 1} AI route lane{routes.length === 1 ? "" : "s"}</span><span>{reasons[0]}</span></div>
+      <div className="vf-signal"><strong>Signal:</strong> {first(deal,["signalSummary"], `${first(deal,["urgency"],"Active")} opportunity with ${money(first(deal,["askingPrice","ask"]))} ask, ${money(first(deal,["arv","value"]))} value, ${list(deal,["knownIssues","issues"]).join(", ") || "no listed blockers"}.`)}</div>
+      <div className="vf-actions"><Link href={`/deal-rooms/${encodeURIComponent(id)}`} className="vf-btn vf-gold">Open Room</Link><button onClick={()=>{setState(deal,"saved");setTick(tick+1)}} className="vf-btn">Save</button><button onClick={()=>{setState(deal,"archived");setTick(tick+1)}} className="vf-btn">Archive</button><button onClick={()=>{setState(deal,"deleted");setTick(tick+1)}} className="vf-btn vf-red">Delete</button><span className="vf-state">{currentState}</span></div>
+    </div>
+  </article>;
 }
 
 export default function VaultForgeDealRoomsClient() {
-  const [rooms, setRooms] = useState<DealRoom[]>([]);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
-
-  function refresh() {
-    setRooms(loadDeals());
-    setProfile(readProfile());
-  }
-
-  useEffect(() => {
-    refresh();
-    window.addEventListener("vaultforge-deals-change", refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      window.removeEventListener("vaultforge-deals-change", refresh);
-      window.removeEventListener("storage", refresh);
-    };
-  }, []);
-
-  const stateCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    rooms.forEach((room) => {
-      const state = val(room, ["state"], "Unknown") || "Unknown";
-      counts[state] = (counts[state] || 0) + 1;
-    });
-    return counts;
-  }, [rooms]);
-
-  return (
-    <>
-      <section style={card}>
-        <div style={eyebrow}>Deal Rooms</div>
-        <h1 style={h1}>Clean deal room board.</h1>
-        <p style={sub}>Photos, routing targets, AI matched profile cards, state count, and room controls stay synced from the intake.</p>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 22 }}>
-          <button type="button" style={btn} onClick={refresh}>Refresh Rooms</button>
-          <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
-        </div>
-      </section>
-
-      <section style={card}>
-        <div style={eyebrow}>State Count</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          {Object.keys(stateCounts).length ? Object.entries(stateCounts).map(([state, count]) => <span key={state} style={btn}>{state}: {count}</span>) : <p style={sub}>No active deal rooms yet.</p>}
-        </div>
-      </section>
-
-      {!rooms.length ? <section style={card}><p style={sub}>No saved Deal Rooms yet. Create a deal and it will appear here.</p></section> : null}
-
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 22 }}>
-        {rooms.map((deal) => <DealCard key={dealId(deal)} deal={deal} profile={profile} onChanged={refresh} />)}
-      </section>
-    </>
-  );
+  const [rooms, setRooms] = useState<AnyDeal[]>([]);
+  function refresh() { setRooms(readDeals()); }
+  useEffect(() => { refresh(); window.addEventListener("vaultforge-deal-change", refresh); window.addEventListener("storage", refresh); return () => { window.removeEventListener("vaultforge-deal-change", refresh); window.removeEventListener("storage", refresh); }; }, []);
+  const metrics = useMemo(() => ({ active: rooms.filter((r)=>stateFor(idOf(r),r)==="active").length, saved: rooms.filter((r)=>stateFor(idOf(r),r)==="saved").length, archived: rooms.filter((r)=>stateFor(idOf(r),r)==="archived").length, photos: rooms.filter(photo).length }), [rooms]);
+  return <>
+    <style>{`.vf-deal-card{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;border:1px solid rgba(245,197,66,.24);border-radius:26px;background:linear-gradient(145deg,#08101e,#050816);padding:14px;margin-bottom:14px}.vf-photo{height:190px;border-radius:20px;border:1px solid rgba(245,197,66,.18);background:#111827;display:grid;place-items:center;overflow:hidden;color:#c9d0dc;font-weight:950}.vf-photo img{width:100%;height:100%;object-fit:cover;display:block}.vf-deal-body h2{font-size:34px;line-height:1;margin:0 0 8px}.vf-deal-body p{color:#c9d0dc;margin:0 0 12px;font-size:18px}.vf-pills{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.vf-pills span{border:1px solid rgba(245,197,66,.18);background:rgba(245,197,66,.07);color:#ffe99a;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:900}.vf-signal{border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:13px;color:#c9d0dc;background:rgba(255,255,255,.04);line-height:1.35}.vf-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;align-items:center}.vf-state{font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#c9d0dc;font-weight:900}@media(max-width:760px){.vf-deal-card{grid-template-columns:1fr}.vf-photo{height:240px}}`}</style>
+    <section className="vf-grid"><div className="vf-metric"><span>Active</span><strong>{metrics.active}</strong></div><div className="vf-metric"><span>Saved</span><strong>{metrics.saved}</strong></div><div className="vf-metric"><span>Archived</span><strong>{metrics.archived}</strong></div><div className="vf-metric"><span>Photos</span><strong>{metrics.photos}</strong></div></section>
+    <section className="vf-card"><div className="vf-eyebrow">Active Intelligence Rooms</div>{rooms.length ? rooms.filter((r)=>stateFor(idOf(r),r)!=="deleted").map((room)=><DealCard key={idOf(room)} deal={room}/>) : <p className="vf-copy">No Deal Rooms yet. Create a deal to start the VaultForge brain.</p>}</section>
+  </>;
 }
