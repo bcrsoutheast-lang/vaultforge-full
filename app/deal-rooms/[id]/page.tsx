@@ -1,66 +1,403 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
+type RoomKind = "deal";
 type RoomState = "active" | "saved" | "archived" | "deleted";
-type DealRoom = Record<string, any> & { id: string; roomState?: RoomState };
-type Profile = Record<string, any>;
 
+type SavedProfile = {
+  profilePhoto?: string;
+  fullName?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  preferredContact?: string[];
+  memberTypes?: string[];
+  buyStates?: string[];
+  operateStates?: string[];
+  alertStates?: string[];
+  contactStates?: string[];
+  assetTypes?: string[];
+};
+
+type RoomRecord = {
+  id?: string;
+  roomId?: string;
+  dealId?: string;
+  painId?: string;
+  roomState?: RoomState;
+  cleanupState?: RoomState;
+  stateStatus?: RoomState;
+  title?: string;
+  name?: string;
+  assetClass?: string;
+  state?: string;
+  city?: string;
+  county?: string;
+  address?: string;
+  photoUrls?: string[];
+  photos?: string[];
+  photoUrl?: string;
+  photo?: string;
+  imageUrl?: string;
+  publicUrl?: string;
+  routeTo?: string[];
+  routedTo?: string[];
+  routingNeeds?: string[];
+  painTypes?: string[];
+  urgency?: string[] | string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  bestContact?: string;
+  submitterRole?: string;
+  askingPrice?: string;
+  propertyValue?: string;
+  arv?: string;
+  repairs?: string;
+  payoff?: string;
+  amountNeeded?: string;
+  equitySpread?: string;
+  beds?: string;
+  baths?: string;
+  sqft?: string;
+  units?: string;
+  buildingSize?: string;
+  acres?: string;
+  zoning?: string;
+  occupancy?: string;
+  access?: string;
+  authority?: string;
+  timeline?: string;
+  riskLevel?: string;
+  analyzer?: string;
+  aiRead?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
+const KIND: RoomKind = "deal";
 const ROOM_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
-const STATE_KEY = "vaultforge_clean_room_states";
 const PROFILE_KEY = "vaultforge_profile_v2";
+const ROOM_STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
 
-const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" };
+function parseJson<T>(raw: string | null, fallback: T): T { try { return raw ? JSON.parse(raw) as T : fallback; } catch { return fallback; } }
+function idOf(room: RoomRecord | null | undefined) { return String(room?.id || room?.roomId || room?.dealId || room?.painId || ""); }
+function readRooms(key: string): RoomRecord[] { const parsed = parseJson<unknown>(window.localStorage.getItem(key), []); return Array.isArray(parsed) ? parsed as RoomRecord[] : []; }
+function readProfile(): SavedProfile | null { return parseJson<SavedProfile | null>(window.localStorage.getItem(PROFILE_KEY), null); }
+
+function readStates(): Record<string, RoomState> {
+  const merged: Record<string, RoomState> = {};
+  for (const key of ROOM_STATE_KEYS) Object.assign(merged, parseJson<Record<string, RoomState>>(window.localStorage.getItem(key), {}));
+  return merged;
+}
+
+function writeStates(states: Record<string, RoomState>) {
+  for (const key of ROOM_STATE_KEYS) window.localStorage.setItem(key, JSON.stringify(states));
+}
+
+function roomState(room: RoomRecord | null): RoomState {
+  if (!room) return "active";
+  const states = readStates();
+  const id = idOf(room);
+  const compound = `${KIND}:${id}`;
+  const status = states[compound] || states[id] || room.roomState || room.cleanupState || room.stateStatus || "active";
+  if (status === "saved" || status === "archived" || status === "deleted") return status;
+  return "active";
+}
+
+function findRoom(id: string): RoomRecord | null {
+  const directKeys = [
+    `vaultforge_clean_${KIND}_room_${id}`,
+    `vaultforge_${KIND}_room_${id}`,
+    `vf_${KIND}_room_${id}`,
+  ];
+
+  for (const key of directKeys) {
+    const hit = parseJson<RoomRecord | null>(window.localStorage.getItem(key), null);
+    const hitId = idOf(hit);
+    if (hit && hitId) return { ...hit, id: hitId, roomState: roomState(hit) };
+  }
+
+  for (const key of ROOM_KEYS) {
+    const hit = readRooms(key).find((room) => idOf(room) === id);
+    const hitId = idOf(hit);
+    if (hit && hitId) return { ...hit, id: hitId, roomState: roomState(hit) };
+  }
+
+  return null;
+}
+
+function syncRoom(room: RoomRecord, state: RoomState) {
+  const id = idOf(room);
+  if (!id) return;
+
+  const next = { ...room, id, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
+
+  window.localStorage.setItem(`vaultforge_clean_${KIND}_room_${id}`, JSON.stringify(next));
+  window.localStorage.setItem(`vaultforge_${KIND}_room_${id}`, JSON.stringify(next));
+
+  for (const key of ROOM_KEYS) {
+    const rows = readRooms(key).filter((item) => idOf(item) !== id);
+    window.localStorage.setItem(key, JSON.stringify([next, ...rows]));
+  }
+
+  const states = readStates();
+  states[id] = state;
+  states[`${KIND}:${id}`] = state;
+  writeStates(states);
+
+  window.dispatchEvent(new Event("storage"));
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  window.dispatchEvent(new Event(KIND === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
+}
+
+function normalizeList(input: unknown): string[] {
+  if (Array.isArray(input)) return input.map((item) => String(item).trim()).filter(Boolean);
+  if (typeof input === "string" && input.trim()) return input.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function arr(room: RoomRecord | null, keys: string[]) {
+  if (!room) return [];
+  for (const key of keys) {
+    const list = normalizeList(room[key]);
+    if (list.length) return list;
+  }
+  return [];
+}
+
+function val(room: RoomRecord | null, keys: string[], fallback = "Not listed") {
+  if (!room) return fallback;
+  for (const key of keys) {
+    const got = room[key];
+    if (got !== undefined && got !== null && String(got).trim()) return String(got);
+  }
+  return fallback;
+}
+
+function photos(room: RoomRecord | null) {
+  if (!room) return [];
+  const all = [room.photoUrls, room.photos, room.photoUrl, room.photo, room.imageUrl, room.publicUrl].flatMap(normalizeList);
+  return Array.from(new Set(all)).filter((item) => item && !item.startsWith("data:")).slice(0, 10);
+}
+
+function money(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Not listed";
+  if (raw.includes("$")) return raw;
+  const number = Number(raw.replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(number) || number <= 0) return raw;
+  return number.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+function location(room: RoomRecord | null) {
+  return [val(room, ["city"], ""), val(room, ["county"], ""), val(room, ["state"], "")].filter(Boolean).join(", ") || "Market not listed";
+}
+
+function messageHref(room: RoomRecord | null) {
+  if (!room) return "/messages";
+  const id = idOf(room);
+  const title = val(room, ["title", "name"], KIND === "deal" ? "Deal Room" : "Pain Room");
+  return `/messages?type=${KIND}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent(`${KIND === "deal" ? "Deal Room" : "Pain Room"}: ${title}`)}`;
+}
+
+function folderPath(state: RoomState) {
+  if (state === "saved") return "/saved-rooms";
+  if (state === "archived") return "/archived-rooms";
+  if (state === "deleted") return "/deleted-rooms";
+  return KIND === "deal" ? "/deal-rooms" : "/pain-rooms";
+}
+
+function fitScore(room: RoomRecord | null, profile: SavedProfile | null) {
+  if (!room || !profile) return 0;
+  let score = 0;
+  const state = val(room, ["state"], "");
+  const asset = val(room, ["assetClass"], "").toLowerCase();
+  const route = arr(room, ["routeTo", "routedTo", "routingNeeds"]).join(" ").toLowerCase();
+  if (state && profile.alertStates?.includes(state)) score += 20;
+  if (state && profile.buyStates?.includes(state)) score += 12;
+  if (state && profile.operateStates?.includes(state)) score += 12;
+  if ((profile.assetTypes || []).some((item) => item.toLowerCase().includes(asset))) score += 12;
+  for (const type of profile.memberTypes || []) if (route.includes(type.toLowerCase())) score += 10;
+  return Math.min(100, score || 62);
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return <div style={factCard}><div style={miniEyebrow}>{label}</div><div style={factValue}>{value}</div></div>;
+}
+
+export default function RoomDetailPage() {
+  const params = useParams();
+  const id = decodeURIComponent(String(params?.id || ""));
+  const [room, setRoom] = useState<RoomRecord | null>(null);
+  const [profile, setProfile] = useState<SavedProfile | null>(null);
+
+  function load() {
+    setRoom(findRoom(id));
+    setProfile(readProfile());
+  }
+
+  useEffect(() => {
+    load();
+    window.addEventListener("storage", load);
+    window.addEventListener("vaultforge-room-state-change", load);
+    window.addEventListener(KIND === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change", load);
+    return () => {
+      window.removeEventListener("storage", load);
+      window.removeEventListener("vaultforge-room-state-change", load);
+      window.removeEventListener(KIND === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change", load);
+    };
+  }, [id]);
+
+  function moveTo(state: RoomState) {
+    if (!room) return;
+    syncRoom(room, state);
+    window.location.href = folderPath(state);
+  }
+
+  const roomPhotos = useMemo(() => photos(room), [room]);
+  const status = roomState(room);
+  const routeValues = arr(room, ["routeTo", "routedTo", "routingNeeds"]);
+  const title = val(room, ["title", "name"], KIND === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
+  const signal = val(room, ["analyzer", "aiRead"], `${KIND === "deal" ? "Deal" : "Pain"} signal in ${location(room)}. Verify facts, route to matched profile, move qualified conversation into Messages.`);
+
+  if (!room) {
+    return (
+      <main style={page}>
+        <div style={wrap}>
+          <nav style={nav}><Link href={KIND === "deal" ? "/deal-rooms" : "/pain-rooms"} style={goldBtn}>Back</Link><Link href="/command" style={btn}>Command</Link></nav>
+          <section style={card}><div style={eyebrow}>{KIND === "deal" ? "Deal Room" : "Pain Room"}</div><h1 style={h1}>Room not found.</h1><p style={sub}>This room was not found in local saved rooms.</p></section>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main style={page}>
+      <div style={wrap}>
+        <nav style={nav}>
+          <Link href="/command" style={btn}>Command</Link>
+          <Link href={KIND === "deal" ? "/deal-rooms" : "/pain-rooms"} style={goldBtn}>{KIND === "deal" ? "Deal Rooms" : "Pain Rooms"}</Link>
+          <Link href="/messages" style={btn}>Messages</Link>
+          <Link href="/profile" style={btn}>Profile</Link>
+          <Link href="/" style={redBtn}>Exit</Link>
+        </nav>
+
+        <section style={card}>
+          {roomPhotos.length ? <div style={photoGrid}>{roomPhotos.map((url, index) => <img key={`${url}-${index}`} src={url} alt={`Room photo ${index + 1}`} style={photoStyle} />)}</div> : <div style={emptyPhoto}>No photo URL saved for this room</div>}
+          <div style={eyebrow}>{val(room, ["assetClass"], KIND === "deal" ? "Deal Room" : "Pain Room")}</div>
+          <h1 style={h1}>{title}</h1>
+          <p style={sub}>{location(room)}</p>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>5S Controls</div>
+          <p style={{ ...sub, marginBottom: 18 }}>Current: {status}. Save, Archive, or Delete moves this room out of the active command surface and into the matching folder.</p>
+          <div style={actionRow}>
+            <button type="button" onClick={() => moveTo("saved")} style={goldBtn}>Save</button>
+            <button type="button" onClick={() => moveTo("archived")} style={btn}>Archive</button>
+            <button type="button" onClick={() => moveTo("deleted")} style={redBtn}>Delete</button>
+            <span style={btn}>Current: {status}</span>
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Owner Message</div>
+          <h2 style={h2}>Contact owner with this {KIND} attached.</h2>
+          <p style={sub}>Message subject is locked to this room so the thread matches the {KIND}.</p>
+          <div style={{ ...actionRow, marginTop: 18 }}>
+            <Link href={messageHref(room)} style={goldBtn}>Message Owner</Link>
+            <a href={`mailto:${val(room, ["contactEmail"], "")}?subject=${encodeURIComponent(`${KIND === "deal" ? "Deal Room" : "Pain Room"}: ${title}`)}`} style={btn}>Email Owner</a>
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>VaultForge Signal Summary</div>
+          <p style={sub}>{signal}</p>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>AI Routed Profile</div>
+          {profile ? (
+            <div style={profileCard}>
+              {profile.profilePhoto ? <img src={profile.profilePhoto} alt="Profile" style={profilePhoto} /> : <div style={emptyPhoto}>No profile photo</div>}
+              <div>
+                <h2 style={h2}>{profile.fullName || profile.company || "Saved Profile"}</h2>
+                <p style={sub}>Fit score: {fitScore(room, profile)}%. Contact: {(profile.preferredContact || []).join(", ") || "Not selected"}. Phone: {profile.phone || "Not listed"}. Email: {profile.email || "Not listed"}.</p>
+              </div>
+            </div>
+          ) : <p style={sub}>No saved profile found. Save a profile so VaultForge can route this room.</p>}
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Numbers + Facts</div>
+          <div style={grid}>
+            <Fact label="Ask" value={money(val(room, ["askingPrice"], ""))} />
+            <Fact label="Value / ARV" value={money(val(room, ["propertyValue", "arv"], ""))} />
+            <Fact label="Repairs / Work" value={money(val(room, ["repairs"], ""))} />
+            <Fact label="Payoff" value={money(val(room, ["payoff"], ""))} />
+            <Fact label="Amount Needed" value={money(val(room, ["amountNeeded"], ""))} />
+            <Fact label="Equity Spread" value={val(room, ["equitySpread"])} />
+            <Fact label="Beds" value={val(room, ["beds"])} />
+            <Fact label="Baths" value={val(room, ["baths"])} />
+            <Fact label="Sqft" value={val(room, ["sqft"])} />
+            <Fact label="Units" value={val(room, ["units"])} />
+            <Fact label="Building" value={val(room, ["buildingSize"])} />
+            <Fact label="Acres" value={val(room, ["acres"])} />
+            <Fact label="Zoning" value={val(room, ["zoning"])} />
+            <Fact label="Occupancy" value={val(room, ["occupancy"])} />
+            <Fact label="Access" value={val(room, ["access"])} />
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Contact + Routing</div>
+          <div style={grid}>
+            <Fact label="Name" value={val(room, ["contactName"])} />
+            <Fact label="Phone" value={val(room, ["contactPhone"])} />
+            <Fact label="Email" value={val(room, ["contactEmail"])} />
+            <Fact label="Best Contact" value={val(room, ["bestContact"])} />
+            <Fact label="Role" value={val(room, ["submitterRole"])} />
+            <Fact label="Route To" value={routeValues.join(", ") || "Not selected"} />
+            <Fact label="Urgency" value={arr(room, ["urgency"]).join(", ") || "Not selected"} />
+            <Fact label="Pain Types" value={arr(room, ["painTypes"]).join(", ") || "Not selected"} />
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Notes</div>
+          <div style={noteBox}><p style={sub}>{val(room, ["notes"], "No notes saved.")}</p></div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto", paddingBottom: 70 };
+const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 };
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 28, marginBottom: 22 };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 8, fontWeight: 900, fontSize: 14, marginBottom: 14 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,72px)", lineHeight: .92, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 20, lineHeight: 1.4, margin: 0 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 8, fontWeight: 900, fontSize: 19, marginBottom: 14 };
+const miniEyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 900, fontSize: 13, marginBottom: 10 };
+const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,76px)", lineHeight: 0.92, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 1, letterSpacing: -2, margin: "0 0 12px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 22, lineHeight: 1.35, margin: 0 };
 const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
 const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-
-function readJson<T>(key: string, fallback: T): T { try { const raw = window.localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; } }
-function writeJson(key: string, value: any) { window.localStorage.setItem(key, JSON.stringify(value)); }
-function getStates(): Record<string, RoomState> { return readJson(STATE_KEY, {} as Record<string, RoomState>); }
-function dealId(deal: DealRoom) { return String(deal.id || deal.roomId || deal.dealId || ""); }
-function readArray(key: string): DealRoom[] { return readJson<DealRoom[]>(key, []); }
-function val(deal: DealRoom | null, keys: string[], fallback = "Not listed") { for (const k of keys) { const v = deal?.[k]; if (v !== undefined && v !== null && String(v).trim()) return String(v); } return fallback; }
-function arr(deal: DealRoom | null, keys: string[]) { for (const k of keys) { const v = deal?.[k]; if (Array.isArray(v)) return v.map(String); if (typeof v === "string" && v.trim()) return v.split(",").map((x) => x.trim()).filter(Boolean); } return []; }
-function money(v: string) { const clean = String(v || "").replace(/[^0-9.]/g, ""); if (!clean) return "Not listed"; const n = Number(clean); return Number.isFinite(n) ? `$${n.toLocaleString()}` : v; }
-function photo(deal: DealRoom | null) { return val(deal, ["photoUrl", "photoURL", "imageUrl", "publicUrl", "photo", "photoDataUrl", "image", "thumbnailUrl"], ""); }
-function profile(): Profile { return readJson<Profile>(PROFILE_KEY, {}); }
-function findDeal(id: string): DealRoom | null { const states = getStates(); for (const key of ROOM_KEYS) { const hit = readArray(key).find((deal) => dealId(deal) === id); if (hit) return { ...hit, id, roomState: states[id] || hit.roomState || "active" }; } for (const key of [`vaultforge_clean_deal_room_${id}`, `vaultforge_deal_room_${id}`, `vf_deal_room_${id}`]) { const hit = readJson<DealRoom | null>(key, null); if (hit) return { ...hit, id, roomState: states[id] || hit.roomState || "active" }; } return null; }
-function syncDeal(deal: DealRoom) { const id = dealId(deal); if (!id) return; writeJson(`vaultforge_clean_deal_room_${id}`, deal); writeJson(`vaultforge_deal_room_${id}`, deal); writeJson(`vf_deal_room_${id}`, deal); ROOM_KEYS.forEach((key) => { const rows = readArray(key).filter((item) => dealId(item) !== id); writeJson(key, [deal, ...rows]); }); window.dispatchEvent(new Event("vaultforge-deal-change")); }
-function score(deal: DealRoom, p: Profile) { let points = 0; const reasons: string[] = []; const state = val(deal,["state"],""); const county = val(deal,["county"],""); const asset = val(deal,["assetClass","assetType"],""); const routes = arr(deal,["routeTo","routedTo"]); const strategy = arr(deal,["strategies","dealTypes"]); const states = [...(p.buyStates || []), ...(p.operateStates || []), ...(p.alertStates || []), ...(p.contactStates || [])]; if (state && states.includes(state)) { points += 20; reasons.push(`${state} state match`); } if (county && p.countiesByState?.[state]?.includes?.(county)) { points += 20; reasons.push(`${county} county match`); } if (asset && (p.assetTypes || []).some((x: string) => asset.toLowerCase().includes(String(x).toLowerCase()) || String(x).toLowerCase().includes(asset.toLowerCase()))) { points += 20; reasons.push(`${asset} asset match`); } routes.forEach((r) => { if ((p.memberTypes || []).includes(r) || (p.capitalRoles || []).includes(r)) { points += 10; reasons.push(`${r} lane match`); } }); strategy.forEach((s) => { if ((p.dealTypes || []).includes(s)) { points += 8; reasons.push(`${s} strategy match`); } }); if ((p.routingRules || []).includes("Allow AI Routing")) { points += 12; reasons.push("AI routing allowed"); } return { points: Math.min(100, points || 38), reasons: reasons.length ? reasons : ["Profile saved, but needs more buy-box chips for higher confidence."] }; }
-function Fact({ label, value }: { label: string; value: string }) { return <div style={{ background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 20, padding: 20 }}><div style={{ ...eyebrow, fontSize: 12, letterSpacing: 4 }}>{label}</div><div style={{ fontSize: 22, fontWeight: 850 }}>{value || "Not listed"}</div></div>; }
-function PillList({ title, values }: { title: string; values: string[] }) { return <section style={{ ...card, padding: 22 }}><div style={eyebrow}>{title}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{values.length ? values.map((x)=><span key={x} style={{border:"1px solid rgba(245,197,66,.24)",background:"rgba(245,197,66,.07)",color:"#ffe99a",borderRadius:999,padding:"9px 12px",fontWeight:900,fontSize:13}}>{x}</span>) : <span style={{color:"#c9d0dc"}}>Not listed</span>}</div></section>; }
-
-export default function DealRoomDetailPage() {
-  const params = useParams(); const id = decodeURIComponent(String(params?.id || ""));
-  const [deal, setDeal] = useState<DealRoom | null>(null);
-  const [p, setP] = useState<Profile>({});
-  function load() { setDeal(findDeal(id)); setP(profile()); }
-  useEffect(() => { load(); }, [id]);
-  function setRoomState(state: RoomState) { if (!deal) return; const states = getStates(); states[id] = state; writeJson(STATE_KEY, states); const next = { ...deal, roomState: state, updatedAt: new Date().toISOString() }; syncDeal(next); setDeal(next); }
-  const img = photo(deal); const routes = arr(deal,["routeTo","routedTo"]); const issues = arr(deal,["knownIssues","issues"]); const docs = arr(deal,["docs"]); const strategies = arr(deal,["strategies","dealTypes"]); const capitalNeeds = arr(deal,["capitalNeeds"]); const fit = useMemo(() => deal ? score(deal, p) : { points: 0, reasons: [] as string[] }, [deal, p]);
-  const profileName = [p.fullName, p.company].filter(Boolean).join(" / ") || "No saved member profile";
-  const profilePhoto = String(p.profilePhoto || p.companyLogo || "");
-  const signalSummary = deal ? val(deal, ["signalSummary"], `${val(deal,["assetClass"],"Deal")} signal in ${[val(deal,["city"],""), val(deal,["county"],""), val(deal,["state"],"")].filter(Boolean).join(", ")}. Ask ${money(val(deal,["askingPrice","ask"],""))}, value ${money(val(deal,["arv","value"],""))}, repairs ${money(val(deal,["repairs"],""))}.`) : "";
-  if (!deal) return <main style={page}><div style={wrap}><Link href="/deal-rooms" style={goldBtn}>Back to Deal Rooms</Link><section style={card}><div style={eyebrow}>Deal Room</div><h1 style={h1}>Room not found.</h1><p style={sub}>Open a saved Deal Room from the board.</p></section></div></main>;
-  return <main style={page}><div style={wrap}>
-    <nav style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:18}}><Link href="/command" style={btn}>Command</Link><Link href="/deal-rooms" style={goldBtn}>Deal Rooms</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/" style={redBtn}>Exit</Link></nav>
-    <section style={card}>{img ? <img src={img} alt={val(deal,["title"],"Deal photo")} style={{width:"100%",maxHeight:440,objectFit:"cover",borderRadius:24,marginBottom:24,border:"1px solid rgba(207,216,230,.2)"}} /> : <div style={{border:"1px dashed rgba(207,216,230,.25)",borderRadius:24,padding:70,textAlign:"center",color:"#c9d0dc",marginBottom:24}}>No photo URL saved for this room</div>}<div style={eyebrow}>{val(deal,["assetClass","asset_class"],"Deal Room")}</div><h1 style={h1}>{val(deal,["title","name"],"Untitled Deal")}</h1><p style={sub}>{[val(deal,["city"],""), val(deal,["county"],""), val(deal,["state"],"")].filter(Boolean).join(" • ")}</p></section>
-    <section style={card}><div style={eyebrow}>5S Controls</div><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button type="button" onClick={()=>setRoomState("saved")} style={goldBtn}>Save</button><button type="button" onClick={()=>setRoomState("archived")} style={btn}>Archive</button><button type="button" onClick={()=>setRoomState("deleted")} style={redBtn}>Delete</button><span style={btn}>Current: {deal.roomState || "active"}</span></div></section>
-    <section style={card}><div style={eyebrow}>Owner Message</div><h2 style={{fontSize:34,margin:"0 0 12px"}}>Contact owner with this deal attached.</h2><p style={sub}>Message subject is locked to this room so the thread matches the deal.</p><div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:16}}><Link href={`/messages?room=${encodeURIComponent(id)}&type=deal&subject=${encodeURIComponent(`Deal Room: ${val(deal,["title","name"],"Untitled Deal")}`)}&to=${encodeURIComponent(val(deal,["contactEmail"],""))}`} style={goldBtn}>Message Owner</Link><a href={`mailto:${val(deal,["contactEmail"],"")}?subject=${encodeURIComponent(`VaultForge Deal Room: ${val(deal,["title","name"],"Untitled Deal")}`)}`} style={btn}>Email Owner</a></div></section>
-    <section style={card}><div style={eyebrow}>VaultForge Signal Summary</div><p style={sub}>{signalSummary}</p></section>
-    <section style={card}><div style={eyebrow}>AI Routed Profile</div><div style={{display:"grid",gridTemplateColumns:"140px minmax(0,1fr)",gap:18,alignItems:"center"}}><div style={{width:132,height:132,borderRadius:24,overflow:"hidden",border:"1px solid rgba(245,197,66,.28)",background:"#111827",display:"grid",placeItems:"center",color:"#c9d0dc",fontWeight:950}}>{profilePhoto ? <img src={profilePhoto} alt="Profile" style={{width:"100%",height:"100%",objectFit:"cover"}}/> : "No photo"}</div><div><h2 style={{fontSize:36,margin:"0 0 8px"}}>{profileName}</h2><p style={sub}>Fit score: <strong style={{color:"#ffd45a"}}>{fit.points}%</strong>. Contact: {(p.preferredContact || []).join(", ") || "Not selected"}. Phone: {p.phone || "Not listed"}. Email: {p.email || "Not listed"}.</p><div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>{fit.reasons.map((r)=><span key={r} style={{border:"1px solid rgba(245,197,66,.24)",borderRadius:999,padding:"8px 11px",color:"#ffe99a",fontWeight:900,fontSize:12}}>{r}</span>)}</div></div></div><div style={{...grid,marginTop:18}}><Fact label="Member Types" value={(p.memberTypes || []).join(", ") || "Not listed"}/><Fact label="Buy States" value={(p.buyStates || []).join(", ") || "Not listed"}/><Fact label="Alert States" value={(p.alertStates || []).join(", ") || "Not listed"}/><Fact label="Capital Role" value={(p.capitalRoles || []).join(", ") || "Not listed"}/><Fact label="Execution" value={(p.executionCapabilities || []).join(", ") || "Not listed"}/><Fact label="Routing Rules" value={(p.routingRules || []).join(", ") || "Not listed"}/></div></section>
-    <section style={card}><div style={eyebrow}>Numbers + Asset Facts</div><div style={grid}><Fact label="Ask" value={money(val(deal,["askingPrice","ask"],""))}/><Fact label="ARV / Value" value={money(val(deal,["arv","value"],""))}/><Fact label="Repairs / Work" value={money(val(deal,["repairs"],""))}/><Fact label="Equity Spread" value={val(deal,["equitySpread"])}/><Fact label="Beds" value={val(deal,["beds"])}/><Fact label="Baths" value={val(deal,["baths"])}/><Fact label="Sqft" value={val(deal,["sqft"])}/><Fact label="Units" value={val(deal,["units"])}/><Fact label="Acres" value={val(deal,["acres"])}/><Fact label="Zoning" value={val(deal,["zoning"])}/></div></section>
-    <section style={card}><div style={eyebrow}>Contact + Control</div><div style={grid}><Fact label="Name" value={val(deal,["contactName"])}/><Fact label="Phone" value={val(deal,["contactPhone"])}/><Fact label="Email" value={val(deal,["contactEmail"])}/><Fact label="Best Contact" value={val(deal,["bestContact"])}/><Fact label="Submitter Role" value={val(deal,["submitterRole"])}/><Fact label="Deadline" value={val(deal,["deadline"])}/></div></section>
-    <div style={grid}><PillList title="Route Lanes" values={routes}/><PillList title="Strategy" values={strategies}/><PillList title="Capital Need" values={capitalNeeds}/><PillList title="Issues" values={issues}/><PillList title="Documents" values={docs}/><PillList title="AI Fit Reasons" values={fit.reasons}/></div>
-    <section style={card}><div style={eyebrow}>AI Execution Brain</div><div style={grid}><Fact label="Urgency" value={val(deal,["urgency"])}/><Fact label="Occupancy" value={val(deal,["occupancy"])}/><Fact label="Access" value={val(deal,["access"])}/><Fact label="Assignment Fee" value={val(deal,["assignmentFee"])}/></div><div style={{...card,marginTop:20,marginBottom:0,padding:22}}><div style={eyebrow}>AI Room Read</div><p style={sub}>{val(deal,["aiRead"],"No AI read saved.")}</p></div><div style={{...card,marginTop:20,marginBottom:0,padding:22}}><div style={eyebrow}>Seller Motivation</div><p style={sub}>{val(deal,["sellerMotivation"],"Not listed")}</p></div><div style={{...card,marginTop:20,marginBottom:0,padding:22}}><div style={eyebrow}>Risk Notes</div><p style={sub}>{val(deal,["riskNotes"],"Not listed")}</p></div><div style={{...card,marginTop:20,marginBottom:0,padding:22}}><div style={eyebrow}>Private AI Notes</div><p style={sub}>{val(deal,["privateAiNotes","notes"],"No notes saved.")}</p></div></section>
-  </div></main>;
-}
+const actionRow: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 12 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(245px, 1fr))", gap: 16 };
+const factCard: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 20, padding: 22 };
+const factValue: React.CSSProperties = { fontSize: 22, fontWeight: 850, color: "#f7f7fb" };
+const photoGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 };
+const photoStyle: React.CSSProperties = { width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(207,216,230,.2)" };
+const emptyPhoto: React.CSSProperties = { border: "1px dashed rgba(207,216,230,.25)", borderRadius: 24, padding: 70, textAlign: "center", color: "#c9d0dc", marginBottom: 24, fontSize: 22 };
+const profileCard: React.CSSProperties = { display: "grid", gridTemplateColumns: "130px 1fr", gap: 20, alignItems: "start" };
+const profilePhoto: React.CSSProperties = { width: 130, height: 130, objectFit: "cover", borderRadius: 24, border: "1px solid rgba(245,197,66,.34)" };
+const noteBox: React.CSSProperties = { marginTop: 18, padding: 22, borderRadius: 22, border: "1px solid rgba(207,216,230,.14)", background: "#121724" };
