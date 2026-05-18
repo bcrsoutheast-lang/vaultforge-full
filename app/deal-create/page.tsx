@@ -1,120 +1,90 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
 
-const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+type AssetClass = "Residential" | "Commercial" | "Land";
+type ToastKind = "success" | "error";
 
-const CONTACT_METHODS = ["Call", "Text", "Email", "VaultForge Message"];
-const CONTACT_TIMES = ["Morning", "Midday", "Afternoon", "Evening", "Anytime"];
-const SUBMITTER_ROLES = ["Owner", "Wholesaler", "Agent", "Partner", "Lender", "Operator", "Other"];
-const CONTRACT_STATUS = ["Under Contract", "Direct to Seller", "Listed", "Verbal Agreement", "Researching", "Unknown"];
-const OCCUPANCY = ["Vacant", "Tenant Occupied", "Owner Occupied", "Partially Occupied", "Unknown"];
-const ACCESS = ["Lockbox", "By Appointment", "Drive By Only", "Tenant Notice Needed", "Owner Must Approve", "Unknown"];
-const ADDRESS_VISIBILITY = ["Private Only", "Public Teaser", "Show After Approval", "Show After Unlock"];
-const ROUTING_NEEDS = ["Buyer", "Lender", "JV Partner", "Contractor", "Operator", "Property Manager", "Attorney/Title", "Advice"];
-const URGENCY = ["Low", "Medium", "High", "Emergency"];
-const ISSUES = ["Title Issue", "Lien", "Probate", "Code Violation", "Tax Issue", "Tenant Issue", "Permit Issue", "Structural Concern", "None Known"];
-const DOCS = ["More Photos Available", "Inspection Available", "Comps Available", "Repair Bid Available", "Title Work Available", "Contract Available", "Survey Available"];
+type ToastState = {
+  show: boolean;
+  kind: ToastKind;
+  title: string;
+  message: string;
+};
 
-type Deal = {
+type DealDraft = {
   id: string;
-  type: string;
-  photo: string;
+  assetClass: AssetClass;
   title: string;
   state: string;
   city: string;
   county: string;
-  purchasePrice: string;
-  arv: string;
-  repairs: string;
+  askingPrice: string;
+  arvValue: string;
+  repairsWork: string;
   equitySpread: string;
   beds: string;
   baths: string;
   sqft: string;
-  noi: string;
-  capRate: string;
-  tenantStatus: string;
-  acres: string;
+  units: string;
+  acreage: string;
   zoning: string;
-  utilities: string;
-  notes: string;
-
-  contactName: string;
-  contactPhone: string;
-  contactEmail: string;
-  contactMethods: string[];
-  contactTimes: string[];
-  submitterRoles: string[];
-  contractStatus: string[];
+  lotType: string;
+  sellerName: string;
+  sellerPhone: string;
+  sellerEmail: string;
   assignmentFee: string;
-  closeDate: string;
-  occupancy: string[];
-  access: string[];
-  accessNotes: string;
-  addressVisibility: string[];
-  routingNeeds: string[];
-  urgency: string[];
-  canContactMatchedMembers: string;
-  issues: string[];
-  docs: string[];
-  repairNotes: string;
-  privateAiNotes: string;
-
+  deadline: string;
+  bestContact: string;
+  submitterRole: string;
+  routeTo: string[];
+  urgency: string;
+  occupancy: string;
+  access: string;
+  knownIssues: string[];
+  docsAvailable: string[];
+  aiNotes: string;
+  photoDataUrl: string;
+  photoName: string;
   createdAt: string;
+  updatedAt: string;
 };
 
-const STORAGE_KEY = "vaultforge_clean_deal_rooms_v1";
+const STORAGE_KEY = "vaultforge_deal_rooms";
 
-const emptyDeal: Deal = {
-  id: "",
-  type: "Residential",
-  photo: "",
-  title: "",
-  state: "GA",
-  city: "",
-  county: "",
-  purchasePrice: "",
-  arv: "",
-  repairs: "",
-  equitySpread: "",
-  beds: "",
-  baths: "",
-  sqft: "",
-  noi: "",
-  capRate: "",
-  tenantStatus: "",
-  acres: "",
-  zoning: "",
-  utilities: "",
-  notes: "",
+const assetClasses: AssetClass[] = ["Residential", "Commercial", "Land"];
+const states = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+const contactOptions = ["VaultForge Message", "Phone", "Email", "Text"];
+const roles = ["Owner", "Wholesaler", "Broker", "Agent", "Investor", "Operator", "Lender", "Contractor"];
+const routeOptions = ["Buyer", "Capital", "Lender", "Operator", "Contractor", "Broker", "Attorney", "Title", "Property Manager"];
+const urgencyOptions = ["Low", "Medium", "High", "Emergency"];
+const occupancyOptions = ["Vacant", "Owner Occupied", "Tenant Occupied", "Unknown", "Raw Land", "N/A"];
+const accessOptions = ["Drive By", "Lockbox", "Appointment", "Owner Access", "Tenant Notice", "Unknown"];
+const issueOptions = ["None Known", "Title", "Probate", "Foreclosure", "Taxes", "Liens", "Permit", "Tenant", "Construction", "Environmental", "Survey", "Access"];
+const docOptions = ["Photos", "Rent Roll", "Survey", "Title Work", "POF Needed", "Inspection", "Plans", "Permits", "ARV Comps", "Repair Bid"];
 
-  contactName: "",
-  contactPhone: "",
-  contactEmail: "",
-  contactMethods: [],
-  contactTimes: [],
-  submitterRoles: [],
-  contractStatus: [],
-  assignmentFee: "",
-  closeDate: "",
-  occupancy: [],
-  access: [],
-  accessNotes: "",
-  addressVisibility: ["Private Only"],
-  routingNeeds: [],
-  urgency: [],
-  canContactMatchedMembers: "Yes",
-  issues: [],
-  docs: [],
-  repairNotes: "",
-  privateAiNotes: "",
+function safeText(value: unknown) {
+  return String(value || "").trim();
+}
 
-  createdAt: "",
-};
+function moneyLabel(value: string) {
+  const cleaned = safeText(value).replace(/[^0-9.]/g, "");
+  if (!cleaned) return "not entered";
+  const number = Number(cleaned);
+  if (!Number.isFinite(number)) return value;
+  return `$${number.toLocaleString()}`;
+}
 
-function readDeals(): Deal[] {
+function makeId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `deal_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function readDeals(): DealDraft[] {
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
@@ -124,445 +94,514 @@ function readDeals(): Deal[] {
   }
 }
 
-function writeDeal(deal: Deal) {
-  const deals = readDeals();
-  const next = [deal, ...deals.filter((item) => item.id !== deal.id)];
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  window.dispatchEvent(new CustomEvent("vaultforge-deals-change"));
+function writeDeals(deals: DealDraft[]) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(deals));
 }
 
-function money(value: string) {
-  const clean = String(value || "").trim();
-  if (!clean) return "Not listed";
-  if (clean.includes("$")) return clean;
+const blankDeal: DealDraft = {
+  id: "",
+  assetClass: "Residential",
+  title: "",
+  state: "GA",
+  city: "",
+  county: "",
+  askingPrice: "",
+  arvValue: "",
+  repairsWork: "",
+  equitySpread: "",
+  beds: "",
+  baths: "",
+  sqft: "",
+  units: "",
+  acreage: "",
+  zoning: "",
+  lotType: "",
+  sellerName: "",
+  sellerPhone: "",
+  sellerEmail: "",
+  assignmentFee: "",
+  deadline: "",
+  bestContact: "VaultForge Message",
+  submitterRole: "Owner",
+  routeTo: ["Buyer"],
+  urgency: "High",
+  occupancy: "Vacant",
+  access: "Appointment",
+  knownIssues: ["None Known"],
+  docsAvailable: ["Photos"],
+  aiNotes: "",
+  photoDataUrl: "",
+  photoName: "",
+  createdAt: "",
+  updatedAt: "",
+};
 
-  const n = Number(clean.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return clean;
-
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-}
-
-function ChipGroup({
-  label,
-  items,
-  selected,
-  onToggle,
-  note,
-}: {
-  label: string;
-  items: string[];
-  selected: string[];
-  onToggle: (item: string) => void;
-  note?: string;
-}) {
+function Chip({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
   return (
-    <section className="vf-chip-section">
-      <div className="vf-chip-label">{label}</div>
-      {note ? <p className="vf-chip-note">{note}</p> : null}
-      <div className="vf-chip-row">
-        {items.map((item) => {
-          const active = selected.includes(item);
-
-          return (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onToggle(item)}
-              className={active ? "vf-chip active" : "vf-chip"}
-            >
-              {item}
-            </button>
-          );
-        })}
-      </div>
-    </section>
+    <button type="button" onClick={onClick} style={active ? chipActive : chip}>
+      {children}
+    </button>
   );
 }
 
+function Field({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (value: string) => void; placeholder: string; type?: string }) {
+  return <input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} style={input} />;
+}
+
+function TextBox({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  return <textarea value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} style={textarea} />;
+}
+
 export default function DealCreatePage() {
-  const [deal, setDeal] = useState<Deal>(emptyDeal);
-  const [saved, setSaved] = useState("");
+  const [deal, setDeal] = useState<DealDraft>(blankDeal);
+  const [toast, setToast] = useState<ToastState>({ show: false, kind: "success", title: "", message: "" });
+  const [saving, setSaving] = useState(false);
 
-  function update<K extends keyof Deal>(key: K, value: Deal[K]) {
+  useEffect(() => {
+    if (!toast.show) return;
+    const timer = window.setTimeout(() => {
+      setToast((current) => ({ ...current, show: false }));
+    }, toast.kind === "success" ? 2600 : 4200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const aiRead = useMemo(() => {
+    const assetDetail = deal.assetClass === "Residential"
+      ? `${deal.beds || "?"} beds / ${deal.baths || "?"} baths / ${deal.sqft || "?"} sqft`
+      : deal.assetClass === "Commercial"
+        ? `${deal.units || "?"} units / ${deal.sqft || "?"} sqft / zoning ${deal.zoning || "?"}`
+        : `${deal.acreage || "?"} acres / ${deal.lotType || "land"} / zoning ${deal.zoning || "?"}`;
+
+    return `Market: ${deal.city || "City"}, ${deal.county || "County"}, ${deal.state || "State"}. Numbers: ask ${moneyLabel(deal.askingPrice)}, ARV/value ${moneyLabel(deal.arvValue)}, repairs/work ${moneyLabel(deal.repairsWork)}. Best contact: ${deal.bestContact}. Submitter role: ${deal.submitterRole}. Needs routed to: ${deal.routeTo.length ? deal.routeTo.join(", ") : "not selected"}. Urgency: ${deal.urgency}. Occupancy: ${deal.occupancy}. Known issues: ${deal.knownIssues.length ? deal.knownIssues.join(", ") : "none selected"}. ${deal.assetClass} asset: ${assetDetail}.`;
+  }, [deal]);
+
+  function update<K extends keyof DealDraft>(key: K, value: DealDraft[K]) {
     setDeal((current) => ({ ...current, [key]: value }));
-    setSaved("");
   }
 
-  function toggle(key: keyof Deal, item: string) {
-    const current = Array.isArray(deal[key]) ? (deal[key] as string[]) : [];
-    const next = current.includes(item)
-      ? current.filter((value) => value !== item)
-      : [...current, item];
-
-    update(key as any, next as any);
+  function toggleArray(key: "routeTo" | "knownIssues" | "docsAvailable", value: string) {
+    setDeal((current) => {
+      const set = new Set(current[key]);
+      if (set.has(value)) set.delete(value);
+      else set.add(value);
+      return { ...current, [key]: Array.from(set) };
+    });
   }
 
-  function setType(type: string) {
-    setDeal((current) => ({ ...current, type }));
-    setSaved("");
+  function showToast(kind: ToastKind, title: string, message: string) {
+    setToast({ show: true, kind, title, message });
   }
 
-  function photoUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+  function validateDeal() {
+    if (!safeText(deal.title)) return "Add a deal name/title before saving.";
+    if (!safeText(deal.state)) return "Select a state before saving.";
+    if (!safeText(deal.city)) return "Add the city before saving.";
+    if (!safeText(deal.sellerName) && !safeText(deal.sellerPhone) && !safeText(deal.sellerEmail)) {
+      return "Add at least one contact detail: name, phone, or email.";
+    }
+    return "";
+  }
 
+  async function handlePhoto(file: File | null) {
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("error", "Photo not saved", "Please choose an image file only.");
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      showToast("error", "Photo too large", "Use an image under 6MB for the local test build.");
+      return;
+    }
 
     const reader = new FileReader();
-
     reader.onload = () => {
-      if (typeof reader.result === "string") {
-        update("photo", reader.result);
-      }
+      update("photoDataUrl", String(reader.result || ""));
+      update("photoName", file.name);
     };
-
+    reader.onerror = () => showToast("error", "Photo error", "The image could not be read on this device.");
     reader.readAsDataURL(file);
   }
 
-  function saveDeal() {
-    const now = new Date().toISOString();
-    const next: Deal = {
-      ...deal,
-      id: deal.id || `deal-${Date.now()}`,
-      title: deal.title || `${deal.type} Opportunity`,
-      createdAt: deal.createdAt || now,
-    };
+  function handleSave() {
+    const error = validateDeal();
+    if (error) {
+      showToast("error", "Deal not saved", error);
+      return;
+    }
 
-    writeDeal(next);
-    setDeal(next);
-    setSaved("Deal saved locally. It now has contact/routing data for members and smart AI matching.");
+    setSaving(true);
+    try {
+      const now = new Date().toISOString();
+      const id = deal.id || makeId();
+      const savedDeal: DealDraft = {
+        ...deal,
+        id,
+        title: safeText(deal.title),
+        city: safeText(deal.city),
+        county: safeText(deal.county),
+        sellerName: safeText(deal.sellerName),
+        sellerPhone: safeText(deal.sellerPhone),
+        sellerEmail: safeText(deal.sellerEmail),
+        updatedAt: now,
+        createdAt: deal.createdAt || now,
+      };
+
+      const existing = readDeals();
+      const withoutCurrent = existing.filter((item) => item.id !== id);
+      writeDeals([savedDeal, ...withoutCurrent]);
+      setDeal(savedDeal);
+      showToast("success", "Deal saved", "Saved to Deal Rooms. This message will disappear automatically.");
+    } catch (saveError) {
+      console.error(saveError);
+      showToast("error", "Save failed", "This browser could not save the deal locally. Try removing large photos or refreshing.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const aiRead = useMemo(() => {
-    const parts = [
-      deal.city || deal.county || deal.state
-        ? `Market: ${[deal.city, deal.county, deal.state].filter(Boolean).join(", ")}.`
-        : "",
-      deal.purchasePrice || deal.arv || deal.repairs
-        ? `Numbers: ask ${money(deal.purchasePrice)}, ARV/value ${money(deal.arv)}, repairs/work ${money(deal.repairs)}.`
-        : "",
-      deal.contactMethods.length
-        ? `Best contact: ${deal.contactMethods.join(", ")}${deal.contactTimes.length ? ` during ${deal.contactTimes.join(", ")}` : ""}.`
-        : "",
-      deal.submitterRoles.length ? `Submitter role: ${deal.submitterRoles.join(", ")}.` : "",
-      deal.routingNeeds.length ? `Needs routed to: ${deal.routingNeeds.join(", ")}.` : "",
-      deal.urgency.length ? `Urgency: ${deal.urgency.join(", ")}.` : "",
-      deal.occupancy.length ? `Occupancy: ${deal.occupancy.join(", ")}.` : "",
-      deal.issues.length ? `Known issues: ${deal.issues.join(", ")}.` : "",
-      deal.type === "Residential" && (deal.beds || deal.baths || deal.sqft)
-        ? `Residential asset: ${deal.beds || "?"} beds / ${deal.baths || "?"} baths / ${deal.sqft || "?"} sqft.`
-        : "",
-      deal.type === "Commercial" && (deal.noi || deal.capRate || deal.tenantStatus)
-        ? `Commercial read: NOI ${deal.noi || "not listed"}, cap ${deal.capRate || "not listed"}, tenant status ${deal.tenantStatus || "not listed"}.`
-        : "",
-      deal.type === "Land" && (deal.acres || deal.zoning || deal.utilities)
-        ? `Land read: ${deal.acres || "?"} acres, zoning ${deal.zoning || "not listed"}, utilities ${deal.utilities || "not listed"}.`
-        : "",
-      deal.notes ? `Operator notes: ${deal.notes}` : "",
-      deal.privateAiNotes ? `Private AI notes: ${deal.privateAiNotes}` : "",
-    ].filter(Boolean);
-
-    return parts.length
-      ? parts.join(" ")
-      : "Fill the form and click routing fields to generate the operator read for this opportunity.";
-  }, [deal]);
+  function handleClear() {
+    setDeal({ ...blankDeal, assetClass: deal.assetClass });
+    showToast("success", "Form reset", "The form was cleared for a new deal.");
+  }
 
   return (
     <VaultForgeCleanShell
-      active="deals"
-      eyebrow="DEAL OPPORTUNITY"
-      title="Bloomberg operator intake."
-      subtitle="Residential, Commercial, and Land intake with contact controls, member routing, urgency, access, issues, photo upload, and AI-ready room data."
+      title="Deal Opportunity"
+      subtitle="Bloomberg operator intake."
+      description="Residential, Commercial, and Land intake with contact controls, member routing, urgency, access, issues, photo upload, and AI-ready room data."
     >
-      <section className="vf-card">
-        <div className="vf-eyebrow">ASSET CLASS</div>
+      {toast.show ? (
+        <div style={toast.kind === "success" ? toastSuccess : toastError} role="status" aria-live="polite">
+          <strong>{toast.title}</strong>
+          <span>{toast.message}</span>
+        </div>
+      ) : null}
 
-        <div className="vf-chip-row">
-          {["Residential", "Commercial", "Land"].map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setType(item)}
-              className={deal.type === item ? "vf-chip active" : "vf-chip"}
-            >
-              {item}
-            </button>
+      <section style={panel}>
+        <div style={eyebrow}>Asset Class</div>
+        <div style={chipRow}>
+          {assetClasses.map((option) => (
+            <Chip key={option} active={deal.assetClass === option} onClick={() => update("assetClass", option)}>
+              {option}
+            </Chip>
           ))}
         </div>
       </section>
 
-      <section className="vf-card">
-        <div className="vf-eyebrow">{deal.type.toUpperCase()} FORM</div>
+      <section style={panel}>
+        <div style={eyebrow}>{deal.assetClass} Form</div>
 
-        <div className="vf-deal-grid">
-          <div>
-            <div className="vf-photo-box">
-              {deal.photo ? (
-                <img src={deal.photo} alt="" />
-              ) : (
-                <div>Upload property image</div>
-              )}
-            </div>
+        <div style={photoBox}>
+          {deal.photoDataUrl ? <img src={deal.photoDataUrl} alt="Deal preview" style={photo} /> : <div style={photoEmpty}>Upload deal photo</div>}
+          <input type="file" accept="image/*" onChange={(event) => handlePhoto(event.target.files?.[0] || null)} style={fileInput} />
+          {deal.photoName ? <div style={smallText}>{deal.photoName}</div> : null}
+        </div>
 
-            <input
-              type="file"
-              accept="image/*"
-              onChange={photoUpload}
-              style={{ marginTop: 12, color: "#fff", width: "100%" }}
-            />
+        <div style={aiBox}>
+          <div style={eyebrow}>AI Room Read</div>
+          <p style={bodyText}>{aiRead}</p>
+        </div>
 
-            <section className="vf-preview">
-              <div className="vf-eyebrow">AI ROOM READ</div>
-              <p className="vf-copy">{aiRead}</p>
-            </section>
-          </div>
+        <div style={grid3}>
+          <Field value={deal.title} onChange={(value) => update("title", value)} placeholder="Deal Name / Headline" />
+          <select value={deal.state} onChange={(event) => update("state", event.target.value)} style={input}>
+            {states.map((state) => <option key={state} value={state}>{state}</option>)}
+          </select>
+          <Field value={deal.city} onChange={(value) => update("city", value)} placeholder="City" />
+          <Field value={deal.county} onChange={(value) => update("county", value)} placeholder="County" />
+          <Field value={deal.askingPrice} onChange={(value) => update("askingPrice", value)} placeholder="Asking Price" />
+          <Field value={deal.arvValue} onChange={(value) => update("arvValue", value)} placeholder="ARV / Value" />
+          <Field value={deal.repairsWork} onChange={(value) => update("repairsWork", value)} placeholder="Repairs / Work" />
+          <Field value={deal.equitySpread} onChange={(value) => update("equitySpread", value)} placeholder="Equity Spread" />
 
-          <div className="vf-fields">
-            <input placeholder="Deal Title" value={deal.title} onChange={(e) => update("title", e.target.value)} />
+          {deal.assetClass === "Residential" ? (
+            <>
+              <Field value={deal.beds} onChange={(value) => update("beds", value)} placeholder="Beds" />
+              <Field value={deal.baths} onChange={(value) => update("baths", value)} placeholder="Baths" />
+              <Field value={deal.sqft} onChange={(value) => update("sqft", value)} placeholder="Sqft" />
+            </>
+          ) : null}
 
-            <select value={deal.state} onChange={(e) => update("state", e.target.value)}>
-              {STATES.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
+          {deal.assetClass === "Commercial" ? (
+            <>
+              <Field value={deal.units} onChange={(value) => update("units", value)} placeholder="Units / Bays / Keys" />
+              <Field value={deal.sqft} onChange={(value) => update("sqft", value)} placeholder="Building Sqft" />
+              <Field value={deal.zoning} onChange={(value) => update("zoning", value)} placeholder="Zoning" />
+            </>
+          ) : null}
 
-            <input placeholder="City" value={deal.city} onChange={(e) => update("city", e.target.value)} />
-            <input placeholder="County" value={deal.county} onChange={(e) => update("county", e.target.value)} />
-            <input placeholder="Purchase Price" value={deal.purchasePrice} onChange={(e) => update("purchasePrice", e.target.value)} />
-            <input placeholder="ARV / Exit Value" value={deal.arv} onChange={(e) => update("arv", e.target.value)} />
-            <input placeholder="Repair Estimate" value={deal.repairs} onChange={(e) => update("repairs", e.target.value)} />
-            <input placeholder="Equity Spread" value={deal.equitySpread} onChange={(e) => update("equitySpread", e.target.value)} />
+          {deal.assetClass === "Land" ? (
+            <>
+              <Field value={deal.acreage} onChange={(value) => update("acreage", value)} placeholder="Acreage" />
+              <Field value={deal.lotType} onChange={(value) => update("lotType", value)} placeholder="Lot Type" />
+              <Field value={deal.zoning} onChange={(value) => update("zoning", value)} placeholder="Zoning" />
+            </>
+          ) : null}
 
-            {deal.type === "Residential" && (
-              <>
-                <input placeholder="Beds" value={deal.beds} onChange={(e) => update("beds", e.target.value)} />
-                <input placeholder="Baths" value={deal.baths} onChange={(e) => update("baths", e.target.value)} />
-                <input placeholder="SQFT" value={deal.sqft} onChange={(e) => update("sqft", e.target.value)} />
-              </>
-            )}
-
-            {deal.type === "Commercial" && (
-              <>
-                <input placeholder="NOI" value={deal.noi} onChange={(e) => update("noi", e.target.value)} />
-                <input placeholder="Cap Rate" value={deal.capRate} onChange={(e) => update("capRate", e.target.value)} />
-                <input placeholder="Tenant Status" value={deal.tenantStatus} onChange={(e) => update("tenantStatus", e.target.value)} />
-              </>
-            )}
-
-            {deal.type === "Land" && (
-              <>
-                <input placeholder="Acres" value={deal.acres} onChange={(e) => update("acres", e.target.value)} />
-                <input placeholder="Zoning" value={deal.zoning} onChange={(e) => update("zoning", e.target.value)} />
-                <input placeholder="Utilities" value={deal.utilities} onChange={(e) => update("utilities", e.target.value)} />
-              </>
-            )}
-
-            <textarea
-              placeholder="AI / Deal Notes"
-              rows={5}
-              value={deal.notes}
-              onChange={(e) => update("notes", e.target.value)}
-            />
-          </div>
+          <TextBox value={deal.aiNotes} onChange={(value) => update("aiNotes", value)} placeholder="AI / Deal Notes" />
         </div>
       </section>
 
-      <section className="vf-card">
-        <div className="vf-eyebrow">CONTACT + CONTROL</div>
-
-        <div className="vf-fields">
-          <input placeholder="Contact Name" value={deal.contactName} onChange={(e) => update("contactName", e.target.value)} />
-          <input placeholder="Contact Phone" value={deal.contactPhone} onChange={(e) => update("contactPhone", e.target.value)} />
-          <input placeholder="Contact Email" value={deal.contactEmail} onChange={(e) => update("contactEmail", e.target.value)} />
-          <input placeholder="Assignment Fee / Spread" value={deal.assignmentFee} onChange={(e) => update("assignmentFee", e.target.value)} />
-          <input placeholder="Deadline / Close Date" value={deal.closeDate} onChange={(e) => update("closeDate", e.target.value)} />
+      <section style={panel}>
+        <div style={eyebrow}>Contact + Control</div>
+        <div style={grid3}>
+          <Field value={deal.sellerName} onChange={(value) => update("sellerName", value)} placeholder="Name" />
+          <Field value={deal.sellerPhone} onChange={(value) => update("sellerPhone", value)} placeholder="Phone" />
+          <Field value={deal.sellerEmail} onChange={(value) => update("sellerEmail", value)} placeholder="Email" type="email" />
+          <Field value={deal.assignmentFee} onChange={(value) => update("assignmentFee", value)} placeholder="Assignment Fee / Spread" />
+          <Field value={deal.deadline} onChange={(value) => update("deadline", value)} placeholder="Deadline / Close Date" />
         </div>
 
-        <ChipGroup label="Best Way To Be Contacted" items={CONTACT_METHODS} selected={deal.contactMethods} onToggle={(item) => toggle("contactMethods", item)} />
-        <ChipGroup label="Best Time To Contact" items={CONTACT_TIMES} selected={deal.contactTimes} onToggle={(item) => toggle("contactTimes", item)} />
-        <ChipGroup label="Submitter Role" items={SUBMITTER_ROLES} selected={deal.submitterRoles} onToggle={(item) => toggle("submitterRoles", item)} />
-        <ChipGroup label="Contract / Control Status" items={CONTRACT_STATUS} selected={deal.contractStatus} onToggle={(item) => toggle("contractStatus", item)} />
-        <ChipGroup label="Occupancy" items={OCCUPANCY} selected={deal.occupancy} onToggle={(item) => toggle("occupancy", item)} />
-        <ChipGroup label="Access" items={ACCESS} selected={deal.access} onToggle={(item) => toggle("access", item)} />
-        <ChipGroup label="Address Visibility" items={ADDRESS_VISIBILITY} selected={deal.addressVisibility} onToggle={(item) => toggle("addressVisibility", item)} />
+        <div style={subhead}>Best Way To Contact</div>
+        <div style={chipRow}>{contactOptions.map((option) => <Chip key={option} active={deal.bestContact === option} onClick={() => update("bestContact", option)}>{option}</Chip>)}</div>
+
+        <div style={subhead}>Submitter Role</div>
+        <div style={chipRow}>{roles.map((option) => <Chip key={option} active={deal.submitterRole === option} onClick={() => update("submitterRole", option)}>{option}</Chip>)}</div>
       </section>
 
-      <section className="vf-card">
-        <div className="vf-eyebrow">MEMBER ROUTING + SMART AI</div>
+      <section style={panel}>
+        <div style={eyebrow}>Routing Intelligence</div>
+        <div style={subhead}>Route This Deal To</div>
+        <div style={chipRow}>{routeOptions.map((option) => <Chip key={option} active={deal.routeTo.includes(option)} onClick={() => toggleArray("routeTo", option)}>{option}</Chip>)}</div>
 
-        <ChipGroup
-          label="Who Should VaultForge Route This To?"
-          items={ROUTING_NEEDS}
-          selected={deal.routingNeeds}
-          onToggle={(item) => toggle("routingNeeds", item)}
-          note="Members need enough information to know if they are buyer, capital, contractor, operator, title/legal, or advice fit."
-        />
+        <div style={subhead}>Urgency</div>
+        <div style={chipRow}>{urgencyOptions.map((option) => <Chip key={option} active={deal.urgency === option} onClick={() => update("urgency", option)}>{option}</Chip>)}</div>
 
-        <ChipGroup label="Urgency" items={URGENCY} selected={deal.urgency} onToggle={(item) => toggle("urgency", item)} />
-        <ChipGroup label="Known Issues" items={ISSUES} selected={deal.issues} onToggle={(item) => toggle("issues", item)} />
-        <ChipGroup label="Available Documents / Proof" items={DOCS} selected={deal.docs} onToggle={(item) => toggle("docs", item)} />
+        <div style={subhead}>Occupancy</div>
+        <div style={chipRow}>{occupancyOptions.map((option) => <Chip key={option} active={deal.occupancy === option} onClick={() => update("occupancy", option)}>{option}</Chip>)}</div>
 
-        <div className="vf-chip-section">
-          <div className="vf-chip-label">Can VaultForge Contact Matched Members?</div>
-          <div className="vf-chip-row">
-            {["Yes", "No", "Ask Me First"].map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => update("canContactMatchedMembers", item)}
-                className={deal.canContactMatchedMembers === item ? "vf-chip active" : "vf-chip"}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
+        <div style={subhead}>Access</div>
+        <div style={chipRow}>{accessOptions.map((option) => <Chip key={option} active={deal.access === option} onClick={() => update("access", option)}>{option}</Chip>)}</div>
 
-        <div className="vf-fields">
-          <textarea
-            placeholder="Access Instructions"
-            rows={4}
-            value={deal.accessNotes}
-            onChange={(e) => update("accessNotes", e.target.value)}
-          />
-          <textarea
-            placeholder="Repair Notes / Scope"
-            rows={4}
-            value={deal.repairNotes}
-            onChange={(e) => update("repairNotes", e.target.value)}
-          />
-          <textarea
-            placeholder="Private AI Matching Notes"
-            rows={4}
-            value={deal.privateAiNotes}
-            onChange={(e) => update("privateAiNotes", e.target.value)}
-          />
-        </div>
+        <div style={subhead}>Known Issues</div>
+        <div style={chipRow}>{issueOptions.map((option) => <Chip key={option} active={deal.knownIssues.includes(option)} onClick={() => toggleArray("knownIssues", option)}>{option}</Chip>)}</div>
 
-        <div className="vf-btns">
-          <button type="button" className="vf-btn" onClick={saveDeal}>
-            Save Deal Opportunity
-          </button>
-
-          <Link className="vf-btn dark" href="/deal-rooms">
-            Back to Deal Rooms
-          </Link>
-        </div>
-
-        {saved ? <p className="vf-copy" style={{ color: "#86efac" }}>{saved}</p> : null}
+        <div style={subhead}>Docs Available</div>
+        <div style={chipRow}>{docOptions.map((option) => <Chip key={option} active={deal.docsAvailable.includes(option)} onClick={() => toggleArray("docsAvailable", option)}>{option}</Chip>)}</div>
       </section>
 
-      <style>{`
-        .vf-deal-grid {
-          display: grid;
-          grid-template-columns: 320px minmax(0, 1fr);
-          gap: 18px;
-        }
-
-        .vf-photo-box {
-          height: 260px;
-          border-radius: 20px;
-          overflow: hidden;
-          border: 1px solid rgba(255,255,255,.14);
-          background: rgba(255,255,255,.05);
-          display: grid;
-          place-items: center;
-          color: #cbd5e1;
-          font-weight: 900;
-          text-align: center;
-        }
-
-        .vf-photo-box img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-
-        .vf-preview {
-          border: 1px solid rgba(245,200,76,.18);
-          background: rgba(255,255,255,.045);
-          border-radius: 18px;
-          padding: 14px;
-          margin-top: 14px;
-        }
-
-        .vf-fields {
-          display: grid;
-          grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
-          gap: 12px;
-          margin-top: 12px;
-        }
-
-        .vf-fields input,
-        .vf-fields select,
-        .vf-fields textarea {
-          width: 100%;
-          box-sizing: border-box;
-          border: 1px solid rgba(255,255,255,.15);
-          background: rgba(255,255,255,.05);
-          color: #fff;
-          border-radius: 16px;
-          padding: 14px;
-          font-size: 15px;
-        }
-
-        .vf-fields textarea {
-          min-height: 110px;
-          resize: vertical;
-        }
-
-        .vf-chip-section {
-          margin-top: 18px;
-        }
-
-        .vf-chip-label {
-          color: #f5c84c;
-          font-size: 12px;
-          font-weight: 950;
-          letter-spacing: .14em;
-          text-transform: uppercase;
-          margin-bottom: 8px;
-        }
-
-        .vf-chip-note {
-          color: #cbd5e1;
-          font-size: 13px;
-          line-height: 1.4;
-          margin: -2px 0 10px;
-        }
-
-        .vf-chip-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .vf-chip {
-          border: 1px solid rgba(255,255,255,.15);
-          background: rgba(255,255,255,.05);
-          color: #fff;
-          border-radius: 999px;
-          padding: 10px 12px;
-          font-weight: 900;
-          cursor: pointer;
-        }
-
-        .vf-chip.active {
-          border-color: #f5c84c;
-          background: linear-gradient(135deg,#fde68a,#e8c46b);
-          color: #111827;
-        }
-
-        @media (max-width: 820px) {
-          .vf-deal-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
+      <section style={savePanel}>
+        <div>
+          <div style={eyebrow}>Save Control</div>
+          <h2 style={sectionTitle}>Create Deal Room.</h2>
+          <p style={bodyText}>Tap save once. A confirmation banner will appear and disappear after the deal is saved. Then open Deal Rooms.</p>
+        </div>
+        <div style={buttonRow}>
+          <button type="button" onClick={handleSave} disabled={saving} style={primaryButton}>{saving ? "Saving..." : "Save Deal"}</button>
+          <a href="/deal-rooms" style={secondaryButton}>Open Deal Rooms</a>
+          <button type="button" onClick={handleClear} style={dangerButton}>Clear Form</button>
+        </div>
+      </section>
     </VaultForgeCleanShell>
   );
 }
+
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(248, 204, 74, 0.22)",
+  borderRadius: 24,
+  background: "linear-gradient(180deg, rgba(9, 15, 31, 0.98), rgba(5, 9, 20, 0.98))",
+  padding: 28,
+  marginBottom: 26,
+  boxShadow: "0 22px 80px rgba(0,0,0,0.35)",
+};
+
+const savePanel: React.CSSProperties = {
+  ...panel,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 20,
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#ffd966",
+  textTransform: "uppercase",
+  letterSpacing: 6,
+  fontWeight: 900,
+  fontSize: 18,
+  marginBottom: 16,
+};
+
+const sectionTitle: React.CSSProperties = {
+  color: "#ffffff",
+  fontSize: "clamp(34px, 6vw, 56px)",
+  lineHeight: 0.95,
+  margin: "0 0 18px",
+  letterSpacing: -3,
+};
+
+const bodyText: React.CSSProperties = {
+  color: "rgba(235,241,255,0.78)",
+  fontSize: 20,
+  lineHeight: 1.45,
+  margin: 0,
+};
+
+const chipRow: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  marginBottom: 18,
+};
+
+const chip: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.07)",
+  color: "#f7f8fb",
+  borderRadius: 999,
+  padding: "12px 18px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const chipActive: React.CSSProperties = {
+  ...chip,
+  border: "1px solid rgba(255,221,109,0.95)",
+  background: "linear-gradient(135deg, #ffe57a, #f8c94a)",
+  color: "#111522",
+};
+
+const grid3: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 16,
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  minHeight: 58,
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,0.15)",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  padding: "0 18px",
+  fontSize: 16,
+  outline: "none",
+};
+
+const textarea: React.CSSProperties = {
+  ...input,
+  minHeight: 138,
+  padding: 18,
+  resize: "vertical",
+  fontFamily: "inherit",
+};
+
+const photoBox: React.CSSProperties = {
+  marginBottom: 22,
+};
+
+const photo: React.CSSProperties = {
+  width: "100%",
+  maxHeight: 360,
+  objectFit: "cover",
+  borderRadius: 22,
+  border: "1px solid rgba(255,255,255,0.16)",
+  display: "block",
+  marginBottom: 10,
+};
+
+const photoEmpty: React.CSSProperties = {
+  minHeight: 220,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 22,
+  border: "1px dashed rgba(255,255,255,0.24)",
+  background: "rgba(255,255,255,0.05)",
+  color: "rgba(235,241,255,0.65)",
+  fontWeight: 900,
+  marginBottom: 10,
+};
+
+const fileInput: React.CSSProperties = {
+  color: "rgba(235,241,255,0.82)",
+  maxWidth: "100%",
+};
+
+const smallText: React.CSSProperties = {
+  color: "rgba(235,241,255,0.65)",
+  fontSize: 13,
+  marginTop: 6,
+};
+
+const aiBox: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.055)",
+  borderRadius: 22,
+  padding: 20,
+  marginBottom: 22,
+};
+
+const subhead: React.CSSProperties = {
+  color: "#ffd966",
+  fontWeight: 900,
+  letterSpacing: 2,
+  fontSize: 18,
+  margin: "22px 0 12px",
+};
+
+const buttonRow: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+  alignItems: "center",
+};
+
+const primaryButton: React.CSSProperties = {
+  border: "1px solid rgba(255,221,109,0.85)",
+  borderRadius: 999,
+  padding: "15px 22px",
+  background: "linear-gradient(135deg, #ffe57a, #f8c94a)",
+  color: "#111522",
+  fontWeight: 950,
+  cursor: "pointer",
+  textDecoration: "none",
+};
+
+const secondaryButton: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.16)",
+  borderRadius: 999,
+  padding: "15px 22px",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  fontWeight: 900,
+  cursor: "pointer",
+  textDecoration: "none",
+};
+
+const dangerButton: React.CSSProperties = {
+  ...secondaryButton,
+  border: "1px solid rgba(255,74,94,0.42)",
+  color: "#ffb8c0",
+};
+
+const toastBase: React.CSSProperties = {
+  position: "fixed",
+  top: 18,
+  left: "50%",
+  transform: "translateX(-50%)",
+  zIndex: 9999,
+  width: "min(92vw, 560px)",
+  borderRadius: 18,
+  padding: "16px 18px",
+  boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+  display: "grid",
+  gap: 6,
+  fontWeight: 800,
+};
+
+const toastSuccess: React.CSSProperties = {
+  ...toastBase,
+  border: "1px solid rgba(75, 255, 165, 0.38)",
+  background: "linear-gradient(135deg, rgba(6, 48, 34, 0.98), rgba(8, 20, 18, 0.98))",
+  color: "#eafff4",
+};
+
+const toastError: React.CSSProperties = {
+  ...toastBase,
+  border: "1px solid rgba(255, 82, 104, 0.45)",
+  background: "linear-gradient(135deg, rgba(67, 12, 20, 0.98), rgba(18, 8, 13, 0.98))",
+  color: "#fff0f2",
+};
