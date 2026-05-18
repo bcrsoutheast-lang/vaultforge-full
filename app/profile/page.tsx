@@ -1,24 +1,32 @@
-"use client";
+import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
+import VaultForgeProfileClient from "../components/VaultForgeProfileClient";
+import VaultForgeRoomControls from "../components/VaultForgeRoomControls";
 
-import { useEffect } from "react";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export default function ProfileRedirectPage() {
-  useEffect(() => {
-    window.location.replace("/profile-dashboard");
-  }, []);
-
+export default function ProfilePage() {
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#020303",
-        color: "white",
-        display: "grid",
-        placeItems: "center",
-        fontFamily: "Arial, sans-serif",
-      }}
+    <VaultForgeCleanShell
+      active="profile"
+      eyebrow="MEMBER PROFILE"
+      title="AI routing profile."
+      subtitle="Collect the data VaultForge needs to route deals, pain rooms, alerts, intros, and member contact opportunities by actual fit and room information."
     >
-      Opening Member Profile...
-    </main>
+      <VaultForgeProfileClient />
+
+      <section className="vf-card">
+        <div className="vf-eyebrow">5S PROFILE CONTROL</div>
+        <h2 className="vf-h2">Profile cleanup</h2>
+        <p className="vf-copy">
+          Profile can be saved, archived, or deleted from local cleanup folders while the Supabase profile route is reconnected later.
+        </p>
+        <VaultForgeRoomControls
+          roomId="profile:member-routing"
+          roomTitle="Member AI Routing Profile"
+          roomType="general"
+        />
+      </section>
+    </VaultForgeCleanShell>
   );
 }
