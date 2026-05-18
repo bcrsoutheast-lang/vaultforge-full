@@ -27,6 +27,28 @@ type Deal = {
   zoning: string;
   utilities: string;
   notes: string;
+
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  contactMethods?: string[];
+  contactTimes?: string[];
+  submitterRoles?: string[];
+  contractStatus?: string[];
+  assignmentFee?: string;
+  closeDate?: string;
+  occupancy?: string[];
+  access?: string[];
+  accessNotes?: string;
+  addressVisibility?: string[];
+  routingNeeds?: string[];
+  urgency?: string[];
+  canContactMatchedMembers?: string;
+  issues?: string[];
+  docs?: string[];
+  repairNotes?: string;
+  privateAiNotes?: string;
+
   createdAt: string;
 };
 
@@ -44,7 +66,7 @@ function readDeals(): Deal[] {
   }
 }
 
-function money(value: string) {
+function money(value: string | undefined) {
   const clean = String(value || "").trim();
   if (!clean) return "Not listed";
   if (clean.includes("$")) return clean;
@@ -59,9 +81,13 @@ function money(value: string) {
   });
 }
 
-function num(value: string) {
+function num(value: string | undefined) {
   const n = Number(String(value || "").replace(/[^0-9.]/g, ""));
   return Number.isFinite(n) ? n : 0;
+}
+
+function list(value?: string[]) {
+  return value && value.length ? value.join(", ") : "Not selected";
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -132,7 +158,7 @@ export default function DealRoomDetailPage({
       active="deals"
       eyebrow="DEAL COMMAND ROOM"
       title={deal.title || "Deal Room"}
-      subtitle="Full deal intelligence, underwriting, routing context, AI good/bad/next steps, and room controls."
+      subtitle="Full deal intelligence, contact controls, member routing context, AI good/bad/next steps, and room controls."
     >
       <style>{`
         .vf-room-hero-grid {
@@ -266,6 +292,46 @@ export default function DealRoomDetailPage({
       </section>
 
       <section className="vf-card">
+        <div className="vf-eyebrow">Contact + Control</div>
+
+        <div className="vf-room-metrics">
+          <Metric label="Contact Name" value={deal.contactName || "Not listed"} />
+          <Metric label="Phone" value={deal.contactPhone || "Not listed"} />
+          <Metric label="Email" value={deal.contactEmail || "Not listed"} />
+          <Metric label="Best Contact" value={list(deal.contactMethods)} />
+          <Metric label="Best Time" value={list(deal.contactTimes)} />
+          <Metric label="Submitter Role" value={list(deal.submitterRoles)} />
+          <Metric label="Contract Status" value={list(deal.contractStatus)} />
+          <Metric label="Assignment Fee" value={money(deal.assignmentFee)} />
+          <Metric label="Deadline / Close" value={deal.closeDate || "Not listed"} />
+          <Metric label="VaultForge Contact Matched Members" value={deal.canContactMatchedMembers || "Not selected"} />
+        </div>
+      </section>
+
+      <section className="vf-card">
+        <div className="vf-eyebrow">Access + Risk</div>
+
+        <div className="vf-room-metrics">
+          <Metric label="Occupancy" value={list(deal.occupancy)} />
+          <Metric label="Access" value={list(deal.access)} />
+          <Metric label="Address Visibility" value={list(deal.addressVisibility)} />
+          <Metric label="Known Issues" value={list(deal.issues)} />
+          <Metric label="Available Docs" value={list(deal.docs)} />
+        </div>
+
+        <div className="vf-ai-grid" style={{ marginTop: 12 }}>
+          <div className="vf-ai-panel">
+            <div className="vf-eyebrow">Access Notes</div>
+            <p className="vf-copy">{deal.accessNotes || "Not listed"}</p>
+          </div>
+          <div className="vf-ai-panel">
+            <div className="vf-eyebrow">Repair Notes</div>
+            <p className="vf-copy">{deal.repairNotes || "Not listed"}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="vf-card">
         <div className="vf-eyebrow">Submitted Asset Data</div>
 
         <div className="vf-room-metrics">
@@ -308,7 +374,7 @@ export default function DealRoomDetailPage({
             <div className="vf-eyebrow">Good</div>
             <p className="vf-copy">
               {underwriting?.spreadPct && underwriting.spreadPct >= 15
-                ? "The spread may support routing to buyers, lenders, and operators if the condition, title, occupancy, and exit assumptions check out."
+                ? "The spread may support routing to buyers, lenders, and operators if condition, title, occupancy, access, and seller authority check out."
                 : "The room needs stronger economics or more complete data before heavy routing."}
             </p>
           </div>
@@ -316,15 +382,24 @@ export default function DealRoomDetailPage({
           <div className="vf-ai-panel">
             <div className="vf-eyebrow">Caution</div>
             <p className="vf-copy">
-              Verify purchase price, ARV, repair estimate, occupancy, title, access, seller authority, and timeline before presenting as a high-confidence room.
+              {deal.issues?.length
+                ? `Known risk flags: ${deal.issues.join(", ")}. Verify before routing.`
+                : "Verify purchase price, ARV, repair estimate, occupancy, title, access, seller authority, and timeline before presenting as a high-confidence room."}
             </p>
           </div>
 
           <div className="vf-ai-panel">
             <div className="vf-eyebrow">Next Steps</div>
             <p className="vf-copy">
-              Add documents/photos, confirm numbers, assign the right buyer/capital/operator profile, then move communication into the room thread.
+              {deal.routingNeeds?.length
+                ? `Route to: ${deal.routingNeeds.join(", ")}. Keep contact and follow-up inside the room thread.`
+                : "Choose routing needs on the deal form so VaultForge can match buyer/capital/operator/member fit."}
             </p>
+          </div>
+
+          <div className="vf-ai-panel">
+            <div className="vf-eyebrow">Private AI Notes</div>
+            <p className="vf-copy">{deal.privateAiNotes || "No private AI notes yet."}</p>
           </div>
         </div>
       </section>
@@ -335,17 +410,17 @@ export default function DealRoomDetailPage({
         <div className="vf-ai-grid">
           <div className="vf-ai-panel">
             <div className="vf-eyebrow">Buyer Fit</div>
-            <p className="vf-copy">Match by state, city, asset type, strategy, price range, exit type, and urgency.</p>
+            <p className="vf-copy">Match by state, city, asset type, price range, exit type, urgency, and address visibility.</p>
           </div>
 
           <div className="vf-ai-panel">
             <div className="vf-eyebrow">Capital Fit</div>
-            <p className="vf-copy">Match private lenders, JV capital, bridge, hard money, or DSCR based on deal shape and timeline.</p>
+            <p className="vf-copy">Match private lenders, JV capital, bridge, hard money, or DSCR based on numbers, deadline, and control status.</p>
           </div>
 
           <div className="vf-ai-panel">
             <div className="vf-eyebrow">Operator Fit</div>
-            <p className="vf-copy">Match GC, PM, boots-on-ground, asset manager, or local execution partner by market and scope.</p>
+            <p className="vf-copy">Match GC, PM, boots-on-ground, asset manager, or local execution partner by market, access, and repair notes.</p>
           </div>
         </div>
       </section>
