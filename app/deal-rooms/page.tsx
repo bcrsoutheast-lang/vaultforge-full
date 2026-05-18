@@ -1,6 +1,6 @@
 import Link from "next/link";
 import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
-import VaultForgeRoomControls from "../components/VaultForgeRoomControls";
+import VaultForgeDealRoomsClient from "../components/VaultForgeDealRoomsClient";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,21 +11,13 @@ export default function DealRoomsPage() {
       active="deals"
       eyebrow="DEAL ROOMS"
       title="One deal lane."
-      subtitle="Deals, projects, properties, opportunities, flips, buy-holds, land, commercial, and development all live here."
+      subtitle="Saved opportunities from the Bloomberg intake appear here as clean Deal Room cards."
     >
-      <section className="vf-grid">
-        <div className="vf-metric"><span>Active rooms</span><strong>0</strong></div>
-        <div className="vf-metric"><span>Buyer fit</span><strong>0</strong></div>
-        <div className="vf-metric"><span>Capital fit</span><strong>0</strong></div>
-      </section>
-
       <section className="vf-card">
-        <div className="vf-eyebrow">ROOM ENGINE</div>
-        <h2 className="vf-h2">Deal room intelligence stack.</h2>
+        <div className="vf-eyebrow">CREATE</div>
+        <h2 className="vf-h2">Add a Residential, Commercial, or Land opportunity.</h2>
         <p className="vf-copy">
-          Each Deal Room should carry submitted numbers, photos, AI good/bad/next steps,
-          underwriting, buyer fit, capital fit, operator fit, alert context, routing context,
-          score, timeline, cleanup state, and room messages.
+          Save a deal from the intake and it becomes a clean room card here.
         </p>
 
         <div className="vf-btns">
@@ -33,9 +25,9 @@ export default function DealRoomsPage() {
           <Link className="vf-btn dark" href="/messages">Messages</Link>
           <Link className="vf-btn dark" href="/command">Back to Command</Link>
         </div>
-
-        <VaultForgeRoomControls roomId="deal-room:main" roomTitle="Main Deal Rooms Lane" roomType="deal" />
       </section>
+
+      <VaultForgeDealRoomsClient />
     </VaultForgeCleanShell>
   );
 }
