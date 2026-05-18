@@ -266,6 +266,7 @@ export default function DealCreatePage() {
 
   return (
     <VaultForgeCleanShell
+      active="deal-rooms"
       title="Deal Opportunity"
       subtitle="Bloomberg operator intake."
     >
