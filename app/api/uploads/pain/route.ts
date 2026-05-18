@@ -4,88 +4,51 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BUCKET = "vaultforge-pain-photos";
-const MAX_FILES = 5;
-const MAX_BYTES = 8 * 1024 * 1024;
-
-function json(status: number, payload: Record<string, unknown>) {
-  return NextResponse.json(payload, { status });
+function supabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
+  if (!url || !key) throw new Error("Missing Supabase environment variables.");
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
 function safeName(name: string) {
-  const clean = String(name || "pain-photo")
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 90);
-  return clean || "pain-photo.jpg";
+  return String(name || "pain-photo").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/-+/g, "-").slice(0, 90);
 }
 
 export async function POST(request: Request) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const supabaseKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-      "";
-
-    if (!supabaseUrl || !supabaseKey) {
-      return json(500, {
-        ok: false,
-        error: "Missing Supabase environment variables for pain photo upload.",
-        photos: [],
-      });
-    }
-
     const form = await request.formData();
-    const files = form.getAll("photos").filter((item): item is File => item instanceof File);
+    const files = form.getAll("files").filter((item): item is File => item instanceof File);
+    const single = form.get("file");
+    if (single instanceof File) files.push(single);
 
-    if (!files.length) return json(400, { ok: false, error: "No photos received.", photos: [] });
-    if (files.length > MAX_FILES) return json(400, { ok: false, error: "Upload up to 5 photos only.", photos: [] });
+    if (!files.length) return NextResponse.json({ ok: false, error: "No files received." }, { status: 400 });
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    const db = supabase();
+    const bucket = "vaultforge-pain-photos";
+    const uploaded: string[] = [];
+    const errors: string[] = [];
 
-    const uploaded: Array<{ url: string; path: string; name: string }> = [];
-
-    for (const file of files) {
+    for (const file of files.slice(0, 5)) {
       if (!file.type.startsWith("image/")) {
-        return json(400, { ok: false, error: `${file.name} is not an image file.`, photos: uploaded });
+        errors.push(`${file.name} is not an image.`);
+        continue;
       }
-      if (file.size > MAX_BYTES) {
-        return json(400, { ok: false, error: `${file.name} is too large. Keep each photo under 8MB.`, photos: uploaded });
-      }
-
       const ext = safeName(file.name).split(".").pop() || "jpg";
-      const path = `pain/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+      const path = `pain/${Date.now()}-${Math.random().toString(36).slice(2, 9)}.${ext}`;
       const bytes = await file.arrayBuffer();
-
-      const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, {
-        contentType: file.type || "image/jpeg",
-        upsert: false,
-      });
-
+      const { error } = await db.storage.from(bucket).upload(path, bytes, { contentType: file.type || "image/jpeg", upsert: false });
       if (error) {
-        return json(500, {
-          ok: false,
-          error: error.message || "Pain photo upload failed.",
-          bucket: BUCKET,
-          photos: uploaded,
-        });
+        errors.push(error.message);
+        continue;
       }
-
-      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      uploaded.push({ url: data.publicUrl, path, name: file.name });
+      const { data } = db.storage.from(bucket).getPublicUrl(path);
+      if (data?.publicUrl) uploaded.push(data.publicUrl);
     }
 
-    return json(200, { ok: true, photos: uploaded });
+    return NextResponse.json({ ok: uploaded.length > 0, urls: uploaded, photoUrls: uploaded, errors });
   } catch (error) {
-    return json(500, {
-      ok: false,
-      error: error instanceof Error ? error.message : "Unknown pain photo upload error.",
-      photos: [],
-    });
+    const message = error instanceof Error ? error.message : "Upload failed.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
