@@ -71,6 +71,8 @@ const DEAL_ROOM_LIST_KEYS = [
   "vaultforge_deal_room_list",
 ];
 
+const MAX_LOCAL_DEAL_ROOMS = 20;
+
 function readArrayFromStorage(key: string) {
   try {
     const raw = window.localStorage.getItem(key);
@@ -80,6 +82,33 @@ function readArrayFromStorage(key: string) {
   } catch {
     return [];
   }
+}
+
+function isQuotaError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  const name = error instanceof DOMException ? error.name : "";
+  return name === "QuotaExceededError" || name === "NS_ERROR_DOM_QUOTA_REACHED" || message.toLowerCase().includes("quota");
+}
+
+function clearOldLocalDealCache() {
+  const keysToRemove: string[] = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index) || "";
+    if (
+      key.startsWith("vaultforge_clean_deal_room_") ||
+      key.startsWith("vaultforge_deal_room_") ||
+      key.startsWith("vaultforge_room_deal_") ||
+      DEAL_ROOM_LIST_KEYS.includes(key)
+    ) {
+      keysToRemove.push(key);
+    }
+  }
+
+  keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+
+  const allRooms = readArrayFromStorage("vaultforge_clean_rooms");
+  const nonDealRooms = allRooms.filter((item: any) => item?.kind !== "deal" && item?.roomType !== "deal" && item?.type !== "deal");
+  window.localStorage.setItem("vaultforge_clean_rooms", JSON.stringify(nonDealRooms.slice(0, MAX_LOCAL_DEAL_ROOMS)));
 }
 
 function withDealRoomAliases(deal: DealRoom) {
@@ -103,12 +132,12 @@ function withDealRoomAliases(deal: DealRoom) {
   };
 }
 
-function saveDealEverywhere(deal: DealRoom) {
+function writeDealToStorage(deal: DealRoom) {
   const savedDeal = withDealRoomAliases(deal);
 
   for (const key of DEAL_ROOM_LIST_KEYS) {
     const existing = readArrayFromStorage(key);
-    const withoutDuplicate = existing.filter((item: any) => item?.id !== deal.id);
+    const withoutDuplicate = existing.filter((item: any) => item?.id !== deal.id).slice(0, MAX_LOCAL_DEAL_ROOMS - 1);
     window.localStorage.setItem(key, JSON.stringify([savedDeal, ...withoutDuplicate]));
   }
 
@@ -117,8 +146,36 @@ function saveDealEverywhere(deal: DealRoom) {
   window.localStorage.setItem(`vaultforge_room_${deal.id}`, JSON.stringify(savedDeal));
 
   const allRooms = readArrayFromStorage("vaultforge_clean_rooms");
-  const roomsWithoutDuplicate = allRooms.filter((item: any) => item?.id !== deal.id);
+  const roomsWithoutDuplicate = allRooms.filter((item: any) => item?.id !== deal.id).slice(0, MAX_LOCAL_DEAL_ROOMS - 1);
   window.localStorage.setItem("vaultforge_clean_rooms", JSON.stringify([savedDeal, ...roomsWithoutDuplicate]));
+}
+
+function saveDealEverywhere(deal: DealRoom) {
+  try {
+    writeDealToStorage(deal);
+    return { savedPhoto: Boolean(deal.photoDataUrl), clearedOldCache: false };
+  } catch (firstError) {
+    if (!isQuotaError(firstError)) throw firstError;
+
+    clearOldLocalDealCache();
+
+    try {
+      writeDealToStorage(deal);
+      return { savedPhoto: Boolean(deal.photoDataUrl), clearedOldCache: true };
+    } catch (secondError) {
+      if (!isQuotaError(secondError)) throw secondError;
+
+      const noPhotoDeal: DealRoom = {
+        ...deal,
+        photoDataUrl: "",
+        photoName: deal.photoName ? `${deal.photoName} (not stored locally - browser storage was full)` : "",
+      };
+
+      clearOldLocalDealCache();
+      writeDealToStorage(noPhotoDeal);
+      return { savedPhoto: false, clearedOldCache: true };
+    }
+  }
 }
 
 
@@ -223,10 +280,34 @@ export default function DealCreatePage() {
       showToast("error", "Photo error", "Please choose an image file.");
       return;
     }
+
     const reader = new FileReader();
     reader.onload = () => {
-      setPhotoName(file.name);
-      setPhotoDataUrl(String(reader.result || ""));
+      const img = new Image();
+      img.onload = () => {
+        const maxSize = 900;
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          setPhotoName(file.name);
+          setPhotoDataUrl("");
+          showToast("error", "Photo preview only", "The deal can save, but this browser could not compress the photo for local storage.");
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL("image/jpeg", 0.68);
+        setPhotoName(file.name);
+        setPhotoDataUrl(compressed);
+      };
+      img.onerror = () => showToast("error", "Photo error", "The photo could not be loaded. Try another image.");
+      img.src = String(reader.result || "");
     };
     reader.onerror = () => showToast("error", "Photo error", "The photo could not be loaded. Try another image.");
     reader.readAsDataURL(file);
@@ -306,9 +387,15 @@ export default function DealCreatePage() {
       }
 
       const deal = buildDeal();
-      saveDealEverywhere(deal);
+      const result = saveDealEverywhere(deal);
       setSavedId(deal.id);
-      showToast("success", "Deal saved", "Deal Room created and synced to Deal Rooms. Tap Open Deal Rooms below.");
+      showToast(
+        "success",
+        "Deal saved",
+        result.savedPhoto
+          ? "Deal Room created and synced to Deal Rooms. Tap Open Deal Rooms below."
+          : "Deal Room created and synced to Deal Rooms. Browser storage was full, so the deal saved without the photo. Supabase photo storage comes next."
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown save error.";
       showToast("error", "Deal not saved", message);
