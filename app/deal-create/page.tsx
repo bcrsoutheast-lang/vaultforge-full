@@ -268,7 +268,6 @@ export default function DealCreatePage() {
     <VaultForgeCleanShell
       title="Deal Opportunity"
       subtitle="Bloomberg operator intake."
-      description="Residential, Commercial, and Land intake with contact controls, member routing, urgency, access, issues, photo upload, and AI-ready room data."
     >
       {toast.show ? (
         <div style={toast.kind === "success" ? toastSuccess : toastError} role="status" aria-live="polite">
