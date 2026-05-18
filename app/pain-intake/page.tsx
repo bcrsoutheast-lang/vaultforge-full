@@ -1,427 +1,73 @@
 "use client";
 
+import React, { ChangeEvent, FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
 
+type ToastKind = "success" | "error" | "info";
+type Toast = { show: boolean; kind: ToastKind; title: string; message: string };
+type PainRoom = {
+  id: string; kind: "pain"; roomType: "pain"; title: string; state: string; city: string; county: string; address: string;
+  contactName: string; contactPhone: string; contactEmail: string; bestContact: string; ownerRole: string;
+  painTypes: string[]; urgency: string[]; blockers: string[]; routingNeeds: string[]; solutionLanes: string[]; leanTools: string[]; sixSigmaTools: string[];
+  amountNeeded: string; propertyValue: string; payoff: string; equityEstimate: string; timeline: string; authority: string; decisionStatus: string;
+  currentState: string; desiredState: string; rootCause: string; constraint: string; firstMove: string; notes: string; privateAiNotes: string;
+  pressureScore: number; dmaicSummary: string; aiExecutionRead: string; photoUrl: string; imageUrl: string; photoName: string; createdAt: string; updatedAt: string;
+};
+
+const STORAGE_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
-const PAIN_TYPES = ["Distressed Seller", "Funding Gap", "Stalled Construction", "Operator Needed", "Emergency Exit", "Permit / City Issue", "Tenant / Occupancy Issue", "Partnership Issue", "Contractor Problem", "Lender Problem"];
-const CONTACT_METHODS = ["Call", "Text", "Email", "VaultForge Message"];
-const CONTACT_TIMES = ["Morning", "Midday", "Afternoon", "Evening", "Anytime"];
-const URGENCY = ["Low", "Medium", "High", "Emergency"];
-const ROUTING_NEEDS = ["Buyer", "Lender", "JV Partner", "Contractor", "Operator", "Property Manager", "Attorney/Title", "Advice"];
-const BLOCKERS = ["Capital", "Construction", "Title", "Tenant", "City / Permit", "Insurance", "Partner", "Deadline", "Unknown"];
-const AUTHORITY = ["Owner", "Agent", "Wholesaler", "Partner", "Family", "Lender", "Other"];
+const CONTACT = ["VaultForge Message", "Phone", "Email", "Text"];
+const ROLES = ["Owner", "Investor", "Wholesaler", "Agent", "Broker", "Operator", "Lender", "Contractor", "Developer", "Property Manager"];
+const PAIN_TYPES = ["Capital Gap", "Stalled Project", "Contractor Problem", "Permit Problem", "Buyer Needed", "Operator Needed", "Lender Needed", "Legal/Title", "Tenant Issue", "Code Violation", "Emergency Exit", "Disposition Needed", "Equity Trapped", "Partner Problem", "Unknown Next Step"];
+const URGENCY = ["Low", "Medium", "High", "Emergency", "Need answer today", "Need rescue this week", "Deadline / foreclosure risk"];
+const BLOCKERS = ["Capital", "Contractor", "Permits", "Title", "Legal", "Tenant", "Appraisal", "Inspection", "Insurance", "City/County", "Partner", "Buyer", "Lender", "No clear plan"];
+const ROUTING = ["Buyer", "Investor", "Lender", "Operator", "Contractor", "Broker", "Attorney", "Permit Help", "Property Manager", "JV Partner", "Developer", "Disposition"];
+const SOLUTIONS = ["Stabilize", "Fund", "Sell", "JV", "Refinance", "Replace Contractor", "Get Permit Path", "Find Buyer", "Find Operator", "Legal Review", "Title Cleanup", "Create 7-Day Action Plan", "Emergency Triage"];
+const LEAN = ["5S Cleanup", "Value Stream Map", "Constraint Removal", "Waste Elimination", "Standard Work", "Visual Management", "Kaizen Burst", "Pull Plan", "Daily Huddle", "Escalation Board"];
+const SIX = ["DMAIC", "Define Problem", "Measure Impact", "Analyze Root Cause", "Improve Path", "Control Plan", "Fishbone", "5 Whys", "Pareto", "Risk Matrix", "SIPOC"];
+const AUTHORITY = ["Decision Maker", "Need Partner Approval", "Need Seller Approval", "Need Lender Approval", "Need Attorney Review", "Unknown"];
+const DECISION = ["Ready To Act", "Need Options", "Need Capital First", "Need Professional Review", "Waiting On Third Party", "Unknown"];
+const emptyToast: Toast = { show:false, kind:"info", title:"", message:"" };
 
-type Pain = {
-  id: string;
-  photo: string;
-  title: string;
-  state: string;
-  city: string;
-  county: string;
-  painTypes: string[];
-  urgency: string[];
-  blockers: string[];
-  routingNeeds: string[];
-  contactName: string;
-  contactPhone: string;
-  contactEmail: string;
-  contactMethods: string[];
-  contactTimes: string[];
-  authority: string[];
-  deadline: string;
-  amountNeeded: string;
-  propertyValue: string;
-  payoff: string;
-  notes: string;
-  privateAiNotes: string;
-  canContactMatchedMembers: string;
-  createdAt: string;
-};
+const page: React.CSSProperties = { minHeight:"100vh", background:"#05070d", color:"#f7f7fb", padding:18, fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" };
+const wrap: React.CSSProperties = { maxWidth:1180, margin:"0 auto", paddingBottom:70 };
+const card: React.CSSProperties = { background:"linear-gradient(180deg,#080d19,#050816)", border:"1px solid rgba(239,68,68,.28)", borderRadius:26, padding:28, marginBottom:22, boxShadow:"0 18px 60px rgba(0,0,0,.3)" };
+const eyebrow: React.CSSProperties = { color:"#fca5a5", textTransform:"uppercase", letterSpacing:7, fontWeight:900, fontSize:14, marginBottom:14 };
+const h1: React.CSSProperties = { fontSize:"clamp(42px,7vw,78px)", lineHeight:.92, letterSpacing:-4, margin:"0 0 18px", fontWeight:950 };
+const sub: React.CSSProperties = { color:"#c9d0dc", fontSize:"clamp(18px,2.6vw,25px)", lineHeight:1.35, margin:0 };
+const row: React.CSSProperties = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))", gap:16, marginTop:16 };
+const input: React.CSSProperties = { width:"100%", boxSizing:"border-box", borderRadius:18, border:"1px solid rgba(207,216,230,.18)", background:"#121724", color:"#f6f7fb", padding:"17px 18px", fontSize:16, outline:"none" };
+const label: React.CSSProperties = { display:"block", color:"#fca5a5", fontSize:14, letterSpacing:2.5, textTransform:"uppercase", fontWeight:900, marginBottom:8 };
+const chipWrap: React.CSSProperties = { display:"flex", flexWrap:"wrap", gap:10, marginTop:12 };
+const baseChip: React.CSSProperties = { border:"1px solid rgba(207,216,230,.18)", background:"#171c29", color:"#f9fbff", borderRadius:999, padding:"12px 16px", fontWeight:900, cursor:"pointer" };
+const activeChip: React.CSSProperties = { ...baseChip, background:"#ef4444", color:"#fff", borderColor:"#ef4444" };
+const btn: React.CSSProperties = { border:"1px solid rgba(207,216,230,.18)", background:"#171c29", color:"#f7f7fb", borderRadius:999, padding:"13px 18px", fontWeight:950, textDecoration:"none", display:"inline-block", cursor:"pointer" };
+const redBtn: React.CSSProperties = { ...btn, border:0, background:"#ef4444", color:"#fff" };
 
-const STORAGE_KEY = "vaultforge_clean_pain_rooms_v1";
+function id(){return `pain_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;}
+function toggle(list:string[], value:string){return list.includes(value)?list.filter(x=>x!==value):[...list,value];}
+function moneyLabel(v:string){const clean=String(v||"").replace(/[^0-9.]/g,""); if(!clean)return "not listed"; const n=Number(clean); return Number.isFinite(n)?`$${n.toLocaleString()}`:v;}
+function readArray(key:string):any[]{try{const raw=window.localStorage.getItem(key); const p=raw?JSON.parse(raw):[]; return Array.isArray(p)?p:[]}catch{return[]}}
+function strip(item:any){if(!item||typeof item!=="object")return item; const n={...item}; ["photo","photoDataUrl","imageData","base64","previewDataUrl"].forEach(k=>{if(typeof n[k]==="string"&&n[k].startsWith("data:image/"))n[k]=""}); return n;}
+function purge(){for(const key of STORAGE_KEYS){try{window.localStorage.setItem(key,JSON.stringify(readArray(key).map(strip)))}catch{}}}
 
-const emptyPain: Pain = {
-  id: "",
-  photo: "",
-  title: "",
-  state: "GA",
-  city: "",
-  county: "",
-  painTypes: [],
-  urgency: [],
-  blockers: [],
-  routingNeeds: [],
-  contactName: "",
-  contactPhone: "",
-  contactEmail: "",
-  contactMethods: [],
-  contactTimes: [],
-  authority: [],
-  deadline: "",
-  amountNeeded: "",
-  propertyValue: "",
-  payoff: "",
-  notes: "",
-  privateAiNotes: "",
-  canContactMatchedMembers: "Yes",
-  createdAt: "",
-};
-
-function readPain(): Pain[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+export default function PainIntakePage(){
+ const [toast,setToast]=useState<Toast>(emptyToast); const [saving,setSaving]=useState(false); const [photoUploading,setPhotoUploading]=useState(false); const [photoUrl,setPhotoUrl]=useState(""); const [photoName,setPhotoName]=useState(""); const [savedId,setSavedId]=useState("");
+ const [painTypes,setPainTypes]=useState<string[]>(["Stalled Project"]); const [urgency,setUrgency]=useState<string[]>(["High"]); const [blockers,setBlockers]=useState<string[]>(["Capital"]); const [routingNeeds,setRoutingNeeds]=useState<string[]>(["Lender","Operator"]); const [solutionLanes,setSolutionLanes]=useState<string[]>(["Stabilize","Fund"]); const [leanTools,setLeanTools]=useState<string[]>(["5S Cleanup","Constraint Removal"]); const [sixSigmaTools,setSixSigmaTools]=useState<string[]>(["DMAIC","5 Whys"]);
+ const [form,setForm]=useState({title:"",state:"GA",city:"",county:"",address:"",contactName:"",contactPhone:"",contactEmail:"",bestContact:"VaultForge Message",ownerRole:"Owner",amountNeeded:"",propertyValue:"",payoff:"",equityEstimate:"",timeline:"",authority:"Decision Maker",decisionStatus:"Need Options",currentState:"",desiredState:"",rootCause:"",constraint:"",firstMove:"",notes:"",privateAiNotes:""});
+ function update(name:string,value:string){setForm(c=>({...c,[name]:value}));}
+ function show(kind:ToastKind,title:string,message:string,auto=true){setToast({show:true,kind,title,message}); if(auto) window.setTimeout(()=>setToast(emptyToast), kind==="success"?2600:4800);}
+ async function handlePhoto(e:ChangeEvent<HTMLInputElement>){const file=e.target.files?.[0]; if(!file)return; if(!file.type.startsWith("image/")){show("error","Photo error","Choose an image file."); return;} setPhotoUploading(true); setPhotoName(file.name); setPhotoUrl(""); try{const body=new FormData(); body.append("file",file); const res=await fetch("/api/uploads/pain",{method:"POST",body}); const data=await res.json().catch(()=>({})); if(!res.ok||!data?.ok||!data?.photoUrl) throw new Error(data?.error||"Pain photo upload failed."); setPhotoUrl(String(data.photoUrl)); show("success","Photo uploaded","Pain Room photo URL saved.");}catch(err){show("error","Photo not uploaded",`${err instanceof Error?err.message:"Upload failed"}. Pain can still save without photo.`,false)}finally{setPhotoUploading(false)}}
+ const pressureScore=useMemo(()=>{let s=35; if(urgency.includes("Emergency"))s+=30; if(urgency.includes("Deadline / foreclosure risk"))s+=20; s+=Math.min(20,blockers.length*4); if(form.amountNeeded)s+=5; return Math.min(100,s);},[urgency,blockers,form.amountNeeded]);
+ const dmaicSummary=useMemo(()=>`DEFINE: ${form.title||"Pain not titled"}. MEASURE: need ${moneyLabel(form.amountNeeded)}, value ${moneyLabel(form.propertyValue)}, payoff ${moneyLabel(form.payoff)}. ANALYZE: blockers ${blockers.join(", ")||"not selected"}; root cause ${form.rootCause||"not listed"}. IMPROVE: ${solutionLanes.join(", ")||"solution lane needed"}. CONTROL: ${leanTools.join(", ")||"5S/Lean controls"} plus ${sixSigmaTools.join(", ")||"DMAIC"}.`,[form,blockers,solutionLanes,leanTools,sixSigmaTools]);
+ const aiExecutionRead=useMemo(()=>`Pressure score ${pressureScore}. Current state: ${form.currentState||"not listed"}. Desired state: ${form.desiredState||"not listed"}. Constraint: ${form.constraint||"not listed"}. First move: ${form.firstMove||"route to best-fit member and stabilize"}. Routing needs: ${routingNeeds.join(", ")||"not selected"}.`,[pressureScore,form,routingNeeds]);
+ function build():PainRoom{const now=new Date().toISOString(); return {id:id(),kind:"pain",roomType:"pain",title:form.title.trim(),state:form.state,city:form.city.trim(),county:form.county.trim(),address:form.address.trim(),contactName:form.contactName.trim(),contactPhone:form.contactPhone.trim(),contactEmail:form.contactEmail.trim(),bestContact:form.bestContact,ownerRole:form.ownerRole,painTypes,urgency,blockers,routingNeeds,solutionLanes,leanTools,sixSigmaTools,amountNeeded:form.amountNeeded.trim(),propertyValue:form.propertyValue.trim(),payoff:form.payoff.trim(),equityEstimate:form.equityEstimate.trim(),timeline:form.timeline.trim(),authority:form.authority,decisionStatus:form.decisionStatus,currentState:form.currentState.trim(),desiredState:form.desiredState.trim(),rootCause:form.rootCause.trim(),constraint:form.constraint.trim(),firstMove:form.firstMove.trim(),notes:form.notes.trim(),privateAiNotes:form.privateAiNotes.trim(),pressureScore,dmaicSummary,aiExecutionRead,photoUrl,imageUrl:photoUrl,photoName,createdAt:now,updatedAt:now};}
+ function write(room:PainRoom){purge(); const clean=strip(room); for(const key of STORAGE_KEYS){const rows=readArray(key).filter(x=>String(x?.id||"")!==room.id).map(strip); window.localStorage.setItem(key,JSON.stringify([clean,...rows].slice(0,75)));} window.localStorage.setItem(`vaultforge_clean_pain_room_${room.id}`,JSON.stringify(clean)); window.localStorage.setItem(`vaultforge_pain_room_${room.id}`,JSON.stringify(clean)); window.dispatchEvent(new Event("vaultforge-pain-change"));}
+ function save(e?:FormEvent<HTMLFormElement>){e?.preventDefault(); if(saving||photoUploading)return; setSaving(true); try{if(!form.title.trim()){show("error","Pain not saved","Add a title."); return;} if(!form.city.trim()||!form.state.trim()){show("error","Pain not saved","Add city/state."); return;} if(!form.contactName.trim()&&!form.contactPhone.trim()&&!form.contactEmail.trim()){show("error","Pain not saved","Add one contact field."); return;} const room=build(); write(room); setSavedId(room.id); show("success","Pain Room saved",photoUrl?"Solution room created with photo URL.":"Solution room created. No photo uploaded.");}catch(err){purge(); show("error","Pain not saved",err instanceof Error?err.message:"Unknown save error",false)}finally{setSaving(false)}}
+ return <main style={page}><div style={wrap}><nav style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:18}}><Link href="/command" style={btn}>Command</Link><Link href="/pain-rooms" style={redBtn}>Pain Rooms</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/" style={btn}>Exit</Link></nav>{toast.show?<div style={{position:"fixed",top:18,left:"50%",transform:"translateX(-50%)",zIndex:9999,width:"min(92vw,760px)",borderRadius:20,padding:"16px 18px",background:toast.kind==="success"?"#102818":toast.kind==="error"?"#2b1015":"#111827",color:"#fff",border:toast.kind==="success"?"1px solid rgba(101,255,151,.5)":"1px solid rgba(255,88,88,.55)",boxShadow:"0 18px 70px rgba(0,0,0,.55)"}}><div style={{fontWeight:950,fontSize:18}}>{toast.title}</div><div style={{color:"#dce4ef",marginTop:4}}>{toast.message}</div></div>:null}<section style={card}><div style={eyebrow}>Pain Solution Room Intake</div><h1 style={h1}>Lean Six Sigma rescue room.</h1><p style={sub}>This is the VaultForge problem-solving brain: define the pain, measure pressure, analyze root cause, improve through routed members, and control the next steps.</p></section><form onSubmit={save}><section style={card}><div style={eyebrow}>Photo + Core Pain</div>{photoUrl?<img src={photoUrl} alt="Pain preview" style={{width:"100%",maxHeight:360,objectFit:"cover",borderRadius:22,marginBottom:12,border:"1px solid rgba(207,216,230,.2)"}}/>:null}<input type="file" accept="image/*" onChange={handlePhoto}/>{photoName?<span style={{marginLeft:10,color:"#cbd3df"}}>{photoUploading?"Uploading...":photoUrl?`Uploaded: ${photoName}`:`Selected: ${photoName}`}</span>:null}<div style={{...card,marginTop:20,marginBottom:0,padding:20}}><div style={eyebrow}>AI DMAIC Read</div><p style={{...sub,fontSize:18}}>{dmaicSummary}</p><p style={{...sub,fontSize:18,marginTop:12}}>{aiExecutionRead}</p></div><div style={row}><Field name="Pain Room Title" value={form.title} onChange={v=>update("title",v)} required/><SelectField name="State" value={form.state} options={STATES} onChange={v=>update("state",v)}/><Field name="City" value={form.city} onChange={v=>update("city",v)} required/><Field name="County" value={form.county} onChange={v=>update("county",v)}/><Field name="Address / Location" value={form.address} onChange={v=>update("address",v)}/><Field name="Amount Needed" value={form.amountNeeded} onChange={v=>update("amountNeeded",v)}/><Field name="Property Value" value={form.propertyValue} onChange={v=>update("propertyValue",v)}/><Field name="Payoff / Debt" value={form.payoff} onChange={v=>update("payoff",v)}/><Field name="Estimated Equity" value={form.equityEstimate} onChange={v=>update("equityEstimate",v)}/><Field name="Timeline / Deadline" value={form.timeline} onChange={v=>update("timeline",v)}/><TextArea name="Current State" value={form.currentState} onChange={v=>update("currentState",v)}/><TextArea name="Desired State" value={form.desiredState} onChange={v=>update("desiredState",v)}/><TextArea name="Root Cause / 5 Whys" value={form.rootCause} onChange={v=>update("rootCause",v)}/><TextArea name="Main Constraint" value={form.constraint} onChange={v=>update("constraint",v)}/><TextArea name="First Move / Next Best Action" value={form.firstMove} onChange={v=>update("firstMove",v)}/><TextArea name="Private AI Notes" value={form.privateAiNotes} onChange={v=>update("privateAiNotes",v)}/></div></section><section style={card}><div style={eyebrow}>Contact + Authority</div><div style={row}><Field name="Contact Name" value={form.contactName} onChange={v=>update("contactName",v)} required/><Field name="Phone" value={form.contactPhone} onChange={v=>update("contactPhone",v)}/><Field name="Email" value={form.contactEmail} onChange={v=>update("contactEmail",v)}/></div><Choice title="Best Contact" options={CONTACT} value={form.bestContact} onPick={v=>update("bestContact",v)}/><Choice title="Owner Role" options={ROLES} value={form.ownerRole} onPick={v=>update("ownerRole",v)}/><Choice title="Authority" options={AUTHORITY} value={form.authority} onPick={v=>update("authority",v)}/><Choice title="Decision Status" options={DECISION} value={form.decisionStatus} onPick={v=>update("decisionStatus",v)}/><Multi title="Pain Types" options={PAIN_TYPES} values={painTypes} onToggle={v=>setPainTypes(c=>toggle(c,v))}/><Multi title="Urgency" options={URGENCY} values={urgency} onToggle={v=>setUrgency(c=>toggle(c,v))}/><Multi title="Blockers" options={BLOCKERS} values={blockers} onToggle={v=>setBlockers(c=>toggle(c,v))}/><Multi title="Route To" options={ROUTING} values={routingNeeds} onToggle={v=>setRoutingNeeds(c=>toggle(c,v))}/><Multi title="Solution Lanes" options={SOLUTIONS} values={solutionLanes} onToggle={v=>setSolutionLanes(c=>toggle(c,v))}/><Multi title="Lean Tools" options={LEAN} values={leanTools} onToggle={v=>setLeanTools(c=>toggle(c,v))}/><Multi title="Six Sigma Tools" options={SIX} values={sixSigmaTools} onToggle={v=>setSixSigmaTools(c=>toggle(c,v))}/></section><section style={card}><div style={eyebrow}>Save Solution Room</div><p style={{...sub,fontSize:18}}>Photo is uploaded to Supabase Storage. Local browser stores only the photo URL and room metadata.</p><div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:18}}><button type="submit" disabled={saving||photoUploading} style={redBtn}>{photoUploading?"Photo Uploading...":saving?"Saving...":"Save Pain Room"}</button><Link href="/pain-rooms" style={btn}>Open Pain Rooms</Link>{savedId?<Link href={`/pain-rooms/${savedId}`} style={btn}>Open New Room</Link>:null}</div></section></form></div></main>;
 }
-
-function writePain(pain: Pain) {
-  const rooms = readPain();
-  const next = [pain, ...rooms.filter((item) => item.id !== pain.id)];
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  window.dispatchEvent(new CustomEvent("vaultforge-pain-change"));
-}
-
-function money(value: string) {
-  const clean = String(value || "").trim();
-  if (!clean) return "Not listed";
-  if (clean.includes("$")) return clean;
-
-  const n = Number(clean.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return clean;
-
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-}
-
-function ChipGroup({
-  label,
-  items,
-  selected,
-  onToggle,
-  note,
-}: {
-  label: string;
-  items: string[];
-  selected: string[];
-  onToggle: (item: string) => void;
-  note?: string;
-}) {
-  return (
-    <section className="vf-chip-section">
-      <div className="vf-chip-label">{label}</div>
-      {note ? <p className="vf-chip-note">{note}</p> : null}
-      <div className="vf-chip-row">
-        {items.map((item) => {
-          const active = selected.includes(item);
-
-          return (
-            <button
-              key={item}
-              type="button"
-              onClick={() => onToggle(item)}
-              className={active ? "vf-chip active" : "vf-chip"}
-            >
-              {item}
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-export default function PainIntakePage() {
-  const [pain, setPain] = useState<Pain>(emptyPain);
-  const [saved, setSaved] = useState("");
-
-  function update<K extends keyof Pain>(key: K, value: Pain[K]) {
-    setPain((current) => ({ ...current, [key]: value }));
-    setSaved("");
-  }
-
-  function toggle(key: keyof Pain, item: string) {
-    const current = Array.isArray(pain[key]) ? (pain[key] as string[]) : [];
-    const next = current.includes(item)
-      ? current.filter((value) => value !== item)
-      : [...current, item];
-
-    update(key as any, next as any);
-  }
-
-  function photoUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) return;
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        update("photo", reader.result);
-      }
-    };
-
-    reader.readAsDataURL(file);
-  }
-
-  function savePain() {
-    const now = new Date().toISOString();
-    const next: Pain = {
-      ...pain,
-      id: pain.id || `pain-${Date.now()}`,
-      title: pain.title || `${pain.painTypes[0] || "Pain"} Room`,
-      createdAt: pain.createdAt || now,
-    };
-
-    writePain(next);
-    setPain(next);
-    setSaved("Pain Room saved locally. It now has contact, urgency, blockers, routing, and smart AI data.");
-  }
-
-  const aiRead = useMemo(() => {
-    const parts = [
-      pain.city || pain.county || pain.state ? `Market: ${[pain.city, pain.county, pain.state].filter(Boolean).join(", ")}.` : "",
-      pain.painTypes.length ? `Pain type: ${pain.painTypes.join(", ")}.` : "",
-      pain.urgency.length ? `Urgency: ${pain.urgency.join(", ")}.` : "",
-      pain.blockers.length ? `Blockers: ${pain.blockers.join(", ")}.` : "",
-      pain.routingNeeds.length ? `Needs routed to: ${pain.routingNeeds.join(", ")}.` : "",
-      pain.amountNeeded ? `Amount needed: ${money(pain.amountNeeded)}.` : "",
-      pain.deadline ? `Deadline: ${pain.deadline}.` : "",
-      pain.contactMethods.length ? `Best contact: ${pain.contactMethods.join(", ")}.` : "",
-      pain.notes ? `Situation: ${pain.notes}` : "",
-      pain.privateAiNotes ? `Private AI notes: ${pain.privateAiNotes}` : "",
-    ].filter(Boolean);
-
-    return parts.length
-      ? parts.join(" ")
-      : "Fill the pain intake and click routing fields to generate the execution read.";
-  }, [pain]);
-
-  return (
-    <VaultForgeCleanShell
-      active="pain-intake"
-      eyebrow="PAIN INTAKE"
-      title="Submit the pressure."
-      subtitle="Pain Intake creates Pain Rooms with contact, urgency, blockers, routing needs, and AI-ready execution data."
-    >
-      <section className="vf-card red">
-        <div className="vf-eyebrow" style={{ color: "#fca5a5" }}>PAIN ROOM BASICS</div>
-
-        <div className="vf-pain-grid">
-          <div>
-            <div className="vf-photo-box">
-              {pain.photo ? <img src={pain.photo} alt="" /> : <div>Upload pain / property image</div>}
-            </div>
-
-            <input
-              type="file"
-              accept="image/*"
-              onChange={photoUpload}
-              style={{ marginTop: 12, color: "#fff", width: "100%" }}
-            />
-
-            <section className="vf-preview">
-              <div className="vf-eyebrow" style={{ color: "#fca5a5" }}>AI EXECUTION READ</div>
-              <p className="vf-copy">{aiRead}</p>
-            </section>
-          </div>
-
-          <div className="vf-fields">
-            <input placeholder="Pain Room Title" value={pain.title} onChange={(e) => update("title", e.target.value)} />
-
-            <select value={pain.state} onChange={(e) => update("state", e.target.value)}>
-              {STATES.map((s) => <option key={s}>{s}</option>)}
-            </select>
-
-            <input placeholder="City" value={pain.city} onChange={(e) => update("city", e.target.value)} />
-            <input placeholder="County" value={pain.county} onChange={(e) => update("county", e.target.value)} />
-            <input placeholder="Amount Needed / Gap" value={pain.amountNeeded} onChange={(e) => update("amountNeeded", e.target.value)} />
-            <input placeholder="Property Value / ARV" value={pain.propertyValue} onChange={(e) => update("propertyValue", e.target.value)} />
-            <input placeholder="Payoff / Debt" value={pain.payoff} onChange={(e) => update("payoff", e.target.value)} />
-            <input placeholder="Deadline / Date Pressure" value={pain.deadline} onChange={(e) => update("deadline", e.target.value)} />
-
-            <textarea placeholder="What is happening?" rows={5} value={pain.notes} onChange={(e) => update("notes", e.target.value)} />
-          </div>
-        </div>
-      </section>
-
-      <section className="vf-card red">
-        <div className="vf-eyebrow" style={{ color: "#fca5a5" }}>CONTACT + AUTHORITY</div>
-
-        <div className="vf-fields">
-          <input placeholder="Contact Name" value={pain.contactName} onChange={(e) => update("contactName", e.target.value)} />
-          <input placeholder="Contact Phone" value={pain.contactPhone} onChange={(e) => update("contactPhone", e.target.value)} />
-          <input placeholder="Contact Email" value={pain.contactEmail} onChange={(e) => update("contactEmail", e.target.value)} />
-        </div>
-
-        <ChipGroup label="Best Way To Be Contacted" items={CONTACT_METHODS} selected={pain.contactMethods} onToggle={(item) => toggle("contactMethods", item)} />
-        <ChipGroup label="Best Time To Contact" items={CONTACT_TIMES} selected={pain.contactTimes} onToggle={(item) => toggle("contactTimes", item)} />
-        <ChipGroup label="Authority / Relationship" items={AUTHORITY} selected={pain.authority} onToggle={(item) => toggle("authority", item)} />
-      </section>
-
-      <section className="vf-card red">
-        <div className="vf-eyebrow" style={{ color: "#fca5a5" }}>ROUTING + SMART AI</div>
-
-        <ChipGroup label="Pain Type" items={PAIN_TYPES} selected={pain.painTypes} onToggle={(item) => toggle("painTypes", item)} />
-        <ChipGroup label="Urgency" items={URGENCY} selected={pain.urgency} onToggle={(item) => toggle("urgency", item)} />
-        <ChipGroup label="Main Blockers" items={BLOCKERS} selected={pain.blockers} onToggle={(item) => toggle("blockers", item)} />
-        <ChipGroup label="Who Should VaultForge Route This To?" items={ROUTING_NEEDS} selected={pain.routingNeeds} onToggle={(item) => toggle("routingNeeds", item)} />
-
-        <div className="vf-chip-section">
-          <div className="vf-chip-label">Can VaultForge Contact Matched Members?</div>
-          <div className="vf-chip-row">
-            {["Yes", "No", "Ask Me First"].map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => update("canContactMatchedMembers", item)}
-                className={pain.canContactMatchedMembers === item ? "vf-chip active" : "vf-chip"}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="vf-fields">
-          <textarea
-            placeholder="Private AI Matching Notes"
-            rows={4}
-            value={pain.privateAiNotes}
-            onChange={(e) => update("privateAiNotes", e.target.value)}
-          />
-        </div>
-
-        <div className="vf-btns">
-          <button type="button" className="vf-btn" onClick={savePain}>
-            Save Pain Room
-          </button>
-
-          <Link className="vf-btn dark" href="/pain-rooms">
-            Back to Pain Rooms
-          </Link>
-        </div>
-
-        {saved ? <p className="vf-copy" style={{ color: "#86efac" }}>{saved}</p> : null}
-      </section>
-
-      <style>{`
-        .vf-pain-grid {
-          display: grid;
-          grid-template-columns: 320px minmax(0, 1fr);
-          gap: 18px;
-        }
-
-        .vf-photo-box {
-          height: 260px;
-          border-radius: 20px;
-          overflow: hidden;
-          border: 1px solid rgba(255,255,255,.14);
-          background: rgba(255,255,255,.05);
-          display: grid;
-          place-items: center;
-          color: #cbd5e1;
-          font-weight: 900;
-          text-align: center;
-        }
-
-        .vf-photo-box img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-
-        .vf-preview {
-          border: 1px solid rgba(239,68,68,.24);
-          background: rgba(255,255,255,.045);
-          border-radius: 18px;
-          padding: 14px;
-          margin-top: 14px;
-        }
-
-        .vf-fields {
-          display: grid;
-          grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
-          gap: 12px;
-          margin-top: 12px;
-        }
-
-        .vf-fields input,
-        .vf-fields select,
-        .vf-fields textarea {
-          width: 100%;
-          box-sizing: border-box;
-          border: 1px solid rgba(255,255,255,.15);
-          background: rgba(255,255,255,.05);
-          color: #fff;
-          border-radius: 16px;
-          padding: 14px;
-          font-size: 15px;
-        }
-
-        .vf-fields textarea {
-          min-height: 110px;
-          resize: vertical;
-          grid-column: 1 / -1;
-        }
-
-        .vf-chip-section {
-          margin-top: 18px;
-        }
-
-        .vf-chip-label {
-          color: #fca5a5;
-          font-size: 12px;
-          font-weight: 950;
-          letter-spacing: .14em;
-          text-transform: uppercase;
-          margin-bottom: 8px;
-        }
-
-        .vf-chip-note {
-          color: #cbd5e1;
-          font-size: 13px;
-          line-height: 1.4;
-          margin: -2px 0 10px;
-        }
-
-        .vf-chip-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .vf-chip {
-          border: 1px solid rgba(255,255,255,.15);
-          background: rgba(255,255,255,.05);
-          color: #fff;
-          border-radius: 999px;
-          padding: 10px 12px;
-          font-weight: 900;
-          cursor: pointer;
-        }
-
-        .vf-chip.active {
-          border-color: #fca5a5;
-          background: linear-gradient(135deg,#fecaca,#ef4444);
-          color: #111827;
-        }
-
-        @media (max-width: 820px) {
-          .vf-pain-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-    </VaultForgeCleanShell>
-  );
-}
+function Field({name,value,onChange,required=false}:{name:string;value:string;onChange:(v:string)=>void;required?:boolean}){return <label><span style={label}>{name}{required?" *":""}</span><input style={input} value={value} onChange={e=>onChange(e.target.value)} placeholder={name}/></label>}
+function TextArea({name,value,onChange}:{name:string;value:string;onChange:(v:string)=>void}){return <label><span style={label}>{name}</span><textarea style={{...input,minHeight:132,resize:"vertical"}} value={value} onChange={e=>onChange(e.target.value)} placeholder={name}/></label>}
+function SelectField({name,value,options,onChange}:{name:string;value:string;options:string[];onChange:(v:string)=>void}){return <label><span style={label}>{name}</span><select style={input} value={value} onChange={e=>onChange(e.target.value)}>{options.map(x=><option key={x} value={x}>{x}</option>)}</select></label>}
+function Choice({title,options,value,onPick}:{title:string;options:string[];value:string;onPick:(v:string)=>void}){return <div style={{marginTop:22}}><div style={label}>{title}</div><div style={chipWrap}>{options.map(x=><button key={x} type="button" style={value===x?activeChip:baseChip} onClick={()=>onPick(x)}>{x}</button>)}</div></div>}
+function Multi({title,options,values,onToggle}:{title:string;options:string[];values:string[];onToggle:(v:string)=>void}){return <div style={{marginTop:22}}><div style={label}>{title}</div><div style={chipWrap}>{options.map(x=><button key={x} type="button" style={values.includes(x)?activeChip:baseChip} onClick={()=>onToggle(x)}>{x}</button>)}</div></div>}
