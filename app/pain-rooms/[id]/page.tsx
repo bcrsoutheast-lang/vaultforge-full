@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 
 type RoomState = "active" | "saved" | "archived" | "deleted";
 
-type ProfileData = {
+type SavedProfile = {
   profilePhoto?: string;
   companyLogo?: string;
   fullName?: string;
@@ -32,7 +32,9 @@ type ProfileData = {
 };
 
 type PainRoom = {
-  id: string;
+  id?: string;
+  roomId?: string;
+  painId?: string;
   roomState?: RoomState;
   title?: string;
   assetClass?: string;
@@ -44,6 +46,8 @@ type PainRoom = {
   photos?: string[];
   photoUrl?: string;
   photo?: string;
+  imageUrl?: string;
+  publicUrl?: string;
   painTypes?: string[];
   urgency?: string[];
   blockers?: string[];
@@ -94,7 +98,7 @@ const ROOM_KEYS = [
 const PROFILE_KEY = "vaultforge_profile_v2";
 const STATE_KEY = "vaultforge_clean_room_states";
 
-function safeParse<T>(raw: string | null, fallback: T): T {
+function parseJson<T>(raw: string | null, fallback: T): T {
   try {
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
@@ -103,20 +107,20 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   }
 }
 
-function readArray(key: string): PainRoom[] {
+function readRoomArray(key: string): PainRoom[] {
   if (typeof window === "undefined") return [];
-  const parsed = safeParse<unknown>(window.localStorage.getItem(key), []);
+  const parsed = parseJson<unknown>(window.localStorage.getItem(key), []);
   return Array.isArray(parsed) ? (parsed as PainRoom[]) : [];
 }
 
-function getRoomId(room: Partial<PainRoom> | null | undefined): string {
+function roomId(room: PainRoom | null | undefined): string {
   if (!room) return "";
   return String(room.id || room.roomId || room.painId || "");
 }
 
 function readStates(): Record<string, RoomState> {
   if (typeof window === "undefined") return {};
-  return safeParse<Record<string, RoomState>>(window.localStorage.getItem(STATE_KEY), {});
+  return parseJson<Record<string, RoomState>>(window.localStorage.getItem(STATE_KEY), {});
 }
 
 function writeStates(states: Record<string, RoomState>) {
@@ -124,80 +128,78 @@ function writeStates(states: Record<string, RoomState>) {
   window.localStorage.setItem(STATE_KEY, JSON.stringify(states));
 }
 
-function readProfile(): ProfileData | null {
+function readProfile(): SavedProfile | null {
   if (typeof window === "undefined") return null;
-  return safeParse<ProfileData | null>(window.localStorage.getItem(PROFILE_KEY), null);
+  return parseJson<SavedProfile | null>(window.localStorage.getItem(PROFILE_KEY), null);
+}
+
+function cleanRoomForStorage(room: PainRoom): PainRoom {
+  const next: PainRoom = { ...room };
+  const photos = normalizePhotos(next).filter((item) => !item.startsWith("data:"));
+  next.photoUrls = photos;
+  delete next.photoDataUrl;
+  if (typeof next.photo === "string" && next.photo.startsWith("data:")) {
+    delete next.photo;
+  }
+  return next;
 }
 
 function syncRoom(room: PainRoom) {
   if (typeof window === "undefined") return;
 
-  const id = getRoomId(room);
+  const id = roomId(room);
   if (!id) return;
 
-  const cleanRoom: PainRoom = stripOversizedLocalImages({ ...room, id, updatedAt: new Date().toISOString() });
+  const cleaned = cleanRoomForStorage({ ...room, id, updatedAt: new Date().toISOString() });
 
-  window.localStorage.setItem(`vaultforge_clean_pain_room_${id}`, JSON.stringify(cleanRoom));
-  window.localStorage.setItem(`vaultforge_pain_room_${id}`, JSON.stringify(cleanRoom));
+  window.localStorage.setItem(`vaultforge_clean_pain_room_${id}`, JSON.stringify(cleaned));
+  window.localStorage.setItem(`vaultforge_pain_room_${id}`, JSON.stringify(cleaned));
 
   for (const key of ROOM_KEYS) {
-    const rows = readArray(key).filter((item) => getRoomId(item) !== id);
-    window.localStorage.setItem(key, JSON.stringify([cleanRoom, ...rows]));
+    const rows = readRoomArray(key).filter((item) => roomId(item) !== id);
+    window.localStorage.setItem(key, JSON.stringify([cleaned, ...rows]));
   }
 
   window.dispatchEvent(new Event("vaultforge-pain-change"));
-}
-
-function stripOversizedLocalImages(room: PainRoom): PainRoom {
-  const next: PainRoom = { ...room };
-
-  const urls = normalizePhotos(next);
-  next.photoUrls = urls.filter((item) => !item.startsWith("data:"));
-  delete next.photo;
-  delete next.photoDataUrl;
-
-  return next;
 }
 
 function findRoom(id: string): PainRoom | null {
   if (typeof window === "undefined") return null;
 
   const states = readStates();
-
-  const directKeys = [`vaultforge_clean_pain_room_${id}`, `vaultforge_pain_room_${id}`, `vf_pain_room_${id}`];
+  const directKeys = [
+    `vaultforge_clean_pain_room_${id}`,
+    `vaultforge_pain_room_${id}`,
+    `vf_pain_room_${id}`,
+  ];
 
   for (const key of directKeys) {
-    const parsed = safeParse<PainRoom | null>(window.localStorage.getItem(key), null);
-    if (parsed && getRoomId(parsed)) {
-      const foundId = getRoomId(parsed);
-      return { ...parsed, id: foundId, roomState: states[foundId] || parsed.roomState || "active" };
+    const direct = parseJson<PainRoom | null>(window.localStorage.getItem(key), null);
+    const directId = roomId(direct);
+    if (direct && directId) {
+      return { ...direct, id: directId, roomState: states[directId] || direct.roomState || "active" };
     }
   }
 
   for (const key of ROOM_KEYS) {
-    const hit = readArray(key).find((room) => getRoomId(room) === id);
-    if (hit) {
-      const foundId = getRoomId(hit);
-      return { ...hit, id: foundId, roomState: states[foundId] || hit.roomState || "active" };
+    const hit = readRoomArray(key).find((item) => roomId(item) === id);
+    const hitId = roomId(hit);
+    if (hit && hitId) {
+      return { ...hit, id: hitId, roomState: states[hitId] || hit.roomState || "active" };
     }
   }
 
   return null;
 }
 
-function text(value: unknown, fallback = "Not listed"): string {
-  if (value === undefined || value === null) return fallback;
-  const cleaned = String(value).trim();
-  return cleaned ? cleaned : fallback;
-}
-
-function value(room: PainRoom | null, keys: string[], fallback = "Not listed"): string {
+function firstText(room: PainRoom | null, keys: string[], fallback = "Not listed"): string {
   if (!room) return fallback;
 
   for (const key of keys) {
     const candidate = room[key];
-    if (candidate !== undefined && candidate !== null && String(candidate).trim()) {
-      return String(candidate);
+    if (candidate !== undefined && candidate !== null) {
+      const cleaned = String(candidate).trim();
+      if (cleaned) return cleaned;
     }
   }
 
@@ -205,26 +207,32 @@ function value(room: PainRoom | null, keys: string[], fallback = "Not listed"): 
 }
 
 function normalizeList(input: unknown): string[] {
-  if (Array.isArray(input)) return input.map((item) => String(item).trim()).filter(Boolean);
+  if (Array.isArray(input)) {
+    return input.map((item) => String(item).trim()).filter(Boolean);
+  }
+
   if (typeof input === "string" && input.trim()) {
     return input.split(",").map((item) => item.trim()).filter(Boolean);
   }
+
   return [];
 }
 
-function arr(room: PainRoom | null, keys: string[]): string[] {
+function roomList(room: PainRoom | null, keys: string[]): string[] {
   if (!room) return [];
+
   for (const key of keys) {
     const list = normalizeList(room[key]);
     if (list.length) return list;
   }
+
   return [];
 }
 
 function normalizePhotos(room: PainRoom | null): string[] {
   if (!room) return [];
 
-  const candidates: unknown[] = [
+  const values: unknown[] = [
     room.photoUrls,
     room.photos,
     room.photoUrl,
@@ -235,9 +243,9 @@ function normalizePhotos(room: PainRoom | null): string[] {
 
   const output: string[] = [];
 
-  for (const candidate of candidates) {
-    const items = normalizeList(candidate);
-    for (const item of items) {
+  for (const value of values) {
+    const list = normalizeList(value);
+    for (const item of list) {
       if (item && !output.includes(item)) output.push(item);
     }
   }
@@ -260,19 +268,21 @@ function money(value: unknown): string {
   });
 }
 
-function roomLocation(room: PainRoom | null): string {
-  return [value(room, ["city"], ""), value(room, ["county"], ""), value(room, ["state"], "")]
-    .filter(Boolean)
-    .join(", ") || "Market not listed";
+function locationText(room: PainRoom | null): string {
+  return [
+    firstText(room, ["city"], ""),
+    firstText(room, ["county"], ""),
+    firstText(room, ["state"], ""),
+  ].filter(Boolean).join(", ") || "Market not listed";
 }
 
 function pressureScore(room: PainRoom | null): number {
   if (!room) return 0;
 
-  const urgency = arr(room, ["urgency"]).join(" ").toLowerCase();
-  const blockers = arr(room, ["blockers"]).length;
-  const amount = Number(value(room, ["amountNeeded"], "0").replace(/[^0-9.]/g, "")) || 0;
-  const timeline = value(room, ["timeline"], "").toLowerCase();
+  const urgency = roomList(room, ["urgency"]).join(" ").toLowerCase();
+  const blockers = roomList(room, ["blockers"]).length;
+  const amount = Number(firstText(room, ["amountNeeded"], "0").replace(/[^0-9.]/g, "")) || 0;
+  const timeline = firstText(room, ["timeline"], "").toLowerCase();
 
   let score = 42;
   if (urgency.includes("emergency")) score += 35;
@@ -287,15 +297,15 @@ function pressureScore(room: PainRoom | null): number {
   return Math.max(1, Math.min(99, score));
 }
 
-function scoreProfile(room: PainRoom | null, profile: ProfileData | null): number {
+function profileFitScore(room: PainRoom | null, profile: SavedProfile | null): number {
   if (!room || !profile) return 0;
 
   let score = 0;
-  const state = value(room, ["state"], "");
-  const county = value(room, ["county"], "");
-  const assetClass = value(room, ["assetClass"], "").toLowerCase();
-  const routingNeeds = arr(room, ["routingNeeds"]).join(" ").toLowerCase();
-  const painTypes = arr(room, ["painTypes"]).join(" ").toLowerCase();
+  const state = firstText(room, ["state"], "");
+  const county = firstText(room, ["county"], "");
+  const assetClass = firstText(room, ["assetClass"], "").toLowerCase();
+  const routing = roomList(room, ["routingNeeds"]).join(" ").toLowerCase();
+  const painTypes = roomList(room, ["painTypes"]).join(" ").toLowerCase();
 
   if (state && profile.alertStates?.includes(state)) score += 20;
   if (state && profile.buyStates?.includes(state)) score += 12;
@@ -304,15 +314,16 @@ function scoreProfile(room: PainRoom | null, profile: ProfileData | null): numbe
   if (county && state && profile.countiesByState?.[state]?.includes(county)) score += 15;
 
   for (const asset of profile.assetTypes || []) {
-    if (assetClass && asset.toLowerCase().includes(assetClass.toLowerCase())) score += 10;
-    if (assetClass === "residential" && ["sfr", "multifamily"].includes(asset.toLowerCase())) score += 6;
-    if (assetClass === "commercial" && ["commercial", "retail", "office", "industrial", "mixed use"].includes(asset.toLowerCase())) score += 6;
-    if (assetClass === "land" && asset.toLowerCase().includes("land")) score += 8;
+    const lower = asset.toLowerCase();
+    if (assetClass && lower.includes(assetClass)) score += 10;
+    if (assetClass === "residential" && ["sfr", "multifamily"].includes(lower)) score += 6;
+    if (assetClass === "commercial" && ["commercial", "retail", "office", "industrial", "mixed use"].includes(lower)) score += 6;
+    if (assetClass === "land" && lower.includes("land")) score += 8;
   }
 
-  for (const role of profile.memberTypes || []) {
-    const lower = role.toLowerCase();
-    if (routingNeeds.includes(lower)) score += 10;
+  for (const type of profile.memberTypes || []) {
+    const lower = type.toLowerCase();
+    if (routing.includes(lower)) score += 10;
     if (painTypes.includes("funding") && lower.includes("lender")) score += 12;
     if (painTypes.includes("operator") && lower.includes("operator")) score += 12;
     if (painTypes.includes("contractor") && lower.includes("contractor")) score += 12;
@@ -320,14 +331,14 @@ function scoreProfile(room: PainRoom | null, profile: ProfileData | null): numbe
 
   for (const capability of profile.executionCapabilities || []) {
     const lower = capability.toLowerCase();
-    if (routingNeeds.includes(lower)) score += 6;
+    if (routing.includes(lower)) score += 6;
     if (painTypes.includes("permit") && lower.includes("permitting")) score += 8;
     if (painTypes.includes("construction") && lower.includes("construction")) score += 8;
   }
 
   for (const capital of profile.capitalRoles || []) {
     const lower = capital.toLowerCase();
-    if (routingNeeds.includes("capital") && (lower.includes("lender") || lower.includes("cash") || lower.includes("capital"))) score += 10;
+    if (routing.includes("capital") && (lower.includes("lender") || lower.includes("cash") || lower.includes("capital"))) score += 10;
   }
 
   if (profile.routingRules?.includes("Allow AI Routing")) score += 8;
@@ -336,47 +347,48 @@ function scoreProfile(room: PainRoom | null, profile: ProfileData | null): numbe
   return Math.min(100, score);
 }
 
-function matchReason(room: PainRoom | null, profile: ProfileData | null): string {
-  if (!room || !profile) return "No saved member profile found. Save a profile first so VaultForge can route this room.";
+function profileMatchReason(room: PainRoom | null, profile: SavedProfile | null): string {
+  if (!room || !profile) return "No saved profile found. Save a profile first so VaultForge can route this room.";
 
   const reasons: string[] = [];
-  const state = value(room, ["state"], "");
-  const county = value(room, ["county"], "");
-  const assetClass = value(room, ["assetClass"], "");
+  const state = firstText(room, ["state"], "");
+  const county = firstText(room, ["county"], "");
+  const assetClass = firstText(room, ["assetClass"], "");
 
   if (state && profile.alertStates?.includes(state)) reasons.push(`alert state ${state}`);
   if (state && profile.buyStates?.includes(state)) reasons.push(`buy state ${state}`);
   if (state && profile.operateStates?.includes(state)) reasons.push(`operates in ${state}`);
   if (county && state && profile.countiesByState?.[state]?.includes(county)) reasons.push(`${county} County selected`);
-  if (assetClass && (profile.assetTypes || []).some((asset) => asset.toLowerCase().includes(assetClass.toLowerCase()))) reasons.push(`${assetClass} asset fit`);
+  if (assetClass && (profile.assetTypes || []).some((asset) => asset.toLowerCase().includes(assetClass.toLowerCase()))) {
+    reasons.push(`${assetClass} asset fit`);
+  }
 
-  const routeNeeds = arr(room, ["routingNeeds"]);
-  if (routeNeeds.length) reasons.push(`routing need: ${routeNeeds.slice(0, 3).join(", ")}`);
+  const routingNeeds = roomList(room, ["routingNeeds"]);
+  if (routingNeeds.length) reasons.push(`routing need: ${routingNeeds.slice(0, 3).join(", ")}`);
 
-  return reasons.length ? reasons.join(" • ") : "Profile exists, but more profile chips are needed for a stronger route match.";
+  return reasons.length ? reasons.join(" • ") : "Profile exists, but more profile chips are needed for stronger automatic routing.";
 }
 
 function solutionRead(room: PainRoom | null): string {
   if (!room) return "";
 
-  const pain = arr(room, ["painTypes"]).join(", ") || "problem";
-  const blockers = arr(room, ["blockers"]).join(", ") || "blockers not selected";
-  const routing = arr(room, ["routingNeeds"]).join(", ") || "routing not selected";
+  const pain = roomList(room, ["painTypes"]).join(", ") || "problem";
+  const blockers = roomList(room, ["blockers"]).join(", ") || "blockers not selected";
+  const routing = roomList(room, ["routingNeeds"]).join(", ") || "routing not selected";
   const pressure = pressureScore(room);
-  const location = roomLocation(room);
-  const ask = money(value(room, ["askingPrice"], ""));
-  const valueText = money(value(room, ["propertyValue", "arv"], ""));
-  const amount = money(value(room, ["amountNeeded"], ""));
+  const place = locationText(room);
+  const ask = money(firstText(room, ["askingPrice"], ""));
+  const valueText = money(firstText(room, ["propertyValue", "arv"], ""));
+  const amount = money(firstText(room, ["amountNeeded"], ""));
 
-  return `This room is showing ${pain} in ${location}. Pressure score is ${pressure}/99. The current blockers are ${blockers}. The room should route toward ${routing}. Property/value context: ask ${ask}, value ${valueText}, amount needed ${amount}. Next move: confirm contact authority, verify numbers, identify the blocking constraint, match the right member profile, and move the cleanest solution path into Messages.`;
+  return `This room is showing ${pain} in ${place}. Pressure score is ${pressure}/99. Current blockers: ${blockers}. Route toward: ${routing}. Property/value context: ask ${ask}, value ${valueText}, amount needed ${amount}. Next move: confirm contact authority, verify numbers, isolate the blocker, match the right member profile, and move the cleanest solution path into Messages.`;
 }
 
-function createMessageHref(room: PainRoom | null): string {
+function messageHref(room: PainRoom | null): string {
   if (!room) return "/messages";
-  const id = getRoomId(room);
-  const title = value(room, ["title"], "Pain Room");
-  const subject = `Pain Room: ${title}`;
-  return `/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent(subject)}`;
+  const id = roomId(room);
+  const title = firstText(room, ["title"], "Pain Room");
+  return `/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent(`Pain Room: ${title}`)}`;
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
@@ -407,7 +419,7 @@ export default function PainRoomDetailPage() {
   const id = decodeURIComponent(String(params?.id || ""));
 
   const [room, setRoom] = useState<PainRoom | null>(null);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [profile, setProfile] = useState<SavedProfile | null>(null);
 
   function load() {
     setRoom(findRoom(id));
@@ -418,6 +430,7 @@ export default function PainRoomDetailPage() {
     load();
     window.addEventListener("vaultforge-pain-change", load);
     window.addEventListener("storage", load);
+
     return () => {
       window.removeEventListener("vaultforge-pain-change", load);
       window.removeEventListener("storage", load);
@@ -427,11 +440,11 @@ export default function PainRoomDetailPage() {
   function setRoomState(state: RoomState) {
     if (!room) return;
 
-    const roomId = getRoomId(room);
-    const next: PainRoom = { ...room, id: roomId, roomState: state, updatedAt: new Date().toISOString() };
+    const idForRoom = roomId(room);
+    const next: PainRoom = { ...room, id: idForRoom, roomState: state, updatedAt: new Date().toISOString() };
 
     const states = readStates();
-    states[roomId] = state;
+    states[idForRoom] = state;
     writeStates(states);
 
     syncRoom(next);
@@ -439,13 +452,13 @@ export default function PainRoomDetailPage() {
   }
 
   const photos = useMemo(() => normalizePhotos(room), [room]);
-  const painTypes = useMemo(() => arr(room, ["painTypes"]), [room]);
-  const urgency = useMemo(() => arr(room, ["urgency"]), [room]);
-  const blockers = useMemo(() => arr(room, ["blockers"]), [room]);
-  const routingNeeds = useMemo(() => arr(room, ["routingNeeds"]), [room]);
-  const solutionLanes = useMemo(() => arr(room, ["solutionLanes"]), [room]);
-  const fit = useMemo(() => scoreProfile(room, profile), [room, profile]);
-  const messageHref = useMemo(() => createMessageHref(room), [room]);
+  const painTypes = useMemo(() => roomList(room, ["painTypes"]), [room]);
+  const urgency = useMemo(() => roomList(room, ["urgency"]), [room]);
+  const blockers = useMemo(() => roomList(room, ["blockers"]), [room]);
+  const routingNeeds = useMemo(() => roomList(room, ["routingNeeds"]), [room]);
+  const solutionLanes = useMemo(() => roomList(room, ["solutionLanes"]), [room]);
+  const fitScore = useMemo(() => profileFitScore(room, profile), [room, profile]);
+  const ownerMessageHref = useMemo(() => messageHref(room), [room]);
   const analysis = useMemo(() => solutionRead(room), [room]);
 
   if (!room) {
@@ -475,16 +488,16 @@ export default function PainRoomDetailPage() {
           <Link href="/command" style={btn}>Command</Link>
           <Link href="/deal-rooms" style={btn}>Deal Rooms</Link>
           <Link href="/pain-rooms" style={goldBtn}>Pain Rooms</Link>
-          <Link href={messageHref} style={btn}>Message Owner</Link>
+          <Link href={ownerMessageHref} style={btn}>Message Owner</Link>
           <Link href="/profile" style={btn}>Profile</Link>
           <Link href="/" style={redBtn}>Exit</Link>
         </nav>
 
         <section style={card}>
           <PhotoGrid photos={photos} />
-          <div style={eyebrow}>{value(room, ["assetClass"], "Pain Room")}</div>
-          <h1 style={h1}>{value(room, ["title"], "Untitled Pain Room")}</h1>
-          <p style={sub}>{roomLocation(room)}</p>
+          <div style={eyebrow}>{firstText(room, ["assetClass"], "Pain Room")}</div>
+          <h1 style={h1}>{firstText(room, ["title"], "Untitled Pain Room")}</h1>
+          <p style={sub}>{locationText(room)}</p>
           <div style={pressureBadge}>{pressureScore(room)}/99 Pressure</div>
         </section>
 
@@ -494,7 +507,7 @@ export default function PainRoomDetailPage() {
             <button type="button" onClick={() => setRoomState("saved")} style={goldBtn}>Save</button>
             <button type="button" onClick={() => setRoomState("archived")} style={btn}>Archive</button>
             <button type="button" onClick={() => setRoomState("deleted")} style={redBtn}>Delete</button>
-            <Link href={messageHref} style={goldBtn}>Message Owner</Link>
+            <Link href={ownerMessageHref} style={goldBtn}>Message Owner</Link>
             <span style={btn}>Current: {room.roomState || "active"}</span>
           </div>
         </section>
@@ -513,41 +526,41 @@ export default function PainRoomDetailPage() {
             <Fact label="Blockers" value={blockers.join(", ") || "Not selected"} />
             <Fact label="Route To" value={routingNeeds.join(", ") || "Not selected"} />
             <Fact label="Solution Lanes" value={solutionLanes.join(", ") || "Analyze, Verify, Route, Message, Execute"} />
-            <Fact label="Target Outcome" value={value(room, ["targetOutcome"])} />
+            <Fact label="Target Outcome" value={firstText(room, ["targetOutcome"])} />
           </div>
         </section>
 
         <section style={card}>
           <div style={eyebrow}>Property / Asset Facts</div>
           <div style={grid}>
-            <Fact label="Asset Class" value={value(room, ["assetClass"])} />
-            <Fact label="Address" value={value(room, ["address"])} />
-            <Fact label="Ask" value={money(value(room, ["askingPrice"], ""))} />
-            <Fact label="Value / ARV" value={money(value(room, ["propertyValue", "arv"], ""))} />
-            <Fact label="Repairs / Work" value={money(value(room, ["repairs"], ""))} />
-            <Fact label="Amount Needed" value={money(value(room, ["amountNeeded"], ""))} />
-            <Fact label="Payoff" value={money(value(room, ["payoff"], ""))} />
-            <Fact label="Beds" value={value(room, ["beds"])} />
-            <Fact label="Baths" value={value(room, ["baths"])} />
-            <Fact label="Sqft" value={value(room, ["sqft"])} />
-            <Fact label="Units" value={value(room, ["units"])} />
-            <Fact label="Building" value={value(room, ["buildingSize"])} />
-            <Fact label="Acres" value={value(room, ["acres"])} />
-            <Fact label="Zoning" value={value(room, ["zoning"])} />
-            <Fact label="Occupancy" value={value(room, ["occupancy"])} />
-            <Fact label="Access" value={value(room, ["access"])} />
+            <Fact label="Asset Class" value={firstText(room, ["assetClass"])} />
+            <Fact label="Address" value={firstText(room, ["address"])} />
+            <Fact label="Ask" value={money(firstText(room, ["askingPrice"], ""))} />
+            <Fact label="Value / ARV" value={money(firstText(room, ["propertyValue", "arv"], ""))} />
+            <Fact label="Repairs / Work" value={money(firstText(room, ["repairs"], ""))} />
+            <Fact label="Amount Needed" value={money(firstText(room, ["amountNeeded"], ""))} />
+            <Fact label="Payoff" value={money(firstText(room, ["payoff"], ""))} />
+            <Fact label="Beds" value={firstText(room, ["beds"])} />
+            <Fact label="Baths" value={firstText(room, ["baths"])} />
+            <Fact label="Sqft" value={firstText(room, ["sqft"])} />
+            <Fact label="Units" value={firstText(room, ["units"])} />
+            <Fact label="Building" value={firstText(room, ["buildingSize"])} />
+            <Fact label="Acres" value={firstText(room, ["acres"])} />
+            <Fact label="Zoning" value={firstText(room, ["zoning"])} />
+            <Fact label="Occupancy" value={firstText(room, ["occupancy"])} />
+            <Fact label="Access" value={firstText(room, ["access"])} />
           </div>
         </section>
 
         <section style={card}>
           <div style={eyebrow}>Owner / Contact</div>
           <div style={grid}>
-            <Fact label="Name" value={value(room, ["contactName"])} />
-            <Fact label="Phone" value={value(room, ["contactPhone"])} />
-            <Fact label="Email" value={value(room, ["contactEmail"])} />
-            <Fact label="Best Contact" value={value(room, ["bestContact"])} />
-            <Fact label="Authority" value={value(room, ["authority"])} />
-            <Fact label="Timeline" value={value(room, ["timeline"])} />
+            <Fact label="Name" value={firstText(room, ["contactName"])} />
+            <Fact label="Phone" value={firstText(room, ["contactPhone"])} />
+            <Fact label="Email" value={firstText(room, ["contactEmail"])} />
+            <Fact label="Best Contact" value={firstText(room, ["bestContact"])} />
+            <Fact label="Authority" value={firstText(room, ["authority"])} />
+            <Fact label="Timeline" value={firstText(room, ["timeline"])} />
           </div>
         </section>
 
@@ -562,13 +575,13 @@ export default function PainRoomDetailPage() {
                 <h3 style={profileTitle}>{profile.fullName || profile.company || "Saved Profile"}</h3>
                 <p style={sub}>{profile.company || "Company not listed"}</p>
                 <div style={pillWrap}>
-                  <span style={pill}>Fit score: {fit}%</span>
+                  <span style={pill}>Fit score: {fitScore}%</span>
                   <span style={pill}>Types: {(profile.memberTypes || []).join(", ") || "Not selected"}</span>
                   <span style={pill}>Contact: {(profile.preferredContact || []).join(", ") || "Not selected"}</span>
                   <span style={pill}>Phone: {profile.phone || "Not listed"}</span>
                   <span style={pill}>Email: {profile.email || "Not listed"}</span>
                 </div>
-                <p style={{ ...sub, fontSize: 18, marginTop: 16 }}>{matchReason(room, profile)}</p>
+                <p style={{ ...sub, fontSize: 18, marginTop: 16 }}>{profileMatchReason(room, profile)}</p>
               </div>
             </div>
           ) : (
@@ -579,20 +592,20 @@ export default function PainRoomDetailPage() {
         <section style={card}>
           <div style={eyebrow}>Notes / Current State</div>
           <div style={grid}>
-            <Fact label="Current State" value={value(room, ["currentState"])} />
-            <Fact label="Root Cause" value={value(room, ["rootCause"])} />
-            <Fact label="Constraints" value={value(room, ["constraints"])} />
-            <Fact label="Risk Level" value={value(room, ["riskLevel"])} />
+            <Fact label="Current State" value={firstText(room, ["currentState"])} />
+            <Fact label="Root Cause" value={firstText(room, ["rootCause"])} />
+            <Fact label="Constraints" value={firstText(room, ["constraints"])} />
+            <Fact label="Risk Level" value={firstText(room, ["riskLevel"])} />
           </div>
 
           <div style={noteBox}>
             <div style={miniEyebrow}>AI Room Read</div>
-            <p style={sub}>{value(room, ["aiRead"], analysis)}</p>
+            <p style={sub}>{firstText(room, ["aiRead"], analysis)}</p>
           </div>
 
           <div style={noteBox}>
             <div style={miniEyebrow}>Private Notes</div>
-            <p style={sub}>{value(room, ["notes"], "No notes saved.")}</p>
+            <p style={sub}>{firstText(room, ["notes"], "No notes saved.")}</p>
           </div>
         </section>
       </div>
@@ -812,4 +825,3 @@ const noteBox: React.CSSProperties = {
   border: "1px solid rgba(207,216,230,.14)",
   background: "#121724",
 };
-
