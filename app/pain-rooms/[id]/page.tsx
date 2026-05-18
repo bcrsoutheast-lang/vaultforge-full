@@ -1,317 +1,329 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-const shell: React.CSSProperties = {
-  minHeight: "100vh",
-  background: "#020617",
-  color: "white",
-  padding: "24px",
-};
-
-const wrap: React.CSSProperties = {
-  maxWidth: 1200,
-  margin: "0 auto",
-};
-
-const card: React.CSSProperties = {
-  background: "linear-gradient(180deg,#020817,#081224)",
-  border: "1px solid rgba(250,204,21,.22)",
-  borderRadius: 24,
-  padding: 24,
-  marginBottom: 24,
-};
-
-const button: React.CSSProperties = {
-  background: "#facc15",
-  color: "#000",
-  border: "none",
-  borderRadius: 999,
-  padding: "12px 18px",
-  fontWeight: 800,
-  cursor: "pointer",
-};
 
 type RoomState = "active" | "saved" | "archived" | "deleted";
+type RoomKind = "deal" | "pain";
 
-type PainRoom = {
-  id: string;
+type RoomRecord = {
+  id?: string;
+  roomId?: string;
+  dealId?: string;
+  painId?: string;
+  roomState?: RoomState;
+  cleanupState?: RoomState;
+  stateStatus?: RoomState;
   title?: string;
+  name?: string;
+  state?: string;
   city?: string;
   county?: string;
-  state?: string;
-  roomState?: RoomState;
+  assetClass?: string;
+  photoUrls?: string[];
+  photos?: string[];
+  photoUrl?: string;
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
   [key: string]: unknown;
 };
 
-function safeParseRooms(raw: string | null): PainRoom[] {
+const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const ROOM_STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
+
+function hasBrowser() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function parseJson<T>(raw: string | null, fallback: T): T {
   try {
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function getPainRooms(): PainRoom[] {
-  const keys = [
-    "vaultforge_clean_pain_rooms_v1",
-    "vaultforge_clean_pain_rooms",
-    "vaultforge_pain_rooms",
-    "vaultforge_rooms_pain",
-    "vf_pain_rooms",
-    "vaultforge-pain-rooms",
+function cleanText(value: unknown, fallback = "") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
+}
+
+function roomId(room: RoomRecord | null | undefined) {
+  return cleanText(room?.id || room?.roomId || room?.dealId || room?.painId, "");
+}
+
+function keysFor(kind: RoomKind) {
+  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
+}
+
+function directKeysFor(kind: RoomKind, id: string) {
+  return [
+    `vaultforge_clean_${kind}_room_${id}`,
+    `vaultforge_${kind}_room_${id}`,
+    `vf_${kind}_room_${id}`,
   ];
+}
 
-  const map = new Map<string, PainRoom>();
+function readArray(key: string): RoomRecord[] {
+  if (!hasBrowser()) return [];
+  const parsed = parseJson<unknown>(window.localStorage.getItem(key), []);
+  return Array.isArray(parsed) ? (parsed as RoomRecord[]) : [];
+}
 
-  for (const key of keys) {
-    const rows = safeParseRooms(window.localStorage.getItem(key));
-    rows.forEach((room) => {
-      const id = String(room.id || room.roomId || room.painId || "");
+function readStates(): Record<string, RoomState> {
+  if (!hasBrowser()) return {};
+  const merged: Record<string, RoomState> = {};
+  for (const key of ROOM_STATE_KEYS) {
+    Object.assign(merged, parseJson<Record<string, RoomState>>(window.localStorage.getItem(key), {}));
+  }
+  return merged;
+}
+
+function writeStates(states: Record<string, RoomState>) {
+  if (!hasBrowser()) return;
+  for (const key of ROOM_STATE_KEYS) {
+    window.localStorage.setItem(key, JSON.stringify(states));
+  }
+}
+
+function getRoomState(room: RoomRecord, kind: RoomKind): RoomState {
+  const states = readStates();
+  const id = roomId(room);
+  const status = states[`${kind}:${id}`] || states[id] || room.roomState || room.cleanupState || room.stateStatus || "active";
+  if (status === "saved" || status === "archived" || status === "deleted") return status;
+  return "active";
+}
+
+function readRooms(kind: RoomKind): RoomRecord[] {
+  if (!hasBrowser()) return [];
+  const map = new Map<string, RoomRecord>();
+
+  for (const key of keysFor(kind)) {
+    for (const room of readArray(key)) {
+      const id = roomId(room);
       if (id && !map.has(id)) map.set(id, { ...room, id });
-    });
+    }
   }
 
   for (let i = 0; i < window.localStorage.length; i += 1) {
     const key = window.localStorage.key(i) || "";
-    if (!key.startsWith("vaultforge_clean_pain_room_") && !key.startsWith("vaultforge_pain_room_")) {
-      continue;
-    }
+    const isDeal = kind === "deal" && (key.startsWith("vaultforge_clean_deal_room_") || key.startsWith("vaultforge_deal_room_") || key.startsWith("vf_deal_room_"));
+    const isPain = kind === "pain" && (key.startsWith("vaultforge_clean_pain_room_") || key.startsWith("vaultforge_pain_room_") || key.startsWith("vf_pain_room_"));
 
-    try {
-      const room = JSON.parse(window.localStorage.getItem(key) || "null") as PainRoom | null;
-      const id = String(room?.id || room?.roomId || room?.painId || "");
-      if (room && id && !map.has(id)) map.set(id, { ...room, id });
-    } catch {
-      // ignore bad local rows
-    }
+    if (!isDeal && !isPain) continue;
+
+    const room = parseJson<RoomRecord | null>(window.localStorage.getItem(key), null);
+    const id = roomId(room);
+    if (room && id && !map.has(id)) map.set(id, { ...room, id });
   }
 
-  return Array.from(map.values());
+  return Array.from(map.values()).map((room) => ({ ...room, roomState: getRoomState(room, kind) }));
 }
 
-function writePainRoomState(roomId: string, next: RoomState) {
-  const keys = [
-    "vaultforge_clean_pain_rooms_v1",
-    "vaultforge_clean_pain_rooms",
-    "vaultforge_pain_rooms",
-    "vaultforge_rooms_pain",
-    "vf_pain_rooms",
-    "vaultforge-pain-rooms",
-  ];
+function syncRoomState(room: RoomRecord, kind: RoomKind, state: RoomState) {
+  if (!hasBrowser()) return;
+  const id = roomId(room);
+  if (!id) return;
 
-  for (const key of keys) {
-    const rows = safeParseRooms(window.localStorage.getItem(key));
-    const updated = rows.map((room) => {
-      const id = String(room.id || room.roomId || room.painId || "");
-      if (id !== roomId) return room;
-      return { ...room, id: roomId, roomState: next, cleanupState: next, stateStatus: next };
-    });
+  const next = {
+    ...room,
+    id,
+    roomState: state,
+    cleanupState: state,
+    stateStatus: state,
+    updatedAt: new Date().toISOString(),
+  };
 
-    if (rows.length) {
-      window.localStorage.setItem(key, JSON.stringify(updated));
-    }
+  for (const key of directKeysFor(kind, id)) {
+    window.localStorage.setItem(key, JSON.stringify(next));
   }
 
-  const directKeys = [
-    `vaultforge_clean_pain_room_${roomId}`,
-    `vaultforge_pain_room_${roomId}`,
-    `vf_pain_room_${roomId}`,
-  ];
+  for (const key of keysFor(kind)) {
+    const rows = readArray(key).filter((item) => roomId(item) !== id);
+    window.localStorage.setItem(key, JSON.stringify([next, ...rows]));
+  }
 
-  directKeys.forEach((key) => {
-    try {
-      const current = JSON.parse(window.localStorage.getItem(key) || "null") as PainRoom | null;
-      if (current) {
-        window.localStorage.setItem(
-          key,
-          JSON.stringify({ ...current, id: roomId, roomState: next, cleanupState: next, stateStatus: next })
-        );
-      }
-    } catch {
-      // ignore bad local rows
-    }
-  });
-
-  const stateKeys = [
-    "vaultforge_clean_room_states",
-    "vaultforge_room_states",
-    "vaultforge_pain_room_states",
-    "vaultforge_5s_room_states",
-  ];
-
-  stateKeys.forEach((key) => {
-    try {
-      const current = JSON.parse(window.localStorage.getItem(key) || "{}");
-      current[roomId] = next;
-      current[`pain:${roomId}`] = next;
-      window.localStorage.setItem(key, JSON.stringify(current));
-    } catch {
-      window.localStorage.setItem(key, JSON.stringify({ [roomId]: next, [`pain:${roomId}`]: next }));
-    }
-  });
+  const states = readStates();
+  states[id] = state;
+  states[`${kind}:${id}`] = state;
+  writeStates(states);
 
   window.dispatchEvent(new Event("storage"));
   window.dispatchEvent(new Event("vaultforge-room-state-change"));
-  window.dispatchEvent(new Event("vaultforge-pain-change"));
+  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
 }
 
-function folderPath(next: RoomState) {
-  if (next === "saved") return "/saved-rooms";
-  if (next === "archived") return "/archived-rooms";
-  if (next === "deleted") return "/deleted-rooms";
-  return "/pain-rooms";
+function locationFor(room: RoomRecord) {
+  return [cleanText(room.city), cleanText(room.county), cleanText(room.state)].filter(Boolean).join(", ") || "Market not listed";
 }
 
-export default function PainRoomPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const [room, setRoom] = useState<PainRoom | null>(null);
-  const [roomState, setRoomState] = useState<RoomState>("active");
+function titleFor(room: RoomRecord, kind: RoomKind) {
+  return cleanText(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
+}
+
+function hrefFor(kind: RoomKind, room: RoomRecord) {
+  const id = encodeURIComponent(roomId(room));
+  return kind === "deal" ? `/deal-rooms/${id}` : `/pain-rooms/${id}`;
+}
+
+function folderPath(state: RoomState) {
+  if (state === "saved") return "/saved-rooms";
+  if (state === "archived") return "/archived-rooms";
+  if (state === "deleted") return "/deleted-rooms";
+  return "/command";
+}
+
+function firstPhoto(room: RoomRecord) {
+  const list = [
+    ...(Array.isArray(room.photoUrls) ? room.photoUrls : []),
+    ...(Array.isArray(room.photos) ? room.photos : []),
+    room.photoUrl,
+    room.imageUrl,
+  ].map((item) => cleanText(item)).filter(Boolean);
+  return list[0] || "";
+}
+
+
+const KIND: RoomKind = "pain";
+
+export default function RoomDetailPage({ params }: { params: { id: string } }) {
+  const [room, setRoom] = useState<RoomRecord | null>(null);
+  const [state, setState] = useState<RoomState>("active");
+
+  function load() {
+    const found = readRooms(KIND).find((item) => roomId(item) === params.id) || null;
+    setRoom(found);
+    setState(found ? getRoomState(found, KIND) : "active");
+  }
 
   useEffect(() => {
-    const found = getPainRooms().find((item) => item.id === params.id) || null;
-    setRoom(found);
-    setRoomState((found?.roomState as RoomState) || "active");
+    load();
+    window.addEventListener("storage", load);
+    window.addEventListener("vaultforge-room-state-change", load);
+    window.addEventListener(KIND === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change", load);
+    return () => {
+      window.removeEventListener("storage", load);
+      window.removeEventListener("vaultforge-room-state-change", load);
+      window.removeEventListener(KIND === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change", load);
+    };
   }, [params.id]);
 
-  function updateRoomState(next: RoomState) {
-    writePainRoomState(params.id, next);
-    setRoomState(next);
+  function move(next: RoomState) {
+    if (!room) return;
+    syncRoomState(room, KIND, next);
+    setState(next);
     window.location.href = folderPath(next);
   }
 
-  const summary = useMemo(() => {
-    if (!room) return "";
-    return `${room.title || "Pain Room"} in ${room.city || "Unknown"}, ${room.county || ""}, ${room.state || ""}.`;
-  }, [room]);
-
   if (!room) {
     return (
-      <div style={shell}>
+      <main style={page}>
         <div style={wrap}>
-          <div style={card}>
-            <h1>Pain room not found.</h1>
-            <Link href="/pain-rooms" style={{ ...button, textDecoration: "none", display: "inline-flex" }}>
-              Back to Pain Rooms
-            </Link>
-          </div>
+          <section style={card}>
+            <h1 style={h1}>Room not found.</h1>
+            <Link href={KIND === "deal" ? "/deal-rooms" : "/pain-rooms"} style={goldBtn}>Back</Link>
+          </section>
         </div>
-      </div>
+      </main>
     );
   }
 
+  const messageHref = `/messages?type=${KIND}&room=${encodeURIComponent(roomId(room))}&subject=${encodeURIComponent(`${KIND === "deal" ? "Deal Room" : "Pain Room"}: ${titleFor(room, KIND)}`)}`;
+
   return (
-    <div style={shell}>
+    <main style={page}>
       <div style={wrap}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
-          <Link href="/command" style={{ ...button, textDecoration: "none", display: "inline-flex" }}>
-            Command
-          </Link>
-          <Link href="/pain-rooms" style={{ ...button, textDecoration: "none", display: "inline-flex" }}>
-            Pain Rooms
-          </Link>
-          <Link href="/messages" style={{ ...button, textDecoration: "none", display: "inline-flex" }}>
-            Messages
-          </Link>
-          <Link
-            href="/logout"
-            style={{
-              ...button,
-              background: "#7f1d1d",
-              color: "white",
-              textDecoration: "none",
-              display: "inline-flex",
-            }}
-          >
-            Logout
-          </Link>
-        </div>
+        <nav style={nav}>
+          <Link href="/command" style={btn}>Command</Link>
+          <Link href={KIND === "deal" ? "/deal-rooms" : "/pain-rooms"} style={goldBtn}>{KIND === "deal" ? "Deal Rooms" : "Pain Rooms"}</Link>
+          <Link href="/messages" style={btn}>Messages</Link>
+          <Link href="/saved-rooms" style={btn}>Saved</Link>
+          <Link href="/archived-rooms" style={btn}>Archived</Link>
+          <Link href="/deleted-rooms" style={btn}>Deleted</Link>
+          <Link href="/logout" style={redBtn}>Logout</Link>
+        </nav>
 
-        <div style={card}>
-          <div style={{ color: "#facc15", letterSpacing: 6, fontWeight: 800, marginBottom: 12 }}>
-            PAIN ROOM
+        <section style={card}>
+          {firstPhoto(room) ? <img src={firstPhoto(room)} alt="" style={{...photo, height: 280}} /> : null}
+          <div style={eyebrow}>{KIND === "deal" ? "Deal Room" : "Pain Room"}</div>
+          <h1 style={h1}>{titleFor(room, KIND)}</h1>
+          <p style={sub}>{locationFor(room)}</p>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>5S Controls</div>
+          <p style={{...sub, marginBottom: 18}}>Current: {state}. Save, Archive, or Delete moves this room out of the active board and into the folder.</p>
+          <div style={row}>
+            <button type="button" onClick={() => move("saved")} style={goldBtn}>Save</button>
+            <button type="button" onClick={() => move("archived")} style={btn}>Archive</button>
+            <button type="button" onClick={() => move("deleted")} style={redBtn}>Delete</button>
           </div>
+        </section>
 
-          <h1 style={{ fontSize: 56, lineHeight: 1, marginBottom: 16 }}>
-            {room.title || "Untitled Pain Room"}
-          </h1>
-
-          <div style={{ fontSize: 28, color: "#d1d5db" }}>
-            {room.city || "Unknown"} • {room.county || "Unknown"} • {room.state || "Unknown"}
+        <section style={card}>
+          <div style={eyebrow}>Owner Message</div>
+          <h2 style={h2}>Contact owner with this {KIND} attached.</h2>
+          <p style={sub}>Message subject is locked to this room.</p>
+          <div style={{...row, marginTop: 18}}>
+            <Link href={messageHref} style={goldBtn}>Message Owner</Link>
           </div>
-        </div>
+        </section>
 
-        <div style={card}>
-          <div style={{ color: "#facc15", letterSpacing: 6, fontWeight: 800, marginBottom: 18 }}>
-            5S CONTROLS
-          </div>
-
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button style={button} onClick={() => updateRoomState("saved")}>
-              Save
-            </button>
-
-            <button style={button} onClick={() => updateRoomState("archived")}>
-              Archive
-            </button>
-
-            <button
-              style={{ ...button, background: "#7f1d1d", color: "white" }}
-              onClick={() => updateRoomState("deleted")}
-            >
-              Delete
-            </button>
-
-            <div
-              style={{
-                padding: "12px 18px",
-                borderRadius: 999,
-                border: "1px solid rgba(255,255,255,.15)",
-              }}
-            >
-              Current: {roomState}
-            </div>
-          </div>
-        </div>
-
-        <div style={card}>
-          <div style={{ color: "#facc15", letterSpacing: 6, fontWeight: 800, marginBottom: 18 }}>
-            PAIN SUMMARY
-          </div>
-
-          <div style={{ fontSize: 24, lineHeight: 1.5, color: "#d1d5db" }}>
-            {summary}
-          </div>
-        </div>
-
-        <div style={card}>
-          <div style={{ color: "#facc15", letterSpacing: 6, fontWeight: 800, marginBottom: 18 }}>
-            OWNER MESSAGE
-          </div>
-
-          <h2 style={{ fontSize: 42, marginBottom: 16 }}>
-            Contact owner with this pain room attached.
-          </h2>
-
-          <div style={{ fontSize: 24, lineHeight: 1.5, color: "#d1d5db", marginBottom: 24 }}>
-            Message subject stays locked to this room.
-          </div>
-
-          <Link
-            href={`/messages?type=pain&room=${encodeURIComponent(room.id)}&subject=${encodeURIComponent(
-              `Pain Room: ${room.title || "Untitled Pain Room"}`
-            )}`}
-            style={{ ...button, textDecoration: "none", display: "inline-flex" }}
-          >
-            Message Owner
-          </Link>
-        </div>
+        <section style={card}>
+          <div style={eyebrow}>Room Summary</div>
+          <p style={sub}>{KIND === "deal" ? "Deal" : "Pain"} room in {locationFor(room)}. Verify facts, route to profile, and move qualified conversation into Messages.</p>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
+
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "#05070d",
+  color: "#f7f7fb",
+  padding: 18,
+  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+};
+
+const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 80 };
+const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
+
+const card: React.CSSProperties = {
+  background: "linear-gradient(180deg,#080d19,#050816)",
+  border: "1px solid rgba(245,197,66,.28)",
+  borderRadius: 26,
+  padding: 28,
+  marginBottom: 22,
+};
+
+const btn: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "#171c29",
+  color: "#f7f7fb",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 950,
+  textDecoration: "none",
+  display: "inline-block",
+  cursor: "pointer",
+};
+
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const h1: React.CSSProperties = { fontSize: "clamp(42px,8vw,82px)", lineHeight: .9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(28px,5vw,50px)", lineHeight: .95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 22, lineHeight: 1.35, margin: 0 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 18 };
+const row: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10 };
+const roomCard: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 22, padding: 22 };
+const roomTitle: React.CSSProperties = { fontSize: 30, margin: "0 0 10px", lineHeight: 1 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "0 0 14px", lineHeight: 1.35 };
+const photo: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, marginBottom: 14, border: "1px solid rgba(207,216,230,.18)" };
+
