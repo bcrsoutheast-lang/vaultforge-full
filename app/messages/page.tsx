@@ -261,13 +261,14 @@ function buildCards(profile: SavedProfile | null): RoomMessageCard[] {
   });
 }
 
-function readSearchParams() {
+function readSearchParams(): { type: "" | RoomType; id: string } {
   if (typeof window === "undefined") {
-    return { type: "" as "" | RoomType, id: "" };
+    return { type: "", id: "" };
   }
 
   const params = new URLSearchParams(window.location.search);
-  const type = params.get("type") === "pain" ? "pain" : params.get("type") === "deal" ? "deal" : "";
+  const rawType = params.get("type") || "";
+  const type: "" | RoomType = rawType === "pain" ? "pain" : rawType === "deal" ? "deal" : "";
   const id = params.get("room") || "";
   return { type, id };
 }
