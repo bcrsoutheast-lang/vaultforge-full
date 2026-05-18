@@ -1,5 +1,5 @@
 import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
-import VaultForgeProfileClient from "../components/VaultForgeProfileClient";
+import VaultForgeProfileBloomberg from "../components/VaultForgeProfileBloomberg";
 import VaultForgeRoomControls from "../components/VaultForgeRoomControls";
 
 export const dynamic = "force-dynamic";
@@ -11,16 +11,17 @@ export default function ProfilePage() {
       active="profile"
       eyebrow="MEMBER PROFILE"
       title="AI routing profile."
-      subtitle="Collect the data VaultForge needs to route deals, pain rooms, alerts, intros, and member contact opportunities by actual fit and room information."
+      subtitle="Chip-based profile setup for routing, alerts, states, markets, asset fit, member contact, and execution matching."
     >
-      <VaultForgeProfileClient />
+      <VaultForgeProfileBloomberg />
 
       <section className="vf-card">
         <div className="vf-eyebrow">5S PROFILE CONTROL</div>
-        <h2 className="vf-h2">Profile cleanup</h2>
+        <h2 className="vf-h2">Profile cleanup.</h2>
         <p className="vf-copy">
-          Profile can be saved, archived, or deleted from local cleanup folders while the Supabase profile route is reconnected later.
+          Save, archive, or delete this profile marker from the clean 5S folders while database persistence is wired later.
         </p>
+
         <VaultForgeRoomControls
           roomId="profile:member-routing"
           roomTitle="Member AI Routing Profile"
