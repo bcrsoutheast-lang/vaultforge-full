@@ -1,5 +1,6 @@
 import Link from "next/link";
 import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
+import VaultForgeRoomControls from "../components/VaultForgeRoomControls";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -30,6 +31,8 @@ export default function DealRoomsPage() {
           <Link className="vf-btn" href="/messages">Messages</Link>
           <Link className="vf-btn dark" href="/command">Back to Command</Link>
         </div>
+
+        <VaultForgeRoomControls roomId="deal-room:main" roomTitle="Main Deal Rooms Lane" roomType="deal" />
       </section>
     </VaultForgeCleanShell>
   );
