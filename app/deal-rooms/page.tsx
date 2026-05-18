@@ -27,8 +27,10 @@ export default function DealRoomsPage() {
           underwriting, buyer fit, capital fit, operator fit, alert context, routing context,
           score, timeline, cleanup state, and room messages.
         </p>
+
         <div className="vf-btns">
-          <Link className="vf-btn" href="/messages">Messages</Link>
+          <Link className="vf-btn" href="/deal-create">Create Deal Opportunity</Link>
+          <Link className="vf-btn dark" href="/messages">Messages</Link>
           <Link className="vf-btn dark" href="/command">Back to Command</Link>
         </div>
 
