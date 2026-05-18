@@ -1,16 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type AlertType = "deal" | "pain" | "message";
 type Severity = "critical" | "high" | "medium" | "low";
+type RoomState = "active" | "saved" | "archived" | "deleted";
 
 type RoomRecord = {
   id?: string;
   roomId?: string;
   dealId?: string;
   painId?: string;
+  roomState?: RoomState;
   title?: string;
   name?: string;
   state?: string;
@@ -28,6 +29,7 @@ type RoomRecord = {
 
 type AlertRow = {
   id: string;
+  roomKey: string;
   type: AlertType;
   title: string;
   subtitle: string;
@@ -36,7 +38,6 @@ type AlertRow = {
   timestamp: string;
   href: string;
   lane: string;
-  pulse: boolean;
 };
 
 type MessageRow = {
@@ -50,9 +51,25 @@ type MessageRow = {
   read?: boolean;
 };
 
+type SummaryCard = {
+  key: AlertType;
+  label: string;
+  href: string;
+  count: number;
+  unread: number;
+  newest: string;
+  pulse: boolean;
+  severity: Severity;
+};
+
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
-const SEEN_KEY = "vaultforge_live_alert_seen_v1";
+
+const SEEN_KEY = "vaultforge_live_alert_seen_v2";
+const ROOM_STATE_KEY = "vaultforge_clean_room_states";
+const MAX_PULSE_CARDS = 5;
+const MAX_VISIBLE_ALERTS = 8;
+const MAX_VISIBLE_TICKETS = 5;
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   try {
@@ -77,6 +94,28 @@ function list(value: unknown): string[] {
 
 function roomId(room: RoomRecord | null | undefined) {
   return text(room?.id || room?.roomId || room?.dealId || room?.painId, "");
+}
+
+function readRoomStates(): Record<string, RoomState> {
+  if (typeof window === "undefined") return {};
+  return parseJson<Record<string, RoomState>>(window.localStorage.getItem(ROOM_STATE_KEY), {});
+}
+
+function roomCurrentState(room: RoomRecord, type: "deal" | "pain"): RoomState {
+  const states = readRoomStates();
+  const id = roomId(room);
+  const compound = `${type}:${id}`;
+
+  return (
+    states[id] ||
+    states[compound] ||
+    room.roomState ||
+    "active"
+  );
+}
+
+function isActiveRoom(room: RoomRecord, type: "deal" | "pain") {
+  return roomCurrentState(room, type) === "active";
 }
 
 function readArray(key: string): RoomRecord[] {
@@ -109,7 +148,7 @@ function uniqueRooms(keys: string[], type: "deal" | "pain"): RoomRecord[] {
     if (room && id && !map.has(id)) map.set(id, { ...room, id });
   }
 
-  return Array.from(map.values());
+  return Array.from(map.values()).filter((room) => isActiveRoom(room, type));
 }
 
 function readMessagesForThread(threadKey: string): MessageRow[] {
@@ -118,7 +157,7 @@ function readMessagesForThread(threadKey: string): MessageRow[] {
   return Array.isArray(parsed) ? (parsed as MessageRow[]) : [];
 }
 
-function messageThreads(): AlertRow[] {
+function messageThreads(activeDealIds: Set<string>, activePainIds: Set<string>): AlertRow[] {
   if (typeof window === "undefined") return [];
 
   const rows: AlertRow[] = [];
@@ -129,25 +168,30 @@ function messageThreads(): AlertRow[] {
 
     const threadKey = key.replace("vaultforge_room_messages_", "");
     const [rawType, ...idParts] = threadKey.split(":");
-    const type = rawType === "pain" ? "pain" : rawType === "deal" ? "deal" : "";
+    const roomType = rawType === "pain" ? "pain" : rawType === "deal" ? "deal" : "";
     const roomIdValue = idParts.join(":");
-    if (!type || !roomIdValue) continue;
+
+    if (!roomType || !roomIdValue) continue;
+    if (roomType === "deal" && !activeDealIds.has(roomIdValue)) continue;
+    if (roomType === "pain" && !activePainIds.has(roomIdValue)) continue;
 
     const messages = readMessagesForThread(threadKey);
     const latest = messages[0];
     const unread = messages.filter((message) => !message.read).length;
 
+    if (!messages.length) continue;
+
     rows.push({
       id: `message:${threadKey}`,
+      roomKey: `${roomType}:${roomIdValue}`,
       type: "message",
-      title: latest?.subject || `${type === "deal" ? "Deal" : "Pain"} message thread`,
-      subtitle: latest?.body || "Room thread has no messages yet.",
+      title: latest?.subject || `${roomType === "deal" ? "Deal" : "Pain"} message thread`,
+      subtitle: latest?.body || "Room message thread updated.",
       severity: unread > 0 ? "high" : "low",
       count: messages.length,
       timestamp: latest?.createdAt || "",
-      href: `/messages?type=${encodeURIComponent(type)}&room=${encodeURIComponent(roomIdValue)}`,
-      lane: type === "deal" ? "Deal Message" : "Pain Message",
-      pulse: false,
+      href: `/messages?type=${encodeURIComponent(roomType)}&room=${encodeURIComponent(roomIdValue)}`,
+      lane: roomType === "deal" ? "Deal Message" : "Pain Message",
     });
   }
 
@@ -192,7 +236,7 @@ function newestTime(rows: AlertRow[]) {
 }
 
 function timeAgo(value: string) {
-  if (!value) return "not opened";
+  if (!value) return "no activity";
   try {
     const diff = Date.now() - new Date(value).getTime();
     const min = Math.max(0, Math.floor(diff / 60000));
@@ -210,11 +254,15 @@ function alertRows(): AlertRow[] {
   const dealRooms = uniqueRooms(DEAL_KEYS, "deal");
   const painRooms = uniqueRooms(PAIN_KEYS, "pain");
 
+  const activeDealIds = new Set(dealRooms.map(roomId).filter(Boolean));
+  const activePainIds = new Set(painRooms.map(roomId).filter(Boolean));
+
   const dealAlerts: AlertRow[] = dealRooms.map((room) => {
     const id = roomId(room);
     const routes = [...list(room.routeTo), ...list(room.routedTo)];
     return {
       id: `deal:${id}`,
+      roomKey: `deal:${id}`,
       type: "deal",
       title: titleFor(room, "Untitled Deal Room"),
       subtitle: `${location(room) || "Market not listed"}${routes.length ? ` • Route: ${routes.join(", ")}` : ""}`,
@@ -223,7 +271,6 @@ function alertRows(): AlertRow[] {
       timestamp: timestamp(room),
       href: `/deal-rooms/${encodeURIComponent(id)}`,
       lane: "New Deal",
-      pulse: false,
     };
   });
 
@@ -232,6 +279,7 @@ function alertRows(): AlertRow[] {
     const routes = list(room.routingNeeds);
     return {
       id: `pain:${id}`,
+      roomKey: `pain:${id}`,
       type: "pain",
       title: titleFor(room, "Untitled Pain Room"),
       subtitle: `${location(room) || "Market not listed"}${routes.length ? ` • Needs: ${routes.join(", ")}` : ""}`,
@@ -240,25 +288,13 @@ function alertRows(): AlertRow[] {
       timestamp: timestamp(room),
       href: `/pain-rooms/${encodeURIComponent(id)}`,
       lane: "New Pain",
-      pulse: false,
     };
   });
 
-  const messages = messageThreads();
+  const messages = messageThreads(activeDealIds, activePainIds);
 
   return [...dealAlerts, ...painAlerts, ...messages].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
 }
-
-type SummaryCard = {
-  key: AlertType;
-  label: string;
-  href: string;
-  count: number;
-  unread: number;
-  newest: string;
-  pulse: boolean;
-  severity: Severity;
-};
 
 function summaryCards(rows: AlertRow[], seen: Record<string, string>): SummaryCard[] {
   const lanes: Array<{ key: AlertType; label: string; href: string }> = [
@@ -272,7 +308,7 @@ function summaryCards(rows: AlertRow[], seen: Record<string, string>): SummaryCa
     const newest = newestTime(laneRows);
     const seenTime = seen[`lane:${lane.key}`] || "";
     const unread = laneRows.filter((row) => !seen[row.id] || (row.timestamp && row.timestamp > seen[row.id])).length;
-    const pulse = Boolean(newest && (!seenTime || newest > seenTime));
+    const pulse = Boolean(unread > 0 && newest && (!seenTime || newest > seenTime));
 
     let severity: Severity = "low";
     if (laneRows.some((row) => row.severity === "critical")) {
@@ -296,6 +332,16 @@ function summaryCards(rows: AlertRow[], seen: Record<string, string>): SummaryCa
   });
 }
 
+function unseen(row: AlertRow, seen: Record<string, string>) {
+  return !seen[row.id] || Boolean(row.timestamp && row.timestamp > seen[row.id]);
+}
+
+function priorityWeight(row: AlertRow) {
+  const severityWeight = row.severity === "critical" ? 4 : row.severity === "high" ? 3 : row.severity === "medium" ? 2 : 1;
+  const timeWeight = row.timestamp ? new Date(row.timestamp).getTime() / 10000000000000 : 0;
+  return severityWeight + timeWeight;
+}
+
 export default function VaultForgeLiveAlertEngine() {
   const [rows, setRows] = useState<AlertRow[]>([]);
   const [seen, setSeen] = useState<Record<string, string>>({});
@@ -309,23 +355,29 @@ export default function VaultForgeLiveAlertEngine() {
   useEffect(() => {
     load();
     const interval = window.setInterval(load, 2500);
+
     window.addEventListener("storage", load);
     window.addEventListener("vaultforge-message-change", load);
     window.addEventListener("vaultforge-pain-change", load);
+    window.addEventListener("vaultforge-room-state-change", load);
+
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("storage", load);
       window.removeEventListener("vaultforge-message-change", load);
       window.removeEventListener("vaultforge-pain-change", load);
+      window.removeEventListener("vaultforge-room-state-change", load);
     };
   }, []);
 
   function markLane(type: AlertType) {
     const laneRows = rows.filter((row) => row.type === type);
     const next = { ...seen, [`lane:${type}`]: new Date().toISOString() };
+
     laneRows.forEach((row) => {
       next[row.id] = row.timestamp || new Date().toISOString();
     });
+
     writeSeen(next);
     setSeen(next);
     setSelected(type);
@@ -339,15 +391,30 @@ export default function VaultForgeLiveAlertEngine() {
   }
 
   const summaries = useMemo(() => summaryCards(rows, seen), [rows, seen]);
-  const filteredRows = useMemo(() => (selected === "all" ? rows : rows.filter((row) => row.type === selected)), [rows, selected]);
-  const criticalRows = rows.filter((row) => row.severity === "critical" || row.severity === "high").slice(0, 6);
+
+  const unseenRows = rows
+    .filter((row) => unseen(row, seen))
+    .sort((a, b) => priorityWeight(b) - priorityWeight(a));
+
+  const pulsingIds = new Set(unseenRows.slice(0, MAX_PULSE_CARDS).map((row) => row.id));
+
+  const filteredRows = useMemo(() => {
+    const base = selected === "all" ? rows : rows.filter((row) => row.type === selected);
+    return base.slice(0, MAX_VISIBLE_ALERTS);
+  }, [rows, selected]);
+
+  const ticketRows = rows
+    .filter((row) => row.severity === "critical" || row.severity === "high")
+    .slice(0, MAX_VISIBLE_TICKETS);
+
+  const overflowCount = selected === "all" ? Math.max(0, rows.length - MAX_VISIBLE_ALERTS) : Math.max(0, rows.filter((row) => row.type === selected).length - MAX_VISIBLE_ALERTS);
 
   return (
     <section style={shell}>
       <style>{`
         @keyframes vfPulse {
-          0% { box-shadow: 0 0 0 0 rgba(255, 65, 65, .45); transform: translateY(0); }
-          70% { box-shadow: 0 0 0 14px rgba(255, 65, 65, 0); transform: translateY(-1px); }
+          0% { box-shadow: 0 0 0 0 rgba(255, 65, 65, .42); transform: translateY(0); }
+          70% { box-shadow: 0 0 0 12px rgba(255, 65, 65, 0); transform: translateY(-1px); }
           100% { box-shadow: 0 0 0 0 rgba(255, 65, 65, 0); transform: translateY(0); }
         }
         @keyframes vfTicker {
@@ -359,7 +426,8 @@ export default function VaultForgeLiveAlertEngine() {
       <div style={topBar}>
         <div>
           <div style={eyebrow}>Live Alert Engine</div>
-          <h2 style={title}>Bloomberg alert deck.</h2>
+          <h2 style={title}>Clean Bloomberg alert deck.</h2>
+          <p style={copy}>Only active, unseen, highest-priority items pulse. Saved, archived, and deleted rooms leave this deck and stay in their folders.</p>
         </div>
         <div style={livePill}>LIVE</div>
       </div>
@@ -377,20 +445,22 @@ export default function VaultForgeLiveAlertEngine() {
           >
             <span style={summaryLabel}>{item.label}</span>
             <strong style={summaryNumber}>{item.unread}</strong>
-            <span style={summarySub}>{item.count} total • {timeAgo(item.newest)}</span>
+            <span style={summarySub}>{item.count} active total • {timeAgo(item.newest)}</span>
           </button>
         ))}
       </div>
 
-      <div style={tickerShell}>
-        <div style={tickerTrack}>
-          {[...rows.slice(0, 8), ...rows.slice(0, 8)].map((row, index) => (
-            <span key={`${row.id}-${index}`} style={tickerItem}>
-              {row.lane}: {row.title} · {row.subtitle}
-            </span>
-          ))}
+      {rows.length ? (
+        <div style={tickerShell}>
+          <div style={tickerTrack}>
+            {[...rows.slice(0, 8), ...rows.slice(0, 8)].map((row, index) => (
+              <span key={`${row.id}-${index}`} style={tickerItem}>
+                {row.lane}: {row.title} · {row.subtitle}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div style={actionRow}>
         <button type="button" onClick={() => setSelected("all")} style={selected === "all" ? goldBtn : btn}>All Alerts</button>
@@ -402,10 +472,13 @@ export default function VaultForgeLiveAlertEngine() {
       <div style={grid}>
         <div style={panel}>
           <div style={eyebrow}>Alert Cards</div>
-          {!filteredRows.length ? <p style={copy}>No alert cards in this lane yet.</p> : null}
+          <p style={miniCopy}>Showing the newest {MAX_VISIBLE_ALERTS}. Everything else is summarized by count so the command surface stays clean.</p>
+          {!filteredRows.length ? <p style={copy}>No active alert cards in this lane.</p> : null}
+
           <div style={stack}>
-            {filteredRows.slice(0, 8).map((row) => {
-              const isUnseen = !seen[row.id] || (row.timestamp && row.timestamp > seen[row.id]);
+            {filteredRows.map((row) => {
+              const shouldPulse = pulsingIds.has(row.id);
+
               return (
                 <button
                   key={row.id}
@@ -413,10 +486,10 @@ export default function VaultForgeLiveAlertEngine() {
                   onClick={() => openAlert(row)}
                   style={{
                     ...alertCard,
-                    ...(isUnseen ? pulseStyle(row.severity) : {}),
+                    ...(shouldPulse ? pulseStyle(row.severity) : {}),
                   }}
                 >
-                  <span style={severityDot(row.severity)} />
+                  <span style={severityDot(row.severity, shouldPulse)} />
                   <div>
                     <div style={alertTop}>{row.lane}</div>
                     <strong style={alertTitle}>{row.title}</strong>
@@ -427,12 +500,17 @@ export default function VaultForgeLiveAlertEngine() {
               );
             })}
           </div>
+
+          {overflowCount > 0 ? (
+            <div style={overflowBox}>+{overflowCount} more active items summarized. Open Deal Rooms, Pain Rooms, or Messages to work the full lane.</div>
+          ) : null}
         </div>
 
         <div style={panel}>
           <div style={eyebrow}>Execution Tickets</div>
+          <p style={miniCopy}>Only high-pressure active tickets show here.</p>
           <div style={stack}>
-            {(criticalRows.length ? criticalRows : rows.slice(0, 4)).map((row) => (
+            {ticketRows.map((row) => (
               <div key={`ticket-${row.id}`} style={ticketCard}>
                 <div style={ticketHead}>
                   <strong>{row.severity.toUpperCase()}</strong>
@@ -442,7 +520,7 @@ export default function VaultForgeLiveAlertEngine() {
                 <p style={alertSub}>{row.type === "message" ? "Open thread and respond." : "Open room, verify facts, route to profile, move to messages."}</p>
               </div>
             ))}
-            {!rows.length ? <p style={copy}>No tickets yet. New rooms and messages will appear here.</p> : null}
+            {!ticketRows.length ? <p style={copy}>No urgent active tickets.</p> : null}
           </div>
         </div>
       </div>
@@ -458,227 +536,46 @@ function pulseStyle(severity: Severity): React.CSSProperties {
   };
 }
 
-function severityDot(severity: Severity): React.CSSProperties {
+function severityDot(severity: Severity, active: boolean): React.CSSProperties {
   const color = severity === "critical" ? "#ff3030" : severity === "high" ? "#ff4d4d" : severity === "medium" ? "#ffdc68" : "#8ca0bd";
   return {
     width: 12,
     height: 12,
     borderRadius: 999,
-    background: color,
+    background: active ? color : "#8ca0bd",
     flex: "0 0 auto",
     marginTop: 6,
-    boxShadow: `0 0 18px ${color}`,
+    boxShadow: active ? `0 0 18px ${color}` : "none",
   };
 }
 
-const shell: React.CSSProperties = {
-  display: "grid",
-  gap: 18,
-};
-
-const topBar: React.CSSProperties = {
-  border: "1px solid rgba(245,197,66,.28)",
-  borderRadius: 26,
-  padding: 24,
-  background: "linear-gradient(135deg, rgba(9,14,26,.98), rgba(8,6,10,.98))",
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 20,
-  alignItems: "center",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#ffd45a",
-  textTransform: "uppercase",
-  letterSpacing: 6,
-  fontWeight: 950,
-  fontSize: 13,
-};
-
-const title: React.CSSProperties = {
-  color: "#f8fafc",
-  fontSize: "clamp(30px,5vw,54px)",
-  lineHeight: 1,
-  letterSpacing: -2,
-  margin: "8px 0 0",
-};
-
-const livePill: React.CSSProperties = {
-  background: "#e31321",
-  color: "white",
-  borderRadius: 999,
-  padding: "10px 14px",
-  fontWeight: 950,
-  boxShadow: "0 0 24px rgba(227,19,33,.55)",
-};
-
-const summaryGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-  gap: 14,
-};
-
-const summaryCard: React.CSSProperties = {
-  textAlign: "left",
-  border: "1px solid rgba(207,216,230,.16)",
-  borderRadius: 22,
-  padding: 18,
-  background: "#121724",
-  color: "#f8fafc",
-  cursor: "pointer",
-};
-
-const summaryLabel: React.CSSProperties = {
-  display: "block",
-  color: "#ffd45a",
-  textTransform: "uppercase",
-  letterSpacing: 3,
-  fontSize: 12,
-  fontWeight: 950,
-};
-
-const summaryNumber: React.CSSProperties = {
-  display: "block",
-  fontSize: 44,
-  lineHeight: 1,
-  marginTop: 8,
-};
-
-const summarySub: React.CSSProperties = {
-  display: "block",
-  color: "#aeb7c7",
-  marginTop: 8,
-};
-
-const tickerShell: React.CSSProperties = {
-  overflow: "hidden",
-  border: "1px solid rgba(245,197,66,.20)",
-  borderRadius: 18,
-  background: "#0b0f19",
-  padding: "12px 0",
-};
-
-const tickerTrack: React.CSSProperties = {
-  display: "flex",
-  gap: 24,
-  width: "max-content",
-  animation: "vfTicker 35s linear infinite",
-};
-
-const tickerItem: React.CSSProperties = {
-  whiteSpace: "nowrap",
-  color: "#ffd45a",
-  fontSize: 14,
-  fontWeight: 850,
-};
-
-const actionRow: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-};
-
-const btn: React.CSSProperties = {
-  border: "1px solid rgba(207,216,230,.18)",
-  background: "#171c29",
-  color: "#f7f7fb",
-  borderRadius: 999,
-  padding: "12px 16px",
-  fontWeight: 950,
-  cursor: "pointer",
-};
-
-const goldBtn: React.CSSProperties = {
-  ...btn,
-  background: "#ffdc68",
-  color: "#10131a",
-  borderColor: "#ffdc68",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0,1.35fr) minmax(300px,.65fr)",
-  gap: 18,
-};
-
-const panel: React.CSSProperties = {
-  border: "1px solid rgba(245,197,66,.24)",
-  borderRadius: 24,
-  padding: 22,
-  background: "linear-gradient(180deg,#080d19,#050816)",
-};
-
-const stack: React.CSSProperties = {
-  display: "grid",
-  gap: 12,
-  marginTop: 16,
-};
-
-const alertCard: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "18px 1fr",
-  gap: 12,
-  width: "100%",
-  textAlign: "left",
-  border: "1px solid rgba(207,216,230,.14)",
-  borderRadius: 20,
-  padding: 16,
-  background: "#121724",
-  color: "#f8fafc",
-  cursor: "pointer",
-};
-
-const alertTop: React.CSSProperties = {
-  color: "#ffd45a",
-  textTransform: "uppercase",
-  letterSpacing: 3,
-  fontSize: 11,
-  fontWeight: 950,
-};
-
-const alertTitle: React.CSSProperties = {
-  display: "block",
-  fontSize: 21,
-  marginTop: 5,
-};
-
-const alertSub: React.CSSProperties = {
-  color: "#aeb7c7",
-  margin: "6px 0",
-  lineHeight: 1.35,
-};
-
-const meta: React.CSSProperties = {
-  color: "#7e8aa0",
-  fontSize: 13,
-};
-
-const ticketCard: React.CSSProperties = {
-  border: "1px solid rgba(255,80,80,.24)",
-  background: "rgba(55,10,20,.35)",
-  borderRadius: 18,
-  padding: 16,
-};
-
-const ticketHead: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  color: "#ffb4b4",
-  fontSize: 12,
-  letterSpacing: 2,
-};
-
-const ticketText: React.CSSProperties = {
-  color: "#f8fafc",
-  fontSize: 18,
-  fontWeight: 850,
-  margin: "10px 0 4px",
-};
-
-const copy: React.CSSProperties = {
-  color: "#c9d0dc",
-  fontSize: 18,
-  lineHeight: 1.4,
-};
-
+const shell: React.CSSProperties = { display: "grid", gap: 18 };
+const topBar: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 24, background: "linear-gradient(135deg, rgba(9,14,26,.98), rgba(8,6,10,.98))", display: "flex", justifyContent: "space-between", gap: 20, alignItems: "center" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 6, fontWeight: 950, fontSize: 13 };
+const title: React.CSSProperties = { color: "#f8fafc", fontSize: "clamp(30px,5vw,54px)", lineHeight: 1, letterSpacing: -2, margin: "8px 0 10px" };
+const livePill: React.CSSProperties = { background: "#e31321", color: "white", borderRadius: 999, padding: "10px 14px", fontWeight: 950, boxShadow: "0 0 24px rgba(227,19,33,.55)" };
+const summaryGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14 };
+const summaryCard: React.CSSProperties = { textAlign: "left", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 18, background: "#121724", color: "#f8fafc", cursor: "pointer" };
+const summaryLabel: React.CSSProperties = { display: "block", color: "#ffd45a", textTransform: "uppercase", letterSpacing: 3, fontSize: 12, fontWeight: 950 };
+const summaryNumber: React.CSSProperties = { display: "block", fontSize: 44, lineHeight: 1, marginTop: 8 };
+const summarySub: React.CSSProperties = { display: "block", color: "#aeb7c7", marginTop: 8 };
+const tickerShell: React.CSSProperties = { overflow: "hidden", border: "1px solid rgba(245,197,66,.20)", borderRadius: 18, background: "#0b0f19", padding: "12px 0" };
+const tickerTrack: React.CSSProperties = { display: "flex", gap: 24, width: "max-content", animation: "vfTicker 35s linear infinite" };
+const tickerItem: React.CSSProperties = { whiteSpace: "nowrap", color: "#ffd45a", fontSize: 14, fontWeight: 850 };
+const actionRow: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap" };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "12px 16px", fontWeight: 950, cursor: "pointer" };
+const goldBtn: React.CSSProperties = { ...btn, background: "#ffdc68", color: "#10131a", borderColor: "#ffdc68" };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0,1.35fr) minmax(300px,.65fr)", gap: 18 };
+const panel: React.CSSProperties = { border: "1px solid rgba(245,197,66,.24)", borderRadius: 24, padding: 22, background: "linear-gradient(180deg,#080d19,#050816)" };
+const stack: React.CSSProperties = { display: "grid", gap: 12, marginTop: 16 };
+const alertCard: React.CSSProperties = { display: "grid", gridTemplateColumns: "18px 1fr", gap: 12, width: "100%", textAlign: "left", border: "1px solid rgba(207,216,230,.14)", borderRadius: 20, padding: 16, background: "#121724", color: "#f8fafc", cursor: "pointer" };
+const alertTop: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 3, fontSize: 11, fontWeight: 950 };
+const alertTitle: React.CSSProperties = { display: "block", fontSize: 21, marginTop: 5 };
+const alertSub: React.CSSProperties = { color: "#aeb7c7", margin: "6px 0", lineHeight: 1.35 };
+const meta: React.CSSProperties = { color: "#7e8aa0", fontSize: 13 };
+const ticketCard: React.CSSProperties = { border: "1px solid rgba(255,80,80,.24)", background: "rgba(55,10,20,.35)", borderRadius: 18, padding: 16 };
+const ticketHead: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, color: "#ffb4b4", fontSize: 12, letterSpacing: 2 };
+const ticketText: React.CSSProperties = { color: "#f8fafc", fontSize: 18, fontWeight: 850, margin: "10px 0 4px" };
+const copy: React.CSSProperties = { color: "#c9d0dc", fontSize: 18, lineHeight: 1.4, margin: 0 };
+const miniCopy: React.CSSProperties = { color: "#9ca8ba", fontSize: 14, lineHeight: 1.35, margin: "10px 0 0" };
+const overflowBox: React.CSSProperties = { marginTop: 14, border: "1px solid rgba(245,197,66,.18)", borderRadius: 18, padding: 14, color: "#ffd45a", background: "rgba(245,197,66,.06)", fontWeight: 850 };
