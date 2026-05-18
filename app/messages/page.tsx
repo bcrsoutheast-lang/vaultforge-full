@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type RoomType = "deal" | "pain";
+type ViewMode = "home" | "deal" | "pain" | "thread";
 type ThreadState = "active" | "saved" | "archived" | "deleted";
 type FilterState = ThreadState | "all";
 
@@ -37,12 +38,6 @@ type RoomRecord = {
   city?: string;
   county?: string;
   state?: string;
-  photoUrl?: string;
-  photoUrls?: string[];
-  photos?: string[];
-  photo?: string;
-  imageUrl?: string;
-  publicUrl?: string;
   [key: string]: unknown;
 };
 
@@ -82,12 +77,12 @@ type RoomMessageCard = {
 };
 
 const PROFILE_KEY = "vaultforge_profile_v2";
-const THREAD_STATE_KEY = "vaultforge_message_thread_states_v2";
+const THREAD_STATE_KEY = "vaultforge_message_thread_states_v3";
 
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 
-function threadKey(type: RoomType, id: string) {
+function makeThreadKey(type: RoomType, id: string) {
   return `${type}:${id}`;
 }
 
@@ -130,8 +125,10 @@ function readArray(key: string): RoomRecord[] {
   return Array.isArray(parsed) ? (parsed as RoomRecord[]) : [];
 }
 
-function uniqueRooms(keys: string[]): RoomRecord[] {
+function uniqueRooms(type: RoomType): RoomRecord[] {
   if (typeof window === "undefined") return [];
+
+  const keys = type === "deal" ? DEAL_KEYS : PAIN_KEYS;
   const map = new Map<string, RoomRecord>();
 
   for (const key of keys) {
@@ -141,10 +138,10 @@ function uniqueRooms(keys: string[]): RoomRecord[] {
     }
   }
 
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const key = window.localStorage.key(index) || "";
-    const isDealDirect = keys === DEAL_KEYS && (key.startsWith("vaultforge_clean_deal_room_") || key.startsWith("vaultforge_deal_room_"));
-    const isPainDirect = keys === PAIN_KEYS && (key.startsWith("vaultforge_clean_pain_room_") || key.startsWith("vaultforge_pain_room_"));
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i) || "";
+    const isDealDirect = type === "deal" && (key.startsWith("vaultforge_clean_deal_room_") || key.startsWith("vaultforge_deal_room_"));
+    const isPainDirect = type === "pain" && (key.startsWith("vaultforge_clean_pain_room_") || key.startsWith("vaultforge_pain_room_"));
 
     if (!isDealDirect && !isPainDirect) continue;
 
@@ -228,7 +225,7 @@ function buildCards(profile: SavedProfile | null): RoomMessageCard[] {
     const id = roomId(room);
     if (!id) return;
 
-    const key = threadKey(type, id);
+    const key = makeThreadKey(type, id);
     const messages = readMessages(key);
     const latest = messages[0];
 
@@ -251,8 +248,8 @@ function buildCards(profile: SavedProfile | null): RoomMessageCard[] {
     });
   };
 
-  uniqueRooms(DEAL_KEYS).forEach((room) => build("deal", room));
-  uniqueRooms(PAIN_KEYS).forEach((room) => build("pain", room));
+  uniqueRooms("deal").forEach((room) => build("deal", room));
+  uniqueRooms("pain").forEach((room) => build("pain", room));
 
   return rows.sort((a, b) => {
     const aTime = a.lastAt || "0";
@@ -261,16 +258,20 @@ function buildCards(profile: SavedProfile | null): RoomMessageCard[] {
   });
 }
 
-function readSearchParams(): { type: "" | RoomType; id: string } {
-  if (typeof window === "undefined") {
-    return { type: "", id: "" };
-  }
+function readSearchParams(): { view: ViewMode; type: "" | RoomType; roomId: string } {
+  if (typeof window === "undefined") return { view: "home", type: "", roomId: "" };
 
   const params = new URLSearchParams(window.location.search);
+  const rawBox = params.get("box") || "";
   const rawType = params.get("type") || "";
-  const type: "" | RoomType = rawType === "pain" ? "pain" : rawType === "deal" ? "deal" : "";
-  const id = params.get("room") || "";
-  return { type, id };
+  const roomIdValue = params.get("room") || "";
+
+  if (rawType === "deal" && roomIdValue) return { view: "thread", type: "deal", roomId: roomIdValue };
+  if (rawType === "pain" && roomIdValue) return { view: "thread", type: "pain", roomId: roomIdValue };
+  if (rawBox === "deal") return { view: "deal", type: "deal", roomId: "" };
+  if (rawBox === "pain") return { view: "pain", type: "pain", roomId: "" };
+
+  return { view: "home", type: "", roomId: "" };
 }
 
 function niceDate(value: string) {
@@ -282,8 +283,16 @@ function niceDate(value: string) {
   }
 }
 
-function backHref(type: RoomType, id: string) {
+function roomHref(type: RoomType, id: string) {
   return type === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`;
+}
+
+function messagesBoxHref(type: RoomType) {
+  return `/messages?box=${type}`;
+}
+
+function threadHref(card: RoomMessageCard) {
+  return `/messages?type=${encodeURIComponent(card.roomType)}&room=${encodeURIComponent(card.roomId)}`;
 }
 
 function stateLabel(state: ThreadState) {
@@ -296,9 +305,10 @@ function stateLabel(state: ThreadState) {
 export default function MessagesPage() {
   const [profile, setProfile] = useState<SavedProfile | null>(null);
   const [cards, setCards] = useState<RoomMessageCard[]>([]);
-  const [filter, setFilter] = useState<FilterState>("active");
+  const [view, setView] = useState<ViewMode>("home");
   const [openType, setOpenType] = useState<"" | RoomType>("");
   const [openId, setOpenId] = useState("");
+  const [filter, setFilter] = useState<FilterState>("active");
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [body, setBody] = useState("");
   const [replyMode, setReplyMode] = useState<"profileToOwner" | "ownerToProfile">("profileToOwner");
@@ -306,15 +316,16 @@ export default function MessagesPage() {
   function load() {
     const savedProfile = readProfile();
     const route = readSearchParams();
-    const built = buildCards(savedProfile);
+    const builtCards = buildCards(savedProfile);
 
     setProfile(savedProfile);
-    setCards(built);
+    setCards(builtCards);
+    setView(route.view);
     setOpenType(route.type);
-    setOpenId(route.id);
+    setOpenId(route.roomId);
 
-    if (route.type && route.id) {
-      const key = threadKey(route.type, route.id);
+    if (route.view === "thread" && route.type && route.roomId) {
+      const key = makeThreadKey(route.type, route.roomId);
       const markedRead = readMessages(key).map((item) => ({ ...item, read: true }));
       writeMessages(key, markedRead);
       setMessages(markedRead);
@@ -327,6 +338,7 @@ export default function MessagesPage() {
     load();
     window.addEventListener("storage", load);
     window.addEventListener("vaultforge-message-change", load);
+
     return () => {
       window.removeEventListener("storage", load);
       window.removeEventListener("vaultforge-message-change", load);
@@ -348,20 +360,28 @@ export default function MessagesPage() {
     };
   }, [cards]);
 
-  const filteredCards = useMemo(() => {
-    if (filter === "all") return cards;
-    return cards.filter((card) => card.state === filter);
-  }, [cards, filter]);
+  const dealCards = cards.filter((card) => card.roomType === "deal");
+  const painCards = cards.filter((card) => card.roomType === "pain");
 
-  const dealCards = filteredCards.filter((card) => card.roomType === "deal");
-  const painCards = filteredCards.filter((card) => card.roomType === "pain");
+  const dealMessageCount = dealCards.reduce((sum, card) => sum + card.count, 0);
+  const painMessageCount = painCards.reduce((sum, card) => sum + card.count, 0);
+
+  const visibleCards = useMemo(() => {
+    const typeFiltered = view === "deal" ? dealCards : view === "pain" ? painCards : [];
+    if (filter === "all") return typeFiltered;
+    return typeFiltered.filter((card) => card.state === filter);
+  }, [view, dealCards, painCards, filter]);
+
+  function refreshCards() {
+    setCards(buildCards(profile));
+    window.dispatchEvent(new Event("vaultforge-message-change"));
+  }
 
   function setCardState(card: RoomMessageCard, state: ThreadState) {
     const states = readStates();
     states[card.threadKey] = state;
     writeStates(states);
-    setCards(buildCards(profile));
-    window.dispatchEvent(new Event("vaultforge-message-change"));
+    refreshCards();
   }
 
   function deleteForever(card: RoomMessageCard) {
@@ -369,16 +389,18 @@ export default function MessagesPage() {
     if (!ok) return;
 
     window.localStorage.removeItem(messagesKey(card.threadKey));
+
     const states = readStates();
     delete states[card.threadKey];
     writeStates(states);
-    setCards(buildCards(profile));
-    if (currentCard?.threadKey === card.threadKey) setMessages([]);
-    window.dispatchEvent(new Event("vaultforge-message-change"));
+
+    setMessages([]);
+    refreshCards();
   }
 
   function sendMessage() {
     if (!currentCard) return;
+
     const cleaned = body.trim();
     if (!cleaned) return;
 
@@ -408,33 +430,32 @@ export default function MessagesPage() {
     writeMessages(currentCard.threadKey, next);
     setMessages(next);
     setBody("");
+
     setCards(buildCards(profile));
     window.dispatchEvent(new Event("vaultforge-message-change"));
+
+    window.history.pushState(null, "", messagesBoxHref(currentCard.roomType));
+    setView(currentCard.roomType);
+    setOpenType("");
+    setOpenId("");
   }
 
-  if (currentCard) {
+  if (view === "thread" && currentCard) {
     const fromName = replyMode === "profileToOwner" ? currentCard.senderName : currentCard.ownerName;
     const toName = replyMode === "profileToOwner" ? currentCard.ownerName : currentCard.senderName;
 
     return (
       <main style={page}>
         <div style={wrap}>
-          <nav style={nav}>
-            <Link href="/command" style={btn}>Command</Link>
-            <Link href="/deal-rooms" style={btn}>Deal Rooms</Link>
-            <Link href="/pain-rooms" style={btn}>Pain Rooms</Link>
-            <Link href="/messages" style={goldBtn}>Messages</Link>
-            <Link href="/profile" style={btn}>Profile</Link>
-            <Link href="/" style={redBtn}>Exit</Link>
-          </nav>
+          <TopNav />
 
           <section style={card}>
             <div style={eyebrow}>{currentCard.roomType === "deal" ? "Deal Message Thread" : "Pain Message Thread"}</div>
             <h1 style={h1}>{currentCard.subject}</h1>
             <p style={sub}>{currentCard.location || "Location not listed"}</p>
             <div style={actionRow}>
-              <Link href={backHref(currentCard.roomType, currentCard.roomId)} style={goldBtn}>Back To Room</Link>
-              <Link href="/messages" style={btn}>All Message Cards</Link>
+              <Link href={messagesBoxHref(currentCard.roomType)} style={goldBtn}>Back To {currentCard.roomType === "deal" ? "Deal Messages" : "Pain Messages"}</Link>
+              <Link href={roomHref(currentCard.roomType, currentCard.roomId)} style={btn}>Open Room</Link>
             </div>
           </section>
 
@@ -444,35 +465,28 @@ export default function MessagesPage() {
           </section>
 
           <section style={card}>
-            <div style={eyebrow}>Communication Route</div>
+            <div style={eyebrow}>Route</div>
             <div style={routeGrid}>
-              <div style={routeBox}>
-                <div style={miniEyebrow}>Saved Profile</div>
-                <h3 style={routeTitle}>{currentCard.senderName}</h3>
-                <p style={muted}>{currentCard.senderContact}</p>
-              </div>
-              <div style={routeBox}>
-                <div style={miniEyebrow}>Room Owner / Contact</div>
-                <h3 style={routeTitle}>{currentCard.ownerName}</h3>
-                <p style={muted}>{currentCard.ownerContact}</p>
-              </div>
+              <RouteBox label="Saved Profile" name={currentCard.senderName} contact={currentCard.senderContact} />
+              <RouteBox label="Room Owner / Contact" name={currentCard.ownerName} contact={currentCard.ownerContact} />
             </div>
           </section>
 
           <section style={card}>
-            <div style={eyebrow}>Send / Reply</div>
+            <div style={eyebrow}>Reply</div>
             <div style={toggleRow}>
               <button type="button" onClick={() => setReplyMode("profileToOwner")} style={replyMode === "profileToOwner" ? goldBtn : btn}>Profile → Owner</button>
               <button type="button" onClick={() => setReplyMode("ownerToProfile")} style={replyMode === "ownerToProfile" ? goldBtn : btn}>Owner → Profile</button>
             </div>
             <div style={messageRoute}><strong>{fromName}</strong><span>→</span><strong>{toName}</strong></div>
             <textarea style={textarea} value={body} onChange={(event) => setBody(event.target.value)} placeholder={`Reply in: ${currentCard.subject}`} />
-            <button type="button" onClick={sendMessage} style={goldBtn}>Send Room Message</button>
+            <button type="button" onClick={sendMessage} style={goldBtn}>Send Reply</button>
+            <p style={muted}>After sending, VaultForge returns you to the {currentCard.roomType === "deal" ? "Deal Messages" : "Pain Messages"} card area.</p>
           </section>
 
           <section style={card}>
-            <div style={eyebrow}>This Room Thread ({messages.length})</div>
-            {!messages.length ? <p style={sub}>No messages in this room yet.</p> : null}
+            <div style={eyebrow}>This Thread ({messages.length})</div>
+            {!messages.length ? <p style={sub}>No messages in this thread yet.</p> : null}
             <div style={threadList}>
               {messages.map((message) => (
                 <article key={message.id} style={messageCard}>
@@ -492,59 +506,133 @@ export default function MessagesPage() {
     );
   }
 
+  if (view === "deal" || view === "pain") {
+    const label = view === "deal" ? "Deal Messages" : "Pain Messages";
+
+    return (
+      <main style={page}>
+        <div style={wrap}>
+          <TopNav />
+
+          <section style={card}>
+            <div style={eyebrow}>{label}</div>
+            <h1 style={h1}>{label} card area.</h1>
+            <p style={sub}>
+              Click a room communication card to open that one thread. Cleanup moves the card into the selected folder.
+            </p>
+            <div style={actionRow}>
+              <Link href="/messages" style={goldBtn}>Back To Communication Cards</Link>
+            </div>
+          </section>
+
+          <section style={card}>
+            <div style={eyebrow}>Folders</div>
+            <div style={filterRow}>
+              {(["active", "saved", "archived", "deleted", "all"] as FilterState[]).map((item) => (
+                <button key={item} type="button" onClick={() => setFilter(item)} style={filter === item ? goldBtn : btn}>
+                  {item.toUpperCase()} ({counts[item]})
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section style={card}>
+            <div style={eyebrow}>{label} Threads</div>
+            {!visibleCards.length ? <p style={sub}>No {label} cards in this folder.</p> : null}
+            <div style={cardGrid}>
+              {visibleCards.map((item) => (
+                <MessageRoomCard key={item.threadKey} card={item} onState={setCardState} onDeleteForever={deleteForever} />
+              ))}
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main style={page}>
       <div style={wrap}>
-        <nav style={nav}>
-          <Link href="/command" style={btn}>Command</Link>
-          <Link href="/deal-rooms" style={btn}>Deal Rooms</Link>
-          <Link href="/pain-rooms" style={btn}>Pain Rooms</Link>
-          <Link href="/messages" style={goldBtn}>Messages</Link>
-          <Link href="/profile" style={btn}>Profile</Link>
-          <Link href="/" style={redBtn}>Exit</Link>
-        </nav>
+        <TopNav />
 
         <section style={card}>
           <div style={eyebrow}>Messages</div>
           <h1 style={h1}>Communication cards.</h1>
           <p style={sub}>
-            Every Deal Room and Pain Room gets its own message card. Cards show message count, open the exact room thread, and stay organized by folder.
+            Two clean work areas: Deal Messages and Pain Messages. Each opens to its own room-thread cards.
           </p>
         </section>
 
-        <section style={card}>
-          <div style={eyebrow}>Message Folders</div>
-          <h2 style={h2}>Active, saved, archived, deleted.</h2>
-          <div style={filterRow}>
-            {(["active", "saved", "archived", "deleted", "all"] as FilterState[]).map((item) => (
-              <button key={item} type="button" onClick={() => setFilter(item)} style={filter === item ? goldBtn : btn}>
-                {item.toUpperCase()} ({counts[item]})
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>Deal Room Message Cards</div>
-          {!dealCards.length ? <p style={sub}>No Deal Room cards in this folder.</p> : null}
-          <div style={cardGrid}>
-            {dealCards.map((item) => (
-              <MessageRoomCard key={item.threadKey} card={item} onState={setCardState} onDeleteForever={deleteForever} />
-            ))}
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>Pain Room Message Cards</div>
-          {!painCards.length ? <p style={sub}>No Pain Room cards in this folder.</p> : null}
-          <div style={cardGrid}>
-            {painCards.map((item) => (
-              <MessageRoomCard key={item.threadKey} card={item} onState={setCardState} onDeleteForever={deleteForever} />
-            ))}
-          </div>
+        <section style={twoCardGrid}>
+          <CommunicationBox
+            title="Deal Messages"
+            subtitle="Deal Room communication threads."
+            roomCount={dealCards.length}
+            messageCount={dealMessageCount}
+            href="/messages?box=deal"
+          />
+          <CommunicationBox
+            title="Pain Messages"
+            subtitle="Pain Room communication threads."
+            roomCount={painCards.length}
+            messageCount={painMessageCount}
+            href="/messages?box=pain"
+          />
         </section>
       </div>
     </main>
+  );
+}
+
+function TopNav() {
+  return (
+    <nav style={nav}>
+      <Link href="/command" style={btn}>Command</Link>
+      <Link href="/deal-rooms" style={btn}>Deal Rooms</Link>
+      <Link href="/pain-rooms" style={btn}>Pain Rooms</Link>
+      <Link href="/messages" style={goldBtn}>Messages</Link>
+      <Link href="/profile" style={btn}>Profile</Link>
+      <Link href="/" style={redBtn}>Exit</Link>
+    </nav>
+  );
+}
+
+function CommunicationBox({
+  title,
+  subtitle,
+  roomCount,
+  messageCount,
+  href,
+}: {
+  title: string;
+  subtitle: string;
+  roomCount: number;
+  messageCount: number;
+  href: string;
+}) {
+  return (
+    <Link href={href} style={communicationCard}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={commTitle}>{title}</h2>
+      <p style={sub}>{subtitle}</p>
+      <div style={countBox}>
+        <strong>{roomCount}</strong>
+        <span>room cards</span>
+        <strong>{messageCount}</strong>
+        <span>messages</span>
+      </div>
+      <span style={goldBtn}>Open {title}</span>
+    </Link>
+  );
+}
+
+function RouteBox({ label, name, contact }: { label: string; name: string; contact: string }) {
+  return (
+    <div style={routeBox}>
+      <div style={miniEyebrow}>{label}</div>
+      <h3 style={routeTitle}>{name}</h3>
+      <p style={muted}>{contact}</p>
+    </div>
   );
 }
 
@@ -557,8 +645,6 @@ function MessageRoomCard({
   onState: (card: RoomMessageCard, state: ThreadState) => void;
   onDeleteForever: (card: RoomMessageCard) => void;
 }) {
-  const href = `/messages?type=${encodeURIComponent(card.roomType)}&room=${encodeURIComponent(card.roomId)}`;
-
   return (
     <article style={threadCard}>
       <div style={threadHeader}>
@@ -583,8 +669,8 @@ function MessageRoomCard({
       <p style={muted}>{niceDate(card.lastAt)}</p>
 
       <div style={actionRowCompact}>
-        <Link href={href} style={goldBtn}>Open Thread</Link>
-        <Link href={backHref(card.roomType, card.roomId)} style={btn}>Open Room</Link>
+        <Link href={threadHref(card)} style={goldBtn}>Open Thread</Link>
+        <Link href={roomHref(card.roomType, card.roomId)} style={btn}>Open Room</Link>
       </div>
 
       <CleanupControls card={card} onState={onState} onDeleteForever={onDeleteForever} />
@@ -623,10 +709,12 @@ const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", c
 const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto", paddingBottom: 70 };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 };
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 28, marginBottom: 22 };
+const twoCardGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 18 };
+const communicationCard: React.CSSProperties = { ...card, minHeight: 260, textDecoration: "none", color: "#f7f7fb", display: "block" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 8, fontWeight: 900, fontSize: 19, marginBottom: 14 };
 const miniEyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 900, fontSize: 13, marginBottom: 10 };
 const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,76px)", lineHeight: 0.92, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 1, letterSpacing: -2, margin: "0 0 12px", fontWeight: 950 };
+const commTitle: React.CSSProperties = { fontSize: "clamp(36px,6vw,60px)", lineHeight: 0.95, letterSpacing: -3, margin: "0 0 14px", fontWeight: 950 };
 const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 22, lineHeight: 1.35, margin: 0 };
 const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
