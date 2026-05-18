@@ -12,6 +12,8 @@ type RoomRecord = {
   dealId?: string;
   painId?: string;
   roomState?: RoomState;
+  cleanupState?: RoomState;
+  stateStatus?: RoomState;
   title?: string;
   name?: string;
   state?: string;
@@ -34,17 +36,12 @@ type AlertRow = {
   title: string;
   subtitle: string;
   severity: Severity;
-  count: number;
   timestamp: string;
   href: string;
   lane: string;
 };
 
 type MessageRow = {
-  id?: string;
-  threadKey?: string;
-  roomType?: "deal" | "pain";
-  roomId?: string;
   subject?: string;
   body?: string;
   createdAt?: string;
@@ -54,7 +51,6 @@ type MessageRow = {
 type SummaryCard = {
   key: AlertType;
   label: string;
-  href: string;
   count: number;
   unread: number;
   newest: string;
@@ -65,8 +61,15 @@ type SummaryCard = {
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 
-const SEEN_KEY = "vaultforge_live_alert_seen_v2";
-const ROOM_STATE_KEY = "vaultforge_clean_room_states";
+const ROOM_STATE_KEYS = [
+  "vaultforge_clean_room_states",
+  "vaultforge_room_states",
+  "vaultforge_deal_room_states",
+  "vaultforge_pain_room_states",
+  "vaultforge_5s_room_states",
+];
+
+const SEEN_KEY = "vaultforge_live_alert_seen_v3";
 const MAX_PULSE_CARDS = 5;
 const MAX_VISIBLE_ALERTS = 8;
 const MAX_VISIBLE_TICKETS = 5;
@@ -98,7 +101,14 @@ function roomId(room: RoomRecord | null | undefined) {
 
 function readRoomStates(): Record<string, RoomState> {
   if (typeof window === "undefined") return {};
-  return parseJson<Record<string, RoomState>>(window.localStorage.getItem(ROOM_STATE_KEY), {});
+  const merged: Record<string, RoomState> = {};
+
+  for (const key of ROOM_STATE_KEYS) {
+    const parsed = parseJson<Record<string, RoomState>>(window.localStorage.getItem(key), {});
+    Object.assign(merged, parsed);
+  }
+
+  return merged;
 }
 
 function roomCurrentState(room: RoomRecord, type: "deal" | "pain"): RoomState {
@@ -106,12 +116,16 @@ function roomCurrentState(room: RoomRecord, type: "deal" | "pain"): RoomState {
   const id = roomId(room);
   const compound = `${type}:${id}`;
 
-  return (
-    states[id] ||
+  const direct =
     states[compound] ||
+    states[id] ||
     room.roomState ||
-    "active"
-  );
+    room.cleanupState ||
+    room.stateStatus ||
+    "active";
+
+  if (direct === "saved" || direct === "archived" || direct === "deleted") return direct;
+  return "active";
 }
 
 function isActiveRoom(room: RoomRecord, type: "deal" | "pain") {
@@ -178,7 +192,6 @@ function messageThreads(activeDealIds: Set<string>, activePainIds: Set<string>):
     const messages = readMessagesForThread(threadKey);
     const latest = messages[0];
     const unread = messages.filter((message) => !message.read).length;
-
     if (!messages.length) continue;
 
     rows.push({
@@ -188,7 +201,6 @@ function messageThreads(activeDealIds: Set<string>, activePainIds: Set<string>):
       title: latest?.subject || `${roomType === "deal" ? "Deal" : "Pain"} message thread`,
       subtitle: latest?.body || "Room message thread updated.",
       severity: unread > 0 ? "high" : "low",
-      count: messages.length,
       timestamp: latest?.createdAt || "",
       href: `/messages?type=${encodeURIComponent(roomType)}&room=${encodeURIComponent(roomIdValue)}`,
       lane: roomType === "deal" ? "Deal Message" : "Pain Message",
@@ -267,7 +279,6 @@ function alertRows(): AlertRow[] {
       title: titleFor(room, "Untitled Deal Room"),
       subtitle: `${location(room) || "Market not listed"}${routes.length ? ` • Route: ${routes.join(", ")}` : ""}`,
       severity: severityFor(room, "deal"),
-      count: 1,
       timestamp: timestamp(room),
       href: `/deal-rooms/${encodeURIComponent(id)}`,
       lane: "New Deal",
@@ -284,7 +295,6 @@ function alertRows(): AlertRow[] {
       title: titleFor(room, "Untitled Pain Room"),
       subtitle: `${location(room) || "Market not listed"}${routes.length ? ` • Needs: ${routes.join(", ")}` : ""}`,
       severity: severityFor(room, "pain"),
-      count: 1,
       timestamp: timestamp(room),
       href: `/pain-rooms/${encodeURIComponent(id)}`,
       lane: "New Pain",
@@ -297,10 +307,10 @@ function alertRows(): AlertRow[] {
 }
 
 function summaryCards(rows: AlertRow[], seen: Record<string, string>): SummaryCard[] {
-  const lanes: Array<{ key: AlertType; label: string; href: string }> = [
-    { key: "deal", label: "New Deals", href: "/deal-rooms" },
-    { key: "pain", label: "New Pain", href: "/pain-rooms" },
-    { key: "message", label: "Messages", href: "/messages" },
+  const lanes: Array<{ key: AlertType; label: string }> = [
+    { key: "deal", label: "New Deals" },
+    { key: "pain", label: "New Pain" },
+    { key: "message", label: "Messages" },
   ];
 
   return lanes.map((lane): SummaryCard => {
@@ -311,24 +321,11 @@ function summaryCards(rows: AlertRow[], seen: Record<string, string>): SummaryCa
     const pulse = Boolean(unread > 0 && newest && (!seenTime || newest > seenTime));
 
     let severity: Severity = "low";
-    if (laneRows.some((row) => row.severity === "critical")) {
-      severity = "critical";
-    } else if (laneRows.some((row) => row.severity === "high")) {
-      severity = "high";
-    } else if (laneRows.length) {
-      severity = "medium";
-    }
+    if (laneRows.some((row) => row.severity === "critical")) severity = "critical";
+    else if (laneRows.some((row) => row.severity === "high")) severity = "high";
+    else if (laneRows.length) severity = "medium";
 
-    return {
-      key: lane.key,
-      label: lane.label,
-      href: lane.href,
-      count: laneRows.length,
-      unread,
-      newest,
-      pulse,
-      severity,
-    };
+    return { key: lane.key, label: lane.label, count: laneRows.length, unread, newest, pulse, severity };
   });
 }
 
@@ -354,30 +351,26 @@ export default function VaultForgeLiveAlertEngine() {
 
   useEffect(() => {
     load();
-    const interval = window.setInterval(load, 2500);
-
+    const interval = window.setInterval(load, 2000);
     window.addEventListener("storage", load);
     window.addEventListener("vaultforge-message-change", load);
     window.addEventListener("vaultforge-pain-change", load);
     window.addEventListener("vaultforge-room-state-change", load);
-
+    window.addEventListener("vaultforge-deal-change", load);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("storage", load);
       window.removeEventListener("vaultforge-message-change", load);
       window.removeEventListener("vaultforge-pain-change", load);
       window.removeEventListener("vaultforge-room-state-change", load);
+      window.removeEventListener("vaultforge-deal-change", load);
     };
   }, []);
 
   function markLane(type: AlertType) {
     const laneRows = rows.filter((row) => row.type === type);
     const next = { ...seen, [`lane:${type}`]: new Date().toISOString() };
-
-    laneRows.forEach((row) => {
-      next[row.id] = row.timestamp || new Date().toISOString();
-    });
-
+    laneRows.forEach((row) => { next[row.id] = row.timestamp || new Date().toISOString(); });
     writeSeen(next);
     setSeen(next);
     setSelected(type);
@@ -391,23 +384,12 @@ export default function VaultForgeLiveAlertEngine() {
   }
 
   const summaries = useMemo(() => summaryCards(rows, seen), [rows, seen]);
-
-  const unseenRows = rows
-    .filter((row) => unseen(row, seen))
-    .sort((a, b) => priorityWeight(b) - priorityWeight(a));
-
+  const unseenRows = rows.filter((row) => unseen(row, seen)).sort((a, b) => priorityWeight(b) - priorityWeight(a));
   const pulsingIds = new Set(unseenRows.slice(0, MAX_PULSE_CARDS).map((row) => row.id));
-
-  const filteredRows = useMemo(() => {
-    const base = selected === "all" ? rows : rows.filter((row) => row.type === selected);
-    return base.slice(0, MAX_VISIBLE_ALERTS);
-  }, [rows, selected]);
-
-  const ticketRows = rows
-    .filter((row) => row.severity === "critical" || row.severity === "high")
-    .slice(0, MAX_VISIBLE_TICKETS);
-
-  const overflowCount = selected === "all" ? Math.max(0, rows.length - MAX_VISIBLE_ALERTS) : Math.max(0, rows.filter((row) => row.type === selected).length - MAX_VISIBLE_ALERTS);
+  const baseRows = selected === "all" ? rows : rows.filter((row) => row.type === selected);
+  const filteredRows = baseRows.slice(0, MAX_VISIBLE_ALERTS);
+  const ticketRows = rows.filter((row) => row.severity === "critical" || row.severity === "high").slice(0, MAX_VISIBLE_TICKETS);
+  const overflowCount = Math.max(0, baseRows.length - MAX_VISIBLE_ALERTS);
 
   return (
     <section style={shell}>
@@ -427,22 +409,14 @@ export default function VaultForgeLiveAlertEngine() {
         <div>
           <div style={eyebrow}>Live Alert Engine</div>
           <h2 style={title}>Clean Bloomberg alert deck.</h2>
-          <p style={copy}>Only active, unseen, highest-priority items pulse. Saved, archived, and deleted rooms leave this deck and stay in their folders.</p>
+          <p style={copy}>Active work only. Saved, archived, and deleted rooms disappear from live alerts and stay in folders.</p>
         </div>
         <div style={livePill}>LIVE</div>
       </div>
 
       <div style={summaryGrid}>
         {summaries.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => markLane(item.key)}
-            style={{
-              ...summaryCard,
-              ...(item.pulse ? pulseStyle(item.severity) : {}),
-            }}
-          >
+          <button key={item.key} type="button" onClick={() => markLane(item.key)} style={{ ...summaryCard, ...(item.pulse ? pulseStyle(item.severity) : {}) }}>
             <span style={summaryLabel}>{item.label}</span>
             <strong style={summaryNumber}>{item.unread}</strong>
             <span style={summarySub}>{item.count} active total • {timeAgo(item.newest)}</span>
@@ -454,9 +428,7 @@ export default function VaultForgeLiveAlertEngine() {
         <div style={tickerShell}>
           <div style={tickerTrack}>
             {[...rows.slice(0, 8), ...rows.slice(0, 8)].map((row, index) => (
-              <span key={`${row.id}-${index}`} style={tickerItem}>
-                {row.lane}: {row.title} · {row.subtitle}
-              </span>
+              <span key={`${row.id}-${index}`} style={tickerItem}>{row.lane}: {row.title} · {row.subtitle}</span>
             ))}
           </div>
         </div>
@@ -472,23 +444,13 @@ export default function VaultForgeLiveAlertEngine() {
       <div style={grid}>
         <div style={panel}>
           <div style={eyebrow}>Alert Cards</div>
-          <p style={miniCopy}>Showing the newest {MAX_VISIBLE_ALERTS}. Everything else is summarized by count so the command surface stays clean.</p>
+          <p style={miniCopy}>Showing newest {MAX_VISIBLE_ALERTS}. Older active items are summarized to stop clutter.</p>
           {!filteredRows.length ? <p style={copy}>No active alert cards in this lane.</p> : null}
-
           <div style={stack}>
             {filteredRows.map((row) => {
               const shouldPulse = pulsingIds.has(row.id);
-
               return (
-                <button
-                  key={row.id}
-                  type="button"
-                  onClick={() => openAlert(row)}
-                  style={{
-                    ...alertCard,
-                    ...(shouldPulse ? pulseStyle(row.severity) : {}),
-                  }}
-                >
+                <button key={row.id} type="button" onClick={() => openAlert(row)} style={{ ...alertCard, ...(shouldPulse ? pulseStyle(row.severity) : {}) }}>
                   <span style={severityDot(row.severity, shouldPulse)} />
                   <div>
                     <div style={alertTop}>{row.lane}</div>
@@ -500,22 +462,16 @@ export default function VaultForgeLiveAlertEngine() {
               );
             })}
           </div>
-
-          {overflowCount > 0 ? (
-            <div style={overflowBox}>+{overflowCount} more active items summarized. Open Deal Rooms, Pain Rooms, or Messages to work the full lane.</div>
-          ) : null}
+          {overflowCount > 0 ? <div style={overflowBox}>+{overflowCount} more active items summarized. Open Deal Rooms, Pain Rooms, or Messages for the full lane.</div> : null}
         </div>
 
         <div style={panel}>
           <div style={eyebrow}>Execution Tickets</div>
-          <p style={miniCopy}>Only high-pressure active tickets show here.</p>
+          <p style={miniCopy}>Only active high-pressure tickets show here.</p>
           <div style={stack}>
             {ticketRows.map((row) => (
               <div key={`ticket-${row.id}`} style={ticketCard}>
-                <div style={ticketHead}>
-                  <strong>{row.severity.toUpperCase()}</strong>
-                  <span>{row.type.toUpperCase()}</span>
-                </div>
+                <div style={ticketHead}><strong>{row.severity.toUpperCase()}</strong><span>{row.type.toUpperCase()}</span></div>
                 <p style={ticketText}>{row.title}</p>
                 <p style={alertSub}>{row.type === "message" ? "Open thread and respond." : "Open room, verify facts, route to profile, move to messages."}</p>
               </div>
@@ -530,23 +486,12 @@ export default function VaultForgeLiveAlertEngine() {
 
 function pulseStyle(severity: Severity): React.CSSProperties {
   const border = severity === "critical" ? "rgba(255,45,45,.85)" : severity === "high" ? "rgba(255,80,80,.65)" : "rgba(255,220,104,.55)";
-  return {
-    borderColor: border,
-    animation: "vfPulse 1.8s infinite",
-  };
+  return { borderColor: border, animation: "vfPulse 1.8s infinite" };
 }
 
 function severityDot(severity: Severity, active: boolean): React.CSSProperties {
   const color = severity === "critical" ? "#ff3030" : severity === "high" ? "#ff4d4d" : severity === "medium" ? "#ffdc68" : "#8ca0bd";
-  return {
-    width: 12,
-    height: 12,
-    borderRadius: 999,
-    background: active ? color : "#8ca0bd",
-    flex: "0 0 auto",
-    marginTop: 6,
-    boxShadow: active ? `0 0 18px ${color}` : "none",
-  };
+  return { width: 12, height: 12, borderRadius: 999, background: active ? color : "#8ca0bd", flex: "0 0 auto", marginTop: 6, boxShadow: active ? `0 0 18px ${color}` : "none" };
 }
 
 const shell: React.CSSProperties = { display: "grid", gap: 18 };
