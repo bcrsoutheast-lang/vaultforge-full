@@ -1,5 +1,6 @@
 import Link from "next/link";
 import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
+import VaultForgeRoomControls from "../components/VaultForgeRoomControls";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -37,6 +38,8 @@ export default function PainIntakePage() {
         <div className="vf-btns">
           <Link className="vf-btn" href="/pain-rooms">Open Pain Rooms</Link>
         </div>
+
+        <VaultForgeRoomControls roomId="pain-intake:form" roomTitle="Pain Intake" roomType="pain" />
       </section>
     </VaultForgeCleanShell>
   );
