@@ -4,39 +4,79 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function client() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
-  if (!url || !key) return null;
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    "";
+
+  if (!url || !key) {
+    throw new Error("Missing Supabase environment variables for deal photo upload.");
+  }
+
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 function safeName(name: string) {
-  return String(name || "deal-photo.jpg").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/-+/g, "-").slice(0, 90);
+  const clean = String(name || "deal-photo")
+    .toLowerCase()
+    .replace(/[^a-z0-9.\-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 90);
+  return clean || "deal-photo.jpg";
 }
 
 export async function POST(request: Request) {
   try {
-    const supabase = client();
-    if (!supabase) return NextResponse.json({ ok: false, error: "Missing Supabase environment variables." }, { status: 500 });
-
     const form = await request.formData();
     const file = form.get("file");
-    const roomId = String(form.get("roomId") || `deal_${Date.now()}`);
-    if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No image file received." }, { status: 400 });
-    if (!file.type.startsWith("image/")) return NextResponse.json({ ok: false, error: "Only image uploads are allowed." }, { status: 400 });
 
-    const bucket = process.env.NEXT_PUBLIC_SUPABASE_DEAL_BUCKET || "vaultforge-deal-photos";
-    const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-    const path = `${roomId}/${Date.now()}-${safeName(file.name || `photo.${ext}`)}`;
+    if (!(file instanceof File)) {
+      return NextResponse.json({ ok: false, error: "No image file received." }, { status: 400 });
+    }
+
+    if (!file.type.startsWith("image/")) {
+      return NextResponse.json({ ok: false, error: "Only image files are allowed." }, { status: 400 });
+    }
+
+    const maxBytes = 7 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      return NextResponse.json({ ok: false, error: "Image is too large. Use a smaller photo under 7MB." }, { status: 413 });
+    }
+
+    const supabase = getSupabase();
+    const bucket = "vaultforge-deal-photos";
+    const ext = safeName(file.name).split(".").pop() || "jpg";
+    const path = `deals/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
     const bytes = await file.arrayBuffer();
 
-    const { error } = await supabase.storage.from(bucket).upload(path, bytes, { contentType: file.type, upsert: true });
-    if (error) return NextResponse.json({ ok: false, error: error.message, bucket, path }, { status: 500 });
+    const { error } = await supabase.storage.from(bucket).upload(path, bytes, {
+      contentType: file.type || "image/jpeg",
+      upsert: false,
+    });
+
+    if (error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: error.message || "Supabase Storage upload failed.",
+          bucket,
+          note: "Confirm bucket vaultforge-deal-photos exists and upload policy allows this key.",
+        },
+        { status: 500 }
+      );
+    }
 
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-    return NextResponse.json({ ok: true, photoUrl: data.publicUrl, bucket, path, name: file.name, size: file.size, type: file.type });
+    const publicUrl = data?.publicUrl || "";
+
+    return NextResponse.json({ ok: true, photoUrl: publicUrl, path, bucket });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Upload failed." }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown upload error.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
