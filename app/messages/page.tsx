@@ -1,21 +1,23 @@
+import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
+
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default function MessagesPage() {
   return (
-    <main style={{
-      minHeight:"100vh",
-      background:"#030712",
-      color:"#fff",
-      padding:"32px",
-      fontFamily:"Arial"
-    }}>
-      <div style={{color:"#f5c84c",fontWeight:900,fontSize:44}}>
-        MESSAGES
-      </div>
-
-      <p style={{maxWidth:900,fontSize:20,color:"#cbd5e1"}}>
-        One unified communication layer connected directly to Deal Rooms and Pain Rooms.
-      </p>
-    </main>
+    <VaultForgeCleanShell
+      active="messages"
+      eyebrow="MESSAGES"
+      title="One communication layer."
+      subtitle="Messages connect to Deal Rooms and Pain Rooms only. No duplicate inboxes."
+    >
+      <section className="vf-card">
+        <div className="vf-eyebrow">ROOM THREADS</div>
+        <h2 className="vf-h2">Clean message command placeholder.</h2>
+        <p className="vf-copy">
+          Next build reconnects this to existing message persistence without bringing old routes back.
+        </p>
+      </section>
+    </VaultForgeCleanShell>
   );
 }
