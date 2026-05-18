@@ -4,28 +4,10 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BUCKETS = ["vaultforge-deal-photos", "vf-deal-photos", "deal-photos", "uploads"];
+const BUCKETS = ["vaultforge-deal-photos", "deal-photos", "property-photos"];
+const MAX_BYTES = 7 * 1024 * 1024;
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
-
-function cleanEmail(value: unknown) {
-  return clean(value).toLowerCase();
-}
-
-function json(data: Record<string, any>, status = 200) {
-  return NextResponse.json(data, {
-    status,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  });
-}
-
-function supabaseAdmin() {
+function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -33,164 +15,94 @@ function supabaseAdmin() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) return null;
+  if (!url || !key) {
+    throw new Error("Missing Supabase URL or key. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or anon key.");
+  }
 
   return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
+    auth: { autoRefreshToken: false, persistSession: false },
   });
 }
 
 function safeName(name: string) {
-  return (
-    clean(name)
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 90) || "deal-photo.jpg"
-  );
+  return String(name || "deal-photo.jpg")
+    .toLowerCase()
+    .replace(/[^a-z0-9.\-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 90);
 }
 
-function extensionFromType(type: string) {
-  const lower = clean(type).toLowerCase();
+async function ensureBucket(client: ReturnType<typeof getSupabase>, bucket: string) {
+  const { data } = await client.storage.getBucket(bucket);
+  if (data?.name) return true;
 
-  if (lower.includes("png")) return "png";
-  if (lower.includes("webp")) return "webp";
-  if (lower.includes("gif")) return "gif";
-  if (lower.includes("heic")) return "heic";
-  if (lower.includes("heif")) return "heif";
-  return "jpg";
-}
-
-async function tryCreateBucket(client: any, bucket: string) {
-  try {
-    await client.storage.createBucket(bucket, {
-      public: true,
-      fileSizeLimit: 10485760,
-      allowedMimeTypes: ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/heic", "image/heif"],
-    });
-  } catch {
-    // Bucket may already exist or current key may not be allowed to create buckets.
-  }
-}
-
-export async function GET() {
-  return json({
-    ok: true,
-    route: "/api/deal/upload-photo",
-    method: "POST multipart/form-data",
-    expected_fields: ["file", "photo", "image", "email"],
-    buckets: BUCKETS,
-    mode: "pain_style_non_blocking_deal_upload",
+  const { error } = await client.storage.createBucket(bucket, {
+    public: true,
+    fileSizeLimit: `${MAX_BYTES}`,
+    allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
   });
+
+  return !error;
 }
 
 export async function POST(request: Request) {
-  const client = supabaseAdmin();
-
-  if (!client) {
-    return json(
-      {
-        ok: false,
-        error: "Supabase upload is not configured. Deal record can still save without photos.",
-      },
-      200
-    );
-  }
-
-  let form: FormData;
-
   try {
-    form = await request.formData();
-  } catch {
-    return json({ ok: false, error: "Invalid upload form. Deal record can still save without photos." }, 200);
-  }
+    const form = await request.formData();
+    const file = form.get("file");
+    const dealId = String(form.get("dealId") || `deal_${Date.now()}`);
 
-  const file = form.get("file") || form.get("photo") || form.get("image");
+    if (!(file instanceof File)) {
+      return NextResponse.json({ ok: false, error: "No image file was received." }, { status: 400 });
+    }
 
-  if (!(file instanceof File)) {
-    return json({ ok: false, error: "Missing file. Deal record can still save without photos." }, 200);
-  }
+    if (!file.type.startsWith("image/")) {
+      return NextResponse.json({ ok: false, error: "The selected file is not an image." }, { status: 400 });
+    }
 
-  if (!file.size) {
-    return json({ ok: false, error: "Photo file is empty. Deal record can still save without photos." }, 200);
-  }
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json(
+        { ok: false, error: "Image is still too large after browser compression. Choose a smaller image or screenshot." },
+        { status: 413 },
+      );
+    }
 
-  if (file.size > 10 * 1024 * 1024) {
-    return json({ ok: false, error: "Photo is too large. Max size is 10MB. Deal record can still save without this photo." }, 200);
-  }
+    const client = getSupabase();
+    const ext = file.type.includes("png") ? "png" : file.type.includes("webp") ? "webp" : "jpg";
+    const path = `${dealId}/${Date.now()}-${safeName(file.name || `photo.${ext}`)}`;
 
-  const contentType = clean(file.type) || "image/jpeg";
+    let lastError = "";
 
-  if (!contentType.startsWith("image/")) {
-    return json({ ok: false, error: "Only image uploads are supported. Deal record can still save without this file." }, 200);
-  }
-
-  const email = cleanEmail(form.get("email") || form.get("owner_email") || form.get("member_email") || request.headers.get("x-vf-email") || "unknown")
-    .replace(/[^a-z0-9@._-]+/g, "-");
-
-  const ext = extensionFromType(contentType);
-  const originalName = safeName(file.name || `deal-photo.${ext}`);
-  const fileName = originalName.includes(".") ? originalName : `${originalName}.${ext}`;
-  const filePath = `${email || "unknown"}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${fileName}`;
-  const attempts: Record<string, any>[] = [];
-
-  let buffer: ArrayBuffer;
-
-  try {
-    buffer = await file.arrayBuffer();
-  } catch {
-    return json({ ok: false, error: "Could not read uploaded photo. Deal record can still save without this photo." }, 200);
-  }
-
-  for (const bucket of BUCKETS) {
-    await tryCreateBucket(client, bucket);
-
-    try {
-      const { error } = await client.storage.from(bucket).upload(filePath, buffer, {
-        contentType,
-        upsert: true,
+    for (const bucket of BUCKETS) {
+      await ensureBucket(client, bucket);
+      const { error } = await client.storage.from(bucket).upload(path, file, {
         cacheControl: "3600",
+        upsert: true,
+        contentType: file.type || `image/${ext}`,
       });
 
-      attempts.push({ bucket, ok: !error, error: error?.message || null });
-
-      if (error) continue;
-
-      const { data } = client.storage.from(bucket).getPublicUrl(filePath);
-      const publicUrl = clean(data?.publicUrl);
-
-      if (publicUrl) {
-        return json({
-          ok: true,
-          url: publicUrl,
-          publicUrl,
-          public_url: publicUrl,
-          photo_url: publicUrl,
-          image_url: publicUrl,
-          main_photo_url: publicUrl,
-          primary_photo_url: publicUrl,
-          bucket,
-          path: filePath,
-          filename: originalName,
-          content_type: contentType,
-          size: file.size,
-        });
+      if (error) {
+        lastError = error.message;
+        continue;
       }
-    } catch (error: any) {
-      attempts.push({ bucket, ok: false, error: error?.message || String(error) });
-    }
-  }
 
-  return json(
-    {
-      ok: false,
-      error: "Photo upload failed because Supabase Storage bucket or policy is not allowing upload. Deal record can still save without photos.",
-      attempts,
-    },
-    200
-  );
+      const { data } = client.storage.from(bucket).getPublicUrl(path);
+      return NextResponse.json({
+        ok: true,
+        bucket,
+        path,
+        url: data.publicUrl,
+        publicUrl: data.publicUrl,
+        fileName: file.name,
+        size: file.size,
+      });
+    }
+
+    return NextResponse.json(
+      { ok: false, error: lastError || "Photo upload failed. Check Supabase Storage bucket permissions." },
+      { status: 500 },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown photo upload error.";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
 }
