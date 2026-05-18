@@ -454,7 +454,7 @@ export default function MessagesPage() {
             <h1 style={h1}>{currentCard.subject}</h1>
             <p style={sub}>{currentCard.location || "Location not listed"}</p>
             <div style={actionRow}>
-              <Link href={messagesBoxHref(currentCard.roomType)} style={goldBtn}>Back To {currentCard.roomType === "deal" ? "Deal Messages" : "Pain Messages"}</Link>
+              <a href={messagesBoxHref(currentCard.roomType)} style={goldBtn}>Back To {currentCard.roomType === "deal" ? "Deal Messages" : "Pain Messages"}</a>
               <Link href={roomHref(currentCard.roomType, currentCard.roomId)} style={btn}>Open Room</Link>
             </div>
           </section>
@@ -521,7 +521,7 @@ export default function MessagesPage() {
               Click a room communication card to open that one thread. Cleanup moves the card into the selected folder.
             </p>
             <div style={actionRow}>
-              <Link href="/messages" style={goldBtn}>Back To Communication Cards</Link>
+              <a href="/messages" style={goldBtn}>Back To Communication Cards</a>
             </div>
           </section>
 
@@ -569,14 +569,22 @@ export default function MessagesPage() {
             subtitle="Deal Room communication threads."
             roomCount={dealCards.length}
             messageCount={dealMessageCount}
-            href="/messages?box=deal"
+            onOpen={() => {
+              window.history.pushState(null, "", "/messages?box=deal");
+              setView("deal");
+              setFilter("active");
+            }}
           />
           <CommunicationBox
             title="Pain Messages"
             subtitle="Pain Room communication threads."
             roomCount={painCards.length}
             messageCount={painMessageCount}
-            href="/messages?box=pain"
+            onOpen={() => {
+              window.history.pushState(null, "", "/messages?box=pain");
+              setView("pain");
+              setFilter("active");
+            }}
           />
         </section>
       </div>
@@ -590,7 +598,7 @@ function TopNav() {
       <Link href="/command" style={btn}>Command</Link>
       <Link href="/deal-rooms" style={btn}>Deal Rooms</Link>
       <Link href="/pain-rooms" style={btn}>Pain Rooms</Link>
-      <Link href="/messages" style={goldBtn}>Messages</Link>
+      <a href="/messages" style={goldBtn}>Messages</a>
       <Link href="/profile" style={btn}>Profile</Link>
       <Link href="/" style={redBtn}>Exit</Link>
     </nav>
@@ -602,16 +610,16 @@ function CommunicationBox({
   subtitle,
   roomCount,
   messageCount,
-  href,
+  onOpen,
 }: {
   title: string;
   subtitle: string;
   roomCount: number;
   messageCount: number;
-  href: string;
+  onOpen: () => void;
 }) {
   return (
-    <Link href={href} style={communicationCard}>
+    <button type="button" onClick={onOpen} style={communicationCardButton}>
       <div style={eyebrow}>{title}</div>
       <h2 style={commTitle}>{title}</h2>
       <p style={sub}>{subtitle}</p>
@@ -622,7 +630,7 @@ function CommunicationBox({
         <span>messages</span>
       </div>
       <span style={goldBtn}>Open {title}</span>
-    </Link>
+    </button>
   );
 }
 
@@ -669,7 +677,7 @@ function MessageRoomCard({
       <p style={muted}>{niceDate(card.lastAt)}</p>
 
       <div style={actionRowCompact}>
-        <Link href={threadHref(card)} style={goldBtn}>Open Thread</Link>
+        <a href={threadHref(card)} style={goldBtn}>Open Thread</a>
         <Link href={roomHref(card.roomType, card.roomId)} style={btn}>Open Room</Link>
       </div>
 
@@ -711,6 +719,7 @@ const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", m
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 28, marginBottom: 22 };
 const twoCardGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 18 };
 const communicationCard: React.CSSProperties = { ...card, minHeight: 260, textDecoration: "none", color: "#f7f7fb", display: "block" };
+const communicationCardButton: React.CSSProperties = { ...card, minHeight: 260, color: "#f7f7fb", display: "block", width: "100%", textAlign: "left", cursor: "pointer" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 8, fontWeight: 900, fontSize: 19, marginBottom: 14 };
 const miniEyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 900, fontSize: 13, marginBottom: 10 };
 const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,76px)", lineHeight: 0.92, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
