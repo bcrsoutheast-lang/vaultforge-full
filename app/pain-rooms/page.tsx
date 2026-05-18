@@ -1,57 +1,35 @@
+import Link from "next/link";
+import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
+
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default function PainRoomsPage() {
   return (
-    <main style={{
-      minHeight:"100vh",
-      background:"#030712",
-      color:"#fff",
-      padding:"32px",
-      fontFamily:"Arial"
-    }}>
-      <div style={{color:"#ff6b6b",fontWeight:900,fontSize:44}}>
-        PAIN ROOMS
-      </div>
+    <VaultForgeCleanShell
+      active="pain-rooms"
+      eyebrow="PAIN ROOMS"
+      title="Execution pressure lives here."
+      subtitle="Pain Rooms are VaultForge’s moat: distress, funding gaps, stalled jobs, seller pressure, operator issues, and urgent problem solving."
+    >
+      <section className="vf-grid">
+        <div className="vf-metric"><span>Active rooms</span><strong>0</strong></div>
+        <div className="vf-metric"><span>Capital gaps</span><strong>0</strong></div>
+        <div className="vf-metric"><span>Operator needs</span><strong>0</strong></div>
+      </section>
 
-      <p style={{maxWidth:900,fontSize:20,color:"#cbd5e1"}}>
-        Pain Rooms are the VaultForge execution moat. Distress, pressure, funding gaps,
-        stalled projects and operational failures route here first.
-      </p>
-
-      <div style={box}>
-        <div style={eyebrow}>PRESSURE ENGINE</div>
-
-        <h2 style={{fontSize:42,margin:"0 0 16px"}}>
-          Distress → routing → execution.
-        </h2>
-
-        <ul style={{color:"#cbd5e1",fontSize:20,lineHeight:1.8}}>
-          <li>Seller distress analysis</li>
-          <li>Capital gap detection</li>
-          <li>Execution failure scoring</li>
-          <li>Urgency classification</li>
-          <li>State pressure tracking</li>
-          <li>Operator matching</li>
-          <li>Lender + JV routing</li>
-          <li>AI next-step recommendations</li>
-        </ul>
-      </div>
-    </main>
+      <section className="vf-card red">
+        <div className="vf-eyebrow" style={{ color: "#fca5a5" }}>EXECUTION ENGINE</div>
+        <h2 className="vf-h2">Pain Rooms should outshine Deal Rooms.</h2>
+        <p className="vf-copy">
+          Each Pain Room needs urgency, blocker, risk, deadline, capital need,
+          AI diagnosis, matched profiles, next steps, owner control, and room-context messages.
+        </p>
+        <div className="vf-btns">
+          <Link className="vf-btn" href="/pain-intake">Submit Pain</Link>
+          <Link className="vf-btn dark" href="/messages">Messages</Link>
+        </div>
+      </section>
+    </VaultForgeCleanShell>
   );
 }
-
-const box: React.CSSProperties = {
-  marginTop:28,
-  border:"1px solid rgba(255,107,107,.25)",
-  borderRadius:24,
-  padding:28,
-  background:"linear-gradient(180deg,#1a0d0d,#030712)"
-};
-
-const eyebrow: React.CSSProperties = {
-  color:"#ff6b6b",
-  fontSize:12,
-  letterSpacing:4,
-  marginBottom:12,
-  fontWeight:800
-};
