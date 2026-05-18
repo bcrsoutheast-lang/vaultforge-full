@@ -1,4 +1,5 @@
 import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
+import VaultForgeRoomControls from "../components/VaultForgeRoomControls";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,6 +18,8 @@ export default function MessagesPage() {
         <p className="vf-copy">
           Next build reconnects this to existing message persistence without bringing old routes back.
         </p>
+
+        <VaultForgeRoomControls roomId="messages:main" roomTitle="Messages Lane" roomType="general" />
       </section>
     </VaultForgeCleanShell>
   );
