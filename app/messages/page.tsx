@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type RoomType = "deal" | "pain" | "general";
+type ThreadState = "active" | "saved" | "archived" | "deleted";
+type FilterState = "active" | "saved" | "archived" | "deleted" | "all";
 
 type SavedProfile = {
   profilePhoto?: string;
@@ -30,6 +32,9 @@ type RoomRecord = {
   ownerName?: string;
   ownerPhone?: string;
   ownerEmail?: string;
+  sellerName?: string;
+  sellerPhone?: string;
+  sellerEmail?: string;
   submitterRole?: string;
   assetClass?: string;
   city?: string;
@@ -39,6 +44,8 @@ type RoomRecord = {
   photoUrls?: string[];
   photos?: string[];
   photo?: string;
+  imageUrl?: string;
+  publicUrl?: string;
   [key: string]: unknown;
 };
 
@@ -73,10 +80,13 @@ type ThreadIndex = {
   lastAt: string;
   count: number;
   unread: number;
+  state?: ThreadState;
 };
 
 const PROFILE_KEY = "vaultforge_profile_v2";
-const INDEX_KEY = "vaultforge_room_message_threads_v2";
+const INDEX_KEY = "vaultforge_room_message_threads_v3";
+const OLD_INDEX_KEYS = ["vaultforge_room_message_threads_v2", "vaultforge_room_message_threads_v1"];
+const THREAD_STATE_KEY = "vaultforge_message_thread_states_v1";
 
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
@@ -102,6 +112,16 @@ function parseJson<T>(raw: string | null, fallback: T): T {
 function readProfile(): SavedProfile | null {
   if (typeof window === "undefined") return null;
   return parseJson<SavedProfile | null>(window.localStorage.getItem(PROFILE_KEY), null);
+}
+
+function readThreadStates(): Record<string, ThreadState> {
+  if (typeof window === "undefined") return {};
+  return parseJson<Record<string, ThreadState>>(window.localStorage.getItem(THREAD_STATE_KEY), {});
+}
+
+function writeThreadStates(states: Record<string, ThreadState>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(THREAD_STATE_KEY, JSON.stringify(states));
 }
 
 function readArray(key: string): RoomRecord[] {
@@ -209,13 +229,58 @@ function writeMessages(threadKey: string, rows: MessageRow[]) {
   window.localStorage.setItem(messagesKey(threadKey), JSON.stringify(rows));
 }
 
+function normalizeThread(item: Partial<ThreadIndex>, states: Record<string, ThreadState>): ThreadIndex | null {
+  const threadKey = text(item.threadKey, "");
+  if (!threadKey) return null;
+
+  const parts = threadKey.split(":");
+  const fallbackType: RoomType = parts[0] === "pain" ? "pain" : parts[0] === "deal" ? "deal" : "general";
+  const fallbackRoom = parts.slice(1).join(":");
+
+  const roomType: RoomType = item.roomType === "pain" ? "pain" : item.roomType === "deal" ? "deal" : fallbackType;
+  const roomIdValue = text(item.roomId, fallbackRoom);
+  const messages = readMessages(threadKey);
+  const latest = messages[0];
+
+  return {
+    threadKey,
+    roomType,
+    roomId: roomIdValue,
+    subject: text(item.subject, latest?.subject || `${roomType.toUpperCase()} Room Message`),
+    roomTitle: text(item.roomTitle, text(item.subject, "Room Thread")),
+    recipientName: text(item.recipientName, "Room Owner"),
+    recipientContact: text(item.recipientContact, "No owner contact saved"),
+    senderName: text(item.senderName, "Saved Profile"),
+    senderContact: text(item.senderContact, "No profile contact saved"),
+    lastMessage: text(item.lastMessage, latest?.body || "No messages yet."),
+    lastAt: text(item.lastAt, latest?.createdAt || new Date().toISOString()),
+    count: Number(item.count || messages.length || 0),
+    unread: Number(item.unread || messages.filter((message) => !message.read).length || 0),
+    state: states[threadKey] || item.state || "active",
+  };
+}
+
 function readIndex(): ThreadIndex[] {
   if (typeof window === "undefined") return [];
-  const v2 = parseJson<unknown>(window.localStorage.getItem(INDEX_KEY), []);
-  if (Array.isArray(v2)) return v2 as ThreadIndex[];
+  const states = readThreadStates();
 
-  const old = parseJson<unknown>(window.localStorage.getItem("vaultforge_room_message_threads_v1"), []);
-  return Array.isArray(old) ? (old as ThreadIndex[]) : [];
+  const current = parseJson<unknown>(window.localStorage.getItem(INDEX_KEY), []);
+  if (Array.isArray(current)) {
+    return current
+      .map((item) => normalizeThread(item as Partial<ThreadIndex>, states))
+      .filter((item): item is ThreadIndex => Boolean(item));
+  }
+
+  for (const key of OLD_INDEX_KEYS) {
+    const old = parseJson<unknown>(window.localStorage.getItem(key), []);
+    if (Array.isArray(old) && old.length) {
+      return old
+        .map((item) => normalizeThread(item as Partial<ThreadIndex>, states))
+        .filter((item): item is ThreadIndex => Boolean(item));
+    }
+  }
+
+  return [];
 }
 
 function writeIndex(rows: ThreadIndex[]) {
@@ -234,6 +299,7 @@ function rebuildIndexForThread(args: {
   senderName: string;
   senderContact: string;
 }) {
+  const states = readThreadStates();
   const messages = readMessages(args.threadKey);
   const latest = messages[0];
   const existing = readIndex().filter((item) => item.threadKey !== args.threadKey);
@@ -252,6 +318,7 @@ function rebuildIndexForThread(args: {
     lastAt: latest?.createdAt || new Date().toISOString(),
     count: messages.length,
     unread: messages.filter((item) => !item.read).length,
+    state: states[args.threadKey] || "active",
   };
 
   writeIndex([next, ...existing].sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt))));
@@ -285,6 +352,13 @@ function backHref(roomType: RoomType, roomIdValue: string) {
   return "/command";
 }
 
+function stateLabel(state: ThreadState) {
+  if (state === "saved") return "Saved";
+  if (state === "archived") return "Archived";
+  if (state === "deleted") return "Deleted";
+  return "Active";
+}
+
 export default function MessagesPage() {
   const [roomType, setRoomType] = useState<RoomType>("general");
   const [roomIdValue, setRoomIdValue] = useState("");
@@ -295,6 +369,7 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [body, setBody] = useState("");
   const [replyMode, setReplyMode] = useState<"profileToOwner" | "ownerToProfile">("profileToOwner");
+  const [filter, setFilter] = useState<FilterState>("active");
 
   const threadKey = useMemo(() => makeThreadKey(roomType, roomIdValue), [roomType, roomIdValue]);
   const isRoomThread = roomType !== "general" && !!roomIdValue;
@@ -359,6 +434,41 @@ export default function MessagesPage() {
     };
   }, []);
 
+  function refreshThreads() {
+    setThreads(readIndex());
+    window.dispatchEvent(new Event("vaultforge-message-change"));
+  }
+
+  function setThreadState(target: ThreadIndex, state: ThreadState) {
+    const states = readThreadStates();
+    states[target.threadKey] = state;
+    writeThreadStates(states);
+
+    const next = readIndex().map((item) => (item.threadKey === target.threadKey ? { ...item, state } : item));
+    writeIndex(next);
+    setThreads(next);
+
+    window.dispatchEvent(new Event("vaultforge-message-change"));
+  }
+
+  function deleteForever(target: ThreadIndex) {
+    const ok = window.confirm(`Delete message thread forever: "${target.subject}"?`);
+    if (!ok) return;
+
+    window.localStorage.removeItem(messagesKey(target.threadKey));
+
+    const states = readThreadStates();
+    delete states[target.threadKey];
+    writeThreadStates(states);
+
+    const next = readIndex().filter((item) => item.threadKey !== target.threadKey);
+    writeIndex(next);
+    setThreads(next);
+
+    if (target.threadKey === threadKey) setMessages([]);
+    window.dispatchEvent(new Event("vaultforge-message-change"));
+  }
+
   function sendMessage() {
     if (!isRoomThread) return;
 
@@ -382,6 +492,12 @@ export default function MessagesPage() {
       read: true,
     };
 
+    const states = readThreadStates();
+    if (!states[threadKey]) {
+      states[threadKey] = "active";
+      writeThreadStates(states);
+    }
+
     const nextMessages = [nextMessage, ...readMessages(threadKey)];
     writeMessages(threadKey, nextMessages);
     rebuildIndexForThread({
@@ -402,20 +518,25 @@ export default function MessagesPage() {
     window.dispatchEvent(new Event("vaultforge-message-change"));
   }
 
-  function deleteThread(target: ThreadIndex) {
-    const ok = window.confirm(`Delete message thread "${target.subject}"?`);
-    if (!ok) return;
+  const filteredThreads = useMemo(() => {
+    const rows = readIndex();
+    if (filter === "all") return rows;
+    return rows.filter((thread) => (thread.state || "active") === filter);
+  }, [threads, filter]);
 
-    window.localStorage.removeItem(messagesKey(target.threadKey));
-    writeIndex(readIndex().filter((item) => item.threadKey !== target.threadKey));
+  const dealThreads = filteredThreads.filter((thread) => thread.roomType === "deal");
+  const painThreads = filteredThreads.filter((thread) => thread.roomType === "pain");
 
-    if (target.threadKey === threadKey) setMessages([]);
-    setThreads(readIndex());
-    window.dispatchEvent(new Event("vaultforge-message-change"));
-  }
-
-  const dealThreads = threads.filter((thread) => thread.roomType === "deal");
-  const painThreads = threads.filter((thread) => thread.roomType === "pain");
+  const counts = useMemo(() => {
+    const rows = readIndex();
+    return {
+      active: rows.filter((thread) => (thread.state || "active") === "active").length,
+      saved: rows.filter((thread) => thread.state === "saved").length,
+      archived: rows.filter((thread) => thread.state === "archived").length,
+      deleted: rows.filter((thread) => thread.state === "deleted").length,
+      all: rows.length,
+    };
+  }, [threads]);
 
   return (
     <main style={page}>
@@ -431,9 +552,9 @@ export default function MessagesPage() {
 
         <section style={card}>
           <div style={eyebrow}>Messages</div>
-          <h1 style={h1}>Room-specific communication.</h1>
+          <h1 style={h1}>Clean room communication.</h1>
           <p style={sub}>
-            Each Deal Room and each Pain Room has its own thread. Sender comes from Profile. Recipient comes from the room owner/contact.
+            Deal Room threads and Pain Room threads stay separated, auto-route sender/recipient, and include cleanup controls so the work area stays clean.
           </p>
         </section>
 
@@ -452,6 +573,30 @@ export default function MessagesPage() {
             </section>
 
             <section style={card}>
+              <div style={eyebrow}>Thread Cleanup</div>
+              <ThreadCleanupButtons
+                thread={{
+                  threadKey,
+                  roomType,
+                  roomId: roomIdValue,
+                  subject: finalSubject,
+                  roomTitle: title,
+                  recipientName,
+                  recipientContact,
+                  senderName,
+                  senderContact,
+                  lastMessage: messages[0]?.body || "No messages yet.",
+                  lastAt: messages[0]?.createdAt || new Date().toISOString(),
+                  count: messages.length,
+                  unread: 0,
+                  state: readThreadStates()[threadKey] || "active",
+                }}
+                onState={setThreadState}
+                onDeleteForever={deleteForever}
+              />
+            </section>
+
+            <section style={card}>
               <div style={eyebrow}>Auto Routing Block</div>
               <div style={routeGrid}>
                 <div style={routeBox}>
@@ -466,9 +611,6 @@ export default function MessagesPage() {
                   <p style={muted}>{savedOwnerContact}</p>
                 </div>
               </div>
-              <p style={hint}>
-                No manual name or email entry needed. VaultForge pulls sender from Profile and recipient from this room.
-              </p>
             </section>
 
             <section style={card}>
@@ -519,21 +661,33 @@ export default function MessagesPage() {
         ) : (
           <>
             <section style={card}>
-              <div style={eyebrow}>Deal Message Threads</div>
-              {!dealThreads.length ? <p style={sub}>No Deal Room messages yet. Open a Deal Room and click Message Owner.</p> : null}
-              <div style={threadList}>
-                {dealThreads.map((thread) => (
-                  <ThreadCard key={thread.threadKey} thread={thread} onDelete={() => deleteThread(thread)} />
+              <div style={eyebrow}>Message Work Area</div>
+              <h2 style={h2}>Active, saved, archived, deleted.</h2>
+              <div style={filterRow}>
+                {(["active", "saved", "archived", "deleted", "all"] as FilterState[]).map((item) => (
+                  <button key={item} type="button" onClick={() => { setFilter(item); refreshThreads(); }} style={filter === item ? goldBtn : btn}>
+                    {item.toUpperCase()} ({counts[item]})
+                  </button>
                 ))}
               </div>
             </section>
 
             <section style={card}>
-              <div style={eyebrow}>Pain Message Threads</div>
-              {!painThreads.length ? <p style={sub}>No Pain Room messages yet. Open a Pain Room and click Message Owner.</p> : null}
-              <div style={threadList}>
+              <div style={eyebrow}>Deal Room Message Cards</div>
+              {!dealThreads.length ? <p style={sub}>No Deal Room threads in this folder.</p> : null}
+              <div style={cardGrid}>
+                {dealThreads.map((thread) => (
+                  <ThreadCard key={thread.threadKey} thread={thread} onState={setThreadState} onDeleteForever={deleteForever} />
+                ))}
+              </div>
+            </section>
+
+            <section style={card}>
+              <div style={eyebrow}>Pain Room Message Cards</div>
+              {!painThreads.length ? <p style={sub}>No Pain Room threads in this folder.</p> : null}
+              <div style={cardGrid}>
                 {painThreads.map((thread) => (
-                  <ThreadCard key={thread.threadKey} thread={thread} onDelete={() => deleteThread(thread)} />
+                  <ThreadCard key={thread.threadKey} thread={thread} onState={setThreadState} onDeleteForever={deleteForever} />
                 ))}
               </div>
             </section>
@@ -544,23 +698,67 @@ export default function MessagesPage() {
   );
 }
 
-function ThreadCard({ thread, onDelete }: { thread: ThreadIndex; onDelete: () => void }) {
+function ThreadCleanupButtons({
+  thread,
+  onState,
+  onDeleteForever,
+}: {
+  thread: ThreadIndex;
+  onState: (thread: ThreadIndex, state: ThreadState) => void;
+  onDeleteForever: (thread: ThreadIndex) => void;
+}) {
+  return (
+    <div style={cleanupBox}>
+      <div style={miniEyebrow}>Current: {stateLabel(thread.state || "active")}</div>
+      <div style={actionRowCompact}>
+        <button type="button" onClick={() => onState(thread, "saved")} style={goldBtn}>Save</button>
+        <button type="button" onClick={() => onState(thread, "archived")} style={btn}>Archive</button>
+        <button type="button" onClick={() => onState(thread, "deleted")} style={redBtn}>Delete</button>
+        {(thread.state || "active") === "deleted" ? (
+          <>
+            <button type="button" onClick={() => onState(thread, "active")} style={btn}>Restore</button>
+            <button type="button" onClick={() => onDeleteForever(thread)} style={dangerBtn}>Delete Forever</button>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ThreadCard({
+  thread,
+  onState,
+  onDeleteForever,
+}: {
+  thread: ThreadIndex;
+  onState: (thread: ThreadIndex, state: ThreadState) => void;
+  onDeleteForever: (thread: ThreadIndex) => void;
+}) {
   const href = `/messages?type=${encodeURIComponent(thread.roomType)}&room=${encodeURIComponent(thread.roomId)}&subject=${encodeURIComponent(thread.subject)}`;
+  const roomHref = backHref(thread.roomType, thread.roomId);
 
   return (
     <article style={threadCard}>
-      <div>
-        <div style={miniEyebrow}>{thread.roomType === "deal" ? "Deal Thread" : "Pain Thread"}</div>
-        <h3 style={threadTitle}>{thread.subject}</h3>
-        <p style={muted}>Room ID: {thread.roomId}</p>
-        <p style={muted}>Sender: {thread.senderName || "Saved Profile"} → Recipient: {thread.recipientName || "Room Owner"}</p>
-        <p style={threadPreview}>{thread.lastMessage}</p>
-        <p style={muted}>{thread.count} messages • {thread.unread} unread • {niceDate(thread.lastAt)}</p>
+      <div style={threadHeader}>
+        <div>
+          <div style={miniEyebrow}>{thread.roomType === "deal" ? "Deal Message Card" : "Pain Message Card"}</div>
+          <h3 style={threadTitle}>{thread.subject}</h3>
+        </div>
+        <span style={statePill}>{stateLabel(thread.state || "active")}</span>
       </div>
-      <div style={actionRow}>
+
+      <p style={muted}>Room ID: {thread.roomId}</p>
+      <p style={muted}>Sender: {thread.senderName || "Saved Profile"}</p>
+      <p style={muted}>Recipient: {thread.recipientName || "Room Owner"}</p>
+      <p style={threadPreview}>{thread.lastMessage}</p>
+      <p style={muted}>{thread.count} messages • {thread.unread} unread • {niceDate(thread.lastAt)}</p>
+
+      <div style={actionRowCompact}>
         <Link href={href} style={goldBtn}>Open Thread</Link>
-        <button type="button" onClick={onDelete} style={redBtn}>Delete</button>
+        <Link href={roomHref} style={btn}>Open Room</Link>
       </div>
+
+      <ThreadCleanupButtons thread={thread} onState={onState} onDeleteForever={onDeleteForever} />
     </article>
   );
 }
@@ -584,21 +782,27 @@ const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 22, lineHeight: 1
 const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
 const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const dangerBtn: React.CSSProperties = { ...btn, background: "#3a080d", borderColor: "rgba(255,30,30,.75)", color: "#ffc9c9" };
 const actionRow: React.CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 };
+const actionRowCompact: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 };
+const filterRow: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 };
 const routeGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 };
 const routeBox: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 22, padding: 20 };
 const routeTitle: React.CSSProperties = { fontSize: 28, margin: "0 0 8px", lineHeight: 1 };
 const avatar: React.CSSProperties = { width: 92, height: 92, borderRadius: 18, objectFit: "cover", marginTop: 12, border: "1px solid rgba(245,197,66,.34)" };
-const hint: React.CSSProperties = { color: "#aeb7c7", margin: "16px 0 0", fontSize: 17, lineHeight: 1.35 };
 const toggleRow: React.CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 };
 const messageRoute: React.CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 14, fontSize: 22 };
 const textarea: React.CSSProperties = { width: "100%", boxSizing: "border-box", borderRadius: 18, border: "1px solid rgba(207,216,230,.18)", background: "#121724", color: "#f6f7fb", padding: "17px 18px", fontSize: 16, outline: "none", minHeight: 140, resize: "vertical", marginBottom: 14 };
 const threadList: React.CSSProperties = { display: "grid", gap: 14 };
+const cardGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 16 };
 const threadCard: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 22, padding: 22 };
+const cleanupBox: React.CSSProperties = { marginTop: 16, padding: 16, border: "1px solid rgba(245,197,66,.18)", borderRadius: 18, background: "rgba(245,197,66,.045)" };
 const messageCard: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 22, padding: 22 };
 const messageTop: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", color: "#f7f7fb" };
+const threadHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" };
 const threadTitle: React.CSSProperties = { fontSize: 28, margin: "0 0 10px" };
 const threadPreview: React.CSSProperties = { color: "#e7edf7", fontSize: 18, lineHeight: 1.35, margin: "10px 0" };
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "6px 0" };
 const mutedBig: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", fontSize: 19 };
 const messageBody: React.CSSProperties = { color: "#f7f7fb", fontSize: 20, lineHeight: 1.4, margin: "12px 0 0" };
+const statePill: React.CSSProperties = { borderRadius: 999, padding: "8px 12px", background: "#ffdc68", color: "#10131a", fontWeight: 950, fontSize: 12 };
