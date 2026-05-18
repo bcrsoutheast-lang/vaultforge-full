@@ -11,7 +11,7 @@ export default function CommandPage() {
       active="command"
       eyebrow="COMMAND CENTER"
       title="Fresh command build."
-      subtitle="Clean product path: Deal Rooms, Pain Intake, Pain Rooms, Messages, and 5S folders."
+      subtitle="Clean product path: Deal Rooms, Pain Intake, Pain Rooms, Messages, Profile, and 5S folders."
     >
       <section className="vf-grid">
         <article className="vf-card">
@@ -37,6 +37,18 @@ export default function CommandPage() {
             <Link className="vf-btn dark" href="/pain-rooms">Open Pain Rooms</Link>
           </div>
           <VaultForgeRoomControls roomId="command:pain-lane" roomTitle="Pain Rooms Lane" roomType="pain" />
+        </article>
+
+        <article className="vf-card">
+          <div className="vf-eyebrow">PROFILE</div>
+          <h2 className="vf-h2">AI matching data</h2>
+          <p className="vf-copy">
+            Member profile controls routing, alerts, contact priority, state/county fit, pain fit, deal fit, and matching quality.
+          </p>
+          <div className="vf-btns">
+            <Link className="vf-btn" href="/profile">Complete Profile</Link>
+          </div>
+          <VaultForgeRoomControls roomId="command:profile" roomTitle="Profile Lane" roomType="general" />
         </article>
 
         <article className="vf-card">
