@@ -1,41 +1,14 @@
 "use client";
 
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import VaultForgeRoomControls from "./VaultForgeRoomControls";
 
-type Deal = {
-  id: string;
-  type: string;
-  photo: string;
-  title: string;
-  state: string;
-  city: string;
-  county: string;
-  purchasePrice: string;
-  arv: string;
-  repairs: string;
-  equitySpread: string;
-  beds: string;
-  baths: string;
-  sqft: string;
-  noi: string;
-  capRate: string;
-  tenantStatus: string;
-  acres: string;
-  zoning: string;
-  utilities: string;
-  notes: string;
-  createdAt: string;
-};
+type DealRoom = Record<string, any>;
+const LIST_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vf_deal_rooms", "deal_rooms"];
 
-const STORAGE_KEY = "vaultforge_clean_deal_rooms_v1";
-
-function readDeals(): Deal[] {
-  if (typeof window === "undefined") return [];
-
+function readList(key: string): DealRoom[] {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -43,265 +16,129 @@ function readDeals(): Deal[] {
   }
 }
 
-function money(value: string) {
-  const clean = String(value || "").trim();
-  if (!clean) return "Not listed";
-  if (clean.includes("$")) return clean;
-
-  const n = Number(clean.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return clean;
-
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
+function saveEverywhere(deals: DealRoom[]) {
+  for (const key of LIST_KEYS) window.localStorage.setItem(key, JSON.stringify(deals));
 }
 
-function buildRead(deal: Deal) {
-  const parts = [
-    deal.city || deal.county || deal.state
-      ? `Market: ${[deal.city, deal.county, deal.state].filter(Boolean).join(", ")}.`
-      : "",
-    deal.purchasePrice || deal.arv || deal.repairs
-      ? `Numbers: ask ${money(deal.purchasePrice)}, ARV/value ${money(deal.arv)}, repairs/work ${money(deal.repairs)}.`
-      : "",
-    deal.type === "Residential" && (deal.beds || deal.baths || deal.sqft)
-      ? `Residential: ${deal.beds || "?"} beds / ${deal.baths || "?"} baths / ${deal.sqft || "?"} sqft.`
-      : "",
-    deal.type === "Commercial" && (deal.noi || deal.capRate || deal.tenantStatus)
-      ? `Commercial: NOI ${deal.noi || "not listed"}, cap ${deal.capRate || "not listed"}, tenant ${deal.tenantStatus || "not listed"}.`
-      : "",
-    deal.type === "Land" && (deal.acres || deal.zoning || deal.utilities)
-      ? `Land: ${deal.acres || "?"} acres, zoning ${deal.zoning || "not listed"}, utilities ${deal.utilities || "not listed"}.`
-      : "",
-    deal.notes ? `Operator notes: ${deal.notes}` : "",
-  ].filter(Boolean);
-
-  return parts.length ? parts.join(" ") : "Open this room to add numbers, AI analysis, routing context, and profiles.";
+function normalizeDeal(deal: DealRoom): DealRoom {
+  const id = String(deal.id || `deal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  return {
+    ...deal,
+    id,
+    kind: deal.kind || "deal",
+    type: deal.type || "deal",
+    roomType: deal.roomType || "deal",
+    title: deal.title || deal.name || deal.address || "Untitled Deal Room",
+    city: deal.city || deal.market || "",
+    state: deal.state || "",
+    county: deal.county || "",
+    assetClass: deal.assetClass || deal.asset_class || deal.propertyType || "Deal",
+    askingPrice: deal.askingPrice || deal.askPrice || deal.price || "",
+    arv: deal.arv || deal.value || "",
+    repairs: deal.repairs || deal.repairCost || "",
+    photoDataUrl: deal.photoDataUrl || deal.image || deal.imageUrl || "",
+  };
 }
 
-function DealCard({ deal }: { deal: Deal }) {
-  const spread = deal.equitySpread || "";
-  const read = buildRead(deal);
-
-  return (
-    <article className="vf-deal-card">
-      <div className="vf-deal-line" />
-
-      <div className="vf-deal-photo">
-        {deal.photo ? <img src={deal.photo} alt="" /> : <span>No image</span>}
-      </div>
-
-      <div>
-        <div className="vf-deal-top">
-          <div>
-            <div className="vf-eyebrow">Deal Room · {deal.type}</div>
-            <h2 className="vf-h2" style={{ marginBottom: 6 }}>
-              {deal.title || "Untitled Deal Room"}
-            </h2>
-            <p className="vf-copy" style={{ marginTop: 0 }}>
-              {[deal.city, deal.county, deal.state].filter(Boolean).join(", ") || "Market not listed"}
-            </p>
-          </div>
-
-          <div className="vf-score-box">
-            <strong>{spread || "84"}</strong>
-            <span>{spread ? "Spread" : "Score"}</span>
-          </div>
-        </div>
-
-        <div className="vf-pills">
-          <span>Ask {money(deal.purchasePrice)}</span>
-          <span>ARV {money(deal.arv)}</span>
-          <span>Repairs {money(deal.repairs)}</span>
-          <span>{deal.type}</span>
-        </div>
-
-        <section className="vf-read-box">
-          <div className="vf-eyebrow">AI Best-Fit Read</div>
-          <p className="vf-copy">{read}</p>
-        </section>
-
-        <div className="vf-btns">
-          <Link className="vf-btn" href={`/deal-rooms/${encodeURIComponent(deal.id)}`}>
-            Open Room
-          </Link>
-
-          <Link className="vf-btn dark" href={`/messages?room=${encodeURIComponent(deal.id)}`}>
-            Message
-          </Link>
-        </div>
-
-        <VaultForgeRoomControls
-          roomId={`deal:${deal.id}`}
-          roomTitle={deal.title || "Deal Room"}
-          roomType="deal"
-        />
-      </div>
-    </article>
-  );
+function loadAllDeals() {
+  const seen = new Set<string>();
+  const merged: DealRoom[] = [];
+  for (const key of LIST_KEYS) {
+    for (const rawDeal of readList(key)) {
+      const deal = normalizeDeal(rawDeal);
+      if (!deal.id || seen.has(deal.id)) continue;
+      seen.add(deal.id);
+      merged.push(deal);
+    }
+  }
+  merged.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  try { saveEverywhere(merged); } catch {}
+  return merged;
 }
+
+const shell: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto", paddingBottom: 60 };
+const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 24, marginBottom: 20, boxShadow: "0 18px 60px rgba(0,0,0,.3)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 900, fontSize: 17, marginBottom: 12 };
+const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,74px)", lineHeight: .92, letterSpacing: -4, margin: "0 0 16px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: "clamp(18px,2.5vw,25px)", lineHeight: 1.35, margin: 0 };
+const button: React.CSSProperties = { border: 0, borderRadius: 18, padding: "15px 18px", fontWeight: 950, cursor: "pointer", fontSize: 15, textDecoration: "none", display: "inline-block" };
+const goldButton: React.CSSProperties = { ...button, background: "#ffdc68", color: "#111319" };
+const darkButton: React.CSSProperties = { ...button, background: "#171c29", color: "#f7f7fb", border: "1px solid rgba(207,216,230,.18)" };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(270px, 1fr))", gap: 18 };
 
 export default function VaultForgeDealRoomsClient() {
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [deals, setDeals] = useState<DealRoom[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   function refresh() {
-    setDeals(readDeals());
+    setDeals(loadAllDeals());
+    setLoaded(true);
   }
 
-  useEffect(() => {
-    refresh();
-    window.addEventListener("vaultforge-deals-change", refresh);
-    return () => window.removeEventListener("vaultforge-deals-change", refresh);
-  }, []);
+  useEffect(() => { refresh(); }, []);
 
-  const metrics = useMemo(() => {
-    return {
-      active: deals.length,
-      residential: deals.filter((deal) => deal.type === "Residential").length,
-      commercial: deals.filter((deal) => deal.type === "Commercial").length,
-      land: deals.filter((deal) => deal.type === "Land").length,
-    };
+  const counts = useMemo(() => {
+    const byState: Record<string, number> = {};
+    deals.forEach((deal) => { const state = String(deal.state || "Unknown"); byState[state] = (byState[state] || 0) + 1; });
+    return byState;
   }, [deals]);
 
   return (
-    <>
-      <style>{`
-        .vf-deal-card {
-          border: 1px solid rgba(245,200,76,.22);
-          background:
-            radial-gradient(circle at top right, rgba(245,200,76,.10), transparent 28%),
-            linear-gradient(145deg, rgba(12,16,25,.96), rgba(2,6,23,.99));
-          border-radius: 24px;
-          padding: 14px;
-          display: grid;
-          grid-template-columns: 180px minmax(0, 1fr);
-          gap: 16px;
-        }
+    <main style={shell}>
+      <div style={wrap}>
+        <nav style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+          <Link href="/command" style={darkButton}>Command</Link>
+          <Link href="/deal-create" style={goldButton}>Create Deal</Link>
+          <Link href="/pain-intake" style={darkButton}>Pain Intake</Link>
+          <Link href="/profile" style={darkButton}>Profile</Link>
+          <Link href="/" style={{ ...darkButton, borderColor: "rgba(255,78,78,.45)", color: "#ff9b9b" }}>Exit</Link>
+        </nav>
 
-        .vf-deal-line {
-          grid-column: 1 / -1;
-          height: 4px;
-          border-radius: 999px;
-          background: linear-gradient(90deg,#f5c84c,transparent);
-        }
+        <section style={card}>
+          <div style={eyebrow}>Deal Rooms</div>
+          <h1 style={h1}>Clean deal room board.</h1>
+          <p style={sub}>Reads every local Deal Room save key and resyncs them so new deals show here immediately.</p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+            <button type="button" onClick={refresh} style={darkButton}>Refresh Rooms</button>
+            <Link href="/deal-create" style={goldButton}>Create Deal</Link>
+          </div>
+        </section>
 
-        .vf-deal-photo {
-          min-height: 160px;
-          border-radius: 18px;
-          overflow: hidden;
-          border: 1px solid rgba(255,255,255,.14);
-          background: rgba(255,255,255,.05);
-          display: grid;
-          place-items: center;
-          color: #94a3b8;
-          font-weight: 900;
-        }
+        <section style={card}>
+          <div style={eyebrow}>State Count</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {Object.keys(counts).length ? Object.entries(counts).map(([state, count]) => <span key={state} style={darkButton}>{state}: {count}</span>) : <span style={sub}>No saved deal rooms yet.</span>}
+          </div>
+        </section>
 
-        .vf-deal-photo img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-
-        .vf-deal-top {
-          display: flex;
-          justify-content: space-between;
-          gap: 14px;
-        }
-
-        .vf-score-box {
-          text-align: right;
-          flex: 0 0 auto;
-        }
-
-        .vf-score-box strong {
-          display: block;
-          color: #f5c84c;
-          font-size: 34px;
-          line-height: 1;
-          letter-spacing: -.05em;
-        }
-
-        .vf-score-box span {
-          display: block;
-          color: #94a3b8;
-          font-size: 11px;
-          letter-spacing: .14em;
-          text-transform: uppercase;
-          font-weight: 900;
-          margin-top: 5px;
-        }
-
-        .vf-pills {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 12px;
-        }
-
-        .vf-pills span {
-          border: 1px solid rgba(255,255,255,.13);
-          background: rgba(255,255,255,.045);
-          color: #cbd5e1;
-          border-radius: 999px;
-          padding: 7px 10px;
-          font-size: 12px;
-          font-weight: 850;
-        }
-
-        .vf-read-box {
-          border: 1px solid rgba(245,200,76,.18);
-          background: rgba(255,255,255,.045);
-          border-radius: 18px;
-          padding: 14px;
-          margin-top: 14px;
-        }
-
-        @media(max-width:780px){
-          .vf-deal-card {
-            grid-template-columns: 1fr;
-          }
-
-          .vf-deal-photo {
-            height: 210px;
-          }
-
-          .vf-deal-top {
-            display: block;
-          }
-
-          .vf-score-box {
-            text-align: left;
-            margin-top: 10px;
-          }
-        }
-      `}</style>
-
-      <section className="vf-grid">
-        <div className="vf-metric"><span>Active rooms</span><strong>{metrics.active}</strong></div>
-        <div className="vf-metric"><span>Residential</span><strong>{metrics.residential}</strong></div>
-        <div className="vf-metric"><span>Commercial</span><strong>{metrics.commercial}</strong></div>
-        <div className="vf-metric"><span>Land</span><strong>{metrics.land}</strong></div>
-      </section>
-
-      <section className="vf-card">
-        <div className="vf-eyebrow">Active Deal Rooms</div>
-
-        {!deals.length ? (
-          <p className="vf-copy">
-            No saved Deal Rooms yet. Use Create Deal Opportunity to add the first clean room.
-          </p>
-        ) : null}
-
-        <div style={{ display: "grid", gap: 14 }}>
-          {deals.map((deal) => (
-            <DealCard key={deal.id} deal={deal} />
-          ))}
-        </div>
-      </section>
-    </>
+        {!loaded ? null : deals.length === 0 ? (
+          <section style={card}>
+            <div style={eyebrow}>No Deal Rooms Found</div>
+            <p style={sub}>Create one deal, wait for the saved popup, then tap Open Deal Rooms.</p>
+          </section>
+        ) : (
+          <section style={grid}>
+            {deals.map((deal) => (
+              <article key={deal.id} style={card}>
+                {deal.photoDataUrl ? <img src={deal.photoDataUrl} alt="Deal" style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 20, border: "1px solid rgba(207,216,230,.18)", marginBottom: 14 }} /> : null}
+                <div style={eyebrow}>{deal.assetClass || "Deal"}</div>
+                <h2 style={{ fontSize: 32, lineHeight: 1, margin: "0 0 12px", letterSpacing: -1.5 }}>{deal.title || "Untitled Deal Room"}</h2>
+                <p style={{ ...sub, fontSize: 17 }}>{[deal.city, deal.county, deal.state].filter(Boolean).join(", ") || "Location not listed"}</p>
+                <p style={{ color: "#dce4ef", fontSize: 16, lineHeight: 1.45 }}>
+                  Ask: {deal.askingPrice || "Not listed"}<br />
+                  ARV/Value: {deal.arv || "Not listed"}<br />
+                  Repairs: {deal.repairs || "Not listed"}<br />
+                  Route: {Array.isArray(deal.routeTo) ? deal.routeTo.join(", ") : "Not selected"}
+                </p>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                  <Link href={`/deal-rooms/${deal.id}`} style={goldButton}>Open Room</Link>
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
+      </div>
+    </main>
   );
 }
