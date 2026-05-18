@@ -1,6 +1,14 @@
 import Link from "next/link";
 
-type Active = "command" | "deals" | "pain-intake" | "pain-rooms" | "messages";
+type Active =
+  | "command"
+  | "deals"
+  | "pain-intake"
+  | "pain-rooms"
+  | "messages"
+  | "saved"
+  | "archived"
+  | "deleted";
 
 type Props = {
   active: Active;
@@ -16,6 +24,9 @@ const nav: Array<{ key: Active; label: string; href: string }> = [
   { key: "pain-intake", label: "Pain Intake", href: "/pain-intake" },
   { key: "pain-rooms", label: "Pain Rooms", href: "/pain-rooms" },
   { key: "messages", label: "Messages", href: "/messages" },
+  { key: "saved", label: "Saved", href: "/saved-rooms" },
+  { key: "archived", label: "Archived", href: "/archived-rooms" },
+  { key: "deleted", label: "Deleted", href: "/deleted-rooms" },
 ];
 
 export default function VaultForgeCleanShell({
@@ -71,6 +82,7 @@ export default function VaultForgeCleanShell({
           display: flex;
           gap: 9px;
           flex-wrap: wrap;
+          align-items: center;
         }
 
         .vf-nav a {
@@ -88,6 +100,12 @@ export default function VaultForgeCleanShell({
           color: #111827;
           border-color: transparent;
           background: linear-gradient(135deg, #fde68a, #e8c46b);
+        }
+
+        .vf-nav a.exit {
+          color: #fecaca;
+          border-color: rgba(239, 68, 68, .30);
+          background: rgba(127, 29, 29, .22);
         }
 
         .vf-hero,
@@ -175,12 +193,20 @@ export default function VaultForgeCleanShell({
           padding: 12px 15px;
           font-weight: 950;
           text-decoration: none;
+          border: 0;
+          cursor: pointer;
         }
 
         .vf-btn.dark {
           color: #fff;
           background: rgba(255, 255, 255, .06);
           border: 1px solid rgba(255, 255, 255, .15);
+        }
+
+        .vf-btn.danger {
+          color: #fecaca;
+          background: rgba(127, 29, 29, .22);
+          border: 1px solid rgba(239, 68, 68, .34);
         }
 
         .vf-copy {
@@ -199,7 +225,7 @@ export default function VaultForgeCleanShell({
         @media (max-width: 700px) {
           .vf-page { padding: 12px; }
           .vf-logo { font-size: 25px; }
-          .vf-nav { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+          .vf-nav { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; width: 100%; }
           .vf-nav a { white-space: nowrap; }
           .vf-hero, .vf-card { padding: 20px; border-radius: 24px; }
         }
@@ -219,6 +245,8 @@ export default function VaultForgeCleanShell({
                 {item.label}
               </Link>
             ))}
+
+            <Link href="/" className="exit">Exit</Link>
           </nav>
         </header>
 
