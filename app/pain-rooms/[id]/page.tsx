@@ -1,78 +1,35 @@
+"use client";
+
 import Link from "next/link";
-import { getCanonicalRoom } from "../../lib/vaultforgeCanonicalRooms";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-type Params = Promise<{ id: string }>;
-
-export default async function PainRoomDetailPage({ params }: { params: Params }) {
-  const { id } = await params;
-  const room = await getCanonicalRoom("pain", id);
-
-  return (
-    <main className="vf-page">
-      <style>{`
-        .vf-page{min-height:100vh;background:radial-gradient(circle at top left,rgba(239,68,68,.14),transparent 30%),linear-gradient(180deg,#02040a,#071018 52%,#02040a);color:#fff;padding:22px 14px 80px;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-        .vf-wrap{max-width:1180px;margin:0 auto;display:grid;gap:16px}
-        .vf-card{border:1px solid rgba(239,68,68,.28);background:linear-gradient(145deg,rgba(35,8,8,.94),rgba(2,6,23,.98));border-radius:24px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.28)}
-        .vf-kicker{color:#fca5a5;font-size:12px;font-weight:950;letter-spacing:.16em;text-transform:uppercase}
-        h1{font-size:clamp(42px,8vw,82px);line-height:.9;letter-spacing:-.07em;margin:10px 0 12px}
-        p{color:#fee2e2;line-height:1.55}
-        .vf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px}
-        .vf-metric{border:1px solid rgba(239,68,68,.18);background:rgba(127,29,29,.16);border-radius:16px;padding:12px}
-        .vf-metric span{display:block;color:#fecaca;font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:900}
-        .vf-metric strong{display:block;color:#fff;font-size:17px;margin-top:5px;overflow-wrap:anywhere}
-        .vf-box-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-        .vf-box{border:1px solid rgba(239,68,68,.18);background:rgba(127,29,29,.14);border-radius:20px;padding:16px}
-        .vf-box h3{margin:0 0 10px}
-        .vf-nav{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
-        .vf-nav a{color:#f8fafc;text-decoration:none;border:1px solid rgba(239,68,68,.26);background:rgba(127,29,29,.22);border-radius:999px;padding:10px 13px;font-weight:900;font-size:13px}
-        .vf-nav a.primary{background:linear-gradient(135deg,#fecaca,#ef4444);color:#111827;border:0}
-      `}</style>
-
-      <div className="vf-wrap">
-        <section className="vf-card">
-          <div className="vf-kicker">Pain Execution Room</div>
-          <h1>{room?.title || "Pain room not loaded"}</h1>
-          <p>{room?.summary || "This id did not match a live pain room. Open a room from /pain-rooms so the current canonical id is used."}</p>
-          <div className="vf-nav">
-            <Link href="/pain-rooms">Back to Pain Rooms</Link>
-            <Link href="/dashboard">Command</Link>
-            <Link href={`/message-command/${encodeURIComponent("pain:" + id)}`} className="primary">Room Thread</Link>
-          </div>
-        </section>
-
-        <section className="vf-card">
-          <div className="vf-kicker">Pressure Data</div>
-          <div className="vf-grid">
-            <div className="vf-metric"><span>Market</span><strong>{room?.subtitle || "Not listed"}</strong></div>
-            <div className="vf-metric"><span>Pain Type</span><strong>{room?.asset_type || "Not listed"}</strong></div>
-            <div className="vf-metric"><span>Urgency</span><strong>{room?.urgency || "High"}</strong></div>
-            <div className="vf-metric"><span>Capital Need</span><strong>{room?.capital_needed || "Not listed"}</strong></div>
-            <div className="vf-metric"><span>Distress Score</span><strong>{room?.score || "88"}</strong></div>
-            <div className="vf-metric"><span>Source</span><strong>{room?.source_table || "not-found"}</strong></div>
-          </div>
-        </section>
-
-        <section className="vf-card">
-          <div className="vf-kicker">Pain Execution AI</div>
-          <div className="vf-box-grid">
-            <div className="vf-box"><h3 style={{color:"#86efac"}}>What can be solved</h3><p>This room can be routed if the blocker, deadline, capital need, and decision-maker are clear.</p></div>
-            <div className="vf-box"><h3 style={{color:"#fca5a5"}}>Execution risk</h3><p>Delay increases pressure. Pain rooms lose value when ownership, deadline, and next action are unclear.</p></div>
-            <div className="vf-box"><h3 style={{color:"#93c5fd"}}>Next steps</h3><p>Assign owner, confirm deadline, route matched operator/capital/buyer profiles, and keep all messages tied to this room.</p></div>
-          </div>
-        </section>
-
-        <section className="vf-card">
-          <div className="vf-kicker">Execution Stack Matches</div>
-          <div className="vf-box-grid">
-            <div className="vf-box"><h3>Rescue Capital</h3><p>Capital match for funding gap, bridge need, refinance issue, or JV pressure.</p></div>
-            <div className="vf-box"><h3>Operator Match</h3><p>Operator match for local execution, construction, PM, or turnaround work.</p></div>
-            <div className="vf-box"><h3>Buyer / Exit Match</h3><p>Buyer match if the resolution path is sale, assignment, or liquidation.</p></div>
-          </div>
-        </section>
-      </div>
-    </main>
-  );
-}
+type RoomState = "active" | "saved" | "archived" | "deleted";
+type PainRoom = Record<string, any> & { id: string; roomState?: RoomState };
+type Profile = Record<string, any>;
+const STORAGE_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const STATE_KEY = "vaultforge_clean_room_states";
+const PROFILE_KEY = "vaultforge_profile_v2";
+const page: React.CSSProperties = { minHeight:"100vh", background:"#05070d", color:"#f7f7fb", padding:18, fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" };
+const wrap: React.CSSProperties = { maxWidth:1180, margin:"0 auto", paddingBottom:70 };
+const card: React.CSSProperties = { background:"linear-gradient(180deg,#080d19,#050816)", border:"1px solid rgba(239,68,68,.28)", borderRadius:26, padding:28, marginBottom:22 };
+const eyebrow: React.CSSProperties = { color:"#fca5a5", textTransform:"uppercase", letterSpacing:7, fontWeight:900, fontSize:14, marginBottom:14 };
+const h1: React.CSSProperties = { fontSize:"clamp(42px,7vw,72px)", lineHeight:.92, letterSpacing:-4, margin:"0 0 18px", fontWeight:950 };
+const sub: React.CSSProperties = { color:"#c9d0dc", fontSize:20, lineHeight:1.4, margin:0 };
+const grid: React.CSSProperties = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))", gap:16 };
+const btn: React.CSSProperties = { border:"1px solid rgba(207,216,230,.18)", background:"#171c29", color:"#f7f7fb", borderRadius:999, padding:"13px 18px", fontWeight:950, textDecoration:"none", display:"inline-block", cursor:"pointer" };
+const redBtn: React.CSSProperties = { ...btn, border:0, background:"#ef4444", color:"#fff" };
+const dangerBtn: React.CSSProperties = { ...btn, background:"#271016", borderColor:"rgba(255,70,70,.48)", color:"#ffaaaa" };
+function read<T>(key:string,f:T):T{try{const raw=window.localStorage.getItem(key);return raw?JSON.parse(raw):f}catch{return f}}
+function write(key:string,v:any){window.localStorage.setItem(key,JSON.stringify(v))}
+function id(r:PainRoom){return String(r.id||r.roomId||"")}
+function arr(room:PainRoom|null,keys:string[]){for(const k of keys){const v=room?.[k]; if(Array.isArray(v))return v.map(String); if(typeof v==="string"&&v.trim())return v.split(",").map(x=>x.trim()).filter(Boolean)} return []}
+function val(room:PainRoom|null,keys:string[],fallback="Not listed"){for(const k of keys){const v=room?.[k]; if(v!==undefined&&v!==null&&String(v).trim())return String(v)} return fallback}
+function money(v:string){const c=String(v||"").replace(/[^0-9.]/g,""); if(!c)return "Not listed"; const n=Number(c); return Number.isFinite(n)?`$${n.toLocaleString()}`:v}
+function photo(room:PainRoom|null){return val(room,["photoUrl","imageUrl","publicUrl","photo"],"")}
+function findPain(roomId:string){const states=read<Record<string,RoomState>>(STATE_KEY,{}); for(const key of STORAGE_KEYS){const hit=read<PainRoom[]>(key,[]).find(r=>id(r)===roomId); if(hit)return {...hit,id:roomId,roomState:states[roomId]||hit.roomState||"active"}} for(const key of [`vaultforge_clean_pain_room_${roomId}`,`vaultforge_pain_room_${roomId}`,`vf_pain_room_${roomId}`]){const hit=read<PainRoom|null>(key,null); if(hit)return {...hit,id:roomId,roomState:states[roomId]||hit.roomState||"active"}} return null}
+function sync(room:PainRoom){const roomId=id(room); if(!roomId)return; write(`vaultforge_clean_pain_room_${roomId}`,room); write(`vaultforge_pain_room_${roomId}`,room); for(const key of STORAGE_KEYS){const rows=read<PainRoom[]>(key,[]).filter(r=>id(r)!==roomId); write(key,[room,...rows])} window.dispatchEvent(new Event("vaultforge-pain-change"))}
+function score(room:PainRoom,p:Profile){let points=0; const reasons:string[]=[]; const state=val(room,["state"],""); const county=val(room,["county"],""); const blockers=arr(room,["blockers"]); const routes=arr(room,["routingNeeds","routeTo"]); const states=[...(p.buyStates||[]),...(p.operateStates||[]),...(p.alertStates||[]),...(p.contactStates||[])]; if(state&&states.includes(state)){points+=20;reasons.push(`${state} state match`)} if(county&&p.countiesByState?.[state]?.includes?.(county)){points+=18;reasons.push(`${county} county match`)} routes.forEach(r=>{if((p.memberTypes||[]).includes(r)||(p.capitalRoles||[]).includes(r)||(p.executionCapabilities||[]).includes(r)){points+=12;reasons.push(`${r} capability match`)}}); blockers.forEach(b=>{if((p.painPreferences||[]).some((x:string)=>String(x).toLowerCase().includes(b.toLowerCase())||b.toLowerCase().includes(String(x).toLowerCase()))){points+=10;reasons.push(`${b} pain preference`)}}); if((p.routingRules||[]).includes("Allow AI Routing")){points+=12;reasons.push("AI routing allowed")} return {points:Math.min(100,points||40),reasons:reasons.length?reasons:["Saved profile found; add more profile chips to improve routing confidence."]}}
+function Fact({label,value}:{label:string;value:string}){return <div style={{background:"#121724",border:"1px solid rgba(207,216,230,.14)",borderRadius:20,padding:20}}><div style={{...eyebrow,fontSize:12,letterSpacing:4}}>{label}</div><div style={{fontSize:22,fontWeight:850}}>{value||"Not listed"}</div></div>}
+function Pills({title,values}:{title:string;values:string[]}){return <section style={{...card,padding:22}}><div style={eyebrow}>{title}</div><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{values.length?values.map(x=><span key={x} style={{border:"1px solid rgba(239,68,68,.28)",background:"rgba(239,68,68,.08)",color:"#fecaca",borderRadius:999,padding:"9px 12px",fontWeight:900,fontSize:13}}>{x}</span>):<span style={{color:"#c9d0dc"}}>Not listed</span>}</div></section>}
+export default function PainRoomDetailPage(){const params=useParams(); const roomId=decodeURIComponent(String(params?.id||"")); const [room,setRoom]=useState<PainRoom|null>(null); const [p,setP]=useState<Profile>({}); function load(){setRoom(findPain(roomId)); setP(read<Profile>(PROFILE_KEY,{}))} useEffect(()=>{load()},[roomId]); function setRoomState(state:RoomState){if(!room)return; const states=read<Record<string,RoomState>>(STATE_KEY,{}); states[roomId]=state; write(STATE_KEY,states); const next={...room,roomState:state,updatedAt:new Date().toISOString()}; sync(next); setRoom(next)} const fit=useMemo(()=>room?score(room,p):{points:0,reasons:[] as string[]},[room,p]); if(!room)return <main style={page}><div style={wrap}><Link href="/pain-rooms" style={redBtn}>Back to Pain Rooms</Link><section style={card}><div style={eyebrow}>Pain Room</div><h1 style={h1}>Room not found.</h1><p style={sub}>Open a saved Pain Room from the board.</p></section></div></main>; const img=photo(room); const profilePhoto=String(p.profilePhoto||p.companyLogo||""); const profileName=[p.fullName,p.company].filter(Boolean).join(" / ")||"No saved member profile"; return <main style={page}><div style={wrap}><nav style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:18}}><Link href="/command" style={btn}>Command</Link><Link href="/pain-rooms" style={redBtn}>Pain Rooms</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/" style={dangerBtn}>Exit</Link></nav><section style={card}>{img?<img src={img} alt={val(room,["title"],"Pain photo")} style={{width:"100%",maxHeight:440,objectFit:"cover",borderRadius:24,marginBottom:24,border:"1px solid rgba(207,216,230,.2)"}}/>:<div style={{border:"1px dashed rgba(207,216,230,.25)",borderRadius:24,padding:70,textAlign:"center",color:"#c9d0dc",marginBottom:24}}>No photo URL saved for this room</div>}<div style={eyebrow}>Pain Solution Room</div><h1 style={h1}>{val(room,["title"],"Untitled Pain Room")}</h1><p style={sub}>{[val(room,["city"],""),val(room,["county"],""),val(room,["state"],"")].filter(Boolean).join(" • ")}</p></section><section style={card}><div style={eyebrow}>Owner Message</div><h2 style={{fontSize:34,margin:"0 0 12px"}}>Contact owner with this pain attached.</h2><p style={sub}>Message subject is locked to this room so the thread matches the pain problem.</p><div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:16}}><Link href={`/messages?room=${encodeURIComponent(roomId)}&type=pain&subject=${encodeURIComponent(`Pain Room: ${val(room,["title"],"Untitled Pain Room")}`)}&to=${encodeURIComponent(val(room,["contactEmail"],""))}`} style={redBtn}>Message Owner</Link><a href={`mailto:${val(room,["contactEmail"],"")}?subject=${encodeURIComponent(`VaultForge Pain Room: ${val(room,["title"],"Untitled Pain Room")}`)}`} style={btn}>Email Owner</a></div></section><section style={card}><div style={eyebrow}>5S Controls</div><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button type="button" onClick={()=>setRoomState("saved")} style={redBtn}>Save</button><button type="button" onClick={()=>setRoomState("archived")} style={btn}>Archive</button><button type="button" onClick={()=>setRoomState("deleted")} style={dangerBtn}>Delete</button><span style={btn}>Current: {room.roomState||"active"}</span></div></section><section style={card}><div style={eyebrow}>DMAIC Command Read</div><p style={sub}>{val(room,["dmaicSummary"],"No DMAIC summary saved.")}</p><p style={{...sub,marginTop:14}}>{val(room,["aiExecutionRead"],"No AI execution read saved.")}</p></section><section style={card}><div style={eyebrow}>AI Routed Profile</div><div style={{display:"grid",gridTemplateColumns:"140px minmax(0,1fr)",gap:18,alignItems:"center"}}><div style={{width:132,height:132,borderRadius:24,overflow:"hidden",border:"1px solid rgba(239,68,68,.28)",background:"#111827",display:"grid",placeItems:"center",color:"#c9d0dc",fontWeight:950}}>{profilePhoto?<img src={profilePhoto} alt="Profile" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"No photo"}</div><div><h2 style={{fontSize:36,margin:"0 0 8px"}}>{profileName}</h2><p style={sub}>Fit score: <strong style={{color:"#ef4444"}}>{fit.points}%</strong>. Contact: {(p.preferredContact||[]).join(", ")||"Not selected"}. Phone: {p.phone||"Not listed"}. Email: {p.email||"Not listed"}.</p><div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>{fit.reasons.map((r:string)=><span key={r} style={{border:"1px solid rgba(239,68,68,.24)",borderRadius:999,padding:"8px 11px",color:"#fecaca",fontWeight:900,fontSize:12}}>{r}</span>)}</div></div></div></section><section style={card}><div style={eyebrow}>Pressure Metrics</div><div style={grid}><Fact label="Pressure Score" value={String(room.pressureScore||"Not listed")}/><Fact label="Amount Needed" value={money(val(room,["amountNeeded"],""))}/><Fact label="Property Value" value={money(val(room,["propertyValue"],""))}/><Fact label="Payoff" value={money(val(room,["payoff"],""))}/><Fact label="Equity Estimate" value={money(val(room,["equityEstimate"],""))}/><Fact label="Timeline" value={val(room,["timeline"])}/><Fact label="Authority" value={val(room,["authority"])}/><Fact label="Decision Status" value={val(room,["decisionStatus"])}/></div></section><section style={card}><div style={eyebrow}>Contact</div><div style={grid}><Fact label="Name" value={val(room,["contactName"])}/><Fact label="Phone" value={val(room,["contactPhone"])}/><Fact label="Email" value={val(room,["contactEmail"])}/><Fact label="Best Contact" value={val(room,["bestContact"])}/><Fact label="Owner Role" value={val(room,["ownerRole"])}/></div></section><div style={grid}><Pills title="Pain Types" values={arr(room,["painTypes"])}/><Pills title="Urgency" values={arr(room,["urgency"])}/><Pills title="Blockers" values={arr(room,["blockers"])}/><Pills title="Routing Needs" values={arr(room,["routingNeeds"])}/><Pills title="Solution Lanes" values={arr(room,["solutionLanes"])}/><Pills title="Lean Tools" values={arr(room,["leanTools"])}/><Pills title="Six Sigma Tools" values={arr(room,["sixSigmaTools"])}/><Pills title="AI Fit Reasons" values={fit.reasons}/></div><section style={card}><div style={eyebrow}>Lean Six Sigma Room Notes</div><div style={grid}><Fact label="Current State" value={val(room,["currentState"])}/><Fact label="Desired State" value={val(room,["desiredState"])}/><Fact label="Root Cause" value={val(room,["rootCause"])}/><Fact label="Constraint" value={val(room,["constraint"])}/><Fact label="First Move" value={val(room,["firstMove"])}/><Fact label="Private AI Notes" value={val(room,["privateAiNotes","notes"])}/></div></section></div></main>}
