@@ -249,33 +249,49 @@ function alertRows(): AlertRow[] {
   return [...dealAlerts, ...painAlerts, ...messages].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
 }
 
-function summaryCards(rows: AlertRow[], seen: Record<string, string>) {
-  const lanes = [
+type SummaryCard = {
+  key: AlertType;
+  label: string;
+  href: string;
+  count: number;
+  unread: number;
+  newest: string;
+  pulse: boolean;
+  severity: Severity;
+};
+
+function summaryCards(rows: AlertRow[], seen: Record<string, string>): SummaryCard[] {
+  const lanes: Array<{ key: AlertType; label: string; href: string }> = [
     { key: "deal", label: "New Deals", href: "/deal-rooms" },
     { key: "pain", label: "New Pain", href: "/pain-rooms" },
     { key: "message", label: "Messages", href: "/messages" },
-  ] as const;
+  ];
 
-  return lanes.map((lane) => {
+  return lanes.map((lane): SummaryCard => {
     const laneRows = rows.filter((row) => row.type === lane.key);
     const newest = newestTime(laneRows);
     const seenTime = seen[`lane:${lane.key}`] || "";
     const unread = laneRows.filter((row) => !seen[row.id] || (row.timestamp && row.timestamp > seen[row.id])).length;
     const pulse = Boolean(newest && (!seenTime || newest > seenTime));
 
+    let severity: Severity = "low";
+    if (laneRows.some((row) => row.severity === "critical")) {
+      severity = "critical";
+    } else if (laneRows.some((row) => row.severity === "high")) {
+      severity = "high";
+    } else if (laneRows.length) {
+      severity = "medium";
+    }
+
     return {
-      ...lane,
+      key: lane.key,
+      label: lane.label,
+      href: lane.href,
       count: laneRows.length,
       unread,
       newest,
       pulse,
-      severity: laneRows.some((row) => row.severity === "critical")
-        ? "critical"
-        : laneRows.some((row) => row.severity === "high")
-          ? "high"
-          : laneRows.length
-            ? "medium"
-            : "low",
+      severity,
     };
   });
 }
