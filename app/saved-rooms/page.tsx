@@ -1,14 +1,18 @@
-import VaultForgeRoomFolderPage from "../components/VaultForgeRoomFolderPage";
+import VaultForgeCleanShell from "../components/VaultForgeCleanShell";
+import VaultForgeRoomFolderClient from "../components/VaultForgeRoomFolderClient";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default function SavedRoomsPage() {
   return (
-    <VaultForgeRoomFolderPage
-      status="saved"
-      title="Saved Rooms."
-      subtitle="Rooms saved for follow-up. They stay out of Active until restored."
-    />
+    <VaultForgeCleanShell
+      active="saved"
+      eyebrow="5S FOLDER"
+      title="Saved Rooms"
+      subtitle="Saved rooms are intentionally monitored. Use Archive or Delete when they no longer belong in saved workflow."
+    >
+      <VaultForgeRoomFolderClient folder="saved" />
+    </VaultForgeCleanShell>
   );
 }
