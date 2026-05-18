@@ -3,284 +3,495 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type Message = {
+type RoomType = "deal" | "pain" | "general";
+
+type MessageRow = {
   id: string;
+  threadKey: string;
+  roomType: RoomType;
   roomId: string;
-  roomType: string;
-  roomTitle: string;
   subject: string;
-  fromName: string;
-  fromContact: string;
-  toName: string;
-  toContact: string;
+  senderName: string;
+  senderContact: string;
   body: string;
-  status: "active" | "saved" | "archived" | "deleted";
   createdAt: string;
+  read: boolean;
 };
 
-type RoomLite = { id: string; type: "deal" | "pain"; title: string; owner: string; contact: string; subject: string };
+type ThreadIndex = {
+  threadKey: string;
+  roomType: RoomType;
+  roomId: string;
+  subject: string;
+  lastMessage: string;
+  lastAt: string;
+  count: number;
+  unread: number;
+};
 
-const MESSAGE_KEY = "vaultforge_room_messages_v1";
-const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
-const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_pain_rooms", "vf_pain_rooms"];
+const INDEX_KEY = "vaultforge_room_message_threads_v1";
 
-function readArray(key: string): any[] {
-  if (typeof window === "undefined") return [];
+function makeThreadKey(roomType: string, roomId: string) {
+  const safeType = roomType === "pain" ? "pain" : roomType === "deal" ? "deal" : "general";
+  const safeRoom = String(roomId || "general").trim() || "general";
+  return `${safeType}:${safeRoom}`;
+}
+
+function messagesKey(threadKey: string) {
+  return `vaultforge_room_messages_${threadKey}`;
+}
+
+function parseJson<T>(raw: string | null, fallback: T): T {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function writeMessages(messages: Message[]) {
-  window.localStorage.setItem(MESSAGE_KEY, JSON.stringify(messages));
-  window.dispatchEvent(new Event("vaultforge-messages-change"));
+function readMessages(threadKey: string): MessageRow[] {
+  if (typeof window === "undefined") return [];
+  const parsed = parseJson<unknown>(window.localStorage.getItem(messagesKey(threadKey)), []);
+  return Array.isArray(parsed) ? (parsed as MessageRow[]) : [];
 }
 
-function readMessages(): Message[] {
-  return readArray(MESSAGE_KEY).filter(Boolean) as Message[];
+function writeMessages(threadKey: string, rows: MessageRow[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(messagesKey(threadKey), JSON.stringify(rows));
 }
 
-function safeText(value: any, fallback = "Not listed") {
-  const text = String(value ?? "").trim();
-  return text || fallback;
+function readIndex(): ThreadIndex[] {
+  if (typeof window === "undefined") return [];
+  const parsed = parseJson<unknown>(window.localStorage.getItem(INDEX_KEY), []);
+  return Array.isArray(parsed) ? (parsed as ThreadIndex[]) : [];
 }
 
-function roomId(row: any) {
-  return String(row?.id || row?.roomId || row?.dealId || row?.painId || "");
+function writeIndex(rows: ThreadIndex[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(INDEX_KEY, JSON.stringify(rows));
 }
 
-function uniqueRooms(rows: any[], type: "deal" | "pain"): RoomLite[] {
-  const map = new Map<string, RoomLite>();
-  rows.forEach((row) => {
-    const id = roomId(row);
-    if (!id || map.has(`${type}:${id}`)) return;
-    const title = safeText(row.title || row.name, type === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
-    const owner = safeText(row.contactName || row.ownerName || row.submittedBy, "Owner / Submitter");
-    const contact = safeText(row.contactEmail || row.contactPhone || row.ownerEmail || row.ownerPhone, "VaultForge Message");
-    map.set(`${type}:${id}`, {
-      id,
-      type,
-      title,
-      owner,
-      contact,
-      subject: `${type === "deal" ? "Deal" : "Pain"}: ${title}`,
-    });
-  });
-  return Array.from(map.values());
+function rebuildIndexForThread(threadKey: string, roomType: RoomType, roomId: string, subject: string) {
+  const messages = readMessages(threadKey);
+  const latest = messages[0];
+
+  const existing = readIndex().filter((item) => item.threadKey !== threadKey);
+
+  const next: ThreadIndex = {
+    threadKey,
+    roomType,
+    roomId,
+    subject: subject || latest?.subject || `${roomType.toUpperCase()} Room Message`,
+    lastMessage: latest?.body || "No messages yet.",
+    lastAt: latest?.createdAt || new Date().toISOString(),
+    count: messages.length,
+    unread: messages.filter((item) => !item.read).length,
+  };
+
+  writeIndex([next, ...existing].sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt))));
 }
 
-function readRooms(): RoomLite[] {
-  const deals = DEAL_KEYS.flatMap(readArray);
-  const pains = PAIN_KEYS.flatMap(readArray);
-  return [...uniqueRooms(deals, "deal"), ...uniqueRooms(pains, "pain")];
+function readSearchParams() {
+  if (typeof window === "undefined") {
+    return { roomType: "general" as RoomType, roomId: "", subject: "" };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const rawType = params.get("type") || "";
+  const roomType: RoomType = rawType === "pain" ? "pain" : rawType === "deal" ? "deal" : "general";
+  const roomId = params.get("room") || "";
+  const subject = params.get("subject") || "";
+
+  return { roomType, roomId, subject };
 }
 
-function makeId() {
-  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+function niceDate(value: string) {
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
+function backHref(roomType: RoomType, roomId: string) {
+  if (roomType === "deal" && roomId) return `/deal-rooms/${encodeURIComponent(roomId)}`;
+  if (roomType === "pain" && roomId) return `/pain-rooms/${encodeURIComponent(roomId)}`;
+  return "/command";
 }
 
 export default function MessagesPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [rooms, setRooms] = useState<RoomLite[]>([]);
-  const [selectedRoomKey, setSelectedRoomKey] = useState("");
-  const [fromName, setFromName] = useState("");
-  const [fromContact, setFromContact] = useState("");
+  const [roomType, setRoomType] = useState<RoomType>("general");
+  const [roomId, setRoomId] = useState("");
+  const [subject, setSubject] = useState("");
+  const [threads, setThreads] = useState<ThreadIndex[]>([]);
+  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [senderName, setSenderName] = useState("");
+  const [senderContact, setSenderContact] = useState("");
   const [body, setBody] = useState("");
-  const [toast, setToast] = useState("");
 
-  function refresh() {
-    const nextRooms = readRooms();
-    const params = new URLSearchParams(window.location.search);
-    const roomParam = params.get("room") || "";
-    const typeParam = params.get("type") || "";
-    const subjectParam = params.get("subject") || "";
-    setRooms(nextRooms);
-    setMessages(readMessages());
+  const threadKey = useMemo(() => makeThreadKey(roomType, roomId), [roomType, roomId]);
+  const isRoomThread = roomType !== "general" && !!roomId;
 
-    if (roomParam) {
-      const normalized = roomParam.includes(":") ? roomParam : typeParam ? `${typeParam}:${roomParam}` : roomParam;
-      const found = nextRooms.find((room) => `${room.type}:${room.id}` === normalized || room.id === roomParam);
-      if (found) setSelectedRoomKey(`${found.type}:${found.id}`);
-      else if (subjectParam) {
-        setSelectedRoomKey(`custom:${roomParam}`);
-      }
-    } else if (!selectedRoomKey && nextRooms[0]) {
-      setSelectedRoomKey(`${nextRooms[0].type}:${nextRooms[0].id}`);
+  function load() {
+    const route = readSearchParams();
+    setRoomType(route.roomType);
+    setRoomId(route.roomId);
+    setSubject(route.subject);
+
+    const key = makeThreadKey(route.roomType, route.roomId);
+
+    if (route.roomType !== "general" && route.roomId) {
+      const existingMessages = readMessages(key).map((item) => ({ ...item, read: true }));
+      writeMessages(key, existingMessages);
+      rebuildIndexForThread(key, route.roomType, route.roomId, route.subject);
+      setMessages(existingMessages);
+    } else {
+      setMessages([]);
     }
+
+    setThreads(readIndex());
   }
 
   useEffect(() => {
-    refresh();
-    window.addEventListener("vaultforge-messages-change", refresh);
-    return () => window.removeEventListener("vaultforge-messages-change", refresh);
+    load();
+    window.addEventListener("storage", load);
+    window.addEventListener("vaultforge-message-change", load);
+    return () => {
+      window.removeEventListener("storage", load);
+      window.removeEventListener("vaultforge-message-change", load);
+    };
   }, []);
 
-  const selectedRoom = useMemo(() => {
-    return rooms.find((room) => `${room.type}:${room.id}` === selectedRoomKey) || null;
-  }, [rooms, selectedRoomKey]);
+  function sendMessage() {
+    if (!isRoomThread) return;
 
-  const visibleMessages = useMemo(() => {
-    if (!selectedRoom) return messages.filter((message) => message.status !== "deleted");
-    return messages.filter((message) => message.roomId === selectedRoom.id && message.roomType === selectedRoom.type && message.status !== "deleted");
-  }, [messages, selectedRoom]);
+    const cleanedBody = body.trim();
+    if (!cleanedBody) return;
 
-  const counts = useMemo(() => ({
-    active: messages.filter((m) => m.status === "active").length,
-    saved: messages.filter((m) => m.status === "saved").length,
-    archived: messages.filter((m) => m.status === "archived").length,
-  }), [messages]);
+    const finalSubject = subject || `${roomType === "deal" ? "Deal Room" : "Pain Room"}: ${roomId}`;
 
-  function submitMessage() {
-    if (!selectedRoom) {
-      setToast("Pick a Deal Room or Pain Room first.");
-      return;
-    }
-    if (!body.trim()) {
-      setToast("Add a message before sending.");
-      return;
-    }
-    const next: Message = {
-      id: makeId(),
-      roomId: selectedRoom.id,
-      roomType: selectedRoom.type,
-      roomTitle: selectedRoom.title,
-      subject: selectedRoom.subject,
-      fromName: fromName.trim() || "VaultForge Member",
-      fromContact: fromContact.trim() || "VaultForge Message",
-      toName: selectedRoom.owner,
-      toContact: selectedRoom.contact,
-      body: body.trim(),
-      status: "active",
+    const nextMessage: MessageRow = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      threadKey,
+      roomType,
+      roomId,
+      subject: finalSubject,
+      senderName: senderName.trim() || "VaultForge Member",
+      senderContact: senderContact.trim(),
+      body: cleanedBody,
       createdAt: new Date().toISOString(),
+      read: true,
     };
-    const nextMessages = [next, ...messages];
+
+    const nextMessages = [nextMessage, ...readMessages(threadKey)];
+    writeMessages(threadKey, nextMessages);
+    rebuildIndexForThread(threadKey, roomType, roomId, finalSubject);
+
     setMessages(nextMessages);
-    writeMessages(nextMessages);
+    setThreads(readIndex());
     setBody("");
-    setToast("Message saved to this room thread.");
-    window.setTimeout(() => setToast(""), 2200);
+    window.dispatchEvent(new Event("vaultforge-message-change"));
   }
 
-  function setMessageStatus(id: string, status: Message["status"]) {
-    const next = messages.map((message) => (message.id === id ? { ...message, status } : message));
-    setMessages(next);
-    writeMessages(next);
+  function deleteThread(target: ThreadIndex) {
+    const ok = window.confirm(`Delete message thread "${target.subject}"?`);
+    if (!ok) return;
+
+    window.localStorage.removeItem(messagesKey(target.threadKey));
+    writeIndex(readIndex().filter((item) => item.threadKey !== target.threadKey));
+
+    if (target.threadKey === threadKey) setMessages([]);
+    setThreads(readIndex());
+    window.dispatchEvent(new Event("vaultforge-message-change"));
   }
+
+  const dealThreads = threads.filter((thread) => thread.roomType === "deal");
+  const painThreads = threads.filter((thread) => thread.roomType === "pain");
 
   return (
     <main style={page}>
       <div style={wrap}>
         <nav style={nav}>
-          <Link href="/command" style={navBtn}>Command</Link>
-          <Link href="/deal-rooms" style={navBtn}>Deal Rooms</Link>
-          <Link href="/pain-intake" style={navBtn}>Pain Intake</Link>
-          <Link href="/pain-rooms" style={navBtn}>Pain Rooms</Link>
+          <Link href="/command" style={btn}>Command</Link>
+          <Link href="/deal-rooms" style={btn}>Deal Rooms</Link>
+          <Link href="/pain-rooms" style={btn}>Pain Rooms</Link>
           <Link href="/messages" style={goldBtn}>Messages</Link>
-          <Link href="/profile" style={navBtn}>Profile</Link>
+          <Link href="/profile" style={btn}>Profile</Link>
           <Link href="/" style={redBtn}>Exit</Link>
         </nav>
 
-        {toast ? <div style={toastBox}>{toast}</div> : null}
-
         <section style={card}>
           <div style={eyebrow}>Messages</div>
-          <h1 style={h1}>Room communication command.</h1>
-          <p style={sub}>Every message attaches to a Deal Room or Pain Room. Subject lines match the room, so owner contact, member routing, and room context stay together.</p>
+          <h1 style={h1}>Room-specific communication.</h1>
+          <p style={sub}>
+            Deal Rooms and Pain Rooms keep separate message threads. No single mixed message bucket.
+          </p>
         </section>
 
-        <section style={metricGrid}>
-          <div style={metric}><span>Active</span><strong>{counts.active}</strong></div>
-          <div style={metric}><span>Saved</span><strong>{counts.saved}</strong></div>
-          <div style={metric}><span>Archived</span><strong>{counts.archived}</strong></div>
-          <div style={metric}><span>Rooms</span><strong>{rooms.length}</strong></div>
-        </section>
+        {isRoomThread ? (
+          <>
+            <section style={card}>
+              <div style={eyebrow}>{roomType === "deal" ? "Deal Room Thread" : "Pain Room Thread"}</div>
+              <h2 style={h2}>{subject || `${roomType === "deal" ? "Deal Room" : "Pain Room"} message`}</h2>
+              <p style={sub}>Room ID: {roomId}</p>
+              <div style={actionRow}>
+                <Link href={backHref(roomType, roomId)} style={goldBtn}>Back To Room</Link>
+                <Link href="/messages" style={btn}>All Threads</Link>
+              </div>
+            </section>
 
-        <section style={twoCol}>
-          <div style={card}>
-            <div style={eyebrow}>Room Threads</div>
-            <h2 style={h2}>Pick a room.</h2>
-            {!rooms.length ? <p style={sub}>No Deal Rooms or Pain Rooms found yet.</p> : null}
-            <div style={{ display: "grid", gap: 10 }}>
-              {rooms.map((room) => {
-                const key = `${room.type}:${room.id}`;
-                const count = messages.filter((m) => m.roomId === room.id && m.roomType === room.type && m.status !== "deleted").length;
-                return (
-                  <button key={key} type="button" onClick={() => setSelectedRoomKey(key)} style={selectedRoomKey === key ? roomBtnActive : roomBtn}>
-                    <strong>{room.title}</strong>
-                    <span>{room.type.toUpperCase()} • {room.owner} • {count} messages</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            <section style={card}>
+              <div style={eyebrow}>Send Message</div>
+              <div style={formGrid}>
+                <input style={input} value={senderName} onChange={(event) => setSenderName(event.target.value)} placeholder="Your name / company" />
+                <input style={input} value={senderContact} onChange={(event) => setSenderContact(event.target.value)} placeholder="Phone / email / best contact" />
+              </div>
+              <textarea style={textarea} value={body} onChange={(event) => setBody(event.target.value)} placeholder={`Message about: ${subject || roomId}`} />
+              <button type="button" onClick={sendMessage} style={goldBtn}>Send Room Message</button>
+            </section>
 
-          <div style={card}>
-            <div style={eyebrow}>Compose</div>
-            <h2 style={h2}>Message owner.</h2>
-            <div style={subjectBox}>
-              <strong>Subject:</strong> {selectedRoom ? selectedRoom.subject : "Pick a room"}<br />
-              <strong>To:</strong> {selectedRoom ? `${selectedRoom.owner} • ${selectedRoom.contact}` : "No room selected"}
-            </div>
-            <div style={formGrid}>
-              <input style={input} value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="Your name / company" />
-              <input style={input} value={fromContact} onChange={(e) => setFromContact(e.target.value)} placeholder="Your phone / email" />
-            </div>
-            <textarea style={textarea} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write message tied to this room..." />
-            <button type="button" style={goldButton} onClick={submitMessage}>Send / Save Room Message</button>
-          </div>
-        </section>
+            <section style={card}>
+              <div style={eyebrow}>This Room Thread</div>
+              {!messages.length ? <p style={sub}>No messages in this room yet.</p> : null}
+              <div style={threadList}>
+                {messages.map((message) => (
+                  <article key={message.id} style={messageCard}>
+                    <div style={messageTop}>
+                      <strong>{message.senderName}</strong>
+                      <span>{niceDate(message.createdAt)}</span>
+                    </div>
+                    {message.senderContact ? <p style={muted}>{message.senderContact}</p> : null}
+                    <p style={messageBody}>{message.body}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </>
+        ) : (
+          <>
+            <section style={card}>
+              <div style={eyebrow}>Deal Message Threads</div>
+              {!dealThreads.length ? <p style={sub}>No Deal Room messages yet. Open a Deal Room and click Message Owner.</p> : null}
+              <div style={threadList}>
+                {dealThreads.map((thread) => (
+                  <ThreadCard key={thread.threadKey} thread={thread} onDelete={() => deleteThread(thread)} />
+                ))}
+              </div>
+            </section>
 
-        <section style={card}>
-          <div style={eyebrow}>Thread</div>
-          <h2 style={h2}>{selectedRoom ? selectedRoom.title : "All messages"}</h2>
-          <div style={{ display: "grid", gap: 14 }}>
-            {!visibleMessages.length ? <p style={sub}>No messages in this room yet.</p> : null}
-            {visibleMessages.map((message) => (
-              <article key={message.id} style={messageCard}>
-                <div style={eyebrow}>{message.subject}</div>
-                <p style={sub}>{message.body}</p>
-                <div style={small}>From: {message.fromName} • {message.fromContact}</div>
-                <div style={small}>To: {message.toName} • {message.toContact}</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-                  <button type="button" style={miniBtn} onClick={() => setMessageStatus(message.id, "saved")}>Save</button>
-                  <button type="button" style={miniBtn} onClick={() => setMessageStatus(message.id, "archived")}>Archive</button>
-                  <button type="button" style={miniRed} onClick={() => setMessageStatus(message.id, "deleted")}>Delete</button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+            <section style={card}>
+              <div style={eyebrow}>Pain Message Threads</div>
+              {!painThreads.length ? <p style={sub}>No Pain Room messages yet. Open a Pain Room and click Message Owner.</p> : null}
+              <div style={threadList}>
+                {painThreads.map((thread) => (
+                  <ThreadCard key={thread.threadKey} thread={thread} onDelete={() => deleteThread(thread)} />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </main>
   );
 }
 
-const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
-const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto", paddingBottom: 70 };
-const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 };
-const navBtn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block" };
-const goldBtn: React.CSSProperties = { ...navBtn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...navBtn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 28, marginBottom: 22 };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 8, fontWeight: 900, fontSize: 16, marginBottom: 14 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,72px)", lineHeight: .92, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,48px)", lineHeight: .96, letterSpacing: -2, margin: "0 0 18px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
-const metricGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 14, marginBottom: 22 };
-const metric: React.CSSProperties = { ...card, marginBottom: 0, padding: 20 };
-const twoCol: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))", gap: 22 };
-const roomBtn: React.CSSProperties = { textAlign: "left", border: "1px solid rgba(207,216,230,.18)", background: "#121724", color: "#f7f7fb", borderRadius: 18, padding: 16, cursor: "pointer" };
-const roomBtnActive: React.CSSProperties = { ...roomBtn, borderColor: "#ffdc68", boxShadow: "0 0 0 1px rgba(255,220,104,.4)" };
-const subjectBox: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", background: "rgba(255,220,104,.06)", borderRadius: 18, padding: 16, color: "#dce4ef", lineHeight: 1.5, marginBottom: 16 };
-const formGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 };
-const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", borderRadius: 16, border: "1px solid rgba(207,216,230,.18)", background: "#121724", color: "#f6f7fb", padding: "15px 16px", fontSize: 16, outline: "none" };
-const textarea: React.CSSProperties = { ...input, minHeight: 160, marginTop: 12, resize: "vertical" };
-const goldButton: React.CSSProperties = { border: 0, background: "#ffdc68", color: "#10131a", borderRadius: 999, padding: "15px 22px", fontWeight: 950, cursor: "pointer", marginTop: 14 };
-const messageCard: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#101622", borderRadius: 22, padding: 20 };
-const miniBtn: React.CSSProperties = { ...navBtn, padding: "10px 14px", cursor: "pointer" };
-const miniRed: React.CSSProperties = { ...redBtn, padding: "10px 14px", cursor: "pointer" };
-const small: React.CSSProperties = { color: "#9ca8ba", fontSize: 14, marginTop: 6 };
-const toastBox: React.CSSProperties = { position: "fixed", top: 18, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "#102818", color: "#fff", border: "1px solid rgba(101,255,151,.5)", borderRadius: 18, padding: "14px 18px", boxShadow: "0 18px 70px rgba(0,0,0,.55)", fontWeight: 900 };
+function ThreadCard({ thread, onDelete }: { thread: ThreadIndex; onDelete: () => void }) {
+  const href = `/messages?type=${encodeURIComponent(thread.roomType)}&room=${encodeURIComponent(thread.roomId)}&subject=${encodeURIComponent(thread.subject)}`;
+
+  return (
+    <article style={threadCard}>
+      <div>
+        <div style={miniEyebrow}>{thread.roomType === "deal" ? "Deal Thread" : "Pain Thread"}</div>
+        <h3 style={threadTitle}>{thread.subject}</h3>
+        <p style={muted}>Room ID: {thread.roomId}</p>
+        <p style={threadPreview}>{thread.lastMessage}</p>
+        <p style={muted}>{thread.count} messages • {thread.unread} unread • {niceDate(thread.lastAt)}</p>
+      </div>
+      <div style={actionRow}>
+        <Link href={href} style={goldBtn}>Open Thread</Link>
+        <button type="button" onClick={onDelete} style={redBtn}>Delete</button>
+      </div>
+    </article>
+  );
+}
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "#05070d",
+  color: "#f7f7fb",
+  padding: 18,
+  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+};
+
+const wrap: React.CSSProperties = {
+  maxWidth: 1180,
+  margin: "0 auto",
+  paddingBottom: 70,
+};
+
+const nav: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  marginBottom: 18,
+};
+
+const card: React.CSSProperties = {
+  background: "linear-gradient(180deg,#080d19,#050816)",
+  border: "1px solid rgba(245,197,66,.28)",
+  borderRadius: 26,
+  padding: 28,
+  marginBottom: 22,
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#ffd45a",
+  textTransform: "uppercase",
+  letterSpacing: 8,
+  fontWeight: 900,
+  fontSize: 19,
+  marginBottom: 14,
+};
+
+const miniEyebrow: React.CSSProperties = {
+  color: "#ffd45a",
+  textTransform: "uppercase",
+  letterSpacing: 5,
+  fontWeight: 900,
+  fontSize: 13,
+  marginBottom: 10,
+};
+
+const h1: React.CSSProperties = {
+  fontSize: "clamp(42px,7vw,76px)",
+  lineHeight: 0.92,
+  letterSpacing: -4,
+  margin: "0 0 18px",
+  fontWeight: 950,
+};
+
+const h2: React.CSSProperties = {
+  fontSize: "clamp(30px,5vw,52px)",
+  lineHeight: 1,
+  letterSpacing: -2,
+  margin: "0 0 12px",
+  fontWeight: 950,
+};
+
+const sub: React.CSSProperties = {
+  color: "#c9d0dc",
+  fontSize: 22,
+  lineHeight: 1.35,
+  margin: 0,
+};
+
+const btn: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "#171c29",
+  color: "#f7f7fb",
+  borderRadius: 999,
+  padding: "13px 18px",
+  fontWeight: 950,
+  textDecoration: "none",
+  display: "inline-block",
+  cursor: "pointer",
+};
+
+const goldBtn: React.CSSProperties = {
+  ...btn,
+  border: 0,
+  background: "#ffdc68",
+  color: "#10131a",
+};
+
+const redBtn: React.CSSProperties = {
+  ...btn,
+  background: "#271016",
+  borderColor: "rgba(255,70,70,.48)",
+  color: "#ffaaaa",
+};
+
+const actionRow: React.CSSProperties = {
+  display: "flex",
+  gap: 12,
+  flexWrap: "wrap",
+  marginTop: 16,
+};
+
+const formGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: 14,
+  marginBottom: 14,
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 18,
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "#121724",
+  color: "#f6f7fb",
+  padding: "17px 18px",
+  fontSize: 16,
+  outline: "none",
+};
+
+const textarea: React.CSSProperties = {
+  ...input,
+  minHeight: 140,
+  resize: "vertical",
+  marginBottom: 14,
+};
+
+const threadList: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+};
+
+const threadCard: React.CSSProperties = {
+  background: "#121724",
+  border: "1px solid rgba(207,216,230,.14)",
+  borderRadius: 22,
+  padding: 22,
+};
+
+const messageCard: React.CSSProperties = {
+  background: "#121724",
+  border: "1px solid rgba(207,216,230,.14)",
+  borderRadius: 22,
+  padding: 22,
+};
+
+const messageTop: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+  color: "#f7f7fb",
+};
+
+const threadTitle: React.CSSProperties = {
+  fontSize: 28,
+  margin: "0 0 10px",
+};
+
+const threadPreview: React.CSSProperties = {
+  color: "#e7edf7",
+  fontSize: 18,
+  lineHeight: 1.35,
+  margin: "10px 0",
+};
+
+const muted: React.CSSProperties = {
+  color: "#aeb7c7",
+  margin: "6px 0",
+};
+
+const messageBody: React.CSSProperties = {
+  color: "#f7f7fb",
+  fontSize: 20,
+  lineHeight: 1.4,
+  margin: "12px 0 0",
+};
