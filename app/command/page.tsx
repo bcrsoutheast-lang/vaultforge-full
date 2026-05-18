@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type RoomState = "active" | "saved" | "archived" | "deleted";
 type RoomKind = "deal" | "pain";
@@ -96,7 +96,6 @@ function readArray(key: string): RoomRecord[] {
 
 function readStates(): Record<string, RoomState> {
   if (!hasBrowser()) return {};
-
   const merged: Record<string, RoomState> = {};
 
   for (const key of ROOM_STATE_KEYS) {
@@ -136,9 +135,7 @@ function readRooms(kind: RoomKind): RoomRecord[] {
   for (const key of keysFor(kind)) {
     for (const room of readArray(key)) {
       const id = roomId(room);
-      if (id && !map.has(id)) {
-        map.set(id, { ...room, id });
-      }
+      if (id && !map.has(id)) map.set(id, { ...room, id });
     }
   }
 
@@ -165,9 +162,7 @@ function readRooms(kind: RoomKind): RoomRecord[] {
     );
 
     const id = roomId(room);
-    if (room && id && !map.has(id)) {
-      map.set(id, { ...room, id });
-    }
+    if (room && id && !map.has(id)) map.set(id, { ...room, id });
   }
 
   return Array.from(map.values()).map((room) => ({
@@ -195,14 +190,13 @@ function hrefFor(kind: RoomKind, room: RoomRecord) {
 }
 
 function readMessageRows(key: string): MessageRow[] {
+  if (!hasBrowser()) return [];
   const parsed = parseJson<unknown>(window.localStorage.getItem(key), []);
   return Array.isArray(parsed) ? (parsed as MessageRow[]) : [];
 }
 
 function messageStats(kind: RoomKind): MessageStats {
-  if (!hasBrowser()) {
-    return { threads: 0, messages: 0, unread: 0, newest: "" };
-  }
+  if (!hasBrowser()) return { threads: 0, messages: 0, unread: 0, newest: "" };
 
   let threads = 0;
   let messages = 0;
@@ -222,32 +216,11 @@ function messageStats(kind: RoomKind): MessageStats {
 
     for (const row of rows) {
       const createdAt = cleanText(row.createdAt, "");
-      if (createdAt && (!newest || createdAt > newest)) {
-        newest = createdAt;
-      }
+      if (createdAt && (!newest || createdAt > newest)) newest = createdAt;
     }
   }
 
   return { threads, messages, unread, newest };
-}
-
-function timeAgo(value: string) {
-  if (!value) return "no activity";
-
-  try {
-    const diff = Date.now() - new Date(value).getTime();
-    const minutes = Math.max(0, Math.floor(diff / 60000));
-
-    if (minutes < 1) return "just now";
-    if (minutes < 60) return `${minutes}m ago`;
-
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-
-    return `${Math.floor(hours / 24)}d ago`;
-  } catch {
-    return value;
-  }
 }
 
 function newestRoomTime(rooms: RoomRecord[]) {
@@ -257,6 +230,21 @@ function newestRoomTime(rooms: RoomRecord[]) {
     .sort();
 
   return times[times.length - 1] || "";
+}
+
+function timeAgo(value: string) {
+  if (!value) return "no activity";
+  try {
+    const diff = Date.now() - new Date(value).getTime();
+    const minutes = Math.max(0, Math.floor(diff / 60000));
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  } catch {
+    return value;
+  }
 }
 
 export default function CommandPage() {
@@ -314,10 +302,10 @@ export default function CommandPage() {
   const painDeleted = pains.filter((room) => getRoomState(room, "pain") === "deleted");
 
   const liveTicker = [
-    ...dealActive.slice(0, 4).map((room) => `New Deal: ${titleFor(room, "deal")} • ${locationFor(room)}`),
-    ...painActive.slice(0, 4).map((room) => `New Pain: ${titleFor(room, "pain")} • ${locationFor(room)}`),
-    dealMessages.unread ? `Deal Messages: ${dealMessages.unread} unread` : "",
-    painMessages.unread ? `Pain Messages: ${painMessages.unread} unread` : "",
+    ...dealActive.slice(0, 5).map((room) => `NEW DEAL: ${titleFor(room, "deal")} • ${locationFor(room)}`),
+    ...painActive.slice(0, 5).map((room) => `NEW PAIN: ${titleFor(room, "pain")} • ${locationFor(room)}`),
+    dealMessages.unread ? `DEAL MESSAGES: ${dealMessages.unread} unread` : "",
+    painMessages.unread ? `PAIN MESSAGES: ${painMessages.unread} unread` : "",
   ].filter(Boolean);
 
   return (
@@ -325,12 +313,12 @@ export default function CommandPage() {
       <style>{`
         @keyframes vfPulse {
           0% { box-shadow: 0 0 0 0 rgba(255, 70, 70, .45); transform: translateY(0); }
-          70% { box-shadow: 0 0 0 12px rgba(255, 70, 70, 0); transform: translateY(-1px); }
+          70% { box-shadow: 0 0 0 13px rgba(255, 70, 70, 0); transform: translateY(-1px); }
           100% { box-shadow: 0 0 0 0 rgba(255, 70, 70, 0); transform: translateY(0); }
         }
         @keyframes vfGoldPulse {
-          0% { box-shadow: 0 0 0 0 rgba(255, 220, 104, .38); transform: translateY(0); }
-          70% { box-shadow: 0 0 0 12px rgba(255, 220, 104, 0); transform: translateY(-1px); }
+          0% { box-shadow: 0 0 0 0 rgba(255, 220, 104, .40); transform: translateY(0); }
+          70% { box-shadow: 0 0 0 13px rgba(255, 220, 104, 0); transform: translateY(-1px); }
           100% { box-shadow: 0 0 0 0 rgba(255, 220, 104, 0); transform: translateY(0); }
         }
         @keyframes vfTicker {
@@ -353,16 +341,26 @@ export default function CommandPage() {
         </nav>
 
         <section style={hero}>
-          <div style={eyebrow}>Command Center</div>
-          <h1 style={h1}>Live intelligence first.</h1>
-          <p style={sub}>
-            Active work stays on the desk. Saved, archived, and deleted rooms move into clean separate Deal and Pain folders.
-          </p>
+          <div>
+            <div style={eyebrow}>Command Center</div>
+            <h1 style={h1}>Live intelligence first.</h1>
+            <p style={sub}>
+              Active rooms pulse on the desk. Saved, archived, and deleted rooms move into separate Deal and Pain folders.
+            </p>
+          </div>
         </section>
 
-        <section style={card}>
-          <div style={eyebrow}>VaultForge Alert Desk</div>
-          <h2 style={h2}>Active work only.</h2>
+        <section style={alertShell}>
+          <div style={alertHeader}>
+            <div>
+              <div style={eyebrow}>Live Alert Engine</div>
+              <h2 style={h2}>Clean VaultForge Alert Desk.</h2>
+              <p style={sub}>
+                Active work only. Deal, Pain, and Message lanes stay separated.
+              </p>
+            </div>
+            <div style={livePill}>LIVE</div>
+          </div>
 
           <div style={summaryGrid}>
             <LiveCard
@@ -384,7 +382,7 @@ export default function CommandPage() {
             <LiveCard
               title="Deal Messages"
               count={dealMessages.unread}
-              detail={`${dealMessages.messages} messages • ${dealMessages.threads} room threads`}
+              detail={`${dealMessages.messages} messages • ${dealMessages.threads} threads`}
               href="/messages?lane=deal"
               pulse={dealMessages.unread > 0}
               tone="gold"
@@ -392,7 +390,7 @@ export default function CommandPage() {
             <LiveCard
               title="Pain Messages"
               count={painMessages.unread}
-              detail={`${painMessages.messages} messages • ${painMessages.threads} room threads`}
+              detail={`${painMessages.messages} messages • ${painMessages.threads} threads`}
               href="/messages?lane=pain"
               pulse={painMessages.unread > 0}
               tone="gold"
@@ -410,59 +408,45 @@ export default function CommandPage() {
           ) : null}
         </section>
 
-        <section style={card}>
+        <section style={folderShell}>
           <div style={eyebrow}>5S Room Folders</div>
-          <h2 style={h2}>Deal folders and Pain folders stay separate.</h2>
+          <h2 style={h2}>Six clean folders.</h2>
+          <p style={{ ...sub, marginBottom: 20 }}>
+            Deal folders and Pain folders do not merge. Click any card to open that lane.
+          </p>
 
-          <div style={folderGrid}>
-            <FolderCard
-              title="Saved Deals"
-              count={dealSaved.length}
-              href="/saved-rooms?type=deal"
-              kind="deal"
-              state="saved"
-            />
-            <FolderCard
-              title="Archived Deals"
-              count={dealArchived.length}
-              href="/archived-rooms?type=deal"
-              kind="deal"
-              state="archived"
-            />
-            <FolderCard
-              title="Deleted Deals"
-              count={dealDeleted.length}
-              href="/deleted-rooms?type=deal"
-              kind="deal"
-              state="deleted"
-            />
-            <FolderCard
-              title="Saved Pain"
-              count={painSaved.length}
-              href="/saved-rooms?type=pain"
-              kind="pain"
-              state="saved"
-            />
-            <FolderCard
-              title="Archived Pain"
-              count={painArchived.length}
-              href="/archived-rooms?type=pain"
-              kind="pain"
-              state="archived"
-            />
-            <FolderCard
-              title="Deleted Pain"
-              count={painDeleted.length}
-              href="/deleted-rooms?type=pain"
-              kind="pain"
-              state="deleted"
-            />
+          <div style={sixGrid}>
+            <FolderCard title="Saved Deals" count={dealSaved.length} href="/saved-rooms?type=deal" kind="deal" state="saved" />
+            <FolderCard title="Archived Deals" count={dealArchived.length} href="/archived-rooms?type=deal" kind="deal" state="archived" />
+            <FolderCard title="Deleted Deals" count={dealDeleted.length} href="/deleted-rooms?type=deal" kind="deal" state="deleted" />
+            <FolderCard title="Saved Pain" count={painSaved.length} href="/saved-rooms?type=pain" kind="pain" state="saved" />
+            <FolderCard title="Archived Pain" count={painArchived.length} href="/archived-rooms?type=pain" kind="pain" state="archived" />
+            <FolderCard title="Deleted Pain" count={painDeleted.length} href="/deleted-rooms?type=pain" kind="pain" state="deleted" />
           </div>
         </section>
 
-        <section style={twoGrid}>
-          <ActiveLane title="Active Deal Alerts" kind="deal" rooms={dealActive.slice(0, 5)} />
-          <ActiveLane title="Active Pain Alerts" kind="pain" rooms={painActive.slice(0, 5)} />
+        <section style={workGrid}>
+          <AlertLane
+            title="Active Deal Alerts"
+            kind="deal"
+            rooms={dealActive.slice(0, 6)}
+          />
+          <ExecutionLane
+            dealRooms={dealActive.slice(0, 4)}
+            painRooms={painActive.slice(0, 4)}
+          />
+        </section>
+
+        <section style={workGrid}>
+          <AlertLane
+            title="Active Pain Alerts"
+            kind="pain"
+            rooms={painActive.slice(0, 6)}
+          />
+          <MessageLane
+            dealMessages={dealMessages}
+            painMessages={painMessages}
+          />
         </section>
       </div>
     </main>
@@ -519,12 +503,12 @@ function FolderCard({
       <p style={muted}>
         {kind === "deal" ? "Deal" : "Pain"} rooms marked {state}.
       </p>
-      <span style={goldBtn}>Open Folder</span>
+      <span style={miniGold}>Open Folder</span>
     </Link>
   );
 }
 
-function ActiveLane({
+function AlertLane({
   title,
   kind,
   rooms,
@@ -534,8 +518,9 @@ function ActiveLane({
   rooms: RoomRecord[];
 }) {
   return (
-    <section style={card}>
+    <section style={panel}>
       <div style={eyebrow}>{title}</div>
+      <p style={smallCopy}>Newest active {kind === "deal" ? "deal" : "pain"} rooms only. Foldered rooms stay out.</p>
 
       {!rooms.length ? (
         <p style={sub}>No active {kind === "deal" ? "deal" : "pain"} alerts.</p>
@@ -543,12 +528,91 @@ function ActiveLane({
 
       <div style={stack}>
         {rooms.map((room) => (
-          <Link key={`${kind}-${roomId(room)}`} href={hrefFor(kind, room)} style={miniRoomCard}>
-            <div style={smallEyebrow}>{kind === "deal" ? "New Deal" : "New Pain"}</div>
-            <h3 style={roomTitle}>{titleFor(room, kind)}</h3>
-            <p style={muted}>{locationFor(room)}</p>
+          <Link key={`${kind}-${roomId(room)}`} href={hrefFor(kind, room)} style={alertCard}>
+            <span style={dot} />
+            <div>
+              <div style={smallEyebrow}>{kind === "deal" ? "New Deal" : "New Pain"}</div>
+              <h3 style={roomTitle}>{titleFor(room, kind)}</h3>
+              <p style={muted}>{locationFor(room)}</p>
+            </div>
           </Link>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function ExecutionLane({
+  dealRooms,
+  painRooms,
+}: {
+  dealRooms: RoomRecord[];
+  painRooms: RoomRecord[];
+}) {
+  const rows = [
+    ...dealRooms.map((room) => ({ kind: "deal" as RoomKind, room })),
+    ...painRooms.map((room) => ({ kind: "pain" as RoomKind, room })),
+  ].slice(0, 6);
+
+  return (
+    <section style={panel}>
+      <div style={eyebrow}>Execution Tickets</div>
+      <p style={smallCopy}>Only active rooms create tickets.</p>
+
+      {!rows.length ? <p style={sub}>No active execution tickets.</p> : null}
+
+      <div style={stack}>
+        {rows.map(({ kind, room }) => (
+          <Link key={`ticket-${kind}-${roomId(room)}`} href={hrefFor(kind, room)} style={ticketCard}>
+            <div style={ticketTop}>
+              <span>HIGH</span>
+              <span>{kind.toUpperCase()}</span>
+            </div>
+            <h3 style={ticketTitle}>{titleFor(room, kind)}</h3>
+            <p style={muted}>Open room, verify facts, route to profile, move to messages.</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MessageLane({
+  dealMessages,
+  painMessages,
+}: {
+  dealMessages: MessageStats;
+  painMessages: MessageStats;
+}) {
+  return (
+    <section style={panel}>
+      <div style={eyebrow}>Message Alerts</div>
+      <p style={smallCopy}>Deal threads and Pain threads stay separate.</p>
+
+      <div style={stack}>
+        <Link
+          href="/messages?lane=deal"
+          style={{
+            ...messageCard,
+            ...(dealMessages.unread > 0 ? goldPulse : {}),
+          }}
+        >
+          <div style={smallEyebrow}>Deal Messages</div>
+          <h3 style={roomTitle}>{dealMessages.unread} unread</h3>
+          <p style={muted}>{dealMessages.messages} messages • {dealMessages.threads} threads</p>
+        </Link>
+
+        <Link
+          href="/messages?lane=pain"
+          style={{
+            ...messageCard,
+            ...(painMessages.unread > 0 ? goldPulse : {}),
+          }}
+        >
+          <div style={smallEyebrow}>Pain Messages</div>
+          <h3 style={roomTitle}>{painMessages.unread} unread</h3>
+          <p style={muted}>{painMessages.messages} messages • {painMessages.threads} threads</p>
+        </Link>
       </div>
     </section>
   );
@@ -565,7 +629,7 @@ const page: React.CSSProperties = {
 const wrap: React.CSSProperties = {
   maxWidth: 1280,
   margin: "0 auto",
-  paddingBottom: 80,
+  paddingBottom: 90,
 };
 
 const nav: React.CSSProperties = {
@@ -618,20 +682,44 @@ const hero: React.CSSProperties = {
     "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)",
 };
 
-const card: React.CSSProperties = {
-  background: "linear-gradient(180deg,#080d19,#050816)",
+const alertShell: React.CSSProperties = {
   border: "1px solid rgba(245,197,66,.28)",
+  borderRadius: 28,
+  padding: 26,
+  marginBottom: 20,
+  background:
+    "radial-gradient(circle at top right, rgba(227,19,33,.16), transparent 34%), linear-gradient(135deg, rgba(9,14,26,.98), rgba(8,6,10,.98))",
+};
+
+const alertHeader: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 20,
+  alignItems: "center",
+  marginBottom: 18,
+};
+
+const folderShell: React.CSSProperties = {
+  border: "1px solid rgba(245,197,66,.28)",
+  borderRadius: 28,
+  padding: 26,
+  marginBottom: 20,
+  background: "linear-gradient(180deg,#080d19,#050816)",
+};
+
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(245,197,66,.24)",
   borderRadius: 26,
-  padding: 28,
-  marginBottom: 22,
+  padding: 24,
+  background: "linear-gradient(180deg,#080d19,#050816)",
 };
 
 const eyebrow: React.CSSProperties = {
   color: "#ffd45a",
   textTransform: "uppercase",
-  letterSpacing: 8,
+  letterSpacing: 7,
   fontWeight: 950,
-  fontSize: 17,
+  fontSize: 15,
   marginBottom: 12,
 };
 
@@ -641,7 +729,7 @@ const smallEyebrow: React.CSSProperties = {
   letterSpacing: 5,
   fontWeight: 950,
   fontSize: 13,
-  marginBottom: 12,
+  marginBottom: 10,
 };
 
 const h1: React.CSSProperties = {
@@ -656,34 +744,50 @@ const h2: React.CSSProperties = {
   fontSize: "clamp(32px,5vw,54px)",
   lineHeight: 0.95,
   letterSpacing: -2,
-  margin: "0 0 20px",
+  margin: "0 0 12px",
   fontWeight: 950,
 };
 
 const sub: React.CSSProperties = {
   color: "#c9d0dc",
-  fontSize: 22,
+  fontSize: 21,
   lineHeight: 1.35,
   margin: 0,
 };
 
+const smallCopy: React.CSSProperties = {
+  color: "#9ca8ba",
+  fontSize: 15,
+  lineHeight: 1.35,
+  margin: "0 0 16px",
+};
+
+const livePill: React.CSSProperties = {
+  background: "#e31321",
+  color: "white",
+  borderRadius: 999,
+  padding: "13px 16px",
+  fontWeight: 950,
+  boxShadow: "0 0 24px rgba(227,19,33,.55)",
+};
+
 const summaryGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 16,
-  marginBottom: 18,
-};
-
-const folderGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(215px, 1fr))",
   gap: 16,
 };
 
-const twoGrid: React.CSSProperties = {
+const sixGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(225px, 1fr))",
+  gap: 16,
+};
+
+const workGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0,1.25fr) minmax(320px,.75fr)",
   gap: 18,
+  marginBottom: 20,
 };
 
 const liveCard: React.CSSProperties = {
@@ -729,7 +833,7 @@ const tickerShell: React.CSSProperties = {
 
 const tickerTrack: React.CSSProperties = {
   display: "flex",
-  gap: 24,
+  gap: 26,
   width: "max-content",
   animation: "vfTicker 35s linear infinite",
 };
@@ -738,7 +842,7 @@ const tickerItem: React.CSSProperties = {
   whiteSpace: "nowrap",
   color: "#ffd45a",
   fontSize: 14,
-  fontWeight: 850,
+  fontWeight: 900,
 };
 
 const folderCard: React.CSSProperties = {
@@ -756,23 +860,76 @@ const folderNumber: React.CSSProperties = {
   margin: "0 0 10px",
 };
 
+const miniGold: React.CSSProperties = {
+  ...goldBtn,
+  padding: "10px 14px",
+  display: "inline-block",
+  marginTop: 14,
+};
+
 const stack: React.CSSProperties = {
   display: "grid",
   gap: 14,
 };
 
-const miniRoomCard: React.CSSProperties = {
+const alertCard: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "18px 1fr",
+  gap: 12,
   background: "#121724",
   border: "1px solid rgba(207,216,230,.16)",
   borderRadius: 22,
-  padding: 22,
+  padding: 20,
+  color: "#f7f7fb",
+  textDecoration: "none",
+};
+
+const dot: React.CSSProperties = {
+  width: 12,
+  height: 12,
+  borderRadius: 999,
+  background: "#ff4d4d",
+  boxShadow: "0 0 18px rgba(255,70,70,.8)",
+  marginTop: 8,
+};
+
+const messageCard: React.CSSProperties = {
+  background: "#121724",
+  border: "1px solid rgba(207,216,230,.16)",
+  borderRadius: 22,
+  padding: 20,
   color: "#f7f7fb",
   textDecoration: "none",
   display: "block",
 };
 
+const ticketCard: React.CSSProperties = {
+  background: "rgba(55,10,20,.35)",
+  border: "1px solid rgba(255,80,80,.24)",
+  borderRadius: 20,
+  padding: 18,
+  color: "#f7f7fb",
+  textDecoration: "none",
+};
+
+const ticketTop: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  color: "#ffb4b4",
+  letterSpacing: 3,
+  fontSize: 12,
+  fontWeight: 900,
+  marginBottom: 10,
+};
+
+const ticketTitle: React.CSSProperties = {
+  fontSize: 24,
+  margin: "0 0 6px",
+};
+
 const roomTitle: React.CSSProperties = {
-  fontSize: 30,
+  fontSize: 28,
   lineHeight: 1,
   margin: "0 0 8px",
 };
+
