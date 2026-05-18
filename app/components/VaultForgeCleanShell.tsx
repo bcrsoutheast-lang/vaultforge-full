@@ -8,7 +8,8 @@ type Active =
   | "messages"
   | "saved"
   | "archived"
-  | "deleted";
+  | "deleted"
+  | "profile";
 
 type Props = {
   active: Active;
@@ -24,6 +25,7 @@ const nav: Array<{ key: Active; label: string; href: string }> = [
   { key: "pain-intake", label: "Pain Intake", href: "/pain-intake" },
   { key: "pain-rooms", label: "Pain Rooms", href: "/pain-rooms" },
   { key: "messages", label: "Messages", href: "/messages" },
+  { key: "profile", label: "Profile", href: "/profile" },
   { key: "saved", label: "Saved", href: "/saved-rooms" },
   { key: "archived", label: "Archived", href: "/archived-rooms" },
   { key: "deleted", label: "Deleted", href: "/deleted-rooms" },
