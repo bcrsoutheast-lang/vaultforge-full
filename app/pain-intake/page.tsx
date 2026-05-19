@@ -9,6 +9,7 @@ type Room = {
   id?: string;
   roomId?: string;
   title?: string;
+  name?: string;
   state?: string;
   city?: string;
   county?: string;
@@ -100,10 +101,16 @@ type Room = {
   alertRead?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  coverPhoto?: string;
   photoUrls?: string[];
   photos?: string[];
+  photoUrl?: string;
+  imageUrl?: string;
+  photoSaveWarning?: string;
+  photoCount?: number;
   notes?: string;
   analyzer?: string;
+  aiRead?: string;
   [key:string]: unknown;
 };
 
@@ -111,23 +118,29 @@ const STATES = ["GA","TN","AL","FL","NC","SC","TX"];
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms","vaultforge_deal_rooms","vaultforge_rooms_deals","vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1","vaultforge_clean_pain_rooms","vaultforge_pain_rooms","vaultforge_rooms_pain","vf_pain_rooms"];
 const STATE_KEYS = ["vaultforge_clean_room_states","vaultforge_room_states","vaultforge_deal_room_states","vaultforge_pain_room_states","vaultforge_5s_room_states"];
+const READ_KEY = "vaultforge_room_alert_read_v1";
 
 function ok(){ return typeof window !== "undefined" && typeof window.localStorage !== "undefined"; }
 function j<T>(raw:string|null,fb:T):T{ try{return raw?JSON.parse(raw) as T:fb}catch{return fb} }
 function txt(v:unknown,fb=""){ const s=String(v||"").trim(); return s||fb; }
 function list(v:unknown):string[]{ if(Array.isArray(v)) return v.map(x=>String(x).trim()).filter(Boolean); if(typeof v==="string"&&v.trim()) return v.split(",").map(x=>x.trim()).filter(Boolean); return []; }
 function rid(r:Room|null|undefined){ return txt(r?.id||r?.roomId); }
+function titleFor(r:Room|null|undefined,kind:RoomKind){ return txt(r?.title||r?.name,kind==="deal"?"Untitled Deal Room":"Untitled Pain Room"); }
+function loc(r:Room|null|undefined){ return [txt(r?.city),txt(r?.county),txt(r?.state)].filter(Boolean).join(", ")||"Market not listed"; }
 function arr<T>(key:string):T[]{ if(!ok()) return []; const p=j<unknown>(localStorage.getItem(key),[]); return Array.isArray(p)?p as T[]:[]; }
 function keys(kind:RoomKind){ return kind==="deal"?DEAL_KEYS:PAIN_KEYS; }
+function roomKeys(kind:RoomKind,id:string){ return [`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`]; }
 function statesMap(){ const m:Record<string,RoomState>={}; if(!ok()) return m; STATE_KEYS.forEach(k=>Object.assign(m,j<Record<string,RoomState>>(localStorage.getItem(k),{}))); return m; }
-function saveStateMap(m:Record<string,RoomState>){ if(!ok()) return; STATE_KEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(m))); }
-function compressImage(file:File,maxWidth=1200,quality=.72):Promise<string>{
+function saveStateMap(m:Record<string,RoomState>){ if(!ok()) return; STATE_KEYS.forEach(k=>{try{localStorage.setItem(k,JSON.stringify(m));}catch{}}); }
+function safeSet(key:string,value:unknown){ try{localStorage.setItem(key,JSON.stringify(value));return true;}catch{return false;} }
+
+function compressImage(file:File,maxWidth=850,quality=.52):Promise<string>{
   return new Promise(resolve=>{
     const reader=new FileReader();
     reader.onerror=()=>resolve("");
     reader.onload=()=>{
       const img=new Image();
-      img.onerror=()=>resolve(String(reader.result||""));
+      img.onerror=()=>resolve("");
       img.onload=()=>{
         try{
           const scale=Math.min(1,maxWidth/img.width);
@@ -135,50 +148,76 @@ function compressImage(file:File,maxWidth=1200,quality=.72):Promise<string>{
           canvas.width=Math.max(1,Math.round(img.width*scale));
           canvas.height=Math.max(1,Math.round(img.height*scale));
           const ctx=canvas.getContext("2d");
-          if(!ctx){resolve(String(reader.result||""));return;}
+          if(!ctx){resolve("");return;}
           ctx.drawImage(img,0,0,canvas.width,canvas.height);
           resolve(canvas.toDataURL("image/jpeg",quality));
-        }catch{
-          resolve(String(reader.result||""));
-        }
+        }catch{ resolve(""); }
       };
       img.src=String(reader.result||"");
     };
     reader.readAsDataURL(file);
   });
 }
-function photoDataUrls(files:FileList|null,max=10):Promise<string[]>{
-  return new Promise(resolve=>{
-    const selected=Array.from(files||[]).slice(0,max);
-    if(!selected.length){resolve([]);return;}
-    Promise.all(selected.map(file=>compressImage(file,1200,.72))).then(rows=>resolve(rows.filter(Boolean)));
-  });
+
+async function photoDataUrls(files:FileList|null,max=10):Promise<string[]>{
+  const selected=Array.from(files||[]).slice(0,max);
+  const out:string[]=[];
+  for(const file of selected){
+    const compressed=await compressImage(file,850,.52);
+    if(compressed && compressed.length < 450000) out.push(compressed);
+    if(out.length >= 10) break;
+  }
+  return out;
 }
-function safeSet(key:string,value:unknown){
-  try{localStorage.setItem(key,JSON.stringify(value));return true;}catch{return false;}
+
+function photoFields(urls:string[], attemptedCount=0):Partial<Room>{
+  const safe = urls.filter(Boolean).slice(0,10);
+  const cover = safe[0] || "";
+  return {
+    coverPhoto: cover,
+    photoUrl: cover,
+    imageUrl: cover,
+    photoUrls: safe,
+    photos: safe,
+    photoCount: attemptedCount || safe.length,
+    photoSaveWarning: attemptedCount && !safe.length ? "Photos were too large for browser storage. Room saved without photos." : ""
+  };
 }
+
+function slimForList(room:Room):Room{
+  return {
+    ...room,
+    photos: room.coverPhoto ? [room.coverPhoto] : [],
+    photoUrls: room.coverPhoto ? [room.coverPhoto] : [],
+    photoUrl: room.coverPhoto || "",
+    imageUrl: room.coverPhoto || ""
+  };
+}
+
 function saveRoom(kind:RoomKind,room:Room){
   if(!ok()) return "";
   const id=rid(room)||`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
   const now=new Date().toISOString();
-  let next: Room={...room,id,roomId:id,roomState:"active" as RoomState,cleanupState:"active" as RoomState,stateStatus:"active" as RoomState,createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""};
-  const singleKeys=[`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`];
+  let next:Room={...room,id,roomId:id,roomState:"active",cleanupState:"active",stateStatus:"active",createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""};
 
-  let wroteSingles=true;
-  singleKeys.forEach(x=>{ if(!safeSet(x,next)) wroteSingles=false; });
-
-  if(!wroteSingles){
-    next={...next,photoUrls:[],photos:[],photoSaveWarning:"Photos were too large for browser storage. Room saved without photos."};
-    singleKeys.forEach(x=>safeSet(x,next));
+  let fullWorked=true;
+  for(const key of roomKeys(kind,id)){
+    if(!safeSet(key,next)) fullWorked=false;
   }
 
-  keys(kind).forEach(key=>{
+  if(!fullWorked){
+    const cover=txt(next.coverPhoto||next.photoUrl||next.imageUrl);
+    next={...next,coverPhoto:cover,photoUrl:cover,imageUrl:cover,photoUrls:cover?[cover]:[],photos:cover?[cover]:[],photoSaveWarning:"Only the cover photo was saved because browser storage rejected the full gallery."};
+    for(const key of roomKeys(kind,id)) safeSet(key,next);
+  }
+
+  const listRoom=slimForList(next);
+  for(const key of keys(kind)){
     const existing=arr<Room>(key).filter(x=>rid(x)!==id);
-    if(!safeSet(key,[next,...existing])){
-      const slim={...next,photoUrls:[],photos:[],photoSaveWarning:"Photos were too large for list storage. Open the room record for details."};
-      safeSet(key,[slim,...existing.map(x=>({...x,photoUrls:[],photos:[]}))]);
+    if(!safeSet(key,[listRoom,...existing])){
+      safeSet(key,[{...listRoom,photos:[],photoUrls:[],photoUrl:"",imageUrl:"",coverPhoto:"",photoSaveWarning:"Photos were too large for list storage."},...existing.map(x=>({...x,photos:[],photoUrls:[]}))]);
     }
-  });
+  }
 
   const sm=statesMap();
   sm[id]="active";
@@ -188,8 +227,81 @@ function saveRoom(kind:RoomKind,room:Room){
   window.dispatchEvent(new Event(kind==="deal"?"vaultforge-deal-change":"vaultforge-pain-change"));
   return id;
 }
-function moneyNumber(value:unknown){ const n=Number(String(value||"").replace(/[^0-9.-]/g,"")); return Number.isFinite(n)?n:0; }
+
+function getRoom(kind:RoomKind,id:string):Room|null{
+  if(!ok()) return null;
+  for(const key of roomKeys(kind,id)){
+    const direct=j<Room|null>(localStorage.getItem(key),null);
+    if(direct && rid(direct)) return {...direct,id:rid(direct),roomId:rid(direct)};
+  }
+  for(const key of keys(kind)){
+    const found=arr<Room>(key).find(r=>rid(r)===id);
+    if(found) return {...found,id:rid(found),roomId:rid(found)};
+  }
+  return null;
+}
+
+function photos(room:Room|null):string[]{
+  if(!room) return [];
+  const output:string[]=[];
+  const push=(v:unknown)=>{
+    if(typeof v==="string"){
+      const s=v.trim();
+      if(s && !output.includes(s)) output.push(s);
+    }
+  };
+  push(room.coverPhoto);
+  push(room.photoUrl);
+  push(room.imageUrl);
+  list(room.photoUrls).forEach(push);
+  list(room.photos).forEach(push);
+  Object.keys(room).forEach(k=>{
+    if(k.toLowerCase().includes("photo") || k.toLowerCase().includes("image")){
+      const v=room[k];
+      if(Array.isArray(v)) v.forEach(push);
+      else push(v);
+    }
+  });
+  return output.filter(src=>src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:"));
+}
+
+function markRead(kind:RoomKind,room:Room){
+  if(!ok()) return;
+  const id=rid(room);
+  if(!id) return;
+  const reads=j<Record<string,string>>(localStorage.getItem(READ_KEY),{});
+  reads[id]=new Date().toISOString();
+  reads[`${kind}:${id}`]=new Date().toISOString();
+  safeSet(READ_KEY,reads);
+  const next={...room,viewedAt:new Date().toISOString(),alertRead:true};
+  roomKeys(kind,id).forEach(key=>safeSet(key,next));
+  keys(kind).forEach(key=>{
+    const rows=arr<Room>(key);
+    if(rows.length) safeSet(key,rows.map(r=>rid(r)===id?{...r,...slimForList(next)}:r));
+  });
+  window.dispatchEvent(new Event("vaultforge-room-read-change"));
+}
+
+function setRoomState(kind:RoomKind,room:Room,state:RoomState){
+  if(!ok()) return;
+  const id=rid(room);
+  if(!id) return;
+  const next:Room={...room,roomState:state,cleanupState:state,stateStatus:state,updatedAt:new Date().toISOString()};
+  roomKeys(kind,id).forEach(key=>safeSet(key,next));
+  keys(kind).forEach(key=>{
+    const rows=arr<Room>(key);
+    if(rows.length) safeSet(key,[slimForList(next),...rows.filter(r=>rid(r)!==id)]);
+  });
+  const sm=statesMap();
+  sm[id]=state;
+  sm[`${kind}:${id}`]=state;
+  saveStateMap(sm);
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+}
+
+function money(v:unknown){ const n=Number(String(v||"").replace(/[^0-9.-]/g,"")); return Number.isFinite(n)&&n!==0?n.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not listed"; }
 function fmt(n:number){ return n? n.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not enough data"; }
+function moneyNumber(value:unknown){ const n=Number(String(value||"").replace(/[^0-9.-]/g,"")); return Number.isFinite(n)?n:0; }
 
 
 function Nav({active}:{active:string}){return <nav style={navStyle}><div style={brand}>VAULTFORGE</div><Link href="/command" style={active==="command"?goldBtn:btn}>Command</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/deal-create" style={active==="deal"?goldBtn:btn}>Create Deal</Link><Link href="/pain-intake" style={active==="pain"?goldBtn:btn}>Pain Intake</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/network" style={btn}>Network</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>}
@@ -230,90 +342,32 @@ export default function Page(){
  function setAsset(v:string){setF({...f,assetClass:v,propertyType:(v==="Commercial"?COM_TYPES:v==="Land"?LAND_TYPES:RES_TYPES)[0]})}
  function tog(k:string,v:string){const s=new Set(list(f[k]));s.has(v)?s.delete(v):s.add(v);up(k,Array.from(s))}
  async function submit(){
-   setMsg("Saving pain room... compressing photos if selected.");
+   setMsg("Compressing photo and saving pain room...");
    const urls=await photoDataUrls(files,10);
-   const id=saveRoom("pain",{...f,title:txt(f.title,"Untitled Pain Room"),photoUrls:urls,photos:urls,analyzer:`Pain analyzer: ${asset} ${txt(f.propertyType)} with ${list(f.painTypes).join(", ")||"unclassified"} in ${txt(f.city)}, ${txt(f.county)}, ${txt(f.state)}. Severity ${txt(f.severity)}. Time pressure ${txt(f.timePressure)}. Capital pressure ${txt(f.capitalPressure)}. Route to ${list(f.routingNeeds).join(", ")||"solver profile"}.`});
+   const attempted=files?files.length:0;
+   const id=saveRoom("pain",{...f,...photoFields(urls,attempted),title:txt(f.title,"Untitled Pain Room"),analyzer:`Pain analyzer: ${asset} ${txt(f.propertyType)} with ${list(f.painTypes).join(", ")||"unclassified"} in ${txt(f.city)}, ${txt(f.county)}, ${txt(f.state)}. Severity ${txt(f.severity)}. Time pressure ${txt(f.timePressure)}. Capital pressure ${txt(f.capitalPressure)}. Route to ${list(f.routingNeeds).join(", ")||"solver profile"}.`});
    setF({assetClass:"Residential",state:"GA",propertyType:"Single Family",painTypes:["Funding Gap"],severity:"High",timePressure:"7 Days",capitalPressure:"$25k-$100k",routingNeeds:["Lender"]});
    setFiles(null);
    if(id) window.location.href=`/pain-rooms/${encodeURIComponent(id)}`;
  }
 
  return <main style={page}><div style={wrap}><Nav active="pain"/>{msg?<Section title="Status"><p style={sub}>{msg}</p></Section>:null}
- <section style={hero}><div style={eyebrow}>Adaptive Pain Intake</div><h1 style={h1}>Problem routing engine.</h1><p style={sub}>Residential, Commercial, and Land now switch fields and problem logic.</p></section>
+ <section style={hero}><div style={eyebrow}>Adaptive Pain Intake</div><h1 style={h1}>Problem routing engine.</h1><p style={sub}>Residential, Commercial, and Land switch fields. Photos save as compressed room cover/gallery.</p></section>
 
- <Section title="Asset Class">
-   <SingleChips labelName="Asset Type" options={ASSET} value={asset} onChange={setAsset}/>
- </Section>
-
- <Section title="Problem Type">
-   <MultiChips labelName="Pain Type" options={PAIN} selected={painTypes} onToggle={v=>tog("painTypes",v)}/>
- </Section>
-
- <Section title="Severity + Pressure">
-   <div style={grid}>
-     <SelectBox l="Pain Severity" v={txt(f.severity,"High")} c={v=>up("severity",v)} options={SEVERITY}/>
-     <SelectBox l="Time Pressure" v={txt(f.timePressure,"7 Days")} c={v=>up("timePressure",v)} options={TIME}/>
-     <SelectBox l="Capital Pressure" v={txt(f.capitalPressure,"$25k-$100k")} c={v=>up("capitalPressure",v)} options={CAPITAL}/>
-     <SelectBox l="Control Status" v={txt(f.controlStatus,"Unknown")} c={v=>up("controlStatus",v)} options={["Unknown","Owner Controlled","Contract Controlled","Partner Controlled","Bank Controlled","Court / Estate","No Control Yet"]}/>
-   </div>
-   <div style={{height:18}}/>
-   <MultiChips labelName="Risk Type" options={RISK} selected={list(f.riskTypes)} onToggle={v=>tog("riskTypes",v)}/>
-   <div style={{height:18}}/>
-   <MultiChips labelName="Current Blockers" options={BLOCKERS} selected={list(f.blockers)} onToggle={v=>tog("blockers",v)}/>
- </Section>
-
- <Section title={`${asset} Market + Asset`}>
-   <div style={grid}>
-     <Field l="Pain Room Title" v={txt(f.title)} c={v=>up("title",v)}/>
-     <SelectBox l="State" v={txt(f.state,"GA")} c={v=>up("state",v)} options={STATES}/>
-     <Field l="City" v={txt(f.city)} c={v=>up("city",v)}/>
-     <Field l="County" v={txt(f.county)} c={v=>up("county",v)}/>
-     <Field l="Address / Location" v={txt(f.address)} c={v=>up("address",v)}/>
-     <SelectBox l={`${asset} Type`} v={txt(f.propertyType,typeOptions[0])} c={v=>up("propertyType",v)} options={typeOptions}/>
-   </div>
- </Section>
-
- <Section title="Numbers + Burn">
-   <div style={grid}>
-     <Field l="Ask Price" v={txt(f.askingPrice)} c={v=>up("askingPrice",v)}/>
-     <Field l="Property Value / ARV" v={txt(f.propertyValue)} c={v=>up("propertyValue",v)}/>
-     {asset!=="Land"?<Field l="Repairs / Work" v={txt(f.repairs)} c={v=>up("repairs",v)}/>:<Field l="Site Work / Development Cost" v={txt(f.repairs)} c={v=>up("repairs",v)}/>}
-     <Field l="Existing Loan Amount" v={txt(f.existingLoanAmount||f.loanBalance)} c={v=>up("existingLoanAmount",v)}/>
-     <Field l="Monthly Burn Rate" v={txt(f.monthlyBurnRate)} c={v=>up("monthlyBurnRate",v)}/>
-     <Field l="Money Needed Immediately" v={txt(f.moneyNeededNow)} c={v=>up("moneyNeededNow",v)}/>
-     <Field l="Deadline / Date Pressure" v={txt(f.deadline)} c={v=>up("deadline",v)}/>
-   </div>
- </Section>
-
- <Section title={`${asset} Facts`}>
-   <div style={grid}>
-     {asset==="Residential"?<><Field l="Beds" v={txt(f.beds)} c={v=>up("beds",v)}/><Field l="Baths" v={txt(f.baths)} c={v=>up("baths",v)}/><Field l="Sqft" v={txt(f.sqft)} c={v=>up("sqft",v)}/><Field l="Units" v={txt(f.units)} c={v=>up("units",v)}/></>:null}
-     {asset==="Commercial"?<><Field l="Building Size" v={txt(f.buildingSize)} c={v=>up("buildingSize",v)}/><Field l="Units / Suites" v={txt(f.units)} c={v=>up("units",v)}/><Field l="NOI" v={txt(f.noi)} c={v=>up("noi",v)}/><Field l="Cap Rate" v={txt(f.capRate)} c={v=>up("capRate",v)}/></>:null}
-     {asset==="Land"?<><Field l="Acres" v={txt(f.acres)} c={v=>up("acres",v)}/><Field l="Zoning" v={txt(f.zoning)} c={v=>up("zoning",v)}/><Field l="Frontage" v={txt(f.frontage)} c={v=>up("frontage",v)}/><SelectBox l="Utilities Available" v={txt(f.utilitiesAvailable,"Unknown")} c={v=>up("utilitiesAvailable",v)} options={["Unknown","Water","Sewer","Power","All Utilities","None","Needs Extension"]}/></>:null}
-     <SelectBox l="Occupancy / Use" v={txt(f.occupancy,"Unknown")} c={v=>up("occupancy",v)} options={asset==="Land"?["Unknown","Vacant Land","Timber","Farmed","Encumbered","Occupied Structure On Site"]:["Unknown","Vacant","Owner Occupied","Tenant Occupied","Squatter","Partial Vacancy"]}/>
-     <SelectBox l="Access" v={txt(f.access,"Unknown")} c={v=>up("access",v)} options={asset==="Land"?["Unknown","Road Frontage","Easement","Landlocked","Private Road","No Access"]:["Unknown","Lockbox","Owner Access","Agent Access","No Access","Drive By Only"]}/>
-   </div>
- </Section>
-
+ <Section title="Asset Class"><SingleChips labelName="Asset Type" options={ASSET} value={asset} onChange={setAsset}/></Section>
+ <Section title="Problem Type"><MultiChips labelName="Pain Type" options={PAIN} selected={painTypes} onToggle={v=>tog("painTypes",v)}/></Section>
+ <Section title="Severity + Pressure"><div style={grid}><SelectBox l="Pain Severity" v={txt(f.severity,"High")} c={v=>up("severity",v)} options={SEVERITY}/><SelectBox l="Time Pressure" v={txt(f.timePressure,"7 Days")} c={v=>up("timePressure",v)} options={TIME}/><SelectBox l="Capital Pressure" v={txt(f.capitalPressure,"$25k-$100k")} c={v=>up("capitalPressure",v)} options={CAPITAL}/><SelectBox l="Control Status" v={txt(f.controlStatus,"Unknown")} c={v=>up("controlStatus",v)} options={["Unknown","Owner Controlled","Contract Controlled","Partner Controlled","Bank Controlled","Court / Estate","No Control Yet"]}/></div><div style={{height:18}}/><MultiChips labelName="Risk Type" options={RISK} selected={list(f.riskTypes)} onToggle={v=>tog("riskTypes",v)}/><div style={{height:18}}/><MultiChips labelName="Current Blockers" options={BLOCKERS} selected={list(f.blockers)} onToggle={v=>tog("blockers",v)}/></Section>
+ <Section title={`${asset} Market + Asset`}><div style={grid}><Field l="Pain Room Title" v={txt(f.title)} c={v=>up("title",v)}/><SelectBox l="State" v={txt(f.state,"GA")} c={v=>up("state",v)} options={STATES}/><Field l="City" v={txt(f.city)} c={v=>up("city",v)}/><Field l="County" v={txt(f.county)} c={v=>up("county",v)}/><Field l="Address / Location" v={txt(f.address)} c={v=>up("address",v)}/><SelectBox l={`${asset} Type`} v={txt(f.propertyType,typeOptions[0])} c={v=>up("propertyType",v)} options={typeOptions}/></div></Section>
+ <Section title="Numbers + Burn"><div style={grid}><Field l="Ask Price" v={txt(f.askingPrice)} c={v=>up("askingPrice",v)}/><Field l="Property Value / ARV" v={txt(f.propertyValue)} c={v=>up("propertyValue",v)}/>{asset!=="Land"?<Field l="Repairs / Work" v={txt(f.repairs)} c={v=>up("repairs",v)}/>:<Field l="Site Work / Development Cost" v={txt(f.repairs)} c={v=>up("repairs",v)}/>}<Field l="Existing Loan Amount" v={txt(f.existingLoanAmount||f.loanBalance)} c={v=>up("existingLoanAmount",v)}/><Field l="Monthly Burn Rate" v={txt(f.monthlyBurnRate)} c={v=>up("monthlyBurnRate",v)}/><Field l="Money Needed Immediately" v={txt(f.moneyNeededNow)} c={v=>up("moneyNeededNow",v)}/><Field l="Deadline / Date Pressure" v={txt(f.deadline)} c={v=>up("deadline",v)}/></div></Section>
+ <Section title={`${asset} Facts`}><div style={grid}>{asset==="Residential"?<><Field l="Beds" v={txt(f.beds)} c={v=>up("beds",v)}/><Field l="Baths" v={txt(f.baths)} c={v=>up("baths",v)}/><Field l="Sqft" v={txt(f.sqft)} c={v=>up("sqft",v)}/><Field l="Units" v={txt(f.units)} c={v=>up("units",v)}/></>:null}{asset==="Commercial"?<><Field l="Building Size" v={txt(f.buildingSize)} c={v=>up("buildingSize",v)}/><Field l="Units / Suites" v={txt(f.units)} c={v=>up("units",v)}/><Field l="NOI" v={txt(f.noi)} c={v=>up("noi",v)}/><Field l="Cap Rate" v={txt(f.capRate)} c={v=>up("capRate",v)}/></>:null}{asset==="Land"?<><Field l="Acres" v={txt(f.acres)} c={v=>up("acres",v)}/><Field l="Zoning" v={txt(f.zoning)} c={v=>up("zoning",v)}/><Field l="Frontage" v={txt(f.frontage)} c={v=>up("frontage",v)}/><SelectBox l="Utilities Available" v={txt(f.utilitiesAvailable,"Unknown")} c={v=>up("utilitiesAvailable",v)} options={["Unknown","Water","Sewer","Power","All Utilities","None","Needs Extension"]}/></>:null}<SelectBox l="Occupancy / Use" v={txt(f.occupancy,"Unknown")} c={v=>up("occupancy",v)} options={asset==="Land"?["Unknown","Vacant Land","Timber","Farmed","Encumbered","Occupied Structure On Site"]:["Unknown","Vacant","Owner Occupied","Tenant Occupied","Squatter","Partial Vacancy"]}/><SelectBox l="Access" v={txt(f.access,"Unknown")} c={v=>up("access",v)} options={asset==="Land"?["Unknown","Road Frontage","Easement","Landlocked","Private Road","No Access"]:["Unknown","Lockbox","Owner Access","Agent Access","No Access","Drive By Only"]}/></div></Section>
  {hasForeclosure?<Section title="Foreclosure / Lender Pressure"><div style={grid}><SelectBox l="Foreclosure Filed" v={txt(f.foreclosureFiled,"Unknown")} c={v=>up("foreclosureFiled",v)} options={YESNO}/><Field l="Auction Date" v={txt(f.auctionDate)} c={v=>up("auctionDate",v)}/><Field l="Reinstatement / Arrears" v={txt(f.amountNeeded)} c={v=>up("amountNeeded",v)}/><Field l="Lender / Servicer" v={txt(f.lender)} c={v=>up("lender",v)}/></div></Section>:null}
  {hasConstruction?<Section title="Construction / Permit Problem"><div style={grid}><SelectBox l="Contractor Still On Site" v={txt(f.contractorStatus,"Unknown")} c={v=>up("contractorStatus",v)} options={["Unknown","Yes","No","Abandoned","Dispute","Needs Replacement"]}/><Field l="Completion %" v={txt(f.completionPercent)} c={v=>up("completionPercent",v)}/><SelectBox l="Permit Status" v={txt(f.permitStatus,"Unknown")} c={v=>up("permitStatus",v)} options={["Unknown","No Permit","Applied","Approved","Expired","Stop Work","Inspection Failed"]}/><SelectBox l="Inspection Status" v={txt(f.inspectionStatus,"Unknown")} c={v=>up("inspectionStatus",v)} options={["Unknown","Passed","Failed","Pending","Needs Inspection"]}/></div></Section>:null}
  {hasDamage?<Section title="Damage / Insurance / Structure"><div style={grid}><SelectBox l="Insurance Active" v={txt(f.insuranceActive,"Unknown")} c={v=>up("insuranceActive",v)} options={YESNO}/><Field l="Claim Number" v={txt(f.claimNumber)} c={v=>up("claimNumber",v)}/><SelectBox l="Structural Status" v={txt(f.structuralStatus,"Unknown")} c={v=>up("structuralStatus",v)} options={["Unknown","Safe","Needs Engineer","Unsafe","Condemned"]}/><SelectBox l="Utilities Status" v={txt(f.utilitiesStatus,"Unknown")} c={v=>up("utilitiesStatus",v)} options={["Unknown","On","Off","Partially On","Needs Utility Release"]}/><SelectBox l="City Involvement" v={txt(f.cityInvolvement,"Unknown")} c={v=>up("cityInvolvement",v)} options={["Unknown","None","Code Enforcement","Fire Marshal","Building Dept","Condemned"]}/></div></Section>:null}
  {hasTenant?<Section title="Tenant / Occupancy Problem"><div style={grid}><SelectBox l="Occupied or Vacant" v={txt(f.occupancy,"Unknown")} c={v=>up("occupancy",v)} options={["Unknown","Vacant","Tenant Occupied","Owner Occupied","Squatter","Eviction Needed"]}/><SelectBox l="Access Status" v={txt(f.accessStatus,"Unknown")} c={v=>up("accessStatus",v)} options={["Unknown","Allowed","Restricted","Hostile","No Access"]}/><SelectBox l="Active Litigation" v={txt(f.activeLitigation,"Unknown")} c={v=>up("activeLitigation",v)} options={YESNO}/><Field l="Tenant / Occupancy Notes" v={txt(f.tenantNotes)} c={v=>up("tenantNotes",v)}/></div></Section>:null}
-
- <Section title="Solution Routing">
-   <MultiChips labelName="Needs" options={NEEDS} selected={list(f.routingNeeds)} onToggle={v=>tog("routingNeeds",v)}/>
-   <div style={{height:18}}/>
-   <div style={grid}>
-     <SelectBox l="Can Members Contact Directly" v={txt(f.directContactAllowed,"Unknown")} c={v=>up("directContactAllowed",v)} options={YESNO}/>
-     <SelectBox l="Confidential / NDA" v={txt(f.confidential,"Unknown")} c={v=>up("confidential",v)} options={YESNO}/>
-     <SelectBox l="Title Clear" v={txt(f.titleClear,"Unknown")} c={v=>up("titleClear",v)} options={YESNO}/>
-     <SelectBox l="Has Anyone Else Been Contacted" v={txt(f.contactedOthers,"Unknown")} c={v=>up("contactedOthers",v)} options={YESNO}/>
-   </div>
- </Section>
-
+ <Section title="Solution Routing"><MultiChips labelName="Needs" options={NEEDS} selected={list(f.routingNeeds)} onToggle={v=>tog("routingNeeds",v)}/><div style={{height:18}}/><div style={grid}><SelectBox l="Can Members Contact Directly" v={txt(f.directContactAllowed,"Unknown")} c={v=>up("directContactAllowed",v)} options={YESNO}/><SelectBox l="Confidential / NDA" v={txt(f.confidential,"Unknown")} c={v=>up("confidential",v)} options={YESNO}/><SelectBox l="Title Clear" v={txt(f.titleClear,"Unknown")} c={v=>up("titleClear",v)} options={YESNO}/><SelectBox l="Has Anyone Else Been Contacted" v={txt(f.contactedOthers,"Unknown")} c={v=>up("contactedOthers",v)} options={YESNO}/></div></Section>
  <Section title="Outcome Logic"><div style={grid}><Field l="Root Cause" v={txt(f.rootCause)} c={v=>up("rootCause",v)}/><Field l="Best Realistic Outcome" v={txt(f.bestOutcome)} c={v=>up("bestOutcome",v)}/><Field l="Worst Case Scenario" v={txt(f.worstCase)} c={v=>up("worstCase",v)}/><Field l="What Happens If Nothing Is Done" v={txt(f.nothingDoneOutcome)} c={v=>up("nothingDoneOutcome",v)}/><Field l="Desired Solution" v={txt(f.desiredSolution)} c={v=>up("desiredSolution",v)}/></div></Section>
  <Section title="Contact"><div style={grid}><Field l="Contact Name" v={txt(f.contactName)} c={v=>up("contactName",v)}/><Field l="Phone" v={txt(f.contactPhone)} c={v=>up("contactPhone",v)}/><Field l="Email" v={txt(f.contactEmail)} c={v=>up("contactEmail",v)}/><SelectBox l="Best Contact" v={txt(f.bestContact,"VaultForge Message")} c={v=>up("bestContact",v)} options={["VaultForge Message","Text","Phone","Email","Contact Form"]}/><SelectBox l="Submitter Role" v={txt(f.submitterRole,"Owner")} c={v=>up("submitterRole",v)} options={["Owner","Wholesaler","Agent","Investor","Lender","Operator","Partner","Family / Estate"]}/></div></Section>
- <Section title="Photos Up To 10"><input type="file" multiple accept="image/*" onChange={e=>setFiles(e.target.files)}/><p style={muted}>{files?files.length:0}/10 selected.</p></Section>
+ <Section title="Photos Up To 10"><input type="file" multiple accept="image/*" onChange={e=>setFiles(e.target.files)}/><p style={muted}>{files?files.length:0}/10 selected. First photo becomes room cover.</p></Section>
  <Section title="Notes"><Area l="Problem Notes / AI Context" v={txt(f.notes)} c={v=>up("notes",v)}/></Section>
  <Section title="Save"><button onClick={submit} style={goldBtn}>Save Pain Room</button></Section>
  </div></main>
@@ -328,8 +382,12 @@ const goldBtn:React.CSSProperties={...btn,border:0,background:"#ffdc68",color:"#
 const redBtn:React.CSSProperties={...btn,background:"#271016",borderColor:"rgba(255,70,70,.48)",color:"#ffaaaa"};
 const hero:React.CSSProperties={border:"1px solid rgba(245,197,66,.28)",borderRadius:28,padding:30,marginBottom:20,background:"radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)"};
 const card:React.CSSProperties={background:"linear-gradient(180deg,#080d19,#050816)",border:"1px solid rgba(245,197,66,.28)",borderRadius:26,padding:28,marginBottom:22};
+const inner:React.CSSProperties={background:"#121724",border:"1px solid rgba(207,216,230,.16)",borderRadius:22,padding:22};
 const eyebrow:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:7,fontWeight:950,fontSize:15,marginBottom:12};
+const smallEyebrow:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:5,fontWeight:950,fontSize:13,marginBottom:10};
 const h1:React.CSSProperties={fontSize:"clamp(44px,8vw,86px)",lineHeight:.9,letterSpacing:-4,margin:"0 0 18px",fontWeight:950};
+const h2:React.CSSProperties={fontSize:"clamp(30px,5vw,52px)",lineHeight:.95,letterSpacing:-2,margin:"0 0 18px",fontWeight:950};
+const h3:React.CSSProperties={fontSize:28,lineHeight:1,margin:"0 0 8px",fontWeight:950};
 const sub:React.CSSProperties={color:"#c9d0dc",fontSize:21,lineHeight:1.35,margin:0};
 const muted:React.CSSProperties={color:"#aeb7c7",margin:"8px 0 0",lineHeight:1.35};
 const grid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:16};
@@ -340,4 +398,7 @@ const input:React.CSSProperties={width:"100%",boxSizing:"border-box",border:"1px
 const textArea:React.CSSProperties={...input,minHeight:110,resize:"vertical"};
 const label:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:4,fontSize:12,fontWeight:950,marginBottom:8};
 const calcBox:React.CSSProperties={background:"rgba(255,220,104,.08)",border:"1px solid rgba(255,220,104,.22)",borderRadius:18,padding:18,color:"#ffd45a",fontWeight:950};
+const photoGrid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14};
+const photoStyle:React.CSSProperties={width:"100%",height:220,objectFit:"cover",borderRadius:20,border:"1px solid rgba(255,220,104,.25)",background:"#05070d"};
+const stat:React.CSSProperties={background:"#121724",border:"1px solid rgba(207,216,230,.16)",borderRadius:18,padding:16};
 
