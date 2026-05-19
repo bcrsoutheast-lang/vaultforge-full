@@ -360,9 +360,10 @@ function MemberCard({ member, saved, onSave, onUnsave }: { member: MemberProfile
   );
 }
 
+
 export default function NetworkPage() {
   const [tick, setTick] = useState(0);
-  const [openState, setOpenState] = useState("GA");
+  const [openState, setOpenState] = useState("");
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
@@ -383,8 +384,8 @@ export default function NetworkPage() {
   const deals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "active"), [tick]);
   const pains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "active"), [tick]);
 
-  const openDeals = deals.filter((room) => txt(room.state, "GA") === openState);
-  const openPains = pains.filter((room) => txt(room.state, "GA") === openState);
+  const openDeals = openState ? deals.filter((room) => txt(room.state, "GA") === openState) : [];
+  const openPains = openState ? pains.filter((room) => txt(room.state, "GA") === openState) : [];
 
   return (
     <main style={page}>
@@ -394,7 +395,7 @@ export default function NetworkPage() {
         <section style={hero}>
           <div style={eyebrow}>Network</div>
           <h1 style={h1}>State project network.</h1>
-          <p style={sub}>Network shows posted work by state: Opportunity cards and Pain cards separated. This is not member origin and not states served.</p>
+          <p style={sub}>Click a state card to open its Opportunity cards and Pain cards. Nothing shows until you choose a state.</p>
         </section>
 
         <Section title="Project State Cards">
@@ -405,33 +406,45 @@ export default function NetworkPage() {
               const unreadDeals = unreadRooms("deal", stateDeals).length;
               const unreadPains = unreadRooms("pain", statePains).length;
               const hasPulse = unreadDeals + unreadPains > 0;
+              const isOpen = openState === state;
+
               return (
-                <button key={state} type="button" onClick={() => setOpenState(state)} style={openState === state || hasPulse ? activePanel : panel}>
+                <button
+                  key={state}
+                  type="button"
+                  onClick={() => setOpenState(isOpen ? "" : state)}
+                  style={isOpen || hasPulse ? activePanel : panel}
+                >
                   <div style={eyebrow}>{state}</div>
                   <h2 style={h2}>{stateDeals.length + statePains.length}</h2>
                   <p style={muted}>Opportunities: {stateDeals.length} • unread {unreadDeals}</p>
                   <p style={muted}>Pain: {statePains.length} • unread {unreadPains}</p>
+                  <p style={muted}>{isOpen ? "Click to collapse" : "Click to open"}</p>
                 </button>
               );
             })}
           </div>
         </Section>
 
-        <Section title={`${openState} Opportunity Cards`}>
-          {openDeals.length ? (
-            <div style={grid}>{openDeals.map((room) => <RoomCard key={rid(room)} room={room} kind="deal" />)}</div>
-          ) : (
-            <p style={sub}>No active opportunity cards in {openState}.</p>
-          )}
-        </Section>
+        {openState ? (
+          <>
+            <Section title={`${openState} Opportunity Cards`}>
+              {openDeals.length ? (
+                <div style={grid}>{openDeals.map((room) => <RoomCard key={rid(room)} room={room} kind="deal" />)}</div>
+              ) : (
+                <p style={sub}>No active opportunity cards in {openState}.</p>
+              )}
+            </Section>
 
-        <Section title={`${openState} Pain Cards`}>
-          {openPains.length ? (
-            <div style={grid}>{openPains.map((room) => <RoomCard key={rid(room)} room={room} kind="pain" />)}</div>
-          ) : (
-            <p style={sub}>No active pain cards in {openState}.</p>
-          )}
-        </Section>
+            <Section title={`${openState} Pain Cards`}>
+              {openPains.length ? (
+                <div style={grid}>{openPains.map((room) => <RoomCard key={rid(room)} room={room} kind="pain" />)}</div>
+              ) : (
+                <p style={sub}>No active pain cards in {openState}.</p>
+              )}
+            </Section>
+          </>
+        ) : null}
       </div>
     </main>
   );
