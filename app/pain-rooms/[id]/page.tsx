@@ -387,6 +387,25 @@ function bestNextMove(room: RoomRecord, kind: RoomKind) {
   return "Confirm root cause and desired outcome, then route to the best matching operator/capital/contractor profile.";
 }
 
+
+function nextSteps(room: RoomRecord, kind: RoomKind) {
+  if (kind === "deal") {
+    return [
+      "Verify owner/contact control and best contact method.",
+      "Confirm ask, ARV/value, repairs, access, occupancy, and available docs.",
+      "Route only to matched profiles by state, asset fit, and member type.",
+      "Move qualified buyer/operator/lender conversation into the room message thread.",
+    ];
+  }
+
+  return [
+    "Classify the exact blocker: money, timeline, title, contractor, tenant, permit, or exit pressure.",
+    "Verify decision-maker authority and what outcome solves the pain.",
+    "Match the room to the member profile that can actually solve the blocker.",
+    "Create a room message thread and track the solution conversation there.",
+  ];
+}
+
 function timeline(room: RoomRecord, kind: RoomKind): ActivityRow[] {
   const created = cleanText(room.createdAt || room.updatedAt, "local");
   const read = cleanText(room.viewedAt, "");
