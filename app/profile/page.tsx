@@ -24,6 +24,7 @@ type Room = {
   timePressure?: string;
   severity?: string;
   capitalPressure?: string;
+  controlStatus?: string;
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
@@ -42,12 +43,18 @@ type Room = {
   units?: string;
   acres?: string;
   zoning?: string;
+  monthlyRent?: string;
+  monthlyBurnRate?: string;
+  moneyNeededNow?: string;
+  deadline?: string;
   rootCause?: string;
   bestOutcome?: string;
   worstCase?: string;
   desiredSolution?: string;
   blockers?: string[] | string;
   riskTypes?: string[] | string;
+  submitterRole?: string;
+  bestContact?: string;
   roomState?: RoomState;
   cleanupState?: RoomState;
   stateStatus?: RoomState;
@@ -110,6 +117,7 @@ const OCCUPANCY = ["Unknown", "Vacant", "Owner Occupied", "Tenant Occupied", "Sq
 const SEVERITY = ["Low", "Medium", "High", "Critical", "Emergency"];
 const TIME = ["24 Hours", "72 Hours", "7 Days", "14 Days", "30 Days", "Flexible"];
 const CAPITAL = ["Unknown", "Under $25k", "$25k-$100k", "$100k-$250k", "$250k-$1M", "$1M+"];
+const CONTROL = ["Unknown", "Owner Controlled", "Contract Controlled", "Partner Controlled", "Bank Controlled", "Court / Estate", "No Control Yet"];
 const BLOCKERS = ["Capital", "Timeline", "Title", "Access", "Contractor", "Tenant", "Permit", "City", "Legal", "Partner", "Seller Pressure", "Unknown Numbers", "Insurance", "Utilities"];
 const RISK = ["Legal", "Financial", "Structural", "Operational", "City/Permit", "Occupancy", "Environmental"];
 const YESNO = ["Unknown", "Yes", "No"];
@@ -238,8 +246,8 @@ function allRooms(kind: RoomKind): Room[] {
     const key = localStorage.key(i) || "";
     const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
     if (!match) continue;
-
     const value = j<any>(localStorage.getItem(key), null);
+
     if (Array.isArray(value)) {
       for (const row of value) {
         const id = rid(row);
@@ -257,11 +265,17 @@ function allRooms(kind: RoomKind): Room[] {
   }
 
   const states = stateMap();
-  return out.map((room) => {
-    const id = rid(room);
-    const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-    return { ...room, roomState: state, cleanupState: state, stateStatus: state };
-  });
+  return out
+    .map((room) => {
+      const id = rid(room);
+      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+    })
+    .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+}
+
+function getRoom(kind: RoomKind, id: string) {
+  return allRooms(kind).find((room) => rid(room) === id) || null;
 }
 
 function readMap() {
@@ -275,6 +289,19 @@ function unreadRooms(kind: RoomKind, rooms: Room[]) {
     if (roomState(room) !== "active") return false;
     return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
   });
+}
+
+function markRead(kind: RoomKind, room: Room) {
+  if (!ok()) return;
+  const id = rid(room);
+  if (!id) return;
+  const reads = readMap();
+  reads[id] = new Date().toISOString();
+  reads[`${kind}:${id}`] = new Date().toISOString();
+  localStorage.setItem(READ_KEY, JSON.stringify(reads));
+  const next = { ...room, alertRead: true, viewedAt: new Date().toISOString() };
+  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
+  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
 }
 
 function firstPhoto(room: Room) {
@@ -379,6 +406,19 @@ function saveRoom(kind: RoomKind, room: Room) {
   return id;
 }
 
+function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
+  if (!ok()) return;
+  const id = rid(room);
+  const next: Room = { ...room, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
+  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
+  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
+  const map = stateMap();
+  map[id] = state;
+  map[`${kind}:${id}`] = state;
+  STATE_KEYS.forEach((key) => saveSafe(key, map));
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+}
+
 function saveProfile(profile: Profile) {
   if (!ok()) return;
   PROFILE_KEYS.forEach((key) => localStorage.setItem(key, JSON.stringify(profile)));
@@ -407,7 +447,7 @@ const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repea
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
 const textarea: React.CSSProperties = { ...input, minHeight: 110, resize: "vertical" };
-const photoStyle: React.CSSProperties = { width: "100%", height: 160, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+const photoStyle: React.CSSProperties = { width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
 function Nav({ active }: { active: string }) {
   const item = (href: string, label: string, key: string) => <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>;
@@ -419,7 +459,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><input style={input} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label><div style={labelStyle}>{label}</div><input type="text" style={input} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
@@ -434,6 +474,27 @@ function ChipSet({ label, options, selected, onToggle }: { label: string; option
   return <div><div style={labelStyle}>{label}</div><div style={row}>{options.map((option) => <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>{option}</button>)}</div></div>;
 }
 
+function Value({ label, value }: { label: string; value: unknown }) {
+  return <div style={panel}><div style={eyebrow}>{label}</div><p style={sub}>{txt(value, "Not listed")}</p></div>;
+}
+
+function RoomCard({ room, kind, pulse = false }: { room: Room; kind: RoomKind; pulse?: boolean }) {
+  const img = firstPhoto(room);
+  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
+  return <div style={pulse ? pulsePanel : panel}>
+    {img ? <img src={img} alt={titleFor(room, kind)} style={photoStyle} /> : null}
+    <div style={eyebrow}>{kind === "deal" ? "Deal Room" : "Pain Room"} • {roomState(room)}</div>
+    <h2 style={h2}>{titleFor(room, kind)}</h2>
+    <p style={sub}>{loc(room)}</p>
+    <p style={muted}>{kind === "deal" ? `${txt(room.assetClass)} • ${txt(room.propertyType)} • Route: ${list(room.routeTo).join(", ") || "Buyer"}` : `${txt(room.assetClass)} • ${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"}`}</p>
+    <p style={muted}>{kind === "deal" ? `Ask ${txt(room.askingPrice, "N/A")} • Value ${txt(room.propertyValue, "N/A")} • Repairs ${txt(room.repairs, "N/A")}` : `Severity ${txt(room.severity, "N/A")} • Time ${txt(room.timePressure, "N/A")} • Capital ${txt(room.capitalPressure, "N/A")}`}</p>
+    <div style={{ ...row, marginTop: 16 }}>
+      <Link href={href} style={goldBtn}>Open Room</Link>
+      <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}`} style={btn}>Messages</Link>
+    </div>
+  </div>;
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile>({ statesOperated: ["GA"], markets: [], memberType: "Investor", contactPreference: "VaultForge Message", directContact: "Unknown", capitalPosition: "Unknown", proofOfFunds: "Unknown", fundingRange: "Unknown" });
   const [saved, setSaved] = useState("");
@@ -445,32 +506,14 @@ export default function ProfilePage() {
   }, []);
 
   function up(key: string, value: unknown) { setProfile({ ...profile, [key]: value }); }
-
-  function toggle(key: keyof Profile, value: string) {
-    const set = new Set(list(profile[key]));
-    set.has(value) ? set.delete(value) : set.add(value);
-    up(String(key), Array.from(set));
-  }
-
-  function updateCity(value: string) {
-    const county = countyFromCity(value);
-    setProfile({ ...profile, primaryCity: value, primaryCounty: county || profile.primaryCounty || "" });
-  }
-
-  async function handlePhoto(files: FileList | null) {
-    const photo = await onePhoto(files);
-    if (photo) setProfile({ ...profile, profilePhoto: photo });
-  }
-
-  function save() {
-    saveProfile(profile);
-    setSaved("Profile saved.");
-  }
+  function toggle(key: keyof Profile, value: string) { const set = new Set(list(profile[key])); set.has(value) ? set.delete(value) : set.add(value); up(String(key), Array.from(set)); }
+  function updateCity(value: string) { const county = countyFromCity(value); setProfile({ ...profile, primaryCity: value, primaryCounty: county || profile.primaryCounty || "" }); }
+  async function handlePhoto(files: FileList | null) { const photo = await onePhoto(files); if (photo) setProfile({ ...profile, profilePhoto: photo }); }
+  function save() { saveProfile(profile); setSaved("Profile saved."); }
 
   return <main style={page}><div style={wrap}><Nav active="profile" />
     <section style={hero}><div style={eyebrow}>Profile</div><h1 style={h1}>AI matching data.</h1><p style={sub}>Fixed save button, photo upload, city-to-county auto fill, buy box, strategy, routing, capital, proof, and contact fields.</p></section>
     {saved ? <Section title="Status"><p style={sub}>{saved}</p></Section> : null}
-
     <Section title="Identity"><div style={grid}><Field label="Name" value={txt(profile.name)} onChange={(value) => up("name", value)} /><Field label="Company" value={txt(profile.company)} onChange={(value) => up("company", value)} /><Field label="Email" value={txt(profile.email)} onChange={(value) => up("email", value)} /><Field label="Phone" value={txt(profile.phone)} onChange={(value) => up("phone", value)} /><SelectField label="Member Type" value={txt(profile.memberType, "Investor")} onChange={(value) => up("memberType", value)} options={MEMBER_TYPES} /><SelectField label="Contact Preference" value={txt(profile.contactPreference, "VaultForge Message")} onChange={(value) => up("contactPreference", value)} options={CONTACT_PREFS} /></div></Section>
     <Section title="Profile Photo">{txt(profile.profilePhoto) ? <img src={txt(profile.profilePhoto)} alt="Profile" style={{ width: 150, height: 150, objectFit: "cover", borderRadius: 24, border: "1px solid rgba(245,197,66,.3)", display: "block", marginBottom: 14 }} /> : null}<input type="file" accept="image/*" onChange={(event) => handlePhoto(event.target.files)} /><p style={muted}>Photo saves locally for now.</p></Section>
     <Section title="Geography Intelligence"><div style={grid}><Field label="Primary City" value={txt(profile.primaryCity)} onChange={updateCity} /><Field label="Auto County" value={txt(profile.primaryCounty)} onChange={(value) => up("primaryCounty", value)} /></div><div style={{ height: 18 }} /><ChipSet label="States Operated In" options={STATES} selected={list(profile.statesOperated)} onToggle={(value) => toggle("statesOperated", value)} /><div style={{ height: 18 }} /><ChipSet label="Markets / Submarkets" options={MARKETS} selected={list(profile.markets)} onToggle={(value) => toggle("markets", value)} /></Section>
