@@ -1,19 +1,214 @@
 "use client";
-import Link from "next/link";
-import {useEffect,useMemo,useState} from "react";
-type S="active"|"saved"|"archived"|"deleted";type K="pain"|"pain";
-type R={id?:string;roomId?:string;title?:string;name?:string;state?:string;city?:string;county?:string;address?:string;assetClass?:string;propertyType?:string;askingPrice?:string;propertyValue?:string;repairs?:string;timeline?:string;timePressure?:string;severity?:string;capitalPressure?:string;controlStatus?:string;contactName?:string;contactPhone?:string;contactEmail?:string;bestContact?:string;notes?:string;routeTo?:string[]|string;routingNeeds?:string[]|string;painTypes?:string[]|string;strategy?:string[]|string;blockers?:string[]|string;riskTypes?:string[]|string;documentsAvailable?:string[]|string;condition?:string;occupancy?:string;beds?:string;baths?:string;sqft?:string;units?:string;acres?:string;zoning?:string;noi?:string;capRate?:string;utilities?:string;roadFrontage?:string;entitlementStatus?:string;monthlyBurnRate?:string;moneyNeededNow?:string;deadline?:string;rootCause?:string;bestOutcome?:string;worstCase?:string;desiredSolution?:string;currentStatus?:string;ownerSituation?:string;accessStatus?:string;titleStatus?:string;insuranceStatus?:string;permitStatus?:string;tenantStatus?:string;legalStatus?:string;roomState?:S;cleanupState?:S;stateStatus?:S;alertRead?:boolean;viewedAt?:string;createdAt?:string;updatedAt?:string;coverPhoto?:string;photoUrl?:string;imageUrl?:string;photos?:string[];photoUrls?:string[];analyzer?:string;[key:string]:unknown};
-type M={id?:string;name?:string;company?:string;email?:string;phone?:string;profilePhoto?:string;memberType?:string;basedState?:string;basedCity?:string;basedCounty?:string;statesOperated?:string[];markets?:string[];assetClasses?:string[];strategies?:string[];specialties?:string[];needs?:string[];canProvide?:string[];capitalPosition?:string;proofOfFunds?:string;fundingRange?:string;contactPreference?:string;directContact?:string;bio?:string;[key:string]:unknown};
-const STATES=["GA","TN","AL","FL","NC","SC","TX"],ASSETS=["Residential","Commercial","Land"],RES=["Single Family","Duplex","Triplex","Quad","Townhome","Condo","Mobile Home","Small Multifamily","Apartment"],COM=["Retail","Office","Industrial","Warehouse","Hotel","Self Storage","Mixed Use","Medical","Restaurant","Automotive","Church / Special Use"],LAND=["Infill Lot","Acreage","Entitled Land","Raw Land","Commercial Pad","Subdivision","Timber","Farm","Assemblage","Waterfront"],STRAT=["Wholesale","Flip","Buy & Hold","BRRRR","Development","Seller Finance","JV","Rental","Hotel Conversion","Airbnb"],ROUTES=["Buyer","Lender","Operator","Contractor","Developer","Attorney","Capital Partner","Property Manager"],NEEDS=["Lender","Operator","Contractor","Buyer","Attorney","Insurance Adjuster","City Expeditor","Private Capital","Property Manager","Developer"],PAINS=["Funding Gap","Foreclosure","Stalled Construction","Contractor Problem","Title Problem","Permit Problem","City Violation","Tenant Issue","Partnership Dispute","Emergency Exit","Insurance Claim","Fire Damage","Mold","Structural","Probate","Tax Sale Capital Need","Squatter Issue","Burn Rate","Seller Pressure","Lender Problem","Failed Closing"],BLOCK=["Capital","Timeline","Title","Access","Contractor","Tenant","Permit","City","Legal","Partner","Seller Pressure","Unknown Numbers","Insurance","Utilities","Appraisal","Inspection"],RISK=["Legal","Financial","Structural","Operational","City/Permit","Occupancy","Environmental","Insurance","Market","Reputation"],DOCS=["Photos","Contract","Title Report","Insurance Claim","Repair Estimate","Scope of Work","Appraisal","Rent Roll","Survey","Plans","Permits","Proof of Funds"],COND=["Unknown","Turnkey","Light Rehab","Medium Rehab","Full Gut","Fire Damage","Shell","Tear Down"],OCC=["Unknown","Vacant","Owner Occupied","Tenant Occupied","Squatter","Partial Vacancy"],TIME=["24 Hours","72 Hours","7 Days","14 Days","30 Days","Flexible"],CAP=["Unknown","Under $25k","$25k-$100k","$100k-$250k","$250k-$1M","$1M+"],SEV=["Low","Medium","High","Critical","Emergency"],YESNO=["Unknown","Yes","No"],MEMBER_TYPES=["Investor","Wholesaler","Lender","Contractor","Developer","Agent","Attorney","Operator","Private Capital","Property Manager"],CONTACT=["VaultForge Message","Phone","Text","Email","Contact Form"],CAP_POS=["Unknown","Cash Buyer","Private Capital","Hard Money","Bank Lending","JV Capital","Needs Capital","Operator With Capital","Operator Needs Capital"],FUND=["Unknown","Under $50k","$50k-$250k","$250k-$1M","$1M-$5M","$5M+"],SPEC=["Distress","Funding Gap","Off Market","Construction","Land","Commercial","Residential","Creative Finance","Insurance","Permits","Probate","Foreclosure","Tax Sale","Stalled Project","Value Add"],PROVIDE=["Capital","Buying","Lending","Contractors","Legal","Insurance","Property Management","Development","Operations","Introductions"],MARKETS=["Atlanta","North Georgia","Chattanooga","Nashville","Knoxville","Birmingham","Huntsville","Montgomery","Jacksonville","Tampa","Orlando","Miami","Charlotte","Raleigh-Durham","Greenville-Spartanburg","Charleston","Dallas-Fort Worth","Houston","Austin","San Antonio"];
-const DKEY=["vaultforge_clean_pain_rooms","vaultforge_pain_rooms","vaultforge_rooms_pains","vf_pain_rooms"],PKEY=["vaultforge_clean_pain_rooms_v1","vaultforge_clean_pain_rooms","vaultforge_pain_rooms","vaultforge_rooms_pain","vf_pain_rooms"],SKEY=["vaultforge_clean_room_states","vaultforge_room_states","vaultforge_pain_room_states","vaultforge_pain_room_states","vaultforge_5s_room_states"],READ="vaultforge_room_alert_read_v1",PKEYS=["vaultforge_profile","vaultforge_member_profile","vaultforge_clean_profile"],DIR="vaultforge_member_directory_v1";
-const CITY:any={atlanta:"Fulton",alpharetta:"Fulton",roswell:"Fulton",marietta:"Cobb",smyrna:"Cobb",kennesaw:"Cobb",cartersville:"Bartow",cville:"Bartow",cvile:"Bartow",adairsville:"Bartow",rome:"Floyd",gainesville:"Hall",savannah:"Chatham",augusta:"Richmond",columbus:"Muscogee",macon:"Bibb",chattanooga:"Hamilton",nashville:"Davidson",knoxville:"Knox",birmingham:"Jefferson",huntsville:"Madison",charlotte:"Mecklenburg",raleigh:"Wake",greenville:"Greenville",charleston:"Charleston",dallas:"Dallas",houston:"Harris",austin:"Travis","san antonio":"Bexar",sanantonio:"Bexar"};
-function ok(){return typeof window!=="undefined"&&!!window.localStorage}function jj<T>(r:string|null,f:T):T{try{return r?JSON.parse(r):f}catch{return f}}function t(v:unknown,f=""){const s=String(v||"").trim();return s||f}function l(v:unknown){if(Array.isArray(v))return v.map(String).map(x=>x.trim()).filter(Boolean);if(typeof v==="string"&&v.trim())return v.split(",").map(x=>x.trim()).filter(Boolean);return [] as string[]}function id(r:R|null|undefined){return t(r?.id||r?.roomId)}function st(r:R):S{const s=t(r.roomState||r.cleanupState||r.stateStatus,"active");return s==="saved"||s==="archived"||s==="deleted"?s:"active"}function keys(k:K){return k==="pain"?DKEY:PKEY}function sk(k:K,i:string){return[`vaultforge_clean_${k}_room_${i}`,`vaultforge_${k}_room_${i}`,`vf_${k}_room_${i}`]}function arr<T>(k:string):T[]{return ok()?jj<unknown>(localStorage.getItem(k),[]) instanceof Array?jj<T[]>(localStorage.getItem(k),[]):[]:[]}function smap(){const m:Record<string,S>={};if(ok())SKEY.forEach(k=>Object.assign(m,jj<Record<string,S>>(localStorage.getItem(k),{})));return m}function save(k:string,v:unknown){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{return false}}function county(c:string){return CITY[c.trim().toLowerCase().replace(/\s+/g," ")]||""}function types(a:string){return a==="Commercial"?COM:a==="Land"?LAND:RES}function title(r:R,k:K){return t(r.title||r.name,k==="pain"?"Untitled Pain Room":"Untitled Pain Room")}function loc(r:R){return[t(r.city),t(r.county),t(r.state)].filter(Boolean).join(", ")||"Market not listed"}function money(v:unknown){const n=Number(String(v||"").replace(/[^0-9.-]/g,""));return Number.isFinite(n)?n:0}function photo(r:R){return[t(r.coverPhoto),t(r.photoUrl),t(r.imageUrl),...l(r.photoUrls),...l(r.photos)].find(x=>x.startsWith("data:image")||x.startsWith("http")||x.startsWith("/")||x.startsWith("blob:"))||""}
-function all(k:K){if(!ok())return[] as R[];const out:R[]=[];const seen=new Set<string>();for(const kk of keys(k))for(const r of arr<R>(kk)){const i=id(r);if(i&&!seen.has(i)){seen.add(i);out.push({...r,id:i,roomId:i})}}for(let i=0;i<localStorage.length;i++){const kk=localStorage.key(i)||"";const m=k==="pain"?kk.includes("pain_room"):kk.includes("pain_room");if(!m)continue;const v=jj<any>(localStorage.getItem(kk),null);const rows=Array.isArray(v)?v:v&&typeof v==="object"?[v]:[];for(const r of rows){const ii=id(r);if(ii&&!seen.has(ii)){seen.add(ii);out.push({...r,id:ii,roomId:ii})}}}const map=smap();return out.map(r=>{const i=id(r);const s=map[i]||map[`${k}:${i}`]||st(r);return{...r,roomState:s,cleanupState:s,stateStatus:s}}).sort((a,b)=>String(b.createdAt||b.updatedAt||"").localeCompare(String(a.createdAt||a.updatedAt||"")))}
-function getRoom(k:K,i:string){if(!ok())return null as R|null;for(const kk of sk(k,i)){const r=jj<R|null>(localStorage.getItem(kk),null);if(r&&id(r))return r}return all(k).find(r=>id(r)===i)||null}function setRoomState(k:K,r:R,s:S){const i=id(r);if(!ok()||!i)return;const n={...r,roomState:s,cleanupState:s,stateStatus:s,updatedAt:new Date().toISOString()};sk(k,i).forEach(kk=>save(kk,n));keys(k).forEach(kk=>save(kk,[n,...arr<R>(kk).filter(x=>id(x)!==i)]));const m=smap();m[i]=s;m[`${k}:${i}`]=s;SKEY.forEach(kk=>save(kk,m));window.dispatchEvent(new Event("vaultforge-room-state-change"))}function saveRoom(k:K,r:R){if(!ok())return"";const i=`${k}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,now=new Date().toISOString(),cover=t(r.coverPhoto||r.photoUrl||r.imageUrl||l(r.photos)[0]||l(r.photoUrls)[0]);const n={...r,id:i,roomId:i,roomState:"active" as S,cleanupState:"active" as S,stateStatus:"active" as S,createdAt:now,updatedAt:now,alertRead:false,viewedAt:"",coverPhoto:cover,photoUrl:cover,imageUrl:cover,photos:cover?[cover]:[],photoUrls:cover?[cover]:[]};sk(k,i).forEach(kk=>save(kk,n));keys(k).forEach(kk=>save(kk,[n,...arr<R>(kk).filter(x=>id(x)!==i)]));const m=smap();m[i]="active";m[`${k}:${i}`]="active";SKEY.forEach(kk=>save(kk,m));window.dispatchEvent(new Event(k==="pain"?"vaultforge-pain-change":"vaultforge-pain-change"));return i}function unread(k:K,rs:R[]){const rd=ok()?jj<Record<string,string>>(localStorage.getItem(READ),{}):{};return rs.filter(r=>{const i=id(r);return st(r)==="active"&&!r.alertRead&&!r.viewedAt&&!rd[i]&&!rd[`${k}:${i}`]})}function mark(k:K,r:R){const i=id(r);if(!ok()||!i)return;const rd=jj<Record<string,string>>(localStorage.getItem(READ),{});rd[i]=new Date().toISOString();rd[`${k}:${i}`]=rd[i];localStorage.setItem(READ,JSON.stringify(rd));window.dispatchEvent(new Event("vaultforge-room-read-change"))}
-function pid(p:M){return t(p.id)||t(p.email).toLowerCase()||"local_member"}function norm(p:M):M{return{...p,id:pid(p),name:t(p.name,"VaultForge Member"),memberType:t(p.memberType,"Investor"),basedState:t(p.basedState,"GA"),statesOperated:l(p.statesOperated).length?l(p.statesOperated):["GA"],markets:l(p.markets),assetClasses:l(p.assetClasses),strategies:l(p.strategies),specialties:l(p.specialties),needs:l(p.needs),canProvide:l(p.canProvide),capitalPosition:t(p.capitalPosition,"Unknown"),proofOfFunds:t(p.proofOfFunds,"Unknown"),fundingRange:t(p.fundingRange,"Unknown"),contactPreference:t(p.contactPreference,"VaultForge Message"),directContact:t(p.directContact,"Unknown")}}function getProfile(){if(!ok())return{} as M;for(const k of PKEYS){const p=jj<M|null>(localStorage.getItem(k),null);if(p&&typeof p==="object")return norm(p)}return norm({id:"local_member",name:"VaultForge Member",basedState:"GA",statesOperated:["GA"]})}function dir(){if(!ok())return[] as M[];const d=jj<M[]>(localStorage.getItem(DIR),[]),cur=getProfile(),ci=pid(cur),seen=new Set<string>();return[cur,...d.filter(p=>pid(p)!==ci)].map(norm).filter(p=>{const i=pid(p);if(seen.has(i))return false;seen.add(i);return true})}function saveProfile(p:M){const n=norm(p);if(ok()){PKEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(n)));localStorage.setItem(DIR,JSON.stringify([n,...dir().filter(x=>pid(x)!==pid(n))]));window.dispatchEvent(new Event("vaultforge-profile-change"));window.dispatchEvent(new Event("vaultforge-network-change"))}return n}function over(a:unknown,b:unknown){const aa=l(a).map(x=>x.toLowerCase()),bb=l(b).map(x=>x.toLowerCase());return aa.filter(x=>bb.includes(x)).length}function score(m:M,r:R,k:K){let s=0;const why:string[]=[];if(l(m.statesOperated).includes(t(r.state))){s+=30;why.push("state fit")}if(over(m.assetClasses,[t(r.assetClass)])){s+=20;why.push("asset fit")}if(k==="pain"){if(over(m.strategies,r.strategy)){s+=20;why.push("strategy fit")}if(over(m.canProvide,r.routeTo)){s+=25;why.push("route fit")}}else{if(over(m.canProvide,r.routingNeeds)){s+=30;why.push("solver fit")}if(over(m.specialties,r.painTypes)){s+=25;why.push("pain specialty")}}return{member:m,score:Math.min(100,s),reasons:why}}function best(r:R,k:K,ms:M[]){return ms.map(m=>score(m,r,k)).filter(x=>x.score>0).sort((a,b)=>b.score-a.score)[0]||null}function matchCount(rs:R[],k:K,ms:M[]){return rs.filter(r=>best(r,k,ms)).length}
-function painAI(r:R){const spread=money(r.propertyValue)-money(r.askingPrice)-money(r.repairs);let strength=45;if(spread>50000)strength+=20;if(spread>150000)strength+=15;if(t(r.controlStatus).toLowerCase().includes("controlled"))strength+=10;if(l(r.routeTo).length)strength+=10;strength=Math.max(0,Math.min(100,strength));const risk=t(r.condition).includes("Full")||t(r.condition).includes("Fire")?75:t(r.occupancy).includes("Squatter")?80:45;const urg=t(r.timeline).includes("24")||t(r.timeline).includes("72")?90:t(r.timeline).includes("7")?75:45;return{strength,spread,risk,urg,banner:strength>=75?"Strong routing opportunity":strength>=55?"Workable opportunity with missing proof":"Needs verification before routing",next:"Verify control, access, title, photos, numbers, and route to the best fit member before introducing parties."}}function painAI(r:R){let sev=40;if(t(r.severity).includes("High"))sev+=20;if(t(r.severity).includes("Critical")||t(r.severity).includes("Emergency"))sev+=35;if(t(r.timePressure).includes("24")||t(r.timePressure).includes("72"))sev+=20;if(l(r.blockers).includes("Capital"))sev+=10;sev=Math.max(0,Math.min(100,sev));const cap=t(r.capitalPressure)!=="Unknown"?75:l(r.painTypes).includes("Funding Gap")?80:35,block=Math.min(100,l(r.blockers).length*12+l(r.riskTypes).length*8);return{sev,cap,block,banner:sev>=80?"Immediate pressure signal":sev>=60?"High priority execution issue":"Track and route when more facts are verified",next:"Identify the blocking issue, confirm who controls the pain, collect proof documents, and route to the best solver profile.",consequence:t(r.worstCase,"Delay, loss of control, cost increase, or failed closing if no action is taken.")}}
-async function comp(file:File,w=620,q=.42):Promise<string>{return new Promise(res=>{const rd=new FileReader();rd.onerror=()=>res("");rd.onload=()=>{const im=new Image();im.onerror=()=>res("");im.onload=()=>{try{const sc=Math.min(1,w/im.width),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*sc));c.height=Math.max(1,Math.round(im.height*sc));const x=c.getContext("2d");if(!x)return res("");x.drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",q))}catch{res("")}};im.src=String(rd.result||"")};rd.readAsDataURL(file)})}async function photos(fs:FileList|null){const out:string[]=[];for(const f of Array.from(fs||[]).slice(0,10)){const p=await comp(f);if(p)out.push(p)}return out}async function one(fs:FileList|null){const f=Array.from(fs||[])[0];return f?comp(f):""}
-const page:React.CSSProperties={minHeight:"100vh",background:"#05070d",color:"#f7f7fb",padding:18,fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"},wrap:React.CSSProperties={maxWidth:1280,margin:"0 auto",paddingBottom:90},nav:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:18},brand:React.CSSProperties={color:"#ffd45a",fontSize:27,fontWeight:950,letterSpacing:-1,marginRight:10},btn:React.CSSProperties={border:"1px solid rgba(207,216,230,.18)",background:"#171c29",color:"#f7f7fb",borderRadius:999,padding:"13px 18px",fontWeight:950,textDecoration:"none",display:"inline-block",cursor:"pointer"},goldBtn:React.CSSProperties={...btn,border:0,background:"#ffdc68",color:"#10131a"},redBtn:React.CSSProperties={...btn,background:"#271016",borderColor:"rgba(255,70,70,.48)",color:"#ffaaaa"},hero:React.CSSProperties={border:"1px solid rgba(245,197,66,.28)",borderRadius:28,padding:30,marginBottom:20,background:"radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)"},redHero:React.CSSProperties={...hero,borderColor:"rgba(255,70,70,.62)",background:"radial-gradient(circle at top right, rgba(255,30,60,.22), transparent 35%), linear-gradient(180deg,#170812,#050816)"},card:React.CSSProperties={background:"linear-gradient(180deg,#080d19,#050816)",border:"1px solid rgba(245,197,66,.28)",borderRadius:26,padding:26,marginBottom:22},panel:React.CSSProperties={background:"#121724",border:"1px solid rgba(207,216,230,.16)",borderRadius:22,padding:22},activePanel:React.CSSProperties={...panel,borderColor:"rgba(255,70,70,.70)",boxShadow:"0 0 26px rgba(255,50,70,.22)"},pulsePanel:React.CSSProperties={...panel,borderColor:"rgba(245,197,66,.75)",boxShadow:"0 0 26px rgba(245,197,66,.18)"},eyebrow:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:7,fontWeight:950,fontSize:15,marginBottom:12},lab:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:4,fontSize:12,fontWeight:950,marginBottom:8},h1:React.CSSProperties={fontSize:"clamp(44px,8vw,86px)",lineHeight:.9,letterSpacing:-4,margin:"0 0 18px",fontWeight:950},h2:React.CSSProperties={fontSize:"clamp(30px,5vw,52px)",lineHeight:.95,letterSpacing:-2,margin:"0 0 14px",fontWeight:950},sub:React.CSSProperties={color:"#c9d0dc",fontSize:21,lineHeight:1.35,margin:0},muted:React.CSSProperties={color:"#aeb7c7",margin:"8px 0 0",lineHeight:1.35},grid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:16},row:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"},input:React.CSSProperties={width:"100%",boxSizing:"border-box",border:"1px solid rgba(207,216,230,.18)",background:"#151b2a",color:"#f8fafc",borderRadius:18,padding:"15px 16px",fontSize:16},textarea:React.CSSProperties={...input,minHeight:110,resize:"vertical"},photoStyle:React.CSSProperties={width:"100%",height:170,objectFit:"cover",borderRadius:18,border:"1px solid rgba(245,197,66,.25)",marginBottom:12};
-function stop(e:React.KeyboardEvent<HTMLInputElement|HTMLTextAreaElement>){e.stopPropagation()}function Nav({active}:{active:string}){const it=(href:string,label:string,key:string)=><Link href={href} style={active===key?goldBtn:btn}>{label}</Link>;return <nav style={nav}><div style={brand}>VAULTFORGE</div>{it("/command","Command","command")}{it("/members","Members","members")}{it("/network","Network","network")}{it("/alerts","Alerts","alerts")}{it("/messages","Messages","messages")}{it("/pain-rooms","Pain Rooms","pains")}{it("/pain-rooms","Pain Rooms","pain")}{it("/pain-create","Create Pain","pain-create")}{it("/pain-intake","Pain Intake","pain-intake")}{it("/profile","Profile","profile")}<Link href="/logout" style={redBtn}>Logout</Link></nav>}function Section({title,children}:{title:string;children:React.ReactNode}){return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>}function Field({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label><div style={lab}>{label}</div><input type="text" style={input} value={value} onKeyDownCapture={stop} onKeyUpCapture={stop} onKeyPress={stop} onChange={e=>onChange(e.target.value)}/></label>}function TextArea({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label><div style={lab}>{label}</div><textarea style={textarea} value={value} onKeyDownCapture={stop} onKeyUpCapture={stop} onKeyPress={stop} onChange={e=>onChange(e.target.value)}/></label>}function SelectField({label,value,onChange,options}:{label:string;value:string;onChange:(v:string)=>void;options:string[]}){return <label><div style={lab}>{label}</div><select style={input} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o}>{o}</option>)}</select></label>}function ChipSet({label,options,selected,onToggle}:{label:string;options:string[];selected:string[];onToggle:(v:string)=>void}){return <div><div style={lab}>{label}</div><div style={row}>{options.map(o=><button key={o} type="button" style={selected.includes(o)?goldBtn:btn} onClick={()=>onToggle(o)}>{o}</button>)}</div></div>}function PhotoPicker({photos:setPhotosArr,setPhotos}:{photos:string[];setPhotos:(n:string[])=>void}){async function add(fs:FileList|null){const p=await photos(fs);setPhotos([...setPhotosArr,...p].slice(0,10))}return <div><input type="file" multiple accept="image/*" onChange={e=>add(e.target.files)}/><p style={muted}>{setPhotosArr.length}/10 photo(s). First photo becomes cover.</p>{setPhotosArr.length?<div style={grid}>{setPhotosArr.map((p,i)=><div key={p.slice(0,20)+i} style={panel}><img src={p} alt={`Selected ${i+1}`} style={photoStyle}/><button type="button" style={redBtn} onClick={()=>setPhotos(setPhotosArr.filter((_,x)=>x!==i))}>Delete Photo</button></div>)}</div>:null}</div>}function Value({label,value}:{label:string;value:unknown}){return <div style={panel}><div style={eyebrow}>{label}</div><p style={sub}>{t(value,"Not listed")}</p></div>}function Meter({label,value}:{label:string;value:number}){return <div style={panel}><div style={eyebrow}>{label}</div><h2 style={h2}>{value}%</h2><div style={{height:10,background:"#070a12",borderRadius:999,overflow:"hidden"}}><div style={{width:`${Math.max(0,Math.min(100,value))}%`,height:"100%",background:"#ffdc68"}}/></div></div>}function MatchCard({match}:{match:{member:M;score:number;reasons:string[]}}){return <div style={panel}><div style={eyebrow}>Best Fit</div><h2 style={h2}>{t(match.member.name,"Member")}</h2><p style={sub}>{match.score}% match</p><p style={muted}>{match.reasons.join(", ")||"Profile overlap"}</p><div style={{...row,marginTop:14}}><Link href={`/messages?to=${encodeURIComponent(t(match.member.email,pid(match.member)))}&subject=${encodeURIComponent("Network Match: "+t(match.member.name,"Member"))}`} style={goldBtn}>Contact</Link></div></div>}
 
-export default function PainRoomPage({params}:{params:{id:string}}){const ridp=decodeURIComponent(params.id||""),[room,setRoom]=useState<R|null>(null),[open,setOpen]=useState("summary");useEffect(()=>{const r=getRoom("pain",ridp);setRoom(r);if(r)mark("pain",r)},[ridp]);const members=useMemo(()=>dir(),[room?.id]);if(!room)return <main style={page}><div style={wrap}><Nav active="pains"/><section style={hero}><h1 style={h1}>Room not found.</h1></section></div></main>;const ai=painAI(room),img=photo(room),matches=members.map(m=>score(m,room,"pain")).sort((a,b)=>b.score-a.score).slice(0,5);function move(s:S){setRoomState("pain",room!,s);setRoom({...room!,roomState:s,cleanupState:s,stateStatus:s})}return <main style={page}><div style={wrap}><Nav active="pains"/><section style={ai.sev>=80?redHero:hero}>{img?<img src={img} alt={title(room,"pain")} style={photoStyle}/>:null}<div style={eyebrow}>Pain Room • {st(room)}</div><h1 style={h1}>{title(room,"pain")}</h1><p style={sub}>{loc(room)}</p><p style={muted}>{t(room.assetClass)} • {t(room.propertyType)} • {l(room.strategy).join(", ")||"No strategy selected"}</p></section><Section title="Room Controls"><div style={grid}>{[["summary","Intelligence",ai.sev+"%",ai.banner],["problem","Problem",l(room.painTypes).length,"pain type(s)"],["pressure","Pressure",ai.block+"%","blocker score"],["matches","Matches",matches.length,"member fits"],["messages","Messages","Open","room thread"],["notes","Notes",t(room.notes)||t(room.analyzer)?"1":"0","room notes"]].map(x=><button key={String(x[0])} type="button" style={open===x[0]?pulsePanel:panel} onClick={()=>setOpen(String(x[0]))}><div style={eyebrow}>{x[1]}</div><h2 style={h2}>{x[2]}</h2><p style={muted}>{x[3]}</p></button>)}</div></Section><Section title="Actions"><div style={row}><button type="button" style={goldBtn} onClick={()=>move("saved")}>Save</button><button type="button" style={btn} onClick={()=>move("archived")}>Archive</button><button type="button" style={redBtn} onClick={()=>move("deleted")}>Delete</button><Link href="/pain-rooms" style={btn}>Back</Link></div></Section>{open==="summary"?<Section title="Intelligence Snapshot"><div style={grid}><Meter label="Pain Strength" value={ai.sev}/><Meter label="Urgency" value={ai.block}/><Meter label="Capital Need" value={ai.cap}/><Value label="AI Signal" value={t(room.analyzer,ai.banner)}/></div></Section>:null}{open==="problem"?<Section title="Problem Facts"><div style={grid}><Value label="Pain Type" value={l(room.painTypes).join(", ")}/><Value label="Severity" value={room.severity}/><Value label="Time Pressure" value={room.timePressure}/><Value label="Needs" value={l(room.routingNeeds).join(", ")}/><Value label="NOI" value={room.noi}/><Value label="Cap Rate" value={room.capRate}/><Value label="Acres" value={room.acres}/><Value label="Zoning" value={room.zoning}/></div></Section>:null}{open==="pressure"?<><Section title="Blockers + Risk"><div style={grid}><Value label="Blockers" value={l(room.blockers).join(", ")}/><Value label="Risk Types" value={l(room.riskTypes).join(", ")}/><Value label="Condition" value={room.condition}/><Value label="Occupancy" value={room.occupancy}/><Value label="Control" value={room.controlStatus}/><Value label="Timeline" value={room.timeline||room.timePressure}/><Value label="Contact" value={[t(room.contactName),t(room.contactPhone),t(room.contactEmail)].filter(Boolean).join(" • ")}/></div></Section><Section title="Best Next Move"><p style={sub}>{ai.next}</p></Section></>:null}{open==="matches"?<Section title="Best Member Matches"><div style={grid}>{matches.length?matches.map(m=><MatchCard key={pid(m.member)} match={m}/>):<p style={sub}>No member profiles available yet.</p>}</div></Section>:null}{open==="messages"?<Section title="Room Messages"><Link href={`/messages?type=pain&room=${encodeURIComponent(ridp)}&subject=${encodeURIComponent("Pain Room: "+title(room,"pain"))}`} style={goldBtn}>Open Message Thread</Link></Section>:null}{open==="notes"?<Section title="Room Notes"><p style={sub}>{t(room.notes,"No notes added.")}</p><p style={muted}>{t(room.analyzer)}</p></Section>:null}</div></main>}
+import React from "react";
+
+type Room = {
+  id: string;
+  title: string;
+  city: string;
+  state: string;
+  severity: string;
+  needs: string[];
+  notes: string;
+};
+
+function getRoom(id: string): Room {
+  if (typeof window === "undefined") {
+    return {
+      id,
+      title: "Pain Room",
+      city: "Unknown",
+      state: "GA",
+      severity: "Medium",
+      needs: [],
+      notes: "",
+    };
+  }
+
+  try {
+    const raw = localStorage.getItem("vf_pain_rooms");
+    const rooms = raw ? JSON.parse(raw) : [];
+    const found = rooms.find((r: any) => r.id === id);
+
+    return (
+      found || {
+        id,
+        title: "Pain Room",
+        city: "Unknown",
+        state: "GA",
+        severity: "Medium",
+        needs: [],
+        notes: "",
+      }
+    );
+  } catch {
+    return {
+      id,
+      title: "Pain Room",
+      city: "Unknown",
+      state: "GA",
+      severity: "Medium",
+      needs: [],
+      notes: "",
+    };
+  }
+}
+
+function buildPainIntel(room: Room) {
+  const severityMap: Record<string, string> = {
+    Low: "Monitor",
+    Medium: "Active",
+    High: "Urgent",
+    Critical: "Immediate Attention",
+  };
+
+  return {
+    urgency: severityMap[room.severity] || "Active",
+    routing:
+      room.needs.length > 0
+        ? room.needs.join(", ")
+        : "Lender, Operator, Contractor",
+    summary:
+      room.notes ||
+      "AI routing engine detected operational pressure and recommends immediate network review.",
+  };
+}
+
+export default function PainRoomPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const room = getRoom(params.id);
+  const intel = buildPainIntel(room);
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#05070d",
+        color: "#f3f4f6",
+        padding: 24,
+        fontFamily: "Inter, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1200,
+          margin: "0 auto",
+          display: "grid",
+          gap: 24,
+        }}
+      >
+        <section
+          style={{
+            border: "1px solid rgba(255,215,0,.25)",
+            borderRadius: 24,
+            padding: 28,
+            background:
+              "linear-gradient(135deg, rgba(10,14,30,.96), rgba(5,7,13,.98))",
+          }}
+        >
+          <div
+            style={{
+              color: "#f5d15f",
+              letterSpacing: 6,
+              fontWeight: 800,
+              marginBottom: 18,
+            }}
+          >
+            PAIN ROOM
+          </div>
+
+          <h1
+            style={{
+              fontSize: 54,
+              lineHeight: 1,
+              margin: 0,
+              fontWeight: 900,
+            }}
+          >
+            {room.title}
+          </h1>
+
+          <p
+            style={{
+              marginTop: 18,
+              color: "#b8c0d4",
+              fontSize: 20,
+            }}
+          >
+            {room.city}, {room.state}
+          </p>
+        </section>
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+            gap: 20,
+          }}
+        >
+          <div
+            style={{
+              border: "1px solid rgba(255,215,0,.15)",
+              borderRadius: 20,
+              padding: 22,
+              background: "#0c1222",
+            }}
+          >
+            <div style={{ color: "#f5d15f", letterSpacing: 4 }}>
+              AI URGENCY
+            </div>
+
+            <h2 style={{ fontSize: 36 }}>{intel.urgency}</h2>
+          </div>
+
+          <div
+            style={{
+              border: "1px solid rgba(255,215,0,.15)",
+              borderRadius: 20,
+              padding: 22,
+              background: "#0c1222",
+            }}
+          >
+            <div style={{ color: "#f5d15f", letterSpacing: 4 }}>
+              NETWORK ROUTING
+            </div>
+
+            <h2 style={{ fontSize: 28 }}>{intel.routing}</h2>
+          </div>
+        </section>
+
+        <section
+          style={{
+            border: "1px solid rgba(255,215,0,.15)",
+            borderRadius: 20,
+            padding: 22,
+            background: "#0c1222",
+          }}
+        >
+          <div
+            style={{
+              color: "#f5d15f",
+              letterSpacing: 4,
+              marginBottom: 14,
+            }}
+          >
+            AI INTELLIGENCE SUMMARY
+          </div>
+
+          <p
+            style={{
+              color: "#c8d1e4",
+              fontSize: 18,
+              lineHeight: 1.7,
+            }}
+          >
+            {intel.summary}
+          </p>
+        </section>
+      </div>
+    </main>
+  );
+}
