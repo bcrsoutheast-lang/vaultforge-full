@@ -1,7 +1,89 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type RoomState = "active" | "saved" | "archived" | "deleted";
+type RoomKind = "deal" | "pain";
+
+type Room = {
+  id?: string;
+  roomId?: string;
+  title?: string;
+  name?: string;
+  state?: string;
+  city?: string;
+  county?: string;
+  address?: string;
+  assetClass?: string;
+  propertyType?: string;
+  askingPrice?: string;
+  propertyValue?: string;
+  repairs?: string;
+  timeline?: string;
+  timePressure?: string;
+  severity?: string;
+  capitalPressure?: string;
+  controlStatus?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  bestContact?: string;
+  notes?: string;
+  routeTo?: string[] | string;
+  routingNeeds?: string[] | string;
+  painTypes?: string[] | string;
+  strategy?: string[] | string;
+  motivation?: string[] | string;
+  condition?: string;
+  occupancy?: string;
+  dealStrength?: string;
+  beds?: string;
+  baths?: string;
+  sqft?: string;
+  units?: string;
+  acres?: string;
+  zoning?: string;
+  monthlyRent?: string;
+  noi?: string;
+  capRate?: string;
+  lotSize?: string;
+  utilities?: string;
+  roadFrontage?: string;
+  entitlementStatus?: string;
+  monthlyBurnRate?: string;
+  moneyNeededNow?: string;
+  deadline?: string;
+  rootCause?: string;
+  bestOutcome?: string;
+  worstCase?: string;
+  desiredSolution?: string;
+  currentStatus?: string;
+  ownerSituation?: string;
+  accessStatus?: string;
+  titleStatus?: string;
+  insuranceStatus?: string;
+  permitStatus?: string;
+  tenantStatus?: string;
+  legalStatus?: string;
+  blockers?: string[] | string;
+  riskTypes?: string[] | string;
+  documentsAvailable?: string[] | string;
+  roomState?: RoomState;
+  cleanupState?: RoomState;
+  stateStatus?: RoomState;
+  alertRead?: boolean;
+  viewedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  coverPhoto?: string;
+  photoUrl?: string;
+  imageUrl?: string;
+  photos?: string[];
+  photoUrls?: string[];
+  analyzer?: string;
+  [key: string]: unknown;
+};
 
 type MemberProfile = {
   id?: string;
@@ -31,20 +113,59 @@ type MemberProfile = {
   [key: string]: unknown;
 };
 
-const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
-const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
-
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const MARKETS = ["Atlanta", "North Georgia", "Chattanooga", "Nashville", "Knoxville", "Birmingham", "Huntsville", "Montgomery", "Jacksonville", "Tampa", "Orlando", "Miami", "Charlotte", "Raleigh-Durham", "Greenville-Spartanburg", "Charleston", "Dallas-Fort Worth", "Houston", "Austin", "San Antonio"];
+
 const ASSETS = ["Residential", "Commercial", "Land"];
+const RES_TYPES = ["Single Family", "Duplex", "Triplex", "Quad", "Townhome", "Condo", "Mobile Home", "Small Multifamily", "Apartment"];
+const COM_TYPES = ["Retail", "Office", "Industrial", "Warehouse", "Hotel", "Self Storage", "Mixed Use", "Medical", "Restaurant", "Automotive", "Church / Special Use"];
+const LAND_TYPES = ["Infill Lot", "Acreage", "Entitled Land", "Raw Land", "Commercial Pad", "Subdivision", "Timber", "Farm", "Assemblage", "Waterfront"];
+
 const STRATEGIES = ["Wholesale", "Flip", "Buy & Hold", "BRRRR", "Development", "Seller Finance", "JV", "Rental", "Hotel Conversion", "Airbnb"];
-const SPECIALTIES = ["Distress", "Funding Gap", "Off Market", "Construction", "Land", "Commercial", "Residential", "Creative Finance", "Insurance", "Permits", "Probate", "Foreclosure", "Tax Sale", "Stalled Project", "Value Add"];
+const ROUTES = ["Buyer", "Lender", "Operator", "Contractor", "Developer", "Attorney", "Capital Partner", "Property Manager"];
+const CONDITION = ["Unknown", "Turnkey", "Light Rehab", "Medium Rehab", "Full Gut", "Fire Damage", "Shell", "Tear Down"];
+const OCCUPANCY = ["Unknown", "Vacant", "Owner Occupied", "Tenant Occupied", "Squatter", "Partial Vacancy"];
+const TIME = ["24 Hours", "72 Hours", "7 Days", "14 Days", "30 Days", "Flexible"];
+const BEST_CONTACT = ["VaultForge Message", "Phone", "Text", "Email", "Contact Form"];
+const CONTROL = ["Unknown", "Owner Controlled", "Contract Controlled", "Partner Controlled", "Bank Controlled", "Court / Estate", "No Control Yet"];
+
+const PAIN_TYPES = [
+  "Funding Gap",
+  "Foreclosure",
+  "Stalled Construction",
+  "Contractor Problem",
+  "Title Problem",
+  "Permit Problem",
+  "City Violation",
+  "Tenant Issue",
+  "Partnership Dispute",
+  "Emergency Exit",
+  "Insurance Claim",
+  "Fire Damage",
+  "Mold",
+  "Structural",
+  "Probate",
+  "Tax Sale Risk",
+  "Squatter Issue",
+  "Burn Rate",
+  "Seller Pressure",
+  "Lender Problem",
+  "Failed Closing",
+];
+
 const NEEDS = ["Lender", "Operator", "Contractor", "Buyer", "Attorney", "Insurance Adjuster", "City Expeditor", "Private Capital", "Property Manager", "Developer"];
-const CAN_PROVIDE = ["Capital", "Buying", "Lending", "Contractors", "Legal", "Insurance", "Property Management", "Development", "Operations", "Introductions"];
+const BLOCKERS = ["Capital", "Timeline", "Title", "Access", "Contractor", "Tenant", "Permit", "City", "Legal", "Partner", "Seller Pressure", "Unknown Numbers", "Insurance", "Utilities", "Appraisal", "Inspection"];
+const RISK = ["Legal", "Financial", "Structural", "Operational", "City/Permit", "Occupancy", "Environmental", "Insurance", "Market", "Reputation"];
+const DOCUMENTS = ["Photos", "Contract", "Title Report", "Insurance Claim", "Repair Estimate", "Scope of Work", "Appraisal", "Rent Roll", "Survey", "Plans", "Permits", "Proof of Funds"];
+const CAPITAL = ["Unknown", "Under $25k", "$25k-$100k", "$100k-$250k", "$250k-$1M", "$1M+"];
+const SEVERITY = ["Low", "Medium", "High", "Critical", "Emergency"];
+
 const MEMBER_TYPES = ["Investor", "Wholesaler", "Lender", "Contractor", "Developer", "Agent", "Attorney", "Operator", "Private Capital", "Property Manager"];
 const CONTACT_PREFS = ["VaultForge Message", "Text", "Phone", "Email", "Contact Form"];
 const CAPITAL_POSITIONS = ["Unknown", "Cash Buyer", "Private Capital", "Hard Money", "Bank Lending", "JV Capital", "Needs Capital", "Operator With Capital", "Operator Needs Capital"];
 const FUNDING_RANGES = ["Unknown", "Under $50k", "$50k-$250k", "$250k-$1M", "$1M-$5M", "$5M+"];
+const SPECIALTIES = ["Distress", "Funding Gap", "Off Market", "Construction", "Land", "Commercial", "Residential", "Creative Finance", "Insurance", "Permits", "Probate", "Foreclosure", "Tax Sale", "Stalled Project", "Value Add"];
+const CAN_PROVIDE = ["Capital", "Buying", "Lending", "Contractors", "Legal", "Insurance", "Property Management", "Development", "Operations", "Introductions"];
 const YESNO = ["Unknown", "Yes", "No"];
 
 const CITY_COUNTY: Record<string, string> = {
@@ -80,6 +201,12 @@ const CITY_COUNTY: Record<string, string> = {
   sanantonio: "Bexar",
 };
 
+const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
+
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
@@ -103,12 +230,15 @@ function list(value: unknown): string[] {
   return [];
 }
 
+function rid(room: Room | null | undefined) {
+  return txt(room?.id || room?.roomId);
+}
+
 function profileId(profile: MemberProfile) {
   return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
 }
 
 function normalizeProfile(profile: MemberProfile): MemberProfile {
-  const now = new Date().toISOString();
   return {
     ...profile,
     id: profileId(profile),
@@ -127,7 +257,7 @@ function normalizeProfile(profile: MemberProfile): MemberProfile {
     fundingRange: txt(profile.fundingRange, "Unknown"),
     contactPreference: txt(profile.contactPreference, "VaultForge Message"),
     directContact: txt(profile.directContact, "Unknown"),
-    updatedAt: now,
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -160,15 +290,84 @@ function saveProfile(profile: MemberProfile) {
   if (!ok()) return normalizeProfile(profile);
   const next = normalizeProfile(profile);
   PROFILE_KEYS.forEach((key) => localStorage.setItem(key, JSON.stringify(next)));
-
   const directory = getDirectory();
   const id = profileId(next);
-  const merged = [next, ...directory.filter((member) => profileId(member) !== id)];
-  localStorage.setItem(MEMBER_DIRECTORY_KEY, JSON.stringify(merged));
-
+  localStorage.setItem(MEMBER_DIRECTORY_KEY, JSON.stringify([next, ...directory.filter((member) => profileId(member) !== id)]));
   window.dispatchEvent(new Event("vaultforge-profile-change"));
   window.dispatchEvent(new Event("vaultforge-network-change"));
   return next;
+}
+
+function arr<T>(key: string): T[] {
+  if (!ok()) return [];
+  const parsed = j<unknown>(localStorage.getItem(key), []);
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
+
+function keysFor(kind: RoomKind) {
+  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
+}
+
+function singleKeys(kind: RoomKind, id: string) {
+  return [`vaultforge_clean_${kind}_room_${id}`, `vaultforge_${kind}_room_${id}`, `vf_${kind}_room_${id}`];
+}
+
+function saveSafe(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function stateMap() {
+  const map: Record<string, RoomState> = {};
+  if (!ok()) return map;
+  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomState>>(localStorage.getItem(key), {})));
+  return map;
+}
+
+function saveRoom(kind: RoomKind, room: Room) {
+  if (!ok()) return "";
+  const id = `${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
+  const next: Room = {
+    ...room,
+    id,
+    roomId: id,
+    roomState: "active",
+    cleanupState: "active",
+    stateStatus: "active",
+    createdAt: now,
+    updatedAt: now,
+    alertRead: false,
+    viewedAt: "",
+  };
+
+  for (const key of singleKeys(kind, id)) {
+    const worked = saveSafe(key, next);
+    if (!worked) saveSafe(key, { ...next, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" });
+  }
+
+  const cover = txt(next.coverPhoto || next.photoUrl || next.imageUrl);
+  const slim: Room = { ...next, photos: cover ? [cover] : [], photoUrls: cover ? [cover] : [], coverPhoto: cover, photoUrl: cover, imageUrl: cover };
+
+  for (const key of keysFor(kind)) {
+    const existing = arr<Room>(key).filter((row) => rid(row) !== id);
+    const worked = saveSafe(key, [slim, ...existing]);
+    if (!worked) saveSafe(key, [{ ...slim, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }, ...existing]);
+  }
+
+  const map = stateMap();
+  map[id] = "active";
+  map[`${kind}:${id}`] = "active";
+  STATE_KEYS.forEach((key) => saveSafe(key, map));
+
+  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+
+  return id;
 }
 
 function countyFromCity(city: string) {
@@ -205,9 +404,33 @@ async function compressImage(file: File, maxWidth = 850, quality = 0.52): Promis
   });
 }
 
+async function photosFromFiles(files: FileList | null) {
+  const selected = Array.from(files || []).slice(0, 10);
+  const output: string[] = [];
+  for (const file of selected) {
+    const compressed = await compressImage(file);
+    if (compressed && compressed.length < 450000) output.push(compressed);
+  }
+  return output;
+}
+
 async function onePhoto(files: FileList | null) {
   const file = Array.from(files || [])[0];
   return file ? compressImage(file) : "";
+}
+
+function assetTypes(assetClass: string) {
+  if (assetClass === "Commercial") return COM_TYPES;
+  if (assetClass === "Land") return LAND_TYPES;
+  return RES_TYPES;
+}
+
+function titleFor(room: Room, kind: RoomKind) {
+  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
+}
+
+function loc(room: Room) {
+  return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
 }
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
@@ -233,16 +456,25 @@ const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", bor
 const textarea: React.CSSProperties = { ...input, minHeight: 110, resize: "vertical" };
 const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
-function Nav() {
+function stopBubble(event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  event.stopPropagation();
+}
+
+function Nav({ active }: { active: string }) {
+  const item = (href: string, label: string, key: string) => <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>;
   return (
     <nav style={nav}>
       <div style={brand}>VAULTFORGE</div>
-      <Link href="/command" style={btn}>Command</Link>
-      <Link href="/members" style={btn}>Members</Link>
-      <Link href="/network" style={btn}>Network</Link>
-      <Link href="/alerts" style={btn}>Alerts</Link>
-      <Link href="/messages" style={btn}>Messages</Link>
-      <Link href="/profile" style={goldBtn}>Profile</Link>
+      {item("/command", "Command", "command")}
+      {item("/members", "Members", "members")}
+      {item("/network", "Network", "network")}
+      {item("/alerts", "Alerts", "alerts")}
+      {item("/messages", "Messages", "messages")}
+      {item("/deal-rooms", "Deal Rooms", "deals")}
+      {item("/pain-rooms", "Pain Rooms", "pain")}
+      {item("/deal-create", "Create Deal", "deal-create")}
+      {item("/pain-intake", "Pain Intake", "pain-intake")}
+      {item("/profile", "Profile", "profile")}
       <Link href="/logout" style={redBtn}>Logout</Link>
     </nav>
   );
@@ -253,11 +485,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><input type="text" style={input} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return (
+    <label>
+      <div style={labelStyle}>{label}</div>
+      <input type="text" style={input} value={value} onKeyDown={stopBubble} onKeyUp={stopBubble} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
 }
 
 function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><textarea style={textarea} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return (
+    <label>
+      <div style={labelStyle}>{label}</div>
+      <textarea style={textarea} value={value} onKeyDown={stopBubble} onKeyUp={stopBubble} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
 }
 
 function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
@@ -266,6 +508,30 @@ function SelectField({ label, value, onChange, options }: { label: string; value
 
 function ChipSet({ label, options, selected, onToggle }: { label: string; options: string[]; selected: string[]; onToggle: (value: string) => void }) {
   return <div><div style={labelStyle}>{label}</div><div style={row}>{options.map((option) => <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>{option}</button>)}</div></div>;
+}
+
+function PhotoPicker({ photos, setPhotos }: { photos: string[]; setPhotos: (next: string[]) => void }) {
+  async function add(files: FileList | null) {
+    const next = await photosFromFiles(files);
+    setPhotos([...photos, ...next].slice(0, 10));
+  }
+
+  return (
+    <div>
+      <input type="file" multiple accept="image/*" onChange={(event) => add(event.target.files)} />
+      <p style={muted}>{photos.length}/10 photo(s) selected</p>
+      {photos.length ? (
+        <div style={grid}>
+          {photos.map((photo, index) => (
+            <div key={`${photo.slice(0, 30)}-${index}`} style={panel}>
+              <img src={photo} alt={`Selected ${index + 1}`} style={photoStyle} />
+              <button type="button" style={redBtn} onClick={() => setPhotos(photos.filter((_, i) => i !== index))}>Delete Photo</button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function ProfilePreview({ profile }: { profile: MemberProfile }) {
@@ -300,6 +566,7 @@ export default function ProfilePage() {
     fundingRange: "Unknown",
   });
   const [banner, setBanner] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     setProfile(getProfile());
@@ -326,14 +593,20 @@ export default function ProfilePage() {
   }
 
   function save() {
+    setError("");
+    if (!txt(profile.name)) {
+      setError("Add member name before saving.");
+      return;
+    }
     const next = saveProfile(profile);
     setProfile(next);
     setBanner(`Saved. Member card appears under ${txt(next.basedState, "GA")}. Routing uses ${list(next.statesOperated).join(", ") || "no operating states"}.`);
   }
 
-  return <main style={page}><div style={wrap}><Nav />
+  return <main style={page}><div style={wrap}><Nav active="profile" />
 
     {banner ? <section style={activePanel}><div style={eyebrow}>Saved</div><h2 style={h2}>{banner}</h2></section> : null}
+    {error ? <section style={activePanel}><div style={eyebrow}>Error</div><h2 style={h2}>{error}</h2></section> : null}
 
     <section style={hero}>
       <div style={eyebrow}>Profile Intelligence</div>
@@ -357,7 +630,12 @@ export default function ProfilePage() {
     </Section>
 
     <Section title="Profile Photo">
-      {txt(profile.profilePhoto) ? <img src={txt(profile.profilePhoto)} alt="Profile" style={{ width: 150, height: 150, objectFit: "cover", borderRadius: 24, border: "1px solid rgba(245,197,66,.3)", display: "block", marginBottom: 14 }} /> : null}
+      {txt(profile.profilePhoto) ? (
+        <div style={panel}>
+          <img src={txt(profile.profilePhoto)} alt="Profile" style={{ width: 150, height: 150, objectFit: "cover", borderRadius: 24, border: "1px solid rgba(245,197,66,.3)", display: "block", marginBottom: 14 }} />
+          <button type="button" style={redBtn} onClick={() => up("profilePhoto", "")}>Delete Photo</button>
+        </div>
+      ) : null}
       <input type="file" accept="image/*" onChange={(event) => handlePhoto(event.target.files)} />
     </Section>
 
