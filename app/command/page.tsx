@@ -99,6 +99,9 @@ const READ_KEY = "vaultforge_room_alert_read_v1";
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
 const MESSAGE_KEY = "vaultforge_message_threads_v2";
+const ALERT_SEEN_KEY = "vaultforge_alert_seen_v1";
+const ALERT_DISMISSED_KEY = "vaultforge_alert_dismissed_v1";
+const ALERT_WATCHLIST_KEY = "vaultforge_alert_watchlist_v1";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -280,6 +283,15 @@ function saveThreads(threads: MessageThread[]) {
   if (!ok()) return;
   localStorage.setItem(MESSAGE_KEY, JSON.stringify(threads));
   window.dispatchEvent(new Event("vaultforge-messages-change"));
+}
+
+function idListFromStorage(key: string) {
+  if (!ok()) return [] as string[];
+  return j<string[]>(localStorage.getItem(key), []);
+}
+
+function alertId(kind: string, id: string) {
+  return `${kind}:${id}`;
 }
 
 function messageCounts() {
@@ -488,6 +500,19 @@ export default function CommandPage() {
   const savedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "saved"), [tick]);
   const archivedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "archived"), [tick]);
   const deletedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "deleted"), [tick]);
+  const seenAlerts = useMemo(() => idListFromStorage(ALERT_SEEN_KEY), [tick]);
+  const dismissedAlerts = useMemo(() => idListFromStorage(ALERT_DISMISSED_KEY), [tick]);
+  const watchlistAlerts = useMemo(() => idListFromStorage(ALERT_WATCHLIST_KEY), [tick]);
+  const dealAlertCount = unreadDeals.filter((room) => {
+    const id = alertId("deal", rid(room));
+    return !seenAlerts.includes(id) && !dismissedAlerts.includes(id);
+  }).length;
+  const painAlertCount = unreadPains.filter((room) => {
+    const id = alertId("pain", rid(room));
+    return !seenAlerts.includes(id) && !dismissedAlerts.includes(id);
+  }).length;
+  const messageAlertCount = counts.unread;
+  const totalAlertCount = dealAlertCount + painAlertCount + messageAlertCount;
 
   const newestDeal = unreadDeals[0] || deals[0] || null;
   const newestPain = unreadPains[0] || pains[0] || null;
@@ -571,6 +596,40 @@ export default function CommandPage() {
               <div style={eyebrow}>Unread Messages</div>
               <h2 style={h2}>{counts.unread}</h2>
               <p style={muted}>{counts.totalMessages} message(s) • click to open cards</p>
+            </Link>
+          </div>
+        </Section>
+
+        <Section title="Alert Center">
+          <div style={grid}>
+            <Link href="/alerts" style={totalAlertCount ? activePanel : panel}>
+              <div style={eyebrow}>Active Alerts</div>
+              <h2 style={h2}>{totalAlertCount}</h2>
+              <p style={muted}>deal, pain, and message alerts</p>
+            </Link>
+
+            <Link href="/alerts" style={dealAlertCount ? activePanel : panel}>
+              <div style={eyebrow}>Deal Alerts</div>
+              <h2 style={h2}>{dealAlertCount}</h2>
+              <p style={muted}>new opportunity alert(s)</p>
+            </Link>
+
+            <Link href="/alerts" style={painAlertCount ? activePanel : panel}>
+              <div style={eyebrow}>Pain Alerts</div>
+              <h2 style={h2}>{painAlertCount}</h2>
+              <p style={muted}>new pain alert(s)</p>
+            </Link>
+
+            <Link href="/alerts" style={messageAlertCount ? activePanel : panel}>
+              <div style={eyebrow}>Message Alerts</div>
+              <h2 style={h2}>{messageAlertCount}</h2>
+              <p style={muted}>unread message thread(s)</p>
+            </Link>
+
+            <Link href="/alerts" style={watchlistAlerts.length ? activePanel : panel}>
+              <div style={eyebrow}>Watchlist</div>
+              <h2 style={h2}>{watchlistAlerts.length}</h2>
+              <p style={muted}>saved alert item(s)</p>
             </Link>
           </div>
         </Section>
