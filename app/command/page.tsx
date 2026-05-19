@@ -444,64 +444,177 @@ function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
   );
 }
 
+
 export default function CommandPage() {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
-    ["storage", "vaultforge-profile-change", "vaultforge-network-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-messages-change"].forEach((event) => window.addEventListener(event, refresh));
-    return () => ["storage", "vaultforge-profile-change", "vaultforge-network-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-messages-change"].forEach((event) => window.removeEventListener(event, refresh));
+    [
+      "storage",
+      "vaultforge-profile-change",
+      "vaultforge-network-change",
+      "vaultforge-room-state-change",
+      "vaultforge-room-read-change",
+      "vaultforge-deal-change",
+      "vaultforge-pain-change",
+      "vaultforge-messages-change",
+    ].forEach((event) => window.addEventListener(event, refresh));
+
+    return () =>
+      [
+        "storage",
+        "vaultforge-profile-change",
+        "vaultforge-network-change",
+        "vaultforge-room-state-change",
+        "vaultforge-room-read-change",
+        "vaultforge-deal-change",
+        "vaultforge-pain-change",
+        "vaultforge-messages-change",
+      ].forEach((event) => window.removeEventListener(event, refresh));
   }, []);
 
   const profile = useMemo(() => getDirectory()[0] || {}, [tick]);
   const members = useMemo(() => getDirectory(), [tick]);
   const deals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "active"), [tick]);
   const pains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "active"), [tick]);
-  const unreadDeals = unreadRooms("deal", deals);
-  const unreadPains = unreadRooms("pain", pains);
+  const unreadDeals = useMemo(() => unreadRooms("deal", deals), [deals]);
+  const unreadPains = useMemo(() => unreadRooms("pain", pains), [pains]);
   const counts = useMemo(() => messageCounts(), [tick]);
+
+  const newestDeal = unreadDeals[0] || deals[0] || null;
+  const newestPain = unreadPains[0] || pains[0] || null;
+  const pressureTotal = unreadDeals.length + unreadPains.length + counts.unread;
+  const railItems = [
+    ...unreadDeals.slice(0, 4).map((room) => `NEW DEAL • ${titleFor(room, "deal")} • ${loc(room)}`),
+    ...unreadPains.slice(0, 4).map((room) => `NEW PAIN • ${titleFor(room, "pain")} • ${loc(room)}`),
+    ...(counts.dealUnread ? [`DEAL MESSAGE • ${counts.dealUnread} unread`] : []),
+    ...(counts.painUnread ? [`PAIN MESSAGE • ${counts.painUnread} unread`] : []),
+    ...(counts.networkUnread ? [`NETWORK MESSAGE • ${counts.networkUnread} unread`] : []),
+  ];
 
   return (
     <main style={page}>
       <div style={wrap}>
         <Nav active="command" />
 
+        {pressureTotal > 0 ? (
+          <section style={activePanel}>
+            <div style={eyebrow}>Live Alert</div>
+            <h2 style={h2}>{pressureTotal} item(s) need review</h2>
+            <p style={sub}>
+              {unreadDeals.length} new deal(s) • {unreadPains.length} new pain item(s) • {counts.unread} unread message thread(s)
+            </p>
+          </section>
+        ) : null}
+
         <section style={hero}>
           <div style={eyebrow}>Member Command Center</div>
-          <h1 style={h1}>Action creates reaction.</h1>
-          <p style={sub}>{txt(profile.name, "Member")} • Based {txt(profile.basedCity, "City not set")}, {txt(profile.basedState, "GA")} • Every message button now creates or opens a tracked thread.</p>
+          <h1 style={h1}>Live action desk.</h1>
+          <p style={sub}>
+            {txt(profile.name, "Member")} • Based {txt(profile.basedCity, "City not set")}, {txt(profile.basedState, "GA")} • New rooms and unread messages pulse until opened.
+          </p>
           <div style={{ ...row, marginTop: 22 }}>
             <Link href="/members" style={goldBtn}>Members</Link>
             <Link href="/network" style={goldBtn}>Network</Link>
-            <Link href="/messages" style={goldBtn}>Messages</Link>
+            <Link href="/messages" style={counts.unread ? redBtn : btn}>Messages</Link>
             <Link href="/deal-create" style={btn}>Create Deal</Link>
             <Link href="/pain-intake" style={btn}>Submit Pain</Link>
           </div>
         </section>
 
-        <Section title="Live Counts">
-          <div style={grid}>
-            <Link href="/members" style={panel}><div style={eyebrow}>Members</div><h2 style={h2}>{members.length}</h2><p style={muted}>profile cards</p></Link>
-            <Link href="/network" style={unreadDeals.length ? activePanel : panel}><div style={eyebrow}>Opportunity Cards</div><h2 style={h2}>{deals.length}</h2><p style={muted}>{unreadDeals.length} unread</p></Link>
-            <Link href="/network" style={unreadPains.length ? activePanel : panel}><div style={eyebrow}>Pain Cards</div><h2 style={h2}>{pains.length}</h2><p style={muted}>{unreadPains.length} unread</p></Link>
-            <Link href="/messages" style={counts.unread ? activePanel : panel}><div style={eyebrow}>Messages</div><h2 style={h2}>{counts.totalMessages}</h2><p style={muted}>{counts.total} active thread(s) • {counts.unread} unread</p></Link>
+        <Section title="Pulse Rail">
+          <div
+            style={{
+              border: "1px solid rgba(245,197,66,.25)",
+              borderRadius: 18,
+              padding: 14,
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              color: pressureTotal ? "#ffdc68" : "#aeb7c7",
+              fontWeight: 950,
+            }}
+          >
+            {railItems.length ? railItems.join("     |     ") : "No unread rooms or messages."}
           </div>
         </Section>
 
-        <Section title="Message Reaction Counts">
+        <Section title="Live Counts">
           <div style={grid}>
-            <Link href="/messages?type=deal" style={counts.dealUnread ? activePanel : panel}><div style={eyebrow}>Deal Messages</div><h2 style={h2}>{counts.dealMessages}</h2><p style={muted}>{counts.deal} thread(s) • {counts.dealUnread} unread</p></Link>
-            <Link href="/messages?type=pain" style={counts.painUnread ? activePanel : panel}><div style={eyebrow}>Pain Messages</div><h2 style={h2}>{counts.painMessages}</h2><p style={muted}>{counts.pain} thread(s) • {counts.painUnread} unread</p></Link>
-            <Link href="/messages" style={counts.networkUnread ? activePanel : panel}><div style={eyebrow}>Network Messages</div><h2 style={h2}>{counts.networkMessages}</h2><p style={muted}>{counts.network} thread(s) • {counts.networkUnread} unread</p></Link>
+            <Link href="/members" style={panel}>
+              <div style={eyebrow}>Members</div>
+              <h2 style={h2}>{members.length}</h2>
+              <p style={muted}>profile cards</p>
+            </Link>
+
+            <Link href="/network" style={unreadDeals.length ? activePanel : panel}>
+              <div style={eyebrow}>New Deals</div>
+              <h2 style={h2}>{unreadDeals.length}</h2>
+              <p style={muted}>{deals.length} active opportunity card(s)</p>
+            </Link>
+
+            <Link href="/network" style={unreadPains.length ? activePanel : panel}>
+              <div style={eyebrow}>New Pain</div>
+              <h2 style={h2}>{unreadPains.length}</h2>
+              <p style={muted}>{pains.length} active pain card(s)</p>
+            </Link>
+
+            <Link href="/messages" style={counts.unread ? activePanel : panel}>
+              <div style={eyebrow}>Unread Messages</div>
+              <h2 style={h2}>{counts.unread}</h2>
+              <p style={muted}>{counts.totalMessages} total message(s)</p>
+            </Link>
+          </div>
+        </Section>
+
+        <Section title="Pressure Cards">
+          <div style={grid}>
+            <Link href={newestDeal ? `/deal-rooms/${encodeURIComponent(rid(newestDeal))}` : "/deal-rooms"} style={unreadDeals.length ? activePanel : panel}>
+              <div style={eyebrow}>Deal Pressure</div>
+              <h2 style={h2}>{unreadDeals.length}</h2>
+              <p style={muted}>{newestDeal ? titleFor(newestDeal, "deal") : "No active deal pressure"}</p>
+            </Link>
+
+            <Link href={newestPain ? `/pain-rooms/${encodeURIComponent(rid(newestPain))}` : "/pain-rooms"} style={unreadPains.length ? activePanel : panel}>
+              <div style={eyebrow}>Pain Pressure</div>
+              <h2 style={h2}>{unreadPains.length}</h2>
+              <p style={muted}>{newestPain ? titleFor(newestPain, "pain") : "No active pain pressure"}</p>
+            </Link>
+
+            <Link href="/messages" style={counts.dealUnread ? activePanel : panel}>
+              <div style={eyebrow}>Deal Messages</div>
+              <h2 style={h2}>{counts.dealUnread}</h2>
+              <p style={muted}>{counts.dealMessages} message(s)</p>
+            </Link>
+
+            <Link href="/messages" style={counts.painUnread ? activePanel : panel}>
+              <div style={eyebrow}>Pain Messages</div>
+              <h2 style={h2}>{counts.painUnread}</h2>
+              <p style={muted}>{counts.painMessages} message(s)</p>
+            </Link>
+
+            <Link href="/messages" style={counts.networkUnread ? activePanel : panel}>
+              <div style={eyebrow}>Network Messages</div>
+              <h2 style={h2}>{counts.networkUnread}</h2>
+              <p style={muted}>{counts.networkMessages} message(s)</p>
+            </Link>
           </div>
         </Section>
 
         <Section title="Active Opportunity Cards">
-          {deals.length ? <div style={grid}>{deals.slice(0, 4).map((room) => <RoomCard key={rid(room)} room={room} kind="deal" />)}</div> : <p style={sub}>No active opportunity cards.</p>}
+          {deals.length ? (
+            <div style={grid}>{deals.slice(0, 4).map((room) => <RoomCard key={rid(room)} room={room} kind="deal" />)}</div>
+          ) : (
+            <p style={sub}>No active opportunity cards.</p>
+          )}
         </Section>
 
         <Section title="Active Pain Cards">
-          {pains.length ? <div style={grid}>{pains.slice(0, 4).map((room) => <RoomCard key={rid(room)} room={room} kind="pain" />)}</div> : <p style={sub}>No active pain cards.</p>}
+          {pains.length ? (
+            <div style={grid}>{pains.slice(0, 4).map((room) => <RoomCard key={rid(room)} room={room} kind="pain" />)}</div>
+          ) : (
+            <p style={sub}>No active pain cards.</p>
+          )}
         </Section>
       </div>
     </main>
