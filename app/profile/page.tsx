@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type MemberProfile = {
   id?: string;
@@ -103,32 +103,30 @@ function list(value: unknown): string[] {
   return [];
 }
 
-function safeSet(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function profileId(profile: MemberProfile) {
   return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
 }
 
 function normalizeProfile(profile: MemberProfile): MemberProfile {
   const now = new Date().toISOString();
-  const id = profileId(profile);
   return {
     ...profile,
-    id,
+    id: profileId(profile),
+    name: txt(profile.name, "VaultForge Member"),
+    memberType: txt(profile.memberType, "Investor"),
     basedState: txt(profile.basedState, "GA"),
     statesOperated: list(profile.statesOperated).length ? list(profile.statesOperated) : ["GA"],
+    markets: list(profile.markets),
     assetClasses: list(profile.assetClasses),
     strategies: list(profile.strategies),
     specialties: list(profile.specialties),
     needs: list(profile.needs),
     canProvide: list(profile.canProvide),
+    capitalPosition: txt(profile.capitalPosition, "Unknown"),
+    proofOfFunds: txt(profile.proofOfFunds, "Unknown"),
+    fundingRange: txt(profile.fundingRange, "Unknown"),
+    contactPreference: txt(profile.contactPreference, "VaultForge Message"),
+    directContact: txt(profile.directContact, "Unknown"),
     updatedAt: now,
   };
 }
@@ -141,6 +139,7 @@ function getProfile(): MemberProfile {
   }
   return normalizeProfile({
     id: "local_member",
+    name: "VaultForge Member",
     basedState: "GA",
     statesOperated: ["GA"],
     memberType: "Investor",
@@ -152,37 +151,24 @@ function getProfile(): MemberProfile {
   });
 }
 
-function getDirectory(): MemberProfile[] {
-  if (!ok()) return [];
-  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
-  const current = getProfile();
-  const currentId = profileId(current);
-  const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
-  const seen = new Set<string>();
-  return merged.filter((member) => {
-    const id = profileId(member);
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  }).map(normalizeProfile);
+function getDirectory() {
+  if (!ok()) return [] as MemberProfile[];
+  return j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []).map(normalizeProfile);
 }
 
 function saveProfile(profile: MemberProfile) {
-  if (!ok()) return;
+  if (!ok()) return normalizeProfile(profile);
   const next = normalizeProfile(profile);
-  PROFILE_KEYS.forEach((key) => safeSet(key, next));
+  PROFILE_KEYS.forEach((key) => localStorage.setItem(key, JSON.stringify(next)));
 
-  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
-  const nextId = profileId(next);
-  const merged = [next, ...directory.filter((member) => profileId(member) !== nextId)];
-  safeSet(MEMBER_DIRECTORY_KEY, merged);
+  const directory = getDirectory();
+  const id = profileId(next);
+  const merged = [next, ...directory.filter((member) => profileId(member) !== id)];
+  localStorage.setItem(MEMBER_DIRECTORY_KEY, JSON.stringify(merged));
 
   window.dispatchEvent(new Event("vaultforge-profile-change"));
   window.dispatchEvent(new Event("vaultforge-network-change"));
-}
-
-function membersForState(state: string) {
-  return getDirectory().filter((member) => list(member.statesOperated).includes(state));
+  return next;
 }
 
 function countyFromCity(city: string) {
@@ -234,7 +220,7 @@ const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor
 const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
 const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
-const pulsePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.65)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
 const labelStyle: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontSize: 12, fontWeight: 950, marginBottom: 8 };
 const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
@@ -245,11 +231,21 @@ const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repea
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
 const textarea: React.CSSProperties = { ...input, minHeight: 110, resize: "vertical" };
-const photoStyle: React.CSSProperties = { width: "100%", height: 160, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
-function Nav({ active }: { active: string }) {
-  const item = (href: string, label: string, key: string) => <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>;
-  return <nav style={nav}><div style={brand}>VAULTFORGE</div>{item("/command","Command","command")}{item("/deal-rooms","Deal Rooms","deals")}{item("/deal-create","Create Deal","deal-create")}{item("/pain-intake","Pain Intake","pain-intake")}{item("/pain-rooms","Pain Rooms","pain")}{item("/network","Network","network")}{item("/messages","Messages","messages")}{item("/profile","Profile","profile")}<Link href="/logout" style={redBtn}>Logout</Link></nav>;
+function Nav() {
+  return (
+    <nav style={nav}>
+      <div style={brand}>VAULTFORGE</div>
+      <Link href="/command" style={btn}>Command</Link>
+      <Link href="/members" style={btn}>Members</Link>
+      <Link href="/network" style={btn}>Network</Link>
+      <Link href="/alerts" style={btn}>Alerts</Link>
+      <Link href="/messages" style={btn}>Messages</Link>
+      <Link href="/profile" style={goldBtn}>Profile</Link>
+      <Link href="/logout" style={redBtn}>Logout</Link>
+    </nav>
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -272,18 +268,23 @@ function ChipSet({ label, options, selected, onToggle }: { label: string; option
   return <div><div style={labelStyle}>{label}</div><div style={row}>{options.map((option) => <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>{option}</button>)}</div></div>;
 }
 
-function MemberCard({ member }: { member: MemberProfile }) {
-  return <div style={panel}>
-    {txt(member.profilePhoto) ? <img src={txt(member.profilePhoto)} alt={txt(member.name, "Member")} style={photoStyle} /> : null}
-    <div style={eyebrow}>{txt(member.memberType, "Member")} • Based {txt(member.basedState, "N/A")}</div>
-    <h2 style={h2}>{txt(member.name, "VaultForge Member")}</h2>
-    <p style={sub}>{txt(member.company, "Company not listed")}</p>
-    <p style={muted}>From: {[txt(member.basedCity), txt(member.basedCounty), txt(member.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
-    <p style={muted}>Operates: {list(member.statesOperated).join(", ") || "No states selected"}</p>
-    <p style={muted}>Can provide: {list(member.canProvide).join(", ") || "Not listed"}</p>
-    <p style={muted}>Needs: {list(member.needs).join(", ") || "Not listed"}</p>
-    <div style={{ ...row, marginTop: 18 }}><Link href="/messages" style={goldBtn}>Message</Link><Link href="/profile" style={btn}>Profile</Link></div>
-  </div>;
+function ProfilePreview({ profile }: { profile: MemberProfile }) {
+  return (
+    <div style={activePanel}>
+      {txt(profile.profilePhoto) ? <img src={txt(profile.profilePhoto)} alt={txt(profile.name, "Member")} style={photoStyle} /> : null}
+      <div style={eyebrow}>{txt(profile.memberType, "Member")} • From {txt(profile.basedState, "GA")}</div>
+      <h2 style={h2}>{txt(profile.name, "VaultForge Member")}</h2>
+      <p style={sub}>{txt(profile.company, "Company not listed")}</p>
+      <p style={muted}>Profile state: {[txt(profile.basedCity), txt(profile.basedCounty), txt(profile.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
+      <p style={muted}>Operates in: {list(profile.statesOperated).join(", ") || "No operating states selected"}</p>
+      <p style={muted}>Markets: {list(profile.markets).join(", ") || "Not listed"}</p>
+      <p style={muted}>Assets: {list(profile.assetClasses).join(", ") || "Not listed"}</p>
+      <p style={muted}>Strategies: {list(profile.strategies).join(", ") || "Not listed"}</p>
+      <p style={muted}>Can provide: {list(profile.canProvide).join(", ") || "Not listed"}</p>
+      <p style={muted}>Needs: {list(profile.needs).join(", ") || "Not listed"}</p>
+      <p style={muted}>Capital: {txt(profile.capitalPosition, "Unknown")} • Proof: {txt(profile.proofOfFunds, "Unknown")} • Range: {txt(profile.fundingRange, "Unknown")}</p>
+    </div>
+  );
 }
 
 export default function ProfilePage() {
@@ -325,19 +326,24 @@ export default function ProfilePage() {
   }
 
   function save() {
-    saveProfile(profile);
-    setBanner("Profile saved. Network visibility updated.");
+    const next = saveProfile(profile);
+    setProfile(next);
+    setBanner(`Saved. Member card appears under ${txt(next.basedState, "GA")}. Routing uses ${list(next.statesOperated).join(", ") || "no operating states"}.`);
   }
 
-  return <main style={page}><div style={wrap}><Nav active="profile" />
+  return <main style={page}><div style={wrap}><Nav />
 
-    {banner ? <section style={pulsePanel}><div style={eyebrow}>Saved</div><h2 style={h2}>{banner}</h2></section> : null}
+    {banner ? <section style={activePanel}><div style={eyebrow}>Saved</div><h2 style={h2}>{banner}</h2></section> : null}
 
     <section style={hero}>
       <div style={eyebrow}>Profile Intelligence</div>
       <h1 style={h1}>Identity drives routing.</h1>
-      <p style={sub}>Based state is who you are from. States operated in control Network visibility and routing.</p>
+      <p style={sub}>Based State controls where your member card appears. States Operated controls matching, routing, Network project fit, alerts, and AI scoring.</p>
     </section>
+
+    <Section title="Member Card Preview">
+      <ProfilePreview profile={profile} />
+    </Section>
 
     <Section title="Identity">
       <div style={grid}>
@@ -355,7 +361,7 @@ export default function ProfilePage() {
       <input type="file" accept="image/*" onChange={(event) => handlePhoto(event.target.files)} />
     </Section>
 
-    <Section title="From / Based In">
+    <Section title="Based From">
       <div style={grid}>
         <SelectField label="Based State" value={txt(profile.basedState, "GA")} onChange={(value) => up("basedState", value)} options={STATES} />
         <Field label="Based City" value={txt(profile.basedCity)} onChange={updateBasedCity} />
@@ -363,7 +369,7 @@ export default function ProfilePage() {
       </div>
     </Section>
 
-    <Section title="Network Visibility">
+    <Section title="Routing Geography">
       <ChipSet label="States Operated In" options={STATES} selected={list(profile.statesOperated)} onToggle={(value) => toggle("statesOperated", value)} />
       <div style={{ height: 18 }} />
       <ChipSet label="Markets / Submarkets" options={MARKETS} selected={list(profile.markets)} onToggle={(value) => toggle("markets", value)} />
@@ -377,7 +383,7 @@ export default function ProfilePage() {
       <ChipSet label="Specialties" options={SPECIALTIES} selected={list(profile.specialties)} onToggle={(value) => toggle("specialties", value)} />
     </Section>
 
-    <Section title="Network Routing">
+    <Section title="Network Matching">
       <ChipSet label="Needs" options={NEEDS} selected={list(profile.needs)} onToggle={(value) => toggle("needs", value)} />
       <div style={{ height: 18 }} />
       <ChipSet label="Can Provide" options={CAN_PROVIDE} selected={list(profile.canProvide)} onToggle={(value) => toggle("canProvide", value)} />
@@ -398,7 +404,8 @@ export default function ProfilePage() {
 
     <Section title="Save">
       <button type="button" style={goldBtn} onClick={save}>Save Profile</button>{" "}
-      <Link href="/network" style={btn}>Open Network</Link>
+      <Link href="/members" style={btn}>View Members</Link>{" "}
+      <Link href="/network" style={btn}>View Network</Link>
     </Section>
   </div></main>;
 }
