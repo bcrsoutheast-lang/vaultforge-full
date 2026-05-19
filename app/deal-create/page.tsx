@@ -47,7 +47,8 @@ type DealRoom = {
 };
 
 const STORE_KEY = "vaultforge_clean_deal_rooms";
-const LEGACY_KEYS = ["vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const STATE_KEY = "vaultforge_deal_room_state_v2";
+
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const ASSETS = ["Residential", "Commercial", "Land"];
 const RES_TYPES = ["Single Family", "Duplex", "Triplex", "Quad", "Townhome", "Condo", "Mobile Home", "Small Multifamily", "Apartment"];
@@ -94,7 +95,7 @@ const CITY_COUNTY: Record<string, string> = {
   sanantonio: "Bexar",
 };
 
-function ok() {
+function browserReady() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
@@ -138,6 +139,7 @@ function locationFor(room: Partial<DealRoom>) {
 
 function defaultDealRoom(): DealRoom {
   const now = new Date().toISOString();
+
   return {
     id: "",
     title: "",
@@ -182,41 +184,57 @@ function defaultDealRoom(): DealRoom {
   };
 }
 
+function normalizeDeal(row: any): DealRoom {
+  const base = defaultDealRoom();
+  const id = safeText(row?.id || row?.roomId);
+  const photos = safeList(row?.photos || row?.photoUrls);
+  const coverPhoto = safeText(row?.coverPhoto || row?.photoUrl || row?.imageUrl || photos[0]);
+
+  return {
+    ...base,
+    ...row,
+    id,
+    title: safeText(row?.title || row?.name, "Untitled Deal Room"),
+    state: safeText(row?.state, "GA"),
+    city: safeText(row?.city),
+    county: safeText(row?.county),
+    assetClass: (["Residential", "Commercial", "Land"].includes(safeText(row?.assetClass)) ? safeText(row?.assetClass) : "Residential") as DealRoom["assetClass"],
+    propertyType: safeText(row?.propertyType, "Single Family"),
+    strategy: safeList(row?.strategy).length ? safeList(row?.strategy) : ["Wholesale"],
+    routeTo: safeList(row?.routeTo).length ? safeList(row?.routeTo) : ["Buyer"],
+    photos,
+    coverPhoto,
+    roomState: (["active", "saved", "archived", "deleted"].includes(safeText(row?.roomState || row?.cleanupState || row?.stateStatus)) ? safeText(row?.roomState || row?.cleanupState || row?.stateStatus) : "active") as DealRoom["roomState"],
+  };
+}
+
 function readDealRooms(): DealRoom[] {
-  if (!ok()) return [];
-  const rooms: DealRoom[] = [];
-  const seen = new Set<string>();
+  if (!browserReady()) return [];
+  const rows = parseJson<any[]>(localStorage.getItem(STORE_KEY), []);
+  const states = parseJson<Record<string, DealRoom["roomState"]>>(localStorage.getItem(STATE_KEY), {});
+  return rows.map(normalizeDeal).map((room) => ({
+    ...room,
+    roomState: states[room.id] || room.roomState || "active",
+  }));
+}
 
-  for (const key of [STORE_KEY, ...LEGACY_KEYS]) {
-    const rows = parseJson<any[]>(localStorage.getItem(key), []);
-    for (const row of rows) {
-      const id = safeText(row?.id || row?.roomId);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      rooms.push({
-        ...defaultDealRoom(),
-        ...row,
-        id,
-        title: safeText(row?.title || row?.name, "Untitled Deal Room"),
-        strategy: safeList(row?.strategy).length ? safeList(row?.strategy) : ["Wholesale"],
-        routeTo: safeList(row?.routeTo).length ? safeList(row?.routeTo) : ["Buyer"],
-        photos: safeList(row?.photos || row?.photoUrls),
-        coverPhoto: safeText(row?.coverPhoto || row?.photoUrl || row?.imageUrl || safeList(row?.photos || row?.photoUrls)[0]),
-        roomState: safeText(row?.roomState || row?.cleanupState || row?.stateStatus, "active") as DealRoom["roomState"],
-      });
-    }
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
   }
-
-  return rooms;
 }
 
 function saveDealRoom(room: DealRoom) {
-  if (!ok()) return "";
+  if (!browserReady()) return { ok: false, id: "", message: "Browser storage is not available." };
+
   const id = room.id || `deal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now = new Date().toISOString();
   const coverPhoto = room.photos[0] || room.coverPhoto || "";
 
-  const next: DealRoom = {
+  const fullRoom: DealRoom = {
     ...room,
     id,
     coverPhoto,
@@ -228,13 +246,27 @@ function saveDealRoom(room: DealRoom) {
   };
 
   const existing = readDealRooms().filter((item) => item.id !== id);
-  const all = [next, ...existing];
+  const fullList = [fullRoom, ...existing];
 
-  localStorage.setItem(STORE_KEY, JSON.stringify(all));
-  localStorage.setItem(`vaultforge_deal_room_${id}`, JSON.stringify(next));
+  let saved = writeJson(STORE_KEY, fullList) && writeJson(`vaultforge_deal_room_${id}`, fullRoom);
+
+  if (!saved) {
+    const noPhotoRoom: DealRoom = { ...fullRoom, photos: [], coverPhoto: "" };
+    const noPhotoList = [noPhotoRoom, ...existing.map((item) => ({ ...item, photos: [], coverPhoto: "" }))];
+    saved = writeJson(STORE_KEY, noPhotoList) && writeJson(`vaultforge_deal_room_${id}`, noPhotoRoom);
+  }
+
+  if (!saved) {
+    return { ok: false, id: "", message: "Deal could not save. Browser storage is full. Delete old test rooms/photos and try again." };
+  }
+
+  const states = parseJson<Record<string, DealRoom["roomState"]>>(localStorage.getItem(STATE_KEY), {});
+  states[id] = "active";
+  writeJson(STATE_KEY, states);
+
   window.dispatchEvent(new Event("vaultforge-deal-change"));
   window.dispatchEvent(new Event("vaultforge-room-state-change"));
-  return id;
+  return { ok: true, id, message: "Deal room saved." };
 }
 
 async function compressImage(file: File, maxWidth = 620, quality = 0.42): Promise<string> {
@@ -299,7 +331,7 @@ function dealIntelligence(room: DealRoom) {
 }
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
-const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
+const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 120 };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
 const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
 const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
@@ -309,6 +341,7 @@ const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", bo
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
 const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
 const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
+const sticky: React.CSSProperties = { position: "sticky", top: 10, zIndex: 10, background: "rgba(5,7,13,.92)", backdropFilter: "blur(10px)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 24, padding: 16, marginBottom: 18 };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
 const label: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontSize: 12, fontWeight: 950, marginBottom: 8 };
 const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
@@ -368,6 +401,7 @@ export default function DealCreatePage() {
   const [banner, setBanner] = useState("");
   const [error, setError] = useState("");
   const [savedId, setSavedId] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const propertyTypes = useMemo(() => propertyTypesFor(form.assetClass), [form.assetClass]);
   const intelligence = useMemo(() => dealIntelligence(form), [form]);
@@ -402,24 +436,45 @@ export default function DealCreatePage() {
   }
 
   function save() {
+    setSaving(true);
     setError("");
     setBanner("");
     setSavedId("");
 
-    if (!safeText(form.title)) {
-      setError("Add a deal title before saving.");
-      return;
-    }
+    try {
+      if (!safeText(form.title)) {
+        setError("Add a deal title before saving.");
+        return;
+      }
 
-    const id = saveDealRoom({ ...form, coverPhoto: form.photos[0] || form.coverPhoto });
-    setSavedId(id);
-    setBanner("Deal room saved. Open Room will now go to the real saved deal room.");
+      const result = saveDealRoom({ ...form, coverPhoto: form.photos[0] || form.coverPhoto });
+      if (!result.ok || !result.id) {
+        setError(result.message || "Deal did not save.");
+        return;
+      }
+
+      setSavedId(result.id);
+      setBanner("Deal room saved. Use Open Room to verify it.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Deal save failed.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <main style={page}>
       <div style={wrap}>
         <Nav />
+
+        <section style={sticky}>
+          <div style={row}>
+            <button type="button" style={goldBtn} onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Deal Room"}</button>
+            {savedId ? <Link href={`/deal-rooms/${encodeURIComponent(savedId)}`} style={goldBtn}>Open Saved Room</Link> : null}
+            <span style={muted}>{safeText(form.title, "No title yet")} • {form.assetClass} • {locationFor(form)}</span>
+          </div>
+        </section>
 
         {banner ? <section style={activePanel}><div style={eyebrow}>Saved</div><h2 style={h2}>{banner}</h2><div style={{ ...row, marginTop: 18 }}><Link href={`/deal-rooms/${encodeURIComponent(savedId)}`} style={goldBtn}>Open Room</Link><button type="button" style={btn} onClick={() => { setBanner(""); setSavedId(""); setForm(defaultDealRoom()); }}>Create Another</button><Link href="/network" style={btn}>Go Network</Link></div></section> : null}
         {error ? <section style={activePanel}><div style={eyebrow}>Error</div><h2 style={h2}>{error}</h2></section> : null}
@@ -514,7 +569,9 @@ export default function DealCreatePage() {
         </Section>
 
         <Section title="Save">
-          <button type="button" style={goldBtn} onClick={save}>Save Deal Room</button>
+          <button type="button" style={goldBtn} onClick={save} disabled={saving}>
+            {saving ? "Saving..." : "Save Deal Room"}
+          </button>
         </Section>
       </div>
     </main>
