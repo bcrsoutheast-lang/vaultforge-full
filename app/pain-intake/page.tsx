@@ -161,7 +161,7 @@ function saveRoom(kind:RoomKind,room:Room){
   if(!ok()) return "";
   const id=rid(room)||`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
   const now=new Date().toISOString();
-  let next={...room,id,roomId:id,roomState:"active" as RoomState,cleanupState:"active" as RoomState,stateStatus:"active" as RoomState,createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""};
+  let next: Room={...room,id,roomId:id,roomState:"active" as RoomState,cleanupState:"active" as RoomState,stateStatus:"active" as RoomState,createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""};
   const singleKeys=[`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`];
 
   let wroteSingles=true;
