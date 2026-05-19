@@ -475,9 +475,11 @@ function MatchCard({ match }: { match: { member: MemberProfile; score: number; r
   </div>;
 }
 
+
 export default function DealRoomPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id || "");
   const [room, setRoom] = useState<Room | null>(null);
+  const [openPanel, setOpenPanel] = useState<"summary" | "numbers" | "execution" | "matches" | "messages" | "notes">("summary");
 
   useEffect(() => {
     const found = getRoom("deal", id);
@@ -508,61 +510,42 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
       <h1 style={h1}>{titleFor(room, "deal")}</h1>
       <p style={sub}>{loc(room)}</p>
       <p style={muted}>{txt(room.assetClass)} • {txt(room.propertyType)} • {list(room.strategy).join(", ") || "No strategy selected"}</p>
-      <div style={{ ...row, marginTop: 18 }}>
-        <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Deal Room: " + titleFor(room, "deal"))}`} style={goldBtn}>Message Room</Link>
-        <Link href="/network" style={btn}>Find Members</Link>
-      </div>
     </section>
 
-    <Section title="Action Controls">
-      <p style={sub}>Current state: {roomState(room)}. Every action changes Command visibility and folder placement.</p>
-      <div style={{ ...row, marginTop: 18 }}>
+    <Section title="Room Controls">
+      <div style={grid}>
+        <button type="button" style={openPanel === "summary" ? pulsePanel : panel} onClick={() => setOpenPanel("summary")}><div style={eyebrow}>Intelligence</div><h2 style={h2}>{intelligence.strength}%</h2><p style={muted}>{intelligence.banner}</p></button>
+        <button type="button" style={openPanel === "numbers" ? pulsePanel : panel} onClick={() => setOpenPanel("numbers")}><div style={eyebrow}>Numbers</div><h2 style={h2}>{intelligence.spread ? `$${intelligence.spread.toLocaleString()}` : "N/A"}</h2><p style={muted}>estimated spread</p></button>
+        <button type="button" style={openPanel === "execution" ? pulsePanel : panel} onClick={() => setOpenPanel("execution")}><div style={eyebrow}>Execution</div><h2 style={h2}>{intelligence.urgency}%</h2><p style={muted}>urgency</p></button>
+        <button type="button" style={openPanel === "matches" ? pulsePanel : panel} onClick={() => setOpenPanel("matches")}><div style={eyebrow}>Matches</div><h2 style={h2}>{matches.length}</h2><p style={muted}>member fits</p></button>
+        <button type="button" style={openPanel === "messages" ? pulsePanel : panel} onClick={() => setOpenPanel("messages")}><div style={eyebrow}>Messages</div><h2 style={h2}>Open</h2><p style={muted}>room thread</p></button>
+        <button type="button" style={openPanel === "notes" ? pulsePanel : panel} onClick={() => setOpenPanel("notes")}><div style={eyebrow}>Notes</div><h2 style={h2}>{txt(room.notes) ? "1" : "0"}</h2><p style={muted}>room notes</p></button>
+      </div>
+    </Section>
+
+    <Section title="Actions">
+      <div style={{ ...row }}>
         <button type="button" style={goldBtn} onClick={() => move("saved")}>Save</button>
         <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
         <button type="button" style={redBtn} onClick={() => move("deleted")}>Delete</button>
+        <Link href="/deal-rooms" style={btn}>Back</Link>
       </div>
     </Section>
 
-    <Section title="Intelligence Snapshot">
-      <div style={grid}>
-        <Meter label="Deal Strength" value={intelligence.strength} />
-        <Meter label="Urgency" value={intelligence.urgency} />
-        <Meter label="Risk" value={intelligence.risk} />
-        <Value label="Signal" value={intelligence.banner} />
-      </div>
-    </Section>
+    {openPanel === "summary" ? <Section title="Intelligence Snapshot"><div style={grid}><Meter label="Deal Strength" value={intelligence.strength} /><Meter label="Urgency" value={intelligence.urgency} /><Meter label="Risk" value={intelligence.risk} /><Value label="Signal" value={intelligence.banner} /></div></Section> : null}
 
-    <Section title="Numbers + Spread">
-      <div style={grid}>
-        <Value label="Ask Price" value={room.askingPrice} />
-        <Value label="Value / ARV" value={room.propertyValue} />
-        <Value label="Repairs" value={room.repairs} />
-        <Value label="Estimated Spread" value={intelligence.spread ? `$${intelligence.spread.toLocaleString()}` : "Needs numbers"} />
-      </div>
-    </Section>
+    {openPanel === "numbers" ? <Section title="Numbers + Spread"><div style={grid}><Value label="Ask Price" value={room.askingPrice} /><Value label="Value / ARV" value={room.propertyValue} /><Value label="Repairs" value={room.repairs} /><Value label="Estimated Spread" value={intelligence.spread ? `$${intelligence.spread.toLocaleString()}` : "Needs numbers"} /></div></Section> : null}
 
-    <Section title="Execution Fit">
-      <div style={grid}>
-        <Value label="Route To" value={list(room.routeTo).join(", ")} />
-        <Value label="Strategy" value={list(room.strategy).join(", ")} />
-        <Value label="Condition" value={room.condition} />
-        <Value label="Occupancy" value={room.occupancy} />
-        <Value label="Timeline" value={room.timeline || room.timePressure} />
-        <Value label="Contact" value={[txt(room.contactName), txt(room.contactPhone), txt(room.contactEmail)].filter(Boolean).join(" • ")} />
-      </div>
-    </Section>
+    {openPanel === "execution" ? <>
+      <Section title="Execution Fit"><div style={grid}><Value label="Route To" value={list(room.routeTo).join(", ")} /><Value label="Strategy" value={list(room.strategy).join(", ")} /><Value label="Condition" value={room.condition} /><Value label="Occupancy" value={room.occupancy} /><Value label="Timeline" value={room.timeline || room.timePressure} /><Value label="Contact" value={[txt(room.contactName), txt(room.contactPhone), txt(room.contactEmail)].filter(Boolean).join(" • ")} /></div></Section>
+      <Section title="Best Next Move"><p style={sub}>{intelligence.nextMove}</p></Section>
+    </> : null}
 
-    <Section title="Best Next Move">
-      <p style={sub}>{intelligence.nextMove}</p>
-    </Section>
+    {openPanel === "matches" ? <Section title="Best Member Matches">{matches.length ? <div style={grid}>{matches.map((match) => <MatchCard key={profileId(match.member)} match={match} />)}</div> : <p style={sub}>No member profiles available yet.</p>}</Section> : null}
 
-    <Section title="Best Member Matches">
-      {matches.length ? <div style={grid}>{matches.map((match) => <MatchCard key={profileId(match.member)} match={match} />)}</div> : <p style={sub}>No member profiles available yet. Build profiles to activate matching.</p>}
-    </Section>
+    {openPanel === "messages" ? <Section title="Room Messages"><p style={sub}>Open the thread for this room.</p><div style={{ ...row, marginTop: 18 }}><Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Deal Room: " + titleFor(room, "deal"))}`} style={goldBtn}>Open Message Thread</Link></div></Section> : null}
 
-    <Section title="Room Notes">
-      <p style={sub}>{txt(room.notes, "No notes added.")}</p>
-    </Section>
+    {openPanel === "notes" ? <Section title="Room Notes"><p style={sub}>{txt(room.notes, "No notes added.")}</p></Section> : null}
 
   </div></main>;
 }
