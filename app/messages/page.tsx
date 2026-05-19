@@ -284,15 +284,25 @@ function saveThreads(threads: MessageThread[]) {
 
 function messageCounts() {
   const active = getThreads().filter((thread) => thread.status === "active");
+  const dealThreads = active.filter((thread) => thread.lane === "deal");
+  const painThreads = active.filter((thread) => thread.lane === "pain");
+  const networkThreads = active.filter((thread) => thread.lane === "network");
+  const countMessages = (threads: MessageThread[]) =>
+    threads.reduce((sum, thread) => sum + Math.max(0, thread.messages.length), 0);
+
   return {
     total: active.length,
+    totalMessages: countMessages(active),
     unread: active.filter((thread) => thread.unread).length,
-    deal: active.filter((thread) => thread.lane === "deal").length,
-    pain: active.filter((thread) => thread.lane === "pain").length,
-    network: active.filter((thread) => thread.lane === "network").length,
-    dealUnread: active.filter((thread) => thread.lane === "deal" && thread.unread).length,
-    painUnread: active.filter((thread) => thread.lane === "pain" && thread.unread).length,
-    networkUnread: active.filter((thread) => thread.lane === "network" && thread.unread).length,
+    deal: dealThreads.length,
+    pain: painThreads.length,
+    network: networkThreads.length,
+    dealMessages: countMessages(dealThreads),
+    painMessages: countMessages(painThreads),
+    networkMessages: countMessages(networkThreads),
+    dealUnread: dealThreads.filter((thread) => thread.unread).length,
+    painUnread: painThreads.filter((thread) => thread.unread).length,
+    networkUnread: networkThreads.filter((thread) => thread.unread).length,
   };
 }
 
@@ -512,9 +522,9 @@ export default function MessagesPage() {
 
         <Section title="Message Lanes">
           <div style={grid}>
-            <LaneCard label="Deal Messages" active={lane === "deal"} count={counts.deal} unread={counts.dealUnread} onClick={() => setLane("deal")} />
-            <LaneCard label="Pain Messages" active={lane === "pain"} count={counts.pain} unread={counts.painUnread} onClick={() => setLane("pain")} />
-            <LaneCard label="Network Messages" active={lane === "network"} count={counts.network} unread={counts.networkUnread} onClick={() => setLane("network")} />
+            <LaneCard label="Deal Messages" active={lane === "deal"} count={counts.dealMessages} unread={counts.dealUnread} threads={counts.deal} onClick={() => setLane("deal")} />
+            <LaneCard label="Pain Messages" active={lane === "pain"} count={counts.painMessages} unread={counts.painUnread} threads={counts.pain} onClick={() => setLane("pain")} />
+            <LaneCard label="Network Messages" active={lane === "network"} count={counts.networkMessages} unread={counts.networkUnread} threads={counts.network} onClick={() => setLane("network")} />
           </div>
         </Section>
 
@@ -581,12 +591,26 @@ export default function MessagesPage() {
   );
 }
 
-function LaneCard({ label, count, unread, active, onClick }: { label: string; count: number; unread: number; active: boolean; onClick: () => void }) {
+function LaneCard({
+  label,
+  count,
+  unread,
+  threads,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  unread: number;
+  threads: number;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button type="button" style={active || unread ? activePanel : panel} onClick={onClick}>
       <div style={eyebrow}>{label}</div>
-      <h2 style={h2}>{unread}</h2>
-      <p style={muted}>{count} active thread(s)</p>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>{threads} active thread(s) • {unread} unread</p>
     </button>
   );
 }
