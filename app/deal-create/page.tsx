@@ -9,7 +9,6 @@ type Room = {
   id?: string;
   roomId?: string;
   title?: string;
-  name?: string;
   state?: string;
   city?: string;
   county?: string;
@@ -26,7 +25,6 @@ type Room = {
   routingNeeds?: string[] | string;
   askingPrice?: string;
   propertyValue?: string;
-  arv?: string;
   repairs?: string;
   monthlyRent?: string;
   taxes?: string;
@@ -39,7 +37,6 @@ type Room = {
   assignmentFee?: string;
   loanBalance?: string;
   interestRate?: string;
-  balloonDate?: string;
   sellerFlexibility?: string;
   titleStatus?: string;
   environmentalIssues?: string;
@@ -54,6 +51,8 @@ type Room = {
   buildingSize?: string;
   acres?: string;
   zoning?: string;
+  frontage?: string;
+  utilitiesAvailable?: string;
   access?: string;
   docs?: string[] | string;
   contactName?: string;
@@ -63,7 +62,6 @@ type Room = {
   submitterRole?: string;
   painTypes?: string[] | string;
   severity?: string;
-  urgency?: string[] | string;
   blockers?: string[] | string;
   timePressure?: string;
   capitalPressure?: string;
@@ -88,8 +86,6 @@ type Room = {
   confidential?: string;
   directContactAllowed?: string;
   rootCause?: string;
-  targetOutcome?: string;
-  currentState?: string;
   desiredSolution?: string;
   completionPercent?: string;
   permitStatus?: string;
@@ -108,7 +104,6 @@ type Room = {
   photos?: string[];
   notes?: string;
   analyzer?: string;
-  aiRead?: string;
   [key:string]: unknown;
 };
 
@@ -128,22 +123,23 @@ function statesMap(){ const m:Record<string,RoomState>={}; if(!ok()) return m; S
 function saveStateMap(m:Record<string,RoomState>){ if(!ok()) return; STATE_KEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(m))); }
 function photoDataUrls(files:FileList|null,max=10):Promise<string[]>{ return new Promise(resolve=>{ const selected=Array.from(files||[]).slice(0,max); if(!selected.length){resolve([]);return;} Promise.all(selected.map(file=>new Promise<string>(res=>{ const reader=new FileReader(); reader.onload=()=>res(String(reader.result||"")); reader.onerror=()=>res(""); reader.readAsDataURL(file); }))).then(rows=>resolve(rows.filter(Boolean))); }); }
 function saveRoom(kind:RoomKind,room:Room){ if(!ok()) return ""; const id=rid(room)||`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`; const now=new Date().toISOString(); const next={...room,id,roomId:id,roomState:"active" as RoomState,cleanupState:"active" as RoomState,stateStatus:"active" as RoomState,createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""}; [`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`].forEach(x=>localStorage.setItem(x,JSON.stringify(next))); keys(kind).forEach(key=>localStorage.setItem(key,JSON.stringify([next,...arr<Room>(key).filter(x=>rid(x)!==id)]))); const sm=statesMap(); sm[id]="active"; sm[`${kind}:${id}`]="active"; saveStateMap(sm); window.dispatchEvent(new Event("vaultforge-room-state-change")); window.dispatchEvent(new Event(kind==="deal"?"vaultforge-deal-change":"vaultforge-pain-change")); return id; }
+function moneyNumber(value:unknown){ const n=Number(String(value||"").replace(/[^0-9.-]/g,"")); return Number.isFinite(n)?n:0; }
+function fmt(n:number){ return n? n.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not enough data"; }
 
 
-function Nav({active}:{active:string}){return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={active==="command"?goldBtn:btn}>Command</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/deal-create" style={active==="deal"?goldBtn:btn}>Create Deal</Link><Link href="/pain-intake" style={active==="pain"?goldBtn:btn}>Pain Intake</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/network" style={btn}>Network</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>}
+function Nav({active}:{active:string}){return <nav style={navStyle}><div style={brand}>VAULTFORGE</div><Link href="/command" style={active==="command"?goldBtn:btn}>Command</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/deal-create" style={active==="deal"?goldBtn:btn}>Create Deal</Link><Link href="/pain-intake" style={active==="pain"?goldBtn:btn}>Pain Intake</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/network" style={btn}>Network</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>}
 function Field({l,v,c,placeholder=""}:{l:string;v:string;c:(v:string)=>void;placeholder?:string}){return <label><div style={label}>{l}</div><input style={input} placeholder={placeholder} value={v} onChange={e=>c(e.target.value)}/></label>}
 function Area({l,v,c}:{l:string;v:string;c:(v:string)=>void}){return <label><div style={label}>{l}</div><textarea style={textArea} value={v} onChange={e=>c(e.target.value)}/></label>}
 function SelectBox({l,v,c,options}:{l:string;v:string;c:(v:string)=>void;options:string[]}){return <label><div style={label}>{l}</div><select style={input} value={v} onChange={e=>c(e.target.value)}>{options.map(o=><option key={o} value={o}>{o}</option>)}</select></label>}
 function MultiChips({labelName,options,selected,onToggle}:{labelName:string;options:string[];selected:string[];onToggle:(v:string)=>void}){return <div><div style={label}>{labelName}</div><div style={row}>{options.map(o=><button type="button" key={o} onClick={()=>onToggle(o)} style={selected.includes(o)?chipActive:chip}>{o}</button>)}</div></div>}
+function SingleChips({labelName,options,value,onChange}:{labelName:string;options:string[];value:string;onChange:(v:string)=>void}){return <div><div style={label}>{labelName}</div><div style={row}>{options.map(o=><button type="button" key={o} onClick={()=>onChange(o)} style={value===o?chipActive:chip}>{o}</button>)}</div></div>}
 function Section({title,children}:{title:string;children:React.ReactNode}){return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>}
-function moneyNumber(value:unknown){const n=Number(String(value||"").replace(/[^0-9.-]/g,""));return Number.isFinite(n)?n:0}
-function fmt(n:number){return n? n.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not enough data"}
 
 
-const ASSET=["Residential","Commercial","Land","Multifamily","Industrial","Retail","Mixed Use"];
+const ASSET=["Residential","Commercial","Land"];
 const RES_TYPES=["Single Family","Duplex","Triplex","Quad","Townhome","Condo","Mobile Home","Small Multifamily"];
-const COM_TYPES=["Retail","Office","Industrial","Warehouse","Hotel","Self Storage","Mixed Use","Medical","Restaurant"];
-const LAND_TYPES=["Infill Lot","Acreage","Entitled Land","Raw Land","Commercial Pad","Subdivision","Timber","Farm"];
+const COM_TYPES=["Retail","Office","Industrial","Warehouse","Hotel","Self Storage","Mixed Use","Medical","Restaurant","Automotive","Church / Special Use"];
+const LAND_TYPES=["Infill Lot","Acreage","Entitled Land","Raw Land","Commercial Pad","Subdivision","Timber","Farm","Assemblage","Waterfront"];
 const STRATEGIES=["Wholesale","Flip","Buy & Hold","BRRRR","Development","Seller Finance","JV","Rental","Hotel Conversion","Airbnb"];
 const CONDITION=["Turnkey","Light Rehab","Medium Rehab","Full Gut","Fire Damage","Shell","Tear Down"];
 const OCCUPANCY=["Vacant","Owner Occupied","Tenant Occupied","Squatter","Partial Vacancy"];
@@ -158,45 +154,50 @@ export default function Page(){
  const [f,setF]=useState<Room>({assetClass:"Residential",state:"GA",propertyType:"Single Family",condition:"Medium Rehab",occupancy:"Vacant",timeline:"14 Days",dealStrength:"Moderate",routeTo:["Buyer"],strategy:["Wholesale"]});
  const [files,setFiles]=useState<FileList|null>(null);
  const [msg,setMsg]=useState("");
+ const asset=txt(f.assetClass,"Residential");
+ const typeOptions=asset==="Commercial"?COM_TYPES:asset==="Land"?LAND_TYPES:RES_TYPES;
+
  function up(k:string,v:unknown){setF({...f,[k]:v})}
+ function setAsset(v:string){setF({...f,assetClass:v,propertyType:(v==="Commercial"?COM_TYPES:v==="Land"?LAND_TYPES:RES_TYPES)[0]})}
  function tog(k:string,v:string){const s=new Set(list(f[k]));s.has(v)?s.delete(v):s.add(v);up(k,Array.from(s))}
- const spread=useMemo(()=>moneyNumber(f.propertyValue||f.arv)-moneyNumber(f.askingPrice)-moneyNumber(f.repairs),[f.propertyValue,f.arv,f.askingPrice,f.repairs]);
- const profit=useMemo(()=>moneyNumber(f.exitValue||f.propertyValue||f.arv)-moneyNumber(f.askingPrice)-moneyNumber(f.repairs)-moneyNumber(f.assignmentFee),[f.exitValue,f.propertyValue,f.arv,f.askingPrice,f.repairs,f.assignmentFee]);
- const typeOptions=f.assetClass==="Commercial"?COM_TYPES:f.assetClass==="Land"?LAND_TYPES:RES_TYPES;
+ const spread=useMemo(()=>moneyNumber(f.propertyValue)-moneyNumber(f.askingPrice)-moneyNumber(f.repairs),[f.propertyValue,f.askingPrice,f.repairs]);
+ const profit=useMemo(()=>moneyNumber(f.exitValue||f.propertyValue)-moneyNumber(f.askingPrice)-moneyNumber(f.repairs)-moneyNumber(f.assignmentFee),[f.exitValue,f.propertyValue,f.askingPrice,f.repairs,f.assignmentFee]);
+
  async function submit(){
    setMsg("Saving deal room...");
    const urls=await photoDataUrls(files,10);
-   const id=saveRoom("deal",{...f,title:txt(f.title,"Untitled Deal Room"),photoUrls:urls,photos:urls,equitySpread:String(spread||""),analyzer:`Deal analyzer: ${txt(f.assetClass)} ${txt(f.propertyType)} in ${txt(f.city)}, ${txt(f.county)}, ${txt(f.state)}. Condition ${txt(f.condition)}. Occupancy ${txt(f.occupancy)}. Spread estimate ${fmt(spread)}. Route to ${list(f.routeTo).join(", ")||"matched members"}. Timeline ${txt(f.timeline)}.`});
+   const id=saveRoom("deal",{...f,title:txt(f.title,"Untitled Deal Room"),photoUrls:urls,photos:urls,analyzer:`Deal analyzer: ${asset} ${txt(f.propertyType)} in ${txt(f.city)}, ${txt(f.county)}, ${txt(f.state)}. Condition ${txt(f.condition)}. Occupancy ${txt(f.occupancy)}. Spread estimate ${fmt(spread)}. Route to ${list(f.routeTo).join(", ")||"matched members"}. Timeline ${txt(f.timeline)}.`});
    setF({assetClass:"Residential",state:"GA",propertyType:"Single Family",condition:"Medium Rehab",occupancy:"Vacant",timeline:"14 Days",dealStrength:"Moderate",routeTo:["Buyer"],strategy:["Wholesale"]});
    setFiles(null);
    if(id) window.location.href=`/deal-rooms/${encodeURIComponent(id)}`;
  }
+
  return <main style={page}><div style={wrap}><Nav active="deal"/>{msg?<Section title="Status"><p style={sub}>{msg}</p></Section>:null}
- <section style={hero}><div style={eyebrow}>Adaptive Deal Intake</div><h1 style={h1}>Deal Opportunity.</h1><p style={sub}>Mostly chips and dropdowns. Type only what actually needs numbers, names, and notes.</p></section>
+ <section style={hero}><div style={eyebrow}>Adaptive Deal Intake</div><h1 style={h1}>Deal Opportunity.</h1><p style={sub}>Residential, Commercial, and Land now switch fields correctly.</p></section>
 
  <Section title="Asset + Strategy">
-   <MultiChips labelName="Asset Type" options={ASSET} selected={[txt(f.assetClass,"Residential")]} onToggle={v=>{up("assetClass",v);up("propertyType",(v==="Commercial"?COM_TYPES:v==="Land"?LAND_TYPES:RES_TYPES)[0]);}}/>
+   <SingleChips labelName="Asset Type" options={ASSET} value={asset} onChange={setAsset}/>
    <div style={{height:18}}/>
    <MultiChips labelName="Strategy" options={STRATEGIES} selected={list(f.strategy)} onToggle={v=>tog("strategy",v)}/>
    <div style={{height:18}}/>
    <MultiChips labelName="Route To" options={ROUTE} selected={list(f.routeTo)} onToggle={v=>tog("routeTo",v)}/>
  </Section>
 
- <Section title="Property + Market">
+ <Section title={`${asset} Property + Market`}>
    <div style={grid}>
      <Field l="Deal Title" v={txt(f.title)} c={v=>up("title",v)}/>
      <SelectBox l="State" v={txt(f.state,"GA")} c={v=>up("state",v)} options={STATES}/>
      <Field l="City" v={txt(f.city)} c={v=>up("city",v)}/>
      <Field l="County" v={txt(f.county)} c={v=>up("county",v)}/>
      <Field l="Address / Location" v={txt(f.address)} c={v=>up("address",v)}/>
-     <SelectBox l="Property Type" v={txt(f.propertyType,typeOptions[0])} c={v=>up("propertyType",v)} options={typeOptions}/>
+     <SelectBox l={`${asset} Type`} v={txt(f.propertyType,typeOptions[0])} c={v=>up("propertyType",v)} options={typeOptions}/>
    </div>
  </Section>
 
  <Section title="Deal Intelligence Selectors">
    <div style={grid}>
-     <SelectBox l="Condition" v={txt(f.condition,"Medium Rehab")} c={v=>up("condition",v)} options={CONDITION}/>
-     <SelectBox l="Occupancy" v={txt(f.occupancy,"Vacant")} c={v=>up("occupancy",v)} options={OCCUPANCY}/>
+     {asset!=="Land"?<SelectBox l="Condition" v={txt(f.condition,"Medium Rehab")} c={v=>up("condition",v)} options={CONDITION}/>:<SelectBox l="Land Status" v={txt(f.condition,"Raw Land")} c={v=>up("condition",v)} options={["Raw Land","Cleared","Wooded","Entitled","Needs Rezoning","Approved Plans","Tear Down"]}/>}
+     {asset!=="Land"?<SelectBox l="Occupancy" v={txt(f.occupancy,"Vacant")} c={v=>up("occupancy",v)} options={OCCUPANCY}/>:<SelectBox l="Access" v={txt(f.access,"Unknown")} c={v=>up("access",v)} options={["Unknown","Road Frontage","Easement","Landlocked","Private Road","No Access"]}/>}
      <SelectBox l="Deal Strength" v={txt(f.dealStrength,"Moderate")} c={v=>up("dealStrength",v)} options={STRENGTH}/>
      <SelectBox l="Timeline" v={txt(f.timeline,"14 Days")} c={v=>up("timeline",v)} options={TIMELINE}/>
      <SelectBox l="Title Status" v={txt(f.titleStatus,"Unknown")} c={v=>up("titleStatus",v)} options={["Unknown","Clear","Clouded","Probate","Lien Issue","Needs Attorney"]}/>
@@ -210,16 +211,14 @@ export default function Page(){
    <div style={grid}>
      <Field l="Ask Price" v={txt(f.askingPrice)} c={v=>up("askingPrice",v)}/>
      <Field l="Property Value / ARV" v={txt(f.propertyValue)} c={v=>up("propertyValue",v)}/>
-     <Field l="Repairs / Work" v={txt(f.repairs)} c={v=>up("repairs",v)}/>
+     {asset!=="Land"?<Field l="Repairs / Work" v={txt(f.repairs)} c={v=>up("repairs",v)}/>:<Field l="Site Work / Development Cost" v={txt(f.repairs)} c={v=>up("repairs",v)}/>}
      <Field l="Exit Value" v={txt(f.exitValue)} c={v=>up("exitValue",v)}/>
      <Field l="Assignment Fee" v={txt(f.assignmentFee)} c={v=>up("assignmentFee",v)}/>
-     <Field l="Monthly Rent" v={txt(f.monthlyRent)} c={v=>up("monthlyRent",v)}/>
+     {asset!=="Land"?<Field l="Monthly Rent" v={txt(f.monthlyRent)} c={v=>up("monthlyRent",v)}/>:<Field l="Projected Lot / Pad Value" v={txt(f.monthlyRent)} c={v=>up("monthlyRent",v)}/>}
      <Field l="Taxes" v={txt(f.taxes)} c={v=>up("taxes",v)}/>
      <Field l="Insurance" v={txt(f.insurance)} c={v=>up("insurance",v)}/>
-     <Field l="Utilities" v={txt(f.utilities)} c={v=>up("utilities",v)}/>
-     <Field l="HOA" v={txt(f.hoa)} c={v=>up("hoa",v)}/>
-     <Field l="NOI" v={txt(f.noi)} c={v=>up("noi",v)}/>
-     <Field l="Cap Rate" v={txt(f.capRate)} c={v=>up("capRate",v)}/>
+     {asset==="Commercial"?<Field l="NOI" v={txt(f.noi)} c={v=>up("noi",v)}/>:null}
+     {asset==="Commercial"?<Field l="Cap Rate" v={txt(f.capRate)} c={v=>up("capRate",v)}/>:null}
    </div>
    <div style={{...grid,marginTop:16}}>
      <div style={calcBox}>Equity Spread: {fmt(spread)}</div>
@@ -227,35 +226,28 @@ export default function Page(){
    </div>
  </Section>
 
- <Section title="Financing + Risk">
+ <Section title={`${asset} Facts`}>
+   <div style={grid}>
+     {asset==="Residential"?<><Field l="Beds" v={txt(f.beds)} c={v=>up("beds",v)}/><Field l="Baths" v={txt(f.baths)} c={v=>up("baths",v)}/><Field l="Sqft" v={txt(f.sqft)} c={v=>up("sqft",v)}/><Field l="Units" v={txt(f.units)} c={v=>up("units",v)}/></>:null}
+     {asset==="Commercial"?<><Field l="Building Size" v={txt(f.buildingSize)} c={v=>up("buildingSize",v)}/><Field l="Units / Suites" v={txt(f.units)} c={v=>up("units",v)}/><Field l="NOI" v={txt(f.noi)} c={v=>up("noi",v)}/><Field l="Cap Rate" v={txt(f.capRate)} c={v=>up("capRate",v)}/></>:null}
+     {asset==="Land"?<><Field l="Acres" v={txt(f.acres)} c={v=>up("acres",v)}/><Field l="Zoning" v={txt(f.zoning)} c={v=>up("zoning",v)}/><Field l="Frontage" v={txt(f.frontage)} c={v=>up("frontage",v)}/><SelectBox l="Utilities Available" v={txt(f.utilitiesAvailable,"Unknown")} c={v=>up("utilitiesAvailable",v)} options={["Unknown","Water","Sewer","Power","All Utilities","None","Needs Extension"]}/></>:null}
+   </div>
+ </Section>
+
+ <Section title="Risk + Docs">
    <div style={grid}>
      <Field l="Existing Loan Balance" v={txt(f.loanBalance)} c={v=>up("loanBalance",v)}/>
      <Field l="Interest Rate" v={txt(f.interestRate)} c={v=>up("interestRate",v)}/>
-     <Field l="Balloon Date" v={txt(f.balloonDate)} c={v=>up("balloonDate",v)}/>
      <SelectBox l="Seller Flexibility" v={txt(f.sellerFlexibility,"Unknown")} c={v=>up("sellerFlexibility",v)} options={["Unknown","Low","Medium","High","Creative Terms Available"]}/>
      <SelectBox l="Environmental Issues" v={txt(f.environmentalIssues,"Unknown")} c={v=>up("environmentalIssues",v)} options={["Unknown","None Known","Possible","Confirmed","Needs Report"]}/>
      <SelectBox l="Permits Needed" v={txt(f.permitsNeeded,"Unknown")} c={v=>up("permitsNeeded",v)} options={["Unknown","None","Minor","Major","Stop Work / City Issue"]}/>
      <SelectBox l="City / Code Issues" v={txt(f.cityIssues,"Unknown")} c={v=>up("cityIssues",v)} options={["Unknown","None Known","Violation","Condemned","Inspection Required"]}/>
-     <SelectBox l="Contractor Bids" v={txt(f.contractorBids,"Unknown")} c={v=>up("contractorBids",v)} options={["Unknown","None","One Bid","Multiple Bids","Needs Bid"]}/>
    </div>
- </Section>
-
- <Section title="Asset Facts">
-   <div style={grid}>
-     <Field l="Beds" v={txt(f.beds)} c={v=>up("beds",v)}/>
-     <Field l="Baths" v={txt(f.baths)} c={v=>up("baths",v)}/>
-     <Field l="Sqft" v={txt(f.sqft)} c={v=>up("sqft",v)}/>
-     <Field l="Units" v={txt(f.units)} c={v=>up("units",v)}/>
-     <Field l="Building Size" v={txt(f.buildingSize)} c={v=>up("buildingSize",v)}/>
-     <Field l="Acres" v={txt(f.acres)} c={v=>up("acres",v)}/>
-     <Field l="Zoning" v={txt(f.zoning)} c={v=>up("zoning",v)}/>
-     <SelectBox l="Access" v={txt(f.access,"Unknown")} c={v=>up("access",v)} options={["Unknown","Lockbox","Owner Access","Agent Access","Drive By Only","No Access Yet"]}/>
-   </div>
- </Section>
-
- <Section title="Docs + Contact">
-   <MultiChips labelName="Attached Docs Checklist" options={DOCS} selected={list(f.docs)} onToggle={v=>tog("docs",v)}/>
    <div style={{height:18}}/>
+   <MultiChips labelName="Attached Docs Checklist" options={DOCS} selected={list(f.docs)} onToggle={v=>tog("docs",v)}/>
+ </Section>
+
+ <Section title="Contact">
    <div style={grid}>
      <Field l="Contact Name" v={txt(f.contactName)} c={v=>up("contactName",v)}/>
      <Field l="Phone" v={txt(f.contactPhone)} c={v=>up("contactPhone",v)}/>
@@ -273,7 +265,7 @@ export default function Page(){
 
 const page:React.CSSProperties={minHeight:"100vh",background:"#05070d",color:"#f7f7fb",padding:18,fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"};
 const wrap:React.CSSProperties={maxWidth:1280,margin:"0 auto",paddingBottom:90};
-const nav:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:18};
+const navStyle:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:18};
 const brand:React.CSSProperties={color:"#ffd45a",fontSize:27,fontWeight:950,letterSpacing:-1,marginRight:10};
 const btn:React.CSSProperties={border:"1px solid rgba(207,216,230,.18)",background:"#171c29",color:"#f7f7fb",borderRadius:999,padding:"13px 18px",fontWeight:950,textDecoration:"none",display:"inline-block",cursor:"pointer"};
 const goldBtn:React.CSSProperties={...btn,border:0,background:"#ffdc68",color:"#10131a"};
@@ -282,7 +274,6 @@ const hero:React.CSSProperties={border:"1px solid rgba(245,197,66,.28)",borderRa
 const card:React.CSSProperties={background:"linear-gradient(180deg,#080d19,#050816)",border:"1px solid rgba(245,197,66,.28)",borderRadius:26,padding:28,marginBottom:22};
 const eyebrow:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:7,fontWeight:950,fontSize:15,marginBottom:12};
 const h1:React.CSSProperties={fontSize:"clamp(44px,8vw,86px)",lineHeight:.9,letterSpacing:-4,margin:"0 0 18px",fontWeight:950};
-const h2:React.CSSProperties={fontSize:"clamp(30px,5vw,50px)",lineHeight:.95,letterSpacing:-2,margin:"0 0 18px",fontWeight:950};
 const sub:React.CSSProperties={color:"#c9d0dc",fontSize:21,lineHeight:1.35,margin:0};
 const muted:React.CSSProperties={color:"#aeb7c7",margin:"8px 0 0",lineHeight:1.35};
 const grid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:16};
