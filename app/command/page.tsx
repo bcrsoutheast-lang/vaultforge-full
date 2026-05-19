@@ -482,6 +482,12 @@ export default function CommandPage() {
   const unreadDeals = useMemo(() => unreadRooms("deal", deals), [deals]);
   const unreadPains = useMemo(() => unreadRooms("pain", pains), [pains]);
   const counts = useMemo(() => messageCounts(), [tick]);
+  const savedDeals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "saved"), [tick]);
+  const archivedDeals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "archived"), [tick]);
+  const deletedDeals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "deleted"), [tick]);
+  const savedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "saved"), [tick]);
+  const archivedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "archived"), [tick]);
+  const deletedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "deleted"), [tick]);
 
   const newestDeal = unreadDeals[0] || deals[0] || null;
   const newestPain = unreadPains[0] || pains[0] || null;
@@ -565,6 +571,46 @@ export default function CommandPage() {
               <div style={eyebrow}>Unread Messages</div>
               <h2 style={h2}>{counts.unread}</h2>
               <p style={muted}>{counts.totalMessages} message(s) • click to open cards</p>
+            </Link>
+          </div>
+        </Section>
+
+        <Section title="Room Folders">
+          <div style={grid}>
+            <Link href="/saved-rooms" style={savedDeals.length ? activePanel : panel}>
+              <div style={eyebrow}>Deal Saved</div>
+              <h2 style={h2}>{savedDeals.length}</h2>
+              <p style={muted}>saved opportunity room(s)</p>
+            </Link>
+
+            <Link href="/archived-rooms" style={archivedDeals.length ? activePanel : panel}>
+              <div style={eyebrow}>Deal Archived</div>
+              <h2 style={h2}>{archivedDeals.length}</h2>
+              <p style={muted}>archived opportunity room(s)</p>
+            </Link>
+
+            <Link href="/deleted-rooms" style={deletedDeals.length ? activePanel : panel}>
+              <div style={eyebrow}>Deal Deleted</div>
+              <h2 style={h2}>{deletedDeals.length}</h2>
+              <p style={muted}>deleted opportunity room(s)</p>
+            </Link>
+
+            <Link href="/saved-rooms" style={savedPains.length ? activePanel : panel}>
+              <div style={eyebrow}>Pain Saved</div>
+              <h2 style={h2}>{savedPains.length}</h2>
+              <p style={muted}>saved pain room(s)</p>
+            </Link>
+
+            <Link href="/archived-rooms" style={archivedPains.length ? activePanel : panel}>
+              <div style={eyebrow}>Pain Archived</div>
+              <h2 style={h2}>{archivedPains.length}</h2>
+              <p style={muted}>archived pain room(s)</p>
+            </Link>
+
+            <Link href="/deleted-rooms" style={deletedPains.length ? activePanel : panel}>
+              <div style={eyebrow}>Pain Deleted</div>
+              <h2 style={h2}>{deletedPains.length}</h2>
+              <p style={muted}>deleted pain room(s)</p>
             </Link>
           </div>
         </Section>
