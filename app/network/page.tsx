@@ -33,52 +33,9 @@ type MemberProfile = {
 
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
+const SAVED_PROFILES_KEY = "vaultforge_saved_member_profiles_v1";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
-const MARKETS = ["Atlanta", "North Georgia", "Chattanooga", "Nashville", "Knoxville", "Birmingham", "Huntsville", "Montgomery", "Jacksonville", "Tampa", "Orlando", "Miami", "Charlotte", "Raleigh-Durham", "Greenville-Spartanburg", "Charleston", "Dallas-Fort Worth", "Houston", "Austin", "San Antonio"];
-const ASSETS = ["Residential", "Commercial", "Land"];
-const STRATEGIES = ["Wholesale", "Flip", "Buy & Hold", "BRRRR", "Development", "Seller Finance", "JV", "Rental", "Hotel Conversion", "Airbnb"];
-const SPECIALTIES = ["Distress", "Funding Gap", "Off Market", "Construction", "Land", "Commercial", "Residential", "Creative Finance", "Insurance", "Permits", "Probate", "Foreclosure", "Tax Sale", "Stalled Project", "Value Add"];
-const NEEDS = ["Lender", "Operator", "Contractor", "Buyer", "Attorney", "Insurance Adjuster", "City Expeditor", "Private Capital", "Property Manager", "Developer"];
-const CAN_PROVIDE = ["Capital", "Buying", "Lending", "Contractors", "Legal", "Insurance", "Property Management", "Development", "Operations", "Introductions"];
-const MEMBER_TYPES = ["Investor", "Wholesaler", "Lender", "Contractor", "Developer", "Agent", "Attorney", "Operator", "Private Capital", "Property Manager"];
-const CONTACT_PREFS = ["VaultForge Message", "Text", "Phone", "Email", "Contact Form"];
-const CAPITAL_POSITIONS = ["Unknown", "Cash Buyer", "Private Capital", "Hard Money", "Bank Lending", "JV Capital", "Needs Capital", "Operator With Capital", "Operator Needs Capital"];
-const FUNDING_RANGES = ["Unknown", "Under $50k", "$50k-$250k", "$250k-$1M", "$1M-$5M", "$5M+"];
-const YESNO = ["Unknown", "Yes", "No"];
-
-const CITY_COUNTY: Record<string, string> = {
-  atlanta: "Fulton",
-  alpharetta: "Fulton",
-  roswell: "Fulton",
-  marietta: "Cobb",
-  smyrna: "Cobb",
-  kennesaw: "Cobb",
-  cartersville: "Bartow",
-  cville: "Bartow",
-  cvile: "Bartow",
-  adairsville: "Bartow",
-  rome: "Floyd",
-  gainesville: "Hall",
-  savannah: "Chatham",
-  augusta: "Richmond",
-  columbus: "Muscogee",
-  macon: "Bibb",
-  chattanooga: "Hamilton",
-  nashville: "Davidson",
-  knoxville: "Knox",
-  birmingham: "Jefferson",
-  huntsville: "Madison",
-  charlotte: "Mecklenburg",
-  raleigh: "Wake",
-  greenville: "Greenville",
-  charleston: "Charleston",
-  dallas: "Dallas",
-  houston: "Harris",
-  austin: "Travis",
-  "san antonio": "Bexar",
-  sanantonio: "Bexar",
-};
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -103,33 +60,24 @@ function list(value: unknown): string[] {
   return [];
 }
 
-function safeSet(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function profileId(profile: MemberProfile) {
   return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
 }
 
 function normalizeProfile(profile: MemberProfile): MemberProfile {
-  const now = new Date().toISOString();
   const id = profileId(profile);
   return {
     ...profile,
     id,
+    name: txt(profile.name, "VaultForge Member"),
     basedState: txt(profile.basedState, "GA"),
     statesOperated: list(profile.statesOperated).length ? list(profile.statesOperated) : ["GA"],
+    markets: list(profile.markets),
     assetClasses: list(profile.assetClasses),
     strategies: list(profile.strategies),
     specialties: list(profile.specialties),
     needs: list(profile.needs),
     canProvide: list(profile.canProvide),
-    updatedAt: now,
   };
 }
 
@@ -141,14 +89,10 @@ function getProfile(): MemberProfile {
   }
   return normalizeProfile({
     id: "local_member",
+    name: "VaultForge Member",
     basedState: "GA",
     statesOperated: ["GA"],
     memberType: "Investor",
-    contactPreference: "VaultForge Message",
-    directContact: "Unknown",
-    capitalPosition: "Unknown",
-    proofOfFunds: "Unknown",
-    fundingRange: "Unknown",
   });
 }
 
@@ -159,72 +103,39 @@ function getDirectory(): MemberProfile[] {
   const currentId = profileId(current);
   const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
   const seen = new Set<string>();
-  return merged.filter((member) => {
-    const id = profileId(member);
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  }).map(normalizeProfile);
+  return merged
+    .map(normalizeProfile)
+    .filter((member) => {
+      const id = profileId(member);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
 }
 
-function saveProfile(profile: MemberProfile) {
+function savedIds() {
+  if (!ok()) return [];
+  return j<string[]>(localStorage.getItem(SAVED_PROFILES_KEY), []);
+}
+
+function saveSavedIds(ids: string[]) {
   if (!ok()) return;
-  const next = normalizeProfile(profile);
-  PROFILE_KEYS.forEach((key) => safeSet(key, next));
-
-  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
-  const nextId = profileId(next);
-  const merged = [next, ...directory.filter((member) => profileId(member) !== nextId)];
-  safeSet(MEMBER_DIRECTORY_KEY, merged);
-
-  window.dispatchEvent(new Event("vaultforge-profile-change"));
-  window.dispatchEvent(new Event("vaultforge-network-change"));
+  localStorage.setItem(SAVED_PROFILES_KEY, JSON.stringify(Array.from(new Set(ids))));
+  window.dispatchEvent(new Event("vaultforge-saved-profiles-change"));
 }
 
-function membersForState(state: string) {
-  return getDirectory().filter((member) => list(member.statesOperated).includes(state));
+function membersForState(state: string, members: MemberProfile[]) {
+  return members.filter((member) => list(member.statesOperated).includes(state));
 }
 
-function countyFromCity(city: string) {
-  return CITY_COUNTY[city.trim().toLowerCase().replace(/\s+/g, " ")] || "";
-}
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "#05070d",
+  color: "#f7f7fb",
+  padding: 18,
+  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+};
 
-async function compressImage(file: File, maxWidth = 850, quality = 0.52): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onerror = () => resolve("");
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => resolve("");
-      img.onload = () => {
-        try {
-          const scale = Math.min(1, maxWidth / img.width);
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(img.width * scale));
-          canvas.height = Math.max(1, Math.round(img.height * scale));
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve("");
-            return;
-          }
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/jpeg", quality));
-        } catch {
-          resolve("");
-        }
-      };
-      img.src = String(reader.result || "");
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-async function onePhoto(files: FileList | null) {
-  const file = Array.from(files || [])[0];
-  return file ? compressImage(file) : "";
-}
-
-const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
 const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
@@ -234,101 +145,230 @@ const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor
 const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
 const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
-const pulsePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.65)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
-const labelStyle: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontSize: 12, fontWeight: 950, marginBottom: 8 };
 const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
 const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
 const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
-const textarea: React.CSSProperties = { ...input, minHeight: 110, resize: "vertical" };
-const photoStyle: React.CSSProperties = { width: "100%", height: 160, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
 function Nav({ active }: { active: string }) {
-  const item = (href: string, label: string, key: string) => <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>;
-  return <nav style={nav}><div style={brand}>VAULTFORGE</div>{item("/command","Command","command")}{item("/deal-rooms","Deal Rooms","deals")}{item("/deal-create","Create Deal","deal-create")}{item("/pain-intake","Pain Intake","pain-intake")}{item("/pain-rooms","Pain Rooms","pain")}{item("/network","Network","network")}{item("/messages","Messages","messages")}{item("/profile","Profile","profile")}<Link href="/logout" style={redBtn}>Logout</Link></nav>;
+  const item = (href: string, label: string, key: string) => (
+    <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>
+  );
+
+  return (
+    <nav style={nav}>
+      <div style={brand}>VAULTFORGE</div>
+      {item("/command", "Command", "command")}
+      {item("/deal-rooms", "Deal Rooms", "deals")}
+      {item("/deal-create", "Create Deal", "deal-create")}
+      {item("/pain-intake", "Pain Intake", "pain-intake")}
+      {item("/pain-rooms", "Pain Rooms", "pain")}
+      {item("/network", "Network", "network")}
+      {item("/messages", "Messages", "messages")}
+      {item("/profile", "Profile", "profile")}
+      <Link href="/logout" style={redBtn}>Logout</Link>
+    </nav>
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+  return (
+    <section style={card}>
+      <div style={eyebrow}>{title}</div>
+      {children}
+    </section>
+  );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><input type="text" style={input} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+function StateCard({
+  state,
+  count,
+  active,
+  savedCount,
+  onClick,
+}: {
+  state: string;
+  count: number;
+  active: boolean;
+  savedCount: number;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} style={active ? activePanel : panel}>
+      <div style={eyebrow}>{state}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>member(s) serving</p>
+      <p style={muted}>{savedCount} saved profile(s)</p>
+    </button>
+  );
 }
 
-function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><textarea style={textarea} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
-}
+function MemberCard({
+  member,
+  saved,
+  onSave,
+  onUnsave,
+}: {
+  member: MemberProfile;
+  saved: boolean;
+  onSave: () => void;
+  onUnsave: () => void;
+}) {
+  const canProvide = list(member.canProvide);
+  const needs = list(member.needs);
+  const strategies = list(member.strategies);
+  const assets = list(member.assetClasses);
+  const markets = list(member.markets);
 
-function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
-  return <label><div style={labelStyle}>{label}</div><select style={input} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
-}
+  return (
+    <div style={saved ? activePanel : panel}>
+      {txt(member.profilePhoto) ? <img src={txt(member.profilePhoto)} alt={txt(member.name, "Member")} style={photoStyle} /> : null}
 
-function ChipSet({ label, options, selected, onToggle }: { label: string; options: string[]; selected: string[]; onToggle: (value: string) => void }) {
-  return <div><div style={labelStyle}>{label}</div><div style={row}>{options.map((option) => <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>{option}</button>)}</div></div>;
-}
+      <div style={eyebrow}>{txt(member.memberType, "Member")} • Based {txt(member.basedState, "N/A")}</div>
+      <h2 style={h2}>{txt(member.name, "VaultForge Member")}</h2>
+      <p style={sub}>{txt(member.company, "Company not listed")}</p>
 
-function MemberCard({ member }: { member: MemberProfile }) {
-  return <div style={panel}>
-    {txt(member.profilePhoto) ? <img src={txt(member.profilePhoto)} alt={txt(member.name, "Member")} style={photoStyle} /> : null}
-    <div style={eyebrow}>{txt(member.memberType, "Member")} • Based {txt(member.basedState, "N/A")}</div>
-    <h2 style={h2}>{txt(member.name, "VaultForge Member")}</h2>
-    <p style={sub}>{txt(member.company, "Company not listed")}</p>
-    <p style={muted}>From: {[txt(member.basedCity), txt(member.basedCounty), txt(member.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
-    <p style={muted}>Operates: {list(member.statesOperated).join(", ") || "No states selected"}</p>
-    <p style={muted}>Can provide: {list(member.canProvide).join(", ") || "Not listed"}</p>
-    <p style={muted}>Needs: {list(member.needs).join(", ") || "Not listed"}</p>
-    <div style={{ ...row, marginTop: 18 }}><Link href="/messages" style={goldBtn}>Message</Link><Link href="/profile" style={btn}>Profile</Link></div>
-  </div>;
+      <p style={muted}>From: {[txt(member.basedCity), txt(member.basedCounty), txt(member.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
+      <p style={muted}>Works in: {list(member.statesOperated).join(", ") || "No states selected"}</p>
+      <p style={muted}>Markets: {markets.join(", ") || "Not listed"}</p>
+      <p style={muted}>Assets: {assets.join(", ") || "Not listed"}</p>
+      <p style={muted}>Strategies: {strategies.join(", ") || "Not listed"}</p>
+      <p style={muted}>Can provide: {canProvide.join(", ") || "Not listed"}</p>
+      <p style={muted}>Needs: {needs.join(", ") || "Not listed"}</p>
+      <p style={muted}>Capital: {txt(member.capitalPosition, "Unknown")} • Proof: {txt(member.proofOfFunds, "Unknown")} • Range: {txt(member.fundingRange, "Unknown")}</p>
+
+      <div style={{ ...row, marginTop: 18 }}>
+        <Link
+          href={`/messages?to=${encodeURIComponent(txt(member.email, profileId(member)))}&subject=${encodeURIComponent("Network Contact: " + txt(member.name, "VaultForge Member"))}`}
+          style={goldBtn}
+        >
+          Contact
+        </Link>
+        {saved ? (
+          <button type="button" style={redBtn} onClick={onUnsave}>Unsave Profile</button>
+        ) : (
+          <button type="button" style={btn} onClick={onSave}>Save Profile</button>
+        )}
+        <Link href="/profile" style={btn}>My Profile</Link>
+      </div>
+    </div>
+  );
 }
 
 export default function NetworkPage() {
   const [tick, setTick] = useState(0);
   const [openState, setOpenState] = useState("GA");
+  const [showSaved, setShowSaved] = useState(false);
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-network-change", refresh);
     window.addEventListener("vaultforge-profile-change", refresh);
+    window.addEventListener("vaultforge-saved-profiles-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-network-change", refresh);
       window.removeEventListener("vaultforge-profile-change", refresh);
+      window.removeEventListener("vaultforge-saved-profiles-change", refresh);
     };
   }, []);
 
-  const directory = useMemo(() => getDirectory(), [tick]);
-  const stateCounts = STATES.map((state) => ({ state, members: directory.filter((member) => list(member.statesOperated).includes(state)) }));
-  const openMembers = membersForState(openState);
+  const members = useMemo(() => getDirectory(), [tick]);
+  const saved = useMemo(() => savedIds(), [tick]);
+  const openMembers = useMemo(() => membersForState(openState, members), [openState, members]);
+  const savedMembers = useMemo(() => members.filter((member) => saved.includes(profileId(member))), [members, saved]);
 
-  return <main style={page}><div style={wrap}><Nav active="network" />
+  function saveMember(member: MemberProfile) {
+    saveSavedIds([...saved, profileId(member)]);
+    setTick((x) => x + 1);
+  }
 
-    <section style={hero}>
-      <div style={eyebrow}>Network</div>
-      <h1 style={h1}>State service map.</h1>
-      <p style={sub}>Profile based state is identity. States operated in controls where the member appears in Network.</p>
-    </section>
+  function unsaveMember(member: MemberProfile) {
+    saveSavedIds(saved.filter((id) => id !== profileId(member)));
+    setTick((x) => x + 1);
+  }
 
-    <Section title="State Cards">
-      <div style={grid}>
-        {stateCounts.map(({ state, members }) => (
-          <button key={state} type="button" onClick={() => setOpenState(state)} style={openState === state ? pulsePanel : panel}>
-            <div style={eyebrow}>{state}</div>
-            <h2 style={h2}>{members.length}</h2>
-            <p style={muted}>member(s) serving this state</p>
-          </button>
-        ))}
+  return (
+    <main style={page}>
+      <div style={wrap}>
+        <Nav active="network" />
+
+        <section style={hero}>
+          <div style={eyebrow}>Network</div>
+          <h1 style={h1}>State member network.</h1>
+          <p style={sub}>Click a state. Only members serving that state show below. Save profiles and contact them from the member card.</p>
+          <div style={{ ...row, marginTop: 22 }}>
+            <button type="button" style={!showSaved ? goldBtn : btn} onClick={() => setShowSaved(false)}>State Members</button>
+            <button type="button" style={showSaved ? goldBtn : btn} onClick={() => setShowSaved(true)}>Saved Profiles ({savedMembers.length})</button>
+          </div>
+        </section>
+
+        {!showSaved ? (
+          <>
+            <Section title="State Buttons">
+              <div style={grid}>
+                {STATES.map((state) => {
+                  const stateMembers = membersForState(state, members);
+                  const stateSaved = stateMembers.filter((member) => saved.includes(profileId(member))).length;
+
+                  return (
+                    <StateCard
+                      key={state}
+                      state={state}
+                      count={stateMembers.length}
+                      savedCount={stateSaved}
+                      active={openState === state}
+                      onClick={() => setOpenState(state)}
+                    />
+                  );
+                })}
+              </div>
+            </Section>
+
+            <Section title={`${openState} Members`}>
+              {openMembers.length ? (
+                <div style={grid}>
+                  {openMembers.map((member) => (
+                    <MemberCard
+                      key={profileId(member)}
+                      member={member}
+                      saved={saved.includes(profileId(member))}
+                      onSave={() => saveMember(member)}
+                      onUnsave={() => unsaveMember(member)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p style={sub}>No members serving {openState} yet.</p>
+              )}
+            </Section>
+          </>
+        ) : (
+          <Section title="Saved Profiles">
+            {savedMembers.length ? (
+              <div style={grid}>
+                {savedMembers.map((member) => (
+                  <MemberCard
+                    key={profileId(member)}
+                    member={member}
+                    saved
+                    onSave={() => saveMember(member)}
+                    onUnsave={() => unsaveMember(member)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p style={sub}>No saved profiles yet.</p>
+            )}
+          </Section>
+        )}
       </div>
-    </Section>
-
-    <Section title={`${openState} Members`}>
-      {openMembers.length ? <div style={grid}>{openMembers.map((member) => <MemberCard key={profileId(member)} member={member} />)}</div> : <p style={sub}>No members serving {openState} yet.</p>}
-    </Section>
-
-  </div></main>;
+    </main>
+  );
 }
