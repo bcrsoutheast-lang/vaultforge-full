@@ -284,15 +284,25 @@ function saveThreads(threads: MessageThread[]) {
 
 function messageCounts() {
   const active = getThreads().filter((thread) => thread.status === "active");
+  const dealThreads = active.filter((thread) => thread.lane === "deal");
+  const painThreads = active.filter((thread) => thread.lane === "pain");
+  const networkThreads = active.filter((thread) => thread.lane === "network");
+  const countMessages = (threads: MessageThread[]) =>
+    threads.reduce((sum, thread) => sum + Math.max(0, thread.messages.length), 0);
+
   return {
     total: active.length,
+    totalMessages: countMessages(active),
     unread: active.filter((thread) => thread.unread).length,
-    deal: active.filter((thread) => thread.lane === "deal").length,
-    pain: active.filter((thread) => thread.lane === "pain").length,
-    network: active.filter((thread) => thread.lane === "network").length,
-    dealUnread: active.filter((thread) => thread.lane === "deal" && thread.unread).length,
-    painUnread: active.filter((thread) => thread.lane === "pain" && thread.unread).length,
-    networkUnread: active.filter((thread) => thread.lane === "network" && thread.unread).length,
+    deal: dealThreads.length,
+    pain: painThreads.length,
+    network: networkThreads.length,
+    dealMessages: countMessages(dealThreads),
+    painMessages: countMessages(painThreads),
+    networkMessages: countMessages(networkThreads),
+    dealUnread: dealThreads.filter((thread) => thread.unread).length,
+    painUnread: painThreads.filter((thread) => thread.unread).length,
+    networkUnread: networkThreads.filter((thread) => thread.unread).length,
   };
 }
 
@@ -474,15 +484,15 @@ export default function CommandPage() {
             <Link href="/members" style={panel}><div style={eyebrow}>Members</div><h2 style={h2}>{members.length}</h2><p style={muted}>profile cards</p></Link>
             <Link href="/network" style={unreadDeals.length ? activePanel : panel}><div style={eyebrow}>Opportunity Cards</div><h2 style={h2}>{deals.length}</h2><p style={muted}>{unreadDeals.length} unread</p></Link>
             <Link href="/network" style={unreadPains.length ? activePanel : panel}><div style={eyebrow}>Pain Cards</div><h2 style={h2}>{pains.length}</h2><p style={muted}>{unreadPains.length} unread</p></Link>
-            <Link href="/messages" style={counts.unread ? activePanel : panel}><div style={eyebrow}>Messages</div><h2 style={h2}>{counts.unread}</h2><p style={muted}>{counts.total} active thread(s)</p></Link>
+            <Link href="/messages" style={counts.unread ? activePanel : panel}><div style={eyebrow}>Messages</div><h2 style={h2}>{counts.totalMessages}</h2><p style={muted}>{counts.total} active thread(s) • {counts.unread} unread</p></Link>
           </div>
         </Section>
 
         <Section title="Message Reaction Counts">
           <div style={grid}>
-            <Link href="/messages?type=deal" style={counts.dealUnread ? activePanel : panel}><div style={eyebrow}>Deal Messages</div><h2 style={h2}>{counts.dealUnread}</h2><p style={muted}>{counts.deal} active</p></Link>
-            <Link href="/messages?type=pain" style={counts.painUnread ? activePanel : panel}><div style={eyebrow}>Pain Messages</div><h2 style={h2}>{counts.painUnread}</h2><p style={muted}>{counts.pain} active</p></Link>
-            <Link href="/messages" style={counts.networkUnread ? activePanel : panel}><div style={eyebrow}>Network Messages</div><h2 style={h2}>{counts.networkUnread}</h2><p style={muted}>{counts.network} active</p></Link>
+            <Link href="/messages?type=deal" style={counts.dealUnread ? activePanel : panel}><div style={eyebrow}>Deal Messages</div><h2 style={h2}>{counts.dealMessages}</h2><p style={muted}>{counts.deal} thread(s) • {counts.dealUnread} unread</p></Link>
+            <Link href="/messages?type=pain" style={counts.painUnread ? activePanel : panel}><div style={eyebrow}>Pain Messages</div><h2 style={h2}>{counts.painMessages}</h2><p style={muted}>{counts.pain} thread(s) • {counts.painUnread} unread</p></Link>
+            <Link href="/messages" style={counts.networkUnread ? activePanel : panel}><div style={eyebrow}>Network Messages</div><h2 style={h2}>{counts.networkMessages}</h2><p style={muted}>{counts.network} thread(s) • {counts.networkUnread} unread</p></Link>
           </div>
         </Section>
 
