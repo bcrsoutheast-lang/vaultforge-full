@@ -445,6 +445,7 @@ function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
 }
 
 
+
 export default function CommandPage() {
   const [tick, setTick] = useState(0);
 
@@ -485,9 +486,10 @@ export default function CommandPage() {
   const newestDeal = unreadDeals[0] || deals[0] || null;
   const newestPain = unreadPains[0] || pains[0] || null;
   const pressureTotal = unreadDeals.length + unreadPains.length + counts.unread;
+
   const railItems = [
-    ...unreadDeals.slice(0, 4).map((room) => `NEW DEAL • ${titleFor(room, "deal")} • ${loc(room)}`),
-    ...unreadPains.slice(0, 4).map((room) => `NEW PAIN • ${titleFor(room, "pain")} • ${loc(room)}`),
+    ...unreadDeals.slice(0, 3).map((room) => `NEW DEAL • ${titleFor(room, "deal")} • ${loc(room)}`),
+    ...unreadPains.slice(0, 3).map((room) => `NEW PAIN • ${titleFor(room, "pain")} • ${loc(room)}`),
     ...(counts.dealUnread ? [`DEAL MESSAGE • ${counts.dealUnread} unread`] : []),
     ...(counts.painUnread ? [`PAIN MESSAGE • ${counts.painUnread} unread`] : []),
     ...(counts.networkUnread ? [`NETWORK MESSAGE • ${counts.networkUnread} unread`] : []),
@@ -512,7 +514,7 @@ export default function CommandPage() {
           <div style={eyebrow}>Member Command Center</div>
           <h1 style={h1}>Live action desk.</h1>
           <p style={sub}>
-            {txt(profile.name, "Member")} • Based {txt(profile.basedCity, "City not set")}, {txt(profile.basedState, "GA")} • New rooms and unread messages pulse until opened.
+            {txt(profile.name, "Member")} • Based {txt(profile.basedCity, "City not set")}, {txt(profile.basedState, "GA")} • Nothing opens in your face. Click a card to drill in.
           </p>
           <div style={{ ...row, marginTop: 22 }}>
             <Link href="/members" style={goldBtn}>Members</Link>
@@ -539,30 +541,30 @@ export default function CommandPage() {
           </div>
         </Section>
 
-        <Section title="Live Counts">
+        <Section title="Command Cards">
           <div style={grid}>
             <Link href="/members" style={panel}>
               <div style={eyebrow}>Members</div>
               <h2 style={h2}>{members.length}</h2>
-              <p style={muted}>profile cards</p>
+              <p style={muted}>profile card(s)</p>
             </Link>
 
             <Link href="/network" style={unreadDeals.length ? activePanel : panel}>
-              <div style={eyebrow}>New Deals</div>
+              <div style={eyebrow}>Opportunity Cards</div>
               <h2 style={h2}>{unreadDeals.length}</h2>
-              <p style={muted}>{deals.length} active opportunity card(s)</p>
+              <p style={muted}>{deals.length} active • click to open Network</p>
             </Link>
 
             <Link href="/network" style={unreadPains.length ? activePanel : panel}>
-              <div style={eyebrow}>New Pain</div>
+              <div style={eyebrow}>Pain Cards</div>
               <h2 style={h2}>{unreadPains.length}</h2>
-              <p style={muted}>{pains.length} active pain card(s)</p>
+              <p style={muted}>{pains.length} active • click to open Network</p>
             </Link>
 
             <Link href="/messages" style={counts.unread ? activePanel : panel}>
               <div style={eyebrow}>Unread Messages</div>
               <h2 style={h2}>{counts.unread}</h2>
-              <p style={muted}>{counts.totalMessages} total message(s)</p>
+              <p style={muted}>{counts.totalMessages} message(s) • click to open cards</p>
             </Link>
           </div>
         </Section>
@@ -572,49 +574,33 @@ export default function CommandPage() {
             <Link href={newestDeal ? `/deal-rooms/${encodeURIComponent(rid(newestDeal))}` : "/deal-rooms"} style={unreadDeals.length ? activePanel : panel}>
               <div style={eyebrow}>Deal Pressure</div>
               <h2 style={h2}>{unreadDeals.length}</h2>
-              <p style={muted}>{newestDeal ? titleFor(newestDeal, "deal") : "No active deal pressure"}</p>
+              <p style={muted}>{newestDeal ? "Click to open newest deal pressure" : "No active deal pressure"}</p>
             </Link>
 
             <Link href={newestPain ? `/pain-rooms/${encodeURIComponent(rid(newestPain))}` : "/pain-rooms"} style={unreadPains.length ? activePanel : panel}>
               <div style={eyebrow}>Pain Pressure</div>
               <h2 style={h2}>{unreadPains.length}</h2>
-              <p style={muted}>{newestPain ? titleFor(newestPain, "pain") : "No active pain pressure"}</p>
+              <p style={muted}>{newestPain ? "Click to open newest pain pressure" : "No active pain pressure"}</p>
             </Link>
 
             <Link href="/messages" style={counts.dealUnread ? activePanel : panel}>
               <div style={eyebrow}>Deal Messages</div>
-              <h2 style={h2}>{counts.dealUnread}</h2>
-              <p style={muted}>{counts.dealMessages} message(s)</p>
+              <h2 style={h2}>{counts.dealMessages}</h2>
+              <p style={muted}>{counts.deal} thread(s) • {counts.dealUnread} unread</p>
             </Link>
 
             <Link href="/messages" style={counts.painUnread ? activePanel : panel}>
               <div style={eyebrow}>Pain Messages</div>
-              <h2 style={h2}>{counts.painUnread}</h2>
-              <p style={muted}>{counts.painMessages} message(s)</p>
+              <h2 style={h2}>{counts.painMessages}</h2>
+              <p style={muted}>{counts.pain} thread(s) • {counts.painUnread} unread</p>
             </Link>
 
             <Link href="/messages" style={counts.networkUnread ? activePanel : panel}>
               <div style={eyebrow}>Network Messages</div>
-              <h2 style={h2}>{counts.networkUnread}</h2>
-              <p style={muted}>{counts.networkMessages} message(s)</p>
+              <h2 style={h2}>{counts.networkMessages}</h2>
+              <p style={muted}>{counts.network} thread(s) • {counts.networkUnread} unread</p>
             </Link>
           </div>
-        </Section>
-
-        <Section title="Active Opportunity Cards">
-          {deals.length ? (
-            <div style={grid}>{deals.slice(0, 4).map((room) => <RoomCard key={rid(room)} room={room} kind="deal" />)}</div>
-          ) : (
-            <p style={sub}>No active opportunity cards.</p>
-          )}
-        </Section>
-
-        <Section title="Active Pain Cards">
-          {pains.length ? (
-            <div style={grid}>{pains.slice(0, 4).map((room) => <RoomCard key={rid(room)} room={room} kind="pain" />)}</div>
-          ) : (
-            <p style={sub}>No active pain cards.</p>
-          )}
         </Section>
       </div>
     </main>
