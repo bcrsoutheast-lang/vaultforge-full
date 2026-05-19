@@ -425,6 +425,10 @@ function saveProfile(profile: Profile) {
   window.dispatchEvent(new Event("vaultforge-profile-change"));
 }
 
+function allowTypingKeys(event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  event.stopPropagation();
+}
+
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
@@ -459,11 +463,36 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><input type="text" style={input} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return (
+    <label>
+      <div style={labelStyle}>{label}</div>
+      <input
+        type="text"
+        style={input}
+        value={value}
+        onKeyDown={allowTypingKeys}
+        onKeyUp={allowTypingKeys}
+        onKeyPress={allowTypingKeys}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
 }
 
 function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><textarea style={textarea} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return (
+    <label>
+      <div style={labelStyle}>{label}</div>
+      <textarea
+        style={textarea}
+        value={value}
+        onKeyDown={allowTypingKeys}
+        onKeyUp={allowTypingKeys}
+        onKeyPress={allowTypingKeys}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
 }
 
 function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
