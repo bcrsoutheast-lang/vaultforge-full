@@ -444,19 +444,33 @@ function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
   );
 }
 
+
 export default function MessagesPage() {
   const [tick, setTick] = useState(0);
   const [lane, setLane] = useState<MessageThread["lane"]>("deal");
   const [activeId, setActiveId] = useState("");
   const [reply, setReply] = useState("");
+  const [banner, setBanner] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const opened = createOrOpenThread(params);
-    if (opened) setActiveId(opened);
-    const type = txt(params.get("type"));
-    if (type === "deal" || type === "pain") setLane(type);
-    else if (txt(params.get("to"))) setLane("network");
+    const hasActionParams =
+      Boolean(txt(params.get("type"))) ||
+      Boolean(txt(params.get("room"))) ||
+      Boolean(txt(params.get("to"))) ||
+      Boolean(txt(params.get("subject")));
+
+    if (hasActionParams) {
+      const opened = createOrOpenThread(params);
+      if (opened) {
+        setActiveId(opened);
+        setBanner("Thread opened from action.");
+      }
+
+      const type = txt(params.get("type"));
+      if (type === "deal" || type === "pain") setLane(type);
+      else if (txt(params.get("to"))) setLane("network");
+    }
 
     const refresh = () => setTick((x) => x + 1);
     window.addEventListener("storage", refresh);
@@ -470,15 +484,29 @@ export default function MessagesPage() {
   const threads = useMemo(() => getThreads(), [tick]);
   const counts = useMemo(() => messageCounts(), [tick]);
   const visibleThreads = threads.filter((thread) => thread.status === "active" && thread.lane === lane);
-  const activeThread = threads.find((thread) => thread.id === activeId) || visibleThreads[0] || null;
+  const activeThread = activeId ? threads.find((thread) => thread.id === activeId) || null : null;
 
   useEffect(() => {
     if (activeThread && activeThread.unread) {
-      const updated = threads.map((thread) => thread.id === activeThread.id ? { ...thread, unread: false, updatedAt: new Date().toISOString() } : thread);
+      const updated = threads.map((thread) =>
+        thread.id === activeThread.id ? { ...thread, unread: false, updatedAt: new Date().toISOString() } : thread
+      );
       saveThreads(updated);
       setTick((x) => x + 1);
     }
   }, [activeThread?.id]);
+
+  function selectThread(thread: MessageThread) {
+    setActiveId(thread.id);
+    setBanner("");
+  }
+
+  function switchLane(nextLane: MessageThread["lane"]) {
+    setLane(nextLane);
+    setActiveId("");
+    setBanner("");
+    setReply("");
+  }
 
   function updateThread(next: MessageThread) {
     saveThreads([next, ...threads.filter((thread) => thread.id !== next.id)]);
@@ -503,6 +531,7 @@ export default function MessagesPage() {
 
   function setStatus(thread: MessageThread, status: MessageThread["status"]) {
     updateThread({ ...thread, status, updatedAt: new Date().toISOString() });
+    if (status !== "active") setActiveId("");
   }
 
   function toggleSaved(thread: MessageThread) {
@@ -514,78 +543,83 @@ export default function MessagesPage() {
       <div style={wrap}>
         <Nav active="messages" />
 
+        {banner ? (
+          <section style={activePanel}>
+            <div style={eyebrow}>Message Action</div>
+            <h2 style={h2}>{banner}</h2>
+          </section>
+        ) : null}
+
         <section style={hero}>
           <div style={eyebrow}>Messages</div>
-          <h1 style={h1}>Room communication center.</h1>
-          <p style={sub}>Deal, Pain, and Network messages stay separated and tied to the action that opened them.</p>
+          <h1 style={h1}>Message cards.</h1>
+          <p style={sub}>
+            Open a lane, then click a message card to read or reply. The top nav never opens a thread by itself.
+          </p>
         </section>
 
         <Section title="Message Lanes">
           <div style={grid}>
-            <LaneCard label="Deal Messages" active={lane === "deal"} count={counts.dealMessages} unread={counts.dealUnread} threads={counts.deal} onClick={() => setLane("deal")} />
-            <LaneCard label="Pain Messages" active={lane === "pain"} count={counts.painMessages} unread={counts.painUnread} threads={counts.pain} onClick={() => setLane("pain")} />
-            <LaneCard label="Network Messages" active={lane === "network"} count={counts.networkMessages} unread={counts.networkUnread} threads={counts.network} onClick={() => setLane("network")} />
+            <LaneCard label="Deal Messages" active={lane === "deal"} count={counts.dealMessages} unread={counts.dealUnread} threads={counts.deal} onClick={() => switchLane("deal")} />
+            <LaneCard label="Pain Messages" active={lane === "pain"} count={counts.painMessages} unread={counts.painUnread} threads={counts.pain} onClick={() => switchLane("pain")} />
+            <LaneCard label="Network Messages" active={lane === "network"} count={counts.networkMessages} unread={counts.networkUnread} threads={counts.network} onClick={() => switchLane("network")} />
           </div>
         </Section>
 
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, .9fr) minmax(320px, 1.4fr)", gap: 18 }}>
-          <Section title={`${lane} Threads`}>
-            {visibleThreads.length ? (
-              <div style={{ display: "grid", gap: 12 }}>
-                {visibleThreads.map((thread) => (
-                  <button key={thread.id} type="button" onClick={() => setActiveId(thread.id)} style={activeId === thread.id || thread.unread ? activePanel : panel}>
-                    <div style={eyebrow}>{thread.lane}{thread.saved ? " • Saved" : ""}</div>
-                    <h2 style={{ ...h2, fontSize: 30 }}>{thread.subject}</h2>
-                    <p style={muted}>{thread.messages.length} message(s)</p>
-                  </button>
-                ))}
+        <Section title={`${lane} Message Cards`}>
+          {visibleThreads.length ? (
+            <div style={grid}>
+              {visibleThreads.map((thread) => (
+                <button key={thread.id} type="button" onClick={() => selectThread(thread)} style={activeId === thread.id || thread.unread ? activePanel : panel}>
+                  <div style={eyebrow}>{thread.lane}{thread.saved ? " • Saved" : ""}{thread.unread ? " • Unread" : ""}</div>
+                  <h2 style={{ ...h2, fontSize: 30 }}>{thread.subject}</h2>
+                  <p style={muted}>{thread.messages.length} message(s)</p>
+                  <p style={muted}>Click to open thread</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p style={sub}>No active {lane} message cards.</p>
+          )}
+        </Section>
+
+        {activeThread ? (
+          <Section title="Open Thread">
+            <div style={activeThread.unread ? activePanel : panel}>
+              <div style={eyebrow}>{activeThread.lane} Thread</div>
+              <h2 style={h2}>{activeThread.subject}</h2>
+              <p style={muted}>Room: {txt(activeThread.roomId, "No room attached")} • To: {txt(activeThread.to, "Not listed")}</p>
+              <div style={{ ...row, marginTop: 14 }}>
+                <button type="button" style={activeThread.saved ? goldBtn : btn} onClick={() => toggleSaved(activeThread)}>{activeThread.saved ? "Saved" : "Save Thread"}</button>
+                <button type="button" style={btn} onClick={() => setStatus(activeThread, "archived")}>Archive</button>
+                <button type="button" style={redBtn} onClick={() => setStatus(activeThread, "deleted")}>Delete</button>
+                <button type="button" style={btn} onClick={() => setActiveId("")}>Close Thread</button>
               </div>
-            ) : (
-              <p style={sub}>No active {lane} threads.</p>
-            )}
+            </div>
+
+            <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+              {activeThread.messages.map((message) => (
+                <div key={message.id} style={panel}>
+                  <div style={eyebrow}>{message.author}</div>
+                  <p style={sub}>{message.body}</p>
+                  <p style={muted}>{new Date(message.createdAt).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <textarea style={textarea} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Type reply..." />
+              <div style={{ ...row, marginTop: 12 }}>
+                <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
+                {activeThread.roomId ? (
+                  <Link href={activeThread.lane === "pain" ? `/pain-rooms/${encodeURIComponent(activeThread.roomId)}` : activeThread.lane === "deal" ? `/deal-rooms/${encodeURIComponent(activeThread.roomId)}` : "/network"} style={btn}>Open Source</Link>
+                ) : (
+                  <Link href="/network" style={btn}>Open Network</Link>
+                )}
+              </div>
+            </div>
           </Section>
-
-          <Section title="Active Thread">
-            {activeThread ? (
-              <>
-                <div style={activeThread.unread ? activePanel : panel}>
-                  <div style={eyebrow}>{activeThread.lane} Thread</div>
-                  <h2 style={h2}>{activeThread.subject}</h2>
-                  <p style={muted}>Room: {txt(activeThread.roomId, "No room attached")} • To: {txt(activeThread.to, "Not listed")}</p>
-                  <div style={{ ...row, marginTop: 14 }}>
-                    <button type="button" style={activeThread.saved ? goldBtn : btn} onClick={() => toggleSaved(activeThread)}>{activeThread.saved ? "Saved" : "Save Thread"}</button>
-                    <button type="button" style={btn} onClick={() => setStatus(activeThread, "archived")}>Archive</button>
-                    <button type="button" style={redBtn} onClick={() => setStatus(activeThread, "deleted")}>Delete</button>
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
-                  {activeThread.messages.map((message) => (
-                    <div key={message.id} style={panel}>
-                      <div style={eyebrow}>{message.author}</div>
-                      <p style={sub}>{message.body}</p>
-                      <p style={muted}>{new Date(message.createdAt).toLocaleString()}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ marginTop: 16 }}>
-                  <textarea style={textarea} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Type reply..." />
-                  <div style={{ ...row, marginTop: 12 }}>
-                    <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
-                    {activeThread.roomId ? (
-                      <Link href={activeThread.lane === "pain" ? `/pain-rooms/${encodeURIComponent(activeThread.roomId)}` : activeThread.lane === "deal" ? `/deal-rooms/${encodeURIComponent(activeThread.roomId)}` : "/network"} style={btn}>Open Source</Link>
-                    ) : (
-                      <Link href="/network" style={btn}>Open Network</Link>
-                    )}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p style={sub}>Select a thread.</p>
-            )}
-          </Section>
-        </div>
+        ) : null}
       </div>
     </main>
   );
