@@ -2,29 +2,436 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import {
-  ASSETS,
-  BLOCKERS,
-  CAPITAL,
-  CONTACT,
-  CONTROL_STATUS,
-  NEEDS,
-  PAIN_TYPES,
-  RISKS,
-  SEVERITY,
-  STATES,
-  TIME,
-  countyFromCity,
-  defaultPainRoom,
-  locationFor,
-  painIntelligence,
-  photosFromFiles,
-  propertyTypesFor,
-  safeList,
-  safeText,
-  savePainRoom,
-  type PainRoom,
-} from "../lib/vaultforgePain";
+
+type PainState = "active" | "saved" | "archived" | "deleted";
+type AssetClass = "Residential" | "Commercial" | "Land";
+
+type PainRoom = {
+  id: string;
+  roomId: string;
+  title: string;
+  state: string;
+  city: string;
+  county: string;
+  address: string;
+  assetClass: AssetClass;
+  propertyType: string;
+  painTypes: string[];
+  needs: string[];
+  blockers: string[];
+  risks: string[];
+  severity: string;
+  timePressure: string;
+  capitalPressure: string;
+  controlStatus: string;
+  currentStatus: string;
+  ownerSituation: string;
+  accessStatus: string;
+  titleStatus: string;
+  permitStatus: string;
+  insuranceStatus: string;
+  legalStatus: string;
+  askPrice: string;
+  value: string;
+  repairs: string;
+  monthlyBurn: string;
+  moneyNeededNow: string;
+  deadline: string;
+  rootCause: string;
+  bestOutcome: string;
+  worstCase: string;
+  desiredSolution: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  bestContact: string;
+  notes: string;
+  photos: string[];
+  photoUrls: string[];
+  coverPhoto: string;
+  photoUrl: string;
+  imageUrl: string;
+  roomState: PainState;
+  cleanupState: PainState;
+  stateStatus: PainState;
+  alertRead: boolean;
+  viewedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  analyzer: string;
+};
+
+const MAIN_KEY = "vaultforge_clean_pain_rooms_v2";
+const LEGACY_KEY_ONE = "vaultforge_clean_pain_rooms_v1";
+const LEGACY_KEY_TWO = "vaultforge_clean_pain_rooms";
+const LEGACY_KEY_THREE = "vaultforge_pain_rooms";
+const STATE_KEY = "vaultforge_pain_room_state_v2";
+
+const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+const ASSETS = ["Residential", "Commercial", "Land"];
+const RES_TYPES = ["Single Family", "Duplex", "Triplex", "Quad", "Townhome", "Condo", "Mobile Home", "Small Multifamily", "Apartment"];
+const COM_TYPES = ["Retail", "Office", "Industrial", "Warehouse", "Hotel", "Self Storage", "Mixed Use", "Medical", "Restaurant", "Automotive", "Special Use"];
+const LAND_TYPES = ["Infill Lot", "Acreage", "Entitled Land", "Raw Land", "Commercial Pad", "Subdivision", "Timber", "Farm", "Assemblage"];
+const PAIN_TYPES = ["Funding Gap", "Foreclosure", "Stalled Construction", "Contractor Problem", "Title Problem", "Permit Problem", "City Violation", "Tenant Issue", "Partnership Dispute", "Emergency Exit", "Insurance Claim", "Fire Damage", "Mold", "Structural", "Probate", "Tax Sale Risk", "Squatter Issue", "Burn Rate", "Seller Pressure", "Lender Problem", "Failed Closing"];
+const NEEDS = ["Lender", "Operator", "Contractor", "Buyer", "Attorney", "Insurance Adjuster", "City Expeditor", "Private Capital", "Property Manager", "Developer"];
+const BLOCKERS = ["Capital", "Timeline", "Title", "Access", "Contractor", "Tenant", "Permit", "City", "Legal", "Partner", "Seller Pressure", "Unknown Numbers", "Insurance", "Utilities", "Appraisal", "Inspection"];
+const RISKS = ["Legal", "Financial", "Structural", "Operational", "City/Permit", "Occupancy", "Environmental", "Insurance", "Market", "Reputation"];
+const SEVERITY = ["Low", "Medium", "High", "Critical", "Emergency"];
+const TIME = ["24 Hours", "72 Hours", "7 Days", "14 Days", "30 Days", "Flexible"];
+const CAPITAL = ["Unknown", "Under $25k", "$25k-$100k", "$100k-$250k", "$250k-$1M", "$1M+"];
+const CONTROL = ["Unknown", "Owner Controlled", "Contract Controlled", "Partner Controlled", "Bank Controlled", "Court / Estate", "No Control Yet"];
+const CONTACT = ["VaultForge Message", "Phone", "Text", "Email", "Contact Form"];
+
+const CITY_COUNTY: Record<string, string> = {
+  atlanta: "Fulton",
+  alpharetta: "Fulton",
+  roswell: "Fulton",
+  marietta: "Cobb",
+  smyrna: "Cobb",
+  kennesaw: "Cobb",
+  cartersville: "Bartow",
+  cville: "Bartow",
+  cvile: "Bartow",
+  adairsville: "Bartow",
+  rome: "Floyd",
+  gainesville: "Hall",
+  savannah: "Chatham",
+  augusta: "Richmond",
+  columbus: "Muscogee",
+  macon: "Bibb",
+  chattanooga: "Hamilton",
+  nashville: "Davidson",
+  knoxville: "Knox",
+  birmingham: "Jefferson",
+  huntsville: "Madison",
+  charlotte: "Mecklenburg",
+  raleigh: "Wake",
+  greenville: "Greenville",
+  charleston: "Charleston",
+  dallas: "Dallas",
+  houston: "Harris",
+  austin: "Travis",
+  "san antonio": "Bexar",
+  sanantonio: "Bexar",
+};
+
+function browserReady() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function safeText(value: unknown, fallback = "") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
+}
+
+function safeList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function parseJson<T>(raw: string | null, fallback: T): T {
+  try {
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonSafe(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function propertyTypesFor(assetClass: string) {
+  if (assetClass === "Commercial") return COM_TYPES;
+  if (assetClass === "Land") return LAND_TYPES;
+  return RES_TYPES;
+}
+
+function countyFromCity(city: string) {
+  return CITY_COUNTY[city.trim().toLowerCase().replace(/\s+/g, " ")] || "";
+}
+
+function moneyNumber(value: unknown) {
+  const number = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function locationFor(room: Partial<PainRoom>) {
+  return [safeText(room.city), safeText(room.county), safeText(room.state)].filter(Boolean).join(", ") || "Market not listed";
+}
+
+function defaultPainRoom(): PainRoom {
+  const now = new Date().toISOString();
+
+  return {
+    id: "",
+    roomId: "",
+    title: "",
+    state: "GA",
+    city: "",
+    county: "",
+    address: "",
+    assetClass: "Residential",
+    propertyType: "Single Family",
+    painTypes: ["Funding Gap"],
+    needs: ["Lender"],
+    blockers: [],
+    risks: [],
+    severity: "High",
+    timePressure: "7 Days",
+    capitalPressure: "Unknown",
+    controlStatus: "Unknown",
+    currentStatus: "",
+    ownerSituation: "",
+    accessStatus: "",
+    titleStatus: "",
+    permitStatus: "",
+    insuranceStatus: "",
+    legalStatus: "",
+    askPrice: "",
+    value: "",
+    repairs: "",
+    monthlyBurn: "",
+    moneyNeededNow: "",
+    deadline: "",
+    rootCause: "",
+    bestOutcome: "",
+    worstCase: "",
+    desiredSolution: "",
+    contactName: "",
+    phone: "",
+    email: "",
+    bestContact: "VaultForge Message",
+    notes: "",
+    photos: [],
+    photoUrls: [],
+    coverPhoto: "",
+    photoUrl: "",
+    imageUrl: "",
+    roomState: "active",
+    cleanupState: "active",
+    stateStatus: "active",
+    alertRead: false,
+    viewedAt: "",
+    createdAt: now,
+    updatedAt: now,
+    analyzer: "",
+  };
+}
+
+function normalizePainRoom(value: any): PainRoom {
+  const base = defaultPainRoom();
+  const id = safeText(value?.id || value?.roomId || value?.painId || value?.signalId);
+  const photos = safeList(value?.photos || value?.photoUrls);
+  const cover = safeText(value?.coverPhoto || value?.photoUrl || value?.imageUrl || photos[0]);
+
+  return {
+    ...base,
+    ...value,
+    id,
+    roomId: id,
+    title: safeText(value?.title || value?.name || value?.painTitle || value?.problemTitle, "Untitled Pain Room"),
+    state: safeText(value?.state, "GA"),
+    city: safeText(value?.city),
+    county: safeText(value?.county),
+    address: safeText(value?.address || value?.location),
+    assetClass: (["Residential", "Commercial", "Land"].includes(safeText(value?.assetClass)) ? safeText(value?.assetClass) : "Residential") as AssetClass,
+    propertyType: safeText(value?.propertyType, "Single Family"),
+    painTypes: safeList(value?.painTypes || value?.problemTypes).length ? safeList(value?.painTypes || value?.problemTypes) : ["Funding Gap"],
+    needs: safeList(value?.needs || value?.routingNeeds).length ? safeList(value?.needs || value?.routingNeeds) : ["Lender"],
+    blockers: safeList(value?.blockers),
+    risks: safeList(value?.risks || value?.riskTypes),
+    photos,
+    photoUrls: photos,
+    coverPhoto: cover,
+    photoUrl: cover,
+    imageUrl: cover,
+    roomState: (["active", "saved", "archived", "deleted"].includes(safeText(value?.roomState || value?.cleanupState || value?.stateStatus)) ? safeText(value?.roomState || value?.cleanupState || value?.stateStatus) : "active") as PainState,
+    cleanupState: (["active", "saved", "archived", "deleted"].includes(safeText(value?.roomState || value?.cleanupState || value?.stateStatus)) ? safeText(value?.roomState || value?.cleanupState || value?.stateStatus) : "active") as PainState,
+    stateStatus: (["active", "saved", "archived", "deleted"].includes(safeText(value?.roomState || value?.cleanupState || value?.stateStatus)) ? safeText(value?.roomState || value?.cleanupState || value?.stateStatus) : "active") as PainState,
+    createdAt: safeText(value?.createdAt, new Date().toISOString()),
+    updatedAt: safeText(value?.updatedAt, new Date().toISOString()),
+  };
+}
+
+function readStoredPainRooms() {
+  if (!browserReady()) return [];
+  const seen = new Set<string>();
+  const out: PainRoom[] = [];
+
+  for (const key of [MAIN_KEY, LEGACY_KEY_ONE, LEGACY_KEY_TWO, LEGACY_KEY_THREE]) {
+    const rows = parseJson<any[]>(localStorage.getItem(key), []);
+    if (!Array.isArray(rows)) continue;
+
+    for (const row of rows) {
+      const room = normalizePainRoom(row);
+      if (!room.id || seen.has(room.id)) continue;
+      seen.add(room.id);
+      out.push(room);
+    }
+  }
+
+  const states = parseJson<Record<string, PainState>>(localStorage.getItem(STATE_KEY), {});
+  return out.map((room) => ({
+    ...room,
+    roomState: states[room.id] || room.roomState || "active",
+    cleanupState: states[room.id] || room.roomState || "active",
+    stateStatus: states[room.id] || room.roomState || "active",
+  }));
+}
+
+function painIntelligence(room: PainRoom) {
+  let severityScore = 40;
+  if (room.severity === "Medium") severityScore += 10;
+  if (room.severity === "High") severityScore += 25;
+  if (room.severity === "Critical") severityScore += 38;
+  if (room.severity === "Emergency") severityScore += 48;
+  if (room.timePressure === "24 Hours" || room.timePressure === "72 Hours") severityScore += 18;
+  if (room.blockers.includes("Capital")) severityScore += 10;
+  if (room.blockers.includes("Title") || room.blockers.includes("Legal")) severityScore += 8;
+  severityScore = Math.max(0, Math.min(100, severityScore));
+
+  const capitalScore = room.capitalPressure !== "Unknown" || room.painTypes.includes("Funding Gap") ? 78 : 35;
+  const blockerScore = Math.max(10, Math.min(100, room.blockers.length * 12 + room.risks.length * 8));
+  const difficulty = Math.max(20, Math.min(100, Math.round((severityScore + blockerScore + capitalScore) / 3)));
+
+  const banner =
+    severityScore >= 85 ? "Immediate pressure signal"
+    : severityScore >= 70 ? "High-priority execution issue"
+    : severityScore >= 50 ? "Active problem needing routing"
+    : "Monitor until facts are complete";
+
+  const bestNextMove =
+    room.controlStatus === "No Control Yet" ? "Secure control or authority first, then route to the solver network."
+    : room.blockers.includes("Capital") ? "Confirm numbers, money needed now, and route to private capital or lender fit."
+    : room.blockers.includes("Title") ? "Collect title facts and route to attorney/title solver before spending more capital."
+    : "Identify the one blocker preventing execution and route to the highest-fit solver profile.";
+
+  return {
+    severityScore,
+    capitalScore,
+    blockerScore,
+    difficulty,
+    banner,
+    bestNextMove,
+    consequence: room.worstCase || "Delay, cost increase, failed closing, loss of control, or legal/financial escalation.",
+  };
+}
+
+function buildAnalyzer(room: PainRoom) {
+  const intel = painIntelligence(room);
+  return [
+    `Pain analyzer: ${room.painTypes.join(", ")} in ${locationFor(room)}.`,
+    `Severity ${room.severity}. Time pressure ${room.timePressure}. Capital pressure ${room.capitalPressure}.`,
+    `Needs ${room.needs.join(", ")}. Blockers ${room.blockers.join(", ") || "not selected"}.`,
+    `Signal: ${intel.banner}. Severity score ${intel.severityScore}%. Difficulty ${intel.difficulty}%.`,
+    `Best next move: ${intel.bestNextMove}`,
+  ].join(" ");
+}
+
+function saveDirectPainRoom(room: PainRoom) {
+  if (!browserReady()) {
+    return { ok: false, id: "", message: "Browser storage is not available." };
+  }
+
+  const id = room.id || `pain_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
+  const cover = room.photos[0] || room.coverPhoto || "";
+
+  const full = normalizePainRoom({
+    ...room,
+    id,
+    roomId: id,
+    coverPhoto: cover,
+    photoUrl: cover,
+    imageUrl: cover,
+    photoUrls: room.photos,
+    roomState: "active",
+    cleanupState: "active",
+    stateStatus: "active",
+    alertRead: false,
+    viewedAt: "",
+    createdAt: room.createdAt || now,
+    updatedAt: now,
+    analyzer: buildAnalyzer(room),
+  });
+
+  const existing = readStoredPainRooms().filter((item) => item.id !== id);
+  const all = [full, ...existing];
+
+  let saved =
+    writeJsonSafe(MAIN_KEY, all) &&
+    writeJsonSafe(LEGACY_KEY_ONE, all) &&
+    writeJsonSafe(LEGACY_KEY_TWO, all) &&
+    writeJsonSafe(`vaultforge_pain_room_${id}`, full);
+
+  if (!saved) {
+    const slim = normalizePainRoom({ ...full, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" });
+    const slimList = [slim, ...existing.map((item) => ({ ...item, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }))];
+    saved =
+      writeJsonSafe(MAIN_KEY, slimList) &&
+      writeJsonSafe(LEGACY_KEY_ONE, slimList) &&
+      writeJsonSafe(LEGACY_KEY_TWO, slimList) &&
+      writeJsonSafe(`vaultforge_pain_room_${id}`, slim);
+  }
+
+  if (!saved) {
+    return { ok: false, id: "", message: "Pain room could not save. Browser storage is full. Delete old test rooms/photos and try again." };
+  }
+
+  const states = parseJson<Record<string, PainState>>(localStorage.getItem(STATE_KEY), {});
+  states[id] = "active";
+  writeJsonSafe(STATE_KEY, states);
+
+  window.dispatchEvent(new Event("vaultforge-pain-change"));
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  window.dispatchEvent(new Event("vaultforge-alert-change"));
+
+  return { ok: true, id, message: "Pain room saved." };
+}
+
+async function compressImage(file: File, maxWidth = 620, quality = 0.42): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve("");
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve("");
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxWidth / img.width);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve("");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch {
+          resolve("");
+        }
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function photosFromFilesLocal(files: FileList | null) {
+  const selected = Array.from(files || []).slice(0, 10);
+  const output: string[] = [];
+  for (const file of selected) {
+    const compressed = await compressImage(file);
+    if (compressed) output.push(compressed);
+  }
+  return output;
+}
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 120 };
@@ -127,7 +534,7 @@ export default function PainIntakePage() {
 
   function setAsset(assetClass: string) {
     const types = propertyTypesFor(assetClass);
-    setForm({ ...form, assetClass: assetClass as PainRoom["assetClass"], propertyType: types[0] || "" });
+    setForm({ ...form, assetClass: assetClass as AssetClass, propertyType: types[0] || "" });
   }
 
   function setCity(city: string) {
@@ -135,7 +542,7 @@ export default function PainIntakePage() {
   }
 
   async function addPhotos(files: FileList | null) {
-    const next = await photosFromFiles(files);
+    const next = await photosFromFilesLocal(files);
     setForm({ ...form, photos: [...form.photos, ...next].slice(0, 10), coverPhoto: form.coverPhoto || next[0] || "" });
   }
 
@@ -156,19 +563,19 @@ export default function PainIntakePage() {
         return;
       }
 
-      if (!safeList(form.painTypes).length) {
+      if (!form.painTypes.length) {
         setError("Pick at least one pain type.");
         return;
       }
 
-      const id = savePainRoom({ ...form, coverPhoto: form.photos[0] || form.coverPhoto });
-      if (!id) {
-        setError("Pain room did not save. Browser storage may be full.");
+      const result = saveDirectPainRoom({ ...form, coverPhoto: form.photos[0] || form.coverPhoto });
+      if (!result.ok || !result.id) {
+        setError(result.message || "Pain room did not save.");
         return;
       }
 
-      setSavedId(id);
-      setBanner("Pain room saved. Use Open Room to verify the pressure room.");
+      setSavedId(result.id);
+      setBanner("Pain room saved. Use Open Room to verify it.");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pain save failed.");
@@ -184,9 +591,7 @@ export default function PainIntakePage() {
 
         <section style={sticky}>
           <div style={row}>
-            <button type="button" style={goldBtn} onClick={save} disabled={saving}>
-              {saving ? "Saving..." : "Save Pain Room"}
-            </button>
+            <button type="button" style={goldBtn} onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Pain Room"}</button>
             {savedId ? <Link href={`/pain-rooms/${encodeURIComponent(savedId)}`} style={goldBtn}>Open Saved Room</Link> : null}
             <span style={muted}>{safeText(form.title, "No title yet")} • {form.severity} • {locationFor(form)}</span>
           </div>
@@ -261,7 +666,7 @@ export default function PainIntakePage() {
             <SelectField title="Severity" value={form.severity} options={SEVERITY} onChange={(value) => update("severity", value)} />
             <SelectField title="Time Pressure" value={form.timePressure} options={TIME} onChange={(value) => update("timePressure", value)} />
             <SelectField title="Capital Pressure" value={form.capitalPressure} options={CAPITAL} onChange={(value) => update("capitalPressure", value)} />
-            <SelectField title="Control Status" value={form.controlStatus} options={CONTROL_STATUS} onChange={(value) => update("controlStatus", value)} />
+            <SelectField title="Control Status" value={form.controlStatus} options={CONTROL} onChange={(value) => update("controlStatus", value)} />
             <SelectField title="Best Contact" value={form.bestContact} options={CONTACT} onChange={(value) => update("bestContact", value)} />
           </div>
         </Section>
