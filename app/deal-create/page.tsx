@@ -121,8 +121,73 @@ function arr<T>(key:string):T[]{ if(!ok()) return []; const p=j<unknown>(localSt
 function keys(kind:RoomKind){ return kind==="deal"?DEAL_KEYS:PAIN_KEYS; }
 function statesMap(){ const m:Record<string,RoomState>={}; if(!ok()) return m; STATE_KEYS.forEach(k=>Object.assign(m,j<Record<string,RoomState>>(localStorage.getItem(k),{}))); return m; }
 function saveStateMap(m:Record<string,RoomState>){ if(!ok()) return; STATE_KEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(m))); }
-function photoDataUrls(files:FileList|null,max=10):Promise<string[]>{ return new Promise(resolve=>{ const selected=Array.from(files||[]).slice(0,max); if(!selected.length){resolve([]);return;} Promise.all(selected.map(file=>new Promise<string>(res=>{ const reader=new FileReader(); reader.onload=()=>res(String(reader.result||"")); reader.onerror=()=>res(""); reader.readAsDataURL(file); }))).then(rows=>resolve(rows.filter(Boolean))); }); }
-function saveRoom(kind:RoomKind,room:Room){ if(!ok()) return ""; const id=rid(room)||`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`; const now=new Date().toISOString(); const next={...room,id,roomId:id,roomState:"active" as RoomState,cleanupState:"active" as RoomState,stateStatus:"active" as RoomState,createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""}; [`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`].forEach(x=>localStorage.setItem(x,JSON.stringify(next))); keys(kind).forEach(key=>localStorage.setItem(key,JSON.stringify([next,...arr<Room>(key).filter(x=>rid(x)!==id)]))); const sm=statesMap(); sm[id]="active"; sm[`${kind}:${id}`]="active"; saveStateMap(sm); window.dispatchEvent(new Event("vaultforge-room-state-change")); window.dispatchEvent(new Event(kind==="deal"?"vaultforge-deal-change":"vaultforge-pain-change")); return id; }
+function compressImage(file:File,maxWidth=1200,quality=.72):Promise<string>{
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onerror=()=>resolve("");
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>resolve(String(reader.result||""));
+      img.onload=()=>{
+        try{
+          const scale=Math.min(1,maxWidth/img.width);
+          const canvas=document.createElement("canvas");
+          canvas.width=Math.max(1,Math.round(img.width*scale));
+          canvas.height=Math.max(1,Math.round(img.height*scale));
+          const ctx=canvas.getContext("2d");
+          if(!ctx){resolve(String(reader.result||""));return;}
+          ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          resolve(canvas.toDataURL("image/jpeg",quality));
+        }catch{
+          resolve(String(reader.result||""));
+        }
+      };
+      img.src=String(reader.result||"");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function photoDataUrls(files:FileList|null,max=10):Promise<string[]>{
+  return new Promise(resolve=>{
+    const selected=Array.from(files||[]).slice(0,max);
+    if(!selected.length){resolve([]);return;}
+    Promise.all(selected.map(file=>compressImage(file,1200,.72))).then(rows=>resolve(rows.filter(Boolean)));
+  });
+}
+function safeSet(key:string,value:unknown){
+  try{localStorage.setItem(key,JSON.stringify(value));return true;}catch{return false;}
+}
+function saveRoom(kind:RoomKind,room:Room){
+  if(!ok()) return "";
+  const id=rid(room)||`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  const now=new Date().toISOString();
+  let next={...room,id,roomId:id,roomState:"active" as RoomState,cleanupState:"active" as RoomState,stateStatus:"active" as RoomState,createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""};
+  const singleKeys=[`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`];
+
+  let wroteSingles=true;
+  singleKeys.forEach(x=>{ if(!safeSet(x,next)) wroteSingles=false; });
+
+  if(!wroteSingles){
+    next={...next,photoUrls:[],photos:[],photoSaveWarning:"Photos were too large for browser storage. Room saved without photos."};
+    singleKeys.forEach(x=>safeSet(x,next));
+  }
+
+  keys(kind).forEach(key=>{
+    const existing=arr<Room>(key).filter(x=>rid(x)!==id);
+    if(!safeSet(key,[next,...existing])){
+      const slim={...next,photoUrls:[],photos:[],photoSaveWarning:"Photos were too large for list storage. Open the room record for details."};
+      safeSet(key,[slim,...existing.map(x=>({...x,photoUrls:[],photos:[]}))]);
+    }
+  });
+
+  const sm=statesMap();
+  sm[id]="active";
+  sm[`${kind}:${id}`]="active";
+  saveStateMap(sm);
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  window.dispatchEvent(new Event(kind==="deal"?"vaultforge-deal-change":"vaultforge-pain-change"));
+  return id;
+}
 function moneyNumber(value:unknown){ const n=Number(String(value||"").replace(/[^0-9.-]/g,"")); return Number.isFinite(n)?n:0; }
 function fmt(n:number){ return n? n.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not enough data"; }
 
@@ -164,7 +229,7 @@ export default function Page(){
  const profit=useMemo(()=>moneyNumber(f.exitValue||f.propertyValue)-moneyNumber(f.askingPrice)-moneyNumber(f.repairs)-moneyNumber(f.assignmentFee),[f.exitValue,f.propertyValue,f.askingPrice,f.repairs,f.assignmentFee]);
 
  async function submit(){
-   setMsg("Saving deal room...");
+   setMsg("Saving deal room... compressing photos if selected.");
    const urls=await photoDataUrls(files,10);
    const id=saveRoom("deal",{...f,title:txt(f.title,"Untitled Deal Room"),photoUrls:urls,photos:urls,analyzer:`Deal analyzer: ${asset} ${txt(f.propertyType)} in ${txt(f.city)}, ${txt(f.county)}, ${txt(f.state)}. Condition ${txt(f.condition)}. Occupancy ${txt(f.occupancy)}. Spread estimate ${fmt(spread)}. Route to ${list(f.routeTo).join(", ")||"matched members"}. Timeline ${txt(f.timeline)}.`});
    setF({assetClass:"Residential",state:"GA",propertyType:"Single Family",condition:"Medium Rehab",occupancy:"Vacant",timeline:"14 Days",dealStrength:"Moderate",routeTo:["Buyer"],strategy:["Wholesale"]});
