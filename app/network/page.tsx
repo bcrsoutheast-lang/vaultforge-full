@@ -265,6 +265,108 @@ function membersBasedInState(state: string, members: MemberProfile[]) {
   return members.filter((member) => txt(member.basedState, "GA") === state);
 }
 
+
+function profileId(profile: MemberProfile) {
+  return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
+}
+
+function normalizeProfile(profile: MemberProfile): MemberProfile {
+  return {
+    ...profile,
+    id: profileId(profile),
+    name: txt(profile.name, "VaultForge Member"),
+    basedState: txt(profile.basedState, "GA"),
+    statesOperated: list(profile.statesOperated).length ? list(profile.statesOperated) : ["GA"],
+    markets: list(profile.markets),
+    assetClasses: list(profile.assetClasses),
+    strategies: list(profile.strategies),
+    specialties: list(profile.specialties),
+    needs: list(profile.needs),
+    canProvide: list(profile.canProvide),
+  };
+}
+
+function getProfile(): MemberProfile {
+  if (!ok()) return {};
+  for (const key of PROFILE_KEYS) {
+    const found = j<MemberProfile | null>(localStorage.getItem(key), null);
+    if (found && typeof found === "object") return normalizeProfile(found);
+  }
+  return normalizeProfile({ id: "local_member", name: "VaultForge Member", basedState: "GA", statesOperated: ["GA"], memberType: "Investor" });
+}
+
+function getDirectory(): MemberProfile[] {
+  if (!ok()) return [];
+  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
+  const current = getProfile();
+  const currentId = profileId(current);
+  const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
+  const seen = new Set<string>();
+
+  return merged.map(normalizeProfile).filter((member) => {
+    const id = profileId(member);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function overlap(a: unknown, b: unknown) {
+  const aa = list(a).map((x) => x.toLowerCase());
+  const bb = list(b).map((x) => x.toLowerCase());
+  return aa.filter((x) => bb.includes(x)).length;
+}
+
+function scoreMemberForRoom(member: MemberProfile, room: Room, kind: RoomKind) {
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (list(member.statesOperated).includes(txt(room.state))) {
+    score += 30;
+    reasons.push("state fit");
+  }
+
+  if (overlap(member.assetClasses, [txt(room.assetClass)])) {
+    score += 20;
+    reasons.push("asset fit");
+  }
+
+  if (kind === "deal") {
+    if (overlap(member.strategies, room.strategy)) {
+      score += 20;
+      reasons.push("strategy fit");
+    }
+    if (overlap(member.canProvide, room.routeTo)) {
+      score += 25;
+      reasons.push("route fit");
+    }
+  } else {
+    if (overlap(member.canProvide, room.routingNeeds)) {
+      score += 30;
+      reasons.push("solver fit");
+    }
+    if (overlap(member.specialties, room.painTypes)) {
+      score += 25;
+      reasons.push("pain specialty");
+    }
+  }
+
+  return { member, score: Math.max(0, Math.min(100, score)), reasons };
+}
+
+function bestMatchForRoom(room: Room, kind: RoomKind, members: MemberProfile[]) {
+  const matches = members
+    .map((member) => scoreMemberForRoom(member, room, kind))
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return matches[0] || null;
+}
+
+function matchCountForRooms(rooms: Room[], kind: RoomKind, members: MemberProfile[]) {
+  return rooms.filter((room) => Boolean(bestMatchForRoom(room, kind, members))).length;
+}
+
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
@@ -311,10 +413,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
-function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
+function RoomCard({ room, kind, members }: { room: Room; kind: RoomKind; members: MemberProfile[] }) {
   const img = firstPhoto(room);
   const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
   const unread = unreadRooms(kind, [room]).length > 0;
+  const match = bestMatchForRoom(room, kind, members);
 
   return (
     <div style={unread ? activePanel : panel}>
@@ -332,9 +435,13 @@ function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
           ? `Ask ${txt(room.askingPrice, "N/A")} • Value ${txt(room.propertyValue, "N/A")} • Repairs ${txt(room.repairs, "N/A")}`
           : `Time ${txt(room.timePressure, "N/A")} • Capital ${txt(room.capitalPressure, "N/A")}`}
       </p>
+      <p style={muted}>
+        Best fit: {match ? `${txt(match.member.name, "Member")} • ${match.score}% • ${match.reasons.join(", ")}` : "No profile match yet"}
+      </p>
       <div style={{ ...row, marginTop: 16 }}>
         <Link href={href} style={goldBtn}>Open</Link>
         <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}`} style={btn}>Messages</Link>
+        {match ? <Link href={`/messages?to=${encodeURIComponent(txt(match.member.email, profileId(match.member)))}&subject=${encodeURIComponent("Network Match: " + titleFor(room, kind))}`} style={btn}>Contact Fit</Link> : null}
       </div>
     </div>
   );
@@ -383,6 +490,7 @@ export default function NetworkPage() {
 
   const deals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "active"), [tick]);
   const pains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "active"), [tick]);
+  const members = useMemo(() => getDirectory(), [tick]);
 
   const openDeals = openState ? deals.filter((room) => txt(room.state, "GA") === openState) : [];
   const openPains = openState ? pains.filter((room) => txt(room.state, "GA") === openState) : [];
@@ -405,6 +513,8 @@ export default function NetworkPage() {
               const statePains = pains.filter((room) => txt(room.state, "GA") === state);
               const unreadDeals = unreadRooms("deal", stateDeals).length;
               const unreadPains = unreadRooms("pain", statePains).length;
+              const dealMatches = matchCountForRooms(stateDeals, "deal", members);
+              const painMatches = matchCountForRooms(statePains, "pain", members);
               const hasPulse = unreadDeals + unreadPains > 0;
               const isOpen = openState === state;
 
@@ -417,8 +527,8 @@ export default function NetworkPage() {
                 >
                   <div style={eyebrow}>{state}</div>
                   <h2 style={h2}>{stateDeals.length + statePains.length}</h2>
-                  <p style={muted}>Opportunities: {stateDeals.length} • unread {unreadDeals}</p>
-                  <p style={muted}>Pain: {statePains.length} • unread {unreadPains}</p>
+                  <p style={muted}>Opportunities: {stateDeals.length} • unread {unreadDeals} • matches {dealMatches}</p>
+                  <p style={muted}>Pain: {statePains.length} • unread {unreadPains} • matches {painMatches}</p>
                   <p style={muted}>{isOpen ? "Click to collapse" : "Click to open"}</p>
                 </button>
               );
@@ -430,7 +540,7 @@ export default function NetworkPage() {
           <>
             <Section title={`${openState} Opportunity Cards`}>
               {openDeals.length ? (
-                <div style={grid}>{openDeals.map((room) => <RoomCard key={rid(room)} room={room} kind="deal" />)}</div>
+                <div style={grid}>{openDeals.map((room) => <RoomCard key={rid(room)} room={room} kind="deal" members={members} />)}</div>
               ) : (
                 <p style={sub}>No active opportunity cards in {openState}.</p>
               )}
@@ -438,7 +548,7 @@ export default function NetworkPage() {
 
             <Section title={`${openState} Pain Cards`}>
               {openPains.length ? (
-                <div style={grid}>{openPains.map((room) => <RoomCard key={rid(room)} room={room} kind="pain" />)}</div>
+                <div style={grid}>{openPains.map((room) => <RoomCard key={rid(room)} room={room} kind="pain" members={members} />)}</div>
               ) : (
                 <p style={sub}>No active pain cards in {openState}.</p>
               )}
