@@ -1,8 +1,7 @@
-
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type RoomState = "active" | "saved" | "archived" | "deleted";
 type RoomKind = "deal" | "pain";
@@ -29,6 +28,27 @@ type Room = {
   routeTo?: string[];
   routingNeeds?: string[];
   painTypes?: string[];
+  strategy?: string[];
+  motivation?: string[];
+  condition?: string;
+  occupancy?: string;
+  dealStrength?: string;
+  beds?: string;
+  baths?: string;
+  sqft?: string;
+  units?: string;
+  acres?: string;
+  zoning?: string;
+  frontage?: string;
+  severity?: string;
+  capitalPressure?: string;
+  controlStatus?: string;
+  blockers?: string[];
+  riskTypes?: string[];
+  rootCause?: string;
+  bestOutcome?: string;
+  worstCase?: string;
+  desiredSolution?: string;
   roomState?: RoomState;
   cleanupState?: RoomState;
   stateStatus?: RoomState;
@@ -45,31 +65,56 @@ type Room = {
   [key: string]: unknown;
 };
 
+type Profile = {
+  name?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  memberType?: string;
+  profilePhoto?: string;
+  statesOperated?: string[];
+  counties?: string[];
+  markets?: string[];
+  buyBox?: string[];
+  strategies?: string[];
+  assetClasses?: string[];
+  capitalPosition?: string;
+  proofOfFunds?: string;
+  contactPreference?: string;
+  directContact?: string;
+  bio?: string;
+  specialties?: string[];
+  needs?: string[];
+  canProvide?: string[];
+  [key: string]: unknown;
+};
+
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+const COUNTIES = ["Fulton", "Cobb", "Cherokee", "Bartow", "Paulding", "Gwinnett", "DeKalb", "Clayton", "Henry", "Chatham", "Richmond", "Muscogee", "Bibb", "Hall", "Hamilton", "Davidson", "Knox", "Jefferson", "Madison", "Mecklenburg", "Wake", "Greenville", "Charleston", "Harris", "Dallas", "Travis", "Bexar"];
+const MARKETS = ["Atlanta", "North Georgia", "Chattanooga", "Nashville", "Knoxville", "Birmingham", "Huntsville", "Montgomery", "Jacksonville", "Tampa", "Orlando", "Miami", "Charlotte", "Raleigh-Durham", "Greenville-Spartanburg", "Charleston", "Dallas-Fort Worth", "Houston", "Austin", "San Antonio"];
 const ASSETS = ["Residential", "Commercial", "Land"];
+const STRATEGIES = ["Wholesale", "Flip", "Buy & Hold", "BRRRR", "Development", "Seller Finance", "JV", "Rental", "Hotel Conversion", "Airbnb"];
+const ROUTES = ["Buyer", "Lender", "Operator", "Contractor", "Developer", "Attorney", "Capital Partner"];
+const NEEDS = ["Lender", "Operator", "Contractor", "Buyer", "Attorney", "Insurance Adjuster", "City Expeditor", "Private Capital", "Property Manager", "Developer"];
+const PAIN_TYPES = ["Funding Gap", "Foreclosure", "Stalled Construction", "Contractor Problem", "Title Problem", "Permit Problem", "City Violation", "Tenant Issue", "Partnership Dispute", "Emergency Exit", "Insurance Claim", "Fire Damage", "Mold", "Structural", "Probate", "Tax Sale Risk", "Squatter Issue", "Burn Rate"];
+const RES_TYPES = ["Single Family", "Duplex", "Triplex", "Quad", "Townhome", "Condo", "Mobile Home", "Small Multifamily"];
+const COM_TYPES = ["Retail", "Office", "Industrial", "Warehouse", "Hotel", "Self Storage", "Mixed Use", "Medical", "Restaurant", "Automotive", "Church / Special Use"];
+const LAND_TYPES = ["Infill Lot", "Acreage", "Entitled Land", "Raw Land", "Commercial Pad", "Subdivision", "Timber", "Farm", "Assemblage", "Waterfront"];
+const CONDITION = ["Unknown", "Turnkey", "Light Rehab", "Medium Rehab", "Full Gut", "Fire Damage", "Shell", "Tear Down"];
+const OCCUPANCY = ["Unknown", "Vacant", "Owner Occupied", "Tenant Occupied", "Squatter", "Partial Vacancy"];
+const SEVERITY = ["Low", "Medium", "High", "Critical", "Emergency"];
+const TIME = ["24 Hours", "72 Hours", "7 Days", "14 Days", "30 Days", "Flexible"];
+const CAPITAL = ["Unknown", "Under $25k", "$25k-$100k", "$100k-$250k", "$250k-$1M", "$1M+"];
+const BLOCKERS = ["Capital", "Timeline", "Title", "Access", "Contractor", "Tenant", "Permit", "City", "Legal", "Partner", "Seller Pressure", "Unknown Numbers", "Insurance", "Utilities"];
+const RISK = ["Legal", "Financial", "Structural", "Operational", "City/Permit", "Occupancy", "Environmental"];
+const MEMBER_TYPES = ["Investor", "Wholesaler", "Lender", "Contractor", "Developer", "Agent", "Attorney", "Operator", "Private Capital", "Property Manager"];
+const CONTACT_PREFS = ["VaultForge Message", "Text", "Phone", "Email", "Contact Form"];
+const YESNO = ["Unknown", "Yes", "No"];
 
-const DEAL_KEYS = [
-  "vaultforge_clean_deal_rooms",
-  "vaultforge_deal_rooms",
-  "vaultforge_rooms_deals",
-  "vf_deal_rooms",
-];
-
-const PAIN_KEYS = [
-  "vaultforge_clean_pain_rooms_v1",
-  "vaultforge_clean_pain_rooms",
-  "vaultforge_pain_rooms",
-  "vaultforge_rooms_pain",
-  "vf_pain_rooms",
-];
-
-const STATE_KEYS = [
-  "vaultforge_clean_room_states",
-  "vaultforge_room_states",
-  "vaultforge_deal_room_states",
-  "vaultforge_pain_room_states",
-  "vaultforge_5s_room_states",
-];
+const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -109,11 +154,7 @@ function keysFor(kind: RoomKind) {
 }
 
 function singleKeys(kind: RoomKind, id: string) {
-  return [
-    `vaultforge_clean_${kind}_room_${id}`,
-    `vaultforge_${kind}_room_${id}`,
-    `vf_${kind}_room_${id}`,
-  ];
+  return [`vaultforge_clean_${kind}_room_${id}`, `vaultforge_${kind}_room_${id}`, `vf_${kind}_room_${id}`];
 }
 
 function saveSafe(key: string, value: unknown) {
@@ -135,37 +176,29 @@ function stateMap() {
 async function compressImage(file: File, maxWidth = 850, quality = 0.52): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
-
     reader.onerror = () => resolve("");
-
     reader.onload = () => {
       const img = new Image();
-
       img.onerror = () => resolve("");
-
       img.onload = () => {
         try {
           const scale = Math.min(1, maxWidth / img.width);
           const canvas = document.createElement("canvas");
           canvas.width = Math.max(1, Math.round(img.width * scale));
           canvas.height = Math.max(1, Math.round(img.height * scale));
-
           const ctx = canvas.getContext("2d");
           if (!ctx) {
             resolve("");
             return;
           }
-
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           resolve(canvas.toDataURL("image/jpeg", quality));
         } catch {
           resolve("");
         }
       };
-
       img.src = String(reader.result || "");
     };
-
     reader.readAsDataURL(file);
   });
 }
@@ -173,81 +206,36 @@ async function compressImage(file: File, maxWidth = 850, quality = 0.52): Promis
 async function photoData(files: FileList | null) {
   const selected = Array.from(files || []).slice(0, 10);
   const output: string[] = [];
-
   for (const file of selected) {
     const compressed = await compressImage(file);
     if (compressed && compressed.length < 450000) output.push(compressed);
   }
-
   return output;
 }
 
 function saveRoom(kind: RoomKind, room: Room) {
   if (!ok()) return "";
-
   const id = `${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now = new Date().toISOString();
-
-  const next: Room = {
-    ...room,
-    id,
-    roomId: id,
-    roomState: "active",
-    cleanupState: "active",
-    stateStatus: "active",
-    createdAt: now,
-    updatedAt: now,
-    alertRead: false,
-    viewedAt: "",
-  };
+  const next: Room = { ...room, id, roomId: id, roomState: "active", cleanupState: "active", stateStatus: "active", createdAt: now, updatedAt: now, alertRead: false, viewedAt: "" };
 
   for (const key of singleKeys(kind, id)) {
     const worked = saveSafe(key, next);
-    if (!worked) {
-      saveSafe(key, {
-        ...next,
-        photos: [],
-        photoUrls: [],
-        coverPhoto: "",
-        photoUrl: "",
-        imageUrl: "",
-      });
-    }
+    if (!worked) saveSafe(key, { ...next, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" });
   }
 
   const cover = txt(next.coverPhoto || next.photoUrl || next.imageUrl);
-  const slim: Room = {
-    ...next,
-    photos: cover ? [cover] : [],
-    photoUrls: cover ? [cover] : [],
-    coverPhoto: cover,
-    photoUrl: cover,
-    imageUrl: cover,
-  };
+  const slim: Room = { ...next, photos: cover ? [cover] : [], photoUrls: cover ? [cover] : [], coverPhoto: cover, photoUrl: cover, imageUrl: cover };
 
   for (const key of keysFor(kind)) {
     const existing = arr<Room>(key).filter((row) => rid(row) !== id);
     const worked = saveSafe(key, [slim, ...existing]);
-
-    if (!worked) {
-      saveSafe(key, [
-        {
-          ...slim,
-          photos: [],
-          photoUrls: [],
-          coverPhoto: "",
-          photoUrl: "",
-          imageUrl: "",
-        },
-        ...existing,
-      ]);
-    }
+    if (!worked) saveSafe(key, [{ ...slim, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }, ...existing]);
   }
 
   const map = stateMap();
   map[id] = "active";
   map[`${kind}:${id}`] = "active";
-
   STATE_KEYS.forEach((key) => saveSafe(key, map));
 
   window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
@@ -256,205 +244,82 @@ function saveRoom(kind: RoomKind, room: Room) {
   return id;
 }
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background: "#05070d",
-  color: "#f7f7fb",
-  padding: 18,
-  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-};
-
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
 const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
-
-const btn: React.CSSProperties = {
-  border: "1px solid rgba(207,216,230,.18)",
-  background: "#171c29",
-  color: "#f7f7fb",
-  borderRadius: 999,
-  padding: "13px 18px",
-  fontWeight: 950,
-  textDecoration: "none",
-  display: "inline-block",
-  cursor: "pointer",
-};
-
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
 const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(245,197,66,.28)",
-  borderRadius: 28,
-  padding: 30,
-  marginBottom: 20,
-  background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)",
-};
-
-const card: React.CSSProperties = {
-  background: "linear-gradient(180deg,#080d19,#050816)",
-  border: "1px solid rgba(245,197,66,.28)",
-  borderRadius: 26,
-  padding: 26,
-  marginBottom: 22,
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#ffd45a",
-  textTransform: "uppercase",
-  letterSpacing: 7,
-  fontWeight: 950,
-  fontSize: 15,
-  marginBottom: 12,
-};
-
-const labelStyle: React.CSSProperties = {
-  color: "#ffd45a",
-  textTransform: "uppercase",
-  letterSpacing: 4,
-  fontSize: 12,
-  fontWeight: 950,
-  marginBottom: 8,
-};
-
-const h1: React.CSSProperties = {
-  fontSize: "clamp(44px,8vw,86px)",
-  lineHeight: 0.9,
-  letterSpacing: -4,
-  margin: "0 0 18px",
-  fontWeight: 950,
-};
-
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
+const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const labelStyle: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontSize: 12, fontWeight: 950, marginBottom: 8 };
+const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
 const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-
-const input: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid rgba(207,216,230,.18)",
-  background: "#151b2a",
-  color: "#f8fafc",
-  borderRadius: 18,
-  padding: "15px 16px",
-  fontSize: 16,
-};
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
+const textarea: React.CSSProperties = { ...input, minHeight: 110, resize: "vertical" };
 
 function Nav({ active }: { active: string }) {
-  const item = (href: string, label: string, key: string) => (
-    <Link href={href} style={active === key ? goldBtn : btn}>
-      {label}
-    </Link>
-  );
-
-  return (
-    <nav style={nav}>
-      <div style={brand}>VAULTFORGE</div>
-      {item("/command", "Command", "command")}
-      {item("/deal-rooms", "Deal Rooms", "deals")}
-      {item("/deal-create", "Create Deal", "deal-create")}
-      {item("/pain-intake", "Pain Intake", "pain-intake")}
-      {item("/pain-rooms", "Pain Rooms", "pain")}
-      {item("/network", "Network", "network")}
-      {item("/messages", "Messages", "messages")}
-      {item("/profile", "Profile", "profile")}
-      <Link href="/logout" style={redBtn}>
-        Logout
-      </Link>
-    </nav>
-  );
+  const item = (href: string, label: string, key: string) => <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>;
+  return <nav style={nav}><div style={brand}>VAULTFORGE</div>{item("/command","Command","command")}{item("/deal-rooms","Deal Rooms","deals")}{item("/deal-create","Create Deal","deal-create")}{item("/pain-intake","Pain Intake","pain-intake")}{item("/pain-rooms","Pain Rooms","pain")}{item("/network","Network","network")}{item("/messages","Messages","messages")}{item("/profile","Profile","profile")}<Link href="/logout" style={redBtn}>Logout</Link></nav>;
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <label>
-      <div style={labelStyle}>{label}</div>
-      <input style={input} value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
-  );
+  return <label><div style={labelStyle}>{label}</div><input style={input} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: string[];
-}) {
-  return (
-    <label>
-      <div style={labelStyle}>{label}</div>
-      <select style={input} value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option}>{option}</option>
-        ))}
-      </select>
-    </label>
-  );
+function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <label><div style={labelStyle}>{label}</div><textarea style={textarea} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
-function ChipSet({
-  label,
-  options,
-  selected,
-  onToggle,
-}: {
-  label: string;
-  options: string[];
-  selected: string[];
-  onToggle: (value: string) => void;
-}) {
-  return (
-    <div>
-      <div style={labelStyle}>{label}</div>
-      <div style={row}>
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            style={selected.includes(option) ? goldBtn : btn}
-            onClick={() => onToggle(option)}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
+  return <label><div style={labelStyle}>{label}</div><select style={input} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
 }
 
-const DEAL_ROUTES = ["Buyer", "Lender", "Operator", "Contractor", "Developer", "Attorney", "Capital Partner"];
+function ChipSet({ label, options, selected, onToggle }: { label: string; options: string[]; selected: string[]; onToggle: (value: string) => void }) {
+  return <div><div style={labelStyle}>{label}</div><div style={row}>{options.map((option) => <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>{option}</button>)}</div></div>;
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+}
 
 export default function DealCreatePage() {
   const [form, setForm] = useState<Room>({
     assetClass: "Residential",
     state: "GA",
+    propertyType: "Single Family",
     routeTo: ["Buyer"],
+    strategy: ["Wholesale"],
+    condition: "Unknown",
+    occupancy: "Unknown",
+    dealStrength: "Moderate",
   });
-
   const [files, setFiles] = useState<FileList | null>(null);
   const [saving, setSaving] = useState(false);
 
-  function up(key: string, value: unknown) {
-    setForm({ ...form, [key]: value });
-  }
+  const assetClass = txt(form.assetClass, "Residential");
+  const propertyTypes = assetClass === "Commercial" ? COM_TYPES : assetClass === "Land" ? LAND_TYPES : RES_TYPES;
 
-  function toggleRoute(value: string) {
-    const set = new Set(list(form.routeTo));
+  function up(key: string, value: unknown) { setForm({ ...form, [key]: value }); }
+  function toggle(key: "routeTo" | "strategy" | "motivation", value: string) {
+    const set = new Set(list(form[key]));
     set.has(value) ? set.delete(value) : set.add(value);
-    up("routeTo", Array.from(set));
+    up(key, Array.from(set));
+  }
+  function setAsset(value: string) {
+    const defaultType = value === "Commercial" ? COM_TYPES[0] : value === "Land" ? LAND_TYPES[0] : RES_TYPES[0];
+    setForm({ ...form, assetClass: value, propertyType: defaultType });
   }
 
   async function submit() {
     setSaving(true);
     const images = await photoData(files);
     const cover = images[0] || "";
-
     const id = saveRoom("deal", {
       ...form,
       title: txt(form.title, "Untitled Deal Room"),
@@ -463,75 +328,76 @@ export default function DealCreatePage() {
       imageUrl: cover,
       photos: images,
       photoUrls: images,
-      analyzer: `Deal analyzer: ${txt(form.assetClass)} in ${txt(form.city)}, ${txt(form.county)}, ${txt(form.state)}. Route to ${list(form.routeTo).join(", ") || "Buyer"}.`,
+      analyzer: `Deal analyzer: ${txt(form.assetClass)} ${txt(form.propertyType)} in ${txt(form.city)}, ${txt(form.county)}, ${txt(form.state)}. Strategy: ${list(form.strategy).join(", ") || "Not selected"}. Route to ${list(form.routeTo).join(", ") || "Buyer"}.`,
     });
-
     if (id) window.location.href = `/deal-rooms/${encodeURIComponent(id)}`;
     else setSaving(false);
   }
 
-  return (
-    <main style={page}>
-      <div style={wrap}>
-        <Nav active="deal-create" />
+  return <main style={page}><div style={wrap}><Nav active="deal-create" />
+    <section style={hero}><div style={eyebrow}>Adaptive Deal Intake</div><h1 style={h1}>Deal Opportunity.</h1><p style={sub}>Full deal form restored. Mostly chips and dropdowns. Saves active room and opens it.</p></section>
+    {saving ? <Section title="Status"><p style={sub}>Saving deal room...</p></Section> : null}
 
-        <section style={hero}>
-          <div style={eyebrow}>Deal Intake</div>
-          <h1 style={h1}>Deal Opportunity.</h1>
-          <p style={sub}>Stable form. Saves active deal room, cover photo, and opens the new room.</p>
-        </section>
+    <Section title="Asset + Strategy">
+      <ChipSet label="Asset Class" options={ASSETS} selected={[assetClass]} onToggle={setAsset} />
+      <div style={{ height: 18 }} />
+      <ChipSet label="Strategy" options={STRATEGIES} selected={list(form.strategy)} onToggle={(value) => toggle("strategy", value)} />
+      <div style={{ height: 18 }} />
+      <ChipSet label="Route To" options={ROUTES} selected={list(form.routeTo)} onToggle={(value) => toggle("routeTo", value)} />
+    </Section>
 
-        {saving ? (
-          <section style={card}>
-            <p style={sub}>Saving deal room...</p>
-          </section>
-        ) : null}
-
-        <section style={card}>
-          <div style={grid}>
-            <Field label="Deal Title" value={txt(form.title)} onChange={(value) => up("title", value)} />
-            <SelectField label="State" value={txt(form.state, "GA")} onChange={(value) => up("state", value)} options={STATES} />
-            <Field label="City" value={txt(form.city)} onChange={(value) => up("city", value)} />
-            <Field label="County" value={txt(form.county)} onChange={(value) => up("county", value)} />
-            <SelectField label="Asset Class" value={txt(form.assetClass, "Residential")} onChange={(value) => up("assetClass", value)} options={ASSETS} />
-            <Field label="Property Type" value={txt(form.propertyType)} onChange={(value) => up("propertyType", value)} />
-          </div>
-        </section>
-
-        <section style={card}>
-          <ChipSet label="Route To" options={DEAL_ROUTES} selected={list(form.routeTo)} onToggle={toggleRoute} />
-        </section>
-
-        <section style={card}>
-          <div style={grid}>
-            <Field label="Ask Price" value={txt(form.askingPrice)} onChange={(value) => up("askingPrice", value)} />
-            <Field label="Value / ARV" value={txt(form.propertyValue)} onChange={(value) => up("propertyValue", value)} />
-            <Field label="Repairs / Work" value={txt(form.repairs)} onChange={(value) => up("repairs", value)} />
-            <Field label="Timeline" value={txt(form.timeline)} onChange={(value) => up("timeline", value)} />
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={grid}>
-            <Field label="Contact Name" value={txt(form.contactName)} onChange={(value) => up("contactName", value)} />
-            <Field label="Phone" value={txt(form.contactPhone)} onChange={(value) => up("contactPhone", value)} />
-            <Field label="Email" value={txt(form.contactEmail)} onChange={(value) => up("contactEmail", value)} />
-            <Field label="Notes / AI Context" value={txt(form.notes)} onChange={(value) => up("notes", value)} />
-          </div>
-        </section>
-
-        <section style={card}>
-          <div style={eyebrow}>Photos Up To 10</div>
-          <input type="file" multiple accept="image/*" onChange={(event) => setFiles(event.target.files)} />
-          <p style={muted}>{files ? files.length : 0}/10 selected. First photo becomes cover.</p>
-        </section>
-
-        <section style={card}>
-          <button style={goldBtn} onClick={submit}>
-            Save Deal Room
-          </button>
-        </section>
+    <Section title="Property + Market">
+      <div style={grid}>
+        <Field label="Deal Title" value={txt(form.title)} onChange={(value) => up("title", value)} />
+        <SelectField label="State" value={txt(form.state, "GA")} onChange={(value) => up("state", value)} options={STATES} />
+        <Field label="City" value={txt(form.city)} onChange={(value) => up("city", value)} />
+        <Field label="County" value={txt(form.county)} onChange={(value) => up("county", value)} />
+        <Field label="Address / Location" value={txt(form.address)} onChange={(value) => up("address", value)} />
+        <SelectField label="Property Type" value={txt(form.propertyType, propertyTypes[0])} onChange={(value) => up("propertyType", value)} options={propertyTypes} />
       </div>
-    </main>
-  );
+    </Section>
+
+    <Section title="Deal Intelligence">
+      <div style={grid}>
+        <SelectField label="Condition" value={txt(form.condition, "Unknown")} onChange={(value) => up("condition", value)} options={CONDITION} />
+        <SelectField label="Occupancy" value={txt(form.occupancy, "Unknown")} onChange={(value) => up("occupancy", value)} options={OCCUPANCY} />
+        <SelectField label="Deal Strength" value={txt(form.dealStrength, "Moderate")} onChange={(value) => up("dealStrength", value)} options={["Weak", "Moderate", "Strong", "Institutional"]} />
+        <SelectField label="Timeline" value={txt(form.timeline, "14 Days")} onChange={(value) => up("timeline", value)} options={TIME} />
+      </div>
+      <div style={{ height: 18 }} />
+      <ChipSet label="Seller Motivation" options={["Distressed", "Fast Close", "Portfolio Sale", "Partnership Split", "Divorce", "Tax Problem", "Foreclosure", "Inherited", "Burned Out Landlord"]} selected={list(form.motivation)} onToggle={(value) => toggle("motivation", value)} />
+    </Section>
+
+    <Section title="Numbers">
+      <div style={grid}>
+        <Field label="Ask Price" value={txt(form.askingPrice)} onChange={(value) => up("askingPrice", value)} />
+        <Field label="Value / ARV" value={txt(form.propertyValue)} onChange={(value) => up("propertyValue", value)} />
+        <Field label="Repairs / Work" value={txt(form.repairs)} onChange={(value) => up("repairs", value)} />
+        <Field label="Monthly Rent / NOI" value={txt(form.monthlyRent)} onChange={(value) => up("monthlyRent", value)} />
+      </div>
+    </Section>
+
+    <Section title="Property Facts">
+      <div style={grid}>
+        <Field label="Beds" value={txt(form.beds)} onChange={(value) => up("beds", value)} />
+        <Field label="Baths" value={txt(form.baths)} onChange={(value) => up("baths", value)} />
+        <Field label="Sqft" value={txt(form.sqft)} onChange={(value) => up("sqft", value)} />
+        <Field label="Units" value={txt(form.units)} onChange={(value) => up("units", value)} />
+        <Field label="Acres" value={txt(form.acres)} onChange={(value) => up("acres", value)} />
+        <Field label="Zoning" value={txt(form.zoning)} onChange={(value) => up("zoning", value)} />
+      </div>
+    </Section>
+
+    <Section title="Contact + Notes">
+      <div style={grid}>
+        <Field label="Contact Name" value={txt(form.contactName)} onChange={(value) => up("contactName", value)} />
+        <Field label="Phone" value={txt(form.contactPhone)} onChange={(value) => up("contactPhone", value)} />
+        <Field label="Email" value={txt(form.contactEmail)} onChange={(value) => up("contactEmail", value)} />
+        <TextArea label="Notes / AI Context" value={txt(form.notes)} onChange={(value) => up("notes", value)} />
+      </div>
+    </Section>
+
+    <Section title="Photos Up To 10"><input type="file" multiple accept="image/*" onChange={(event) => setFiles(event.target.files)} /><p style={muted}>{files ? files.length : 0}/10 selected. First photo becomes cover.</p></Section>
+    <Section title="Save"><button style={goldBtn} onClick={submit}>Save Deal Room</button></Section>
+  </div></main>;
 }
