@@ -69,6 +69,27 @@ type MemberProfile = {
   [key: string]: unknown;
 };
 
+type MessageThread = {
+  id: string;
+  lane: "deal" | "pain" | "network" | "general";
+  subject: string;
+  roomId?: string;
+  roomType?: string;
+  to?: string;
+  from?: string;
+  status: "active" | "archived" | "deleted";
+  unread: boolean;
+  saved: boolean;
+  createdAt: string;
+  updatedAt: string;
+  messages: {
+    id: string;
+    body: string;
+    author: string;
+    createdAt: string;
+  }[];
+};
+
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
@@ -77,7 +98,7 @@ const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "v
 const READ_KEY = "vaultforge_room_alert_read_v1";
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
-const SAVED_PROFILES_KEY = "vaultforge_saved_member_profiles_v1";
+const MESSAGE_KEY = "vaultforge_message_threads_v2";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -250,19 +271,95 @@ function getDirectory(): MemberProfile[] {
   });
 }
 
-function savedIds() {
-  if (!ok()) return [];
-  return j<string[]>(localStorage.getItem(SAVED_PROFILES_KEY), []);
+function getThreads() {
+  if (!ok()) return [] as MessageThread[];
+  return j<MessageThread[]>(localStorage.getItem(MESSAGE_KEY), []).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 
-function saveSavedIds(ids: string[]) {
+function saveThreads(threads: MessageThread[]) {
   if (!ok()) return;
-  localStorage.setItem(SAVED_PROFILES_KEY, JSON.stringify(Array.from(new Set(ids))));
-  window.dispatchEvent(new Event("vaultforge-saved-profiles-change"));
+  localStorage.setItem(MESSAGE_KEY, JSON.stringify(threads));
+  window.dispatchEvent(new Event("vaultforge-messages-change"));
 }
 
-function membersBasedInState(state: string, members: MemberProfile[]) {
-  return members.filter((member) => txt(member.basedState, "GA") === state);
+function messageCounts() {
+  const active = getThreads().filter((thread) => thread.status === "active");
+  return {
+    total: active.length,
+    unread: active.filter((thread) => thread.unread).length,
+    deal: active.filter((thread) => thread.lane === "deal").length,
+    pain: active.filter((thread) => thread.lane === "pain").length,
+    network: active.filter((thread) => thread.lane === "network").length,
+    dealUnread: active.filter((thread) => thread.lane === "deal" && thread.unread).length,
+    painUnread: active.filter((thread) => thread.lane === "pain" && thread.unread).length,
+    networkUnread: active.filter((thread) => thread.lane === "network" && thread.unread).length,
+  };
+}
+
+function createOrOpenThread(params: URLSearchParams) {
+  if (!ok()) return "";
+  const type = txt(params.get("type"));
+  const room = txt(params.get("room"));
+  const to = txt(params.get("to"));
+  const subjectParam = txt(params.get("subject"));
+
+  const lane: MessageThread["lane"] =
+    type === "deal" ? "deal" :
+    type === "pain" ? "pain" :
+    to ? "network" :
+    "general";
+
+  const subject =
+    subjectParam ||
+    (lane === "deal" ? `Deal Room: ${room || "New thread"}` :
+    lane === "pain" ? `Pain Room: ${room || "New thread"}` :
+    lane === "network" ? `Network Contact: ${to || "Member"}` :
+    "General Message");
+
+  const now = new Date().toISOString();
+  const existing = getThreads();
+  const existingThread = existing.find((thread) =>
+    thread.status !== "deleted" &&
+    thread.lane === lane &&
+    txt(thread.roomId) === room &&
+    txt(thread.to) === to &&
+    txt(thread.subject) === subject
+  );
+
+  if (existingThread) {
+    const updated = existing.map((thread) => thread.id === existingThread.id ? { ...thread, unread: false, updatedAt: now } : thread);
+    saveThreads(updated);
+    return existingThread.id;
+  }
+
+  const id = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const thread: MessageThread = {
+    id,
+    lane,
+    subject,
+    roomId: room,
+    roomType: type,
+    to,
+    from: "me",
+    status: "active",
+    unread: false,
+    saved: false,
+    createdAt: now,
+    updatedAt: now,
+    messages: [
+      {
+        id: `msg_${Date.now()}`,
+        author: "VaultForge",
+        body: lane === "network"
+          ? "Network contact thread opened."
+          : "Room message thread opened.",
+        createdAt: now,
+      },
+    ],
+  };
+
+  saveThreads([thread, ...existing]);
+  return id;
 }
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
@@ -283,6 +380,8 @@ const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
+const textarea: React.CSSProperties = { ...input, minHeight: 120, resize: "vertical" };
 const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
 function Nav({ active }: { active: string }) {
@@ -327,34 +426,9 @@ function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
           ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • Route: ${list(room.routeTo).join(", ") || "Buyer"}`
           : `${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"} • Severity: ${txt(room.severity, "N/A")}`}
       </p>
-      <p style={muted}>
-        {kind === "deal"
-          ? `Ask ${txt(room.askingPrice, "N/A")} • Value ${txt(room.propertyValue, "N/A")} • Repairs ${txt(room.repairs, "N/A")}`
-          : `Time ${txt(room.timePressure, "N/A")} • Capital ${txt(room.capitalPressure, "N/A")}`}
-      </p>
       <div style={{ ...row, marginTop: 16 }}>
         <Link href={href} style={goldBtn}>Open</Link>
-        <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}`} style={btn}>Messages</Link>
-      </div>
-    </div>
-  );
-}
-
-function MemberCard({ member, saved, onSave, onUnsave }: { member: MemberProfile; saved: boolean; onSave: () => void; onUnsave: () => void }) {
-  return (
-    <div style={saved ? activePanel : panel}>
-      {txt(member.profilePhoto) ? <img src={txt(member.profilePhoto)} alt={txt(member.name, "Member")} style={photoStyle} /> : null}
-      <div style={eyebrow}>{txt(member.memberType, "Member")} • From {txt(member.basedState, "N/A")}</div>
-      <h2 style={h2}>{txt(member.name, "VaultForge Member")}</h2>
-      <p style={sub}>{txt(member.company, "Company not listed")}</p>
-      <p style={muted}>Profile state: {[txt(member.basedCity), txt(member.basedCounty), txt(member.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
-      <p style={muted}>Operates in: {list(member.statesOperated).join(", ") || "No operating states selected"}</p>
-      <p style={muted}>Can provide: {list(member.canProvide).join(", ") || "Not listed"}</p>
-      <p style={muted}>Needs: {list(member.needs).join(", ") || "Not listed"}</p>
-      <p style={muted}>Capital: {txt(member.capitalPosition, "Unknown")} • {txt(member.fundingRange, "Unknown")}</p>
-      <div style={{ ...row, marginTop: 18 }}>
-        <Link href={`/messages?to=${encodeURIComponent(txt(member.email, profileId(member)))}&subject=${encodeURIComponent("Network Contact: " + txt(member.name, "VaultForge Member"))}`} style={goldBtn}>Contact</Link>
-        {saved ? <button type="button" style={redBtn} onClick={onUnsave}>Unsave Profile</button> : <button type="button" style={btn} onClick={onSave}>Save Profile</button>}
+        <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}&subject=${encodeURIComponent((kind === "deal" ? "Deal Room: " : "Pain Room: ") + titleFor(room, kind))}`} style={btn}>Messages</Link>
       </div>
     </div>
   );
@@ -365,8 +439,8 @@ export default function CommandPage() {
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
-    ["storage", "vaultforge-profile-change", "vaultforge-network-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-deal-change", "vaultforge-pain-change"].forEach((event) => window.addEventListener(event, refresh));
-    return () => ["storage", "vaultforge-profile-change", "vaultforge-network-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-deal-change", "vaultforge-pain-change"].forEach((event) => window.removeEventListener(event, refresh));
+    ["storage", "vaultforge-profile-change", "vaultforge-network-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-messages-change"].forEach((event) => window.addEventListener(event, refresh));
+    return () => ["storage", "vaultforge-profile-change", "vaultforge-network-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-messages-change"].forEach((event) => window.removeEventListener(event, refresh));
   }, []);
 
   const profile = useMemo(() => getDirectory()[0] || {}, [tick]);
@@ -375,6 +449,7 @@ export default function CommandPage() {
   const pains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "active"), [tick]);
   const unreadDeals = unreadRooms("deal", deals);
   const unreadPains = unreadRooms("pain", pains);
+  const counts = useMemo(() => messageCounts(), [tick]);
 
   return (
     <main style={page}>
@@ -384,10 +459,11 @@ export default function CommandPage() {
         <section style={hero}>
           <div style={eyebrow}>Member Command Center</div>
           <h1 style={h1}>Action creates reaction.</h1>
-          <p style={sub}>{txt(profile.name, "Member")} • Based {txt(profile.basedCity, "City not set")}, {txt(profile.basedState, "GA")} • Operating states drive routing. Members and Network are now separate systems.</p>
+          <p style={sub}>{txt(profile.name, "Member")} • Based {txt(profile.basedCity, "City not set")}, {txt(profile.basedState, "GA")} • Every message button now creates or opens a tracked thread.</p>
           <div style={{ ...row, marginTop: 22 }}>
             <Link href="/members" style={goldBtn}>Members</Link>
             <Link href="/network" style={goldBtn}>Network</Link>
+            <Link href="/messages" style={goldBtn}>Messages</Link>
             <Link href="/deal-create" style={btn}>Create Deal</Link>
             <Link href="/pain-intake" style={btn}>Submit Pain</Link>
           </div>
@@ -398,7 +474,15 @@ export default function CommandPage() {
             <Link href="/members" style={panel}><div style={eyebrow}>Members</div><h2 style={h2}>{members.length}</h2><p style={muted}>profile cards</p></Link>
             <Link href="/network" style={unreadDeals.length ? activePanel : panel}><div style={eyebrow}>Opportunity Cards</div><h2 style={h2}>{deals.length}</h2><p style={muted}>{unreadDeals.length} unread</p></Link>
             <Link href="/network" style={unreadPains.length ? activePanel : panel}><div style={eyebrow}>Pain Cards</div><h2 style={h2}>{pains.length}</h2><p style={muted}>{unreadPains.length} unread</p></Link>
-            <Link href="/messages" style={panel}><div style={eyebrow}>Messages</div><h2 style={h2}>0</h2><p style={muted}>room threads</p></Link>
+            <Link href="/messages" style={counts.unread ? activePanel : panel}><div style={eyebrow}>Messages</div><h2 style={h2}>{counts.unread}</h2><p style={muted}>{counts.total} active thread(s)</p></Link>
+          </div>
+        </Section>
+
+        <Section title="Message Reaction Counts">
+          <div style={grid}>
+            <Link href="/messages?type=deal" style={counts.dealUnread ? activePanel : panel}><div style={eyebrow}>Deal Messages</div><h2 style={h2}>{counts.dealUnread}</h2><p style={muted}>{counts.deal} active</p></Link>
+            <Link href="/messages?type=pain" style={counts.painUnread ? activePanel : panel}><div style={eyebrow}>Pain Messages</div><h2 style={h2}>{counts.painUnread}</h2><p style={muted}>{counts.pain} active</p></Link>
+            <Link href="/messages" style={counts.networkUnread ? activePanel : panel}><div style={eyebrow}>Network Messages</div><h2 style={h2}>{counts.networkUnread}</h2><p style={muted}>{counts.network} active</p></Link>
           </div>
         </Section>
 
