@@ -101,19 +101,24 @@ type Room = {
   alertRead?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  coverPhoto?: string;
   photoUrls?: string[];
   photos?: string[];
   photoUrl?: string;
   imageUrl?: string;
   photoSaveWarning?: string;
+  photoCount?: number;
   notes?: string;
   analyzer?: string;
   aiRead?: string;
   [key:string]: unknown;
 };
 
-const READ_KEY = "vaultforge_room_alert_read_v1";
+const STATES = ["GA","TN","AL","FL","NC","SC","TX"];
+const DEAL_KEYS = ["vaultforge_clean_deal_rooms","vaultforge_deal_rooms","vaultforge_rooms_deals","vf_deal_rooms"];
+const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1","vaultforge_clean_pain_rooms","vaultforge_pain_rooms","vaultforge_rooms_pain","vf_pain_rooms"];
 const STATE_KEYS = ["vaultforge_clean_room_states","vaultforge_room_states","vaultforge_deal_room_states","vaultforge_pain_room_states","vaultforge_5s_room_states"];
+const READ_KEY = "vaultforge_room_alert_read_v1";
 
 function ok(){ return typeof window !== "undefined" && typeof window.localStorage !== "undefined"; }
 function j<T>(raw:string|null,fb:T):T{ try{return raw?JSON.parse(raw) as T:fb}catch{return fb} }
@@ -123,21 +128,104 @@ function rid(r:Room|null|undefined){ return txt(r?.id||r?.roomId); }
 function titleFor(r:Room|null|undefined,kind:RoomKind){ return txt(r?.title||r?.name,kind==="deal"?"Untitled Deal Room":"Untitled Pain Room"); }
 function loc(r:Room|null|undefined){ return [txt(r?.city),txt(r?.county),txt(r?.state)].filter(Boolean).join(", ")||"Market not listed"; }
 function arr<T>(key:string):T[]{ if(!ok()) return []; const p=j<unknown>(localStorage.getItem(key),[]); return Array.isArray(p)?p as T[]:[]; }
-function stateMap(){ const m:Record<string,RoomState>={}; if(!ok()) return m; STATE_KEYS.forEach(k=>Object.assign(m,j<Record<string,RoomState>>(localStorage.getItem(k),{}))); return m; }
-function saveStateMap(m:Record<string,RoomState>){ if(!ok()) return; STATE_KEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(m))); }
+function keys(kind:RoomKind){ return kind==="deal"?DEAL_KEYS:PAIN_KEYS; }
+function roomKeys(kind:RoomKind,id:string){ return [`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`]; }
+function statesMap(){ const m:Record<string,RoomState>={}; if(!ok()) return m; STATE_KEYS.forEach(k=>Object.assign(m,j<Record<string,RoomState>>(localStorage.getItem(k),{}))); return m; }
+function saveStateMap(m:Record<string,RoomState>){ if(!ok()) return; STATE_KEYS.forEach(k=>{try{localStorage.setItem(k,JSON.stringify(m));}catch{}}); }
+function safeSet(key:string,value:unknown){ try{localStorage.setItem(key,JSON.stringify(value));return true;}catch{return false;} }
 
-function roomKeys(kind:RoomKind,id:string){
-  return [
-    `vaultforge_clean_${kind}_room_${id}`,
-    `vaultforge_${kind}_room_${id}`,
-    `vf_${kind}_room_${id}`,
-  ];
+function compressImage(file:File,maxWidth=850,quality=.52):Promise<string>{
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onerror=()=>resolve("");
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>resolve("");
+      img.onload=()=>{
+        try{
+          const scale=Math.min(1,maxWidth/img.width);
+          const canvas=document.createElement("canvas");
+          canvas.width=Math.max(1,Math.round(img.width*scale));
+          canvas.height=Math.max(1,Math.round(img.height*scale));
+          const ctx=canvas.getContext("2d");
+          if(!ctx){resolve("");return;}
+          ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          resolve(canvas.toDataURL("image/jpeg",quality));
+        }catch{ resolve(""); }
+      };
+      img.src=String(reader.result||"");
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
-function listKeys(kind:RoomKind){
-  return kind==="deal"
-    ? ["vaultforge_clean_deal_rooms","vaultforge_deal_rooms","vaultforge_rooms_deals","vf_deal_rooms"]
-    : ["vaultforge_clean_pain_rooms_v1","vaultforge_clean_pain_rooms","vaultforge_pain_rooms","vaultforge_rooms_pain","vf_pain_rooms"];
+async function photoDataUrls(files:FileList|null,max=10):Promise<string[]>{
+  const selected=Array.from(files||[]).slice(0,max);
+  const out:string[]=[];
+  for(const file of selected){
+    const compressed=await compressImage(file,850,.52);
+    if(compressed && compressed.length < 450000) out.push(compressed);
+    if(out.length >= 10) break;
+  }
+  return out;
+}
+
+function photoFields(urls:string[], attemptedCount=0):Partial<Room>{
+  const safe = urls.filter(Boolean).slice(0,10);
+  const cover = safe[0] || "";
+  return {
+    coverPhoto: cover,
+    photoUrl: cover,
+    imageUrl: cover,
+    photoUrls: safe,
+    photos: safe,
+    photoCount: attemptedCount || safe.length,
+    photoSaveWarning: attemptedCount && !safe.length ? "Photos were too large for browser storage. Room saved without photos." : ""
+  };
+}
+
+function slimForList(room:Room):Room{
+  return {
+    ...room,
+    photos: room.coverPhoto ? [room.coverPhoto] : [],
+    photoUrls: room.coverPhoto ? [room.coverPhoto] : [],
+    photoUrl: room.coverPhoto || "",
+    imageUrl: room.coverPhoto || ""
+  };
+}
+
+function saveRoom(kind:RoomKind,room:Room){
+  if(!ok()) return "";
+  const id=rid(room)||`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  const now=new Date().toISOString();
+  let next:Room={...room,id,roomId:id,roomState:"active",cleanupState:"active",stateStatus:"active",createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""};
+
+  let fullWorked=true;
+  for(const key of roomKeys(kind,id)){
+    if(!safeSet(key,next)) fullWorked=false;
+  }
+
+  if(!fullWorked){
+    const cover=txt(next.coverPhoto||next.photoUrl||next.imageUrl);
+    next={...next,coverPhoto:cover,photoUrl:cover,imageUrl:cover,photoUrls:cover?[cover]:[],photos:cover?[cover]:[],photoSaveWarning:"Only the cover photo was saved because browser storage rejected the full gallery."};
+    for(const key of roomKeys(kind,id)) safeSet(key,next);
+  }
+
+  const listRoom=slimForList(next);
+  for(const key of keys(kind)){
+    const existing=arr<Room>(key).filter(x=>rid(x)!==id);
+    if(!safeSet(key,[listRoom,...existing])){
+      safeSet(key,[{...listRoom,photos:[],photoUrls:[],photoUrl:"",imageUrl:"",coverPhoto:"",photoSaveWarning:"Photos were too large for list storage."},...existing.map(x=>({...x,photos:[],photoUrls:[]}))]);
+    }
+  }
+
+  const sm=statesMap();
+  sm[id]="active";
+  sm[`${kind}:${id}`]="active";
+  saveStateMap(sm);
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  window.dispatchEvent(new Event(kind==="deal"?"vaultforge-deal-change":"vaultforge-pain-change"));
+  return id;
 }
 
 function getRoom(kind:RoomKind,id:string):Room|null{
@@ -146,40 +234,27 @@ function getRoom(kind:RoomKind,id:string):Room|null{
     const direct=j<Room|null>(localStorage.getItem(key),null);
     if(direct && rid(direct)) return {...direct,id:rid(direct),roomId:rid(direct)};
   }
-  for(const key of listKeys(kind)){
+  for(const key of keys(kind)){
     const found=arr<Room>(key).find(r=>rid(r)===id);
     if(found) return {...found,id:rid(found),roomId:rid(found)};
-  }
-  for(let i=0;i<localStorage.length;i++){
-    const key=localStorage.key(i)||"";
-    const shouldCheck=kind==="deal"
-      ? (key.includes("deal_room")||key.includes("deal_rooms"))
-      : (key.includes("pain_room")||key.includes("pain_rooms"));
-    if(!shouldCheck) continue;
-    const value=j<any>(localStorage.getItem(key),null);
-    if(Array.isArray(value)){
-      const found=value.find((r:Room)=>rid(r)===id);
-      if(found) return {...found,id:rid(found),roomId:rid(found)};
-    }else if(value && typeof value==="object" && rid(value)===id){
-      return {...value,id:rid(value),roomId:rid(value)};
-    }
   }
   return null;
 }
 
 function photos(room:Room|null):string[]{
   if(!room) return [];
-  const output:string[] = [];
+  const output:string[]=[];
   const push=(v:unknown)=>{
     if(typeof v==="string"){
       const s=v.trim();
       if(s && !output.includes(s)) output.push(s);
     }
   };
-  list(room.photoUrls).forEach(push);
-  list(room.photos).forEach(push);
+  push(room.coverPhoto);
   push(room.photoUrl);
   push(room.imageUrl);
+  list(room.photoUrls).forEach(push);
+  list(room.photos).forEach(push);
   Object.keys(room).forEach(k=>{
     if(k.toLowerCase().includes("photo") || k.toLowerCase().includes("image")){
       const v=room[k];
@@ -197,12 +272,12 @@ function markRead(kind:RoomKind,room:Room){
   const reads=j<Record<string,string>>(localStorage.getItem(READ_KEY),{});
   reads[id]=new Date().toISOString();
   reads[`${kind}:${id}`]=new Date().toISOString();
-  localStorage.setItem(READ_KEY,JSON.stringify(reads));
+  safeSet(READ_KEY,reads);
   const next={...room,viewedAt:new Date().toISOString(),alertRead:true};
-  roomKeys(kind,id).forEach(key=>localStorage.setItem(key,JSON.stringify(next)));
-  listKeys(kind).forEach(key=>{
+  roomKeys(kind,id).forEach(key=>safeSet(key,next));
+  keys(kind).forEach(key=>{
     const rows=arr<Room>(key);
-    if(rows.length) localStorage.setItem(key,JSON.stringify(rows.map(r=>rid(r)===id?{...r,...next}:r)));
+    if(rows.length) safeSet(key,rows.map(r=>rid(r)===id?{...r,...slimForList(next)}:r));
   });
   window.dispatchEvent(new Event("vaultforge-room-read-change"));
 }
@@ -211,13 +286,13 @@ function setRoomState(kind:RoomKind,room:Room,state:RoomState){
   if(!ok()) return;
   const id=rid(room);
   if(!id) return;
-  const next={...room,roomState:state,cleanupState:state,stateStatus:state,updatedAt:new Date().toISOString()};
-  roomKeys(kind,id).forEach(key=>localStorage.setItem(key,JSON.stringify(next)));
-  listKeys(kind).forEach(key=>{
+  const next:Room={...room,roomState:state,cleanupState:state,stateStatus:state,updatedAt:new Date().toISOString()};
+  roomKeys(kind,id).forEach(key=>safeSet(key,next));
+  keys(kind).forEach(key=>{
     const rows=arr<Room>(key);
-    if(rows.length) localStorage.setItem(key,JSON.stringify([next,...rows.filter(r=>rid(r)!==id)]));
+    if(rows.length) safeSet(key,[slimForList(next),...rows.filter(r=>rid(r)!==id)]);
   });
-  const sm=stateMap();
+  const sm=statesMap();
   sm[id]=state;
   sm[`${kind}:${id}`]=state;
   saveStateMap(sm);
@@ -225,10 +300,12 @@ function setRoomState(kind:RoomKind,room:Room,state:RoomState){
 }
 
 function money(v:unknown){ const n=Number(String(v||"").replace(/[^0-9.-]/g,"")); return Number.isFinite(n)&&n!==0?n.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not listed"; }
+function fmt(n:number){ return n? n.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not enough data"; }
+function moneyNumber(value:unknown){ const n=Number(String(value||"").replace(/[^0-9.-]/g,"")); return Number.isFinite(n)?n:0; }
 
 
 function Nav({active}:{active:string}){
-  return <nav style={nav}>
+  return <nav style={navStyle}>
     <div style={brand}>VAULTFORGE</div>
     <Link href="/command" style={btn}>Command</Link>
     <Link href="/deal-rooms" style={active==="deal"?goldBtn:btn}>Deal Rooms</Link>
@@ -288,12 +365,12 @@ export default function Page({params}:{params:{id:string}}){
       <Section title="Room Photos">
         {roomPhotos.length ? (
           <div style={photoGrid}>
-            {roomPhotos.map((src,index)=><img key={`${src.slice(0,40)}-${index}`} src={src} alt={`Room photo ${index+1}`} style={photoStyle}/>)}
+            {roomPhotos.map((src,index)=><img key={`${index}-${src.length}`} src={src} alt={`Room photo ${index+1}`} style={photoStyle}/>)}
           </div>
         ) : (
           <div style={inner}>
             <h3 style={h3}>No photo saved for this room.</h3>
-            <p style={muted}>{txt(room.photoSaveWarning,"If a photo was selected but does not show here, browser storage rejected the image size. The room still saved.")}</p>
+            <p style={muted}>{txt(room.photoSaveWarning,"Photos are being saved locally for now. If a phone image is too large, the room saves without blocking.")}</p>
           </div>
         )}
       </Section>
@@ -331,91 +408,24 @@ export default function Page({params}:{params:{id:string}}){
 
 function DealDetails({room}:{room:Room}){
   return <>
-    <Section title="Deal Intelligence">
-      <div style={grid}>
-        <Detail label="Asset Class" value={room.assetClass}/>
-        <Detail label="Property Type" value={room.propertyType}/>
-        <Detail label="Strategy" value={room.strategy}/>
-        <Detail label="Route To" value={room.routeTo}/>
-        <Detail label="Condition" value={room.condition}/>
-        <Detail label="Occupancy" value={room.occupancy}/>
-        <Detail label="Timeline" value={room.timeline}/>
-        <Detail label="Deal Strength" value={room.dealStrength}/>
-      </div>
-    </Section>
-    <Section title="Deal Numbers">
-      <div style={grid}>
-        <Detail label="Ask Price" value={money(room.askingPrice)}/>
-        <Detail label="Value / ARV" value={money(room.propertyValue)}/>
-        <Detail label="Repairs / Work" value={money(room.repairs)}/>
-        <Detail label="Exit Value" value={money(room.exitValue)}/>
-        <Detail label="Assignment Fee" value={money(room.assignmentFee)}/>
-        <Detail label="Monthly Rent" value={money(room.monthlyRent)}/>
-        <Detail label="NOI" value={money(room.noi)}/>
-        <Detail label="Cap Rate" value={room.capRate}/>
-      </div>
-    </Section>
-    <Section title="Asset Facts">
-      <div style={grid}>
-        <Detail label="Beds" value={room.beds}/>
-        <Detail label="Baths" value={room.baths}/>
-        <Detail label="Sqft" value={room.sqft}/>
-        <Detail label="Units" value={room.units}/>
-        <Detail label="Building Size" value={room.buildingSize}/>
-        <Detail label="Acres" value={room.acres}/>
-        <Detail label="Zoning" value={room.zoning}/>
-        <Detail label="Access" value={room.access}/>
-      </div>
-    </Section>
+    <Section title="Deal Intelligence"><div style={grid}><Detail label="Asset Class" value={room.assetClass}/><Detail label="Property Type" value={room.propertyType}/><Detail label="Strategy" value={room.strategy}/><Detail label="Route To" value={room.routeTo}/><Detail label="Condition" value={room.condition}/><Detail label="Occupancy" value={room.occupancy}/><Detail label="Timeline" value={room.timeline}/><Detail label="Deal Strength" value={room.dealStrength}/></div></Section>
+    <Section title="Deal Numbers"><div style={grid}><Detail label="Ask Price" value={money(room.askingPrice)}/><Detail label="Value / ARV" value={money(room.propertyValue)}/><Detail label="Repairs / Work" value={money(room.repairs)}/><Detail label="Exit Value" value={money(room.exitValue)}/><Detail label="Assignment Fee" value={money(room.assignmentFee)}/><Detail label="Monthly Rent" value={money(room.monthlyRent)}/><Detail label="NOI" value={money(room.noi)}/><Detail label="Cap Rate" value={room.capRate}/></div></Section>
+    <Section title="Asset Facts"><div style={grid}><Detail label="Beds" value={room.beds}/><Detail label="Baths" value={room.baths}/><Detail label="Sqft" value={room.sqft}/><Detail label="Units" value={room.units}/><Detail label="Building Size" value={room.buildingSize}/><Detail label="Acres" value={room.acres}/><Detail label="Zoning" value={room.zoning}/><Detail label="Access" value={room.access}/></div></Section>
   </>
 }
 
 function PainDetails({room}:{room:Room}){
   return <>
-    <Section title="Pain Intelligence">
-      <div style={grid}>
-        <Detail label="Asset Class" value={room.assetClass}/>
-        <Detail label="Property Type" value={room.propertyType}/>
-        <Detail label="Pain Type" value={room.painTypes}/>
-        <Detail label="Severity" value={room.severity}/>
-        <Detail label="Time Pressure" value={room.timePressure}/>
-        <Detail label="Capital Pressure" value={room.capitalPressure}/>
-        <Detail label="Risk Types" value={room.riskTypes}/>
-        <Detail label="Current Blockers" value={room.blockers}/>
-        <Detail label="Needs" value={room.routingNeeds}/>
-      </div>
-    </Section>
-    <Section title="Pain Numbers">
-      <div style={grid}>
-        <Detail label="Ask Price" value={money(room.askingPrice)}/>
-        <Detail label="Value / ARV" value={money(room.propertyValue)}/>
-        <Detail label="Repairs / Work" value={money(room.repairs)}/>
-        <Detail label="Existing Loan" value={money(room.existingLoanAmount||room.loanBalance)}/>
-        <Detail label="Monthly Burn Rate" value={money(room.monthlyBurnRate)}/>
-        <Detail label="Money Needed Now" value={money(room.moneyNeededNow)}/>
-        <Detail label="Deadline" value={room.deadline}/>
-        <Detail label="Control Status" value={room.controlStatus}/>
-      </div>
-    </Section>
-    <Section title="Solution Logic">
-      <div style={grid}>
-        <Detail label="Root Cause" value={room.rootCause}/>
-        <Detail label="Best Outcome" value={room.bestOutcome}/>
-        <Detail label="Worst Case" value={room.worstCase}/>
-        <Detail label="If Nothing Is Done" value={room.nothingDoneOutcome}/>
-        <Detail label="Desired Solution" value={room.desiredSolution}/>
-        <Detail label="Direct Contact" value={room.directContactAllowed}/>
-        <Detail label="Confidential" value={room.confidential}/>
-        <Detail label="Title Clear" value={room.titleClear}/>
-      </div>
-    </Section>
+    <Section title="Pain Intelligence"><div style={grid}><Detail label="Asset Class" value={room.assetClass}/><Detail label="Property Type" value={room.propertyType}/><Detail label="Pain Type" value={room.painTypes}/><Detail label="Severity" value={room.severity}/><Detail label="Time Pressure" value={room.timePressure}/><Detail label="Capital Pressure" value={room.capitalPressure}/><Detail label="Risk Types" value={room.riskTypes}/><Detail label="Current Blockers" value={room.blockers}/><Detail label="Needs" value={room.routingNeeds}/></div></Section>
+    <Section title="Pain Numbers"><div style={grid}><Detail label="Ask Price" value={money(room.askingPrice)}/><Detail label="Value / ARV" value={money(room.propertyValue)}/><Detail label="Repairs / Work" value={money(room.repairs)}/><Detail label="Existing Loan" value={money(room.existingLoanAmount||room.loanBalance)}/><Detail label="Monthly Burn Rate" value={money(room.monthlyBurnRate)}/><Detail label="Money Needed Now" value={money(room.moneyNeededNow)}/><Detail label="Deadline" value={room.deadline}/><Detail label="Control Status" value={room.controlStatus}/></div></Section>
+    <Section title="Solution Logic"><div style={grid}><Detail label="Root Cause" value={room.rootCause}/><Detail label="Best Outcome" value={room.bestOutcome}/><Detail label="Worst Case" value={room.worstCase}/><Detail label="If Nothing Is Done" value={room.nothingDoneOutcome}/><Detail label="Desired Solution" value={room.desiredSolution}/><Detail label="Direct Contact" value={room.directContactAllowed}/><Detail label="Confidential" value={room.confidential}/><Detail label="Title Clear" value={room.titleClear}/></div></Section>
   </>
 }
 
 
 const page:React.CSSProperties={minHeight:"100vh",background:"#05070d",color:"#f7f7fb",padding:18,fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"};
 const wrap:React.CSSProperties={maxWidth:1280,margin:"0 auto",paddingBottom:90};
-const nav:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:18};
+const navStyle:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:18};
 const brand:React.CSSProperties={color:"#ffd45a",fontSize:27,fontWeight:950,letterSpacing:-1,marginRight:10};
 const btn:React.CSSProperties={border:"1px solid rgba(207,216,230,.18)",background:"#171c29",color:"#f7f7fb",borderRadius:999,padding:"13px 18px",fontWeight:950,textDecoration:"none",display:"inline-block",cursor:"pointer"};
 const goldBtn:React.CSSProperties={...btn,border:0,background:"#ffdc68",color:"#10131a"};
@@ -432,6 +442,12 @@ const sub:React.CSSProperties={color:"#c9d0dc",fontSize:21,lineHeight:1.35,margi
 const muted:React.CSSProperties={color:"#aeb7c7",margin:"8px 0 0",lineHeight:1.35};
 const grid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:16};
 const row:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"};
+const chip:React.CSSProperties={...btn,padding:"11px 16px"};
+const chipActive:React.CSSProperties={...chip,background:"#ffdc68",color:"#10131a",border:0};
+const input:React.CSSProperties={width:"100%",boxSizing:"border-box",border:"1px solid rgba(207,216,230,.18)",background:"#151b2a",color:"#f8fafc",borderRadius:18,padding:"15px 16px",fontSize:16,outline:"none"};
+const textArea:React.CSSProperties={...input,minHeight:110,resize:"vertical"};
+const label:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:4,fontSize:12,fontWeight:950,marginBottom:8};
+const calcBox:React.CSSProperties={background:"rgba(255,220,104,.08)",border:"1px solid rgba(255,220,104,.22)",borderRadius:18,padding:18,color:"#ffd45a",fontWeight:950};
 const photoGrid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14};
 const photoStyle:React.CSSProperties={width:"100%",height:220,objectFit:"cover",borderRadius:20,border:"1px solid rgba(255,220,104,.25)",background:"#05070d"};
 const stat:React.CSSProperties={background:"#121724",border:"1px solid rgba(207,216,230,.16)",borderRadius:18,padding:16};
