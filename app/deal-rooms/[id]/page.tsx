@@ -33,6 +33,7 @@ type RoomRecord = {
   baths?: string;
   sqft?: string;
   units?: string;
+  buildingSize?: string;
   acres?: string;
   zoning?: string;
   occupancy?: string;
@@ -55,6 +56,10 @@ type RoomRecord = {
   aiRead?: string;
   notes?: string;
   privateNotes?: string;
+  currentState?: string;
+  rootCause?: string;
+  targetOutcome?: string;
+  constraints?: string;
   photoUrls?: string[];
   photos?: string[];
   photoUrl?: string;
@@ -65,6 +70,14 @@ type RoomRecord = {
   viewedAt?: string;
   alertRead?: boolean;
   [key: string]: unknown;
+};
+
+type ActivityRow = {
+  id: string;
+  label: string;
+  detail: string;
+  time: string;
+  tone: "gold" | "red" | "blue";
 };
 
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
@@ -108,11 +121,17 @@ function val(room: RoomRecord | null | undefined, keys: string[], fallback = "No
   return fallback;
 }
 
+function numberValue(value: unknown) {
+  const raw = cleanText(value, "");
+  const n = Number(raw.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 function money(value: unknown) {
   const raw = cleanText(value, "");
   if (!raw) return "Not listed";
   if (raw.includes("$")) return raw;
-  const n = Number(raw.replace(/[^0-9.]/g, ""));
+  const n = numberValue(raw);
   if (!Number.isFinite(n) || n <= 0) return raw;
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
@@ -156,12 +175,6 @@ function getRoomState(room: RoomRecord, kind: RoomKind): RoomState {
 function readReadMap(): Record<string, string> {
   if (!hasBrowser()) return {};
   return parseJson<Record<string, string>>(window.localStorage.getItem(READ_KEY), {});
-}
-
-function isRoomRead(kind: RoomKind, room: RoomRecord) {
-  const id = roomId(room);
-  const map = readReadMap();
-  return Boolean(map[`${kind}:${id}`] || map[id] || room.alertRead || room.viewedAt);
 }
 
 function markRoomRead(kind: RoomKind, room: RoomRecord) {
@@ -268,73 +281,121 @@ function photos(room: RoomRecord | null | undefined) {
   return Array.from(new Set(all)).filter((item) => !item.startsWith("data:")).slice(0, 10);
 }
 
-function firstPhoto(room: RoomRecord | null | undefined) {
-  return photos(room)[0] || "";
+function dealSpread(room: RoomRecord) {
+  const value = numberValue(room.propertyValue || room.arv);
+  const ask = numberValue(room.askingPrice);
+  const repairs = numberValue(room.repairs);
+  if (!value || !ask) return 0;
+  return value - ask - repairs;
 }
 
-function dealSpread(room: RoomRecord) {
-  const value = Number(cleanText(room.propertyValue || room.arv, "").replace(/[^0-9.]/g, ""));
-  const ask = Number(cleanText(room.askingPrice, "").replace(/[^0-9.]/g, ""));
-  const repairs = Number(cleanText(room.repairs, "").replace(/[^0-9.]/g, ""));
-  if (!value || !ask) return "Not enough numbers";
-  const spread = value - ask - (Number.isFinite(repairs) ? repairs : 0);
+function dealSpreadText(room: RoomRecord) {
+  const spread = dealSpread(room);
+  if (!spread) return "Not enough numbers";
   return money(String(spread));
+}
+
+function percent(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function dealStrength(room: RoomRecord) {
+  const value = numberValue(room.propertyValue || room.arv);
+  const ask = numberValue(room.askingPrice);
+  const repairs = numberValue(room.repairs);
+  const spread = dealSpread(room);
+  let score = 42;
+  if (value && ask) score += 16;
+  if (spread > 25000) score += 14;
+  if (spread > 75000) score += 12;
+  if (repairs && value && repairs / value < 0.25) score += 8;
+  if (asList(room.routeTo).length || asList(room.routedTo).length || asList(room.routingNeeds).length) score += 8;
+  if (cleanText(room.contactPhone) || cleanText(room.contactEmail)) score += 6;
+  return percent(score);
+}
+
+function painSeverity(room: RoomRecord) {
+  const urgency = asList(room.urgency).join(" ").toLowerCase();
+  const blockers = [...asList(room.blockers), ...asList(room.knownIssues), ...asList(room.painTypes)].join(" ").toLowerCase();
+  const amount = numberValue(room.amountNeeded);
+  let score = 38;
+  if (urgency.includes("emergency")) score += 30;
+  if (urgency.includes("critical")) score += 25;
+  if (urgency.includes("high")) score += 16;
+  if (blockers.includes("funding")) score += 12;
+  if (blockers.includes("foreclosure") || blockers.includes("auction") || blockers.includes("tax")) score += 22;
+  if (blockers.includes("title") || blockers.includes("tenant") || blockers.includes("permit")) score += 10;
+  if (amount > 50000) score += 8;
+  if (amount > 250000) score += 8;
+  return percent(score);
 }
 
 function riskLabel(room: RoomRecord, kind: RoomKind) {
   const combined = [...asList(room.urgency), ...asList(room.knownIssues), ...asList(room.blockers), ...asList(room.painTypes)].join(" ").toLowerCase();
-  if (combined.includes("critical") || combined.includes("emergency") || combined.includes("foreclosure")) return "Critical";
+  if (combined.includes("critical") || combined.includes("emergency") || combined.includes("foreclosure") || combined.includes("auction")) return "Critical";
   if (combined.includes("high") || combined.includes("funding") || combined.includes("stalled") || combined.includes("tenant")) return "High";
   return kind === "pain" ? "Medium" : "Review";
 }
 
+function buyerFit(room: RoomRecord) {
+  let score = 48;
+  if (numberValue(room.propertyValue || room.arv) && numberValue(room.askingPrice)) score += 16;
+  if (dealSpread(room) > 30000) score += 16;
+  if (cleanText(room.access) && cleanText(room.access).toLowerCase() !== "unknown") score += 8;
+  if (cleanText(room.occupancy)) score += 6;
+  return percent(score);
+}
+
+function lenderFit(room: RoomRecord) {
+  let score = 42;
+  if (numberValue(room.propertyValue || room.arv)) score += 14;
+  if (numberValue(room.payoff)) score += 8;
+  if (numberValue(room.repairs)) score += 8;
+  if (numberValue(room.amountNeeded)) score += 12;
+  if (asList(room.routingNeeds).join(" ").toLowerCase().includes("lender")) score += 12;
+  return percent(score);
+}
+
+function operatorFit(room: RoomRecord) {
+  let score = 45;
+  const needs = [...asList(room.routeTo), ...asList(room.routedTo), ...asList(room.routingNeeds), ...asList(room.blockers)].join(" ").toLowerCase();
+  if (needs.includes("operator")) score += 18;
+  if (needs.includes("contractor")) score += 14;
+  if (needs.includes("property manager")) score += 10;
+  if (cleanText(room.access)) score += 6;
+  return percent(score);
+}
+
 function roomSignal(room: RoomRecord, kind: RoomKind) {
   if (kind === "deal") {
-    return `${titleFor(room, kind)} is a ${cleanText(room.assetClass, "deal")} signal in ${locationFor(room)}. Ask ${money(room.askingPrice)}, value ${money(room.propertyValue || room.arv)}, repairs/work ${money(room.repairs)}. Estimated spread: ${dealSpread(room)}. Route to ${[...asList(room.routeTo), ...asList(room.routedTo), ...asList(room.routingNeeds)].join(", ") || "matched buyer/operator/lender profiles"}.`;
+    return `${titleFor(room, kind)} is a ${cleanText(room.assetClass, "deal")} signal in ${locationFor(room)}. Ask ${money(room.askingPrice)}, value ${money(room.propertyValue || room.arv)}, repairs/work ${money(room.repairs)}. Estimated spread: ${dealSpreadText(room)}. Route to ${[...asList(room.routeTo), ...asList(room.routedTo), ...asList(room.routingNeeds)].join(", ") || "matched buyer/operator/lender profiles"}.`;
   }
 
   return `${titleFor(room, kind)} is a pressure room in ${locationFor(room)}. Pain type: ${asList(room.painTypes).join(", ") || "not selected"}. Urgency: ${asList(room.urgency).join(", ") || "not selected"}. Amount needed: ${money(room.amountNeeded)}. Payoff: ${money(room.payoff)}. Best next step: isolate blocker, verify authority/control, match the right capital/operator/contractor profile, then move the conversation into Messages.`;
 }
 
-function nextSteps(room: RoomRecord, kind: RoomKind) {
+function bestNextMove(room: RoomRecord, kind: RoomKind) {
   if (kind === "deal") {
-    return [
-      "Verify owner/contact control and best contact method.",
-      "Confirm ask, ARV/value, repairs, access, occupancy, and available docs.",
-      "Route only to matched profiles by state, asset fit, and member type.",
-      "Move qualified buyer/operator/lender conversation into the room message thread.",
-    ];
+    if (!numberValue(room.propertyValue || room.arv) || !numberValue(room.askingPrice)) return "Collect missing ask, value, repair, and access data before wide routing.";
+    if (dealSpread(room) > 50000) return "Route to matched buyers and capital partners immediately, then verify access and docs.";
+    return "Verify spread and repairs, then route to a targeted buyer/operator group instead of broad blast.";
   }
 
+  const risk = riskLabel(room, kind);
+  if (risk === "Critical") return "Escalate now: confirm decision maker, deadline, exact blocker, and route to solver profile immediately.";
+  if (asList(room.blockers).join(" ").toLowerCase().includes("funding")) return "Route to capital/lender profiles and request payoff, value, timeline, and authority confirmation.";
+  return "Confirm root cause and desired outcome, then route to the best matching operator/capital/contractor profile.";
+}
+
+function timeline(room: RoomRecord, kind: RoomKind): ActivityRow[] {
+  const created = cleanText(room.createdAt || room.updatedAt, "local");
+  const read = cleanText(room.viewedAt, "");
   return [
-    "Classify the exact blocker: money, timeline, title, contractor, tenant, permit, or exit pressure.",
-    "Verify decision-maker authority and what outcome solves the pain.",
-    "Match the room to the member profile that can actually solve the blocker.",
-    "Create a room message thread and track the solution conversation there.",
+    { id: "submitted", label: "Submitted", detail: `${kind === "deal" ? "Deal" : "Pain"} room created in VaultForge.`, time: created, tone: "gold" },
+    { id: "analyzed", label: "AI Analyzed", detail: kind === "deal" ? "Underwriting and route signals generated." : "Pressure and blocker signals generated.", time: cleanText(room.updatedAt, created), tone: "blue" },
+    { id: "viewed", label: read ? "Viewed" : "Awaiting View", detail: read ? "Room opened and alert marked read." : "Unread alert still pending.", time: read || "pending", tone: read ? "gold" : "red" },
+    { id: "message", label: "Message Thread", detail: "Use Message Owner to keep communication attached to this room.", time: "ready", tone: "blue" },
   ];
-}
-
-function readMessageRows(key: string): { read?: boolean; createdAt?: string }[] {
-  if (!hasBrowser()) return [];
-  const parsed = parseJson<unknown>(window.localStorage.getItem(key), []);
-  return Array.isArray(parsed) ? parsed as { read?: boolean; createdAt?: string }[] : [];
-}
-
-function messageStats(kind: RoomKind) {
-  if (!hasBrowser()) return { threads: 0, messages: 0, unread: 0 };
-  let threads = 0;
-  let messages = 0;
-  let unread = 0;
-  for (let i = 0; i < window.localStorage.length; i += 1) {
-    const key = window.localStorage.key(i) || "";
-    if (!key.startsWith(`vaultforge_room_messages_${kind}:`)) continue;
-    const rows = readMessageRows(key);
-    if (!rows.length) continue;
-    threads += 1;
-    messages += rows.length;
-    unread += rows.filter((row) => !row.read).length;
-  }
-  return { threads, messages, unread };
 }
 
 
@@ -368,6 +429,7 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
   const roomPhotos = useMemo(() => photos(room), [room]);
   const signal = room ? roomSignal(room, KIND) : "";
   const steps = room ? nextSteps(room, KIND) : [];
+  const activity = room ? timeline(room, KIND) : [];
 
   if (!room) {
     return (
@@ -383,6 +445,7 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
     );
   }
 
+  const mainScore = KIND === "deal" ? dealStrength(room) : painSeverity(room);
   const messageHref = `/messages?type=${KIND}&room=${encodeURIComponent(roomId(room))}&subject=${encodeURIComponent(`${KIND === "deal" ? "Deal Room" : "Pain Room"}: ${titleFor(room, KIND)}`)}`;
 
   return (
@@ -396,9 +459,16 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
               {roomPhotos.map((url, index) => <img key={`${url}-${index}`} src={url} alt="" style={photoStyle} />)}
             </div>
           ) : null}
-          <div style={eyebrow}>{KIND === "deal" ? "Deal Room" : "Pain Room"}</div>
+          <div style={eyebrow}>{KIND === "deal" ? "Deal Intelligence Room" : "Pain Intelligence Room"}</div>
           <h1 style={h1}>{titleFor(room, KIND)}</h1>
           <p style={sub}>{locationFor(room)}</p>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Room Intelligence Meter</div>
+          <h2 style={h2}>{KIND === "deal" ? "Deal Strength" : "Pain Severity"}: {mainScore}/100</h2>
+          <div style={meterTrack}><div style={{ ...meterFill, width: `${mainScore}%` }} /></div>
+          <p style={{ ...sub, marginTop: 16 }}>{KIND === "deal" ? "Scores spread quality, available numbers, route readiness, access clarity, and contact strength." : "Scores urgency, pressure type, blocker severity, funding amount, and escalation risk."}</p>
         </section>
 
         <section style={card}>
@@ -413,19 +483,19 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
 
         <section style={twoGrid}>
           <section style={card}>
-            <div style={eyebrow}>{KIND === "deal" ? "Deal Facts" : "Pain Facts"}</div>
+            <div style={eyebrow}>{KIND === "deal" ? "AI Underwriting Snapshot" : "Pressure Breakdown"}</div>
             <div style={grid}>
               {KIND === "deal" ? (
                 <>
                   <Fact label="Ask" value={money(room.askingPrice)} />
                   <Fact label="Value / ARV" value={money(room.propertyValue || room.arv)} />
                   <Fact label="Repairs / Work" value={money(room.repairs)} />
-                  <Fact label="Estimated Spread" value={dealSpread(room)} />
-                  <Fact label="Beds" value={val(room, ["beds"])} />
-                  <Fact label="Baths" value={val(room, ["baths"])} />
-                  <Fact label="Sqft" value={val(room, ["sqft"])} />
-                  <Fact label="Occupancy" value={val(room, ["occupancy"])} />
-                  <Fact label="Access" value={val(room, ["access"])} />
+                  <Fact label="Estimated Spread" value={dealSpreadText(room)} />
+                  <Fact label="Buyer Fit" value={`${buyerFit(room)}%`} />
+                  <Fact label="Lender Fit" value={`${lenderFit(room)}%`} />
+                  <Fact label="Operator Fit" value={`${operatorFit(room)}%`} />
+                  <Fact label="Risk" value={riskLabel(room, KIND)} />
+                  <Fact label="Exit Strategy" value={dealSpread(room) > 50000 ? "Wholesale / flip / capital route" : "Verify numbers before route"} />
                 </>
               ) : (
                 <>
@@ -435,9 +505,9 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
                   <Fact label="Payoff" value={money(room.payoff)} />
                   <Fact label="Value / ARV" value={money(room.propertyValue || room.arv)} />
                   <Fact label="Blockers" value={asList(room.blockers).join(", ") || asList(room.knownIssues).join(", ") || "Not selected"} />
-                  <Fact label="Authority" value={val(room, ["authority"])} />
-                  <Fact label="Timeline" value={val(room, ["timeline"])} />
-                  <Fact label="Risk" value={riskLabel(room, KIND)} />
+                  <Fact label="Funding Pressure" value={numberValue(room.amountNeeded) ? `${percent(numberValue(room.amountNeeded) / 5000)}%` : "Unknown"} />
+                  <Fact label="Escalation Risk" value={riskLabel(room, KIND)} />
+                  <Fact label="Ideal Solver" value={asList(room.routingNeeds).join(", ") || "Capital / operator / contractor profile"} />
                 </>
               )}
             </div>
@@ -457,8 +527,8 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
         </section>
 
         <section style={card}>
-          <div style={eyebrow}>VaultForge Analysis</div>
-          <h2 style={h2}>{KIND === "deal" ? "Opportunity read." : "Problem-solving read."}</h2>
+          <div style={eyebrow}>Best Next Move</div>
+          <h2 style={h2}>{bestNextMove(room, KIND)}</h2>
           <p style={sub}>{signal}</p>
         </section>
 
@@ -467,7 +537,7 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
           <div style={grid}>
             <div style={note}>
               <div style={smallEyebrow}>Good</div>
-              <p style={sub}>{KIND === "deal" ? "Room has enough market, contact, and number fields to start underwriting and routing." : "Room identifies pressure, blocker, urgency, and routing need so the right solver can be matched."}</p>
+              <p style={sub}>{KIND === "deal" ? "Room has market, contact, and number fields to begin underwriting and targeted routing." : "Room captures pressure, blocker, urgency, and routing need so the correct solver profile can be matched."}</p>
             </div>
             <div style={note}>
               <div style={smallEyebrow}>Risk</div>
@@ -483,6 +553,22 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
         </section>
 
         <section style={card}>
+          <div style={eyebrow}>Execution Timeline</div>
+          <div style={stack}>
+            {activity.map((item) => (
+              <div key={item.id} style={activityRow}>
+                <span style={item.tone === "red" ? activityDotRed : item.tone === "blue" ? activityDotBlue : activityDotGold} />
+                <div>
+                  <div style={smallEyebrow}>{item.label}</div>
+                  <h3 style={h3}>{item.detail}</h3>
+                  <p style={muted}>{item.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section style={card}>
           <div style={eyebrow}>Owner Message</div>
           <h2 style={h2}>Contact owner with this {KIND} attached.</h2>
           <p style={sub}>Message subject is locked to this room so the conversation stays attached.</p>
@@ -493,7 +579,7 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
 
         <section style={card}>
           <div style={eyebrow}>Notes</div>
-          <p style={sub}>{val(room, ["notes", "privateNotes", "analyzer", "aiRead"], "No notes saved.")}</p>
+          <p style={sub}>{val(room, ["notes", "privateNotes", "analyzer", "aiRead", "currentState", "rootCause", "targetOutcome", "constraints"], "No notes saved.")}</p>
         </section>
       </div>
     </main>
@@ -545,15 +631,11 @@ const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap" };
 const stack: React.CSSProperties = { display: "grid", gap: 14 };
 const photoGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 22 };
 const photoStyle: React.CSSProperties = { width: "100%", height: 210, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(207,216,230,.22)" };
-const alertCard: React.CSSProperties = { display: "grid", gridTemplateColumns: "18px 1fr", gap: 12, background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 20, color: "#f7f7fb", textDecoration: "none" };
-const dot: React.CSSProperties = { width: 12, height: 12, borderRadius: 999, background: "#ff4d4d", boxShadow: "0 0 18px rgba(255,70,70,.8)", marginTop: 8 };
 const note: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
-const liveCard: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
-const redPulse: React.CSSProperties = { borderColor: "rgba(255,70,70,.75)", animation: "vfPulse 1.8s infinite" };
-const goldPulse: React.CSSProperties = { borderColor: "rgba(255,220,104,.70)", animation: "vfGoldPulse 1.8s infinite" };
-const liveNumber: React.CSSProperties = { fontSize: 52, lineHeight: 1, fontWeight: 950 };
-const tickerShell: React.CSSProperties = { overflow: "hidden", border: "1px solid rgba(245,197,66,.20)", borderRadius: 18, background: "#0b0f19", padding: "12px 0", marginTop: 18 };
-const tickerTrack: React.CSSProperties = { display: "flex", gap: 26, width: "max-content", animation: "vfTicker 35s linear infinite" };
-const tickerItem: React.CSSProperties = { whiteSpace: "nowrap", color: "#ffd45a", fontSize: 14, fontWeight: 900 };
-const livePill: React.CSSProperties = { background: "#e31321", color: "white", borderRadius: 999, padding: "13px 16px", fontWeight: 950, boxShadow: "0 0 24px rgba(227,19,33,.55)" };
+const meterTrack: React.CSSProperties = { height: 14, borderRadius: 999, background: "#151b2a", overflow: "hidden", border: "1px solid rgba(207,216,230,.12)", marginTop: 12 };
+const meterFill: React.CSSProperties = { height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#ff4d4d,#ffd45a)" };
+const activityDotGold: React.CSSProperties = { width: 12, height: 12, borderRadius: 999, background: "#ffd45a", boxShadow: "0 0 18px rgba(255,212,90,.75)", marginTop: 8 };
+const activityDotRed: React.CSSProperties = { width: 12, height: 12, borderRadius: 999, background: "#ff4d4d", boxShadow: "0 0 18px rgba(255,70,70,.8)", marginTop: 8 };
+const activityDotBlue: React.CSSProperties = { width: 12, height: 12, borderRadius: 999, background: "#8ab4ff", boxShadow: "0 0 18px rgba(138,180,255,.65)", marginTop: 8 };
+const activityRow: React.CSSProperties = { display: "grid", gridTemplateColumns: "20px 1fr", gap: 12, background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 20, padding: 18 };
 
