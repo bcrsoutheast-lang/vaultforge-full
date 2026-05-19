@@ -6,6 +6,34 @@ import { useEffect, useMemo, useState } from "react";
 type RoomState = "active" | "saved" | "archived" | "deleted";
 type RoomKind = "deal" | "pain";
 
+type MemberProfile = {
+  id?: string;
+  name?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  profilePhoto?: string;
+  memberType?: string;
+  basedState?: string;
+  basedCity?: string;
+  basedCounty?: string;
+  statesOperated?: string[];
+  markets?: string[];
+  assetClasses?: string[];
+  strategies?: string[];
+  specialties?: string[];
+  needs?: string[];
+  canProvide?: string[];
+  capitalPosition?: string;
+  proofOfFunds?: string;
+  fundingRange?: string;
+  contactPreference?: string;
+  directContact?: string;
+  bio?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
 type Room = {
   id?: string;
   roomId?: string;
@@ -41,43 +69,13 @@ type Room = {
   [key: string]: unknown;
 };
 
-type MemberProfile = {
-  id?: string;
-  name?: string;
-  company?: string;
-  email?: string;
-  phone?: string;
-  profilePhoto?: string;
-  memberType?: string;
-  basedState?: string;
-  basedCity?: string;
-  basedCounty?: string;
-  statesOperated?: string[];
-  markets?: string[];
-  assetClasses?: string[];
-  strategies?: string[];
-  specialties?: string[];
-  needs?: string[];
-  canProvide?: string[];
-  capitalPosition?: string;
-  proofOfFunds?: string;
-  fundingRange?: string;
-  contactPreference?: string;
-  directContact?: string;
-  bio?: string;
-  updatedAt?: string;
-  [key: string]: unknown;
-};
-
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
-
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
 const READ_KEY = "vaultforge_room_alert_read_v1";
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
-const SAVED_PROFILES_KEY = "vaultforge_saved_member_profiles_v1";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -115,7 +113,8 @@ function loc(room: Room) {
 }
 
 function roomState(room: Room): RoomState {
-  return txt(room.roomState || room.cleanupState || room.stateStatus, "active") as RoomState;
+  const state = txt(room.roomState || room.cleanupState || room.stateStatus, "active");
+  return state === "saved" || state === "archived" || state === "deleted" ? state : "active";
 }
 
 function arr<T>(key: string): T[] {
@@ -204,67 +203,6 @@ function firstPhoto(room: Room) {
   ].filter(Boolean);
   return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
 }
-
-function profileId(profile: MemberProfile) {
-  return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
-}
-
-function normalizeProfile(profile: MemberProfile): MemberProfile {
-  return {
-    ...profile,
-    id: profileId(profile),
-    name: txt(profile.name, "VaultForge Member"),
-    basedState: txt(profile.basedState, "GA"),
-    statesOperated: list(profile.statesOperated).length ? list(profile.statesOperated) : ["GA"],
-    markets: list(profile.markets),
-    assetClasses: list(profile.assetClasses),
-    strategies: list(profile.strategies),
-    specialties: list(profile.specialties),
-    needs: list(profile.needs),
-    canProvide: list(profile.canProvide),
-  };
-}
-
-function getProfile(): MemberProfile {
-  if (!ok()) return {};
-  for (const key of PROFILE_KEYS) {
-    const found = j<MemberProfile | null>(localStorage.getItem(key), null);
-    if (found && typeof found === "object") return normalizeProfile(found);
-  }
-  return normalizeProfile({ id: "local_member", name: "VaultForge Member", basedState: "GA", statesOperated: ["GA"], memberType: "Investor" });
-}
-
-function getDirectory(): MemberProfile[] {
-  if (!ok()) return [];
-  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
-  const current = getProfile();
-  const currentId = profileId(current);
-  const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
-  const seen = new Set<string>();
-
-  return merged.map(normalizeProfile).filter((member) => {
-    const id = profileId(member);
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-}
-
-function savedIds() {
-  if (!ok()) return [];
-  return j<string[]>(localStorage.getItem(SAVED_PROFILES_KEY), []);
-}
-
-function saveSavedIds(ids: string[]) {
-  if (!ok()) return;
-  localStorage.setItem(SAVED_PROFILES_KEY, JSON.stringify(Array.from(new Set(ids))));
-  window.dispatchEvent(new Event("vaultforge-saved-profiles-change"));
-}
-
-function membersBasedInState(state: string, members: MemberProfile[]) {
-  return members.filter((member) => txt(member.basedState, "GA") === state);
-}
-
 
 function profileId(profile: MemberProfile) {
   return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
@@ -447,27 +385,6 @@ function RoomCard({ room, kind, members }: { room: Room; kind: RoomKind; members
   );
 }
 
-function MemberCard({ member, saved, onSave, onUnsave }: { member: MemberProfile; saved: boolean; onSave: () => void; onUnsave: () => void }) {
-  return (
-    <div style={saved ? activePanel : panel}>
-      {txt(member.profilePhoto) ? <img src={txt(member.profilePhoto)} alt={txt(member.name, "Member")} style={photoStyle} /> : null}
-      <div style={eyebrow}>{txt(member.memberType, "Member")} • From {txt(member.basedState, "N/A")}</div>
-      <h2 style={h2}>{txt(member.name, "VaultForge Member")}</h2>
-      <p style={sub}>{txt(member.company, "Company not listed")}</p>
-      <p style={muted}>Profile state: {[txt(member.basedCity), txt(member.basedCounty), txt(member.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
-      <p style={muted}>Operates in: {list(member.statesOperated).join(", ") || "No operating states selected"}</p>
-      <p style={muted}>Can provide: {list(member.canProvide).join(", ") || "Not listed"}</p>
-      <p style={muted}>Needs: {list(member.needs).join(", ") || "Not listed"}</p>
-      <p style={muted}>Capital: {txt(member.capitalPosition, "Unknown")} • {txt(member.fundingRange, "Unknown")}</p>
-      <div style={{ ...row, marginTop: 18 }}>
-        <Link href={`/messages?to=${encodeURIComponent(txt(member.email, profileId(member)))}&subject=${encodeURIComponent("Network Contact: " + txt(member.name, "VaultForge Member"))}`} style={goldBtn}>Contact</Link>
-        {saved ? <button type="button" style={redBtn} onClick={onUnsave}>Unsave Profile</button> : <button type="button" style={btn} onClick={onSave}>Save Profile</button>}
-      </div>
-    </div>
-  );
-}
-
-
 export default function NetworkPage() {
   const [tick, setTick] = useState(0);
   const [openState, setOpenState] = useState("");
@@ -479,12 +396,16 @@ export default function NetworkPage() {
     window.addEventListener("vaultforge-room-read-change", refresh);
     window.addEventListener("vaultforge-deal-change", refresh);
     window.addEventListener("vaultforge-pain-change", refresh);
+    window.addEventListener("vaultforge-profile-change", refresh);
+    window.addEventListener("vaultforge-network-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-room-state-change", refresh);
       window.removeEventListener("vaultforge-room-read-change", refresh);
       window.removeEventListener("vaultforge-deal-change", refresh);
       window.removeEventListener("vaultforge-pain-change", refresh);
+      window.removeEventListener("vaultforge-profile-change", refresh);
+      window.removeEventListener("vaultforge-network-change", refresh);
     };
   }, []);
 
@@ -503,7 +424,7 @@ export default function NetworkPage() {
         <section style={hero}>
           <div style={eyebrow}>Network</div>
           <h1 style={h1}>State project network.</h1>
-          <p style={sub}>Click a state card to open its Opportunity cards and Pain cards. Nothing shows until you choose a state.</p>
+          <p style={sub}>Click a state card to open its Opportunity cards and Pain cards. Cards show best-fit member matches from profile data.</p>
         </section>
 
         <Section title="Project State Cards">
