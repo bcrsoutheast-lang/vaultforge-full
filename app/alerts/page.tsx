@@ -1,550 +1,361 @@
+"use client";
+
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-import VaultForgeAlertActions from "../components/VaultForgeAlertActions";
+import { useEffect, useMemo, useState } from "react";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+type RoomState = "active" | "saved" | "archived" | "deleted";
+type RoomKind = "deal" | "pain";
 
-type RoomStatus = "active" | "saved" | "archived" | "deleted";
-type AlertRoom = Record<string, any> & {
-  id: string;
-  title: string;
-  summary: string;
-  severity: "critical" | "high" | "medium" | "low";
-  lane: string;
-  state: string;
-  county: string;
-  city: string;
-  score: number;
-  status: RoomStatus;
-  source: string;
-  href: string;
-  created_at: string;
+type Room = {
+  id?: string;
+  roomId?: string;
+  title?: string;
+  name?: string;
+  state?: string;
+  city?: string;
+  county?: string;
+  assetClass?: string;
+  propertyType?: string;
+  routeTo?: string[] | string;
+  routingNeeds?: string[] | string;
+  painTypes?: string[] | string;
+  severity?: string;
+  timePressure?: string;
+  capitalPressure?: string;
+  roomState?: RoomState;
+  cleanupState?: RoomState;
+  stateStatus?: RoomState;
+  alertRead?: boolean;
+  viewedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
 };
 
-const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+type MessageThread = {
+  id: string;
+  lane: "deal" | "pain" | "network" | "general";
+  subject: string;
+  roomId?: string;
+  status: "active" | "archived" | "deleted";
+  unread: boolean;
+  saved: boolean;
+  updatedAt: string;
+  messages: { id: string; body: string; author: string; createdAt: string }[];
+};
 
-function supabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    "";
+const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
+const READ_KEY = "vaultforge_room_alert_read_v1";
+const MESSAGE_KEY = "vaultforge_message_threads_v2";
+const ALERT_SEEN_KEY = "vaultforge_alert_seen_v1";
+const ALERT_DISMISSED_KEY = "vaultforge_alert_dismissed_v1";
+const ALERT_WATCHLIST_KEY = "vaultforge_alert_watchlist_v1";
 
-  if (!url || !key) return null;
-
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+function ok() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
-
-function lower(value: unknown) {
-  return clean(value).toLowerCase();
-}
-
-function pick(row: Record<string, any>, keys: string[], fallback = "") {
-  for (const key of keys) {
-    const value = row?.[key];
-    if (value !== null && value !== undefined && clean(value) !== "") return clean(value);
+function j<T>(raw: string | null, fallback: T): T {
+  try {
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
   }
-  return fallback;
 }
 
-function scoreFrom(row: Record<string, any>) {
-  const raw = Number(
-    row?.urgency_score ??
-      row?.score ??
-      row?.priority_score ??
-      row?.routing_score ??
-      row?.heat_score ??
-      row?.severity_score ??
-      0
-  );
-
-  if (Number.isFinite(raw) && raw > 0) return Math.max(1, Math.min(100, Math.round(raw)));
-
-  const urgency = lower(row?.urgency || row?.priority || row?.severity || row?.status);
-  if (urgency.includes("critical") || urgency.includes("urgent")) return 94;
-  if (urgency.includes("high")) return 82;
-  if (urgency.includes("medium")) return 61;
-  return 38;
+function txt(value: unknown, fallback = "") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
 }
 
-function severityFrom(score: number, row: Record<string, any>): AlertRoom["severity"] {
-  const raw = lower(row?.severity || row?.urgency || row?.priority || row?.alert_level);
-  if (raw.includes("critical") || raw.includes("urgent")) return "critical";
-  if (raw.includes("high")) return "high";
-  if (raw.includes("medium")) return "medium";
-  if (raw.includes("low")) return "low";
-
-  if (score >= 88) return "critical";
-  if (score >= 72) return "high";
-  if (score >= 45) return "medium";
-  return "low";
+function list(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
+  return [];
 }
 
-function laneFrom(row: Record<string, any>) {
-  const raw = lower(
-    row?.lane || row?.category || row?.alert_type || row?.signal_type || row?.type || row?.source_type
-  );
-  const text = lower(JSON.stringify(row || {}));
-
-  if (raw.includes("capital") || text.includes("lender") || text.includes("funding")) return "Capital";
-  if (raw.includes("route") || raw.includes("intro") || text.includes("operator")) return "Routing";
-  if (raw.includes("pain") || raw.includes("pressure") || text.includes("distress")) return "Pressure";
-  if (raw.includes("market") || raw.includes("signal") || raw.includes("intelligence")) return "Market Signal";
-  if (raw.includes("deal") || raw.includes("opportunity") || text.includes("acquisition")) return "Opportunity";
-  return "Urgent";
+function rid(room: Room | null | undefined) {
+  return txt(room?.id || room?.roomId);
 }
 
-function hrefFor(row: Record<string, any>, id: string, lane: string) {
-  const explicit = pick(row, ["href", "url", "room_url", "source_url"], "");
-  if (explicit.startsWith("/")) return explicit;
-
-  const signalId = pick(row, ["signal_id", "routing_signal_id", "alert_signal_id"], "");
-  const dealId = pick(row, ["deal_id", "project_id", "item_id", "opportunity_id"], "");
-  const painId = pick(row, ["pain_id", "pain_request_id", "pressure_id"], "");
-
-  if (signalId) return `/signals/${encodeURIComponent(signalId)}`;
-  if (painId || lane === "Pressure") return `/pain-room/${encodeURIComponent(painId || id)}`;
-  if (dealId || lane === "Opportunity") return `/deal/detail?id=${encodeURIComponent(dealId || id)}`;
-  return `/signals/${encodeURIComponent(id)}`;
+function titleFor(room: Room, kind: RoomKind) {
+  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
 }
 
-function normalizeAlert(row: Record<string, any>, source: string, status: RoomStatus = "active"): AlertRoom {
-  const id = pick(row, ["id", "alert_id", "signal_id", "room_id", "item_id", "deal_id"], `${source}-${Math.random()}`);
-  const score = scoreFrom(row);
-  const lane = laneFrom(row);
-  const title = pick(
-    row,
-    ["title", "alert_title", "signal_title", "name", "headline", "subject", "deal_title"],
-    `${lane} Alert`
-  );
-
-  return {
-    ...row,
-    id,
-    title,
-    summary: pick(
-      row,
-      ["summary", "ai_summary", "description", "notes", "message", "details", "analysis"],
-      "VaultForge detected a room-level signal that may require review, routing, or execution action."
-    ),
-    severity: severityFrom(score, row),
-    lane,
-    state: pick(row, ["state", "market_state", "property_state"], "—"),
-    county: pick(row, ["county", "market_county", "property_county"], "—"),
-    city: pick(row, ["city", "market_city", "property_city"], "—"),
-    score,
-    status,
-    source,
-    href: hrefFor(row, id, lane),
-    created_at: pick(row, ["created_at", "updated_at", "timestamp", "inserted_at"], ""),
-  };
+function loc(room: Room) {
+  return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
 }
 
-async function getUserEmail() {
-  const cookieStore = await cookies();
-  return lower(
-    cookieStore.get("vf_email")?.value ||
-      cookieStore.get("email")?.value ||
-      cookieStore.get("vaultforge_email")?.value ||
-      OWNER_EMAIL
-  );
+function roomState(room: Room): RoomState {
+  return txt(room.roomState || room.cleanupState || room.stateStatus, "active") as RoomState;
 }
 
-async function fetchRoomStates(userEmail: string) {
-  const db = supabase();
-  if (!db) return new Map<string, RoomStatus>();
+function arr<T>(key: string): T[] {
+  if (!ok()) return [];
+  const parsed = j<unknown>(localStorage.getItem(key), []);
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
 
-  const { data } = await db
-    .from("vf_room_states")
-    .select("room_id,room_type,status,user_email")
-    .eq("room_type", "alert")
-    .eq("user_email", userEmail);
+function keysFor(kind: RoomKind) {
+  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
+}
 
-  const map = new Map<string, RoomStatus>();
-  for (const row of data || []) {
-    const id = clean((row as any).room_id);
-    const status = lower((row as any).status) as RoomStatus;
-    if (id && ["active", "saved", "archived", "deleted"].includes(status)) map.set(id, status);
-  }
+function stateMap() {
+  const map: Record<string, RoomState> = {};
+  if (!ok()) return map;
+  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomState>>(localStorage.getItem(key), {})));
   return map;
 }
 
-async function tryTable(table: string, limit = 80) {
-  const db = supabase();
-  if (!db) return [] as Record<string, any>[];
+function allRooms(kind: RoomKind): Room[] {
+  if (!ok()) return [];
+  const out: Room[] = [];
+  const seen = new Set<string>();
 
-  const { data, error } = await db.from(table).select("*").order("created_at", { ascending: false }).limit(limit);
-  if (error || !Array.isArray(data)) return [];
-  return data as Record<string, any>[];
-}
-
-async function loadAlerts(userEmail: string) {
-  const states = await fetchRoomStates(userEmail);
-
-  const directTables = [
-    "vf_alerts",
-    "alerts",
-    "vf_smart_alerts",
-    "vf_member_alerts",
-    "vf_intelligence_alerts",
-  ];
-
-  let rows: AlertRoom[] = [];
-
-  for (const table of directTables) {
-    const data = await tryTable(table, 70);
-    if (data.length) {
-      rows = data.map((row) => {
-        const base = normalizeAlert(row, table);
-        return { ...base, status: states.get(base.id) || base.status };
-      });
-      break;
+  for (const key of keysFor(kind)) {
+    for (const row of arr<Room>(key)) {
+      const id = rid(row);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ ...row, id, roomId: id });
     }
   }
 
-  if (!rows.length) {
-    const signalRows = await tryTable("vf_intelligence_signals", 60);
-    const painRows = await tryTable("vf_pain_signals", 35);
-    const routingRows = await tryTable("vf_routing_actions", 35);
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i) || "";
+    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
+    if (!match) continue;
+    const value = j<any>(localStorage.getItem(key), null);
 
-    rows = [
-      ...signalRows.map((row) => normalizeAlert(row, "vf_intelligence_signals")),
-      ...painRows.map((row) => normalizeAlert({ ...row, lane: "Pressure" }, "vf_pain_signals")),
-      ...routingRows.map((row) => normalizeAlert({ ...row, lane: "Routing" }, "vf_routing_actions")),
-    ].map((alert) => ({ ...alert, status: states.get(alert.id) || alert.status }));
+    if (Array.isArray(value)) {
+      for (const row of value) {
+        const id = rid(row);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push({ ...row, id, roomId: id });
+      }
+    } else if (value && typeof value === "object") {
+      const id = rid(value);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        out.push({ ...value, id, roomId: id });
+      }
+    }
   }
 
-  const seen = new Set<string>();
-  return rows
-    .filter((alert) => {
-      const key = `${alert.id}:${alert.source}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => b.score - a.score);
+  const states = stateMap();
+  return out.map((room) => {
+    const id = rid(room);
+    const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+    return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+  });
 }
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  color: "#fff7df",
-  background:
-    "radial-gradient(circle at top left, rgba(214,44,44,.22), transparent 28%), radial-gradient(circle at top right, rgba(232,196,107,.16), transparent 30%), linear-gradient(180deg,#030406,#07111f 52%,#030406)",
-  padding: "24px 16px 80px",
-  fontFamily:
-    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-};
-
-const shell: React.CSSProperties = {
-  maxWidth: 1180,
-  margin: "0 auto",
-};
-
-const topNav: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "center",
-  marginBottom: 18,
-  flexWrap: "wrap",
-};
-
-const navLinks: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  flexWrap: "wrap",
-};
-
-const navButton: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.25)",
-  color: "#f8e7a7",
-  background: "rgba(255,255,255,.04)",
-  borderRadius: 999,
-  padding: "9px 12px",
-  textDecoration: "none",
-  fontSize: 12,
-  fontWeight: 850,
-};
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.22)",
-  background:
-    "linear-gradient(135deg,rgba(255,255,255,.075),rgba(255,255,255,.025)), radial-gradient(circle at top right,rgba(255,63,63,.16),transparent 32%)",
-  borderRadius: 28,
-  padding: 24,
-  boxShadow: "0 24px 80px rgba(0,0,0,.38)",
-  marginBottom: 18,
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  fontSize: 12,
-  letterSpacing: ".18em",
-  fontWeight: 950,
-  textTransform: "uppercase",
-};
-
-const h1: React.CSSProperties = {
-  fontSize: "clamp(34px, 7vw, 78px)",
-  lineHeight: ".9",
-  letterSpacing: "-.07em",
-  margin: "10px 0 12px",
-};
-
-const ticker: React.CSSProperties = {
-  border: "1px solid rgba(255,92,92,.28)",
-  background: "rgba(255,45,45,.075)",
-  borderRadius: 18,
-  padding: "12px 14px",
-  color: "#ffd4b8",
-  fontWeight: 850,
-  fontSize: 13,
-  letterSpacing: ".03em",
-  marginTop: 16,
-};
-
-const statGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))",
-  gap: 10,
-  margin: "18px 0",
-};
-
-const statCard: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.18)",
-  background: "rgba(0,0,0,.26)",
-  borderRadius: 18,
-  padding: 14,
-};
-
-const tabs: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  flexWrap: "wrap",
-  margin: "16px 0",
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: 20,
-  margin: "22px 0 10px",
-  letterSpacing: "-.03em",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(285px,1fr))",
-  gap: 12,
-};
-
-function severityStyle(severity: AlertRoom["severity"]): React.CSSProperties {
-  if (severity === "critical") return { borderColor: "rgba(255,68,68,.55)", boxShadow: "0 0 0 1px rgba(255,68,68,.12), 0 18px 60px rgba(255,0,0,.12)" };
-  if (severity === "high") return { borderColor: "rgba(255,151,74,.45)" };
-  if (severity === "medium") return { borderColor: "rgba(232,196,107,.35)" };
-  return { borderColor: "rgba(255,255,255,.16)" };
+function getThreads() {
+  if (!ok()) return [] as MessageThread[];
+  return j<MessageThread[]>(localStorage.getItem(MESSAGE_KEY), []).filter((thread) => thread.status === "active");
 }
 
-function AlertCard({ alert, userEmail }: { alert: AlertRoom; userEmail: string }) {
+function readMap() {
+  return ok() ? j<Record<string, string>>(localStorage.getItem(READ_KEY), {}) : {};
+}
+
+function unreadRooms(kind: RoomKind, rooms: Room[]) {
+  const reads = readMap();
+  return rooms.filter((room) => {
+    const id = rid(room);
+    if (roomState(room) !== "active") return false;
+    return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
+  });
+}
+
+function idList(key: string) {
+  if (!ok()) return [] as string[];
+  return j<string[]>(localStorage.getItem(key), []);
+}
+
+function setIdList(key: string, ids: string[]) {
+  if (!ok()) return;
+  localStorage.setItem(key, JSON.stringify(Array.from(new Set(ids))));
+  window.dispatchEvent(new Event("vaultforge-alerts-change"));
+}
+
+function alertId(kind: string, id: string) {
+  return `${kind}:${id}`;
+}
+
+function addId(key: string, id: string) {
+  setIdList(key, [...idList(key), id]);
+}
+
+function removeId(key: string, id: string) {
+  setIdList(key, idList(key).filter((item) => item !== id));
+}
+
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
+const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
+const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
+const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+
+function Nav() {
   return (
-    <article
-      style={{
-        border: "1px solid rgba(232,196,107,.2)",
-        background:
-          "linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.025)), rgba(0,0,0,.34)",
-        borderRadius: 22,
-        padding: 16,
-        ...severityStyle(alert.severity),
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-        <span
-          style={{
-            border: "1px solid rgba(232,196,107,.24)",
-            borderRadius: 999,
-            padding: "6px 9px",
-            fontSize: 11,
-            fontWeight: 950,
-            color: "#f4d986",
-            textTransform: "uppercase",
-          }}
-        >
-          {alert.lane}
-        </span>
-        <span
-          style={{
-            color: alert.severity === "critical" ? "#ffb0b0" : "#f5d889",
-            fontWeight: 950,
-            fontSize: 12,
-            textTransform: "uppercase",
-          }}
-        >
-          {alert.severity} · {alert.score}
-        </span>
-      </div>
-
-      <h2 style={{ margin: "0 0 8px", fontSize: 21, letterSpacing: "-.04em" }}>{alert.title}</h2>
-      <p style={{ color: "rgba(255,247,223,.72)", margin: "0 0 13px", lineHeight: 1.45, fontSize: 14 }}>
-        {alert.summary}
-      </p>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3,1fr)",
-          gap: 8,
-          marginBottom: 14,
-        }}
-      >
-        <Mini label="State" value={alert.state} />
-        <Mini label="County" value={alert.county} />
-        <Mini label="City" value={alert.city} />
-      </div>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <Link href={alert.href} style={navButton}>
-          Open Room
-        </Link>
-        <Link href={`/messages/new?room_type=alert&room_id=${encodeURIComponent(alert.id)}&title=${encodeURIComponent(alert.title)}`} style={navButton}>
-          Message
-        </Link>
-      </div>
-
-      <VaultForgeAlertActions
-        roomId={alert.id}
-        roomType="alert"
-        sourceRoute="/alerts"
-        initialStatus={alert.status}
-        userEmail={userEmail}
-        compact
-      />
-    </article>
+    <nav style={nav}>
+      <div style={brand}>VAULTFORGE</div>
+      <Link href="/command" style={btn}>Command</Link>
+      <Link href="/alerts" style={goldBtn}>Alerts</Link>
+      <Link href="/members" style={btn}>Members</Link>
+      <Link href="/network" style={btn}>Network</Link>
+      <Link href="/messages" style={btn}>Messages</Link>
+      <Link href="/profile" style={btn}>Profile</Link>
+      <Link href="/logout" style={redBtn}>Logout</Link>
+    </nav>
   );
 }
 
-function Mini({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ border: "1px solid rgba(255,255,255,.1)", borderRadius: 14, padding: 9, background: "rgba(0,0,0,.2)" }}>
-      <div style={{ color: "rgba(255,247,223,.48)", fontSize: 10, textTransform: "uppercase", fontWeight: 900 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 850 }}>{value || "—"}</div>
-    </div>
-  );
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
-function FolderLink({ href, label, active }: { href: string; label: string; active?: boolean }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        ...navButton,
-        background: active ? "rgba(232,196,107,.16)" : "rgba(255,255,255,.04)",
-        borderColor: active ? "rgba(232,196,107,.5)" : "rgba(232,196,107,.22)",
-      }}
-    >
-      {label}
-    </Link>
-  );
-}
+type AlertItem = {
+  id: string;
+  kind: "deal" | "pain" | "message";
+  title: string;
+  subtitle: string;
+  href: string;
+};
 
-export default async function AlertsPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
-  const params = searchParams ? await searchParams : {};
-  const folderRaw = lower(Array.isArray(params?.folder) ? params?.folder[0] : params?.folder || "active");
-  const folder: RoomStatus = ["active", "saved", "archived", "deleted"].includes(folderRaw)
-    ? (folderRaw as RoomStatus)
-    : "active";
+export default function AlertsPage() {
+  const [tick, setTick] = useState(0);
+  const [openLane, setOpenLane] = useState<"active" | "watchlist" | "history">("active");
 
-  const userEmail = await getUserEmail();
-  const alerts = await loadAlerts(userEmail);
-  const visible = alerts.filter((alert) => alert.status === folder);
+  useEffect(() => {
+    const refresh = () => setTick((x) => x + 1);
+    ["storage", "vaultforge-room-read-change", "vaultforge-room-state-change", "vaultforge-messages-change", "vaultforge-alerts-change"].forEach((event) => window.addEventListener(event, refresh));
+    return () => ["storage", "vaultforge-room-read-change", "vaultforge-room-state-change", "vaultforge-messages-change", "vaultforge-alerts-change"].forEach((event) => window.removeEventListener(event, refresh));
+  }, []);
 
-  const counts = {
-    active: alerts.filter((a) => a.status === "active").length,
-    saved: alerts.filter((a) => a.status === "saved").length,
-    archived: alerts.filter((a) => a.status === "archived").length,
-    deleted: alerts.filter((a) => a.status === "deleted").length,
-    critical: alerts.filter((a) => a.status === "active" && a.severity === "critical").length,
-    high: alerts.filter((a) => a.status === "active" && a.severity === "high").length,
-  };
+  const seen = useMemo(() => idList(ALERT_SEEN_KEY), [tick]);
+  const dismissed = useMemo(() => idList(ALERT_DISMISSED_KEY), [tick]);
+  const watchlist = useMemo(() => idList(ALERT_WATCHLIST_KEY), [tick]);
+
+  const dealAlerts: AlertItem[] = useMemo(() => unreadRooms("deal", allRooms("deal")).map((room) => ({
+    id: alertId("deal", rid(room)),
+    kind: "deal",
+    title: titleFor(room, "deal"),
+    subtitle: loc(room),
+    href: `/deal-rooms/${encodeURIComponent(rid(room))}`,
+  })), [tick]);
+
+  const painAlerts: AlertItem[] = useMemo(() => unreadRooms("pain", allRooms("pain")).map((room) => ({
+    id: alertId("pain", rid(room)),
+    kind: "pain",
+    title: titleFor(room, "pain"),
+    subtitle: loc(room),
+    href: `/pain-rooms/${encodeURIComponent(rid(room))}`,
+  })), [tick]);
+
+  const messageAlerts: AlertItem[] = useMemo(() => getThreads().filter((thread) => thread.unread).map((thread) => ({
+    id: alertId("message", thread.id),
+    kind: "message",
+    title: thread.subject,
+    subtitle: `${thread.lane} • ${thread.messages.length} message(s)`,
+    href: "/messages",
+  })), [tick]);
+
+  const allAlerts = [...dealAlerts, ...painAlerts, ...messageAlerts];
+  const activeAlerts = allAlerts.filter((alert) => !seen.includes(alert.id) && !dismissed.includes(alert.id));
+  const watchedAlerts = allAlerts.filter((alert) => watchlist.includes(alert.id));
+  const historyAlerts = allAlerts.filter((alert) => seen.includes(alert.id) || dismissed.includes(alert.id));
+
+  const visible = openLane === "active" ? activeAlerts : openLane === "watchlist" ? watchedAlerts : historyAlerts;
+
+  function markSeen(id: string) {
+    addId(ALERT_SEEN_KEY, id);
+    setTick((x) => x + 1);
+  }
+
+  function dismiss(id: string) {
+    addId(ALERT_DISMISSED_KEY, id);
+    setTick((x) => x + 1);
+  }
+
+  function toggleWatch(id: string) {
+    if (watchlist.includes(id)) removeId(ALERT_WATCHLIST_KEY, id);
+    else addId(ALERT_WATCHLIST_KEY, id);
+    setTick((x) => x + 1);
+  }
 
   return (
     <main style={page}>
-      <div style={shell}>
-        <nav style={topNav}>
-          <div style={{ fontWeight: 950, letterSpacing: ".08em", color: "#e8c46b" }}>VAULTFORGE</div>
-          <div style={navLinks}>
-            <Link href="/dashboard" style={navButton}>Dashboard</Link>
-            <Link href="/projects" style={navButton}>Opportunities</Link>
-            <Link href="/pressure-rooms" style={navButton}>Pressure</Link>
-            <Link href="/routing-inbox" style={navButton}>Routing</Link>
-            <Link href="/intelligence" style={navButton}>Intelligence</Link>
-          </div>
-        </nav>
+      <div style={wrap}>
+        <Nav />
 
         <section style={hero}>
-          <div style={eyebrow}>Live Alert Command Lane</div>
-          <h1 style={h1}>Alerts Terminal</h1>
-          <p style={{ maxWidth: 820, color: "rgba(255,247,223,.74)", fontSize: 16, lineHeight: 1.55, margin: 0 }}>
-            Active market pressure, opportunity movement, capital needs, routing triggers, and execution alerts now live inside the same VaultForge room-state engine.
-          </p>
-          <div style={ticker}>
-            URGENCY TICKER · {counts.critical} CRITICAL · {counts.high} HIGH · {counts.active} ACTIVE ALERTS · ROOM CLEANUP ENGINE ONLINE
+          <div style={eyebrow}>Alerts</div>
+          <h1 style={h1}>Action alerts.</h1>
+          <p style={sub}>New Deal, Pain, and Message alerts live here. Mark seen, dismiss, or save to Watchlist.</p>
+        </section>
+
+        <Section title="Alert Cards">
+          <div style={grid}>
+            <button type="button" style={openLane === "active" || activeAlerts.length ? activePanel : panel} onClick={() => setOpenLane("active")}>
+              <div style={eyebrow}>Active Alerts</div>
+              <h2 style={h2}>{activeAlerts.length}</h2>
+              <p style={muted}>deal, pain, message</p>
+            </button>
+
+            <button type="button" style={openLane === "watchlist" || watchedAlerts.length ? activePanel : panel} onClick={() => setOpenLane("watchlist")}>
+              <div style={eyebrow}>Watchlist</div>
+              <h2 style={h2}>{watchedAlerts.length}</h2>
+              <p style={muted}>saved alert(s)</p>
+            </button>
+
+            <button type="button" style={openLane === "history" ? activePanel : panel} onClick={() => setOpenLane("history")}>
+              <div style={eyebrow}>History</div>
+              <h2 style={h2}>{historyAlerts.length}</h2>
+              <p style={muted}>seen or dismissed</p>
+            </button>
           </div>
-        </section>
+        </Section>
 
-        <section style={statGrid}>
-          <Stat label="Active" value={counts.active} />
-          <Stat label="Saved" value={counts.saved} />
-          <Stat label="Archived" value={counts.archived} />
-          <Stat label="Hidden" value={counts.deleted} />
-        </section>
-
-        <div style={tabs}>
-          <FolderLink href="/alerts?folder=active" label={`Active ${counts.active}`} active={folder === "active"} />
-          <FolderLink href="/alerts?folder=saved" label={`Saved ${counts.saved}`} active={folder === "saved"} />
-          <FolderLink href="/alerts?folder=archived" label={`Archived ${counts.archived}`} active={folder === "archived"} />
-          <FolderLink href="/alerts?folder=deleted" label={`Hidden ${counts.deleted}`} active={folder === "deleted"} />
-        </div>
-
-        <h2 style={sectionTitle}>
-          {folder === "active" ? "Active Alerts" : folder === "saved" ? "Saved Alerts" : folder === "archived" ? "Archived Alerts" : "Hidden Alerts"}
-        </h2>
-
-        {visible.length ? (
-          <section style={grid}>
-            {visible.map((alert) => (
-              <AlertCard key={`${alert.source}-${alert.id}`} alert={alert} userEmail={userEmail} />
-            ))}
-          </section>
-        ) : (
-          <section
-            style={{
-              border: "1px dashed rgba(232,196,107,.25)",
-              background: "rgba(0,0,0,.22)",
-              borderRadius: 22,
-              padding: 24,
-              color: "rgba(255,247,223,.7)",
-            }}
-          >
-            No {folder} alerts found. If this is the first deploy, create or generate a signal/pain/routing item and refresh this terminal.
-          </section>
-        )}
+        <Section title={openLane === "active" ? "Active Alerts" : openLane === "watchlist" ? "Watchlist" : "Alert History"}>
+          {visible.length ? (
+            <div style={grid}>
+              {visible.map((alert) => (
+                <div key={alert.id} style={activeAlerts.some((item) => item.id === alert.id) ? activePanel : panel}>
+                  <div style={eyebrow}>{alert.kind}</div>
+                  <h2 style={h2}>{alert.title}</h2>
+                  <p style={sub}>{alert.subtitle}</p>
+                  <div style={{ ...row, marginTop: 16 }}>
+                    <Link href={alert.href} style={goldBtn} onClick={() => markSeen(alert.id)}>Open</Link>
+                    <button type="button" style={btn} onClick={() => markSeen(alert.id)}>Mark Seen</button>
+                    <button type="button" style={watchlist.includes(alert.id) ? goldBtn : btn} onClick={() => toggleWatch(alert.id)}>{watchlist.includes(alert.id) ? "Saved" : "Save Watch"}</button>
+                    <button type="button" style={redBtn} onClick={() => dismiss(alert.id)}>Dismiss</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={sub}>No alerts in this lane.</p>
+          )}
+        </Section>
       </div>
     </main>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div style={statCard}>
-      <div style={{ color: "rgba(255,247,223,.52)", fontSize: 11, fontWeight: 900, textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 34, fontWeight: 950, letterSpacing: "-.05em" }}>{value}</div>
-    </div>
   );
 }
