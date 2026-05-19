@@ -475,9 +475,11 @@ function MatchCard({ match }: { match: { member: MemberProfile; score: number; r
   </div>;
 }
 
+
 export default function PainRoomPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id || "");
   const [room, setRoom] = useState<Room | null>(null);
+  const [openPanel, setOpenPanel] = useState<"summary" | "problem" | "pressure" | "matches" | "messages" | "notes">("summary");
 
   useEffect(() => {
     const found = getRoom("pain", id);
@@ -508,72 +510,43 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
       <h1 style={h1}>{titleFor(room, "pain")}</h1>
       <p style={sub}>{loc(room)}</p>
       <p style={muted}>{list(room.painTypes).join(", ") || "Problem not classified"} • Needs {list(room.routingNeeds).join(", ") || "solver"}</p>
-      <div style={{ ...row, marginTop: 18 }}>
-        <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Pain Room: " + titleFor(room, "pain"))}`} style={goldBtn}>Message Room</Link>
-        <Link href="/network" style={btn}>Find Solvers</Link>
-      </div>
     </section>
 
-    <Section title="Action Controls">
-      <p style={sub}>Current state: {roomState(room)}. Every action changes Command visibility and folder placement.</p>
-      <div style={{ ...row, marginTop: 18 }}>
+    <Section title="Room Controls">
+      <div style={grid}>
+        <button type="button" style={openPanel === "summary" ? pulsePanel : panel} onClick={() => setOpenPanel("summary")}><div style={eyebrow}>Severity</div><h2 style={h2}>{intelligence.severityScore}%</h2><p style={muted}>{intelligence.banner}</p></button>
+        <button type="button" style={openPanel === "problem" ? pulsePanel : panel} onClick={() => setOpenPanel("problem")}><div style={eyebrow}>Problem</div><h2 style={h2}>{list(room.painTypes).length}</h2><p style={muted}>pain type(s)</p></button>
+        <button type="button" style={openPanel === "pressure" ? pulsePanel : panel} onClick={() => setOpenPanel("pressure")}><div style={eyebrow}>Pressure</div><h2 style={h2}>{intelligence.executionBlockScore}%</h2><p style={muted}>blocker score</p></button>
+        <button type="button" style={openPanel === "matches" ? pulsePanel : panel} onClick={() => setOpenPanel("matches")}><div style={eyebrow}>Solvers</div><h2 style={h2}>{matches.length}</h2><p style={muted}>member fits</p></button>
+        <button type="button" style={openPanel === "messages" ? pulsePanel : panel} onClick={() => setOpenPanel("messages")}><div style={eyebrow}>Messages</div><h2 style={h2}>Open</h2><p style={muted}>room thread</p></button>
+        <button type="button" style={openPanel === "notes" ? pulsePanel : panel} onClick={() => setOpenPanel("notes")}><div style={eyebrow}>Notes</div><h2 style={h2}>{txt(room.notes) ? "1" : "0"}</h2><p style={muted}>room notes</p></button>
+      </div>
+    </Section>
+
+    <Section title="Actions">
+      <div style={{ ...row }}>
         <button type="button" style={goldBtn} onClick={() => move("saved")}>Save</button>
         <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
         <button type="button" style={redBtn} onClick={() => move("deleted")}>Delete</button>
+        <Link href="/pain-rooms" style={btn}>Back</Link>
       </div>
     </Section>
 
-    <Section title="Pain Intelligence Snapshot">
-      <div style={grid}>
-        <Meter label="Distress Severity" value={intelligence.severityScore} />
-        <Meter label="Capital Need" value={intelligence.capitalNeedScore} />
-        <Meter label="Execution Blockers" value={intelligence.executionBlockScore} />
-        <Value label="Signal" value={intelligence.banner} />
-      </div>
-    </Section>
+    {openPanel === "summary" ? <Section title="Pain Intelligence Snapshot"><div style={grid}><Meter label="Distress Severity" value={intelligence.severityScore} /><Meter label="Capital Need" value={intelligence.capitalNeedScore} /><Meter label="Execution Blockers" value={intelligence.executionBlockScore} /><Value label="Signal" value={intelligence.banner} /></div></Section> : null}
 
-    <Section title="Problem Facts">
-      <div style={grid}>
-        <Value label="Pain Type" value={list(room.painTypes).join(", ")} />
-        <Value label="Severity" value={room.severity} />
-        <Value label="Time Pressure" value={room.timePressure} />
-        <Value label="Capital Pressure" value={room.capitalPressure} />
-        <Value label="Control Status" value={room.controlStatus} />
-        <Value label="Needs" value={list(room.routingNeeds).join(", ")} />
-      </div>
-    </Section>
+    {openPanel === "problem" ? <Section title="Problem Facts"><div style={grid}><Value label="Pain Type" value={list(room.painTypes).join(", ")} /><Value label="Severity" value={room.severity} /><Value label="Time Pressure" value={room.timePressure} /><Value label="Capital Pressure" value={room.capitalPressure} /><Value label="Control Status" value={room.controlStatus} /><Value label="Needs" value={list(room.routingNeeds).join(", ")} /></div></Section> : null}
 
-    <Section title="Blockers + Risk">
-      <div style={grid}>
-        <Value label="Blockers" value={list(room.blockers).join(", ")} />
-        <Value label="Risk Types" value={list(room.riskTypes).join(", ")} />
-        <Value label="Root Cause" value={room.rootCause} />
-        <Value label="If Nothing Happens" value={intelligence.consequence} />
-      </div>
-    </Section>
+    {openPanel === "pressure" ? <>
+      <Section title="Blockers + Risk"><div style={grid}><Value label="Blockers" value={list(room.blockers).join(", ")} /><Value label="Risk Types" value={list(room.riskTypes).join(", ")} /><Value label="Root Cause" value={room.rootCause} /><Value label="If Nothing Happens" value={intelligence.consequence} /></div></Section>
+      <Section title="Numbers + Pressure"><div style={grid}><Value label="Ask Price" value={room.askingPrice} /><Value label="Value / ARV" value={room.propertyValue} /><Value label="Repairs / Work" value={room.repairs} /><Value label="Monthly Burn" value={room.monthlyBurnRate} /><Value label="Money Needed Now" value={room.moneyNeededNow} /><Value label="Deadline" value={room.deadline} /></div></Section>
+      <Section title="AI Best Next Move"><p style={sub}>{intelligence.nextMove}</p></Section>
+    </> : null}
 
-    <Section title="Numbers + Pressure">
-      <div style={grid}>
-        <Value label="Ask Price" value={room.askingPrice} />
-        <Value label="Value / ARV" value={room.propertyValue} />
-        <Value label="Repairs / Work" value={room.repairs} />
-        <Value label="Monthly Burn" value={room.monthlyBurnRate} />
-        <Value label="Money Needed Now" value={room.moneyNeededNow} />
-        <Value label="Deadline" value={room.deadline} />
-      </div>
-    </Section>
+    {openPanel === "matches" ? <Section title="Best Solver Matches">{matches.length ? <div style={grid}>{matches.map((match) => <MatchCard key={profileId(match.member)} match={match} />)}</div> : <p style={sub}>No member profiles available yet.</p>}</Section> : null}
 
-    <Section title="AI Best Next Move">
-      <p style={sub}>{intelligence.nextMove}</p>
-    </Section>
+    {openPanel === "messages" ? <Section title="Room Messages"><p style={sub}>Open the thread for this pain room.</p><div style={{ ...row, marginTop: 18 }}><Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Pain Room: " + titleFor(room, "pain"))}`} style={goldBtn}>Open Message Thread</Link></div></Section> : null}
 
-    <Section title="Best Solver Matches">
-      {matches.length ? <div style={grid}>{matches.map((match) => <MatchCard key={profileId(match.member)} match={match} />)}</div> : <p style={sub}>No member profiles available yet. Build profiles to activate solver matching.</p>}
-    </Section>
-
-    <Section title="Room Notes">
-      <p style={sub}>{txt(room.notes, "No notes added.")}</p>
-    </Section>
+    {openPanel === "notes" ? <Section title="Room Notes"><p style={sub}>{txt(room.notes, "No notes added.")}</p></Section> : null}
 
   </div></main>;
 }
