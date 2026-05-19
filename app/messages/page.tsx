@@ -3,751 +3,590 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type RoomType = "deal" | "pain";
-type ViewMode = "home" | "deal" | "pain" | "thread";
-type ThreadState = "active" | "saved" | "archived" | "deleted";
-type FilterState = ThreadState | "all";
+type RoomState = "active" | "saved" | "archived" | "deleted";
+type RoomKind = "deal" | "pain";
 
-type SavedProfile = {
-  profilePhoto?: string;
-  fullName?: string;
-  company?: string;
-  email?: string;
-  phone?: string;
-  preferredContact?: string[];
-};
-
-type RoomRecord = {
+type Room = {
   id?: string;
   roomId?: string;
-  dealId?: string;
-  painId?: string;
   title?: string;
   name?: string;
-  contactName?: string;
-  contactPhone?: string;
-  contactEmail?: string;
-  bestContact?: string;
-  ownerName?: string;
-  ownerPhone?: string;
-  ownerEmail?: string;
-  sellerName?: string;
-  sellerPhone?: string;
-  sellerEmail?: string;
-  assetClass?: string;
+  state?: string;
   city?: string;
   county?: string;
-  state?: string;
+  assetClass?: string;
+  propertyType?: string;
+  askingPrice?: string;
+  propertyValue?: string;
+  repairs?: string;
+  routeTo?: string[] | string;
+  routingNeeds?: string[] | string;
+  painTypes?: string[] | string;
+  strategy?: string[] | string;
+  severity?: string;
+  timePressure?: string;
+  capitalPressure?: string;
+  roomState?: RoomState;
+  cleanupState?: RoomState;
+  stateStatus?: RoomState;
+  alertRead?: boolean;
+  viewedAt?: string;
+  coverPhoto?: string;
+  photoUrl?: string;
+  imageUrl?: string;
+  photos?: string[];
+  photoUrls?: string[];
+  createdAt?: string;
+  updatedAt?: string;
   [key: string]: unknown;
 };
 
-type MessageRow = {
+type MemberProfile = {
+  id?: string;
+  name?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  profilePhoto?: string;
+  memberType?: string;
+  basedState?: string;
+  basedCity?: string;
+  basedCounty?: string;
+  statesOperated?: string[];
+  markets?: string[];
+  assetClasses?: string[];
+  strategies?: string[];
+  specialties?: string[];
+  needs?: string[];
+  canProvide?: string[];
+  capitalPosition?: string;
+  proofOfFunds?: string;
+  fundingRange?: string;
+  contactPreference?: string;
+  directContact?: string;
+  bio?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
+type MessageThread = {
   id: string;
-  threadKey: string;
-  roomType: RoomType;
-  roomId: string;
+  lane: "deal" | "pain" | "network" | "general";
   subject: string;
-  fromName: string;
-  fromContact: string;
-  fromRole: "profile" | "owner";
-  toName: string;
-  toContact: string;
-  toRole: "profile" | "owner";
-  body: string;
+  roomId?: string;
+  roomType?: string;
+  to?: string;
+  from?: string;
+  status: "active" | "archived" | "deleted";
+  unread: boolean;
+  saved: boolean;
   createdAt: string;
-  read: boolean;
+  updatedAt: string;
+  messages: {
+    id: string;
+    body: string;
+    author: string;
+    createdAt: string;
+  }[];
 };
 
-type RoomMessageCard = {
-  threadKey: string;
-  roomType: RoomType;
-  roomId: string;
-  roomTitle: string;
-  subject: string;
-  location: string;
-  ownerName: string;
-  ownerContact: string;
-  senderName: string;
-  senderContact: string;
-  count: number;
-  unread: number;
-  lastMessage: string;
-  lastAt: string;
-  state: ThreadState;
-};
-
-const PROFILE_KEY = "vaultforge_profile_v2";
-const THREAD_STATE_KEY = "vaultforge_message_thread_states_v3";
+const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
+const READ_KEY = "vaultforge_room_alert_read_v1";
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
+const MESSAGE_KEY = "vaultforge_message_threads_v2";
 
-function makeThreadKey(type: RoomType, id: string) {
-  return `${type}:${id}`;
+function ok() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function messagesKey(key: string) {
-  return `vaultforge_room_messages_${key}`;
-}
-
-function parseJson<T>(raw: string | null, fallback: T): T {
+function j<T>(raw: string | null, fallback: T): T {
   try {
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
   }
 }
 
-function text(value: unknown, fallback = "") {
-  if (value === undefined || value === null) return fallback;
-  const cleaned = String(value).trim();
-  return cleaned || fallback;
+function txt(value: unknown, fallback = "") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
 }
 
-function roomId(room: RoomRecord | null | undefined) {
-  if (!room) return "";
-  return text(room.id || room.roomId || room.dealId || room.painId, "");
+function list(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
+  return [];
 }
 
-function first(room: RoomRecord | null, keys: string[], fallback = "") {
-  if (!room) return fallback;
-  for (const key of keys) {
-    const got = text(room[key], "");
-    if (got) return got;
-  }
-  return fallback;
+function rid(room: Room | null | undefined) {
+  return txt(room?.id || room?.roomId);
 }
 
-function readArray(key: string): RoomRecord[] {
-  if (typeof window === "undefined") return [];
-  const parsed = parseJson<unknown>(window.localStorage.getItem(key), []);
-  return Array.isArray(parsed) ? (parsed as RoomRecord[]) : [];
+function titleFor(room: Room, kind: RoomKind) {
+  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
 }
 
-function uniqueRooms(type: RoomType): RoomRecord[] {
-  if (typeof window === "undefined") return [];
+function loc(room: Room) {
+  return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
+}
 
-  const keys = type === "deal" ? DEAL_KEYS : PAIN_KEYS;
-  const map = new Map<string, RoomRecord>();
+function roomState(room: Room): RoomState {
+  return txt(room.roomState || room.cleanupState || room.stateStatus, "active") as RoomState;
+}
 
-  for (const key of keys) {
-    for (const room of readArray(key)) {
-      const id = roomId(room);
-      if (id && !map.has(id)) map.set(id, { ...room, id });
+function arr<T>(key: string): T[] {
+  if (!ok()) return [];
+  const parsed = j<unknown>(localStorage.getItem(key), []);
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
+
+function keysFor(kind: RoomKind) {
+  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
+}
+
+function stateMap() {
+  const map: Record<string, RoomState> = {};
+  if (!ok()) return map;
+  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomState>>(localStorage.getItem(key), {})));
+  return map;
+}
+
+function allRooms(kind: RoomKind): Room[] {
+  if (!ok()) return [];
+  const out: Room[] = [];
+  const seen = new Set<string>();
+
+  for (const key of keysFor(kind)) {
+    for (const row of arr<Room>(key)) {
+      const id = rid(row);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ ...row, id, roomId: id });
     }
   }
 
-  for (let i = 0; i < window.localStorage.length; i += 1) {
-    const key = window.localStorage.key(i) || "";
-    const isDealDirect = type === "deal" && (key.startsWith("vaultforge_clean_deal_room_") || key.startsWith("vaultforge_deal_room_"));
-    const isPainDirect = type === "pain" && (key.startsWith("vaultforge_clean_pain_room_") || key.startsWith("vaultforge_pain_room_"));
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i) || "";
+    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
+    if (!match) continue;
 
-    if (!isDealDirect && !isPainDirect) continue;
-
-    const room = parseJson<RoomRecord | null>(window.localStorage.getItem(key), null);
-    const id = roomId(room);
-    if (room && id && !map.has(id)) map.set(id, { ...room, id });
+    const value = j<any>(localStorage.getItem(key), null);
+    if (Array.isArray(value)) {
+      for (const row of value) {
+        const id = rid(row);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push({ ...row, id, roomId: id });
+      }
+    } else if (value && typeof value === "object") {
+      const id = rid(value);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        out.push({ ...value, id, roomId: id });
+      }
+    }
   }
 
-  return Array.from(map.values());
+  const states = stateMap();
+  return out
+    .map((room) => {
+      const id = rid(room);
+      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+    })
+    .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
 }
 
-function readProfile(): SavedProfile | null {
-  if (typeof window === "undefined") return null;
-  return parseJson<SavedProfile | null>(window.localStorage.getItem(PROFILE_KEY), null);
+function readMap() {
+  return ok() ? j<Record<string, string>>(localStorage.getItem(READ_KEY), {}) : {};
 }
 
-function profileName(profile: SavedProfile | null) {
-  return text(profile?.fullName, "") || text(profile?.company, "") || "Saved Profile";
-}
-
-function profileContact(profile: SavedProfile | null) {
-  const methods = Array.isArray(profile?.preferredContact) ? profile.preferredContact.join(", ") : "";
-  const phone = text(profile?.phone, "");
-  const email = text(profile?.email, "");
-  const base = [phone, email].filter(Boolean).join(" / ");
-  return methods ? `${base || "No phone/email"} • Prefers ${methods}` : base || "No profile contact saved";
-}
-
-function ownerName(room: RoomRecord | null) {
-  return first(room, ["contactName", "ownerName", "sellerName"], "Room Owner");
-}
-
-function ownerContact(room: RoomRecord | null) {
-  const phone = first(room, ["contactPhone", "ownerPhone", "sellerPhone"], "");
-  const email = first(room, ["contactEmail", "ownerEmail", "sellerEmail"], "");
-  const best = first(room, ["bestContact"], "");
-  const base = [phone, email].filter(Boolean).join(" / ");
-  return best ? `${base || "No phone/email"} • Best: ${best}` : base || "No owner contact saved";
-}
-
-function roomTitle(type: RoomType, room: RoomRecord) {
-  return first(room, ["title", "name"], type === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
-}
-
-function roomSubject(type: RoomType, room: RoomRecord) {
-  return `${type === "deal" ? "Deal Room" : "Pain Room"}: ${roomTitle(type, room)}`;
-}
-
-function location(room: RoomRecord) {
-  return [first(room, ["city"], ""), first(room, ["county"], ""), first(room, ["state"], "")]
-    .filter(Boolean)
-    .join(", ");
-}
-
-function readMessages(key: string): MessageRow[] {
-  if (typeof window === "undefined") return [];
-  const parsed = parseJson<unknown>(window.localStorage.getItem(messagesKey(key)), []);
-  return Array.isArray(parsed) ? (parsed as MessageRow[]) : [];
-}
-
-function writeMessages(key: string, rows: MessageRow[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(messagesKey(key), JSON.stringify(rows));
-}
-
-function readStates(): Record<string, ThreadState> {
-  if (typeof window === "undefined") return {};
-  return parseJson<Record<string, ThreadState>>(window.localStorage.getItem(THREAD_STATE_KEY), {});
-}
-
-function writeStates(states: Record<string, ThreadState>) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(THREAD_STATE_KEY, JSON.stringify(states));
-}
-
-function buildCards(profile: SavedProfile | null): RoomMessageCard[] {
-  const states = readStates();
-  const rows: RoomMessageCard[] = [];
-
-  const build = (type: RoomType, room: RoomRecord) => {
-    const id = roomId(room);
-    if (!id) return;
-
-    const key = makeThreadKey(type, id);
-    const messages = readMessages(key);
-    const latest = messages[0];
-
-    rows.push({
-      threadKey: key,
-      roomType: type,
-      roomId: id,
-      roomTitle: roomTitle(type, room),
-      subject: roomSubject(type, room),
-      location: location(room),
-      ownerName: ownerName(room),
-      ownerContact: ownerContact(room),
-      senderName: profileName(profile),
-      senderContact: profileContact(profile),
-      count: messages.length,
-      unread: messages.filter((message) => !message.read).length,
-      lastMessage: latest?.body || "No messages yet.",
-      lastAt: latest?.createdAt || "",
-      state: states[key] || "active",
-    });
-  };
-
-  uniqueRooms("deal").forEach((room) => build("deal", room));
-  uniqueRooms("pain").forEach((room) => build("pain", room));
-
-  return rows.sort((a, b) => {
-    const aTime = a.lastAt || "0";
-    const bTime = b.lastAt || "0";
-    return bTime.localeCompare(aTime);
+function unreadRooms(kind: RoomKind, rooms: Room[]) {
+  const reads = readMap();
+  return rooms.filter((room) => {
+    const id = rid(room);
+    if (roomState(room) !== "active") return false;
+    return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
   });
 }
 
-function readSearchParams(): { view: ViewMode; type: "" | RoomType; roomId: string } {
-  if (typeof window === "undefined") return { view: "home", type: "", roomId: "" };
-
-  const params = new URLSearchParams(window.location.search);
-  const rawBox = params.get("box") || "";
-  const rawType = params.get("type") || "";
-  const roomIdValue = params.get("room") || "";
-
-  if (rawType === "deal" && roomIdValue) return { view: "thread", type: "deal", roomId: roomIdValue };
-  if (rawType === "pain" && roomIdValue) return { view: "thread", type: "pain", roomId: roomIdValue };
-  if (rawBox === "deal") return { view: "deal", type: "deal", roomId: "" };
-  if (rawBox === "pain") return { view: "pain", type: "pain", roomId: "" };
-
-  return { view: "home", type: "", roomId: "" };
+function firstPhoto(room: Room) {
+  const possible = [
+    txt(room.coverPhoto),
+    txt(room.photoUrl),
+    txt(room.imageUrl),
+    ...list(room.photoUrls),
+    ...list(room.photos),
+  ].filter(Boolean);
+  return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
 }
 
-function niceDate(value: string) {
-  if (!value) return "No messages yet";
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
+function profileId(profile: MemberProfile) {
+  return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
+}
+
+function normalizeProfile(profile: MemberProfile): MemberProfile {
+  return {
+    ...profile,
+    id: profileId(profile),
+    name: txt(profile.name, "VaultForge Member"),
+    basedState: txt(profile.basedState, "GA"),
+    statesOperated: list(profile.statesOperated).length ? list(profile.statesOperated) : ["GA"],
+    markets: list(profile.markets),
+    assetClasses: list(profile.assetClasses),
+    strategies: list(profile.strategies),
+    specialties: list(profile.specialties),
+    needs: list(profile.needs),
+    canProvide: list(profile.canProvide),
+  };
+}
+
+function getProfile(): MemberProfile {
+  if (!ok()) return {};
+  for (const key of PROFILE_KEYS) {
+    const found = j<MemberProfile | null>(localStorage.getItem(key), null);
+    if (found && typeof found === "object") return normalizeProfile(found);
   }
+  return normalizeProfile({ id: "local_member", name: "VaultForge Member", basedState: "GA", statesOperated: ["GA"], memberType: "Investor" });
 }
 
-function roomHref(type: RoomType, id: string) {
-  return type === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`;
+function getDirectory(): MemberProfile[] {
+  if (!ok()) return [];
+  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
+  const current = getProfile();
+  const currentId = profileId(current);
+  const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
+  const seen = new Set<string>();
+
+  return merged.map(normalizeProfile).filter((member) => {
+    const id = profileId(member);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
-function messagesBoxHref(type: RoomType) {
-  return `/messages?box=${type}`;
+function getThreads() {
+  if (!ok()) return [] as MessageThread[];
+  return j<MessageThread[]>(localStorage.getItem(MESSAGE_KEY), []).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 
-function threadHref(card: RoomMessageCard) {
-  return `/messages?type=${encodeURIComponent(card.roomType)}&room=${encodeURIComponent(card.roomId)}`;
+function saveThreads(threads: MessageThread[]) {
+  if (!ok()) return;
+  localStorage.setItem(MESSAGE_KEY, JSON.stringify(threads));
+  window.dispatchEvent(new Event("vaultforge-messages-change"));
 }
 
-function stateLabel(state: ThreadState) {
-  if (state === "saved") return "Saved";
-  if (state === "archived") return "Archived";
-  if (state === "deleted") return "Deleted";
-  return "Active";
+function messageCounts() {
+  const active = getThreads().filter((thread) => thread.status === "active");
+  return {
+    total: active.length,
+    unread: active.filter((thread) => thread.unread).length,
+    deal: active.filter((thread) => thread.lane === "deal").length,
+    pain: active.filter((thread) => thread.lane === "pain").length,
+    network: active.filter((thread) => thread.lane === "network").length,
+    dealUnread: active.filter((thread) => thread.lane === "deal" && thread.unread).length,
+    painUnread: active.filter((thread) => thread.lane === "pain" && thread.unread).length,
+    networkUnread: active.filter((thread) => thread.lane === "network" && thread.unread).length,
+  };
+}
+
+function createOrOpenThread(params: URLSearchParams) {
+  if (!ok()) return "";
+  const type = txt(params.get("type"));
+  const room = txt(params.get("room"));
+  const to = txt(params.get("to"));
+  const subjectParam = txt(params.get("subject"));
+
+  const lane: MessageThread["lane"] =
+    type === "deal" ? "deal" :
+    type === "pain" ? "pain" :
+    to ? "network" :
+    "general";
+
+  const subject =
+    subjectParam ||
+    (lane === "deal" ? `Deal Room: ${room || "New thread"}` :
+    lane === "pain" ? `Pain Room: ${room || "New thread"}` :
+    lane === "network" ? `Network Contact: ${to || "Member"}` :
+    "General Message");
+
+  const now = new Date().toISOString();
+  const existing = getThreads();
+  const existingThread = existing.find((thread) =>
+    thread.status !== "deleted" &&
+    thread.lane === lane &&
+    txt(thread.roomId) === room &&
+    txt(thread.to) === to &&
+    txt(thread.subject) === subject
+  );
+
+  if (existingThread) {
+    const updated = existing.map((thread) => thread.id === existingThread.id ? { ...thread, unread: false, updatedAt: now } : thread);
+    saveThreads(updated);
+    return existingThread.id;
+  }
+
+  const id = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const thread: MessageThread = {
+    id,
+    lane,
+    subject,
+    roomId: room,
+    roomType: type,
+    to,
+    from: "me",
+    status: "active",
+    unread: false,
+    saved: false,
+    createdAt: now,
+    updatedAt: now,
+    messages: [
+      {
+        id: `msg_${Date.now()}`,
+        author: "VaultForge",
+        body: lane === "network"
+          ? "Network contact thread opened."
+          : "Room message thread opened.",
+        createdAt: now,
+      },
+    ],
+  };
+
+  saveThreads([thread, ...existing]);
+  return id;
+}
+
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
+const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
+const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
+const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
+const textarea: React.CSSProperties = { ...input, minHeight: 120, resize: "vertical" };
+const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+
+function Nav({ active }: { active: string }) {
+  const item = (href: string, label: string, key: string) => (
+    <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>
+  );
+
+  return (
+    <nav style={nav}>
+      <div style={brand}>VAULTFORGE</div>
+      {item("/command", "Command", "command")}
+      {item("/members", "Members", "members")}
+      {item("/network", "Network", "network")}
+      {item("/deal-rooms", "Deal Rooms", "deals")}
+      {item("/pain-rooms", "Pain Rooms", "pain")}
+      {item("/deal-create", "Create Deal", "deal-create")}
+      {item("/pain-intake", "Pain Intake", "pain-intake")}
+      {item("/messages", "Messages", "messages")}
+      {item("/profile", "Profile", "profile")}
+      <Link href="/logout" style={redBtn}>Logout</Link>
+    </nav>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+}
+
+function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
+  const img = firstPhoto(room);
+  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
+  const unread = unreadRooms(kind, [room]).length > 0;
+
+  return (
+    <div style={unread ? activePanel : panel}>
+      {img ? <img src={img} alt={titleFor(room, kind)} style={photoStyle} /> : null}
+      <div style={eyebrow}>{kind === "deal" ? "Opportunity" : "Pain"} • {roomState(room)}</div>
+      <h2 style={h2}>{titleFor(room, kind)}</h2>
+      <p style={sub}>{loc(room)}</p>
+      <p style={muted}>
+        {kind === "deal"
+          ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • Route: ${list(room.routeTo).join(", ") || "Buyer"}`
+          : `${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"} • Severity: ${txt(room.severity, "N/A")}`}
+      </p>
+      <div style={{ ...row, marginTop: 16 }}>
+        <Link href={href} style={goldBtn}>Open</Link>
+        <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}&subject=${encodeURIComponent((kind === "deal" ? "Deal Room: " : "Pain Room: ") + titleFor(room, kind))}`} style={btn}>Messages</Link>
+      </div>
+    </div>
+  );
 }
 
 export default function MessagesPage() {
-  const [profile, setProfile] = useState<SavedProfile | null>(null);
-  const [cards, setCards] = useState<RoomMessageCard[]>([]);
-  const [view, setView] = useState<ViewMode>("home");
-  const [openType, setOpenType] = useState<"" | RoomType>("");
-  const [openId, setOpenId] = useState("");
-  const [filter, setFilter] = useState<FilterState>("active");
-  const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [body, setBody] = useState("");
-  const [replyMode, setReplyMode] = useState<"profileToOwner" | "ownerToProfile">("profileToOwner");
-
-  function load() {
-    const savedProfile = readProfile();
-    const route = readSearchParams();
-    const builtCards = buildCards(savedProfile);
-
-    setProfile(savedProfile);
-    setCards(builtCards);
-    setView(route.view);
-    setOpenType(route.type);
-    setOpenId(route.roomId);
-
-    if (route.view === "thread" && route.type && route.roomId) {
-      const key = makeThreadKey(route.type, route.roomId);
-      const markedRead = readMessages(key).map((item) => ({ ...item, read: true }));
-      writeMessages(key, markedRead);
-      setMessages(markedRead);
-    } else {
-      setMessages([]);
-    }
-  }
+  const [tick, setTick] = useState(0);
+  const [lane, setLane] = useState<MessageThread["lane"]>("deal");
+  const [activeId, setActiveId] = useState("");
+  const [reply, setReply] = useState("");
 
   useEffect(() => {
-    load();
-    window.addEventListener("storage", load);
-    window.addEventListener("vaultforge-message-change", load);
+    const params = new URLSearchParams(window.location.search);
+    const opened = createOrOpenThread(params);
+    if (opened) setActiveId(opened);
+    const type = txt(params.get("type"));
+    if (type === "deal" || type === "pain") setLane(type);
+    else if (txt(params.get("to"))) setLane("network");
 
+    const refresh = () => setTick((x) => x + 1);
+    window.addEventListener("storage", refresh);
+    window.addEventListener("vaultforge-messages-change", refresh);
     return () => {
-      window.removeEventListener("storage", load);
-      window.removeEventListener("vaultforge-message-change", load);
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("vaultforge-messages-change", refresh);
     };
   }, []);
 
-  const currentCard = useMemo(() => {
-    if (!openType || !openId) return null;
-    return cards.find((card) => card.roomType === openType && card.roomId === openId) || null;
-  }, [cards, openType, openId]);
+  const threads = useMemo(() => getThreads(), [tick]);
+  const counts = useMemo(() => messageCounts(), [tick]);
+  const visibleThreads = threads.filter((thread) => thread.status === "active" && thread.lane === lane);
+  const activeThread = threads.find((thread) => thread.id === activeId) || visibleThreads[0] || null;
 
-  const counts = useMemo(() => {
-    return {
-      active: cards.filter((card) => card.state === "active").length,
-      saved: cards.filter((card) => card.state === "saved").length,
-      archived: cards.filter((card) => card.state === "archived").length,
-      deleted: cards.filter((card) => card.state === "deleted").length,
-      all: cards.length,
-    };
-  }, [cards]);
+  useEffect(() => {
+    if (activeThread && activeThread.unread) {
+      const updated = threads.map((thread) => thread.id === activeThread.id ? { ...thread, unread: false, updatedAt: new Date().toISOString() } : thread);
+      saveThreads(updated);
+      setTick((x) => x + 1);
+    }
+  }, [activeThread?.id]);
 
-  const dealCards = cards.filter((card) => card.roomType === "deal");
-  const painCards = cards.filter((card) => card.roomType === "pain");
-
-  const dealMessageCount = dealCards.reduce((sum, card) => sum + card.count, 0);
-  const painMessageCount = painCards.reduce((sum, card) => sum + card.count, 0);
-
-  const visibleCards = useMemo(() => {
-    const typeFiltered = view === "deal" ? dealCards : view === "pain" ? painCards : [];
-    if (filter === "all") return typeFiltered;
-    return typeFiltered.filter((card) => card.state === filter);
-  }, [view, dealCards, painCards, filter]);
-
-  function refreshCards() {
-    setCards(buildCards(profile));
-    window.dispatchEvent(new Event("vaultforge-message-change"));
+  function updateThread(next: MessageThread) {
+    saveThreads([next, ...threads.filter((thread) => thread.id !== next.id)]);
+    setActiveId(next.id);
+    setTick((x) => x + 1);
   }
 
-  function setCardState(card: RoomMessageCard, state: ThreadState) {
-    const states = readStates();
-    states[card.threadKey] = state;
-    writeStates(states);
-    refreshCards();
+  function sendReply() {
+    if (!activeThread || !reply.trim()) return;
+    const now = new Date().toISOString();
+    updateThread({
+      ...activeThread,
+      unread: false,
+      updatedAt: now,
+      messages: [
+        ...activeThread.messages,
+        { id: `msg_${Date.now()}`, author: "Me", body: reply.trim(), createdAt: now },
+      ],
+    });
+    setReply("");
   }
 
-  function deleteForever(card: RoomMessageCard) {
-    const ok = window.confirm(`Delete messages forever for "${card.subject}"?`);
-    if (!ok) return;
-
-    window.localStorage.removeItem(messagesKey(card.threadKey));
-
-    const states = readStates();
-    delete states[card.threadKey];
-    writeStates(states);
-
-    setMessages([]);
-    refreshCards();
+  function setStatus(thread: MessageThread, status: MessageThread["status"]) {
+    updateThread({ ...thread, status, updatedAt: new Date().toISOString() });
   }
 
-  function sendMessage() {
-    if (!currentCard) return;
-
-    const cleaned = body.trim();
-    if (!cleaned) return;
-
-    const fromName = replyMode === "profileToOwner" ? currentCard.senderName : currentCard.ownerName;
-    const fromContact = replyMode === "profileToOwner" ? currentCard.senderContact : currentCard.ownerContact;
-    const toName = replyMode === "profileToOwner" ? currentCard.ownerName : currentCard.senderName;
-    const toContact = replyMode === "profileToOwner" ? currentCard.ownerContact : currentCard.senderContact;
-
-    const nextMessage: MessageRow = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      threadKey: currentCard.threadKey,
-      roomType: currentCard.roomType,
-      roomId: currentCard.roomId,
-      subject: currentCard.subject,
-      fromName,
-      fromContact,
-      fromRole: replyMode === "profileToOwner" ? "profile" : "owner",
-      toName,
-      toContact,
-      toRole: replyMode === "profileToOwner" ? "owner" : "profile",
-      body: cleaned,
-      createdAt: new Date().toISOString(),
-      read: true,
-    };
-
-    const next = [nextMessage, ...readMessages(currentCard.threadKey)];
-    writeMessages(currentCard.threadKey, next);
-    setMessages(next);
-    setBody("");
-
-    setCards(buildCards(profile));
-    window.dispatchEvent(new Event("vaultforge-message-change"));
-
-    window.history.pushState(null, "", messagesBoxHref(currentCard.roomType));
-    setView(currentCard.roomType);
-    setOpenType("");
-    setOpenId("");
-  }
-
-  if (view === "thread" && currentCard) {
-    const fromName = replyMode === "profileToOwner" ? currentCard.senderName : currentCard.ownerName;
-    const toName = replyMode === "profileToOwner" ? currentCard.ownerName : currentCard.senderName;
-
-    return (
-      <main style={page}>
-        <div style={wrap}>
-          <TopNav />
-
-          <section style={card}>
-            <div style={eyebrow}>{currentCard.roomType === "deal" ? "Deal Message Thread" : "Pain Message Thread"}</div>
-            <h1 style={h1}>{currentCard.subject}</h1>
-            <p style={sub}>{currentCard.location || "Location not listed"}</p>
-            <div style={actionRow}>
-              <a href={messagesBoxHref(currentCard.roomType)} style={goldBtn}>Back To {currentCard.roomType === "deal" ? "Deal Messages" : "Pain Messages"}</a>
-              <Link href={roomHref(currentCard.roomType, currentCard.roomId)} style={btn}>Open Room</Link>
-            </div>
-          </section>
-
-          <section style={card}>
-            <div style={eyebrow}>Thread Cleanup</div>
-            <CleanupControls card={currentCard} onState={setCardState} onDeleteForever={deleteForever} />
-          </section>
-
-          <section style={card}>
-            <div style={eyebrow}>Route</div>
-            <div style={routeGrid}>
-              <RouteBox label="Saved Profile" name={currentCard.senderName} contact={currentCard.senderContact} />
-              <RouteBox label="Room Owner / Contact" name={currentCard.ownerName} contact={currentCard.ownerContact} />
-            </div>
-          </section>
-
-          <section style={card}>
-            <div style={eyebrow}>Reply</div>
-            <div style={toggleRow}>
-              <button type="button" onClick={() => setReplyMode("profileToOwner")} style={replyMode === "profileToOwner" ? goldBtn : btn}>Profile → Owner</button>
-              <button type="button" onClick={() => setReplyMode("ownerToProfile")} style={replyMode === "ownerToProfile" ? goldBtn : btn}>Owner → Profile</button>
-            </div>
-            <div style={messageRoute}><strong>{fromName}</strong><span>→</span><strong>{toName}</strong></div>
-            <textarea style={textarea} value={body} onChange={(event) => setBody(event.target.value)} placeholder={`Reply in: ${currentCard.subject}`} />
-            <button type="button" onClick={sendMessage} style={goldBtn}>Send Reply</button>
-            <p style={muted}>After sending, VaultForge returns you to the {currentCard.roomType === "deal" ? "Deal Messages" : "Pain Messages"} card area.</p>
-          </section>
-
-          <section style={card}>
-            <div style={eyebrow}>This Thread ({messages.length})</div>
-            {!messages.length ? <p style={sub}>No messages in this thread yet.</p> : null}
-            <div style={threadList}>
-              {messages.map((message) => (
-                <article key={message.id} style={messageCard}>
-                  <div style={messageTop}>
-                    <strong>{message.fromName} → {message.toName}</strong>
-                    <span>{niceDate(message.createdAt)}</span>
-                  </div>
-                  <p style={muted}>From: {message.fromContact}</p>
-                  <p style={muted}>To: {message.toContact}</p>
-                  <p style={messageBody}>{message.body}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-        </div>
-      </main>
-    );
-  }
-
-  if (view === "deal" || view === "pain") {
-    const label = view === "deal" ? "Deal Messages" : "Pain Messages";
-
-    return (
-      <main style={page}>
-        <div style={wrap}>
-          <TopNav />
-
-          <section style={card}>
-            <div style={eyebrow}>{label}</div>
-            <h1 style={h1}>{label} card area.</h1>
-            <p style={sub}>
-              Click a room communication card to open that one thread. Cleanup moves the card into the selected folder.
-            </p>
-            <div style={actionRow}>
-              <a href="/messages" style={goldBtn}>Back To Communication Cards</a>
-            </div>
-          </section>
-
-          <section style={card}>
-            <div style={eyebrow}>Folders</div>
-            <div style={filterRow}>
-              {(["active", "saved", "archived", "deleted", "all"] as FilterState[]).map((item) => (
-                <button key={item} type="button" onClick={() => setFilter(item)} style={filter === item ? goldBtn : btn}>
-                  {item.toUpperCase()} ({counts[item]})
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section style={card}>
-            <div style={eyebrow}>{label} Threads</div>
-            {!visibleCards.length ? <p style={sub}>No {label} cards in this folder.</p> : null}
-            <div style={cardGrid}>
-              {visibleCards.map((item) => (
-                <MessageRoomCard key={item.threadKey} card={item} onState={setCardState} onDeleteForever={deleteForever} />
-              ))}
-            </div>
-          </section>
-        </div>
-      </main>
-    );
+  function toggleSaved(thread: MessageThread) {
+    updateThread({ ...thread, saved: !thread.saved, updatedAt: new Date().toISOString() });
   }
 
   return (
     <main style={page}>
       <div style={wrap}>
-        <TopNav />
+        <Nav active="messages" />
 
-        <section style={card}>
+        <section style={hero}>
           <div style={eyebrow}>Messages</div>
-          <h1 style={h1}>Communication cards.</h1>
-          <p style={sub}>
-            Two clean work areas: Deal Messages and Pain Messages. Each opens to its own room-thread cards.
-          </p>
+          <h1 style={h1}>Room communication center.</h1>
+          <p style={sub}>Deal, Pain, and Network messages stay separated and tied to the action that opened them.</p>
         </section>
 
-        <section style={twoCardGrid}>
-          <CommunicationBox
-            title="Deal Messages"
-            subtitle="Deal Room communication threads."
-            roomCount={dealCards.length}
-            messageCount={dealMessageCount}
-            onOpen={() => {
-              window.history.pushState(null, "", "/messages?box=deal");
-              setView("deal");
-              setFilter("active");
-            }}
-          />
-          <CommunicationBox
-            title="Pain Messages"
-            subtitle="Pain Room communication threads."
-            roomCount={painCards.length}
-            messageCount={painMessageCount}
-            onOpen={() => {
-              window.history.pushState(null, "", "/messages?box=pain");
-              setView("pain");
-              setFilter("active");
-            }}
-          />
-        </section>
+        <Section title="Message Lanes">
+          <div style={grid}>
+            <LaneCard label="Deal Messages" active={lane === "deal"} count={counts.deal} unread={counts.dealUnread} onClick={() => setLane("deal")} />
+            <LaneCard label="Pain Messages" active={lane === "pain"} count={counts.pain} unread={counts.painUnread} onClick={() => setLane("pain")} />
+            <LaneCard label="Network Messages" active={lane === "network"} count={counts.network} unread={counts.networkUnread} onClick={() => setLane("network")} />
+          </div>
+        </Section>
+
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, .9fr) minmax(320px, 1.4fr)", gap: 18 }}>
+          <Section title={`${lane} Threads`}>
+            {visibleThreads.length ? (
+              <div style={{ display: "grid", gap: 12 }}>
+                {visibleThreads.map((thread) => (
+                  <button key={thread.id} type="button" onClick={() => setActiveId(thread.id)} style={activeId === thread.id || thread.unread ? activePanel : panel}>
+                    <div style={eyebrow}>{thread.lane}{thread.saved ? " • Saved" : ""}</div>
+                    <h2 style={{ ...h2, fontSize: 30 }}>{thread.subject}</h2>
+                    <p style={muted}>{thread.messages.length} message(s)</p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p style={sub}>No active {lane} threads.</p>
+            )}
+          </Section>
+
+          <Section title="Active Thread">
+            {activeThread ? (
+              <>
+                <div style={activeThread.unread ? activePanel : panel}>
+                  <div style={eyebrow}>{activeThread.lane} Thread</div>
+                  <h2 style={h2}>{activeThread.subject}</h2>
+                  <p style={muted}>Room: {txt(activeThread.roomId, "No room attached")} • To: {txt(activeThread.to, "Not listed")}</p>
+                  <div style={{ ...row, marginTop: 14 }}>
+                    <button type="button" style={activeThread.saved ? goldBtn : btn} onClick={() => toggleSaved(activeThread)}>{activeThread.saved ? "Saved" : "Save Thread"}</button>
+                    <button type="button" style={btn} onClick={() => setStatus(activeThread, "archived")}>Archive</button>
+                    <button type="button" style={redBtn} onClick={() => setStatus(activeThread, "deleted")}>Delete</button>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+                  {activeThread.messages.map((message) => (
+                    <div key={message.id} style={panel}>
+                      <div style={eyebrow}>{message.author}</div>
+                      <p style={sub}>{message.body}</p>
+                      <p style={muted}>{new Date(message.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: 16 }}>
+                  <textarea style={textarea} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Type reply..." />
+                  <div style={{ ...row, marginTop: 12 }}>
+                    <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
+                    {activeThread.roomId ? (
+                      <Link href={activeThread.lane === "pain" ? `/pain-rooms/${encodeURIComponent(activeThread.roomId)}` : activeThread.lane === "deal" ? `/deal-rooms/${encodeURIComponent(activeThread.roomId)}` : "/network"} style={btn}>Open Source</Link>
+                    ) : (
+                      <Link href="/network" style={btn}>Open Network</Link>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p style={sub}>Select a thread.</p>
+            )}
+          </Section>
+        </div>
       </div>
     </main>
   );
 }
 
-function TopNav() {
+function LaneCard({ label, count, unread, active, onClick }: { label: string; count: number; unread: number; active: boolean; onClick: () => void }) {
   return (
-    <nav style={nav}>
-      <Link href="/command" style={btn}>Command</Link>
-      <Link href="/deal-rooms" style={btn}>Deal Rooms</Link>
-      <Link href="/pain-rooms" style={btn}>Pain Rooms</Link>
-      <a href="/messages" style={goldBtn}>Messages</a>
-      <Link href="/profile" style={btn}>Profile</Link>
-      <Link href="/" style={redBtn}>Exit</Link>
-    </nav>
-  );
-}
-
-function CommunicationBox({
-  title,
-  subtitle,
-  roomCount,
-  messageCount,
-  onOpen,
-}: {
-  title: string;
-  subtitle: string;
-  roomCount: number;
-  messageCount: number;
-  onOpen: () => void;
-}) {
-  return (
-    <button type="button" onClick={onOpen} style={communicationCardButton}>
-      <div style={eyebrow}>{title}</div>
-      <h2 style={commTitle}>{title}</h2>
-      <p style={sub}>{subtitle}</p>
-      <div style={countBox}>
-        <strong>{roomCount}</strong>
-        <span>room cards</span>
-        <strong>{messageCount}</strong>
-        <span>messages</span>
-      </div>
-      <span style={goldBtn}>Open {title}</span>
+    <button type="button" style={active || unread ? activePanel : panel} onClick={onClick}>
+      <div style={eyebrow}>{label}</div>
+      <h2 style={h2}>{unread}</h2>
+      <p style={muted}>{count} active thread(s)</p>
     </button>
   );
 }
-
-function RouteBox({ label, name, contact }: { label: string; name: string; contact: string }) {
-  return (
-    <div style={routeBox}>
-      <div style={miniEyebrow}>{label}</div>
-      <h3 style={routeTitle}>{name}</h3>
-      <p style={muted}>{contact}</p>
-    </div>
-  );
-}
-
-function MessageRoomCard({
-  card,
-  onState,
-  onDeleteForever,
-}: {
-  card: RoomMessageCard;
-  onState: (card: RoomMessageCard, state: ThreadState) => void;
-  onDeleteForever: (card: RoomMessageCard) => void;
-}) {
-  return (
-    <article style={threadCard}>
-      <div style={threadHeader}>
-        <div>
-          <div style={miniEyebrow}>{card.roomType === "deal" ? "Deal Communication Card" : "Pain Communication Card"}</div>
-          <h3 style={threadTitle}>{card.roomTitle}</h3>
-        </div>
-        <span style={statePill}>{stateLabel(card.state)}</span>
-      </div>
-
-      <p style={muted}>{card.location || "Location not listed"}</p>
-
-      <div style={countBox}>
-        <strong>{card.count}</strong>
-        <span>messages</span>
-        <strong>{card.unread}</strong>
-        <span>unread</span>
-      </div>
-
-      <p style={muted}>Recipient: {card.ownerName}</p>
-      <p style={threadPreview}>{card.lastMessage}</p>
-      <p style={muted}>{niceDate(card.lastAt)}</p>
-
-      <div style={actionRowCompact}>
-        <a href={threadHref(card)} style={goldBtn}>Open Thread</a>
-        <Link href={roomHref(card.roomType, card.roomId)} style={btn}>Open Room</Link>
-      </div>
-
-      <CleanupControls card={card} onState={onState} onDeleteForever={onDeleteForever} />
-    </article>
-  );
-}
-
-function CleanupControls({
-  card,
-  onState,
-  onDeleteForever,
-}: {
-  card: RoomMessageCard;
-  onState: (card: RoomMessageCard, state: ThreadState) => void;
-  onDeleteForever: (card: RoomMessageCard) => void;
-}) {
-  return (
-    <div style={cleanupBox}>
-      <div style={miniEyebrow}>Current: {stateLabel(card.state)}</div>
-      <div style={actionRowCompact}>
-        <button type="button" onClick={() => onState(card, "saved")} style={goldBtn}>Save</button>
-        <button type="button" onClick={() => onState(card, "archived")} style={btn}>Archive</button>
-        <button type="button" onClick={() => onState(card, "deleted")} style={redBtn}>Delete</button>
-        {card.state === "deleted" ? (
-          <>
-            <button type="button" onClick={() => onState(card, "active")} style={btn}>Restore</button>
-            <button type="button" onClick={() => onDeleteForever(card)} style={dangerBtn}>Delete Forever</button>
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
-const wrap: React.CSSProperties = { maxWidth: 1180, margin: "0 auto", paddingBottom: 70 };
-const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 };
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 28, marginBottom: 22 };
-const twoCardGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 18 };
-const communicationCard: React.CSSProperties = { ...card, minHeight: 260, textDecoration: "none", color: "#f7f7fb", display: "block" };
-const communicationCardButton: React.CSSProperties = { ...card, minHeight: 260, color: "#f7f7fb", display: "block", width: "100%", textAlign: "left", cursor: "pointer" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 8, fontWeight: 900, fontSize: 19, marginBottom: 14 };
-const miniEyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 900, fontSize: 13, marginBottom: 10 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,76px)", lineHeight: 0.92, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const commTitle: React.CSSProperties = { fontSize: "clamp(36px,6vw,60px)", lineHeight: 0.95, letterSpacing: -3, margin: "0 0 14px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 22, lineHeight: 1.35, margin: 0 };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
-const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-const dangerBtn: React.CSSProperties = { ...btn, background: "#3a080d", borderColor: "rgba(255,30,30,.75)", color: "#ffc9c9" };
-const actionRow: React.CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 };
-const actionRowCompact: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 };
-const filterRow: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 };
-const routeGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 };
-const routeBox: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 22, padding: 20 };
-const routeTitle: React.CSSProperties = { fontSize: 28, margin: "0 0 8px", lineHeight: 1 };
-const toggleRow: React.CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 };
-const messageRoute: React.CSSProperties = { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 14, fontSize: 22 };
-const textarea: React.CSSProperties = { width: "100%", boxSizing: "border-box", borderRadius: 18, border: "1px solid rgba(207,216,230,.18)", background: "#121724", color: "#f6f7fb", padding: "17px 18px", fontSize: 16, outline: "none", minHeight: 140, resize: "vertical", marginBottom: 14 };
-const threadList: React.CSSProperties = { display: "grid", gap: 14 };
-const cardGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 16 };
-const threadCard: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 22, padding: 22 };
-const cleanupBox: React.CSSProperties = { marginTop: 16, padding: 16, border: "1px solid rgba(245,197,66,.18)", borderRadius: 18, background: "rgba(245,197,66,.045)" };
-const messageCard: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.14)", borderRadius: 22, padding: 22 };
-const messageTop: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", color: "#f7f7fb" };
-const threadHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" };
-const threadTitle: React.CSSProperties = { fontSize: 28, margin: "0 0 10px" };
-const threadPreview: React.CSSProperties = { color: "#e7edf7", fontSize: 18, lineHeight: 1.35, margin: "10px 0" };
-const muted: React.CSSProperties = { color: "#aeb7c7", margin: "6px 0" };
-const messageBody: React.CSSProperties = { color: "#f7f7fb", fontSize: 20, lineHeight: 1.4, margin: "12px 0 0" };
-const statePill: React.CSSProperties = { borderRadius: 999, padding: "8px 12px", background: "#ffdc68", color: "#10131a", fontWeight: 950, fontSize: 12 };
-const countBox: React.CSSProperties = { display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: 8, alignItems: "center", margin: "16px 0", padding: 16, borderRadius: 18, background: "rgba(255,220,104,.08)", border: "1px solid rgba(255,220,104,.22)" };
