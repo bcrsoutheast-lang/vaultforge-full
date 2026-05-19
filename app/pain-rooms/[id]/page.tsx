@@ -53,8 +53,6 @@ type Room = {
   desiredSolution?: string;
   blockers?: string[] | string;
   riskTypes?: string[] | string;
-  submitterRole?: string;
-  bestContact?: string;
   roomState?: RoomState;
   cleanupState?: RoomState;
   stateStatus?: RoomState;
@@ -71,19 +69,21 @@ type Room = {
   [key: string]: unknown;
 };
 
-type Profile = {
+type MemberProfile = {
+  id?: string;
   name?: string;
   company?: string;
   email?: string;
   phone?: string;
-  memberType?: string;
   profilePhoto?: string;
-  primaryCity?: string;
-  primaryCounty?: string;
+  memberType?: string;
+  basedState?: string;
+  basedCity?: string;
+  basedCounty?: string;
   statesOperated?: string[];
   markets?: string[];
-  strategies?: string[];
   assetClasses?: string[];
+  strategies?: string[];
   specialties?: string[];
   needs?: string[];
   canProvide?: string[];
@@ -93,71 +93,16 @@ type Profile = {
   contactPreference?: string;
   directContact?: string;
   bio?: string;
+  updatedAt?: string;
   [key: string]: unknown;
-};
-
-const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
-const MARKETS = ["Atlanta", "North Georgia", "Chattanooga", "Nashville", "Knoxville", "Birmingham", "Huntsville", "Montgomery", "Jacksonville", "Tampa", "Orlando", "Miami", "Charlotte", "Raleigh-Durham", "Greenville-Spartanburg", "Charleston", "Dallas-Fort Worth", "Houston", "Austin", "San Antonio"];
-const ASSETS = ["Residential", "Commercial", "Land"];
-const RES_TYPES = ["Single Family", "Duplex", "Triplex", "Quad", "Townhome", "Condo", "Mobile Home", "Small Multifamily"];
-const COM_TYPES = ["Retail", "Office", "Industrial", "Warehouse", "Hotel", "Self Storage", "Mixed Use", "Medical", "Restaurant", "Automotive", "Church / Special Use"];
-const LAND_TYPES = ["Infill Lot", "Acreage", "Entitled Land", "Raw Land", "Commercial Pad", "Subdivision", "Timber", "Farm", "Assemblage", "Waterfront"];
-const STRATEGIES = ["Wholesale", "Flip", "Buy & Hold", "BRRRR", "Development", "Seller Finance", "JV", "Rental", "Hotel Conversion", "Airbnb"];
-const SPECIALTIES = ["Distress", "Funding Gap", "Off Market", "Construction", "Land", "Commercial", "Residential", "Creative Finance", "Insurance", "Permits", "Probate", "Foreclosure", "Tax Sale", "Stalled Project", "Value Add"];
-const ROUTES = ["Buyer", "Lender", "Operator", "Contractor", "Developer", "Attorney", "Capital Partner"];
-const NEEDS = ["Lender", "Operator", "Contractor", "Buyer", "Attorney", "Insurance Adjuster", "City Expeditor", "Private Capital", "Property Manager", "Developer"];
-const CAN_PROVIDE = ["Capital", "Buying", "Lending", "Contractors", "Legal", "Insurance", "Property Management", "Development", "Operations", "Introductions"];
-const PAIN_TYPES = ["Funding Gap", "Foreclosure", "Stalled Construction", "Contractor Problem", "Title Problem", "Permit Problem", "City Violation", "Tenant Issue", "Partnership Dispute", "Emergency Exit", "Insurance Claim", "Fire Damage", "Mold", "Structural", "Probate", "Tax Sale Risk", "Squatter Issue", "Burn Rate"];
-const MEMBER_TYPES = ["Investor", "Wholesaler", "Lender", "Contractor", "Developer", "Agent", "Attorney", "Operator", "Private Capital", "Property Manager"];
-const CONTACT_PREFS = ["VaultForge Message", "Text", "Phone", "Email", "Contact Form"];
-const CAPITAL_POSITIONS = ["Unknown", "Cash Buyer", "Private Capital", "Hard Money", "Bank Lending", "JV Capital", "Needs Capital", "Operator With Capital", "Operator Needs Capital"];
-const FUNDING_RANGES = ["Unknown", "Under $50k", "$50k-$250k", "$250k-$1M", "$1M-$5M", "$5M+"];
-const CONDITION = ["Unknown", "Turnkey", "Light Rehab", "Medium Rehab", "Full Gut", "Fire Damage", "Shell", "Tear Down"];
-const OCCUPANCY = ["Unknown", "Vacant", "Owner Occupied", "Tenant Occupied", "Squatter", "Partial Vacancy"];
-const SEVERITY = ["Low", "Medium", "High", "Critical", "Emergency"];
-const TIME = ["24 Hours", "72 Hours", "7 Days", "14 Days", "30 Days", "Flexible"];
-const CAPITAL = ["Unknown", "Under $25k", "$25k-$100k", "$100k-$250k", "$250k-$1M", "$1M+"];
-const CONTROL = ["Unknown", "Owner Controlled", "Contract Controlled", "Partner Controlled", "Bank Controlled", "Court / Estate", "No Control Yet"];
-const BLOCKERS = ["Capital", "Timeline", "Title", "Access", "Contractor", "Tenant", "Permit", "City", "Legal", "Partner", "Seller Pressure", "Unknown Numbers", "Insurance", "Utilities"];
-const RISK = ["Legal", "Financial", "Structural", "Operational", "City/Permit", "Occupancy", "Environmental"];
-const YESNO = ["Unknown", "Yes", "No"];
-
-const CITY_COUNTY: Record<string, string> = {
-  atlanta: "Fulton",
-  alpharetta: "Fulton",
-  roswell: "Fulton",
-  marietta: "Cobb",
-  cartersville: "Bartow",
-  cville: "Bartow",
-  cvile: "Bartow",
-  adairsville: "Bartow",
-  rome: "Floyd",
-  gainesville: "Hall",
-  savannah: "Chatham",
-  augusta: "Richmond",
-  columbus: "Muscogee",
-  macon: "Bibb",
-  chattanooga: "Hamilton",
-  nashville: "Davidson",
-  knoxville: "Knox",
-  birmingham: "Jefferson",
-  huntsville: "Madison",
-  charlotte: "Mecklenburg",
-  raleigh: "Wake",
-  greenville: "Greenville",
-  charleston: "Charleston",
-  dallas: "Dallas",
-  houston: "Harris",
-  austin: "Travis",
-  "san antonio": "Bexar",
-  sanantonio: "Bexar",
 };
 
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
-const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const READ_KEY = "vaultforge_room_alert_read_v1";
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -180,6 +125,16 @@ function list(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
   if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
   return [];
+}
+
+function money(value: unknown) {
+  const raw = txt(value);
+  const num = Number(raw.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(num) ? num : 0;
+}
+
+function pct(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
 }
 
 function rid(room: Room | null | undefined) {
@@ -246,8 +201,8 @@ function allRooms(kind: RoomKind): Room[] {
     const key = localStorage.key(i) || "";
     const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
     if (!match) continue;
-    const value = j<any>(localStorage.getItem(key), null);
 
+    const value = j<any>(localStorage.getItem(key), null);
     if (Array.isArray(value)) {
       for (const row of value) {
         const id = rid(row);
@@ -265,13 +220,11 @@ function allRooms(kind: RoomKind): Room[] {
   }
 
   const states = stateMap();
-  return out
-    .map((room) => {
-      const id = rid(room);
-      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
-    })
-    .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+  return out.map((room) => {
+    const id = rid(room);
+    const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+    return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+  });
 }
 
 function getRoom(kind: RoomKind, id: string) {
@@ -282,26 +235,35 @@ function readMap() {
   return ok() ? j<Record<string, string>>(localStorage.getItem(READ_KEY), {}) : {};
 }
 
-function unreadRooms(kind: RoomKind, rooms: Room[]) {
-  const reads = readMap();
-  return rooms.filter((room) => {
-    const id = rid(room);
-    if (roomState(room) !== "active") return false;
-    return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
-  });
-}
-
 function markRead(kind: RoomKind, room: Room) {
   if (!ok()) return;
   const id = rid(room);
   if (!id) return;
   const reads = readMap();
-  reads[id] = new Date().toISOString();
-  reads[`${kind}:${id}`] = new Date().toISOString();
+  const now = new Date().toISOString();
+  reads[id] = now;
+  reads[`${kind}:${id}`] = now;
   localStorage.setItem(READ_KEY, JSON.stringify(reads));
-  const next = { ...room, alertRead: true, viewedAt: new Date().toISOString() };
+
+  const next = { ...room, alertRead: true, viewedAt: now, updatedAt: now };
   singleKeys(kind, id).forEach((key) => saveSafe(key, next));
   keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
+  window.dispatchEvent(new Event("vaultforge-room-read-change"));
+}
+
+function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
+  if (!ok()) return;
+  const id = rid(room);
+  const next: Room = { ...room, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
+  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
+  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
+
+  const map = stateMap();
+  map[id] = state;
+  map[`${kind}:${id}`] = state;
+  STATE_KEYS.forEach((key) => saveSafe(key, map));
+
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
 }
 
 function firstPhoto(room: Room) {
@@ -315,114 +277,149 @@ function firstPhoto(room: Room) {
   return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
 }
 
-function countyFromCity(city: string) {
-  return CITY_COUNTY[city.trim().toLowerCase().replace(/\s+/g, " ")] || "";
+function profileId(profile: MemberProfile) {
+  return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
 }
 
-async function compressImage(file: File, maxWidth = 850, quality = 0.52): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onerror = () => resolve("");
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => resolve("");
-      img.onload = () => {
-        try {
-          const scale = Math.min(1, maxWidth / img.width);
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(img.width * scale));
-          canvas.height = Math.max(1, Math.round(img.height * scale));
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve("");
-            return;
-          }
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/jpeg", quality));
-        } catch {
-          resolve("");
-        }
-      };
-      img.src = String(reader.result || "");
-    };
-    reader.readAsDataURL(file);
+function normalizeProfile(profile: MemberProfile): MemberProfile {
+  return {
+    ...profile,
+    id: profileId(profile),
+    name: txt(profile.name, "VaultForge Member"),
+    basedState: txt(profile.basedState, "GA"),
+    statesOperated: list(profile.statesOperated).length ? list(profile.statesOperated) : ["GA"],
+    markets: list(profile.markets),
+    assetClasses: list(profile.assetClasses),
+    strategies: list(profile.strategies),
+    specialties: list(profile.specialties),
+    needs: list(profile.needs),
+    canProvide: list(profile.canProvide),
+  };
+}
+
+function getProfile(): MemberProfile {
+  if (!ok()) return {};
+  for (const key of PROFILE_KEYS) {
+    const found = j<MemberProfile | null>(localStorage.getItem(key), null);
+    if (found && typeof found === "object") return normalizeProfile(found);
+  }
+  return normalizeProfile({ id: "local_member", name: "VaultForge Member", basedState: "GA", statesOperated: ["GA"], memberType: "Investor" });
+}
+
+function getDirectory(): MemberProfile[] {
+  if (!ok()) return [];
+  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
+  const current = getProfile();
+  const currentId = profileId(current);
+  const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
+  const seen = new Set<string>();
+  return merged.map(normalizeProfile).filter((member) => {
+    const id = profileId(member);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
   });
 }
 
-async function photosFromFiles(files: FileList | null) {
-  const selected = Array.from(files || []).slice(0, 10);
-  const output: string[] = [];
-  for (const file of selected) {
-    const compressed = await compressImage(file);
-    if (compressed && compressed.length < 450000) output.push(compressed);
+function overlap(a: unknown, b: unknown) {
+  const aa = list(a).map((x) => x.toLowerCase());
+  const bb = list(b).map((x) => x.toLowerCase());
+  return aa.filter((x) => bb.includes(x)).length;
+}
+
+function scoreMemberForRoom(member: MemberProfile, room: Room, kind: RoomKind) {
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (list(member.statesOperated).includes(txt(room.state))) {
+    score += 25;
+    reasons.push("operates in room state");
   }
-  return output;
+
+  const assetHits = overlap(member.assetClasses, [txt(room.assetClass)]);
+  if (assetHits) {
+    score += 15;
+    reasons.push("asset class fit");
+  }
+
+  if (kind === "deal") {
+    const strategyHits = overlap(member.strategies, room.strategy);
+    if (strategyHits) {
+      score += 15;
+      reasons.push("strategy fit");
+    }
+    const provideHits = overlap(member.canProvide, room.routeTo);
+    if (provideHits) {
+      score += 25;
+      reasons.push("can provide requested route");
+    }
+    if (txt(member.capitalPosition).toLowerCase().includes("cash") || txt(member.capitalPosition).toLowerCase().includes("capital")) {
+      score += 10;
+      reasons.push("capital-capable profile");
+    }
+  } else {
+    const provideHits = overlap(member.canProvide, room.routingNeeds);
+    if (provideHits) {
+      score += 30;
+      reasons.push("can provide needed solver type");
+    }
+    const specialtyHits = overlap(member.specialties, room.painTypes);
+    if (specialtyHits) {
+      score += 20;
+      reasons.push("pain specialty fit");
+    }
+    if (txt(room.capitalPressure) !== "Unknown" && (txt(member.capitalPosition).toLowerCase().includes("capital") || txt(member.capitalPosition).toLowerCase().includes("cash"))) {
+      score += 10;
+      reasons.push("capital pressure fit");
+    }
+  }
+
+  return { member, score: pct(score), reasons };
 }
 
-async function onePhoto(files: FileList | null) {
-  const file = Array.from(files || [])[0];
-  return file ? compressImage(file) : "";
-}
+function dealIntelligence(room: Room) {
+  const ask = money(room.askingPrice);
+  const value = money(room.propertyValue);
+  const repairs = money(room.repairs);
+  const spread = value - ask - repairs;
+  const spreadPct = value ? (spread / value) * 100 : 0;
+  const hasNumbers = ask > 0 && value > 0;
+  const urgency = txt(room.timeline || room.timePressure).includes("24") ? 95 : txt(room.timeline || room.timePressure).includes("72") ? 80 : txt(room.timeline || room.timePressure).includes("7") ? 65 : 45;
+  const risk = txt(room.condition).toLowerCase().includes("gut") || txt(room.condition).toLowerCase().includes("fire") ? 75 : txt(room.occupancy).toLowerCase().includes("tenant") || txt(room.occupancy).toLowerCase().includes("squatter") ? 70 : 45;
+  const strength = pct((hasNumbers ? 35 : 10) + Math.max(0, Math.min(35, spreadPct)) + (list(room.routeTo).length ? 15 : 5) + (list(room.strategy).length ? 15 : 5));
 
-function saveRoom(kind: RoomKind, room: Room) {
-  if (!ok()) return "";
-  const id = `${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const now = new Date().toISOString();
-  const next: Room = {
-    ...room,
-    id,
-    roomId: id,
-    roomState: "active",
-    cleanupState: "active",
-    stateStatus: "active",
-    createdAt: now,
-    updatedAt: now,
-    alertRead: false,
-    viewedAt: "",
+  return {
+    spread,
+    spreadPct: Math.round(spreadPct),
+    urgency,
+    risk,
+    strength,
+    nextMove: hasNumbers
+      ? "Verify control, confirm access, validate photos/condition, route to the strongest capital or buyer profile, then move the conversation into Messages."
+      : "Numbers are incomplete. Collect ask, value, repair estimate, occupancy, and access before routing this as a serious opportunity.",
+    banner: urgency >= 80 ? "Immediate action required" : strength >= 70 ? "Strong opportunity signal" : "Needs verification before routing",
   };
-
-  for (const key of singleKeys(kind, id)) {
-    const worked = saveSafe(key, next);
-    if (!worked) saveSafe(key, { ...next, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" });
-  }
-
-  const cover = txt(next.coverPhoto || next.photoUrl || next.imageUrl);
-  const slim: Room = { ...next, photos: cover ? [cover] : [], photoUrls: cover ? [cover] : [], coverPhoto: cover, photoUrl: cover, imageUrl: cover };
-
-  for (const key of keysFor(kind)) {
-    const existing = arr<Room>(key).filter((row) => rid(row) !== id);
-    const worked = saveSafe(key, [slim, ...existing]);
-    if (!worked) saveSafe(key, [{ ...slim, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }, ...existing]);
-  }
-
-  const map = stateMap();
-  map[id] = "active";
-  map[`${kind}:${id}`] = "active";
-  STATE_KEYS.forEach((key) => saveSafe(key, map));
-
-  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
-  window.dispatchEvent(new Event("vaultforge-room-state-change"));
-
-  return id;
 }
 
-function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
-  if (!ok()) return;
-  const id = rid(room);
-  const next: Room = { ...room, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
-  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
-  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
-  const map = stateMap();
-  map[id] = state;
-  map[`${kind}:${id}`] = state;
-  STATE_KEYS.forEach((key) => saveSafe(key, map));
-  window.dispatchEvent(new Event("vaultforge-room-state-change"));
-}
+function painIntelligence(room: Room) {
+  const severityBase = txt(room.severity) === "Emergency" ? 100 : txt(room.severity) === "Critical" ? 92 : txt(room.severity) === "High" ? 78 : txt(room.severity) === "Medium" ? 55 : 35;
+  const timeBoost = txt(room.timePressure).includes("24") ? 15 : txt(room.timePressure).includes("72") ? 10 : txt(room.timePressure).includes("7") ? 6 : 0;
+  const blockerBoost = Math.min(20, list(room.blockers).length * 4);
+  const riskBoost = Math.min(15, list(room.riskTypes).length * 5);
+  const capitalBoost = txt(room.capitalPressure) !== "Unknown" ? 8 : 0;
+  const severityScore = pct(severityBase + timeBoost + blockerBoost + riskBoost + capitalBoost);
+  const moneyNeeded = money(room.moneyNeededNow);
+  const value = money(room.propertyValue);
+  const ask = money(room.askingPrice);
 
-function saveProfile(profile: Profile) {
-  if (!ok()) return;
-  PROFILE_KEYS.forEach((key) => localStorage.setItem(key, JSON.stringify(profile)));
-  window.dispatchEvent(new Event("vaultforge-profile-change"));
+  return {
+    severityScore,
+    capitalNeedScore: pct((moneyNeeded ? 40 : 0) + (txt(room.capitalPressure) !== "Unknown" ? 35 : 0) + (value || ask ? 15 : 0)),
+    executionBlockScore: pct(list(room.blockers).length * 12 + list(room.riskTypes).length * 10),
+    nextMove: "Define the root cause, verify control, identify the one blocker that stops execution, route to the highest-fit solver, and move the active conversation into Messages.",
+    consequence: txt(room.worstCase) || "If nothing happens, time pressure increases, leverage drops, cost rises, and fewer clean exits remain.",
+    banner: severityScore >= 85 ? "Emergency pressure signal" : severityScore >= 70 ? "High priority solution room" : "Monitor and route when facts are complete",
+  };
 }
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
@@ -438,98 +435,87 @@ const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,
 const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
 const pulsePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.65)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
-const labelStyle: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontSize: 12, fontWeight: 950, marginBottom: 8 };
 const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
 const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
 const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
-const textarea: React.CSSProperties = { ...input, minHeight: 110, resize: "vertical" };
-const photoStyle: React.CSSProperties = { width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+const photoStyle: React.CSSProperties = { width: "100%", height: 290, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 18 };
 
 function Nav({ active }: { active: string }) {
   const item = (href: string, label: string, key: string) => <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>;
-  return <nav style={nav}><div style={brand}>VAULTFORGE</div>{item("/command","Command","command")}{item("/deal-rooms","Deal Rooms","deals")}{item("/deal-create","Create Deal","deal-create")}{item("/pain-intake","Pain Intake","pain-intake")}{item("/pain-rooms","Pain Rooms","pain")}{item("/network","Network","network")}{item("/messages","Messages","messages")}{item("/profile","Profile","profile")}{item("/saved-rooms","Saved","saved")}{item("/archived-rooms","Archived","archived")}{item("/deleted-rooms","Deleted","deleted")}<Link href="/logout" style={redBtn}>Logout</Link></nav>;
+  return <nav style={nav}><div style={brand}>VAULTFORGE</div>{item("/command","Command","command")}{item("/deal-rooms","Deal Rooms","deals")}{item("/deal-create","Create Deal","deal-create")}{item("/pain-intake","Pain Intake","pain-intake")}{item("/pain-rooms","Pain Rooms","pain")}{item("/network","Network","network")}{item("/messages","Messages","messages")}{item("/profile","Profile","profile")}<Link href="/logout" style={redBtn}>Logout</Link></nav>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><input type="text" style={input} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
-}
-
-function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label><div style={labelStyle}>{label}</div><textarea style={textarea} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
-}
-
-function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
-  return <label><div style={labelStyle}>{label}</div><select style={input} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
-}
-
-function ChipSet({ label, options, selected, onToggle }: { label: string; options: string[]; selected: string[]; onToggle: (value: string) => void }) {
-  return <div><div style={labelStyle}>{label}</div><div style={row}>{options.map((option) => <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>{option}</button>)}</div></div>;
-}
-
 function Value({ label, value }: { label: string; value: unknown }) {
   return <div style={panel}><div style={eyebrow}>{label}</div><p style={sub}>{txt(value, "Not listed")}</p></div>;
 }
 
-function RoomCard({ room, kind, pulse = false }: { room: Room; kind: RoomKind; pulse?: boolean }) {
-  const img = firstPhoto(room);
-  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
-  return <div style={pulse ? pulsePanel : panel}>
-    {img ? <img src={img} alt={titleFor(room, kind)} style={photoStyle} /> : null}
-    <div style={eyebrow}>{kind === "deal" ? "Deal Room" : "Pain Room"} • {roomState(room)}</div>
-    <h2 style={h2}>{titleFor(room, kind)}</h2>
-    <p style={sub}>{loc(room)}</p>
-    <p style={muted}>{kind === "deal" ? `${txt(room.assetClass)} • ${txt(room.propertyType)} • Route: ${list(room.routeTo).join(", ") || "Buyer"}` : `${txt(room.assetClass)} • ${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"}`}</p>
-    <p style={muted}>{kind === "deal" ? `Ask ${txt(room.askingPrice, "N/A")} • Value ${txt(room.propertyValue, "N/A")} • Repairs ${txt(room.repairs, "N/A")}` : `Severity ${txt(room.severity, "N/A")} • Time ${txt(room.timePressure, "N/A")} • Capital ${txt(room.capitalPressure, "N/A")}`}</p>
-    <div style={{ ...row, marginTop: 16 }}>
-      <Link href={href} style={goldBtn}>Open Room</Link>
-      <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}`} style={btn}>Messages</Link>
+function Meter({ label, value }: { label: string; value: number }) {
+  return <div style={panel}><div style={eyebrow}>{label}</div><h2 style={h2}>{pct(value)}%</h2><div style={{ height: 10, borderRadius: 99, background: "#252b3a", overflow: "hidden" }}><div style={{ width: `${pct(value)}%`, height: "100%", background: "#ffdc68" }} /></div></div>;
+}
+
+function MatchCard({ match }: { match: { member: MemberProfile; score: number; reasons: string[] } }) {
+  return <div style={match.score >= 65 ? pulsePanel : panel}>
+    <div style={eyebrow}>Match Score {match.score}%</div>
+    <h2 style={h2}>{txt(match.member.name, "VaultForge Member")}</h2>
+    <p style={sub}>{txt(match.member.company, "Company not listed")}</p>
+    <p style={muted}>From {txt(match.member.basedState, "N/A")} • Operates {list(match.member.statesOperated).join(", ") || "Not listed"}</p>
+    <p style={muted}>Can provide: {list(match.member.canProvide).join(", ") || "Not listed"}</p>
+    <p style={muted}>Why: {match.reasons.join(", ") || "Profile needs more routing data"}</p>
+    <div style={{ ...row, marginTop: 14 }}>
+      <Link href={`/messages?to=${encodeURIComponent(txt(match.member.email, profileId(match.member)))}&subject=${encodeURIComponent("Room Match Contact: " + txt(match.member.name, "VaultForge Member"))}`} style={goldBtn}>Contact</Link>
+      <Link href="/network" style={btn}>Network</Link>
     </div>
   </div>;
 }
 
-const KIND: RoomKind = "pain" as RoomKind;
-
-export default function RoomDetailPage({ params }: { params: { id: string } }) {
+export default function PainRoomPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id || "");
   const [room, setRoom] = useState<Room | null>(null);
 
   useEffect(() => {
-    const found = getRoom(KIND, id);
+    const found = getRoom("pain", id);
     setRoom(found);
-    if (found) markRead(KIND, found);
+    if (found) markRead("pain", found);
   }, [id]);
 
-  if (!room) {
-    return <main style={page}><div style={wrap}><Nav active={KIND === "deal" ? "deals" : "pain"} /><section style={hero}><h1 style={h1}>Room not found.</h1><p style={sub}>Go back to the board and open a current room.</p></section></div></main>;
+  const members = useMemo(() => getDirectory(), [room?.id]);
+  const intelligence = room ? painIntelligence(room) : null;
+  const matches = room ? members.map((member) => scoreMemberForRoom(member, room, "pain")).sort((a, b) => b.score - a.score).slice(0, 5) : [];
+
+  if (!room || !intelligence) {
+    return <main style={page}><div style={wrap}><Nav active="pain" /><section style={hero}><h1 style={h1}>Room not found.</h1><p style={sub}>Go back to Pain Rooms and open a current room.</p></section></div></main>;
   }
 
   const img = firstPhoto(room);
 
   function move(state: RoomState) {
-    if (!room) return;
-    setRoomState(KIND, room, state);
-    setRoom({ ...room, roomState: state, cleanupState: state, stateStatus: state });
+    setRoomState("pain", room!, state);
+    setRoom({ ...room!, roomState: state, cleanupState: state, stateStatus: state });
   }
 
-  return <main style={page}><div style={wrap}><Nav active={KIND === "deal" ? "deals" : "pain"} />
-    <section style={hero}>
-      {img ? <img src={img} alt={titleFor(room, KIND)} style={{ ...photoStyle, height: 290 }} /> : null}
-      <div style={eyebrow}>{KIND === "deal" ? "Deal Room" : "Pain Room"} • {roomState(room)}</div>
-      <h1 style={h1}>{titleFor(room, KIND)}</h1>
+  return <main style={page}><div style={wrap}><Nav active="pain" />
+
+    <section style={intelligence.severityScore >= 80 ? redHero : hero}>
+      {img ? <img src={img} alt={titleFor(room, "pain")} style={photoStyle} /> : null}
+      <div style={eyebrow}>Pain Room • {roomState(room)}</div>
+      <h1 style={h1}>{titleFor(room, "pain")}</h1>
       <p style={sub}>{loc(room)}</p>
-      <p style={muted}>{KIND === "deal" ? `${txt(room.assetClass)} • ${txt(room.propertyType)} • Strategy: ${list(room.strategy).join(", ") || "Not selected"}` : `${txt(room.assetClass)} • ${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"}`}</p>
+      <p style={muted}>{list(room.painTypes).join(", ") || "Problem not classified"} • Needs {list(room.routingNeeds).join(", ") || "solver"}</p>
+      <div style={{ ...row, marginTop: 18 }}>
+        <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Pain Room: " + titleFor(room, "pain"))}`} style={goldBtn}>Message Room</Link>
+        <Link href="/network" style={btn}>Find Solvers</Link>
+      </div>
     </section>
 
-    <Section title="5S Controls">
-      <p style={sub}>Current: {roomState(room)}. Save, archive, or delete moves this room out of active alerts and into its folder.</p>
+    <Section title="Action Controls">
+      <p style={sub}>Current state: {roomState(room)}. Every action changes Command visibility and folder placement.</p>
       <div style={{ ...row, marginTop: 18 }}>
         <button type="button" style={goldBtn} onClick={() => move("saved")}>Save</button>
         <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
@@ -537,34 +523,57 @@ export default function RoomDetailPage({ params }: { params: { id: string } }) {
       </div>
     </Section>
 
-    <Section title={KIND === "deal" ? "Deal Intelligence Snapshot" : "Pain Intelligence Snapshot"}>
-      <p style={sub}>{txt(room.analyzer, KIND === "deal" ? "Deal analyzer: verify seller facts, numbers, condition, route fit, and best execution path." : "Pain analyzer: identify root cause, pressure, blockers, risk, ideal solver profile, and next move.")}</p>
+    <Section title="Pain Intelligence Snapshot">
+      <div style={grid}>
+        <Meter label="Distress Severity" value={intelligence.severityScore} />
+        <Meter label="Capital Need" value={intelligence.capitalNeedScore} />
+        <Meter label="Execution Blockers" value={intelligence.executionBlockScore} />
+        <Value label="Signal" value={intelligence.banner} />
+      </div>
     </Section>
 
-    {KIND === "deal" ? <DealAnalysis room={room} /> : <PainAnalysis room={room} />}
-
-    <Section title="Owner Message">
-      <p style={sub}>Message subject is locked to this room so the thread matches the work.</p>
-      <div style={{ ...row, marginTop: 18 }}><Link href={`/messages?type=${KIND}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent((KIND === "deal" ? "Deal Room: " : "Pain Room: ") + titleFor(room, KIND))}`} style={goldBtn}>Message Owner</Link><Link href={KIND === "deal" ? "/deal-rooms" : "/pain-rooms"} style={btn}>Back to Board</Link></div>
+    <Section title="Problem Facts">
+      <div style={grid}>
+        <Value label="Pain Type" value={list(room.painTypes).join(", ")} />
+        <Value label="Severity" value={room.severity} />
+        <Value label="Time Pressure" value={room.timePressure} />
+        <Value label="Capital Pressure" value={room.capitalPressure} />
+        <Value label="Control Status" value={room.controlStatus} />
+        <Value label="Needs" value={list(room.routingNeeds).join(", ")} />
+      </div>
     </Section>
+
+    <Section title="Blockers + Risk">
+      <div style={grid}>
+        <Value label="Blockers" value={list(room.blockers).join(", ")} />
+        <Value label="Risk Types" value={list(room.riskTypes).join(", ")} />
+        <Value label="Root Cause" value={room.rootCause} />
+        <Value label="If Nothing Happens" value={intelligence.consequence} />
+      </div>
+    </Section>
+
+    <Section title="Numbers + Pressure">
+      <div style={grid}>
+        <Value label="Ask Price" value={room.askingPrice} />
+        <Value label="Value / ARV" value={room.propertyValue} />
+        <Value label="Repairs / Work" value={room.repairs} />
+        <Value label="Monthly Burn" value={room.monthlyBurnRate} />
+        <Value label="Money Needed Now" value={room.moneyNeededNow} />
+        <Value label="Deadline" value={room.deadline} />
+      </div>
+    </Section>
+
+    <Section title="AI Best Next Move">
+      <p style={sub}>{intelligence.nextMove}</p>
+    </Section>
+
+    <Section title="Best Solver Matches">
+      {matches.length ? <div style={grid}>{matches.map((match) => <MatchCard key={profileId(match.member)} match={match} />)}</div> : <p style={sub}>No member profiles available yet. Build profiles to activate solver matching.</p>}
+    </Section>
+
+    <Section title="Room Notes">
+      <p style={sub}>{txt(room.notes, "No notes added.")}</p>
+    </Section>
+
   </div></main>;
-}
-
-function DealAnalysis({ room }: { room: Room }) {
-  return <>
-    <Section title="Front Facts"><div style={grid}><Value label="Asset" value={`${txt(room.assetClass)} ${txt(room.propertyType)}`} /><Value label="Market" value={loc(room)} /><Value label="Condition" value={room.condition} /><Value label="Occupancy" value={room.occupancy} /></div></Section>
-    <Section title="Numbers + Spread"><div style={grid}><Value label="Ask Price" value={room.askingPrice} /><Value label="Value / ARV" value={room.propertyValue} /><Value label="Repairs" value={room.repairs} /><Value label="Income / Rent / NOI" value={room.monthlyRent} /></div></Section>
-    <Section title="Execution Path"><div style={grid}><Value label="Strategy" value={list(room.strategy).join(", ")} /><Value label="Route To" value={list(room.routeTo).join(", ")} /><Value label="Timeline" value={room.timeline || room.timePressure} /><Value label="Deal Strength" value={room.dealStrength} /></div></Section>
-    <Section title="AI Best Next Move"><p style={sub}>Verify title/control, confirm access, validate numbers, match to the strongest buyer/lender/operator profile, then move qualified conversation into Messages.</p></Section>
-  </>;
-}
-
-function PainAnalysis({ room }: { room: Room }) {
-  return <>
-    <Section title="Problem Facts"><div style={grid}><Value label="Pain Type" value={list(room.painTypes).join(", ")} /><Value label="Severity" value={room.severity} /><Value label="Time Pressure" value={room.timePressure} /><Value label="Control Status" value={room.controlStatus} /></div></Section>
-    <Section title="Pressure + Risk"><div style={grid}><Value label="Capital Pressure" value={room.capitalPressure} /><Value label="Blockers" value={list(room.blockers).join(", ")} /><Value label="Risk Types" value={list(room.riskTypes).join(", ")} /><Value label="Needs" value={list(room.routingNeeds).join(", ")} /></div></Section>
-    <Section title="Numbers + Burn"><div style={grid}><Value label="Ask Price" value={room.askingPrice} /><Value label="Value / ARV" value={room.propertyValue} /><Value label="Repairs / Work" value={room.repairs} /><Value label="Money Needed Now" value={room.moneyNeededNow} /></div></Section>
-    <Section title="Outcome Logic"><div style={grid}><Value label="Root Cause" value={room.rootCause} /><Value label="Best Outcome" value={room.bestOutcome} /><Value label="Worst Case" value={room.worstCase} /><Value label="Desired Solution" value={room.desiredSolution} /></div></Section>
-    <Section title="AI Best Next Move"><p style={sub}>Define root cause, verify control, isolate the blocker, route to the highest-fit solver profile, then move the execution conversation into Messages.</p></Section>
-  </>;
 }
