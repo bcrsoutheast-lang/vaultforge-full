@@ -103,6 +103,7 @@ function getDirectory(): MemberProfile[] {
   const currentId = profileId(current);
   const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
   const seen = new Set<string>();
+
   return merged
     .map(normalizeProfile)
     .filter((member) => {
@@ -124,8 +125,16 @@ function saveSavedIds(ids: string[]) {
   window.dispatchEvent(new Event("vaultforge-saved-profiles-change"));
 }
 
-function membersForState(state: string, members: MemberProfile[]) {
-  return members.filter((member) => list(member.statesOperated).includes(state));
+/*
+  IMPORTANT:
+  Network state cards show where the member is FROM / BASED.
+  That uses basedState.
+
+  statesOperated is still displayed on the card and later used for routing,
+  alerts, deal matching, pain matching, and AI intelligence.
+*/
+function membersBasedInState(state: string, members: MemberProfile[]) {
+  return members.filter((member) => txt(member.basedState, "GA") === state);
 }
 
 const page: React.CSSProperties = {
@@ -202,7 +211,7 @@ function StateCard({
     <button type="button" onClick={onClick} style={active ? activePanel : panel}>
       <div style={eyebrow}>{state}</div>
       <h2 style={h2}>{count}</h2>
-      <p style={muted}>member(s) serving</p>
+      <p style={muted}>member profile(s) based here</p>
       <p style={muted}>{savedCount} saved profile(s)</p>
     </button>
   );
@@ -224,17 +233,18 @@ function MemberCard({
   const strategies = list(member.strategies);
   const assets = list(member.assetClasses);
   const markets = list(member.markets);
+  const operates = list(member.statesOperated);
 
   return (
     <div style={saved ? activePanel : panel}>
       {txt(member.profilePhoto) ? <img src={txt(member.profilePhoto)} alt={txt(member.name, "Member")} style={photoStyle} /> : null}
 
-      <div style={eyebrow}>{txt(member.memberType, "Member")} • Based {txt(member.basedState, "N/A")}</div>
+      <div style={eyebrow}>{txt(member.memberType, "Member")} • From {txt(member.basedState, "N/A")}</div>
       <h2 style={h2}>{txt(member.name, "VaultForge Member")}</h2>
       <p style={sub}>{txt(member.company, "Company not listed")}</p>
 
-      <p style={muted}>From: {[txt(member.basedCity), txt(member.basedCounty), txt(member.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
-      <p style={muted}>Works in: {list(member.statesOperated).join(", ") || "No states selected"}</p>
+      <p style={muted}>Profile state: {[txt(member.basedCity), txt(member.basedCounty), txt(member.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
+      <p style={muted}>Operates in: {operates.join(", ") || "No operating states selected"}</p>
       <p style={muted}>Markets: {markets.join(", ") || "Not listed"}</p>
       <p style={muted}>Assets: {assets.join(", ") || "Not listed"}</p>
       <p style={muted}>Strategies: {strategies.join(", ") || "Not listed"}</p>
@@ -281,7 +291,7 @@ export default function NetworkPage() {
 
   const members = useMemo(() => getDirectory(), [tick]);
   const saved = useMemo(() => savedIds(), [tick]);
-  const openMembers = useMemo(() => membersForState(openState, members), [openState, members]);
+  const openMembers = useMemo(() => membersBasedInState(openState, members), [openState, members]);
   const savedMembers = useMemo(() => members.filter((member) => saved.includes(profileId(member))), [members, saved]);
 
   function saveMember(member: MemberProfile) {
@@ -302,7 +312,7 @@ export default function NetworkPage() {
         <section style={hero}>
           <div style={eyebrow}>Network</div>
           <h1 style={h1}>State member network.</h1>
-          <p style={sub}>Click a state. Only members serving that state show below. Save profiles and contact them from the member card.</p>
+          <p style={sub}>Click a state to show only member profiles based in that state. Operating states stay on the card for routing and deal/pain matching.</p>
           <div style={{ ...row, marginTop: 22 }}>
             <button type="button" style={!showSaved ? goldBtn : btn} onClick={() => setShowSaved(false)}>State Members</button>
             <button type="button" style={showSaved ? goldBtn : btn} onClick={() => setShowSaved(true)}>Saved Profiles ({savedMembers.length})</button>
@@ -314,7 +324,7 @@ export default function NetworkPage() {
             <Section title="State Buttons">
               <div style={grid}>
                 {STATES.map((state) => {
-                  const stateMembers = membersForState(state, members);
+                  const stateMembers = membersBasedInState(state, members);
                   const stateSaved = stateMembers.filter((member) => saved.includes(profileId(member))).length;
 
                   return (
@@ -331,7 +341,7 @@ export default function NetworkPage() {
               </div>
             </Section>
 
-            <Section title={`${openState} Members`}>
+            <Section title={`${openState} Based Members`}>
               {openMembers.length ? (
                 <div style={grid}>
                   {openMembers.map((member) => (
@@ -345,7 +355,7 @@ export default function NetworkPage() {
                   ))}
                 </div>
               ) : (
-                <p style={sub}>No members serving {openState} yet.</p>
+                <p style={sub}>No member profiles based in {openState} yet.</p>
               )}
             </Section>
           </>
