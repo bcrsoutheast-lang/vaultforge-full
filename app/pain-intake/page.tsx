@@ -16,20 +16,37 @@ type Room = {
   address?: string;
   assetClass?: string;
   propertyType?: string;
+  condition?: string;
+  occupancy?: string;
+  timeline?: string;
+  dealStrength?: string;
   strategy?: string[] | string;
-  exitStrategy?: string[] | string;
+  motivation?: string[] | string;
   routeTo?: string[] | string;
-  routedTo?: string[] | string;
   routingNeeds?: string[] | string;
   askingPrice?: string;
   propertyValue?: string;
   arv?: string;
   repairs?: string;
-  payoff?: string;
-  amountNeeded?: string;
-  equitySpread?: string;
+  monthlyRent?: string;
+  taxes?: string;
+  insurance?: string;
+  utilities?: string;
+  hoa?: string;
+  noi?: string;
+  capRate?: string;
+  exitValue?: string;
   assignmentFee?: string;
-  deadline?: string;
+  loanBalance?: string;
+  interestRate?: string;
+  balloonDate?: string;
+  sellerFlexibility?: string;
+  titleStatus?: string;
+  environmentalIssues?: string;
+  floodZone?: string;
+  permitsNeeded?: string;
+  cityIssues?: string;
+  contractorBids?: string;
   beds?: string;
   baths?: string;
   sqft?: string;
@@ -37,24 +54,49 @@ type Room = {
   buildingSize?: string;
   acres?: string;
   zoning?: string;
-  occupancy?: string;
   access?: string;
-  knownIssues?: string[] | string;
   docs?: string[] | string;
-  availableDocs?: string[] | string;
   contactName?: string;
   contactPhone?: string;
   contactEmail?: string;
   bestContact?: string;
   submitterRole?: string;
   painTypes?: string[] | string;
+  severity?: string;
   urgency?: string[] | string;
   blockers?: string[] | string;
+  timePressure?: string;
+  capitalPressure?: string;
+  riskTypes?: string[] | string;
+  controlStatus?: string;
+  foreclosureFiled?: string;
+  auctionDate?: string;
+  activeLitigation?: string;
+  insuranceActive?: string;
+  utilitiesStatus?: string;
+  contractorStatus?: string;
+  accessStatus?: string;
+  titleClear?: string;
+  existingLoanAmount?: string;
+  monthlyBurnRate?: string;
+  moneyNeededNow?: string;
+  amountNeeded?: string;
+  nothingDoneOutcome?: string;
+  bestOutcome?: string;
+  worstCase?: string;
+  contactedOthers?: string;
+  confidential?: string;
+  directContactAllowed?: string;
   rootCause?: string;
   targetOutcome?: string;
   currentState?: string;
-  constraints?: string;
   desiredSolution?: string;
+  completionPercent?: string;
+  permitStatus?: string;
+  inspectionStatus?: string;
+  claimNumber?: string;
+  structuralStatus?: string;
+  cityInvolvement?: string;
   roomState?: RoomState;
   cleanupState?: RoomState;
   stateStatus?: RoomState;
@@ -70,91 +112,191 @@ type Room = {
   [key:string]: unknown;
 };
 
-type Profile = {
-  id?: string;
-  name?: string;
-  company?: string;
-  email?: string;
-  phone?: string;
-  photoUrl?: string;
-  memberType?: string;
-  bestContact?: string;
-  statesOperatedIn?: string[] | string;
-  states?: string[] | string;
-  counties?: string[] | string;
-  markets?: string[] | string;
-  strategies?: string[] | string;
-  assetTypes?: string[] | string;
-  capitalRole?: string[] | string;
-  buyerType?: string[] | string;
-  lenderType?: string[] | string;
-  operatorType?: string[] | string;
-  priceRange?: string;
-  capitalAvailable?: string;
-  fundingCapacity?: string;
-  timeline?: string;
-  riskTolerance?: string[] | string;
-  dealPreferences?: string[] | string;
-  painFit?: string[] | string;
-  contactRules?: string[] | string;
-  alertsWanted?: string[] | string;
-  notes?: string;
-  status?: RoomState;
-  [key:string]: unknown;
-};
-
 const STATES = ["GA","TN","AL","FL","NC","SC","TX"];
-
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms","vaultforge_deal_rooms","vaultforge_rooms_deals","vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1","vaultforge_clean_pain_rooms","vaultforge_pain_rooms","vaultforge_rooms_pain","vf_pain_rooms"];
 const STATE_KEYS = ["vaultforge_clean_room_states","vaultforge_room_states","vaultforge_deal_room_states","vaultforge_pain_room_states","vaultforge_5s_room_states"];
 
-const PROFILE_KEY = "vaultforge_member_profile_v1";
-const NETWORK_KEY = "vaultforge_network_members_v1";
-
-function ok(){return typeof window!=="undefined"&&typeof window.localStorage!=="undefined"}
-function j<T>(raw:string|null,fb:T):T{try{return raw?JSON.parse(raw) as T:fb}catch{return fb}}
-function txt(v:unknown,fb=""){const s=String(v||"").trim();return s||fb}
-function list(v:unknown):string[]{if(Array.isArray(v))return v.map(x=>String(x).trim()).filter(Boolean);if(typeof v==="string"&&v.trim())return v.split(",").map(x=>x.trim()).filter(Boolean);return[]}
-function rid(r:Room|null|undefined){return txt(r?.id||r?.roomId)}
-function arr<T>(key:string):T[]{if(!ok())return[];const p=j<unknown>(localStorage.getItem(key),[]);return Array.isArray(p)?p as T[]:[]}
-function keys(kind:RoomKind){return kind==="deal"?DEAL_KEYS:PAIN_KEYS}
-function statesMap(){const m:Record<string,RoomState>={};if(!ok())return m;STATE_KEYS.forEach(k=>Object.assign(m,j<Record<string,RoomState>>(localStorage.getItem(k),{})));return m}
-function saveStateMap(m:Record<string,RoomState>){if(!ok())return;STATE_KEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(m)))}
-function photoDataUrls(files:FileList|null,max=10):Promise<string[]>{return new Promise(resolve=>{const selected=Array.from(files||[]).slice(0,max);if(!selected.length){resolve([]);return}Promise.all(selected.map(file=>new Promise<string>(res=>{const reader=new FileReader();reader.onload=()=>res(String(reader.result||""));reader.onerror=()=>res("");reader.readAsDataURL(file)}))).then(rows=>resolve(rows.filter(Boolean)))})}
-function saveRoom(kind:RoomKind,room:Room){if(!ok())return"";const id=rid(room)||`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;const now=new Date().toISOString();const next={...room,id,roomId:id,roomState:"active" as RoomState,cleanupState:"active" as RoomState,stateStatus:"active" as RoomState,createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""};[`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`].forEach(x=>localStorage.setItem(x,JSON.stringify(next)));keys(kind).forEach(key=>localStorage.setItem(key,JSON.stringify([next,...arr<Room>(key).filter(x=>rid(x)!==id)])));const sm=statesMap();sm[id]="active";sm[`${kind}:${id}`]="active";saveStateMap(sm);window.dispatchEvent(new Event("vaultforge-room-state-change"));window.dispatchEvent(new Event(kind==="deal"?"vaultforge-deal-change":"vaultforge-pain-change"));return id}
-function readProfile():Profile{return ok()?j<Profile>(localStorage.getItem(PROFILE_KEY),{}):{}}
-function profileStates(p:Profile){const st=list(p.statesOperatedIn||p.states).map(x=>x.toUpperCase());return st.length?st:["GA"]}
-function saveProfile(p:Profile){if(!ok())return;const next={...p,id:p.id||txt(p.email,"current-profile"),statesOperatedIn:profileStates(p),updatedAt:new Date().toISOString()};localStorage.setItem(PROFILE_KEY,JSON.stringify(next));const current=j<Profile[]>(localStorage.getItem(NETWORK_KEY),[]);const rows=Array.isArray(current)?current.filter(m=>txt(m.id||m.email||m.name||m.company).toLowerCase()!==txt(next.id||next.email||next.name||next.company).toLowerCase()):[];localStorage.setItem(NETWORK_KEY,JSON.stringify([next,...rows]));window.dispatchEvent(new Event("vaultforge-network-change"))}
+function ok(){ return typeof window !== "undefined" && typeof window.localStorage !== "undefined"; }
+function j<T>(raw:string|null,fb:T):T{ try{return raw?JSON.parse(raw) as T:fb}catch{return fb} }
+function txt(v:unknown,fb=""){ const s=String(v||"").trim(); return s||fb; }
+function list(v:unknown):string[]{ if(Array.isArray(v)) return v.map(x=>String(x).trim()).filter(Boolean); if(typeof v==="string"&&v.trim()) return v.split(",").map(x=>x.trim()).filter(Boolean); return []; }
+function rid(r:Room|null|undefined){ return txt(r?.id||r?.roomId); }
+function arr<T>(key:string):T[]{ if(!ok()) return []; const p=j<unknown>(localStorage.getItem(key),[]); return Array.isArray(p)?p as T[]:[]; }
+function keys(kind:RoomKind){ return kind==="deal"?DEAL_KEYS:PAIN_KEYS; }
+function statesMap(){ const m:Record<string,RoomState>={}; if(!ok()) return m; STATE_KEYS.forEach(k=>Object.assign(m,j<Record<string,RoomState>>(localStorage.getItem(k),{}))); return m; }
+function saveStateMap(m:Record<string,RoomState>){ if(!ok()) return; STATE_KEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(m))); }
+function photoDataUrls(files:FileList|null,max=10):Promise<string[]>{ return new Promise(resolve=>{ const selected=Array.from(files||[]).slice(0,max); if(!selected.length){resolve([]);return;} Promise.all(selected.map(file=>new Promise<string>(res=>{ const reader=new FileReader(); reader.onload=()=>res(String(reader.result||"")); reader.onerror=()=>res(""); reader.readAsDataURL(file); }))).then(rows=>resolve(rows.filter(Boolean))); }); }
+function saveRoom(kind:RoomKind,room:Room){ if(!ok()) return ""; const id=rid(room)||`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`; const now=new Date().toISOString(); const next={...room,id,roomId:id,roomState:"active" as RoomState,cleanupState:"active" as RoomState,stateStatus:"active" as RoomState,createdAt:txt(room.createdAt,now),updatedAt:now,alertRead:false,viewedAt:""}; [`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`].forEach(x=>localStorage.setItem(x,JSON.stringify(next))); keys(kind).forEach(key=>localStorage.setItem(key,JSON.stringify([next,...arr<Room>(key).filter(x=>rid(x)!==id)]))); const sm=statesMap(); sm[id]="active"; sm[`${kind}:${id}`]="active"; saveStateMap(sm); window.dispatchEvent(new Event("vaultforge-room-state-change")); window.dispatchEvent(new Event(kind==="deal"?"vaultforge-deal-change":"vaultforge-pain-change")); return id; }
 
 
-function Nav({active}:{active:string}){return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={active==="command"?goldBtn:btn}>Command</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/deal-create" style={active==="deal"?goldBtn:btn}>Create Deal</Link><Link href="/pain-intake" style={active==="pain"?goldBtn:btn}>Pain Intake</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/network" style={btn}>Network</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={active==="profile"?goldBtn:btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>}
-function Field({l,v,c}:{l:string;v:string;c:(v:string)=>void}){return <label><div style={label}>{l}</div><input style={input} value={v} onChange={e=>c(e.target.value)}/></label>}
+function Nav({active}:{active:string}){return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={active==="command"?goldBtn:btn}>Command</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/deal-create" style={active==="deal"?goldBtn:btn}>Create Deal</Link><Link href="/pain-intake" style={active==="pain"?goldBtn:btn}>Pain Intake</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/network" style={btn}>Network</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>}
+function Field({l,v,c,placeholder=""}:{l:string;v:string;c:(v:string)=>void;placeholder?:string}){return <label><div style={label}>{l}</div><input style={input} placeholder={placeholder} value={v} onChange={e=>c(e.target.value)}/></label>}
 function Area({l,v,c}:{l:string;v:string;c:(v:string)=>void}){return <label><div style={label}>{l}</div><textarea style={textArea} value={v} onChange={e=>c(e.target.value)}/></label>}
-function Select({l,v,c}:{l:string;v:string;c:(v:string)=>void}){return <label><div style={label}>{l}</div><select style={input} value={v} onChange={e=>c(e.target.value)}>{STATES.map(s=><option key={s} value={s}>{s}</option>)}</select></label>}
+function SelectBox({l,v,c,options}:{l:string;v:string;c:(v:string)=>void;options:string[]}){return <label><div style={label}>{l}</div><select style={input} value={v} onChange={e=>c(e.target.value)}>{options.map(o=><option key={o} value={o}>{o}</option>)}</select></label>}
 function MultiChips({labelName,options,selected,onToggle}:{labelName:string;options:string[];selected:string[];onToggle:(v:string)=>void}){return <div><div style={label}>{labelName}</div><div style={row}>{options.map(o=><button type="button" key={o} onClick={()=>onToggle(o)} style={selected.includes(o)?chipActive:chip}>{o}</button>)}</div></div>}
+function Section({title,children}:{title:string;children:React.ReactNode}){return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>}
+function moneyNumber(value:unknown){const n=Number(String(value||"").replace(/[^0-9.-]/g,""));return Number.isFinite(n)?n:0}
+function fmt(n:number){return n? n.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not enough data"}
 
-const ASSETS=["Residential","Commercial","Land"];
-const PAIN=["Funding Gap","Distressed Seller","Foreclosure Risk","Stalled Construction","Contractor Problem","Operator Needed","Lender Problem","Permit / City Issue","Tenant / Occupancy Issue","Partner Dispute","Emergency Exit","Title Problem","Tax Problem","Portfolio Liquidation"];
-const BLOCKERS=["Capital","Timeline","Title","Access","Contractor","Tenant","Permit","City","Legal","Partner","Seller Pressure","Unknown Numbers"];
-const ROUTES=["Lender","Investor","Operator","Contractor","Attorney","Buyer","Developer","Property Manager","Wholesaler"];
-const URGENCY=["Low","Medium","High","Critical","Emergency"];
+
+const ASSET=["Residential","Commercial","Land","Multifamily","Industrial","Retail","Mixed Use"];
+const PAIN=["Funding Gap","Foreclosure","Stalled Construction","Contractor Problem","Title Problem","Permit Problem","City Violation","Tenant Issue","Partnership Dispute","Capital Raise","Emergency Exit","Burn Rate","Lender Pressure","Insurance Claim","Probate","Estate Liquidation","Squatter Issue","Lawsuit","Tax Sale Risk","Utility Shutoff","Fire Damage","Mold","Structural","Crime Property","HOA Problem"];
+const SEVERITY=["Low","Medium","High","Critical","Emergency"];
+const TIME=["24 Hours","72 Hours","7 Days","14 Days","30 Days","Flexible"];
+const CAPITAL=["Under $25k","$25k-$100k","$100k-$250k","$250k-$1M","$1M+"];
+const RISK=["Legal","Financial","Structural","Operational","City/Permit","Occupancy","Environmental"];
+const BLOCKERS=["Capital","Timeline","Title","Access","Contractor","Tenant","Permit","City","Legal","Partner","Seller Pressure","Unknown Numbers","Insurance","Utilities"];
+const NEEDS=["Lender","Operator","Contractor","Buyer","Attorney","Insurance Adjuster","City Expeditor","Developer","Property Manager","Private Capital"];
+const YESNO=["Unknown","Yes","No"];
+
 export default function Page(){
- const [f,setF]=useState<Room>({assetClass:"Residential",state:"GA",painTypes:["Funding Gap"],routingNeeds:["Lender"],urgency:["High"]}); const [files,setFiles]=useState<FileList|null>(null); const [msg,setMsg]=useState("");
+ const [f,setF]=useState<Room>({assetClass:"Residential",state:"GA",painTypes:["Funding Gap"],severity:"High",timePressure:"7 Days",capitalPressure:"$25k-$100k",routingNeeds:["Lender"],urgency:["High"]});
+ const [files,setFiles]=useState<FileList|null>(null);
+ const [msg,setMsg]=useState("");
  function up(k:string,v:unknown){setF({...f,[k]:v})}
  function tog(k:string,v:string){const s=new Set(list(f[k]));s.has(v)?s.delete(v):s.add(v);up(k,Array.from(s))}
- async function submit(){setMsg("Saving pain...");const urls=await photoDataUrls(files,10);const id=saveRoom("pain",{...f,title:txt(f.title,"Untitled Pain Room"),photoUrls:urls,photos:urls,analyzer:`Pain room in ${txt(f.city)}, ${txt(f.county)}, ${txt(f.state)}. Problem: ${list(f.painTypes).join(", ")||"not selected"}. Urgency: ${list(f.urgency).join(", ")||"not selected"}. Route to ${list(f.routingNeeds).join(", ")||"solver profile"}. Next path: verify control, validate numbers, solve blocker, move conversation to Messages.`});setF({assetClass:"Residential",state:"GA",painTypes:["Funding Gap"],routingNeeds:["Lender"],urgency:["High"]});setFiles(null);if(id)window.location.href=`/pain-rooms/${encodeURIComponent(id)}`;}
- return <main style={page}><div style={wrap}><Nav active="pain"/>{msg?<section style={card}><p style={sub}>{msg}</p></section>:null}<section style={hero}><div style={eyebrow}>Pain Intake</div><h1 style={h1}>Problem room.</h1><p style={sub}>Full problem intake restored: type, blocker, numbers, asset, pressure, contact, solution path, and up to 10 photos.</p></section>
- <section style={card}><div style={eyebrow}>Asset Class</div><MultiChips labelName="Choose Type" options={ASSETS} selected={[txt(f.assetClass,"Residential")]} onToggle={v=>up("assetClass",v)}/></section>
- <section style={card}><div style={eyebrow}>Problem Type + Pressure</div><MultiChips labelName="Pain Type" options={PAIN} selected={list(f.painTypes)} onToggle={v=>tog("painTypes",v)}/><div style={{height:18}}/><MultiChips labelName="Urgency" options={URGENCY} selected={list(f.urgency)} onToggle={v=>tog("urgency",v)}/><div style={{height:18}}/><MultiChips labelName="Blockers" options={BLOCKERS} selected={list(f.blockers)} onToggle={v=>tog("blockers",v)}/></section>
- <section style={card}><div style={eyebrow}>Market + Asset</div><div style={grid}><Field l="Pain Room Title *" v={txt(f.title)} c={v=>up("title",v)}/><Select l="State *" v={txt(f.state,"GA")} c={v=>up("state",v)}/><Field l="City *" v={txt(f.city)} c={v=>up("city",v)}/><Field l="County" v={txt(f.county)} c={v=>up("county",v)}/><Field l="Address / Location" v={txt(f.address)} c={v=>up("address",v)}/><Field l="Property Type" v={txt(f.propertyType)} c={v=>up("propertyType",v)}/></div></section>
- <section style={card}><div style={eyebrow}>Numbers</div><div style={grid}><Field l="Ask Price" v={txt(f.askingPrice)} c={v=>up("askingPrice",v)}/><Field l="Property Value / ARV" v={txt(f.propertyValue)} c={v=>up("propertyValue",v)}/><Field l="Repairs / Work" v={txt(f.repairs)} c={v=>up("repairs",v)}/><Field l="Payoff" v={txt(f.payoff)} c={v=>up("payoff",v)}/><Field l="Amount Needed" v={txt(f.amountNeeded)} c={v=>up("amountNeeded",v)}/><Field l="Deadline" v={txt(f.deadline)} c={v=>up("deadline",v)}/></div></section>
- <section style={card}><div style={eyebrow}>Asset Facts</div><div style={grid}><Field l="Beds" v={txt(f.beds)} c={v=>up("beds",v)}/><Field l="Baths" v={txt(f.baths)} c={v=>up("baths",v)}/><Field l="Sqft" v={txt(f.sqft)} c={v=>up("sqft",v)}/><Field l="Units" v={txt(f.units)} c={v=>up("units",v)}/><Field l="Acres" v={txt(f.acres)} c={v=>up("acres",v)}/><Field l="Occupancy" v={txt(f.occupancy)} c={v=>up("occupancy",v)}/><Field l="Access" v={txt(f.access)} c={v=>up("access",v)}/></div></section>
- <section style={card}><div style={eyebrow}>Solution Routing</div><MultiChips labelName="Route Need" options={ROUTES} selected={list(f.routingNeeds)} onToggle={v=>tog("routingNeeds",v)}/><div style={{height:18}}/><div style={grid}><Field l="Root Cause" v={txt(f.rootCause)} c={v=>up("rootCause",v)}/><Field l="Target Outcome" v={txt(f.targetOutcome)} c={v=>up("targetOutcome",v)}/><Field l="Current State" v={txt(f.currentState)} c={v=>up("currentState",v)}/><Field l="Constraints" v={txt(f.constraints)} c={v=>up("constraints",v)}/><Field l="Desired Solution" v={txt(f.desiredSolution)} c={v=>up("desiredSolution",v)}/></div></section>
- <section style={card}><div style={eyebrow}>Contact</div><div style={grid}><Field l="Name" v={txt(f.contactName)} c={v=>up("contactName",v)}/><Field l="Phone" v={txt(f.contactPhone)} c={v=>up("contactPhone",v)}/><Field l="Email" v={txt(f.contactEmail)} c={v=>up("contactEmail",v)}/><Field l="Best Contact" v={txt(f.bestContact)} c={v=>up("bestContact",v)}/><Field l="Submitter Role" v={txt(f.submitterRole)} c={v=>up("submitterRole",v)}/></div></section>
- <section style={card}><div style={eyebrow}>Photos Up To 10</div><input type="file" multiple accept="image/*" onChange={e=>setFiles(e.target.files)}/><p style={muted}>{files?files.length:0}/10 selected.</p></section>
- <section style={card}><div style={eyebrow}>Notes</div><Area l="Problem Notes / AI Context" v={txt(f.notes)} c={v=>up("notes",v)}/></section>
- <section style={card}><button onClick={submit} style={goldBtn}>Save Pain Room</button></section></div></main>
+ const painTypes=list(f.painTypes);
+ const hasForeclosure=painTypes.includes("Foreclosure")||painTypes.includes("Tax Sale Risk")||painTypes.includes("Lender Pressure");
+ const hasConstruction=painTypes.includes("Stalled Construction")||painTypes.includes("Contractor Problem")||painTypes.includes("Permit Problem")||painTypes.includes("City Violation");
+ const hasDamage=painTypes.includes("Fire Damage")||painTypes.includes("Mold")||painTypes.includes("Structural")||painTypes.includes("Insurance Claim");
+ const hasTenant=painTypes.includes("Tenant Issue")||painTypes.includes("Squatter Issue")||painTypes.includes("Crime Property");
+ async function submit(){
+   setMsg("Saving pain room...");
+   const urls=await photoDataUrls(files,10);
+   const id=saveRoom("pain",{...f,title:txt(f.title,"Untitled Pain Room"),photoUrls:urls,photos:urls,analyzer:`Pain analyzer: ${list(f.painTypes).join(", ")||"unclassified"} in ${txt(f.city)}, ${txt(f.county)}, ${txt(f.state)}. Severity ${txt(f.severity)}. Time pressure ${txt(f.timePressure)}. Capital pressure ${txt(f.capitalPressure)}. Route to ${list(f.routingNeeds).join(", ")||"solver profile"}. Best next move: verify control, validate numbers, classify blocker, contact matched profile, move to Messages.`});
+   setF({assetClass:"Residential",state:"GA",painTypes:["Funding Gap"],severity:"High",timePressure:"7 Days",capitalPressure:"$25k-$100k",routingNeeds:["Lender"],urgency:["High"]});
+   setFiles(null);
+   if(id) window.location.href=`/pain-rooms/${encodeURIComponent(id)}`;
+ }
+ return <main style={page}><div style={wrap}><Nav active="pain"/>{msg?<Section title="Status"><p style={sub}>{msg}</p></Section>:null}
+ <section style={hero}><div style={eyebrow}>Adaptive Pain Intake</div><h1 style={h1}>Problem routing engine.</h1><p style={sub}>More guided. More important fields. Conditional blocks appear based on the problem selected.</p></section>
+
+ <Section title="Problem Type">
+   <MultiChips labelName="Pain Type" options={PAIN} selected={list(f.painTypes)} onToggle={v=>tog("painTypes",v)}/>
+ </Section>
+
+ <Section title="Severity + Pressure">
+   <div style={grid}>
+     <SelectBox l="Pain Severity" v={txt(f.severity,"High")} c={v=>up("severity",v)} options={SEVERITY}/>
+     <SelectBox l="Time Pressure" v={txt(f.timePressure,"7 Days")} c={v=>up("timePressure",v)} options={TIME}/>
+     <SelectBox l="Capital Pressure" v={txt(f.capitalPressure,"$25k-$100k")} c={v=>up("capitalPressure",v)} options={CAPITAL}/>
+     <SelectBox l="Control Status" v={txt(f.controlStatus,"Unknown")} c={v=>up("controlStatus",v)} options={["Unknown","Owner Controlled","Contract Controlled","Partner Controlled","Bank Controlled","Court / Estate","No Control Yet"]}/>
+   </div>
+   <div style={{height:18}}/>
+   <MultiChips labelName="Risk Type" options={RISK} selected={list(f.riskTypes)} onToggle={v=>tog("riskTypes",v)}/>
+   <div style={{height:18}}/>
+   <MultiChips labelName="Current Blockers" options={BLOCKERS} selected={list(f.blockers)} onToggle={v=>tog("blockers",v)}/>
+ </Section>
+
+ <Section title="Market + Asset">
+   <div style={grid}>
+     <Field l="Pain Room Title" v={txt(f.title)} c={v=>up("title",v)}/>
+     <SelectBox l="State" v={txt(f.state,"GA")} c={v=>up("state",v)} options={STATES}/>
+     <Field l="City" v={txt(f.city)} c={v=>up("city",v)}/>
+     <Field l="County" v={txt(f.county)} c={v=>up("county",v)}/>
+     <Field l="Address / Location" v={txt(f.address)} c={v=>up("address",v)}/>
+     <SelectBox l="Asset Class" v={txt(f.assetClass,"Residential")} c={v=>up("assetClass",v)} options={ASSET}/>
+     <Field l="Property Type" v={txt(f.propertyType)} c={v=>up("propertyType",v)}/>
+   </div>
+ </Section>
+
+ <Section title="Numbers + Burn">
+   <div style={grid}>
+     <Field l="Ask Price" v={txt(f.askingPrice)} c={v=>up("askingPrice",v)}/>
+     <Field l="Property Value / ARV" v={txt(f.propertyValue)} c={v=>up("propertyValue",v)}/>
+     <Field l="Repairs / Work" v={txt(f.repairs)} c={v=>up("repairs",v)}/>
+     <Field l="Existing Loan Amount" v={txt(f.existingLoanAmount||f.loanBalance)} c={v=>up("existingLoanAmount",v)}/>
+     <Field l="Monthly Burn Rate" v={txt(f.monthlyBurnRate)} c={v=>up("monthlyBurnRate",v)}/>
+     <Field l="Money Needed Immediately" v={txt(f.moneyNeededNow)} c={v=>up("moneyNeededNow",v)}/>
+     <Field l="Deadline / Date Pressure" v={txt(f.deadline)} c={v=>up("deadline",v)}/>
+   </div>
+ </Section>
+
+ <Section title="Property Facts">
+   <div style={grid}>
+     <Field l="Beds" v={txt(f.beds)} c={v=>up("beds",v)}/>
+     <Field l="Baths" v={txt(f.baths)} c={v=>up("baths",v)}/>
+     <Field l="Sqft" v={txt(f.sqft)} c={v=>up("sqft",v)}/>
+     <Field l="Units" v={txt(f.units)} c={v=>up("units",v)}/>
+     <Field l="Acres" v={txt(f.acres)} c={v=>up("acres",v)}/>
+     <SelectBox l="Occupancy" v={txt(f.occupancy,"Unknown")} c={v=>up("occupancy",v)} options={["Unknown","Vacant","Owner Occupied","Tenant Occupied","Squatter","Partial Vacancy"]}/>
+     <SelectBox l="Access" v={txt(f.access,"Unknown")} c={v=>up("access",v)} options={["Unknown","Lockbox","Owner Access","Agent Access","No Access","Drive By Only"]}/>
+   </div>
+ </Section>
+
+ {hasForeclosure?<Section title="Foreclosure / Lender Pressure">
+   <div style={grid}>
+     <SelectBox l="Foreclosure Filed" v={txt(f.foreclosureFiled,"Unknown")} c={v=>up("foreclosureFiled",v)} options={YESNO}/>
+     <Field l="Auction Date" v={txt(f.auctionDate)} c={v=>up("auctionDate",v)}/>
+     <Field l="Reinstatement / Arrears" v={txt(f.amountNeeded)} c={v=>up("amountNeeded",v)}/>
+     <Field l="Lender / Servicer" v={txt(f.lender)} c={v=>up("lender",v)}/>
+   </div>
+ </Section>:null}
+
+ {hasConstruction?<Section title="Construction / Permit Problem">
+   <div style={grid}>
+     <SelectBox l="Contractor Still On Site" v={txt(f.contractorStatus,"Unknown")} c={v=>up("contractorStatus",v)} options={["Unknown","Yes","No","Abandoned","Dispute","Needs Replacement"]}/>
+     <Field l="Completion %" v={txt(f.completionPercent)} c={v=>up("completionPercent",v)}/>
+     <SelectBox l="Permit Status" v={txt(f.permitStatus,"Unknown")} c={v=>up("permitStatus",v)} options={["Unknown","No Permit","Applied","Approved","Expired","Stop Work","Inspection Failed"]}/>
+     <SelectBox l="Inspection Status" v={txt(f.inspectionStatus,"Unknown")} c={v=>up("inspectionStatus",v)} options={["Unknown","Passed","Failed","Pending","Needs Inspection"]}/>
+   </div>
+ </Section>:null}
+
+ {hasDamage?<Section title="Damage / Insurance / Structure">
+   <div style={grid}>
+     <SelectBox l="Insurance Active" v={txt(f.insuranceActive,"Unknown")} c={v=>up("insuranceActive",v)} options={YESNO}/>
+     <Field l="Claim Number" v={txt(f.claimNumber)} c={v=>up("claimNumber",v)}/>
+     <SelectBox l="Structural Status" v={txt(f.structuralStatus,"Unknown")} c={v=>up("structuralStatus",v)} options={["Unknown","Safe","Needs Engineer","Unsafe","Condemned"]}/>
+     <SelectBox l="Utilities Status" v={txt(f.utilitiesStatus,"Unknown")} c={v=>up("utilitiesStatus",v)} options={["Unknown","On","Off","Partially On","Needs Utility Release"]}/>
+     <SelectBox l="City Involvement" v={txt(f.cityInvolvement,"Unknown")} c={v=>up("cityInvolvement",v)} options={["Unknown","None","Code Enforcement","Fire Marshal","Building Dept","Condemned"]}/>
+   </div>
+ </Section>:null}
+
+ {hasTenant?<Section title="Tenant / Occupancy Problem">
+   <div style={grid}>
+     <SelectBox l="Occupied or Vacant" v={txt(f.occupancy,"Unknown")} c={v=>up("occupancy",v)} options={["Unknown","Vacant","Tenant Occupied","Owner Occupied","Squatter","Eviction Needed"]}/>
+     <SelectBox l="Access Status" v={txt(f.accessStatus,"Unknown")} c={v=>up("accessStatus",v)} options={["Unknown","Allowed","Restricted","Hostile","No Access"]}/>
+     <SelectBox l="Active Litigation" v={txt(f.activeLitigation,"Unknown")} c={v=>up("activeLitigation",v)} options={YESNO}/>
+     <Field l="Tenant / Occupancy Notes" v={txt(f.tenantNotes)} c={v=>up("tenantNotes",v)}/>
+   </div>
+ </Section>:null}
+
+ <Section title="Solution Routing">
+   <MultiChips labelName="Needs" options={NEEDS} selected={list(f.routingNeeds)} onToggle={v=>tog("routingNeeds",v)}/>
+   <div style={{height:18}}/>
+   <div style={grid}>
+     <SelectBox l="Can Members Contact Directly" v={txt(f.directContactAllowed,"Unknown")} c={v=>up("directContactAllowed",v)} options={YESNO}/>
+     <SelectBox l="Confidential / NDA" v={txt(f.confidential,"Unknown")} c={v=>up("confidential",v)} options={YESNO}/>
+     <SelectBox l="Title Clear" v={txt(f.titleClear,"Unknown")} c={v=>up("titleClear",v)} options={YESNO}/>
+     <SelectBox l="Has Anyone Else Been Contacted" v={txt(f.contactedOthers,"Unknown")} c={v=>up("contactedOthers",v)} options={YESNO}/>
+   </div>
+ </Section>
+
+ <Section title="Outcome Logic">
+   <div style={grid}>
+     <Field l="Root Cause" v={txt(f.rootCause)} c={v=>up("rootCause",v)}/>
+     <Field l="Best Realistic Outcome" v={txt(f.bestOutcome)} c={v=>up("bestOutcome",v)}/>
+     <Field l="Worst Case Scenario" v={txt(f.worstCase)} c={v=>up("worstCase",v)}/>
+     <Field l="What Happens If Nothing Is Done" v={txt(f.nothingDoneOutcome)} c={v=>up("nothingDoneOutcome",v)}/>
+     <Field l="Desired Solution" v={txt(f.desiredSolution)} c={v=>up("desiredSolution",v)}/>
+   </div>
+ </Section>
+
+ <Section title="Contact">
+   <div style={grid}>
+     <Field l="Contact Name" v={txt(f.contactName)} c={v=>up("contactName",v)}/>
+     <Field l="Phone" v={txt(f.contactPhone)} c={v=>up("contactPhone",v)}/>
+     <Field l="Email" v={txt(f.contactEmail)} c={v=>up("contactEmail",v)}/>
+     <SelectBox l="Best Contact" v={txt(f.bestContact,"VaultForge Message")} c={v=>up("bestContact",v)} options={["VaultForge Message","Text","Phone","Email","Contact Form"]}/>
+     <SelectBox l="Submitter Role" v={txt(f.submitterRole,"Owner")} c={v=>up("submitterRole",v)} options={["Owner","Wholesaler","Agent","Investor","Lender","Operator","Partner","Family / Estate"]}/>
+   </div>
+ </Section>
+
+ <Section title="Photos Up To 10"><input type="file" multiple accept="image/*" onChange={e=>setFiles(e.target.files)}/><p style={muted}>{files?files.length:0}/10 selected.</p></Section>
+ <Section title="Notes"><Area l="Problem Notes / AI Context" v={txt(f.notes)} c={v=>up("notes",v)}/></Section>
+ <Section title="Save"><button onClick={submit} style={goldBtn}>Save Pain Room</button></Section>
+ </div></main>
 }
 
 const page:React.CSSProperties={minHeight:"100vh",background:"#05070d",color:"#f7f7fb",padding:18,fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"};
@@ -168,7 +310,7 @@ const hero:React.CSSProperties={border:"1px solid rgba(245,197,66,.28)",borderRa
 const card:React.CSSProperties={background:"linear-gradient(180deg,#080d19,#050816)",border:"1px solid rgba(245,197,66,.28)",borderRadius:26,padding:28,marginBottom:22};
 const eyebrow:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:7,fontWeight:950,fontSize:15,marginBottom:12};
 const h1:React.CSSProperties={fontSize:"clamp(44px,8vw,86px)",lineHeight:.9,letterSpacing:-4,margin:"0 0 18px",fontWeight:950};
-const h2:React.CSSProperties={fontSize:"clamp(32px,5vw,54px)",lineHeight:.95,letterSpacing:-2,margin:"0 0 18px",fontWeight:950};
+const h2:React.CSSProperties={fontSize:"clamp(30px,5vw,50px)",lineHeight:.95,letterSpacing:-2,margin:"0 0 18px",fontWeight:950};
 const sub:React.CSSProperties={color:"#c9d0dc",fontSize:21,lineHeight:1.35,margin:0};
 const muted:React.CSSProperties={color:"#aeb7c7",margin:"8px 0 0",lineHeight:1.35};
 const grid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:16};
@@ -178,4 +320,5 @@ const chipActive:React.CSSProperties={...chip,background:"#ffdc68",color:"#10131
 const input:React.CSSProperties={width:"100%",boxSizing:"border-box",border:"1px solid rgba(207,216,230,.18)",background:"#151b2a",color:"#f8fafc",borderRadius:18,padding:"15px 16px",fontSize:16,outline:"none"};
 const textArea:React.CSSProperties={...input,minHeight:110,resize:"vertical"};
 const label:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:4,fontSize:12,fontWeight:950,marginBottom:8};
+const calcBox:React.CSSProperties={background:"rgba(255,220,104,.08)",border:"1px solid rgba(255,220,104,.22)",borderRadius:18,padding:18,color:"#ffd45a",fontWeight:950};
 
