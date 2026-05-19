@@ -3,87 +3,21 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type RoomState = "active" | "saved" | "archived" | "deleted";
-type RoomKind = "deal" | "pain";
-
-type Room = {
+type MemberProfile = {
   id?: string;
-  roomId?: string;
-  title?: string;
-  name?: string;
-  state?: string;
-  city?: string;
-  county?: string;
-  address?: string;
-  assetClass?: string;
-  propertyType?: string;
-  askingPrice?: string;
-  propertyValue?: string;
-  repairs?: string;
-  timeline?: string;
-  timePressure?: string;
-  severity?: string;
-  capitalPressure?: string;
-  controlStatus?: string;
-  contactName?: string;
-  contactPhone?: string;
-  contactEmail?: string;
-  notes?: string;
-  routeTo?: string[] | string;
-  routingNeeds?: string[] | string;
-  painTypes?: string[] | string;
-  strategy?: string[] | string;
-  motivation?: string[] | string;
-  condition?: string;
-  occupancy?: string;
-  dealStrength?: string;
-  beds?: string;
-  baths?: string;
-  sqft?: string;
-  units?: string;
-  acres?: string;
-  zoning?: string;
-  monthlyRent?: string;
-  monthlyBurnRate?: string;
-  moneyNeededNow?: string;
-  deadline?: string;
-  rootCause?: string;
-  bestOutcome?: string;
-  worstCase?: string;
-  desiredSolution?: string;
-  blockers?: string[] | string;
-  riskTypes?: string[] | string;
-  submitterRole?: string;
-  bestContact?: string;
-  roomState?: RoomState;
-  cleanupState?: RoomState;
-  stateStatus?: RoomState;
-  alertRead?: boolean;
-  viewedAt?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  coverPhoto?: string;
-  photoUrl?: string;
-  imageUrl?: string;
-  photos?: string[];
-  photoUrls?: string[];
-  analyzer?: string;
-  [key: string]: unknown;
-};
-
-type Profile = {
   name?: string;
   company?: string;
   email?: string;
   phone?: string;
-  memberType?: string;
   profilePhoto?: string;
-  primaryCity?: string;
-  primaryCounty?: string;
+  memberType?: string;
+  basedState?: string;
+  basedCity?: string;
+  basedCounty?: string;
   statesOperated?: string[];
   markets?: string[];
-  strategies?: string[];
   assetClasses?: string[];
+  strategies?: string[];
   specialties?: string[];
   needs?: string[];
   canProvide?: string[];
@@ -93,33 +27,24 @@ type Profile = {
   contactPreference?: string;
   directContact?: string;
   bio?: string;
+  updatedAt?: string;
   [key: string]: unknown;
 };
+
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const MARKETS = ["Atlanta", "North Georgia", "Chattanooga", "Nashville", "Knoxville", "Birmingham", "Huntsville", "Montgomery", "Jacksonville", "Tampa", "Orlando", "Miami", "Charlotte", "Raleigh-Durham", "Greenville-Spartanburg", "Charleston", "Dallas-Fort Worth", "Houston", "Austin", "San Antonio"];
 const ASSETS = ["Residential", "Commercial", "Land"];
-const RES_TYPES = ["Single Family", "Duplex", "Triplex", "Quad", "Townhome", "Condo", "Mobile Home", "Small Multifamily"];
-const COM_TYPES = ["Retail", "Office", "Industrial", "Warehouse", "Hotel", "Self Storage", "Mixed Use", "Medical", "Restaurant", "Automotive", "Church / Special Use"];
-const LAND_TYPES = ["Infill Lot", "Acreage", "Entitled Land", "Raw Land", "Commercial Pad", "Subdivision", "Timber", "Farm", "Assemblage", "Waterfront"];
 const STRATEGIES = ["Wholesale", "Flip", "Buy & Hold", "BRRRR", "Development", "Seller Finance", "JV", "Rental", "Hotel Conversion", "Airbnb"];
 const SPECIALTIES = ["Distress", "Funding Gap", "Off Market", "Construction", "Land", "Commercial", "Residential", "Creative Finance", "Insurance", "Permits", "Probate", "Foreclosure", "Tax Sale", "Stalled Project", "Value Add"];
-const ROUTES = ["Buyer", "Lender", "Operator", "Contractor", "Developer", "Attorney", "Capital Partner"];
 const NEEDS = ["Lender", "Operator", "Contractor", "Buyer", "Attorney", "Insurance Adjuster", "City Expeditor", "Private Capital", "Property Manager", "Developer"];
 const CAN_PROVIDE = ["Capital", "Buying", "Lending", "Contractors", "Legal", "Insurance", "Property Management", "Development", "Operations", "Introductions"];
-const PAIN_TYPES = ["Funding Gap", "Foreclosure", "Stalled Construction", "Contractor Problem", "Title Problem", "Permit Problem", "City Violation", "Tenant Issue", "Partnership Dispute", "Emergency Exit", "Insurance Claim", "Fire Damage", "Mold", "Structural", "Probate", "Tax Sale Risk", "Squatter Issue", "Burn Rate"];
 const MEMBER_TYPES = ["Investor", "Wholesaler", "Lender", "Contractor", "Developer", "Agent", "Attorney", "Operator", "Private Capital", "Property Manager"];
 const CONTACT_PREFS = ["VaultForge Message", "Text", "Phone", "Email", "Contact Form"];
 const CAPITAL_POSITIONS = ["Unknown", "Cash Buyer", "Private Capital", "Hard Money", "Bank Lending", "JV Capital", "Needs Capital", "Operator With Capital", "Operator Needs Capital"];
 const FUNDING_RANGES = ["Unknown", "Under $50k", "$50k-$250k", "$250k-$1M", "$1M-$5M", "$5M+"];
-const CONDITION = ["Unknown", "Turnkey", "Light Rehab", "Medium Rehab", "Full Gut", "Fire Damage", "Shell", "Tear Down"];
-const OCCUPANCY = ["Unknown", "Vacant", "Owner Occupied", "Tenant Occupied", "Squatter", "Partial Vacancy"];
-const SEVERITY = ["Low", "Medium", "High", "Critical", "Emergency"];
-const TIME = ["24 Hours", "72 Hours", "7 Days", "14 Days", "30 Days", "Flexible"];
-const CAPITAL = ["Unknown", "Under $25k", "$25k-$100k", "$100k-$250k", "$250k-$1M", "$1M+"];
-const CONTROL = ["Unknown", "Owner Controlled", "Contract Controlled", "Partner Controlled", "Bank Controlled", "Court / Estate", "No Control Yet"];
-const BLOCKERS = ["Capital", "Timeline", "Title", "Access", "Contractor", "Tenant", "Permit", "City", "Legal", "Partner", "Seller Pressure", "Unknown Numbers", "Insurance", "Utilities"];
-const RISK = ["Legal", "Financial", "Structural", "Operational", "City/Permit", "Occupancy", "Environmental"];
 const YESNO = ["Unknown", "Yes", "No"];
 
 const CITY_COUNTY: Record<string, string> = {
@@ -127,6 +52,8 @@ const CITY_COUNTY: Record<string, string> = {
   alpharetta: "Fulton",
   roswell: "Fulton",
   marietta: "Cobb",
+  smyrna: "Cobb",
+  kennesaw: "Cobb",
   cartersville: "Bartow",
   cville: "Bartow",
   cvile: "Bartow",
@@ -153,12 +80,6 @@ const CITY_COUNTY: Record<string, string> = {
   sanantonio: "Bexar",
 };
 
-const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
-const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
-const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
-const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
-const READ_KEY = "vaultforge_room_alert_read_v1";
-
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
@@ -182,37 +103,7 @@ function list(value: unknown): string[] {
   return [];
 }
 
-function rid(room: Room | null | undefined) {
-  return txt(room?.id || room?.roomId);
-}
-
-function titleFor(room: Room, kind: RoomKind) {
-  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
-}
-
-function loc(room: Room) {
-  return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
-}
-
-function roomState(room: Room): RoomState {
-  return txt(room.roomState || room.cleanupState || room.stateStatus, "active") as RoomState;
-}
-
-function arr<T>(key: string): T[] {
-  if (!ok()) return [];
-  const parsed = j<unknown>(localStorage.getItem(key), []);
-  return Array.isArray(parsed) ? (parsed as T[]) : [];
-}
-
-function keysFor(kind: RoomKind) {
-  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
-}
-
-function singleKeys(kind: RoomKind, id: string) {
-  return [`vaultforge_clean_${kind}_room_${id}`, `vaultforge_${kind}_room_${id}`, `vf_${kind}_room_${id}`];
-}
-
-function saveSafe(key: string, value: unknown) {
+function safeSet(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
@@ -221,98 +112,77 @@ function saveSafe(key: string, value: unknown) {
   }
 }
 
-function stateMap() {
-  const map: Record<string, RoomState> = {};
-  if (!ok()) return map;
-  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomState>>(localStorage.getItem(key), {})));
-  return map;
+function profileId(profile: MemberProfile) {
+  return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
 }
 
-function allRooms(kind: RoomKind): Room[] {
-  if (!ok()) return [];
-  const out: Room[] = [];
-  const seen = new Set<string>();
+function normalizeProfile(profile: MemberProfile): MemberProfile {
+  const now = new Date().toISOString();
+  const id = profileId(profile);
+  return {
+    ...profile,
+    id,
+    basedState: txt(profile.basedState, "GA"),
+    statesOperated: list(profile.statesOperated).length ? list(profile.statesOperated) : ["GA"],
+    assetClasses: list(profile.assetClasses),
+    strategies: list(profile.strategies),
+    specialties: list(profile.specialties),
+    needs: list(profile.needs),
+    canProvide: list(profile.canProvide),
+    updatedAt: now,
+  };
+}
 
-  for (const key of keysFor(kind)) {
-    for (const row of arr<Room>(key)) {
-      const id = rid(row);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push({ ...row, id, roomId: id });
-    }
+function getProfile(): MemberProfile {
+  if (!ok()) return {};
+  for (const key of PROFILE_KEYS) {
+    const found = j<MemberProfile | null>(localStorage.getItem(key), null);
+    if (found && typeof found === "object") return normalizeProfile(found);
   }
-
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const key = localStorage.key(i) || "";
-    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
-    if (!match) continue;
-    const value = j<any>(localStorage.getItem(key), null);
-
-    if (Array.isArray(value)) {
-      for (const row of value) {
-        const id = rid(row);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        out.push({ ...row, id, roomId: id });
-      }
-    } else if (value && typeof value === "object") {
-      const id = rid(value);
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        out.push({ ...value, id, roomId: id });
-      }
-    }
-  }
-
-  const states = stateMap();
-  return out
-    .map((room) => {
-      const id = rid(room);
-      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
-    })
-    .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
-}
-
-function getRoom(kind: RoomKind, id: string) {
-  return allRooms(kind).find((room) => rid(room) === id) || null;
-}
-
-function readMap() {
-  return ok() ? j<Record<string, string>>(localStorage.getItem(READ_KEY), {}) : {};
-}
-
-function unreadRooms(kind: RoomKind, rooms: Room[]) {
-  const reads = readMap();
-  return rooms.filter((room) => {
-    const id = rid(room);
-    if (roomState(room) !== "active") return false;
-    return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
+  return normalizeProfile({
+    id: "local_member",
+    basedState: "GA",
+    statesOperated: ["GA"],
+    memberType: "Investor",
+    contactPreference: "VaultForge Message",
+    directContact: "Unknown",
+    capitalPosition: "Unknown",
+    proofOfFunds: "Unknown",
+    fundingRange: "Unknown",
   });
 }
 
-function markRead(kind: RoomKind, room: Room) {
-  if (!ok()) return;
-  const id = rid(room);
-  if (!id) return;
-  const reads = readMap();
-  reads[id] = new Date().toISOString();
-  reads[`${kind}:${id}`] = new Date().toISOString();
-  localStorage.setItem(READ_KEY, JSON.stringify(reads));
-  const next = { ...room, alertRead: true, viewedAt: new Date().toISOString() };
-  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
-  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
+function getDirectory(): MemberProfile[] {
+  if (!ok()) return [];
+  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
+  const current = getProfile();
+  const currentId = profileId(current);
+  const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
+  const seen = new Set<string>();
+  return merged.filter((member) => {
+    const id = profileId(member);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  }).map(normalizeProfile);
 }
 
-function firstPhoto(room: Room) {
-  const possible = [
-    txt(room.coverPhoto),
-    txt(room.photoUrl),
-    txt(room.imageUrl),
-    ...list(room.photoUrls),
-    ...list(room.photos),
-  ].filter(Boolean);
-  return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
+function saveProfile(profile: MemberProfile) {
+  if (!ok()) return;
+  const next = normalizeProfile(profile);
+  PROFILE_KEYS.forEach((key) => safeSet(key, next));
+
+  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
+  const nextId = profileId(next);
+  const merged = [next, ...directory.filter((member) => profileId(member) !== nextId)];
+  safeSet(MEMBER_DIRECTORY_KEY, merged);
+
+  window.dispatchEvent(new Event("vaultforge-profile-change"));
+  window.dispatchEvent(new Event("vaultforge-network-change"));
+}
+
+function membersForState(state: string) {
+  return getDirectory().filter((member) => list(member.statesOperated).includes(state));
 }
 
 function countyFromCity(city: string) {
@@ -349,80 +219,9 @@ async function compressImage(file: File, maxWidth = 850, quality = 0.52): Promis
   });
 }
 
-async function photosFromFiles(files: FileList | null) {
-  const selected = Array.from(files || []).slice(0, 10);
-  const output: string[] = [];
-  for (const file of selected) {
-    const compressed = await compressImage(file);
-    if (compressed && compressed.length < 450000) output.push(compressed);
-  }
-  return output;
-}
-
 async function onePhoto(files: FileList | null) {
   const file = Array.from(files || [])[0];
   return file ? compressImage(file) : "";
-}
-
-function saveRoom(kind: RoomKind, room: Room) {
-  if (!ok()) return "";
-  const id = `${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const now = new Date().toISOString();
-  const next: Room = {
-    ...room,
-    id,
-    roomId: id,
-    roomState: "active",
-    cleanupState: "active",
-    stateStatus: "active",
-    createdAt: now,
-    updatedAt: now,
-    alertRead: false,
-    viewedAt: "",
-  };
-
-  for (const key of singleKeys(kind, id)) {
-    const worked = saveSafe(key, next);
-    if (!worked) saveSafe(key, { ...next, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" });
-  }
-
-  const cover = txt(next.coverPhoto || next.photoUrl || next.imageUrl);
-  const slim: Room = { ...next, photos: cover ? [cover] : [], photoUrls: cover ? [cover] : [], coverPhoto: cover, photoUrl: cover, imageUrl: cover };
-
-  for (const key of keysFor(kind)) {
-    const existing = arr<Room>(key).filter((row) => rid(row) !== id);
-    const worked = saveSafe(key, [slim, ...existing]);
-    if (!worked) saveSafe(key, [{ ...slim, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }, ...existing]);
-  }
-
-  const map = stateMap();
-  map[id] = "active";
-  map[`${kind}:${id}`] = "active";
-  STATE_KEYS.forEach((key) => saveSafe(key, map));
-
-  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
-  window.dispatchEvent(new Event("vaultforge-room-state-change"));
-
-  return id;
-}
-
-function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
-  if (!ok()) return;
-  const id = rid(room);
-  const next: Room = { ...room, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
-  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
-  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
-  const map = stateMap();
-  map[id] = state;
-  map[`${kind}:${id}`] = state;
-  STATE_KEYS.forEach((key) => saveSafe(key, map));
-  window.dispatchEvent(new Event("vaultforge-room-state-change"));
-}
-
-function saveProfile(profile: Profile) {
-  if (!ok()) return;
-  PROFILE_KEYS.forEach((key) => localStorage.setItem(key, JSON.stringify(profile)));
-  window.dispatchEvent(new Event("vaultforge-profile-change"));
 }
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
@@ -433,7 +232,6 @@ const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", ba
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
 const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
 const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
-const redHero: React.CSSProperties = { ...hero, borderColor: "rgba(255,70,70,.42)", background: "radial-gradient(circle at top right, rgba(255,50,80,.22), transparent 35%), linear-gradient(180deg,#120611,#050816)" };
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
 const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
 const pulsePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.65)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
@@ -447,11 +245,11 @@ const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repea
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
 const textarea: React.CSSProperties = { ...input, minHeight: 110, resize: "vertical" };
-const photoStyle: React.CSSProperties = { width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+const photoStyle: React.CSSProperties = { width: "100%", height: 160, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
 function Nav({ active }: { active: string }) {
   const item = (href: string, label: string, key: string) => <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>;
-  return <nav style={nav}><div style={brand}>VAULTFORGE</div>{item("/command","Command","command")}{item("/deal-rooms","Deal Rooms","deals")}{item("/deal-create","Create Deal","deal-create")}{item("/pain-intake","Pain Intake","pain-intake")}{item("/pain-rooms","Pain Rooms","pain")}{item("/network","Network","network")}{item("/messages","Messages","messages")}{item("/profile","Profile","profile")}{item("/saved-rooms","Saved","saved")}{item("/archived-rooms","Archived","archived")}{item("/deleted-rooms","Deleted","deleted")}<Link href="/logout" style={redBtn}>Logout</Link></nav>;
+  return <nav style={nav}><div style={brand}>VAULTFORGE</div>{item("/command","Command","command")}{item("/deal-rooms","Deal Rooms","deals")}{item("/deal-create","Create Deal","deal-create")}{item("/pain-intake","Pain Intake","pain-intake")}{item("/pain-rooms","Pain Rooms","pain")}{item("/network","Network","network")}{item("/messages","Messages","messages")}{item("/profile","Profile","profile")}<Link href="/logout" style={redBtn}>Logout</Link></nav>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -474,24 +272,17 @@ function ChipSet({ label, options, selected, onToggle }: { label: string; option
   return <div><div style={labelStyle}>{label}</div><div style={row}>{options.map((option) => <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>{option}</button>)}</div></div>;
 }
 
-function Value({ label, value }: { label: string; value: unknown }) {
-  return <div style={panel}><div style={eyebrow}>{label}</div><p style={sub}>{txt(value, "Not listed")}</p></div>;
-}
-
-function RoomCard({ room, kind, pulse = false }: { room: Room; kind: RoomKind; pulse?: boolean }) {
-  const img = firstPhoto(room);
-  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
-  return <div style={pulse ? pulsePanel : panel}>
-    {img ? <img src={img} alt={titleFor(room, kind)} style={photoStyle} /> : null}
-    <div style={eyebrow}>{kind === "deal" ? "Deal Room" : "Pain Room"} • {roomState(room)}</div>
-    <h2 style={h2}>{titleFor(room, kind)}</h2>
-    <p style={sub}>{loc(room)}</p>
-    <p style={muted}>{kind === "deal" ? `${txt(room.assetClass)} • ${txt(room.propertyType)} • Route: ${list(room.routeTo).join(", ") || "Buyer"}` : `${txt(room.assetClass)} • ${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"}`}</p>
-    <p style={muted}>{kind === "deal" ? `Ask ${txt(room.askingPrice, "N/A")} • Value ${txt(room.propertyValue, "N/A")} • Repairs ${txt(room.repairs, "N/A")}` : `Severity ${txt(room.severity, "N/A")} • Time ${txt(room.timePressure, "N/A")} • Capital ${txt(room.capitalPressure, "N/A")}`}</p>
-    <div style={{ ...row, marginTop: 16 }}>
-      <Link href={href} style={goldBtn}>Open Room</Link>
-      <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}`} style={btn}>Messages</Link>
-    </div>
+function MemberCard({ member }: { member: MemberProfile }) {
+  return <div style={panel}>
+    {txt(member.profilePhoto) ? <img src={txt(member.profilePhoto)} alt={txt(member.name, "Member")} style={photoStyle} /> : null}
+    <div style={eyebrow}>{txt(member.memberType, "Member")} • Based {txt(member.basedState, "N/A")}</div>
+    <h2 style={h2}>{txt(member.name, "VaultForge Member")}</h2>
+    <p style={sub}>{txt(member.company, "Company not listed")}</p>
+    <p style={muted}>From: {[txt(member.basedCity), txt(member.basedCounty), txt(member.basedState)].filter(Boolean).join(", ") || "Not listed"}</p>
+    <p style={muted}>Operates: {list(member.statesOperated).join(", ") || "No states selected"}</p>
+    <p style={muted}>Can provide: {list(member.canProvide).join(", ") || "Not listed"}</p>
+    <p style={muted}>Needs: {list(member.needs).join(", ") || "Not listed"}</p>
+    <div style={{ ...row, marginTop: 18 }}><Link href="/messages" style={goldBtn}>Message</Link><Link href="/profile" style={btn}>Profile</Link></div>
   </div>;
 }
 
@@ -500,85 +291,48 @@ export default function CommandPage() {
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
-    ["storage", "vaultforge-room-state-change", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-read-change"].forEach((event) => window.addEventListener(event, refresh));
-    return () => ["storage", "vaultforge-room-state-change", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-read-change"].forEach((event) => window.removeEventListener(event, refresh));
+    ["storage", "vaultforge-profile-change", "vaultforge-network-change"].forEach((event) => window.addEventListener(event, refresh));
+    return () => ["storage", "vaultforge-profile-change", "vaultforge-network-change"].forEach((event) => window.removeEventListener(event, refresh));
   }, []);
 
-  const deals = useMemo(() => allRooms("deal"), [tick]);
-  const pains = useMemo(() => allRooms("pain"), [tick]);
-  const activeDeals = deals.filter((room) => roomState(room) === "active");
-  const activePains = pains.filter((room) => roomState(room) === "active");
-  const unreadDeals = unreadRooms("deal", deals);
-  const unreadPains = unreadRooms("pain", pains);
-  const pressureDeals = activeDeals.filter((room) => txt(room.timePressure).includes("24") || txt(room.timeline).includes("24") || txt(room.dealStrength) === "Strong").slice(0, 4);
-  const pressurePains = activePains.filter((room) => ["Critical", "Emergency", "High"].includes(txt(room.severity))).slice(0, 4);
-  const totalPressure = pressureDeals.length + pressurePains.length;
+  const profile = useMemo(() => getProfile(), [tick]);
+  const directory = useMemo(() => getDirectory(), [tick]);
+  const stateCounts = STATES.map((state) => ({ state, count: directory.filter((member) => list(member.statesOperated).includes(state)).length }));
 
   return <main style={page}><div style={wrap}><Nav active="command" />
 
     <section style={hero}>
-      <img src="/vaultforge-logo.png" alt="VaultForge" style={{ width: "100%", maxWidth: 620, borderRadius: 26, display: "block", marginBottom: 24, border: "1px solid rgba(245,197,66,.24)" }} />
-      <div style={eyebrow}>Military Command Center</div>
-      <h1 style={h1}>Private deal flow. Real execution.</h1>
-      <p style={sub}>Pulsating alerts, pressure tickets, moving signal banner, room folders, state network, and execution lanes.</p>
+      <div style={eyebrow}>Member Command Center</div>
+      <h1 style={h1}>Profile controls the network.</h1>
+      <p style={sub}>{txt(profile.name, "Member")} • Based {txt(profile.basedCity, "City not set")}, {txt(profile.basedState, "GA")} • Operates {list(profile.statesOperated).join(", ") || "No states selected"}</p>
       <div style={{ ...row, marginTop: 22 }}>
-        <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
-        <Link href="/pain-intake" style={goldBtn}>Submit Pain</Link>
-        <Link href="/network" style={btn}>Open Network</Link>
-        <Link href="/messages" style={btn}>Messages</Link>
+        <Link href="/profile" style={goldBtn}>Edit Profile</Link>
+        <Link href="/network" style={goldBtn}>Open Network</Link>
+        <Link href="/deal-create" style={btn}>Create Deal</Link>
+        <Link href="/pain-intake" style={btn}>Submit Pain</Link>
       </div>
     </section>
 
-    {totalPressure ? <section style={redHero}>
-      <div style={eyebrow}>Critical Pressure</div>
-      <h2 style={h2}>{totalPressure} active room(s) require immediate review.</h2>
-      <p style={sub}>Deal pressure and Pain pressure stay separated so the desk never turns into clutter.</p>
-    </section> : null}
-
-    <section style={card}>
-      <div style={eyebrow}>Live Alert Engine</div>
-      <h2 style={h2}>Clean VaultForge Alert Desk.</h2>
-      <p style={sub}>Unread active work pulses. Opening a room marks it read. Saved, archived, and deleted rooms leave the pulse deck.</p>
-      <div style={{ ...grid, marginTop: 22 }}>
-        <div style={unreadDeals.length ? pulsePanel : panel}><div style={eyebrow}>New Deals</div><h2 style={h2}>{unreadDeals.length}</h2><p style={muted}>{activeDeals.length} active deal rooms</p></div>
-        <div style={unreadPains.length ? pulsePanel : panel}><div style={eyebrow}>New Pain</div><h2 style={h2}>{unreadPains.length}</h2><p style={muted}>{activePains.length} active pain rooms</p></div>
-        <div style={panel}><div style={eyebrow}>Deal Messages</div><h2 style={h2}>0</h2><p style={muted}>Unread deal threads</p></div>
-        <div style={panel}><div style={eyebrow}>Pain Messages</div><h2 style={h2}>0</h2><p style={muted}>Unread pain threads</p></div>
-      </div>
-    </section>
-
-    <section style={card}>
-      <div style={eyebrow}>Moving Signal Banner</div>
-      <div style={{ overflow: "hidden", whiteSpace: "nowrap", border: "1px solid rgba(245,197,66,.25)", borderRadius: 18, padding: 14, color: "#ffdc68", fontWeight: 950 }}>
-        {[...unreadDeals.map((room) => `NEW DEAL: ${titleFor(room, "deal")} • ${loc(room)}`), ...unreadPains.map((room) => `NEW PAIN: ${titleFor(room, "pain")} • ${loc(room)}`)].join("     |     ") || "No unread signals right now."}
-      </div>
-    </section>
-
-    <section style={card}>
-      <div style={eyebrow}>5S Room Folders</div>
-      <h2 style={h2}>Six clean folders.</h2>
+    <Section title="Network State Cards">
       <div style={grid}>
-        <Folder label="Saved Deals" count={deals.filter((room) => roomState(room) === "saved").length} href="/saved-rooms" />
-        <Folder label="Archived Deals" count={deals.filter((room) => roomState(room) === "archived").length} href="/archived-rooms" />
-        <Folder label="Deleted Deals" count={deals.filter((room) => roomState(room) === "deleted").length} href="/deleted-rooms" />
-        <Folder label="Saved Pain" count={pains.filter((room) => roomState(room) === "saved").length} href="/saved-rooms" />
-        <Folder label="Archived Pain" count={pains.filter((room) => roomState(room) === "archived").length} href="/archived-rooms" />
-        <Folder label="Deleted Pain" count={pains.filter((room) => roomState(room) === "deleted").length} href="/deleted-rooms" />
+        {stateCounts.map(({ state, count }) => (
+          <Link href="/network" key={state} style={count ? pulsePanel : panel}>
+            <div style={eyebrow}>{state}</div>
+            <h2 style={h2}>{count}</h2>
+            <p style={muted}>member(s) serving</p>
+          </Link>
+        ))}
       </div>
-    </section>
+    </Section>
 
-    <section style={card}><div style={eyebrow}>Deal Pressure Tickets</div>{pressureDeals.length ? <div style={grid}>{pressureDeals.map((room) => <Ticket key={rid(room)} room={room} kind="deal" />)}</div> : <p style={sub}>No critical deal pressure.</p>}</section>
-    <section style={card}><div style={eyebrow}>Pain Pressure Tickets</div>{pressurePains.length ? <div style={grid}>{pressurePains.map((room) => <Ticket key={rid(room)} room={room} kind="pain" />)}</div> : <p style={sub}>No critical pain pressure.</p>}</section>
-    <section style={card}><div style={eyebrow}>Active Deal Alerts</div>{unreadDeals.length ? <div style={grid}>{unreadDeals.slice(0, 6).map((room) => <RoomCard key={rid(room)} room={room} kind="deal" pulse />)}</div> : <p style={sub}>No unread deal alerts.</p>}</section>
-    <section style={card}><div style={eyebrow}>Active Pain Alerts</div>{unreadPains.length ? <div style={grid}>{unreadPains.slice(0, 6).map((room) => <RoomCard key={rid(room)} room={room} kind="pain" pulse />)}</div> : <p style={sub}>No unread pain alerts.</p>}</section>
+    <Section title="Profile Routing Tags">
+      <div style={grid}>
+        <div style={panel}><div style={eyebrow}>Can Provide</div><p style={sub}>{list(profile.canProvide).join(", ") || "Not set"}</p></div>
+        <div style={panel}><div style={eyebrow}>Needs</div><p style={sub}>{list(profile.needs).join(", ") || "Not set"}</p></div>
+        <div style={panel}><div style={eyebrow}>Strategies</div><p style={sub}>{list(profile.strategies).join(", ") || "Not set"}</p></div>
+        <div style={panel}><div style={eyebrow}>Capital</div><p style={sub}>{txt(profile.capitalPosition, "Unknown")} • {txt(profile.fundingRange, "Unknown")}</p></div>
+      </div>
+    </Section>
+
   </div></main>;
-}
-
-function Folder({ label, count, href }: { label: string; count: number; href: string }) {
-  return <div style={panel}><div style={eyebrow}>{label}</div><h2 style={h2}>{count} total</h2><Link href={href} style={goldBtn}>Open Folder</Link></div>;
-}
-
-function Ticket({ room, kind }: { room: Room; kind: RoomKind }) {
-  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
-  return <div style={pulsePanel}><div style={eyebrow}>{kind === "deal" ? "Deal Pressure" : "Pain Pressure"}</div><h2 style={h2}>{titleFor(room, kind)}</h2><p style={sub}>Open room, verify facts, route to profile, then move conversation into Messages.</p><Link href={href} style={goldBtn}>Open Ticket</Link></div>;
 }
