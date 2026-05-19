@@ -1,7 +1,7 @@
-
 "use client";
+
 import Link from "next/link";
-import {useEffect,useMemo,useState} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type RoomState = "active" | "saved" | "archived" | "deleted";
 type RoomKind = "deal" | "pain";
@@ -14,233 +14,557 @@ type Room = {
   state?: string;
   city?: string;
   county?: string;
+  address?: string;
   assetClass?: string;
   propertyType?: string;
+  askingPrice?: string;
+  propertyValue?: string;
+  repairs?: string;
+  timeline?: string;
+  timePressure?: string;
+  severity?: string;
+  capitalPressure?: string;
+  controlStatus?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  notes?: string;
+  routeTo?: string[] | string;
+  routingNeeds?: string[] | string;
+  painTypes?: string[] | string;
+  strategy?: string[] | string;
+  motivation?: string[] | string;
+  condition?: string;
+  occupancy?: string;
+  dealStrength?: string;
+  beds?: string;
+  baths?: string;
+  sqft?: string;
+  units?: string;
+  acres?: string;
+  zoning?: string;
+  monthlyRent?: string;
+  monthlyBurnRate?: string;
+  moneyNeededNow?: string;
+  deadline?: string;
+  rootCause?: string;
+  bestOutcome?: string;
+  worstCase?: string;
+  desiredSolution?: string;
+  blockers?: string[] | string;
+  riskTypes?: string[] | string;
+  submitterRole?: string;
+  bestContact?: string;
   roomState?: RoomState;
   cleanupState?: RoomState;
   stateStatus?: RoomState;
-  viewedAt?: string;
   alertRead?: boolean;
+  viewedAt?: string;
   createdAt?: string;
   updatedAt?: string;
   coverPhoto?: string;
   photoUrl?: string;
   imageUrl?: string;
-  photoUrls?: string[];
   photos?: string[];
+  photoUrls?: string[];
   analyzer?: string;
-  notes?: string;
-  severity?: string;
-  timePressure?: string;
-  capitalPressure?: string;
-  dealStrength?: string;
-  routeTo?: string[] | string;
-  routingNeeds?: string[] | string;
-  painTypes?: string[] | string;
-  [key:string]: unknown;
+  [key: string]: unknown;
 };
 
-const DEAL_KEYS = [
-  "vaultforge_clean_deal_rooms",
-  "vaultforge_deal_rooms",
-  "vaultforge_rooms_deals",
-  "vf_deal_rooms",
-];
+type Profile = {
+  name?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  memberType?: string;
+  profilePhoto?: string;
+  primaryCity?: string;
+  primaryCounty?: string;
+  statesOperated?: string[];
+  markets?: string[];
+  strategies?: string[];
+  assetClasses?: string[];
+  specialties?: string[];
+  needs?: string[];
+  canProvide?: string[];
+  capitalPosition?: string;
+  proofOfFunds?: string;
+  fundingRange?: string;
+  contactPreference?: string;
+  directContact?: string;
+  bio?: string;
+  [key: string]: unknown;
+};
 
-const PAIN_KEYS = [
-  "vaultforge_clean_pain_rooms_v1",
-  "vaultforge_clean_pain_rooms",
-  "vaultforge_pain_rooms",
-  "vaultforge_rooms_pain",
-  "vf_pain_rooms",
-];
+const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+const MARKETS = ["Atlanta", "North Georgia", "Chattanooga", "Nashville", "Knoxville", "Birmingham", "Huntsville", "Montgomery", "Jacksonville", "Tampa", "Orlando", "Miami", "Charlotte", "Raleigh-Durham", "Greenville-Spartanburg", "Charleston", "Dallas-Fort Worth", "Houston", "Austin", "San Antonio"];
+const ASSETS = ["Residential", "Commercial", "Land"];
+const RES_TYPES = ["Single Family", "Duplex", "Triplex", "Quad", "Townhome", "Condo", "Mobile Home", "Small Multifamily"];
+const COM_TYPES = ["Retail", "Office", "Industrial", "Warehouse", "Hotel", "Self Storage", "Mixed Use", "Medical", "Restaurant", "Automotive", "Church / Special Use"];
+const LAND_TYPES = ["Infill Lot", "Acreage", "Entitled Land", "Raw Land", "Commercial Pad", "Subdivision", "Timber", "Farm", "Assemblage", "Waterfront"];
+const STRATEGIES = ["Wholesale", "Flip", "Buy & Hold", "BRRRR", "Development", "Seller Finance", "JV", "Rental", "Hotel Conversion", "Airbnb"];
+const SPECIALTIES = ["Distress", "Funding Gap", "Off Market", "Construction", "Land", "Commercial", "Residential", "Creative Finance", "Insurance", "Permits", "Probate", "Foreclosure", "Tax Sale", "Stalled Project", "Value Add"];
+const ROUTES = ["Buyer", "Lender", "Operator", "Contractor", "Developer", "Attorney", "Capital Partner"];
+const NEEDS = ["Lender", "Operator", "Contractor", "Buyer", "Attorney", "Insurance Adjuster", "City Expeditor", "Private Capital", "Property Manager", "Developer"];
+const CAN_PROVIDE = ["Capital", "Buying", "Lending", "Contractors", "Legal", "Insurance", "Property Management", "Development", "Operations", "Introductions"];
+const PAIN_TYPES = ["Funding Gap", "Foreclosure", "Stalled Construction", "Contractor Problem", "Title Problem", "Permit Problem", "City Violation", "Tenant Issue", "Partnership Dispute", "Emergency Exit", "Insurance Claim", "Fire Damage", "Mold", "Structural", "Probate", "Tax Sale Risk", "Squatter Issue", "Burn Rate"];
+const MEMBER_TYPES = ["Investor", "Wholesaler", "Lender", "Contractor", "Developer", "Agent", "Attorney", "Operator", "Private Capital", "Property Manager"];
+const CONTACT_PREFS = ["VaultForge Message", "Text", "Phone", "Email", "Contact Form"];
+const CAPITAL_POSITIONS = ["Unknown", "Cash Buyer", "Private Capital", "Hard Money", "Bank Lending", "JV Capital", "Needs Capital", "Operator With Capital", "Operator Needs Capital"];
+const FUNDING_RANGES = ["Unknown", "Under $50k", "$50k-$250k", "$250k-$1M", "$1M-$5M", "$5M+"];
+const CONDITION = ["Unknown", "Turnkey", "Light Rehab", "Medium Rehab", "Full Gut", "Fire Damage", "Shell", "Tear Down"];
+const OCCUPANCY = ["Unknown", "Vacant", "Owner Occupied", "Tenant Occupied", "Squatter", "Partial Vacancy"];
+const SEVERITY = ["Low", "Medium", "High", "Critical", "Emergency"];
+const TIME = ["24 Hours", "72 Hours", "7 Days", "14 Days", "30 Days", "Flexible"];
+const CAPITAL = ["Unknown", "Under $25k", "$25k-$100k", "$100k-$250k", "$250k-$1M", "$1M+"];
+const CONTROL = ["Unknown", "Owner Controlled", "Contract Controlled", "Partner Controlled", "Bank Controlled", "Court / Estate", "No Control Yet"];
+const BLOCKERS = ["Capital", "Timeline", "Title", "Access", "Contractor", "Tenant", "Permit", "City", "Legal", "Partner", "Seller Pressure", "Unknown Numbers", "Insurance", "Utilities"];
+const RISK = ["Legal", "Financial", "Structural", "Operational", "City/Permit", "Occupancy", "Environmental"];
+const YESNO = ["Unknown", "Yes", "No"];
 
-const STATE_KEYS = [
-  "vaultforge_clean_room_states",
-  "vaultforge_room_states",
-  "vaultforge_deal_room_states",
-  "vaultforge_pain_room_states",
-  "vaultforge_5s_room_states",
-];
+const CITY_COUNTY: Record<string, string> = {
+  atlanta: "Fulton",
+  alpharetta: "Fulton",
+  roswell: "Fulton",
+  marietta: "Cobb",
+  cartersville: "Bartow",
+  cville: "Bartow",
+  cvile: "Bartow",
+  adairsville: "Bartow",
+  rome: "Floyd",
+  gainesville: "Hall",
+  savannah: "Chatham",
+  augusta: "Richmond",
+  columbus: "Muscogee",
+  macon: "Bibb",
+  chattanooga: "Hamilton",
+  nashville: "Davidson",
+  knoxville: "Knox",
+  birmingham: "Jefferson",
+  huntsville: "Madison",
+  charlotte: "Mecklenburg",
+  raleigh: "Wake",
+  greenville: "Greenville",
+  charleston: "Charleston",
+  dallas: "Dallas",
+  houston: "Harris",
+  austin: "Travis",
+  "san antonio": "Bexar",
+  sanantonio: "Bexar",
+};
 
+const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states"];
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const READ_KEY = "vaultforge_room_alert_read_v1";
 
-function ok(){return typeof window !== "undefined" && typeof window.localStorage !== "undefined";}
-function j<T>(raw:string|null,fb:T):T{try{return raw?JSON.parse(raw) as T:fb}catch{return fb}}
-function txt(v:unknown,fb=""){const s=String(v||"").trim();return s||fb}
-function list(v:unknown):string[]{if(Array.isArray(v))return v.map(x=>String(x).trim()).filter(Boolean);if(typeof v==="string"&&v.trim())return v.split(",").map(x=>x.trim()).filter(Boolean);return[]}
-function rid(r:Room|null|undefined){return txt(r?.id||r?.roomId)}
-function title(r:Room,kind:RoomKind){return txt(r.title||r.name,kind==="deal"?"Untitled Deal Room":"Untitled Pain Room")}
-function loc(r:Room){return [txt(r.city),txt(r.county),txt(r.state)].filter(Boolean).join(", ") || "Market not listed"}
-function roomState(r:Room):RoomState{return (txt(r.roomState||r.cleanupState||r.stateStatus,"active") as RoomState)}
-function arr<T>(key:string):T[]{if(!ok())return[];const p=j<unknown>(localStorage.getItem(key),[]);return Array.isArray(p)?p as T[]:[]}
-function stateMap(){const m:Record<string,RoomState>={};if(!ok())return m;STATE_KEYS.forEach(k=>Object.assign(m,j<Record<string,RoomState>>(localStorage.getItem(k),{})));return m}
-function keys(kind:RoomKind){return kind==="deal"?DEAL_KEYS:PAIN_KEYS}
-
-function allRooms(kind:RoomKind):Room[]{
-  if(!ok()) return [];
-  const out:Room[]=[];
-  const seen=new Set<string>();
-
-  for(const key of keys(kind)){
-    for(const row of arr<Room>(key)){
-      const id=rid(row);
-      if(!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push({...row,id,roomId:id});
-    }
-  }
-
-  for(let i=0;i<localStorage.length;i++){
-    const key=localStorage.key(i)||"";
-    const match = kind==="deal"
-      ? (key.includes("deal_room") || key.includes("deal_rooms"))
-      : (key.includes("pain_room") || key.includes("pain_rooms"));
-    if(!match) continue;
-    const value=j<any>(localStorage.getItem(key),null);
-    if(Array.isArray(value)){
-      for(const row of value){
-        const id=rid(row);
-        if(!id || seen.has(id)) continue;
-        seen.add(id);
-        out.push({...row,id,roomId:id});
-      }
-    }else if(value && typeof value==="object"){
-      const id=rid(value);
-      if(id && !seen.has(id)){
-        seen.add(id);
-        out.push({...value,id,roomId:id});
-      }
-    }
-  }
-
-  const sm=stateMap();
-  return out.map(r=>{
-    const id=rid(r);
-    const s=sm[id] || sm[`${kind}:${id}`] || roomState(r);
-    return {...r,roomState:s,cleanupState:s,stateStatus:s};
-  }).sort((a,b)=>String(b.createdAt||b.updatedAt||"").localeCompare(String(a.createdAt||a.updatedAt||"")));
+function ok() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function readMap(){return ok()?j<Record<string,string>>(localStorage.getItem(READ_KEY),{}):{}}
-function unreadRooms(kind:RoomKind,rooms:Room[]){
-  const reads=readMap();
-  return rooms.filter(r=>{
-    const id=rid(r);
-    if(roomState(r)!=="active") return false;
-    return !r.alertRead && !r.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
+function j<T>(raw: string | null, fallback: T): T {
+  try {
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function txt(value: unknown, fallback = "") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
+}
+
+function list(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
+  return [];
+}
+
+function rid(room: Room | null | undefined) {
+  return txt(room?.id || room?.roomId);
+}
+
+function titleFor(room: Room, kind: RoomKind) {
+  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
+}
+
+function loc(room: Room) {
+  return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
+}
+
+function roomState(room: Room): RoomState {
+  return txt(room.roomState || room.cleanupState || room.stateStatus, "active") as RoomState;
+}
+
+function arr<T>(key: string): T[] {
+  if (!ok()) return [];
+  const parsed = j<unknown>(localStorage.getItem(key), []);
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
+
+function keysFor(kind: RoomKind) {
+  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
+}
+
+function singleKeys(kind: RoomKind, id: string) {
+  return [`vaultforge_clean_${kind}_room_${id}`, `vaultforge_${kind}_room_${id}`, `vf_${kind}_room_${id}`];
+}
+
+function saveSafe(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function stateMap() {
+  const map: Record<string, RoomState> = {};
+  if (!ok()) return map;
+  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomState>>(localStorage.getItem(key), {})));
+  return map;
+}
+
+function allRooms(kind: RoomKind): Room[] {
+  if (!ok()) return [];
+  const out: Room[] = [];
+  const seen = new Set<string>();
+
+  for (const key of keysFor(kind)) {
+    for (const row of arr<Room>(key)) {
+      const id = rid(row);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ ...row, id, roomId: id });
+    }
+  }
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i) || "";
+    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
+    if (!match) continue;
+    const value = j<any>(localStorage.getItem(key), null);
+
+    if (Array.isArray(value)) {
+      for (const row of value) {
+        const id = rid(row);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push({ ...row, id, roomId: id });
+      }
+    } else if (value && typeof value === "object") {
+      const id = rid(value);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        out.push({ ...value, id, roomId: id });
+      }
+    }
+  }
+
+  const states = stateMap();
+  return out
+    .map((room) => {
+      const id = rid(room);
+      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+    })
+    .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+}
+
+function getRoom(kind: RoomKind, id: string) {
+  return allRooms(kind).find((room) => rid(room) === id) || null;
+}
+
+function readMap() {
+  return ok() ? j<Record<string, string>>(localStorage.getItem(READ_KEY), {}) : {};
+}
+
+function unreadRooms(kind: RoomKind, rooms: Room[]) {
+  const reads = readMap();
+  return rooms.filter((room) => {
+    const id = rid(room);
+    if (roomState(room) !== "active") return false;
+    return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
   });
 }
 
-const page:React.CSSProperties={minHeight:"100vh",background:"#05070d",color:"#f7f7fb",padding:18,fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"};
-const wrap:React.CSSProperties={maxWidth:1280,margin:"0 auto",paddingBottom:90};
-const nav:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:18};
-const brand:React.CSSProperties={color:"#ffd45a",fontSize:27,fontWeight:950,letterSpacing:-1,marginRight:10};
-const btn:React.CSSProperties={border:"1px solid rgba(207,216,230,.18)",background:"#171c29",color:"#f7f7fb",borderRadius:999,padding:"13px 18px",fontWeight:950,textDecoration:"none",display:"inline-block",cursor:"pointer"};
-const goldBtn:React.CSSProperties={...btn,border:0,background:"#ffdc68",color:"#10131a"};
-const redBtn:React.CSSProperties={...btn,background:"#271016",borderColor:"rgba(255,70,70,.48)",color:"#ffaaaa"};
-const hero:React.CSSProperties={border:"1px solid rgba(245,197,66,.28)",borderRadius:28,padding:30,marginBottom:20,background:"radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)"};
-const card:React.CSSProperties={background:"linear-gradient(180deg,#080d19,#050816)",border:"1px solid rgba(245,197,66,.28)",borderRadius:26,padding:26,marginBottom:22};
-const panel:React.CSSProperties={background:"#121724",border:"1px solid rgba(207,216,230,.16)",borderRadius:22,padding:22};
-const eyebrow:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:7,fontWeight:950,fontSize:15,marginBottom:12};
-const h1:React.CSSProperties={fontSize:"clamp(44px,8vw,86px)",lineHeight:.9,letterSpacing:-4,margin:"0 0 18px",fontWeight:950};
-const h2:React.CSSProperties={fontSize:"clamp(30px,5vw,52px)",lineHeight:.95,letterSpacing:-2,margin:"0 0 14px",fontWeight:950};
-const sub:React.CSSProperties={color:"#c9d0dc",fontSize:21,lineHeight:1.35,margin:0};
-const muted:React.CSSProperties={color:"#aeb7c7",margin:"8px 0 0",lineHeight:1.35};
-const grid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:16};
-const row:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"};
-const stat:React.CSSProperties={background:"#121724",border:"1px solid rgba(207,216,230,.16)",borderRadius:20,padding:20};
-const photo:React.CSSProperties={width:"100%",height:170,objectFit:"cover",borderRadius:18,marginBottom:14,border:"1px solid rgba(255,220,104,.18)"};
-
-function Nav({active}:{active:string}){
-  const item=(href:string,label:string,key:string)=><Link href={href} style={active===key?goldBtn:btn}>{label}</Link>;
-  return <nav style={nav}>
-    <div style={brand}>VAULTFORGE</div>
-    {item("/command","Command","command")}
-    {item("/deal-rooms","Deal Rooms","deals")}
-    {item("/deal-create","Create Deal","create")}
-    {item("/pain-intake","Pain Intake","pain-create")}
-    {item("/pain-rooms","Pain Rooms","pain")}
-    {item("/network","Network","network")}
-    {item("/messages","Messages","messages")}
-    {item("/profile","Profile","profile")}
-    {item("/saved-rooms","Saved","saved")}
-    {item("/archived-rooms","Archived","archived")}
-    {item("/deleted-rooms","Deleted","deleted")}
-    <Link href="/logout" style={redBtn}>Logout</Link>
-  </nav>
+function markRead(kind: RoomKind, room: Room) {
+  if (!ok()) return;
+  const id = rid(room);
+  if (!id) return;
+  const reads = readMap();
+  reads[id] = new Date().toISOString();
+  reads[`${kind}:${id}`] = new Date().toISOString();
+  localStorage.setItem(READ_KEY, JSON.stringify(reads));
+  const next = { ...room, alertRead: true, viewedAt: new Date().toISOString() };
+  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
+  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
 }
 
-function cover(r:Room){
-  const possible=[
-    txt(r.coverPhoto),
-    txt(r.photoUrl),
-    txt(r.imageUrl),
-    ...list(r.photoUrls),
-    ...list(r.photos)
+function firstPhoto(room: Room) {
+  const possible = [
+    txt(room.coverPhoto),
+    txt(room.photoUrl),
+    txt(room.imageUrl),
+    ...list(room.photoUrls),
+    ...list(room.photos),
   ].filter(Boolean);
-  return possible.find(x=>x.startsWith("data:image")||x.startsWith("http")||x.startsWith("/")||x.startsWith("blob:")) || "";
+  return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
 }
 
-function RoomCard({room,kind}:{room:Room;kind:RoomKind}){
-  const id=rid(room);
-  const img=cover(room);
-  return <div style={panel}>
-    {img?<img src={img} style={photo} alt={title(room,kind)}/>:null}
-    <div style={eyebrow}>{kind==="deal"?"Deal Room":"Pain Room"} • {roomState(room)}</div>
-    <h2 style={h2}>{title(room,kind)}</h2>
-    <p style={sub}>{loc(room)}</p>
-    <p style={muted}>
-      {kind==="deal"
-        ? `${txt(room.assetClass,"Deal")} • ${txt(room.propertyType,"Property")} • Route: ${list(room.routeTo).join(", ")||"Not routed"}`
-        : `${txt(room.assetClass,"Pain")} • ${list(room.painTypes).join(", ")||"Problem"} • Needs: ${list(room.routingNeeds).join(", ")||"Not routed"}`}
-    </p>
-    <div style={{...row,marginTop:18}}>
-      <Link href={kind==="deal"?`/deal-rooms/${encodeURIComponent(id)}`:`/pain-rooms/${encodeURIComponent(id)}`} style={goldBtn}>Open Room</Link>
-      <Link href={`/messages?type=${kind}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent((kind==="deal"?"Deal Room: ":"Pain Room: ")+title(room,kind))}`} style={btn}>Messages</Link>
-    </div>
-  </div>
+function countyFromCity(city: string) {
+  return CITY_COUNTY[city.trim().toLowerCase().replace(/\s+/g, " ")] || "";
 }
 
-const KIND:RoomKind="deal";
-function saveState(kind:RoomKind,room:Room,state:RoomState){
-  if(!ok())return;
-  const id=rid(room);
-  const next={...room,roomState:state,cleanupState:state,stateStatus:state,updatedAt:new Date().toISOString()};
-  [`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`].forEach(k=>localStorage.setItem(k,JSON.stringify(next)));
-  keys(kind).forEach(k=>localStorage.setItem(k,JSON.stringify([next,...arr<Room>(k).filter(r=>rid(r)!==id)])));
-  const sm=stateMap();sm[id]=state;sm[`${kind}:${id}`]=state;STATE_KEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(sm)));
+async function compressImage(file: File, maxWidth = 850, quality = 0.52): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve("");
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve("");
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxWidth / img.width);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve("");
+            return;
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch {
+          resolve("");
+        }
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function photosFromFiles(files: FileList | null) {
+  const selected = Array.from(files || []).slice(0, 10);
+  const output: string[] = [];
+  for (const file of selected) {
+    const compressed = await compressImage(file);
+    if (compressed && compressed.length < 450000) output.push(compressed);
+  }
+  return output;
+}
+
+async function onePhoto(files: FileList | null) {
+  const file = Array.from(files || [])[0];
+  return file ? compressImage(file) : "";
+}
+
+function saveRoom(kind: RoomKind, room: Room) {
+  if (!ok()) return "";
+  const id = `${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
+  const next: Room = {
+    ...room,
+    id,
+    roomId: id,
+    roomState: "active",
+    cleanupState: "active",
+    stateStatus: "active",
+    createdAt: now,
+    updatedAt: now,
+    alertRead: false,
+    viewedAt: "",
+  };
+
+  for (const key of singleKeys(kind, id)) {
+    const worked = saveSafe(key, next);
+    if (!worked) saveSafe(key, { ...next, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" });
+  }
+
+  const cover = txt(next.coverPhoto || next.photoUrl || next.imageUrl);
+  const slim: Room = { ...next, photos: cover ? [cover] : [], photoUrls: cover ? [cover] : [], coverPhoto: cover, photoUrl: cover, imageUrl: cover };
+
+  for (const key of keysFor(kind)) {
+    const existing = arr<Room>(key).filter((row) => rid(row) !== id);
+    const worked = saveSafe(key, [slim, ...existing]);
+    if (!worked) saveSafe(key, [{ ...slim, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }, ...existing]);
+  }
+
+  const map = stateMap();
+  map[id] = "active";
+  map[`${kind}:${id}`] = "active";
+  STATE_KEYS.forEach((key) => saveSafe(key, map));
+
+  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+
+  return id;
+}
+
+function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
+  if (!ok()) return;
+  const id = rid(room);
+  const next: Room = { ...room, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
+  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
+  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
+  const map = stateMap();
+  map[id] = state;
+  map[`${kind}:${id}`] = state;
+  STATE_KEYS.forEach((key) => saveSafe(key, map));
   window.dispatchEvent(new Event("vaultforge-room-state-change"));
 }
-function markRead(kind:RoomKind,room:Room){
-  const id=rid(room); if(!ok()||!id)return;
-  const reads=j<Record<string,string>>(localStorage.getItem(READ_KEY),{});
-  reads[id]=new Date().toISOString(); reads[`${kind}:${id}`]=new Date().toISOString();
-  localStorage.setItem(READ_KEY,JSON.stringify(reads));
-  const next={...room,alertRead:true,viewedAt:new Date().toISOString()};
-  [`vaultforge_clean_${kind}_room_${id}`,`vaultforge_${kind}_room_${id}`,`vf_${kind}_room_${id}`].forEach(k=>localStorage.setItem(k,JSON.stringify(next)));
+
+function saveProfile(profile: Profile) {
+  if (!ok()) return;
+  PROFILE_KEYS.forEach((key) => localStorage.setItem(key, JSON.stringify(profile)));
+  window.dispatchEvent(new Event("vaultforge-profile-change"));
 }
-function getRoom(kind:RoomKind,id:string){
-  const rooms=allRooms(kind);
-  return rooms.find(r=>rid(r)===id)||null;
+
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
+const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
+const redHero: React.CSSProperties = { ...hero, borderColor: "rgba(255,70,70,.42)", background: "radial-gradient(circle at top right, rgba(255,50,80,.22), transparent 35%), linear-gradient(180deg,#120611,#050816)" };
+const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
+const pulsePanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.65)", boxShadow: "0 0 26px rgba(255,50,70,.22)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const labelStyle: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontSize: 12, fontWeight: 950, marginBottom: 8 };
+const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
+const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
+const textarea: React.CSSProperties = { ...input, minHeight: 110, resize: "vertical" };
+const photoStyle: React.CSSProperties = { width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+
+function Nav({ active }: { active: string }) {
+  const item = (href: string, label: string, key: string) => <Link href={href} style={active === key ? goldBtn : btn}>{label}</Link>;
+  return <nav style={nav}><div style={brand}>VAULTFORGE</div>{item("/command","Command","command")}{item("/deal-rooms","Deal Rooms","deals")}{item("/deal-create","Create Deal","deal-create")}{item("/pain-intake","Pain Intake","pain-intake")}{item("/pain-rooms","Pain Rooms","pain")}{item("/network","Network","network")}{item("/messages","Messages","messages")}{item("/profile","Profile","profile")}{item("/saved-rooms","Saved","saved")}{item("/archived-rooms","Archived","archived")}{item("/deleted-rooms","Deleted","deleted")}<Link href="/logout" style={redBtn}>Logout</Link></nav>;
 }
-export default function DetailPage({params}:{params:{id:string}}){
-  const id=decodeURIComponent(params.id||"");
-  const [room,setRoom]=useState<Room|null>(null);
-  useEffect(()=>{const r=getRoom(KIND,id);setRoom(r);if(r)markRead(KIND,r)},[id]);
-  if(!room)return <main style={page}><div style={wrap}><Nav active={KIND==="deal"?"deals":"pain"}/><section style={hero}><h1 style={h1}>Room not found.</h1></section></div></main>
-  const img=cover(room);
-  return <main style={page}><div style={wrap}>
-    <Nav active={KIND==="deal"?"deals":"pain"}/>
-    <section style={hero}>{img?<img src={img} alt={title(room,KIND)} style={{...photo,height:260}}/>:null}<div style={eyebrow}>{KIND==="deal"?"Deal Room":"Pain Room"}</div><h1 style={h1}>{title(room,KIND)}</h1><p style={sub}>{loc(room)}</p><p style={muted}>Current: {roomState(room)}</p></section>
-    <section style={card}><div style={eyebrow}>5S Controls</div><div style={row}><button style={goldBtn} onClick={()=>{saveState(KIND,room,"saved");setRoom({...room,roomState:"saved",cleanupState:"saved",stateStatus:"saved"})}}>Save</button><button style={btn} onClick={()=>{saveState(KIND,room,"archived");setRoom({...room,roomState:"archived",cleanupState:"archived",stateStatus:"archived"})}}>Archive</button><button style={redBtn} onClick={()=>{saveState(KIND,room,"deleted");setRoom({...room,roomState:"deleted",cleanupState:"deleted",stateStatus:"deleted"})}}>Delete</button></div></section>
-    <section style={card}><div style={eyebrow}>Room Summary</div><p style={sub}>{txt(room.analyzer, KIND==="deal"?"Deal room saved. Verify facts and route to profile.":"Pain room saved. Verify problem and route solution profile.")}</p></section>
-    <section style={card}><div style={grid}>
-      <div style={stat}><div style={eyebrow}>Asset</div><p style={sub}>{txt(room.assetClass)} {txt(room.propertyType)}</p></div>
-      <div style={stat}><div style={eyebrow}>Numbers</div><p style={sub}>Ask {txt(room.askingPrice,"N/A")} • Value {txt(room.propertyValue,"N/A")} • Repairs {txt(room.repairs,"N/A")}</p></div>
-      <div style={stat}><div style={eyebrow}>{KIND==="deal"?"Route To":"Needs"}</div><p style={sub}>{KIND==="deal"?list(room.routeTo).join(", "):list(room.routingNeeds).join(", ")}</p></div>
-      <div style={stat}><div style={eyebrow}>Notes</div><p style={sub}>{txt(room.notes,"No notes.")}</p></div>
-    </div></section>
-    <section style={card}><div style={eyebrow}>Owner Message</div><Link href={`/messages?type=${KIND}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent((KIND==="deal"?"Deal Room: ":"Pain Room: ")+title(room,KIND))}`} style={goldBtn}>Message Owner</Link></section>
-  </div></main>
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+}
+
+function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <label><div style={labelStyle}>{label}</div><input type="text" style={input} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <label><div style={labelStyle}>{label}</div><textarea style={textarea} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
+  return <label><div style={labelStyle}>{label}</div><select style={input} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
+}
+
+function ChipSet({ label, options, selected, onToggle }: { label: string; options: string[]; selected: string[]; onToggle: (value: string) => void }) {
+  return <div><div style={labelStyle}>{label}</div><div style={row}>{options.map((option) => <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>{option}</button>)}</div></div>;
+}
+
+function Value({ label, value }: { label: string; value: unknown }) {
+  return <div style={panel}><div style={eyebrow}>{label}</div><p style={sub}>{txt(value, "Not listed")}</p></div>;
+}
+
+function RoomCard({ room, kind, pulse = false }: { room: Room; kind: RoomKind; pulse?: boolean }) {
+  const img = firstPhoto(room);
+  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
+  return <div style={pulse ? pulsePanel : panel}>
+    {img ? <img src={img} alt={titleFor(room, kind)} style={photoStyle} /> : null}
+    <div style={eyebrow}>{kind === "deal" ? "Deal Room" : "Pain Room"} • {roomState(room)}</div>
+    <h2 style={h2}>{titleFor(room, kind)}</h2>
+    <p style={sub}>{loc(room)}</p>
+    <p style={muted}>{kind === "deal" ? `${txt(room.assetClass)} • ${txt(room.propertyType)} • Route: ${list(room.routeTo).join(", ") || "Buyer"}` : `${txt(room.assetClass)} • ${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"}`}</p>
+    <p style={muted}>{kind === "deal" ? `Ask ${txt(room.askingPrice, "N/A")} • Value ${txt(room.propertyValue, "N/A")} • Repairs ${txt(room.repairs, "N/A")}` : `Severity ${txt(room.severity, "N/A")} • Time ${txt(room.timePressure, "N/A")} • Capital ${txt(room.capitalPressure, "N/A")}`}</p>
+    <div style={{ ...row, marginTop: 16 }}>
+      <Link href={href} style={goldBtn}>Open Room</Link>
+      <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}`} style={btn}>Messages</Link>
+    </div>
+  </div>;
+}
+
+const KIND: RoomKind = "deal" as RoomKind;
+
+export default function RoomDetailPage({ params }: { params: { id: string } }) {
+  const id = decodeURIComponent(params.id || "");
+  const [room, setRoom] = useState<Room | null>(null);
+
+  useEffect(() => {
+    const found = getRoom(KIND, id);
+    setRoom(found);
+    if (found) markRead(KIND, found);
+  }, [id]);
+
+  if (!room) {
+    return <main style={page}><div style={wrap}><Nav active={KIND === "deal" ? "deals" : "pain"} /><section style={hero}><h1 style={h1}>Room not found.</h1><p style={sub}>Go back to the board and open a current room.</p></section></div></main>;
+  }
+
+  const img = firstPhoto(room);
+
+  function move(state: RoomState) {
+    if (!room) return;
+    setRoomState(KIND, room, state);
+    setRoom({ ...room, roomState: state, cleanupState: state, stateStatus: state });
+  }
+
+  return <main style={page}><div style={wrap}><Nav active={KIND === "deal" ? "deals" : "pain"} />
+    <section style={hero}>
+      {img ? <img src={img} alt={titleFor(room, KIND)} style={{ ...photoStyle, height: 290 }} /> : null}
+      <div style={eyebrow}>{KIND === "deal" ? "Deal Room" : "Pain Room"} • {roomState(room)}</div>
+      <h1 style={h1}>{titleFor(room, KIND)}</h1>
+      <p style={sub}>{loc(room)}</p>
+      <p style={muted}>{KIND === "deal" ? `${txt(room.assetClass)} • ${txt(room.propertyType)} • Strategy: ${list(room.strategy).join(", ") || "Not selected"}` : `${txt(room.assetClass)} • ${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"}`}</p>
+    </section>
+
+    <Section title="5S Controls">
+      <p style={sub}>Current: {roomState(room)}. Save, archive, or delete moves this room out of active alerts and into its folder.</p>
+      <div style={{ ...row, marginTop: 18 }}>
+        <button type="button" style={goldBtn} onClick={() => move("saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
+        <button type="button" style={redBtn} onClick={() => move("deleted")}>Delete</button>
+      </div>
+    </Section>
+
+    <Section title={KIND === "deal" ? "Deal Intelligence Snapshot" : "Pain Intelligence Snapshot"}>
+      <p style={sub}>{txt(room.analyzer, KIND === "deal" ? "Deal analyzer: verify seller facts, numbers, condition, route fit, and best execution path." : "Pain analyzer: identify root cause, pressure, blockers, risk, ideal solver profile, and next move.")}</p>
+    </Section>
+
+    {KIND === "deal" ? <DealAnalysis room={room} /> : <PainAnalysis room={room} />}
+
+    <Section title="Owner Message">
+      <p style={sub}>Message subject is locked to this room so the thread matches the work.</p>
+      <div style={{ ...row, marginTop: 18 }}><Link href={`/messages?type=${KIND}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent((KIND === "deal" ? "Deal Room: " : "Pain Room: ") + titleFor(room, KIND))}`} style={goldBtn}>Message Owner</Link><Link href={KIND === "deal" ? "/deal-rooms" : "/pain-rooms"} style={btn}>Back to Board</Link></div>
+    </Section>
+  </div></main>;
+}
+
+function DealAnalysis({ room }: { room: Room }) {
+  return <>
+    <Section title="Front Facts"><div style={grid}><Value label="Asset" value={`${txt(room.assetClass)} ${txt(room.propertyType)}`} /><Value label="Market" value={loc(room)} /><Value label="Condition" value={room.condition} /><Value label="Occupancy" value={room.occupancy} /></div></Section>
+    <Section title="Numbers + Spread"><div style={grid}><Value label="Ask Price" value={room.askingPrice} /><Value label="Value / ARV" value={room.propertyValue} /><Value label="Repairs" value={room.repairs} /><Value label="Income / Rent / NOI" value={room.monthlyRent} /></div></Section>
+    <Section title="Execution Path"><div style={grid}><Value label="Strategy" value={list(room.strategy).join(", ")} /><Value label="Route To" value={list(room.routeTo).join(", ")} /><Value label="Timeline" value={room.timeline || room.timePressure} /><Value label="Deal Strength" value={room.dealStrength} /></div></Section>
+    <Section title="AI Best Next Move"><p style={sub}>Verify title/control, confirm access, validate numbers, match to the strongest buyer/lender/operator profile, then move qualified conversation into Messages.</p></Section>
+  </>;
+}
+
+function PainAnalysis({ room }: { room: Room }) {
+  return <>
+    <Section title="Problem Facts"><div style={grid}><Value label="Pain Type" value={list(room.painTypes).join(", ")} /><Value label="Severity" value={room.severity} /><Value label="Time Pressure" value={room.timePressure} /><Value label="Control Status" value={room.controlStatus} /></div></Section>
+    <Section title="Pressure + Risk"><div style={grid}><Value label="Capital Pressure" value={room.capitalPressure} /><Value label="Blockers" value={list(room.blockers).join(", ")} /><Value label="Risk Types" value={list(room.riskTypes).join(", ")} /><Value label="Needs" value={list(room.routingNeeds).join(", ")} /></div></Section>
+    <Section title="Numbers + Burn"><div style={grid}><Value label="Ask Price" value={room.askingPrice} /><Value label="Value / ARV" value={room.propertyValue} /><Value label="Repairs / Work" value={room.repairs} /><Value label="Money Needed Now" value={room.moneyNeededNow} /></div></Section>
+    <Section title="Outcome Logic"><div style={grid}><Value label="Root Cause" value={room.rootCause} /><Value label="Best Outcome" value={room.bestOutcome} /><Value label="Worst Case" value={room.worstCase} /><Value label="Desired Solution" value={room.desiredSolution} /></div></Section>
+    <Section title="AI Best Next Move"><p style={sub}>Define root cause, verify control, isolate the blocker, route to the highest-fit solver profile, then move the execution conversation into Messages.</p></Section>
+  </>;
 }
