@@ -360,9 +360,10 @@ function MemberCard({ member, saved, onSave, onUnsave }: { member: MemberProfile
   );
 }
 
+
 export default function MembersPage() {
   const [tick, setTick] = useState(0);
-  const [openState, setOpenState] = useState("GA");
+  const [openState, setOpenState] = useState("");
   const [showSaved, setShowSaved] = useState(false);
 
   useEffect(() => {
@@ -381,7 +382,7 @@ export default function MembersPage() {
 
   const members = useMemo(() => getDirectory(), [tick]);
   const saved = useMemo(() => savedIds(), [tick]);
-  const openMembers = useMemo(() => membersBasedInState(openState, members), [openState, members]);
+  const openMembers = useMemo(() => openState ? membersBasedInState(openState, members) : [], [openState, members]);
   const savedMembers = useMemo(() => members.filter((member) => saved.includes(profileId(member))), [members, saved]);
 
   function saveMember(member: MemberProfile) {
@@ -394,6 +395,16 @@ export default function MembersPage() {
     setTick((x) => x + 1);
   }
 
+  function openStateCard(state: string) {
+    setShowSaved(false);
+    setOpenState(openState === state ? "" : state);
+  }
+
+  function openSavedProfiles() {
+    setShowSaved(!showSaved);
+    setOpenState("");
+  }
+
   return (
     <main style={page}>
       <div style={wrap}>
@@ -402,51 +413,57 @@ export default function MembersPage() {
         <section style={hero}>
           <div style={eyebrow}>Members</div>
           <h1 style={h1}>State member directory.</h1>
-          <p style={sub}>Member cards are based on where their profile says they are from. Operating states stay inside the card for routing context.</p>
-          <div style={{ ...row, marginTop: 22 }}>
-            <button type="button" style={!showSaved ? goldBtn : btn} onClick={() => setShowSaved(false)}>State Members</button>
-            <button type="button" style={showSaved ? goldBtn : btn} onClick={() => setShowSaved(true)}>Saved Profiles ({savedMembers.length})</button>
-          </div>
+          <p style={sub}>Click a state to open member cards based in that state. Saved profiles open from their own card.</p>
         </section>
 
-        {!showSaved ? (
-          <>
-            <Section title="Member State Cards">
-              <div style={grid}>
-                {STATES.map((state) => {
-                  const stateMembers = membersBasedInState(state, members);
-                  const stateSaved = stateMembers.filter((member) => saved.includes(profileId(member))).length;
-                  return (
-                    <button key={state} type="button" onClick={() => setOpenState(state)} style={openState === state ? activePanel : panel}>
-                      <div style={eyebrow}>{state}</div>
-                      <h2 style={h2}>{stateMembers.length}</h2>
-                      <p style={muted}>member profile(s) based here</p>
-                      <p style={muted}>{stateSaved} saved profile(s)</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </Section>
+        <Section title="Member Cards">
+          <div style={grid}>
+            {STATES.map((state) => {
+              const stateMembers = membersBasedInState(state, members);
+              const stateSaved = stateMembers.filter((member) => saved.includes(profileId(member))).length;
+              const isOpen = openState === state;
 
-            <Section title={`${openState} Based Members`}>
-              {openMembers.length ? (
-                <div style={grid}>
-                  {openMembers.map((member) => (
-                    <MemberCard
-                      key={profileId(member)}
-                      member={member}
-                      saved={saved.includes(profileId(member))}
-                      onSave={() => saveMember(member)}
-                      onUnsave={() => unsaveMember(member)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p style={sub}>No member profiles based in {openState} yet.</p>
-              )}
-            </Section>
-          </>
-        ) : (
+              return (
+                <button key={state} type="button" onClick={() => openStateCard(state)} style={isOpen ? activePanel : panel}>
+                  <div style={eyebrow}>{state}</div>
+                  <h2 style={h2}>{stateMembers.length}</h2>
+                  <p style={muted}>member profile(s) based here</p>
+                  <p style={muted}>{stateSaved} saved profile(s)</p>
+                  <p style={muted}>{isOpen ? "Click to collapse" : "Click to open"}</p>
+                </button>
+              );
+            })}
+
+            <button type="button" onClick={openSavedProfiles} style={showSaved ? activePanel : panel}>
+              <div style={eyebrow}>Saved Profiles</div>
+              <h2 style={h2}>{savedMembers.length}</h2>
+              <p style={muted}>saved member profile(s)</p>
+              <p style={muted}>{showSaved ? "Click to collapse" : "Click to open"}</p>
+            </button>
+          </div>
+        </Section>
+
+        {openState ? (
+          <Section title={`${openState} Based Members`}>
+            {openMembers.length ? (
+              <div style={grid}>
+                {openMembers.map((member) => (
+                  <MemberCard
+                    key={profileId(member)}
+                    member={member}
+                    saved={saved.includes(profileId(member))}
+                    onSave={() => saveMember(member)}
+                    onUnsave={() => unsaveMember(member)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p style={sub}>No member profiles based in {openState} yet.</p>
+            )}
+          </Section>
+        ) : null}
+
+        {showSaved ? (
           <Section title="Saved Profiles">
             {savedMembers.length ? (
               <div style={grid}>
@@ -464,7 +481,7 @@ export default function MembersPage() {
               <p style={sub}>No saved profiles yet.</p>
             )}
           </Section>
-        )}
+        ) : null}
       </div>
     </main>
   );
