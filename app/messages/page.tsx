@@ -350,6 +350,23 @@ function normalizeThread(raw: any): Thread {
   return baseThread;
 }
 
+
+function exactThreadKey(thread: Thread) {
+  return [
+    thread.id,
+    thread.lane,
+    thread.roomId,
+    thread.subject,
+    thread.roomTitle,
+    thread.createdAt,
+  ].map((part) => String(part || "").trim()).join("::");
+}
+
+function sameThread(a: Thread, b: Thread) {
+  return exactThreadKey(a) === exactThreadKey(b);
+}
+
+
 function readThreads(): Thread[] {
   if (!ok()) return [];
   const out: Thread[] = [];
@@ -534,7 +551,7 @@ export default function MessagesPage() {
   const [lane, setLane] = useState<Lane | "all">("all");
   const [folder, setFolder] = useState<ThreadStatus | "unread">("active");
   const [threads, setThreads] = useState<Thread[]>([]);
-  const [activeId, setActiveId] = useState("");
+  const [activeKey, setActiveKey] = useState("");
   const [reply, setReply] = useState("");
   const [newSubject, setNewSubject] = useState("");
   const [newLane, setNewLane] = useState<Lane>("general");
@@ -568,7 +585,7 @@ export default function MessagesPage() {
         current = [seeded, ...current];
         writeThreads(current);
       } else {
-        setActiveId(exists.id);
+        setActiveKey(exactThreadKey(exists));
       }
     }
 
@@ -599,7 +616,7 @@ export default function MessagesPage() {
     return next;
   }, [threads, lane, folder]);
 
-  const activeThread = threads.find((thread) => thread.id === activeId) || null;
+  const activeThread = threads.find((thread) => exactThreadKey(thread) === activeKey) || null;
 
   function persist(next: Thread[]) {
     const hydrated = next.map((thread) => ({ ...thread, participants: hydrateParticipants(thread) }));
@@ -607,10 +624,12 @@ export default function MessagesPage() {
     writeThreads(hydrated);
   }
 
-  function openThread(id: string) {
+  function openThread(target: Thread) {
     const now = new Date().toISOString();
+    const targetKey = exactThreadKey(target);
+
     const next = threads.map((thread) =>
-      thread.id === id
+      exactThreadKey(thread) === targetKey
         ? {
             ...thread,
             unread: false,
@@ -619,12 +638,21 @@ export default function MessagesPage() {
           }
         : thread
     );
+
     persist(next);
-    setActiveId(id);
+
+    const refreshed = next.find((thread) => exactThreadKey(thread) === targetKey) || target;
+    setActiveKey(exactThreadKey(refreshed));
   }
 
   function updateThread(id: string, changes: Partial<Thread>) {
-    persist(threads.map((thread) => thread.id === id ? { ...thread, ...changes, updatedAt: new Date().toISOString() } : thread));
+    const target = threads.find((thread) => thread.id === id && (!activeKey || exactThreadKey(thread) === activeKey));
+    const targetKey = target ? exactThreadKey(target) : "";
+    persist(threads.map((thread) =>
+      (targetKey ? exactThreadKey(thread) === targetKey : thread.id === id)
+        ? { ...thread, ...changes, updatedAt: new Date().toISOString() }
+        : thread
+    ));
   }
 
   function sendReply() {
@@ -641,7 +669,7 @@ export default function MessagesPage() {
     };
 
     const next = threads.map((thread) =>
-      thread.id === activeThread.id
+      exactThreadKey(thread) === exactThreadKey(activeThread)
         ? { ...thread, messages: [...thread.messages, message], participants: hydrateParticipants({ ...thread, messages: [...thread.messages, message] }), unread: false, updatedAt: message.at, status: thread.status === "deleted" ? "active" : thread.status }
         : thread
     );
@@ -665,7 +693,7 @@ export default function MessagesPage() {
     };
     thread.messages = [message];
     persist([thread, ...threads]);
-    setActiveId(thread.id);
+    setActiveKey(exactThreadKey(thread));
     setNewSubject("");
     setNewTo("");
   }
@@ -676,7 +704,7 @@ export default function MessagesPage() {
       : threads.filter((thread) => thread.status === "active" && thread.lane === value && thread.unread).length;
 
     return (
-      <button type="button" style={lane === value ? activePanel : unread ? pulseRed : panel} onClick={() => { setLane(value); setActiveId(""); }}>
+      <button type="button" style={lane === value ? activePanel : unread ? pulseRed : panel} onClick={() => { setLane(value); setActiveKey(""); }}>
         <div style={eyebrow}>{label}</div>
         <h2 style={h2}>{count}</h2>
         <p style={muted}>{unread} unread</p>
@@ -708,11 +736,11 @@ export default function MessagesPage() {
 
         <Section title="Thread Folders">
           <div style={grid}>
-            <StatusFolder title="Active" count={counts.all} active={folder === "active"} onClick={() => { setFolder("active"); setActiveId(""); }} />
-            <StatusFolder title="Unread" count={counts.unread} active={folder === "unread"} onClick={() => { setFolder("unread"); setActiveId(""); }} />
-            <StatusFolder title="Saved" count={counts.saved} active={folder === "saved"} onClick={() => { setFolder("saved"); setActiveId(""); }} />
-            <StatusFolder title="Archived" count={counts.archived} active={folder === "archived"} onClick={() => { setFolder("archived"); setActiveId(""); }} />
-            <StatusFolder title="Deleted" count={counts.deleted} active={folder === "deleted"} onClick={() => { setFolder("deleted"); setActiveId(""); }} />
+            <StatusFolder title="Active" count={counts.all} active={folder === "active"} onClick={() => { setFolder("active"); setActiveKey(""); }} />
+            <StatusFolder title="Unread" count={counts.unread} active={folder === "unread"} onClick={() => { setFolder("unread"); setActiveKey(""); }} />
+            <StatusFolder title="Saved" count={counts.saved} active={folder === "saved"} onClick={() => { setFolder("saved"); setActiveKey(""); }} />
+            <StatusFolder title="Archived" count={counts.archived} active={folder === "archived"} onClick={() => { setFolder("archived"); setActiveKey(""); }} />
+            <StatusFolder title="Deleted" count={counts.deleted} active={folder === "deleted"} onClick={() => { setFolder("deleted"); setActiveKey(""); }} />
           </div>
         </Section>
 
@@ -746,7 +774,7 @@ export default function MessagesPage() {
             visible.length ? (
               <div style={grid}>
                 {visible.map((thread) => (
-                  <ThreadCard key={thread.id} thread={thread} active={activeId === thread.id} onOpen={() => openThread(thread.id)} />
+                  <ThreadCard key={exactThreadKey(thread)} thread={thread} active={activeKey === exactThreadKey(thread)} onOpen={() => openThread(thread)} />
                 ))}
               </div>
             ) : (
