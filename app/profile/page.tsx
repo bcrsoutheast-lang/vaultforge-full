@@ -292,6 +292,7 @@ function Nav() {
     <nav style={nav}>
       <div style={brand}>VAULTFORGE</div>
       <Link href="/command" style={btn}>Command</Link>
+      <Link href="/my-rooms" style={btn}>My Rooms</Link>
       <Link href="/members" style={btn}>Members</Link>
       <Link href="/network" style={btn}>Network</Link>
       <Link href="/state-map" style={btn}>State Map</Link>
