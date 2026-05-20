@@ -1,19 +1,723 @@
 "use client";
-import Link from "next/link";
-import {useEffect,useMemo,useState} from "react";
-type S="active"|"saved"|"archived"|"deleted";type K="deal"|"pain";
-type R={id?:string;roomId?:string;title?:string;name?:string;state?:string;city?:string;county?:string;address?:string;assetClass?:string;propertyType?:string;askingPrice?:string;propertyValue?:string;repairs?:string;timeline?:string;timePressure?:string;severity?:string;capitalPressure?:string;controlStatus?:string;contactName?:string;contactPhone?:string;contactEmail?:string;bestContact?:string;notes?:string;routeTo?:string[]|string;routingNeeds?:string[]|string;painTypes?:string[]|string;strategy?:string[]|string;blockers?:string[]|string;riskTypes?:string[]|string;documentsAvailable?:string[]|string;condition?:string;occupancy?:string;beds?:string;baths?:string;sqft?:string;units?:string;acres?:string;zoning?:string;noi?:string;capRate?:string;utilities?:string;roadFrontage?:string;entitlementStatus?:string;monthlyBurnRate?:string;moneyNeededNow?:string;deadline?:string;rootCause?:string;bestOutcome?:string;worstCase?:string;desiredSolution?:string;currentStatus?:string;ownerSituation?:string;accessStatus?:string;titleStatus?:string;insuranceStatus?:string;permitStatus?:string;tenantStatus?:string;legalStatus?:string;roomState?:S;cleanupState?:S;stateStatus?:S;alertRead?:boolean;viewedAt?:string;createdAt?:string;updatedAt?:string;coverPhoto?:string;photoUrl?:string;imageUrl?:string;photos?:string[];photoUrls?:string[];analyzer?:string;[key:string]:unknown};
-type M={id?:string;name?:string;company?:string;email?:string;phone?:string;profilePhoto?:string;memberType?:string;basedState?:string;basedCity?:string;basedCounty?:string;statesOperated?:string[];markets?:string[];assetClasses?:string[];strategies?:string[];specialties?:string[];needs?:string[];canProvide?:string[];capitalPosition?:string;proofOfFunds?:string;fundingRange?:string;contactPreference?:string;directContact?:string;bio?:string;[key:string]:unknown};
-const STATES=["GA","TN","AL","FL","NC","SC","TX"],ASSETS=["Residential","Commercial","Land"],RES=["Single Family","Duplex","Triplex","Quad","Townhome","Condo","Mobile Home","Small Multifamily","Apartment"],COM=["Retail","Office","Industrial","Warehouse","Hotel","Self Storage","Mixed Use","Medical","Restaurant","Automotive","Church / Special Use"],LAND=["Infill Lot","Acreage","Entitled Land","Raw Land","Commercial Pad","Subdivision","Timber","Farm","Assemblage","Waterfront"],STRAT=["Wholesale","Flip","Buy & Hold","BRRRR","Development","Seller Finance","JV","Rental","Hotel Conversion","Airbnb"],ROUTES=["Buyer","Lender","Operator","Contractor","Developer","Attorney","Capital Partner","Property Manager"],NEEDS=["Lender","Operator","Contractor","Buyer","Attorney","Insurance Adjuster","City Expeditor","Private Capital","Property Manager","Developer"],PAINS=["Funding Gap","Foreclosure","Stalled Construction","Contractor Problem","Title Problem","Permit Problem","City Violation","Tenant Issue","Partnership Dispute","Emergency Exit","Insurance Claim","Fire Damage","Mold","Structural","Probate","Tax Sale Risk","Squatter Issue","Burn Rate","Seller Pressure","Lender Problem","Failed Closing"],BLOCK=["Capital","Timeline","Title","Access","Contractor","Tenant","Permit","City","Legal","Partner","Seller Pressure","Unknown Numbers","Insurance","Utilities","Appraisal","Inspection"],RISK=["Legal","Financial","Structural","Operational","City/Permit","Occupancy","Environmental","Insurance","Market","Reputation"],DOCS=["Photos","Contract","Title Report","Insurance Claim","Repair Estimate","Scope of Work","Appraisal","Rent Roll","Survey","Plans","Permits","Proof of Funds"],COND=["Unknown","Turnkey","Light Rehab","Medium Rehab","Full Gut","Fire Damage","Shell","Tear Down"],OCC=["Unknown","Vacant","Owner Occupied","Tenant Occupied","Squatter","Partial Vacancy"],TIME=["24 Hours","72 Hours","7 Days","14 Days","30 Days","Flexible"],CAP=["Unknown","Under $25k","$25k-$100k","$100k-$250k","$250k-$1M","$1M+"],SEV=["Low","Medium","High","Critical","Emergency"],YESNO=["Unknown","Yes","No"],MEMBER_TYPES=["Investor","Wholesaler","Lender","Contractor","Developer","Agent","Attorney","Operator","Private Capital","Property Manager"],CONTACT=["VaultForge Message","Phone","Text","Email","Contact Form"],CAP_POS=["Unknown","Cash Buyer","Private Capital","Hard Money","Bank Lending","JV Capital","Needs Capital","Operator With Capital","Operator Needs Capital"],FUND=["Unknown","Under $50k","$50k-$250k","$250k-$1M","$1M-$5M","$5M+"],SPEC=["Distress","Funding Gap","Off Market","Construction","Land","Commercial","Residential","Creative Finance","Insurance","Permits","Probate","Foreclosure","Tax Sale","Stalled Project","Value Add"],PROVIDE=["Capital","Buying","Lending","Contractors","Legal","Insurance","Property Management","Development","Operations","Introductions"],MARKETS=["Atlanta","North Georgia","Chattanooga","Nashville","Knoxville","Birmingham","Huntsville","Montgomery","Jacksonville","Tampa","Orlando","Miami","Charlotte","Raleigh-Durham","Greenville-Spartanburg","Charleston","Dallas-Fort Worth","Houston","Austin","San Antonio"];
-const DKEY=["vaultforge_clean_deal_rooms","vaultforge_deal_rooms","vaultforge_rooms_deals","vf_deal_rooms"],PKEY=["vaultforge_clean_pain_rooms_v1","vaultforge_clean_pain_rooms","vaultforge_pain_rooms","vaultforge_rooms_pain","vf_pain_rooms"],SKEY=["vaultforge_clean_room_states","vaultforge_room_states","vaultforge_deal_room_states","vaultforge_pain_room_states","vaultforge_5s_room_states"],READ="vaultforge_room_alert_read_v1",PKEYS=["vaultforge_profile","vaultforge_member_profile","vaultforge_clean_profile"],DIR="vaultforge_member_directory_v1";
-const CITY:any={atlanta:"Fulton",alpharetta:"Fulton",roswell:"Fulton",marietta:"Cobb",smyrna:"Cobb",kennesaw:"Cobb",cartersville:"Bartow",cville:"Bartow",cvile:"Bartow",adairsville:"Bartow",rome:"Floyd",gainesville:"Hall",savannah:"Chatham",augusta:"Richmond",columbus:"Muscogee",macon:"Bibb",chattanooga:"Hamilton",nashville:"Davidson",knoxville:"Knox",birmingham:"Jefferson",huntsville:"Madison",charlotte:"Mecklenburg",raleigh:"Wake",greenville:"Greenville",charleston:"Charleston",dallas:"Dallas",houston:"Harris",austin:"Travis","san antonio":"Bexar",sanantonio:"Bexar"};
-function ok(){return typeof window!=="undefined"&&!!window.localStorage}function jj<T>(r:string|null,f:T):T{try{return r?JSON.parse(r):f}catch{return f}}function t(v:unknown,f=""){const s=String(v||"").trim();return s||f}function l(v:unknown){if(Array.isArray(v))return v.map(String).map(x=>x.trim()).filter(Boolean);if(typeof v==="string"&&v.trim())return v.split(",").map(x=>x.trim()).filter(Boolean);return [] as string[]}function id(r:R|null|undefined){return t(r?.id||r?.roomId)}function st(r:R):S{const s=t(r.roomState||r.cleanupState||r.stateStatus,"active");return s==="saved"||s==="archived"||s==="deleted"?s:"active"}function keys(k:K){return k==="deal"?DKEY:PKEY}function sk(k:K,i:string){return[`vaultforge_clean_${k}_room_${i}`,`vaultforge_${k}_room_${i}`,`vf_${k}_room_${i}`]}function arr<T>(k:string):T[]{return ok()?jj<unknown>(localStorage.getItem(k),[]) instanceof Array?jj<T[]>(localStorage.getItem(k),[]):[]:[]}function smap(){const m:Record<string,S>={};if(ok())SKEY.forEach(k=>Object.assign(m,jj<Record<string,S>>(localStorage.getItem(k),{})));return m}function save(k:string,v:unknown){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{return false}}function county(c:string){return CITY[c.trim().toLowerCase().replace(/\s+/g," ")]||""}function types(a:string){return a==="Commercial"?COM:a==="Land"?LAND:RES}function title(r:R,k:K){return t(r.title||r.name,k==="deal"?"Untitled Deal Room":"Untitled Pain Room")}function loc(r:R){return[t(r.city),t(r.county),t(r.state)].filter(Boolean).join(", ")||"Market not listed"}function money(v:unknown){const n=Number(String(v||"").replace(/[^0-9.-]/g,""));return Number.isFinite(n)?n:0}function photo(r:R){return[t(r.coverPhoto),t(r.photoUrl),t(r.imageUrl),...l(r.photoUrls),...l(r.photos)].find(x=>x.startsWith("data:image")||x.startsWith("http")||x.startsWith("/")||x.startsWith("blob:"))||""}
-function all(k:K){if(!ok())return[] as R[];const out:R[]=[];const seen=new Set<string>();for(const kk of keys(k))for(const r of arr<R>(kk)){const i=id(r);if(i&&!seen.has(i)){seen.add(i);out.push({...r,id:i,roomId:i})}}for(let i=0;i<localStorage.length;i++){const kk=localStorage.key(i)||"";const m=k==="deal"?kk.includes("deal_room"):kk.includes("pain_room");if(!m)continue;const v=jj<any>(localStorage.getItem(kk),null);const rows=Array.isArray(v)?v:v&&typeof v==="object"?[v]:[];for(const r of rows){const ii=id(r);if(ii&&!seen.has(ii)){seen.add(ii);out.push({...r,id:ii,roomId:ii})}}}const map=smap();return out.map(r=>{const i=id(r);const s=map[i]||map[`${k}:${i}`]||st(r);return{...r,roomState:s,cleanupState:s,stateStatus:s}}).sort((a,b)=>String(b.createdAt||b.updatedAt||"").localeCompare(String(a.createdAt||a.updatedAt||"")))}
-function getRoom(k:K,i:string){if(!ok())return null as R|null;for(const kk of sk(k,i)){const r=jj<R|null>(localStorage.getItem(kk),null);if(r&&id(r))return r}return all(k).find(r=>id(r)===i)||null}function setRoomState(k:K,r:R,s:S){const i=id(r);if(!ok()||!i)return;const n={...r,roomState:s,cleanupState:s,stateStatus:s,updatedAt:new Date().toISOString()};sk(k,i).forEach(kk=>save(kk,n));keys(k).forEach(kk=>save(kk,[n,...arr<R>(kk).filter(x=>id(x)!==i)]));const m=smap();m[i]=s;m[`${k}:${i}`]=s;SKEY.forEach(kk=>save(kk,m));window.dispatchEvent(new Event("vaultforge-room-state-change"))}function saveRoom(k:K,r:R){if(!ok())return"";const i=`${k}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,now=new Date().toISOString(),cover=t(r.coverPhoto||r.photoUrl||r.imageUrl||l(r.photos)[0]||l(r.photoUrls)[0]);const n={...r,id:i,roomId:i,roomState:"active" as S,cleanupState:"active" as S,stateStatus:"active" as S,createdAt:now,updatedAt:now,alertRead:false,viewedAt:"",coverPhoto:cover,photoUrl:cover,imageUrl:cover,photos:cover?[cover]:[],photoUrls:cover?[cover]:[]};sk(k,i).forEach(kk=>save(kk,n));keys(k).forEach(kk=>save(kk,[n,...arr<R>(kk).filter(x=>id(x)!==i)]));const m=smap();m[i]="active";m[`${k}:${i}`]="active";SKEY.forEach(kk=>save(kk,m));window.dispatchEvent(new Event(k==="deal"?"vaultforge-deal-change":"vaultforge-pain-change"));return i}function unread(k:K,rs:R[]){const rd=ok()?jj<Record<string,string>>(localStorage.getItem(READ),{}):{};return rs.filter(r=>{const i=id(r);return st(r)==="active"&&!r.alertRead&&!r.viewedAt&&!rd[i]&&!rd[`${k}:${i}`]})}function mark(k:K,r:R){const i=id(r);if(!ok()||!i)return;const rd=jj<Record<string,string>>(localStorage.getItem(READ),{});rd[i]=new Date().toISOString();rd[`${k}:${i}`]=rd[i];localStorage.setItem(READ,JSON.stringify(rd));window.dispatchEvent(new Event("vaultforge-room-read-change"))}
-function pid(p:M){return t(p.id)||t(p.email).toLowerCase()||"local_member"}function norm(p:M):M{return{...p,id:pid(p),name:t(p.name,"VaultForge Member"),memberType:t(p.memberType,"Investor"),basedState:t(p.basedState,"GA"),statesOperated:l(p.statesOperated).length?l(p.statesOperated):["GA"],markets:l(p.markets),assetClasses:l(p.assetClasses),strategies:l(p.strategies),specialties:l(p.specialties),needs:l(p.needs),canProvide:l(p.canProvide),capitalPosition:t(p.capitalPosition,"Unknown"),proofOfFunds:t(p.proofOfFunds,"Unknown"),fundingRange:t(p.fundingRange,"Unknown"),contactPreference:t(p.contactPreference,"VaultForge Message"),directContact:t(p.directContact,"Unknown")}}function getProfile(){if(!ok())return{} as M;for(const k of PKEYS){const p=jj<M|null>(localStorage.getItem(k),null);if(p&&typeof p==="object")return norm(p)}return norm({id:"local_member",name:"VaultForge Member",basedState:"GA",statesOperated:["GA"]})}function dir(){if(!ok())return[] as M[];const d=jj<M[]>(localStorage.getItem(DIR),[]),cur=getProfile(),ci=pid(cur),seen=new Set<string>();return[cur,...d.filter(p=>pid(p)!==ci)].map(norm).filter(p=>{const i=pid(p);if(seen.has(i))return false;seen.add(i);return true})}function saveProfile(p:M){const n=norm(p);if(ok()){PKEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(n)));localStorage.setItem(DIR,JSON.stringify([n,...dir().filter(x=>pid(x)!==pid(n))]));window.dispatchEvent(new Event("vaultforge-profile-change"));window.dispatchEvent(new Event("vaultforge-network-change"))}return n}function over(a:unknown,b:unknown){const aa=l(a).map(x=>x.toLowerCase()),bb=l(b).map(x=>x.toLowerCase());return aa.filter(x=>bb.includes(x)).length}function score(m:M,r:R,k:K){let s=0;const why:string[]=[];if(l(m.statesOperated).includes(t(r.state))){s+=30;why.push("state fit")}if(over(m.assetClasses,[t(r.assetClass)])){s+=20;why.push("asset fit")}if(k==="deal"){if(over(m.strategies,r.strategy)){s+=20;why.push("strategy fit")}if(over(m.canProvide,r.routeTo)){s+=25;why.push("route fit")}}else{if(over(m.canProvide,r.routingNeeds)){s+=30;why.push("solver fit")}if(over(m.specialties,r.painTypes)){s+=25;why.push("pain specialty")}}return{member:m,score:Math.min(100,s),reasons:why}}function best(r:R,k:K,ms:M[]){return ms.map(m=>score(m,r,k)).filter(x=>x.score>0).sort((a,b)=>b.score-a.score)[0]||null}function matchCount(rs:R[],k:K,ms:M[]){return rs.filter(r=>best(r,k,ms)).length}
-function dealAI(r:R){const spread=money(r.propertyValue)-money(r.askingPrice)-money(r.repairs);let strength=45;if(spread>50000)strength+=20;if(spread>150000)strength+=15;if(t(r.controlStatus).toLowerCase().includes("controlled"))strength+=10;if(l(r.routeTo).length)strength+=10;strength=Math.max(0,Math.min(100,strength));const risk=t(r.condition).includes("Full")||t(r.condition).includes("Fire")?75:t(r.occupancy).includes("Squatter")?80:45;const urg=t(r.timeline).includes("24")||t(r.timeline).includes("72")?90:t(r.timeline).includes("7")?75:45;return{strength,spread,risk,urg,banner:strength>=75?"Strong routing opportunity":strength>=55?"Workable opportunity with missing proof":"Needs verification before routing",next:"Verify control, access, title, photos, numbers, and route to the best fit member before introducing parties."}}function painAI(r:R){let sev=40;if(t(r.severity).includes("High"))sev+=20;if(t(r.severity).includes("Critical")||t(r.severity).includes("Emergency"))sev+=35;if(t(r.timePressure).includes("24")||t(r.timePressure).includes("72"))sev+=20;if(l(r.blockers).includes("Capital"))sev+=10;sev=Math.max(0,Math.min(100,sev));const cap=t(r.capitalPressure)!=="Unknown"?75:l(r.painTypes).includes("Funding Gap")?80:35,block=Math.min(100,l(r.blockers).length*12+l(r.riskTypes).length*8);return{sev,cap,block,banner:sev>=80?"Immediate pressure signal":sev>=60?"High priority execution issue":"Track and route when more facts are verified",next:"Identify the blocking issue, confirm who controls the deal, collect proof documents, and route to the best solver profile.",consequence:t(r.worstCase,"Delay, loss of control, cost increase, or failed closing if no action is taken.")}}
-async function comp(file:File,w=620,q=.42):Promise<string>{return new Promise(res=>{const rd=new FileReader();rd.onerror=()=>res("");rd.onload=()=>{const im=new Image();im.onerror=()=>res("");im.onload=()=>{try{const sc=Math.min(1,w/im.width),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*sc));c.height=Math.max(1,Math.round(im.height*sc));const x=c.getContext("2d");if(!x)return res("");x.drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",q))}catch{res("")}};im.src=String(rd.result||"")};rd.readAsDataURL(file)})}async function photos(fs:FileList|null){const out:string[]=[];for(const f of Array.from(fs||[]).slice(0,10)){const p=await comp(f);if(p)out.push(p)}return out}async function one(fs:FileList|null){const f=Array.from(fs||[])[0];return f?comp(f):""}
-const page:React.CSSProperties={minHeight:"100vh",background:"#05070d",color:"#f7f7fb",padding:18,fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"},wrap:React.CSSProperties={maxWidth:1280,margin:"0 auto",paddingBottom:90},nav:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:18},brand:React.CSSProperties={color:"#ffd45a",fontSize:27,fontWeight:950,letterSpacing:-1,marginRight:10},btn:React.CSSProperties={border:"1px solid rgba(207,216,230,.18)",background:"#171c29",color:"#f7f7fb",borderRadius:999,padding:"13px 18px",fontWeight:950,textDecoration:"none",display:"inline-block",cursor:"pointer"},goldBtn:React.CSSProperties={...btn,border:0,background:"#ffdc68",color:"#10131a"},redBtn:React.CSSProperties={...btn,background:"#271016",borderColor:"rgba(255,70,70,.48)",color:"#ffaaaa"},hero:React.CSSProperties={border:"1px solid rgba(245,197,66,.28)",borderRadius:28,padding:30,marginBottom:20,background:"radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)"},redHero:React.CSSProperties={...hero,borderColor:"rgba(255,70,70,.62)",background:"radial-gradient(circle at top right, rgba(255,30,60,.22), transparent 35%), linear-gradient(180deg,#170812,#050816)"},card:React.CSSProperties={background:"linear-gradient(180deg,#080d19,#050816)",border:"1px solid rgba(245,197,66,.28)",borderRadius:26,padding:26,marginBottom:22},panel:React.CSSProperties={background:"#121724",border:"1px solid rgba(207,216,230,.16)",borderRadius:22,padding:22},activePanel:React.CSSProperties={...panel,borderColor:"rgba(255,70,70,.70)",boxShadow:"0 0 26px rgba(255,50,70,.22)"},pulsePanel:React.CSSProperties={...panel,borderColor:"rgba(245,197,66,.75)",boxShadow:"0 0 26px rgba(245,197,66,.18)"},eyebrow:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:7,fontWeight:950,fontSize:15,marginBottom:12},lab:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:4,fontSize:12,fontWeight:950,marginBottom:8},h1:React.CSSProperties={fontSize:"clamp(44px,8vw,86px)",lineHeight:.9,letterSpacing:-4,margin:"0 0 18px",fontWeight:950},h2:React.CSSProperties={fontSize:"clamp(30px,5vw,52px)",lineHeight:.95,letterSpacing:-2,margin:"0 0 14px",fontWeight:950},sub:React.CSSProperties={color:"#c9d0dc",fontSize:21,lineHeight:1.35,margin:0},muted:React.CSSProperties={color:"#aeb7c7",margin:"8px 0 0",lineHeight:1.35},grid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:16},row:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"},input:React.CSSProperties={width:"100%",boxSizing:"border-box",border:"1px solid rgba(207,216,230,.18)",background:"#151b2a",color:"#f8fafc",borderRadius:18,padding:"15px 16px",fontSize:16},textarea:React.CSSProperties={...input,minHeight:110,resize:"vertical"},photoStyle:React.CSSProperties={width:"100%",height:170,objectFit:"cover",borderRadius:18,border:"1px solid rgba(245,197,66,.25)",marginBottom:12};
-function stop(e:React.KeyboardEvent<HTMLInputElement|HTMLTextAreaElement>){e.stopPropagation()}function Nav({active}:{active:string}){const it=(href:string,label:string,key:string)=><Link href={href} style={active===key?goldBtn:btn}>{label}</Link>;return <nav style={nav}><div style={brand}>VAULTFORGE</div>{it("/command","Command","command")}{it("/members","Members","members")}{it("/network","Network","network")}{it("/alerts","Alerts","alerts")}{it("/messages","Messages","messages")}{it("/deal-rooms","Deal Rooms","deals")}{it("/pain-rooms","Pain Rooms","pain")}{it("/deal-create","Create Deal","deal-create")}{it("/pain-intake","Pain Intake","pain-intake")}{it("/profile","Profile","profile")}<Link href="/logout" style={redBtn}>Logout</Link></nav>}function Section({title,children}:{title:string;children:React.ReactNode}){return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>}function Field({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label><div style={lab}>{label}</div><input type="text" style={input} value={value} onKeyDownCapture={stop} onKeyUpCapture={stop} onKeyPress={stop} onChange={e=>onChange(e.target.value)}/></label>}function TextArea({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label><div style={lab}>{label}</div><textarea style={textarea} value={value} onKeyDownCapture={stop} onKeyUpCapture={stop} onKeyPress={stop} onChange={e=>onChange(e.target.value)}/></label>}function SelectField({label,value,onChange,options}:{label:string;value:string;onChange:(v:string)=>void;options:string[]}){return <label><div style={lab}>{label}</div><select style={input} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o}>{o}</option>)}</select></label>}function ChipSet({label,options,selected,onToggle}:{label:string;options:string[];selected:string[];onToggle:(v:string)=>void}){return <div><div style={lab}>{label}</div><div style={row}>{options.map(o=><button key={o} type="button" style={selected.includes(o)?goldBtn:btn} onClick={()=>onToggle(o)}>{o}</button>)}</div></div>}function PhotoPicker({photos:setPhotosArr,setPhotos}:{photos:string[];setPhotos:(n:string[])=>void}){async function add(fs:FileList|null){const p=await photos(fs);setPhotos([...setPhotosArr,...p].slice(0,10))}return <div><input type="file" multiple accept="image/*" onChange={e=>add(e.target.files)}/><p style={muted}>{setPhotosArr.length}/10 photo(s). First photo becomes cover.</p>{setPhotosArr.length?<div style={grid}>{setPhotosArr.map((p,i)=><div key={p.slice(0,20)+i} style={panel}><img src={p} alt={`Selected ${i+1}`} style={photoStyle}/><button type="button" style={redBtn} onClick={()=>setPhotos(setPhotosArr.filter((_,x)=>x!==i))}>Delete Photo</button></div>)}</div>:null}</div>}function Value({label,value}:{label:string;value:unknown}){return <div style={panel}><div style={eyebrow}>{label}</div><p style={sub}>{t(value,"Not listed")}</p></div>}function Meter({label,value}:{label:string;value:number}){return <div style={panel}><div style={eyebrow}>{label}</div><h2 style={h2}>{value}%</h2><div style={{height:10,background:"#070a12",borderRadius:999,overflow:"hidden"}}><div style={{width:`${Math.max(0,Math.min(100,value))}%`,height:"100%",background:"#ffdc68"}}/></div></div>}function MatchCard({match}:{match:{member:M;score:number;reasons:string[]}}){return <div style={panel}><div style={eyebrow}>Best Fit</div><h2 style={h2}>{t(match.member.name,"Member")}</h2><p style={sub}>{match.score}% match</p><p style={muted}>{match.reasons.join(", ")||"Profile overlap"}</p><div style={{...row,marginTop:14}}><Link href={`/messages?to=${encodeURIComponent(t(match.member.email,pid(match.member)))}&subject=${encodeURIComponent("Network Match: "+t(match.member.name,"Member"))}`} style={goldBtn}>Contact</Link></div></div>}
 
-export default function DealRoomPage({params}:{params:{id:string}}){const ridp=decodeURIComponent(params.id||""),[room,setRoom]=useState<R|null>(null),[open,setOpen]=useState("summary");useEffect(()=>{const r=getRoom("deal",ridp);setRoom(r);if(r)mark("deal",r)},[ridp]);const members=useMemo(()=>dir(),[room?.id]);if(!room)return <main style={page}><div style={wrap}><Nav active="deals"/><section style={hero}><h1 style={h1}>Room not found.</h1></section></div></main>;const ai=dealAI(room),img=photo(room),matches=members.map(m=>score(m,room,"deal")).sort((a,b)=>b.score-a.score).slice(0,5);function move(s:S){setRoomState("deal",room!,s);setRoom({...room!,roomState:s,cleanupState:s,stateStatus:s})}return <main style={page}><div style={wrap}><Nav active="deals"/><section style={ai.urg>=80?redHero:hero}>{img?<img src={img} alt={title(room,"deal")} style={photoStyle}/>:null}<div style={eyebrow}>Deal Room • {st(room)}</div><h1 style={h1}>{title(room,"deal")}</h1><p style={sub}>{loc(room)}</p><p style={muted}>{t(room.assetClass)} • {t(room.propertyType)} • {l(room.strategy).join(", ")||"No strategy selected"}</p></section><Section title="Room Controls"><div style={grid}>{[["summary","Intelligence",ai.strength+"%",ai.banner],["numbers","Numbers",ai.spread?`$${ai.spread.toLocaleString()}`:"N/A","estimated spread"],["execution","Execution",ai.urg+"%","urgency"],["matches","Matches",matches.length,"member fits"],["messages","Messages","Open","room thread"],["notes","Notes",t(room.notes)||t(room.analyzer)?"1":"0","room notes"]].map(x=><button key={String(x[0])} type="button" style={open===x[0]?pulsePanel:panel} onClick={()=>setOpen(String(x[0]))}><div style={eyebrow}>{x[1]}</div><h2 style={h2}>{x[2]}</h2><p style={muted}>{x[3]}</p></button>)}</div></Section><Section title="Actions"><div style={row}><button type="button" style={goldBtn} onClick={()=>move("saved")}>Save</button><button type="button" style={btn} onClick={()=>move("archived")}>Archive</button><button type="button" style={redBtn} onClick={()=>move("deleted")}>Delete</button><Link href="/deal-rooms" style={btn}>Back</Link></div></Section>{open==="summary"?<Section title="Intelligence Snapshot"><div style={grid}><Meter label="Deal Strength" value={ai.strength}/><Meter label="Urgency" value={ai.urg}/><Meter label="Risk" value={ai.risk}/><Value label="AI Signal" value={t(room.analyzer,ai.banner)}/></div></Section>:null}{open==="numbers"?<Section title="Numbers + Spread"><div style={grid}><Value label="Ask Price" value={room.askingPrice}/><Value label="Value / ARV" value={room.propertyValue}/><Value label="Repairs" value={room.repairs}/><Value label="Estimated Spread" value={ai.spread?`$${ai.spread.toLocaleString()}`:"Needs numbers"}/><Value label="NOI" value={room.noi}/><Value label="Cap Rate" value={room.capRate}/><Value label="Acres" value={room.acres}/><Value label="Zoning" value={room.zoning}/></div></Section>:null}{open==="execution"?<><Section title="Execution Fit"><div style={grid}><Value label="Route To" value={l(room.routeTo).join(", ")}/><Value label="Strategy" value={l(room.strategy).join(", ")}/><Value label="Condition" value={room.condition}/><Value label="Occupancy" value={room.occupancy}/><Value label="Control" value={room.controlStatus}/><Value label="Timeline" value={room.timeline||room.timePressure}/><Value label="Contact" value={[t(room.contactName),t(room.contactPhone),t(room.contactEmail)].filter(Boolean).join(" • ")}/></div></Section><Section title="Best Next Move"><p style={sub}>{ai.next}</p></Section></>:null}{open==="matches"?<Section title="Best Member Matches"><div style={grid}>{matches.length?matches.map(m=><MatchCard key={pid(m.member)} match={m}/>):<p style={sub}>No member profiles available yet.</p>}</div></Section>:null}{open==="messages"?<Section title="Room Messages"><Link href={`/messages?type=deal&room=${encodeURIComponent(ridp)}&subject=${encodeURIComponent("Deal Room: "+title(room,"deal"))}`} style={goldBtn}>Open Message Thread</Link></Section>:null}{open==="notes"?<Section title="Room Notes"><p style={sub}>{t(room.notes,"No notes added.")}</p><p style={muted}>{t(room.analyzer)}</p></Section>:null}</div></main>}
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
+type RoomState = "active" | "saved" | "archived" | "deleted";
+type RoomKind = "deal" | "pain";
+
+type Room = {
+  id?: string;
+  roomId?: string;
+  title?: string;
+  name?: string;
+  state?: string;
+  city?: string;
+  county?: string;
+  address?: string;
+  assetClass?: string;
+  propertyType?: string;
+  strategy?: string[] | string;
+  routeTo?: string[] | string;
+  painTypes?: string[] | string;
+  needs?: string[] | string;
+  routingNeeds?: string[] | string;
+  blockers?: string[] | string;
+  risks?: string[] | string;
+  riskTypes?: string[] | string;
+  severity?: string;
+  timePressure?: string;
+  capitalPressure?: string;
+  controlStatus?: string;
+  currentStatus?: string;
+  ownerSituation?: string;
+  accessStatus?: string;
+  titleStatus?: string;
+  permitStatus?: string;
+  insuranceStatus?: string;
+  legalStatus?: string;
+  askingPrice?: string;
+  askPrice?: string;
+  propertyValue?: string;
+  value?: string;
+  repairs?: string;
+  monthlyBurn?: string;
+  monthlyBurnRate?: string;
+  moneyNeededNow?: string;
+  deadline?: string;
+  rootCause?: string;
+  bestOutcome?: string;
+  worstCase?: string;
+  desiredSolution?: string;
+  condition?: string;
+  occupancy?: string;
+  beds?: string;
+  baths?: string;
+  sqft?: string;
+  units?: string;
+  noi?: string;
+  capRate?: string;
+  acres?: string;
+  zoning?: string;
+  roadFrontage?: string;
+  utilities?: string;
+  entitlementStatus?: string;
+  contactName?: string;
+  contactPhone?: string;
+  phone?: string;
+  contactEmail?: string;
+  email?: string;
+  bestContact?: string;
+  notes?: string;
+  analyzer?: string;
+  photos?: string[];
+  photoUrls?: string[];
+  coverPhoto?: string;
+  photoUrl?: string;
+  imageUrl?: string;
+  roomState?: RoomState;
+  cleanupState?: RoomState;
+  stateStatus?: RoomState;
+  alertRead?: boolean;
+  viewedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
+type MemberProfile = {
+  id?: string;
+  name?: string;
+  company?: string;
+  email?: string;
+  memberType?: string;
+  basedState?: string;
+  statesOperated?: string[];
+  assetClasses?: string[];
+  strategies?: string[];
+  specialties?: string[];
+  needs?: string[];
+  canProvide?: string[];
+  capitalPosition?: string;
+  fundingRange?: string;
+  [key: string]: unknown;
+};
+
+const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
+const ACTIVITY_KEY = "vaultforge_room_activity_v1";
+const WATCH_KEY = "vaultforge_room_watchlist_v1";
+
+function ok() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function j<T>(raw: string | null, fallback: T): T {
+  try {
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function txt(value: unknown, fallback = "") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
+}
+
+function list(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
+  return [];
+}
+
+function moneyNum(value: unknown) {
+  const n = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function rid(room: Room | null | undefined) {
+  return txt(room?.id || room?.roomId);
+}
+
+function titleFor(room: Room, kind: RoomKind) {
+  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
+}
+
+function loc(room: Room) {
+  return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
+}
+
+function roomState(room: Room): RoomState {
+  const state = txt(room.roomState || room.cleanupState || room.stateStatus, "active");
+  return state === "saved" || state === "archived" || state === "deleted" ? state : "active";
+}
+
+function arr<T>(key: string): T[] {
+  if (!ok()) return [];
+  const parsed = j<unknown>(localStorage.getItem(key), []);
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
+
+function keysFor(kind: RoomKind) {
+  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
+}
+
+function normalizeRoom(row: any, kind: RoomKind): Room {
+  const id = txt(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId);
+  const photos = list(row?.photos || row?.photoUrls);
+  const cover = txt(row?.coverPhoto || row?.photoUrl || row?.imageUrl || photos[0]);
+  return {
+    ...row,
+    id,
+    roomId: id,
+    title: txt(row?.title || row?.name || row?.dealTitle || row?.painTitle || row?.problemTitle, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room"),
+    state: txt(row?.state, "GA"),
+    city: txt(row?.city),
+    county: txt(row?.county),
+    photos,
+    photoUrls: photos,
+    coverPhoto: cover,
+    photoUrl: cover,
+    imageUrl: cover,
+  };
+}
+
+function stateMap() {
+  const map: Record<string, RoomState> = {};
+  if (!ok()) return map;
+  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomState>>(localStorage.getItem(key), {})));
+  return map;
+}
+
+function allRooms(kind: RoomKind): Room[] {
+  if (!ok()) return [];
+  const out: Room[] = [];
+  const seen = new Set<string>();
+
+  for (const key of keysFor(kind)) {
+    for (const row of arr<any>(key)) {
+      const room = normalizeRoom(row, kind);
+      const id = rid(room);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(room);
+    }
+  }
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i) || "";
+    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
+    if (!match) continue;
+    const value = j<any>(localStorage.getItem(key), null);
+    if (Array.isArray(value)) {
+      for (const row of value) {
+        const room = normalizeRoom(row, kind);
+        const id = rid(room);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push(room);
+      }
+    } else if (value && typeof value === "object") {
+      const room = normalizeRoom(value, kind);
+      const id = rid(room);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        out.push(room);
+      }
+    }
+  }
+
+  const states = stateMap();
+  return out.map((room) => {
+    const id = rid(room);
+    const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+    return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+  });
+}
+
+function getRoom(kind: RoomKind, id: string) {
+  if (!ok()) return null as Room | null;
+  const directKeys = kind === "deal"
+    ? [`vaultforge_deal_room_${id}`, `vaultforge_clean_deal_room_${id}`, `vf_deal_room_${id}`]
+    : [`vaultforge_pain_room_${id}`, `vaultforge_clean_pain_room_${id}`, `vf_pain_room_${id}`];
+
+  for (const key of directKeys) {
+    const found = j<any | null>(localStorage.getItem(key), null);
+    if (found) return normalizeRoom(found, kind);
+  }
+
+  return allRooms(kind).find((room) => rid(room) === id) || null;
+}
+
+function writeJson(key: string, value: unknown) {
+  if (!ok()) return false;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function saveRoom(kind: RoomKind, room: Room) {
+  if (!ok()) return;
+  const id = rid(room);
+  if (!id) return;
+  const next = { ...room, id, roomId: id, updatedAt: new Date().toISOString() };
+  const directKey = kind === "deal" ? `vaultforge_deal_room_${id}` : `vaultforge_pain_room_${id}`;
+  writeJson(directKey, next);
+  for (const key of keysFor(kind)) {
+    const rows = allRooms(kind).filter((item) => rid(item) !== id);
+    writeJson(key, [next, ...rows]);
+  }
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+}
+
+function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
+  const next = { ...room, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
+  const id = rid(next);
+  const states = stateMap();
+  states[id] = state;
+  states[`${kind}:${id}`] = state;
+  for (const key of STATE_KEYS) writeJson(key, states);
+  saveRoom(kind, next);
+  addActivity(kind, id, `${state.toUpperCase()} room`);
+}
+
+function firstPhoto(room: Room) {
+  const possible = [txt(room.coverPhoto), txt(room.photoUrl), txt(room.imageUrl), ...list(room.photos), ...list(room.photoUrls)].filter(Boolean);
+  return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
+}
+
+function profileId(profile: MemberProfile) {
+  return txt(profile.id) || txt(profile.email).toLowerCase() || "local_member";
+}
+
+function normalizeProfile(profile: MemberProfile): MemberProfile {
+  return {
+    ...profile,
+    id: profileId(profile),
+    name: txt(profile.name, "VaultForge Member"),
+    memberType: txt(profile.memberType, "Investor"),
+    basedState: txt(profile.basedState, "GA"),
+    statesOperated: list(profile.statesOperated).length ? list(profile.statesOperated) : ["GA"],
+    assetClasses: list(profile.assetClasses),
+    strategies: list(profile.strategies),
+    specialties: list(profile.specialties),
+    needs: list(profile.needs),
+    canProvide: list(profile.canProvide),
+  };
+}
+
+function getProfile(): MemberProfile {
+  if (!ok()) return {};
+  for (const key of PROFILE_KEYS) {
+    const found = j<MemberProfile | null>(localStorage.getItem(key), null);
+    if (found && typeof found === "object") return normalizeProfile(found);
+  }
+  return normalizeProfile({ id: "local_member", name: "VaultForge Member", basedState: "GA", statesOperated: ["GA"], memberType: "Investor" });
+}
+
+function getDirectory(): MemberProfile[] {
+  if (!ok()) return [];
+  const directory = j<MemberProfile[]>(localStorage.getItem(MEMBER_DIRECTORY_KEY), []);
+  const current = getProfile();
+  const currentId = profileId(current);
+  const merged = [current, ...directory.filter((member) => profileId(member) !== currentId)];
+  const seen = new Set<string>();
+  return merged.map(normalizeProfile).filter((member) => {
+    const id = profileId(member);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function overlap(a: unknown, b: unknown) {
+  const aa = list(a).map((x) => x.toLowerCase());
+  const bb = list(b).map((x) => x.toLowerCase());
+  return aa.filter((x) => bb.includes(x)).length;
+}
+
+function scoreMemberForRoom(member: MemberProfile, room: Room, kind: RoomKind) {
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (list(member.statesOperated).includes(txt(room.state))) {
+    score += 30;
+    reasons.push("state");
+  }
+
+  if (overlap(member.assetClasses, [txt(room.assetClass)])) {
+    score += 18;
+    reasons.push("asset");
+  }
+
+  if (kind === "deal") {
+    if (overlap(member.strategies, room.strategy)) {
+      score += 22;
+      reasons.push("strategy");
+    }
+    if (overlap(member.canProvide, room.routeTo)) {
+      score += 25;
+      reasons.push("route");
+    }
+    if (txt(member.memberType).toLowerCase().includes("lender") && list(room.routeTo).join(" ").toLowerCase().includes("lender")) {
+      score += 20;
+      reasons.push("lender");
+    }
+  } else {
+    if (overlap(member.canProvide, room.needs || room.routingNeeds)) {
+      score += 32;
+      reasons.push("solver");
+    }
+    if (overlap(member.specialties, room.painTypes)) {
+      score += 25;
+      reasons.push("specialty");
+    }
+    if (txt(member.memberType).toLowerCase().includes("attorney") && list(room.needs || room.routingNeeds).join(" ").toLowerCase().includes("attorney")) {
+      score += 20;
+      reasons.push("legal");
+    }
+  }
+
+  return { member, score: Math.max(0, Math.min(100, score)), reasons };
+}
+
+function bestMatches(room: Room, kind: RoomKind) {
+  return getDirectory()
+    .map((member) => scoreMemberForRoom(member, room, kind))
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+}
+
+function dealIntel(room: Room) {
+  const ask = moneyNum(room.askingPrice || room.askPrice);
+  const value = moneyNum(room.propertyValue || room.value);
+  const repairs = moneyNum(room.repairs);
+  const spread = value && ask ? value - ask - repairs : 0;
+  const equity = value && ask ? Math.round(((value - ask) / value) * 100) : 0;
+  let score = 42;
+  if (spread > 25000) score += 12;
+  if (spread > 75000) score += 18;
+  if (spread > 150000) score += 14;
+  if (txt(room.controlStatus).includes("Controlled")) score += 10;
+  if (list(room.routeTo).length) score += 8;
+  if (txt(room.condition).includes("Full") || txt(room.condition).includes("Fire")) score -= 10;
+  score = Math.max(0, Math.min(100, score));
+  const urgency = txt(room.timeline).includes("24") || txt(room.timeline).includes("72") ? 90 : txt(room.timeline).includes("7") ? 76 : 45;
+  const risk = txt(room.condition).includes("Full") || txt(room.condition).includes("Fire") ? 78 : txt(room.occupancy).includes("Squatter") ? 82 : 42;
+  const confidence = Math.max(20, Math.min(100, score - (risk > 70 ? 10 : 0) + (ask && value ? 12 : 0)));
+  return {
+    score,
+    spread,
+    equity,
+    urgency,
+    risk,
+    confidence,
+    signal: score >= 75 ? "Strong opportunity" : score >= 55 ? "Workable, verify facts" : "Needs more proof",
+    next: "Verify control, title, access, photos, and numbers. Then route to the highest-fit buyer/capital/operator profile.",
+    exit: list(room.strategy).length ? list(room.strategy).join(", ") : "Wholesale, flip, hold, or JV depending on margin and control.",
+  };
+}
+
+function painIntel(room: Room) {
+  let severity = 40;
+  if (txt(room.severity) === "Medium") severity += 10;
+  if (txt(room.severity) === "High") severity += 25;
+  if (txt(room.severity) === "Critical") severity += 38;
+  if (txt(room.severity) === "Emergency") severity += 48;
+  if (txt(room.timePressure).includes("24") || txt(room.timePressure).includes("72")) severity += 18;
+  if (list(room.blockers).includes("Capital")) severity += 10;
+  if (list(room.blockers).includes("Title") || list(room.risks || room.riskTypes).includes("Legal")) severity += 10;
+  severity = Math.max(0, Math.min(100, severity));
+  const capital = txt(room.capitalPressure) !== "Unknown" || list(room.painTypes).includes("Funding Gap") ? 80 : 36;
+  const collapse = Math.max(15, Math.min(100, severity + (txt(room.timePressure).includes("24") ? 12 : 0) + (list(room.risks || room.riskTypes).length * 4)));
+  const blocker = Math.max(10, Math.min(100, list(room.blockers).length * 13 + list(room.risks || room.riskTypes).length * 8));
+  return {
+    severity,
+    capital,
+    collapse,
+    blocker,
+    signal: severity >= 85 ? "Immediate pressure signal" : severity >= 70 ? "High-priority execution problem" : severity >= 50 ? "Active problem needing routing" : "Monitor until facts improve",
+    next: txt(room.controlStatus) === "No Control Yet" ? "Secure authority/control first, then route to solver network." : list(room.blockers).includes("Capital") ? "Confirm money needed now, collateral, payoff, and deadline, then route to private capital/lender." : list(room.blockers).includes("Title") ? "Collect title facts and route to legal/title specialist before spending more capital." : "Identify the single blocker stopping execution and route to the highest-fit solver.",
+    consequence: txt(room.worstCase, "Delay, cost increase, failed closing, loss of control, or legal/financial escalation."),
+  };
+}
+
+function activityList(kind: RoomKind, id: string) {
+  if (!ok()) return [] as { at: string; text: string }[];
+  const map = j<Record<string, { at: string; text: string }[]>>(localStorage.getItem(ACTIVITY_KEY), {});
+  const key = `${kind}:${id}`;
+  const base = map[key] || [];
+  if (base.length) return base;
+  return [{ at: new Date().toISOString(), text: "Room created / opened" }];
+}
+
+function addActivity(kind: RoomKind, id: string, text: string) {
+  if (!ok()) return;
+  const map = j<Record<string, { at: string; text: string }[]>>(localStorage.getItem(ACTIVITY_KEY), {});
+  const key = `${kind}:${id}`;
+  map[key] = [{ at: new Date().toISOString(), text }, ...(map[key] || [])].slice(0, 30);
+  writeJson(ACTIVITY_KEY, map);
+}
+
+function isWatched(kind: RoomKind, id: string) {
+  if (!ok()) return false;
+  return j<string[]>(localStorage.getItem(WATCH_KEY), []).includes(`${kind}:${id}`);
+}
+
+function toggleWatch(kind: RoomKind, id: string) {
+  if (!ok()) return false;
+  const key = `${kind}:${id}`;
+  const listIds = j<string[]>(localStorage.getItem(WATCH_KEY), []);
+  const next = listIds.includes(key) ? listIds.filter((item) => item !== key) : [key, ...listIds];
+  writeJson(WATCH_KEY, next);
+  addActivity(kind, id, listIds.includes(key) ? "Removed from watchlist" : "Added to watchlist");
+  return !listIds.includes(key);
+}
+
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
+const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
+const dangerHero: React.CSSProperties = { ...hero, borderColor: "rgba(255,70,70,.62)", background: "radial-gradient(circle at top right, rgba(255,30,60,.22), transparent 35%), linear-gradient(180deg,#170812,#050816)" };
+const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.75)", boxShadow: "0 0 26px rgba(245,197,66,.18)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
+const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const photoStyle: React.CSSProperties = { width: "100%", maxHeight: 330, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+
+function Nav({ active }: { active: RoomKind }) {
+  return (
+    <nav style={nav}>
+      <div style={brand}>VAULTFORGE</div>
+      <Link href="/command" style={btn}>Command</Link>
+      <Link href="/network" style={btn}>Network</Link>
+      <Link href="/deal-rooms" style={active === "deal" ? goldBtn : btn}>Deal Rooms</Link>
+      <Link href="/pain-rooms" style={active === "pain" ? goldBtn : btn}>Pain Rooms</Link>
+      <Link href="/messages" style={btn}>Messages</Link>
+      <Link href="/profile" style={btn}>Profile</Link>
+      <Link href="/logout" style={redBtn}>Logout</Link>
+    </nav>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+}
+
+function Meter({ title, value }: { title: string; value: number }) {
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{value}%</h2>
+      <div style={{ height: 10, background: "#070a12", borderRadius: 999, overflow: "hidden" }}>
+        <div style={{ width: `${Math.max(0, Math.min(100, value))}%`, height: "100%", background: "#ffdc68" }} />
+      </div>
+    </div>
+  );
+}
+
+function Value({ title, value }: { title: string; value: unknown }) {
+  return <div style={panel}><div style={eyebrow}>{title}</div><p style={sub}>{txt(value, "Not listed")}</p></div>;
+}
+
+function MatchCard({ match }: { match: { member: MemberProfile; score: number; reasons: string[] } }) {
+  return (
+    <div style={activePanel}>
+      <div style={eyebrow}>Best Fit</div>
+      <h2 style={h2}>{txt(match.member.name, "Member")}</h2>
+      <p style={sub}>{match.score}% match</p>
+      <p style={muted}>{txt(match.member.memberType, "Member")} • {match.reasons.join(", ") || "profile fit"}</p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <Link href={`/messages?to=${encodeURIComponent(txt(match.member.email, profileId(match.member)))}&subject=${encodeURIComponent("VaultForge Room Match")}`} style={goldBtn}>Contact</Link>
+      </div>
+    </div>
+  );
+}
+
+function ActivityStream({ kind, id }: { kind: RoomKind; id: string }) {
+  const activity = activityList(kind, id);
+  return (
+    <div style={grid}>
+      {activity.map((item, index) => (
+        <div key={`${item.at}-${index}`} style={panel}>
+          <div style={eyebrow}>{new Date(item.at).toLocaleString()}</div>
+          <p style={sub}>{item.text}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function DealRoomPage({ params }: { params: { id: string } }) {
+  const id = decodeURIComponent(params.id || "");
+  const [room, setRoom] = useState<Room | null>(null);
+  const [panelKey, setPanelKey] = useState<"intel" | "numbers" | "execution" | "matches" | "activity" | "messages" | "notes">("intel");
+  const [watched, setWatched] = useState(false);
+
+  useEffect(() => {
+    const found = getRoom("deal", id);
+    setRoom(found);
+    setWatched(isWatched("deal", id));
+    if (found) addActivity("deal", id, "Room viewed");
+  }, [id]);
+
+  const intel = useMemo(() => room ? dealIntel(room) : null, [room]);
+  const matches = useMemo(() => room ? bestMatches(room, "deal") : [], [room]);
+  const img = room ? firstPhoto(room) : "";
+
+  if (!room || !intel) {
+    return (
+      <main style={page}>
+        <div style={wrap}>
+          <Nav active="deal" />
+          <section style={hero}>
+            <div style={eyebrow}>Deal Room</div>
+            <h1 style={h1}>Room not found.</h1>
+            <p style={sub}>Go back to Deal Rooms and open a current room.</p>
+            <div style={{ ...row, marginTop: 20 }}><Link href="/deal-rooms" style={goldBtn}>Back to Deal Rooms</Link></div>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  function move(state: RoomState) {
+    setRoomState("deal", room!, state);
+    setRoom({ ...room!, roomState: state, cleanupState: state, stateStatus: state });
+  }
+
+  function watch() {
+    const next = toggleWatch("deal", id);
+    setWatched(next);
+  }
+
+  return (
+    <main style={page}>
+      <div style={wrap}>
+        <Nav active="deal" />
+
+        <section style={intel.risk >= 75 ? dangerHero : hero}>
+          {img ? <img src={img} alt={titleFor(room, "deal")} style={photoStyle} /> : null}
+          <div style={eyebrow}>Opportunity Room • {roomState(room)}</div>
+          <h1 style={h1}>{titleFor(room, "deal")}</h1>
+          <p style={sub}>{loc(room)}</p>
+          <p style={muted}>{txt(room.assetClass, "Asset")} • {txt(room.propertyType, "Type")} • Strategy {list(room.strategy).join(", ") || "Not selected"}</p>
+        </section>
+
+        <Section title="Room Actions">
+          <div style={row}>
+            <button type="button" style={goldBtn} onClick={watch}>{watched ? "Watching" : "Watch"}</button>
+            <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Deal Room: " + titleFor(room, "deal"))}`} style={goldBtn}>Message</Link>
+            <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Intro Request: " + titleFor(room, "deal"))}`} style={btn}>Request Intro</Link>
+            <button type="button" style={btn} onClick={() => move("saved")}>Save</button>
+            <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
+            <button type="button" style={redBtn} onClick={() => move("deleted")}>Delete</button>
+            <Link href="/deal-rooms" style={btn}>Back</Link>
+          </div>
+        </Section>
+
+        <Section title="Intelligence Tabs">
+          <div style={grid}>
+            <button type="button" style={panelKey === "intel" ? activePanel : panel} onClick={() => setPanelKey("intel")}><div style={eyebrow}>AI Snapshot</div><h2 style={h2}>{intel.score}%</h2><p style={muted}>{intel.signal}</p></button>
+            <button type="button" style={panelKey === "numbers" ? activePanel : panel} onClick={() => setPanelKey("numbers")}><div style={eyebrow}>Spread</div><h2 style={h2}>{intel.spread ? `$${intel.spread.toLocaleString()}` : "N/A"}</h2><p style={muted}>estimated margin</p></button>
+            <button type="button" style={panelKey === "execution" ? activePanel : panel} onClick={() => setPanelKey("execution")}><div style={eyebrow}>Execution</div><h2 style={h2}>{intel.urgency}%</h2><p style={muted}>urgency</p></button>
+            <button type="button" style={panelKey === "matches" ? activePanel : panel} onClick={() => setPanelKey("matches")}><div style={eyebrow}>Matches</div><h2 style={h2}>{matches.length}</h2><p style={muted}>member fits</p></button>
+            <button type="button" style={panelKey === "activity" ? activePanel : panel} onClick={() => setPanelKey("activity")}><div style={eyebrow}>Activity</div><h2 style={h2}>{activityList("deal", id).length}</h2><p style={muted}>room events</p></button>
+            <button type="button" style={panelKey === "messages" ? activePanel : panel} onClick={() => setPanelKey("messages")}><div style={eyebrow}>Messages</div><h2 style={h2}>Open</h2><p style={muted}>thread context</p></button>
+          </div>
+        </Section>
+
+        {panelKey === "intel" ? (
+          <Section title="AI Deal Intelligence">
+            <div style={grid}>
+              <Meter title="Deal Strength" value={intel.score} />
+              <Meter title="Risk" value={intel.risk} />
+              <Meter title="Confidence" value={intel.confidence} />
+              <Value title="Signal" value={intel.signal} />
+              <Value title="Best Next Move" value={intel.next} />
+              <Value title="Exit Paths" value={intel.exit} />
+            </div>
+          </Section>
+        ) : null}
+
+        {panelKey === "numbers" ? (
+          <Section title="Deal Numbers">
+            <div style={grid}>
+              <Value title="Ask Price" value={txt(room.askingPrice || room.askPrice)} />
+              <Value title="Value / ARV" value={txt(room.propertyValue || room.value)} />
+              <Value title="Repairs" value={room.repairs} />
+              <Value title="Estimated Spread" value={intel.spread ? `$${intel.spread.toLocaleString()}` : "Needs ask/value/repairs"} />
+              <Value title="Equity Estimate" value={intel.equity ? `${intel.equity}%` : "Needs ask/value"} />
+              <Value title="NOI" value={room.noi} />
+              <Value title="Cap Rate" value={room.capRate} />
+              <Value title="Acres" value={room.acres} />
+              <Value title="Zoning" value={room.zoning} />
+            </div>
+          </Section>
+        ) : null}
+
+        {panelKey === "execution" ? (
+          <Section title="Execution Plan">
+            <div style={grid}>
+              <Value title="Route To" value={list(room.routeTo).join(", ")} />
+              <Value title="Strategy" value={list(room.strategy).join(", ")} />
+              <Value title="Control" value={room.controlStatus} />
+              <Value title="Condition" value={room.condition} />
+              <Value title="Occupancy" value={room.occupancy} />
+              <Value title="Timeline" value={room.timeline || room.timePressure} />
+              <Value title="Contact" value={[txt(room.contactName), txt(room.contactPhone || room.phone), txt(room.contactEmail || room.email)].filter(Boolean).join(" • ")} />
+              <Value title="Next 7 Days" value="Verify facts, route to best-fit members, open message thread, and move toward controlled introduction." />
+            </div>
+          </Section>
+        ) : null}
+
+        {panelKey === "matches" ? (
+          <Section title="Best Fit Members">
+            {matches.length ? <div style={grid}>{matches.map((match) => <MatchCard key={profileId(match.member)} match={match} />)}</div> : <p style={sub}>No matching member profiles yet. Complete Profile to power matching.</p>}
+          </Section>
+        ) : null}
+
+        {panelKey === "activity" ? (
+          <Section title="Room Activity Stream">
+            <ActivityStream kind="deal" id={id} />
+          </Section>
+        ) : null}
+
+        {panelKey === "messages" ? (
+          <Section title="Message Context">
+            <p style={sub}>Messages opened from here carry this room title and type.</p>
+            <div style={{ ...row, marginTop: 18 }}>
+              <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Deal Room: " + titleFor(room, "deal"))}`} style={goldBtn}>Open Message Thread</Link>
+              <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Route This Deal: " + titleFor(room, "deal"))}`} style={btn}>Route Request</Link>
+            </div>
+          </Section>
+        ) : null}
+
+        {panelKey === "notes" ? (
+          <Section title="Notes">
+            <p style={sub}>{txt(room.notes, "No notes added.")}</p>
+            <p style={muted}>{txt(room.analyzer)}</p>
+          </Section>
+        ) : null}
+      </div>
+    </main>
+  );
+}
