@@ -1469,24 +1469,115 @@ export default function MyRoomsPage() {
 
         <Section title="Folder Cards">
           <div style={grid}>
-            <ViewCard view="activeDeals" title="Active Deals" count={countForView("activeDeals")} note="open opportunity rooms" />
-            <ViewCard view="activePain" title="Active Pain" count={countForView("activePain")} note="open pressure rooms" />
+            <ViewCard
+              view="activeDeals"
+              title="Active Deals"
+              count={countForView("activeDeals")}
+              note="open opportunity rooms"
+              active={view === "activeDeals"}
+              onClick={() => setView("activeDeals")}
+            />
+            <ViewCard
+              view="activePain"
+              title="Active Pain"
+              count={countForView("activePain")}
+              note="open pressure rooms"
+              active={view === "activePain"}
+              onClick={() => setView("activePain")}
+            />
 
-            <ViewCard view="savedDeals" title="Saved Deals" count={countForView("savedDeals")} note="kept opportunity rooms" />
-            <ViewCard view="savedPain" title="Saved Pain" count={countForView("savedPain")} note="kept pressure rooms" />
+            <ViewCard
+              view="savedDeals"
+              title="Saved Deals"
+              count={countForView("savedDeals")}
+              note="kept opportunity rooms"
+              active={view === "savedDeals"}
+              onClick={() => setView("savedDeals")}
+            />
+            <ViewCard
+              view="savedPain"
+              title="Saved Pain"
+              count={countForView("savedPain")}
+              note="kept pressure rooms"
+              active={view === "savedPain"}
+              onClick={() => setView("savedPain")}
+            />
 
-            <ViewCard view="archived" title="Archived Deals" count={countDealStatus(deals, "archived")} note="inactive deal rooms" />
-            <ViewCard view="archived" title="Archived Pain" count={countPainStatus(pains, "archived")} note="inactive pain rooms" />
+            <ViewCard
+              view="archived"
+              title="Archived Deals"
+              count={countDealStatus(deals, "archived")}
+              note="inactive deal rooms"
+              active={view === "archived"}
+              onClick={() => setView("archived")}
+            />
+            <ViewCard
+              view="archived"
+              title="Archived Pain"
+              count={countPainStatus(pains, "archived")}
+              note="inactive pain rooms"
+              active={view === "archived"}
+              onClick={() => setView("archived")}
+            />
 
-            <ViewCard view="sold" title="Sold Deals" count={countForView("sold")} note="completed opportunity rooms" />
-            <ViewCard view="resolved" title="Resolved Pain" count={countForView("resolved")} note="handled problem rooms" />
+            <ViewCard
+              view="sold"
+              title="Sold Deals"
+              count={countForView("sold")}
+              note="completed opportunity rooms"
+              active={view === "sold"}
+              onClick={() => setView("sold")}
+            />
+            <ViewCard
+              view="resolved"
+              title="Resolved Pain"
+              count={countForView("resolved")}
+              note="handled problem rooms"
+              active={view === "resolved"}
+              onClick={() => setView("resolved")}
+            />
 
-            <ViewCard view="deleted" title="Deleted Deals" count={countDealStatus(deals, "deleted")} note="hidden deal cleanup" />
-            <ViewCard view="deleted" title="Deleted Pain" count={countPainStatus(pains, "deleted")} note="hidden pain cleanup" />
+            <ViewCard
+              view="deleted"
+              title="Deleted Deals"
+              count={countDealStatus(deals, "deleted")}
+              note="hidden deal cleanup"
+              active={view === "deleted"}
+              onClick={() => setView("deleted")}
+            />
+            <ViewCard
+              view="deleted"
+              title="Deleted Pain"
+              count={countPainStatus(pains, "deleted")}
+              note="hidden pain cleanup"
+              active={view === "deleted"}
+              onClick={() => setView("deleted")}
+            />
 
-            <ViewCard view="assignedToMe" title="Assigned To Me" count={countForView("assignedToMe")} note="rooms assigned into my workspace" />
-            <ViewCard view="routedToMe" title="Routed To Me" count={countForView("routedToMe")} note="rooms routed for action" />
-            <ViewCard view="following" title="Following" count={countForView("following")} note="rooms I am watching" />
+            <ViewCard
+              view="assignedToMe"
+              title="Assigned To Me"
+              count={countForView("assignedToMe")}
+              note="rooms assigned into my workspace"
+              active={view === "assignedToMe"}
+              onClick={() => setView("assignedToMe")}
+            />
+            <ViewCard
+              view="routedToMe"
+              title="Routed To Me"
+              count={countForView("routedToMe")}
+              note="rooms routed for action"
+              active={view === "routedToMe"}
+              onClick={() => setView("routedToMe")}
+            />
+            <ViewCard
+              view="following"
+              title="Following"
+              count={countForView("following")}
+              note="rooms I am watching"
+              active={view === "following"}
+              onClick={() => setView("following")}
+            />
           </div>
         </Section>
 
