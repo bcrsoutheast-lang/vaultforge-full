@@ -62,6 +62,7 @@ const ALERT_WATCHLIST_KEY = "vaultforge_alert_watchlist_v2";
 const ROOM_WATCH_KEY = "vaultforge_room_watchlist_v1";
 const ROOM_WATCH_META_KEY = "vaultforge_room_watch_meta_v1";
 const ROOM_ACTIVITY_KEY = "vaultforge_room_activity_v2";
+const ROUTE_STATUS_KEY = "vaultforge_route_status_v1";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -253,6 +254,47 @@ function removeId(key: string, id: string) {
   setIdList(key, idList(key).filter((item) => item !== id));
 }
 
+
+
+
+function routeStatusMap() {
+  return ok() ? j<Record<string, { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }>>(localStorage.getItem(ROUTE_STATUS_KEY), {}) : {};
+}
+
+function routeStatusAlerts(deals: Room[], pains: Room[]): AlertItem[] {
+  const out: AlertItem[] = [];
+  const map = routeStatusMap();
+
+  for (const [key, value] of Object.entries(map)) {
+    const kind = value.kind === "pain" ? "pain" : "deal";
+    const id = txt(value.roomId);
+    if (!id) continue;
+
+    const room = kind === "deal"
+      ? deals.find((item) => rid(item) === id)
+      : pains.find((item) => rid(item) === id);
+
+    const title = room ? roomTitle(room, kind) : `${kind.toUpperCase()} ROOM ${id.slice(0, 8)}`;
+    const status = txt(value.status, "pending");
+    const member = txt(value.memberName || value.memberEmail, "member");
+    const routeLabel =
+      status === "accepted" ? "Route Accepted"
+      : status === "passed" ? "Route Passed"
+      : status === "claimed" ? "Execution Claimed"
+      : "Route Pending";
+
+    out.push({
+      id: `route:${key}:${status}:${txt(value.at)}`,
+      kind,
+      title: `${routeLabel}: ${title}`,
+      subtitle: `${member} • ${room ? loc(room) : "room context"} • ${new Date(value.at).toLocaleString()}`,
+      href: kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`,
+      severity: status === "passed" ? "red" : "gold",
+    });
+  }
+
+  return out.slice(0, 60);
+}
 
 
 function roomActivityMap() {
@@ -506,12 +548,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function AlertsPage() {
   const [tick, setTick] = useState(0);
-  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "activity" | "history">("active");
+  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "activity" | "routes" | "history">("active");
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
-    ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change", "vaultforge-room-activity-change"].forEach((event) => window.addEventListener(event, refresh));
-    return () => ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change", "vaultforge-room-activity-change"].forEach((event) => window.removeEventListener(event, refresh));
+    ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change", "vaultforge-room-activity-change", "vaultforge-route-status-change"].forEach((event) => window.addEventListener(event, refresh));
+    return () => ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change", "vaultforge-room-activity-change", "vaultforge-route-status-change"].forEach((event) => window.removeEventListener(event, refresh));
   }, []);
 
   const deals = useMemo(() => activeDeals(), [tick]);
@@ -550,11 +592,12 @@ export default function AlertsPage() {
 
   const followingAlerts = useMemo(() => watchedRoomAlerts(deals, pains), [deals, pains]);
   const activityAlerts = useMemo(() => roomActivityAlerts(deals, pains), [deals, pains, tick]);
-  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts, ...activityAlerts];
+  const routeAlerts = useMemo(() => routeStatusAlerts(deals, pains), [deals, pains, tick]);
+  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts, ...activityAlerts, ...routeAlerts];
   const activeAlerts = allAlerts.filter((alert) => !seen.includes(alert.id) && !dismissed.includes(alert.id));
   const watchedAlerts = allAlerts.filter((alert) => watchlist.includes(alert.id));
   const historyAlerts = allAlerts.filter((alert) => seen.includes(alert.id) || dismissed.includes(alert.id));
-  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "activity" ? activityAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
+  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "activity" ? activityAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "routes" ? routeAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
 
   function markSeen(id: string) {
     addId(ALERT_SEEN_KEY, id);
