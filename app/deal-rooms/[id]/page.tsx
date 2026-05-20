@@ -146,7 +146,7 @@ function rid(room: Room | null | undefined) {
 }
 
 function titleFor(room: Room, kind: RoomKind) {
-  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
+  return txt(room.title || room.name, kind === "deal" ? "Untitled Pain Room" : "Untitled Pain Room");
 }
 
 function loc(room: Room) {
@@ -176,7 +176,7 @@ function normalizeRoom(row: any, kind: RoomKind): Room {
     ...row,
     id,
     roomId: id,
-    title: txt(row?.title || row?.name || row?.dealTitle || row?.painTitle || row?.problemTitle, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room"),
+    title: txt(row?.title || row?.name || row?.dealTitle || row?.painTitle || row?.problemTitle, kind === "deal" ? "Untitled Pain Room" : "Untitled Pain Room"),
     state: txt(row?.state, "GA"),
     city: txt(row?.city),
     county: txt(row?.county),
@@ -548,7 +548,7 @@ function Nav({ active }: { active: RoomKind }) {
       <Link href="/my-rooms" style={btn}>My Rooms</Link>
       <Link href="/routing" style={btn}>Routing</Link>
       <Link href="/network" style={btn}>Network</Link>
-      <Link href="/deal-rooms" style={active === "deal" ? goldBtn : btn}>Deal Rooms</Link>
+      <Link href="/pain-rooms" style={active === "deal" ? goldBtn : btn}>Pain Rooms</Link>
       <Link href="/pain-rooms" style={active === "pain" ? goldBtn : btn}>Pain Rooms</Link>
       <Link href="/messages" style={btn}>Messages</Link>
       <Link href="/profile" style={btn}>Profile</Link>
@@ -811,7 +811,7 @@ function EinsteinPanel({ kind, room }: { kind: RoomKind; room: Room }) {
   const painExtra = kind === "pain" ? painEinstein(room) : null;
 
   return (
-    <Section title={kind === "deal" ? "AI Deal Intelligence" : "AI Problem Solver Intelligence"}>
+    <Section title={kind === "deal" ? "AI Problem Solver Intelligence" : "AI Problem Solver Intelligence"}>
       {kind === "deal" && deal && dealExtra ? (
         <>
           <div style={grid}>
@@ -849,7 +849,7 @@ function EinsteinPanel({ kind, room }: { kind: RoomKind; room: Room }) {
   );
 }
 
-export default function DealRoomPage({ params }: { params: { id: string } }) {
+export default function PainRoomPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id || "");
   const [room, setRoom] = useState<Room | null>(null);
   const [panelKey, setPanelKey] = useState<"intel" | "numbers" | "execution" | "matches" | "routing" | "activity" | "messages" | "notes">("intel");
@@ -857,30 +857,30 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
   const [watchCount, setWatchCount] = useState(0);
 
   useEffect(() => {
-    const found = getRoom("deal", id);
+    const found = getRoom("pain", id);
     setRoom(found);
-    setWatched(isWatched("deal", id));
-    setWatchCount(watchingCount("deal", id));
+    setWatched(isWatched("pain", id));
+    setWatchCount(watchingCount("pain", id));
     if (found) {
-      addActivity("deal", id, "Room viewed");
-      addPersistentActivity("deal", id, "Viewed", "Room opened.");
+      addActivity("pain", id, "Room viewed");
+      addPersistentActivity("pain", id, "Viewed", "Room opened.");
     }
   }, [id]);
 
-  const intel = useMemo(() => room ? dealIntel(room) : null, [room]);
-  const matches = useMemo(() => room ? bestMatches(room, "deal") : [], [room]);
+  const intel = useMemo(() => room ? painIntel(room) : null, [room]);
+  const matches = useMemo(() => room ? bestMatches(room, "pain") : [], [room]);
   const img = room ? firstPhoto(room) : "";
 
   if (!room || !intel) {
     return (
       <main style={page}>
         <div style={wrap}>
-          <Nav active="deal" />
+          <Nav active="pain" />
           <section style={hero}>
-            <div style={eyebrow}>Deal Room</div>
+            <div style={eyebrow}>Pain Room</div>
             <h1 style={h1}>Room not found.</h1>
-            <p style={sub}>Go back to Deal Rooms and open a current room.</p>
-            <div style={{ ...row, marginTop: 20 }}><Link href="/deal-rooms" style={goldBtn}>Back to Deal Rooms</Link></div>
+            <p style={sub}>Go back to Pain Rooms and open a current room.</p>
+            <div style={{ ...row, marginTop: 20 }}><Link href="/pain-rooms" style={goldBtn}>Back to Pain Rooms</Link></div>
           </section>
         </div>
       </main>
@@ -888,42 +888,42 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
   }
 
   function move(state: RoomState) {
-    setRoomState("deal", room!, state);
+    setRoomState("pain", room!, state);
     setRoom({ ...room!, roomState: state, cleanupState: state, stateStatus: state });
   }
 
   function watch() {
-    const next = toggleWatch("deal", id);
+    const next = toggleWatch("pain", id);
     setWatched(next);
-    setWatchCount(watchingCount("deal", id));
+    setWatchCount(watchingCount("pain", id));
   }
 
   return (
     <main style={page}>
       <div style={wrap}>
-        <Nav active="deal" />
+        <Nav active="pain" />
 
         <section style={intel.risk >= 75 ? dangerHero : hero}>
-          {img ? <img src={img} alt={titleFor(room, "deal")} style={photoStyle} /> : null}
-          <div style={eyebrow}>Opportunity Room • {roomState(room)}</div>
-          <h1 style={h1}>{titleFor(room, "deal")}</h1>
+          {img ? <img src={img} alt={titleFor(room, "pain")} style={photoStyle} /> : null}
+          <div style={eyebrow}>Pain Room • {roomState(room)}</div>
+          <h1 style={h1}>{titleFor(room, "pain")}</h1>
           <p style={sub}>{loc(room)}</p>
-          <p style={muted}>{txt(room.assetClass, "Asset")} • {txt(room.propertyType, "Type")} • Strategy {list(room.strategy).join(", ") || "Not selected"}</p>
+          <p style={muted}>{txt(room.assetClass, "Asset")} • {txt(room.propertyType, "Type")} • Pain {list(room.painTypes).join(", ") || "Not selected"} • Needs {list(room.needs || room.routingNeeds).join(", ") || "Not selected"}</p>
         </section>
 
         <Section title="Room Actions">
           <div style={row}>
             <button type="button" style={goldBtn} onClick={watch}>{watched ? `Following (${watchCount})` : `Watch (${watchCount})`}</button>
-            <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Deal Room: " + titleFor(room, "deal"))}`} style={goldBtn}>Message</Link>
-            <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Intro Request: " + titleFor(room, "deal"))}`} style={btn}>Request Intro</Link>
+            <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Pain Room: " + titleFor(room, "pain"))}`} style={goldBtn}>Message</Link>
+            <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Intro Request: " + titleFor(room, "pain"))}`} style={btn}>Request Intro</Link>
             <button type="button" style={btn} onClick={() => move("saved")}>Save</button>
             <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
             <button type="button" style={redBtn} onClick={() => move("deleted")}>Delete</button>
-            <Link href="/deal-rooms" style={btn}>Back</Link>
+            <Link href="/pain-rooms" style={btn}>Back</Link>
           </div>
         </Section>
 
-        <EinsteinPanel kind="deal" room={room} />
+        <EinsteinPanel kind="pain" room={room} />
 
         <Section title="Intelligence Tabs">
           <div style={grid}>
@@ -931,37 +931,38 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
             <button type="button" style={panelKey === "numbers" ? activePanel : panel} onClick={() => setPanelKey("numbers")}><div style={eyebrow}>Spread</div><h2 style={h2}>{intel.spread ? `$${intel.spread.toLocaleString()}` : "N/A"}</h2><p style={muted}>estimated margin</p></button>
             <button type="button" style={panelKey === "execution" ? activePanel : panel} onClick={() => setPanelKey("execution")}><div style={eyebrow}>Execution</div><h2 style={h2}>{intel.urgency}%</h2><p style={muted}>urgency</p></button>
             <button type="button" style={panelKey === "matches" ? activePanel : panel} onClick={() => setPanelKey("matches")}><div style={eyebrow}>Matches</div><h2 style={h2}>{matches.length}</h2><p style={muted}>member fits</p></button>
-            <button type="button" style={panelKey === "routing" ? activePanel : panel} onClick={() => setPanelKey("routing")}><div style={eyebrow}>Routing</div><h2 style={h2}>{routeEntriesForRoom("deal", id).length}</h2><p style={muted}>route history</p></button>
-            <button type="button" style={panelKey === "activity" ? activePanel : panel} onClick={() => setPanelKey("activity")}><div style={eyebrow}>Activity</div><h2 style={h2}>{activityList("deal", id).length}</h2><p style={muted}>room events</p></button>
+            <button type="button" style={panelKey === "routing" ? activePanel : panel} onClick={() => setPanelKey("routing")}><div style={eyebrow}>Routing</div><h2 style={h2}>{routeEntriesForRoom("pain", id).length}</h2><p style={muted}>route history</p></button>
+            <button type="button" style={panelKey === "activity" ? activePanel : panel} onClick={() => setPanelKey("activity")}><div style={eyebrow}>Activity</div><h2 style={h2}>{activityList("pain", id).length}</h2><p style={muted}>room events</p></button>
             <button type="button" style={panelKey === "messages" ? activePanel : panel} onClick={() => setPanelKey("messages")}><div style={eyebrow}>Messages</div><h2 style={h2}>Open</h2><p style={muted}>thread context</p></button>
           </div>
         </Section>
 
         {panelKey === "intel" ? (
-          <Section title="AI Deal Intelligence">
+          <Section title="AI Problem Solver Intelligence">
             <div style={grid}>
-              <Meter title="Deal Strength" value={intel.score} />
-              <Meter title="Risk" value={intel.risk} />
-              <Meter title="Confidence" value={intel.confidence} />
+              <Meter title="Pain Severity" value={intel.severity} />
+              <Meter title="Collapse Risk" value={intel.collapse} />
+              <Meter title="Capital Pressure" value={intel.capital} />
+              <Meter title="Blocker Load" value={intel.blocker} />
               <Value title="Signal" value={intel.signal} />
               <Value title="Best Next Move" value={intel.next} />
-              <Value title="Exit Paths" value={intel.exit} />
+              <Value title="If Nothing Happens" value={intel.consequence} />
             </div>
           </Section>
         ) : null}
 
         {panelKey === "numbers" ? (
-          <Section title="Deal Numbers">
+          <Section title="Pain Details">
             <div style={grid}>
-              <Value title="Ask Price" value={txt(room.askingPrice || room.askPrice)} />
-              <Value title="Value / ARV" value={txt(room.propertyValue || room.value)} />
-              <Value title="Repairs" value={room.repairs} />
-              <Value title="Estimated Spread" value={intel.spread ? `$${intel.spread.toLocaleString()}` : "Needs ask/value/repairs"} />
-              <Value title="Equity Estimate" value={intel.equity ? `${intel.equity}%` : "Needs ask/value"} />
-              <Value title="NOI" value={room.noi} />
-              <Value title="Cap Rate" value={room.capRate} />
-              <Value title="Acres" value={room.acres} />
-              <Value title="Zoning" value={room.zoning} />
+              <Value title="Pain Types" value={list(room.painTypes).join(", ")} />
+              <Value title="Severity" value={room.severity} />
+              <Value title="Time Pressure" value={room.timePressure} />
+              <Value title="Capital Pressure" value={room.capitalPressure} />
+              <Value title="Money Needed Now" value={room.moneyNeededNow || room.monthlyBurn || room.monthlyBurnRate} />
+              <Value title="Deadline" value={room.deadline} />
+              <Value title="Root Cause" value={room.rootCause} />
+              <Value title="Best Outcome" value={room.bestOutcome} />
+              <Value title="Worst Case" value={room.worstCase} />
             </div>
           </Section>
         ) : null}
@@ -969,14 +970,14 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
         {panelKey === "execution" ? (
           <Section title="Execution Plan">
             <div style={grid}>
-              <Value title="Route To" value={list(room.routeTo).join(", ")} />
-              <Value title="Strategy" value={list(room.strategy).join(", ")} />
+              <Value title="Needs / Routing Needs" value={list(room.needs || room.routingNeeds).join(", ")} />
+              <Value title="Blockers" value={list(room.blockers).join(", ")} />
+              <Value title="Risks" value={list(room.risks || room.riskTypes).join(", ")} />
               <Value title="Control" value={room.controlStatus} />
-              <Value title="Condition" value={room.condition} />
-              <Value title="Occupancy" value={room.occupancy} />
+              <Value title="Current Status" value={room.currentStatus || room.ownerSituation} />
               <Value title="Timeline" value={room.timeline || room.timePressure} />
               <Value title="Contact" value={[txt(room.contactName), txt(room.contactPhone || room.phone), txt(room.contactEmail || room.email)].filter(Boolean).join(" • ")} />
-              <Value title="Next 7 Days" value="Verify facts, route to best-fit members, open message thread, and move toward controlled introduction." />
+              <Value title="Next 7 Days" value="Confirm blocker, verify authority, route to the highest-fit solver, and open a tracked message thread." />
             </div>
           </Section>
         ) : null}
@@ -987,11 +988,11 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
           </Section>
         ) : null}
 
-        {panelKey === "routing" ? <RouteHistoryPanel kind="deal" id={id} room={room} /> : null}
+        {panelKey === "routing" ? <RouteHistoryPanel kind="pain" id={id} room={room} /> : null}
 
         {panelKey === "activity" ? (
           <Section title="Room Activity Stream">
-            <ActivityStream kind="deal" id={id} />
+            <ActivityStream kind="pain" id={id} />
           </Section>
         ) : null}
 
@@ -999,8 +1000,8 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
           <Section title="Message Context">
             <p style={sub}>Messages opened from here carry this room title and type.</p>
             <div style={{ ...row, marginTop: 18 }}>
-              <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Deal Room: " + titleFor(room, "deal"))}`} style={goldBtn}>Open Message Thread</Link>
-              <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Route This Deal: " + titleFor(room, "deal"))}`} style={btn}>Route Request</Link>
+              <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Pain Room: " + titleFor(room, "pain"))}`} style={goldBtn}>Open Message Thread</Link>
+              <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Route This Pain: " + titleFor(room, "pain"))}`} style={btn}>Route Request</Link>
             </div>
           </Section>
         ) : null}
