@@ -19,7 +19,7 @@ type PainRoom = {
   violationType: string; cityDeadline: string; fineAmount: string; expeditorNeeded: string;
   tenantStatusDetail: string; rentOwed: string; evictionFiled: string; accessProblem: string;
   claimNumber: string; adjusterStatus: string; damageType: string; photos: string[]; photoUrls: string[]; coverPhoto: string; photoUrl: string; imageUrl: string;
-  roomState: PainState; cleanupState: PainState; stateStatus: PainState; alertRead: boolean; viewedAt: string; createdAt: string; updatedAt: string; analyzer: string;
+  ownerId: string; ownerEmail: string; createdBy: string; createdByEmail: string; memberRoomStatus: PainState | "resolved" | "sold"; executionStage: "New" | "Diagnosing" | "Routed" | "In Progress" | "Resolved"; roomState: PainState; cleanupState: PainState; stateStatus: PainState; alertRead: boolean; viewedAt: string; createdAt: string; updatedAt: string; analyzer: string;
 };
 
 const MAIN_KEY = "vaultforge_clean_pain_rooms_v2";
@@ -59,9 +59,38 @@ function propertyTypesFor(asset: string) { if (asset === "Commercial") return CO
 function countyFromCity(city: string) { return CITY_COUNTY[city.trim().toLowerCase().replace(/\s+/g, " ")] || ""; }
 function locationFor(room: Partial<PainRoom>) { return [safeText(room.city), safeText(room.county), safeText(room.state)].filter(Boolean).join(", ") || "Market not listed"; }
 
+
+function currentOwner() {
+  if (!browserReady()) {
+    return { ownerId: "local_member", ownerEmail: "", createdBy: "local_member", createdByEmail: "" };
+  }
+
+  const profileKeys = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+  for (const key of profileKeys) {
+    const profile = parseJson<any | null>(localStorage.getItem(key), null);
+    if (profile && typeof profile === "object") {
+      const email = safeText(profile.email || profile.ownerEmail || profile.createdByEmail);
+      const id = safeText(profile.id || email || "local_member");
+      return { ownerId: id, ownerEmail: email, createdBy: id, createdByEmail: email };
+    }
+  }
+
+  const fallbackEmail =
+    safeText(localStorage.getItem("vf_email")) ||
+    safeText(localStorage.getItem("vaultforge_email")) ||
+    safeText(localStorage.getItem("member_email"));
+
+  return {
+    ownerId: fallbackEmail || "local_member",
+    ownerEmail: fallbackEmail,
+    createdBy: fallbackEmail || "local_member",
+    createdByEmail: fallbackEmail,
+  };
+}
+
 function defaultPain(): PainRoom {
   const now = new Date().toISOString();
-  return { id: "", roomId: "", title: "", state: "GA", city: "", county: "", address: "", assetClass: "Residential", propertyType: "Single Family",
+  return { id: "", roomId: "", ownerId: "", ownerEmail: "", createdBy: "", createdByEmail: "", memberRoomStatus: "active", executionStage: "New", title: "", state: "GA", city: "", county: "", address: "", assetClass: "Residential", propertyType: "Single Family",
     painTypes: ["Funding Gap"], needs: ["Lender"], blockers: [], risks: [], severity: "High", timePressure: "7 Days", capitalPressure: "Unknown", controlStatus: "Unknown",
     currentStatus: "", ownerSituation: "", accessStatus: "", titleStatus: "", permitStatus: "", insuranceStatus: "", legalStatus: "",
     askPrice: "", value: "", repairs: "", monthlyBurn: "", moneyNeededNow: "", deadline: "", rootCause: "", bestOutcome: "", worstCase: "", desiredSolution: "",
@@ -120,7 +149,8 @@ function savePain(room: PainRoom) {
   const now = new Date().toISOString();
   const intel = painIntel(room);
   const cover = room.photos[0] || room.coverPhoto || "";
-  const next: PainRoom = { ...room, id, roomId: id, coverPhoto: cover, photoUrl: cover, imageUrl: cover, photoUrls: room.photos, roomState: "active", cleanupState: "active", stateStatus: "active", alertRead: false, viewedAt: "", createdAt: room.createdAt || now, updatedAt: now, analyzer: intel.analyzer };
+  const owner = currentOwner();
+  const next: PainRoom = { ...room, ...owner, id, roomId: id, coverPhoto: cover, photoUrl: cover, imageUrl: cover, photoUrls: room.photos, memberRoomStatus: "active", executionStage: "New", roomState: "active", cleanupState: "active", stateStatus: "active", alertRead: false, viewedAt: "", createdAt: room.createdAt || now, updatedAt: now, analyzer: intel.analyzer };
   const existing = readPain().filter((x) => x.id !== id);
   let saved = writeJson(MAIN_KEY, [next, ...existing]) && writeJson(LEGACY_ONE, [next, ...existing]) && writeJson(LEGACY_TWO, [next, ...existing]) && writeJson(`vaultforge_pain_room_${id}`, next);
   if (!saved) {
@@ -172,8 +202,7 @@ const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", bor
 const textarea: React.CSSProperties = { ...input, minHeight: 120, resize: "vertical" };
 const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
-function Nav() { return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={btn}>Command</Link>
-      <Link href="/my-rooms" style={btn}>My Rooms</Link><Link href="/state-map" style={btn}>State Map</Link><Link href="/network" style={btn}>Network</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/deal-create" style={btn}>Create Deal</Link><Link href="/pain-intake" style={goldBtn}>Pain Intake</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>; }
+function Nav() { return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={btn}>Command</Link><Link href="/state-map" style={btn}>State Map</Link><Link href="/network" style={btn}>Network</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/deal-create" style={btn}>Create Deal</Link><Link href="/pain-intake" style={goldBtn}>Pain Intake</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>; }
 function Section({ title, children }: { title: string; children: React.ReactNode }) { return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>; }
 function stopKeys(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) { e.stopPropagation(); }
 function Field({ title, value, onChange }: { title: string; value: string; onChange: (value: string) => void }) { return <label><div style={label}>{title}</div><input style={input} value={value} onKeyDownCapture={stopKeys} onKeyUpCapture={stopKeys} onChange={(e) => onChange(e.target.value)} /></label>; }
