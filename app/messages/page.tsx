@@ -662,7 +662,7 @@ function MessageCommandHeader({
   const unread = active.filter((thread) => thread.unread || thread.messages.some((msg) => !msg.read)).length;
   const deal = active.filter((thread) => thread.lane === "deal").length;
   const pain = active.filter((thread) => thread.lane === "pain").length;
-  const routing = active.filter((thread) => thread.lane === "routing" || thread.lane === "introductions").length;
+  const routing = active.filter((thread) => thread.lane === "member" || thread.lane === "general").length;
 
   return (
     <>
@@ -867,7 +867,7 @@ export default function ExecutionMessagesPage() {
       <style>{styleTag}</style>
       <div style={wrap}>
         <Nav />
-        <MessageCommandHeader threads={threads} activeLane={activeLane} />
+        <MessageCommandHeader threads={threads} activeLane={lane === "all" ? "general" : lane} />
 
         <section style={hero}>
           <div style={eyebrow}>Execution Communications</div>
