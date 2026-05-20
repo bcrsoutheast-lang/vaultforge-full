@@ -662,7 +662,7 @@ function MessageCommandHeader({
   const unread = active.filter((thread) => thread.unread || thread.messages.some((msg) => !msg.read)).length;
   const deal = active.filter((thread) => thread.lane === "deal").length;
   const pain = active.filter((thread) => thread.lane === "pain").length;
-  const routing = active.filter((thread) => thread.lane === "member" || thread.lane === "general").length;
+  const routing = active.filter((thread) => thread.lane === "routing" || thread.lane === "introductions").length;
 
   return (
     <>
@@ -798,6 +798,13 @@ export default function ExecutionMessagesPage() {
     ));
   }
 
+  function permanentlyDeleteThread(target: Thread) {
+    const targetKey = exactThreadKey(target);
+    const next = threads.filter((thread) => exactThreadKey(thread) !== targetKey);
+    persist(next);
+    setActiveKey("");
+  }
+
   function sendReply() {
     if (!activeThread || !reply.trim()) return;
     const member = currentMember();
@@ -860,7 +867,7 @@ export default function ExecutionMessagesPage() {
       <style>{styleTag}</style>
       <div style={wrap}>
         <Nav />
-        <MessageCommandHeader threads={threads} activeLane={lane === "all" ? "general" : lane} />
+        <MessageCommandHeader threads={threads} activeLane={activeLane} />
 
         <section style={hero}>
           <div style={eyebrow}>Execution Communications</div>
@@ -940,8 +947,16 @@ export default function ExecutionMessagesPage() {
                   <button type="button" style={btn} onClick={() => setActiveKey("")}>Back to Cards</button>
                   <button type="button" style={activeThread.saved || activeThread.status === "saved" ? goldBtn : btn} onClick={() => updateThread(activeThread.id, { saved: !activeThread.saved, status: activeThread.saved ? "active" : "saved" })}>{activeThread.saved || activeThread.status === "saved" ? "Saved" : "Save"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { unread: !activeThread.unread })}>{activeThread.unread ? "Mark Read" : "Mark Unread"}</button>
-                  <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { status: "archived" })}>Archive</button>
-                  <button type="button" style={redBtn} onClick={() => updateThread(activeThread.id, { status: "deleted" })}>Delete</button>
+                  {activeThread.status !== "deleted" ? (
+                    <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { status: "archived" })}>Archive</button>
+                  ) : null}
+
+                  {activeThread.status !== "deleted" ? (
+                    <button type="button" style={redBtn} onClick={() => updateThread(activeThread.id, { status: "deleted" })}>Delete</button>
+                  ) : (
+                    <button type="button" style={redBtn} onClick={() => permanentlyDeleteThread(activeThread)}>Delete Forever</button>
+                  )}
+
                   {activeThread.status !== "active" ? <button type="button" style={goldBtn} onClick={() => updateThread(activeThread.id, { status: "active" })}>Restore</button> : null}
                   {activeThread.roomType === "deal" && activeThread.roomId ? <Link href={`/deal-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Deal Room</Link> : null}
                   {activeThread.roomType === "pain" && activeThread.roomId ? <Link href={`/pain-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Pain Room</Link> : null}
