@@ -885,6 +885,7 @@ function DashboardMetricCard({
   count,
   note,
   active,
+  alert,
   danger,
   onClick,
 }: {
@@ -892,10 +893,11 @@ function DashboardMetricCard({
   count: number;
   note: string;
   active?: boolean;
+  alert?: boolean;
   danger?: boolean;
   onClick: () => void;
 }) {
-  const style = active ? activePanel : danger && count ? pulseRed : count ? panel : panel;
+  const style = active ? activePanel : alert && count ? (danger ? pulseRed : pulseGold) : panel;
 
   return (
     <button type="button" style={{ ...style, textAlign: "left", cursor: "pointer" }} onClick={onClick}>
@@ -908,13 +910,18 @@ function DashboardMetricCard({
 }
 
 function ViewCard({ view, title, note, count, active, onClick }: { view: ViewKey; title: string; note: string; count: number; active: boolean; onClick: () => void }) {
-  const style = active ? activePanel : count ? (view.includes("Pain") || view === "resolved" ? pulseRed : pulseGold) : panel;
+  const shouldAlert =
+    count > 0 &&
+    (view === "activePain" || view === "assignedToMe" || view === "routedToMe" || view === "following");
+
+  const style = active ? activePanel : shouldAlert ? (view === "activePain" ? pulseRed : pulseGold) : panel;
 
   return (
     <button type="button" style={{ ...style, textAlign: "left", cursor: "pointer" }} onClick={onClick}>
       <div style={eyebrow}>{title}</div>
       <h2 style={h2}>{count}</h2>
       <p style={muted}>{note}</p>
+      <p style={muted}>Click to open</p>
     </button>
   );
 }
@@ -1088,26 +1095,35 @@ export default function MyRoomsPage() {
 
         <Section title="Workspace Ownership">
           <div style={grid}>
-            <div style={activePanel}>
-              <div style={eyebrow}>My Deal Rooms</div>
-              <h2 style={h2}>{deals.length}</h2>
-              <p style={muted}>owned, created, assigned, routed, or local/demo rooms</p>
-            </div>
-            <div style={activePanel}>
-              <div style={eyebrow}>My Pain Rooms</div>
-              <h2 style={h2}>{pains.length}</h2>
-              <p style={muted}>owned, created, assigned, routed, or local/demo rooms</p>
-            </div>
-            <div style={panel}>
-              <div style={eyebrow}>Assigned / Routed</div>
-              <h2 style={h2}>{[...deals, ...pains].filter(roomAssignedToCurrentMember).length + [...deals, ...pains].filter(roomRoutedToCurrentMember).length}</h2>
-              <p style={muted}>rooms sent to this member for action</p>
-            </div>
-            <div style={panel}>
-              <div style={eyebrow}>Global Hidden</div>
-              <h2 style={h2}>{Math.max(0, allDealRooms.length + allPainRooms.length - deals.length - pains.length)}</h2>
-              <p style={muted}>rooms not tied to this member identity</p>
-            </div>
+            <DashboardMetricCard
+              title="My Deal Rooms"
+              count={deals.length}
+              note="owned, created, assigned, routed, or local/demo rooms"
+              active={view === "activeDeals"}
+              onClick={() => setView("activeDeals")}
+            />
+            <DashboardMetricCard
+              title="My Pain Rooms"
+              count={pains.length}
+              note="owned, created, assigned, routed, or local/demo rooms"
+              active={view === "activePain"}
+              onClick={() => setView("activePain")}
+            />
+            <DashboardMetricCard
+              title="Assigned / Routed"
+              count={[...deals, ...pains].filter(roomAssignedToCurrentMember).length + [...deals, ...pains].filter(roomRoutedToCurrentMember).length}
+              note="rooms sent to this member for action"
+              active={view === "assignedToMe" || view === "routedToMe"}
+              alert
+              onClick={() => setView("assignedToMe")}
+            />
+            <DashboardMetricCard
+              title="Global Hidden"
+              count={Math.max(0, allDealRooms.length + allPainRooms.length - deals.length - pains.length)}
+              note="rooms not tied to this member identity"
+              active={false}
+              onClick={() => setView("activeDeals")}
+            />
           </div>
         </Section>
 
@@ -1138,6 +1154,7 @@ export default function MyRoomsPage() {
               count={(stages["Routed"] || 0) + (stages["Under Contract"] || 0)}
               note="rooms in execution"
               active={view === "routedToMe"}
+              alert
               onClick={() => setView("routedToMe")}
             />
             <DashboardMetricCard
@@ -1159,6 +1176,7 @@ export default function MyRoomsPage() {
               count={stages["In Progress"] || 0}
               note="solver work underway"
               active={view === "activePain"}
+              alert
               danger
               onClick={() => setView("activePain")}
             />
@@ -1179,6 +1197,7 @@ export default function MyRoomsPage() {
               count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "pending").length}
               note="waiting on accept/pass/claim"
               active={view === "routedToMe"}
+              alert
               danger
               onClick={() => setView("routedToMe")}
             />
@@ -1201,6 +1220,7 @@ export default function MyRoomsPage() {
               count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "claimed").length}
               note="member claimed execution"
               active={view === "routedToMe"}
+              alert
               onClick={() => setView("routedToMe")}
             />
           </div>
