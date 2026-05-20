@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 
 type AnyRoom = {
   id?: string;
@@ -303,6 +303,71 @@ export function RoomFrontIntelligence({ kind, room }: { kind: RoomKind; room: An
 }
 
 
+
+function IntelligenceSection({
+  title,
+  badge,
+  danger,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  danger?: boolean;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <section
+      style={{
+        background: "linear-gradient(180deg,#0a0f1c,#050816)",
+        border: `1px solid ${danger ? "rgba(255,70,70,.35)" : "rgba(255,220,104,.24)"}`,
+        borderRadius: 24,
+        marginBottom: 18,
+        overflow: "hidden",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        style={{
+          width: "100%",
+          background: "transparent",
+          border: 0,
+          cursor: "pointer",
+          padding: 20,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          color: "#f7f7fb",
+        }}
+      >
+        <div>
+          <div style={eyebrow}>{badge || "AI SECTION"}</div>
+          <div style={{ fontSize: 24, fontWeight: 900, textAlign: "left" }}>{title}</div>
+        </div>
+
+        <div
+          style={{
+            border: `1px solid ${danger ? "rgba(255,70,70,.35)" : "rgba(255,220,104,.24)"}`,
+            borderRadius: 999,
+            padding: "8px 14px",
+            color: danger ? "#ff8080" : "#ffd45a",
+            fontWeight: 800,
+          }}
+        >
+          {open ? "Collapse" : "Expand"}
+        </div>
+      </button>
+
+      {open ? <div style={{ padding: "0 20px 20px" }}>{children}</div> : null}
+    </IntelligenceSection>
+  );
+}
+
+
 function DiagnosticQA({
   question,
   answer,
@@ -588,9 +653,17 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
   if (kind === "pain") {
     const ai = painAnalysis(room);
     return (
-      <section style={{ background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(255,70,70,.35)", borderRadius: 26, padding: 26, marginBottom: 22 }}>
-        <div style={eyebrow}>AI Problem Solver Desk</div>
-        <h2 style={h2}>Surgical pain-room diagnosis.</h2>
+      <IntelligenceSection
+        title="AI Problem Solver Command Desk"
+        badge="CRITICAL PRESSURE"
+        danger
+      >
+        <div style={{ ...redPanel, marginBottom: 18 }}>
+          <div style={eyebrow}>AI SUMMARY</div>
+          <p style={sub}>
+            {ai.root} Collapse risk is currently {pct(ai.collapseRisk)} and the room should route based on blocker severity, not broad exposure.
+          </p>
+        </div>
         <div style={grid}>
           <div style={redPanel}><div style={eyebrow}>Severity</div><h2 style={h2}>{pct(ai.severity)}</h2><p style={muted}>Operational pressure index.</p></div>
           <div style={redPanel}><div style={eyebrow}>FMEA RPN</div><h2 style={h2}>{ai.rpn}</h2><p style={muted}>Severity × collapse × detection gap.</p></div>
@@ -610,15 +683,22 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
           <DiagnosticList title="Fishbone / Ishikawa Answers" items={painFishboneAnswers(room)} />
           <DiagnosticList title="5S / Control Plan Answers" items={painControlPlanAnswers(room, ai)} />
         </div>
-      </section>
+      </IntelligenceSection>
     );
   }
 
   const ai = dealAnalysis(room);
   return (
-    <section style={{ background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.36)", borderRadius: 26, padding: 26, marginBottom: 22 }}>
-      <div style={eyebrow}>AI Deal Intelligence Desk</div>
-      <h2 style={h2}>Institutional underwriting and execution read.</h2>
+    <IntelligenceSection
+      title="Institutional Deal Intelligence Desk"
+      badge="EXECUTION INTELLIGENCE"
+    >
+      <div style={{ ...goldPanel, marginBottom: 18 }}>
+        <div style={eyebrow}>AI SUMMARY</div>
+        <p style={sub}>
+          {ai.primaryConstraint} Execution probability is currently {pct(ai.closeProbability)} with liquidity pressure at {pct(ai.liquidity)}.
+        </p>
+      </div>
 
       <div style={grid}>
         <div style={goldPanel}><div style={eyebrow}>Opportunity</div><h2 style={h2}>{pct(ai.opportunity)}</h2><p style={muted}>Margin, control, proof, and route readiness.</p></div>
@@ -643,6 +723,43 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
         <DiagnosticList title="Deal 5 Whys / AI Answers" items={dealFiveWhyAnswers(room, ai)} />
         <DiagnosticList title="Execution Failure Analysis" items={dealExecutionAnswers(room, ai)} />
         <DiagnosticList title="Exit Scenario Analysis" items={dealExitScenarioAnswers(room, ai)} />
+          <div style={panel}>
+            <div style={eyebrow}>Institutional View</div>
+
+            <div style={{ borderTop: "1px solid rgba(207,216,230,.12)", paddingTop: 12 }}>
+              <div style={eyebrow}>What A Lender Sees</div>
+              <p style={muted}>
+                {ai.missing.length
+                  ? `The room still lacks critical underwriting proof: ${ai.missing.join(", ")}.`
+                  : "The room has enough structure to begin serious underwriting review."}
+              </p>
+            </div>
+
+            <div style={{ borderTop: "1px solid rgba(207,216,230,.12)", paddingTop: 12, marginTop: 12 }}>
+              <div style={eyebrow}>What An Operator Sees</div>
+              <p style={muted}>
+                {ai.primaryConstraint}
+              </p>
+            </div>
+
+            <div style={{ borderTop: "1px solid rgba(207,216,230,.12)", paddingTop: 12, marginTop: 12 }}>
+              <div style={eyebrow}>Why This Dies In Underwriting</div>
+              <p style={muted}>
+                {ai.killShot}
+              </p>
+            </div>
+
+            <div style={{ borderTop: "1px solid rgba(207,216,230,.12)", paddingTop: 12, marginTop: 12 }}>
+              <div style={eyebrow}>Recommended Team</div>
+              <p style={muted}>
+                {ai.lane === "commercial"
+                  ? "Commercial lender • operator • tenant strategist • attorney"
+                  : ai.lane === "land"
+                  ? "Developer • zoning specialist • civil engineer • land capital"
+                  : "Buyer • lender • contractor • title/closing specialist"}
+              </p>
+            </div>
+          </div>
       </div>
     </section>
   );
