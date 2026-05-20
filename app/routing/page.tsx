@@ -310,6 +310,44 @@ function countRouteStatuses() {
   };
 }
 
+
+function routeEntries() {
+  return Object.entries(routeStatusMap()).map(([key, value]) => ({ key, ...value }));
+}
+
+function routeEntriesByStatus(status: string) {
+  return routeEntries().filter((entry) => entry.status === status);
+}
+
+function roomRouteEntries(kind: "deal" | "pain", roomId: string) {
+  return routeEntries().filter((entry) => entry.kind === kind && entry.roomId === roomId);
+}
+
+function roomHasRoute(kind: "deal" | "pain", roomId: string) {
+  return roomRouteEntries(kind, roomId).length > 0;
+}
+
+function routeRoomTitle(kind: "deal" | "pain", roomId: string) {
+  const room = kind === "deal"
+    ? readRooms("deal").find((item) => rid(item) === roomId)
+    : readRooms("pain").find((item) => rid(item) === roomId);
+
+  return room ? roomTitle(room, kind) : `${kind.toUpperCase()} ROOM ${roomId.slice(0, 8)}`;
+}
+
+function routeRoomLocation(kind: "deal" | "pain", roomId: string) {
+  const room = kind === "deal"
+    ? readRooms("deal").find((item) => rid(item) === roomId)
+    : readRooms("pain").find((item) => rid(item) === roomId);
+
+  return room ? loc(room) : "Room context";
+}
+
+function unmatchedRooms(kind: "deal" | "pain") {
+  return readRooms(kind).filter((room) => !roomHasRoute(kind, rid(room)));
+}
+
+
 function memberRouteStatus(kind: "deal" | "pain", roomId: string, member: Member) {
   return routeStatusMap()[routeKey(kind, roomId, member)]?.status || "";
 }
@@ -482,6 +520,47 @@ function MemberCard({ member, score, routeStatus, onRoute, onMessage }: { member
   );
 }
 
+
+function RouteEntryCard({ entry }: { entry: { key: string; status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string } }) {
+  const kind = entry.kind === "pain" ? "pain" : "deal";
+  const roomHref = kind === "deal" ? `/deal-rooms/${encodeURIComponent(entry.roomId)}` : `/pain-rooms/${encodeURIComponent(entry.roomId)}`;
+
+  return (
+    <div style={entry.status === "passed" ? panel : entry.status === "pending" ? pulseGold : activePanel}>
+      <div style={eyebrow}>{entry.status}</div>
+      <h2 style={h2}>{routeRoomTitle(kind, entry.roomId)}</h2>
+      <p style={sub}>{routeRoomLocation(kind, entry.roomId)}</p>
+      <p style={muted}>Member: {entry.memberName || entry.memberEmail || "Member"}</p>
+      <p style={muted}>{new Date(entry.at).toLocaleString()}</p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <Link href={roomHref} style={goldBtn}>Open Room</Link>
+        <Link href={`/messages?type=${kind}&room=${encodeURIComponent(entry.roomId)}&to=${encodeURIComponent(entry.memberEmail || "")}&subject=${encodeURIComponent("Route Follow Up: " + routeRoomTitle(kind, entry.roomId))}`} style={btn}>Message</Link>
+      </div>
+    </div>
+  );
+}
+
+function UnmatchedRoomCard({ kind, room }: { kind: "deal" | "pain"; room: Room }) {
+  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
+
+  return (
+    <div style={kind === "pain" ? pulseRed : pulseGold}>
+      <div style={eyebrow}>{kind === "deal" ? "Unmatched Deal" : "Unmatched Pain"}</div>
+      <h2 style={h2}>{roomTitle(room, kind)}</h2>
+      <p style={sub}>{loc(room)}</p>
+      <p style={muted}>
+        {kind === "deal"
+          ? `${txt(room.assetClass, "Deal")} • ${txt(room.propertyType, "Type")}`
+          : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")}`}
+      </p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <Link href={href} style={goldBtn}>Open Room</Link>
+      </div>
+    </div>
+  );
+}
+
+
 export default function RoutingPage() {
   const [tick, setTick] = useState(0);
 
@@ -505,6 +584,12 @@ export default function RoutingPage() {
   const pains = useMemo(() => readRooms("pain"), [tick]);
   const members = useMemo(() => readMembers(), [tick]);
   const routeCounts = useMemo(() => countRouteStatuses(), [tick]);
+  const pendingRoutes = useMemo(() => routeEntriesByStatus("pending"), [tick]);
+  const acceptedRoutes = useMemo(() => routeEntriesByStatus("accepted"), [tick]);
+  const passedRoutes = useMemo(() => routeEntriesByStatus("passed"), [tick]);
+  const claimedRoutes = useMemo(() => routeEntriesByStatus("claimed"), [tick]);
+  const unmatchedDeals = useMemo(() => unmatchedRooms("deal"), [deals, tick]);
+  const unmatchedPains = useMemo(() => unmatchedRooms("pain"), [pains, tick]);
 
   return (
     <main style={page}>
@@ -526,6 +611,57 @@ export default function RoutingPage() {
             <div style={panel}><div style={eyebrow}>Passed</div><h2 style={h2}>{routeCounts.passed}</h2><p style={muted}>members passed or rejected</p></div>
             <div style={pulseGold}><div style={eyebrow}>Claimed</div><h2 style={h2}>{routeCounts.claimed}</h2><p style={muted}>execution claimed</p></div>
           </div>
+        </Section>
+
+        <Section title="Route Queues">
+          <div style={grid}>
+            <button type="button" style={pendingRoutes.length ? pulseGold : panel}>
+              <div style={eyebrow}>Pending Routes</div>
+              <h2 style={h2}>{pendingRoutes.length}</h2>
+              <p style={muted}>sent, waiting on member action</p>
+            </button>
+            <button type="button" style={acceptedRoutes.length ? activePanel : panel}>
+              <div style={eyebrow}>Accepted Routes</div>
+              <h2 style={h2}>{acceptedRoutes.length}</h2>
+              <p style={muted}>member accepted route</p>
+            </button>
+            <button type="button" style={passedRoutes.length ? panel : panel}>
+              <div style={eyebrow}>Passed Routes</div>
+              <h2 style={h2}>{passedRoutes.length}</h2>
+              <p style={muted}>not a fit / rejected</p>
+            </button>
+            <button type="button" style={claimedRoutes.length ? pulseGold : panel}>
+              <div style={eyebrow}>Claimed Execution</div>
+              <h2 style={h2}>{claimedRoutes.length}</h2>
+              <p style={muted}>member claimed execution</p>
+            </button>
+            <button type="button" style={unmatchedDeals.length ? pulseGold : panel}>
+              <div style={eyebrow}>Unmatched Deals</div>
+              <h2 style={h2}>{unmatchedDeals.length}</h2>
+              <p style={muted}>deal rooms needing route</p>
+            </button>
+            <button type="button" style={unmatchedPains.length ? pulseRed : panel}>
+              <div style={eyebrow}>Unmatched Pain</div>
+              <h2 style={h2}>{unmatchedPains.length}</h2>
+              <p style={muted}>pain rooms needing solver</p>
+            </button>
+          </div>
+        </Section>
+
+        <Section title="Pending Route Queue">
+          {pendingRoutes.length ? <div style={grid}>{pendingRoutes.map((entry) => <RouteEntryCard key={entry.key} entry={entry} />)}</div> : <p style={sub}>No pending routes.</p>}
+        </Section>
+
+        <Section title="Accepted / Claimed Queue">
+          {[...acceptedRoutes, ...claimedRoutes].length ? <div style={grid}>{[...acceptedRoutes, ...claimedRoutes].map((entry) => <RouteEntryCard key={entry.key} entry={entry} />)}</div> : <p style={sub}>No accepted or claimed routes yet.</p>}
+        </Section>
+
+        <Section title="Unmatched Deal Rooms">
+          {unmatchedDeals.length ? <div style={grid}>{unmatchedDeals.map((room) => <UnmatchedRoomCard key={rid(room)} kind="deal" room={room} />)}</div> : <p style={sub}>All active deal rooms have route history.</p>}
+        </Section>
+
+        <Section title="Unmatched Pain Rooms">
+          {unmatchedPains.length ? <div style={grid}>{unmatchedPains.map((room) => <UnmatchedRoomCard key={rid(room)} kind="pain" room={room} />)}</div> : <p style={sub}>All active pain rooms have route history.</p>}
         </Section>
 
         <Section title="Deal Routing Lane">
