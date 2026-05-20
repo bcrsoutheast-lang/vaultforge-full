@@ -348,6 +348,77 @@ function unmatchedRooms(kind: "deal" | "pain") {
 }
 
 
+function routeAgeDays(entry: { at: string }) {
+  const time = new Date(entry.at).getTime();
+  if (!Number.isFinite(time)) return 0;
+  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
+}
+
+function isUrgentPainRoom(room: Room | undefined) {
+  if (!room) return false;
+  const severity = txt(room.severity);
+  const timePressure = txt(room.timePressure);
+  return severity === "Critical" || severity === "Emergency" || timePressure.includes("24") || timePressure.includes("72");
+}
+
+function escalationRoutes() {
+  return routeEntries().filter((entry) => {
+    const kind = entry.kind === "pain" ? "pain" : "deal";
+    const room = kind === "deal"
+      ? readRooms("deal").find((item) => rid(item) === entry.roomId)
+      : readRooms("pain").find((item) => rid(item) === entry.roomId);
+
+    const stalePending = entry.status === "pending" && routeAgeDays(entry) >= 3;
+    const urgentPainPending = kind === "pain" && entry.status === "pending" && isUrgentPainRoom(room);
+    return stalePending || urgentPainPending;
+  });
+}
+
+function rerouteEntry(entry: { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }) {
+  const kind = entry.kind === "pain" ? "pain" : "deal";
+  const room = kind === "deal"
+    ? readRooms("deal").find((item) => rid(item) === entry.roomId)
+    : readRooms("pain").find((item) => rid(item) === entry.roomId);
+
+  const members = readMembers();
+  const ranked = members
+    .filter((member) => member.email !== entry.memberEmail)
+    .map((member) => ({ member, score: kind === "deal" ? scoreDeal(room || {}, member) : scorePain(room || {}, member) }))
+    .sort((a, b) => b.score - a.score);
+
+  const nextMember = ranked[0]?.member;
+  if (!nextMember) return;
+
+  routeRoom(kind, entry.roomId, nextMember);
+  messageMember(kind, entry.roomId, nextMember);
+}
+
+function followUpEntry(entry: { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }) {
+  const kind = entry.kind === "pain" ? "pain" : "deal";
+  const room = kind === "deal"
+    ? readRooms("deal").find((item) => rid(item) === entry.roomId)
+    : readRooms("pain").find((item) => rid(item) === entry.roomId);
+
+  const member: Member = {
+    id: entry.memberEmail || entry.memberName || "member",
+    name: entry.memberName || entry.memberEmail || "Member",
+    email: entry.memberEmail || "",
+    company: "VaultForge",
+    state: txt(room?.state, "GA"),
+    states: [txt(room?.state, "GA")],
+    counties: [txt(room?.county)],
+    memberType: "Routed Member",
+    strategies: [],
+    painFocus: [],
+    capitalRange: "Not listed",
+    score: 70,
+  };
+
+  messageMember(kind, entry.roomId, member);
+}
+
+
+
 function memberRouteStatus(kind: "deal" | "pain", roomId: string, member: Member) {
   return routeStatusMap()[routeKey(kind, roomId, member)]?.status || "";
 }
@@ -521,6 +592,34 @@ function MemberCard({ member, score, routeStatus, onRoute, onMessage }: { member
 }
 
 
+
+function EscalationEntryCard({ entry, refresh }: { entry: { key: string; status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }; refresh: () => void }) {
+  const kind = entry.kind === "pain" ? "pain" : "deal";
+  const roomHref = kind === "deal" ? `/deal-rooms/${encodeURIComponent(entry.roomId)}` : `/pain-rooms/${encodeURIComponent(entry.roomId)}`;
+  const age = routeAgeDays(entry);
+  const room = kind === "deal"
+    ? readRooms("deal").find((item) => rid(item) === entry.roomId)
+    : readRooms("pain").find((item) => rid(item) === entry.roomId);
+  const urgent = kind === "pain" && isUrgentPainRoom(room);
+
+  return (
+    <div style={urgent ? pulseRed : pulseGold}>
+      <div style={eyebrow}>Escalation • {urgent ? "Urgent Pain" : "Stale Pending"}</div>
+      <h2 style={h2}>{routeRoomTitle(kind, entry.roomId)}</h2>
+      <p style={sub}>{routeRoomLocation(kind, entry.roomId)}</p>
+      <p style={muted}>Member: {entry.memberName || entry.memberEmail || "Member"}</p>
+      <p style={muted}>Pending age: {age} day(s) • Status: {entry.status}</p>
+      <p style={muted}>{urgent ? "High-pressure pain route needs response." : "Route has been pending too long."}</p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <Link href={roomHref} style={goldBtn}>Open Room</Link>
+        <button type="button" style={btn} onClick={() => { followUpEntry(entry); refresh(); }}>Message Follow-Up</button>
+        <button type="button" style={goldBtn} onClick={() => { rerouteEntry(entry); refresh(); }}>Reroute Best Fit</button>
+      </div>
+    </div>
+  );
+}
+
+
 function RouteEntryCard({ entry }: { entry: { key: string; status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string } }) {
   const kind = entry.kind === "pain" ? "pain" : "deal";
   const roomHref = kind === "deal" ? `/deal-rooms/${encodeURIComponent(entry.roomId)}` : `/pain-rooms/${encodeURIComponent(entry.roomId)}`;
@@ -590,6 +689,7 @@ export default function RoutingPage() {
   const claimedRoutes = useMemo(() => routeEntriesByStatus("claimed"), [tick]);
   const unmatchedDeals = useMemo(() => unmatchedRooms("deal"), [deals, tick]);
   const unmatchedPains = useMemo(() => unmatchedRooms("pain"), [pains, tick]);
+  const escalations = useMemo(() => escalationRoutes(), [tick, deals, pains]);
 
   return (
     <main style={page}>
@@ -645,7 +745,20 @@ export default function RoutingPage() {
               <h2 style={h2}>{unmatchedPains.length}</h2>
               <p style={muted}>pain rooms needing solver</p>
             </button>
+            <button type="button" style={escalations.length ? pulseRed : panel}>
+              <div style={eyebrow}>Escalations</div>
+              <h2 style={h2}>{escalations.length}</h2>
+              <p style={muted}>stale or urgent routes</p>
+            </button>
           </div>
+        </Section>
+
+        <Section title="Escalation Queue">
+          {escalations.length ? (
+            <div style={grid}>
+              {escalations.map((entry) => <EscalationEntryCard key={entry.key} entry={entry} refresh={() => setTick((value) => value + 1)} />)}
+            </div>
+          ) : <p style={sub}>No stale or urgent route escalations.</p>}
         </Section>
 
         <Section title="Pending Route Queue">
