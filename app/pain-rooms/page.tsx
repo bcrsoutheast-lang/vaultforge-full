@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { locationFor, markPainRoomRead, painIntelligence, readPainRooms, safeText, setPainRoomState, type PainRoom } from "../lib/vaultforgePain";
+import { RoomFrontIntelligence } from "../components/VaultForgeRoomIntelligence";
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
@@ -23,159 +24,6 @@ const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHe
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
 const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
-
-
-function numValue(value: unknown) {
-  const parsed = Number(String(value || "").replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function valueList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
-  if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
-  return [];
-}
-
-function fieldValue(room: any, key: string, fallback = "Not listed") {
-  const value = room?.[key];
-  if (Array.isArray(value)) return value.length ? value.join(", ") : fallback;
-  const clean = String(value || "").trim();
-  return clean || fallback;
-}
-
-function dealFrontSnapshot(room: any): [string, string][] {
-  const asset = fieldValue(room, "assetClass", "Asset");
-  const type = fieldValue(room, "propertyType", "Type");
-  const isCommercial = asset.toLowerCase().includes("commercial");
-  const isLand = asset.toLowerCase().includes("land");
-
-  if (isLand) {
-    return [
-      ["Asset", asset],
-      ["Land Type", type],
-      ["Acres", fieldValue(room, "acres")],
-      ["Zoning", fieldValue(room, "zoning")],
-      ["Utilities", fieldValue(room, "utilities")],
-      ["Road", fieldValue(room, "roadFrontage")],
-    ];
-  }
-
-  if (isCommercial) {
-    return [
-      ["Asset", asset],
-      ["Use", type],
-      ["Units", fieldValue(room, "units")],
-      ["NOI", fieldValue(room, "noi")],
-      ["Cap", fieldValue(room, "capRate")],
-      ["Occupancy", fieldValue(room, "occupancy")],
-    ];
-  }
-
-  return [
-    ["Asset", asset],
-    ["Type", type],
-    ["Beds", fieldValue(room, "beds")],
-    ["Baths", fieldValue(room, "baths")],
-    ["Sqft", fieldValue(room, "sqft")],
-    ["Occupancy", fieldValue(room, "occupancy")],
-  ];
-}
-
-function dealEinstein(room: any) {
-  const ask = numValue(room?.askingPrice || room?.askPrice);
-  const arv = numValue(room?.propertyValue || room?.value);
-  const repairs = numValue(room?.repairs);
-  const spread = arv && ask ? arv - ask - repairs : 0;
-  let score = 38;
-  if (spread > 25000) score += 12;
-  if (spread > 75000) score += 18;
-  if (spread > 150000) score += 15;
-  if (fieldValue(room, "controlStatus", "").toLowerCase().includes("controlled")) score += 10;
-  if (valueList(room?.routeTo).length) score += 7;
-  if (!ask || !arv) score -= 8;
-  score = Math.max(0, Math.min(100, score));
-
-  const risk = Math.max(10, Math.min(100,
-    (!ask || !arv ? 22 : 0) +
-    (fieldValue(room, "condition", "").toLowerCase().includes("full") ? 24 : 0) +
-    (fieldValue(room, "occupancy", "").toLowerCase().includes("squatter") ? 28 : 0) +
-    (fieldValue(room, "controlStatus", "").toLowerCase().includes("no") ? 18 : 0) +
-    28
-  ));
-
-  return {
-    score,
-    risk,
-    spread,
-    signal: score >= 75 ? "Strong opportunity signal" : score >= 55 ? "Workable deal — verify proof" : "Needs stronger facts before hard routing",
-    next: !ask || !arv ? "Collect ask, ARV/value, repairs, control, photos, and access before routing hard." : "Verify control, title/access, photos, and numbers, then route to the highest-fit buyer/capital/operator.",
-    hidden: spread > 75000 ? "Margin may support buyer spread, capital stack, or JV route." : "Upside depends on cleaner numbers, control, and execution path.",
-    killer: !ask || !arv ? "Missing underwriting values." : risk > 70 ? "Risk stack may kill buyer confidence." : "No major killer detected yet.",
-  };
-}
-
-function painFrontSnapshot(room: any): [string, string][] {
-  return [
-    ["Pain", valueList(room?.painTypes).join(", ") || "Problem"],
-    ["Needs", valueList(room?.needs || room?.routingNeeds).join(", ") || "Solver"],
-    ["Severity", fieldValue(room, "severity", "High")],
-    ["Time", fieldValue(room, "timePressure")],
-    ["Capital", fieldValue(room, "capitalPressure")],
-    ["Blocker", valueList(room?.blockers).join(", ") || "Not listed"],
-  ];
-}
-
-function painEinstein(room: any) {
-  let severity = 35;
-  const sev = fieldValue(room, "severity", "").toLowerCase();
-  if (sev.includes("medium")) severity += 10;
-  if (sev.includes("high")) severity += 25;
-  if (sev.includes("critical")) severity += 38;
-  if (sev.includes("emergency")) severity += 48;
-  const pressure = fieldValue(room, "timePressure", "").toLowerCase();
-  if (pressure.includes("24") || pressure.includes("72")) severity += 15;
-  if (valueList(room?.blockers).some((b) => ["capital", "title", "legal", "city"].includes(b.toLowerCase()))) severity += 10;
-  severity = Math.max(0, Math.min(100, severity));
-  const collapse = Math.max(10, Math.min(100, severity + valueList(room?.riskTypes || room?.risks).length * 5));
-  const solver = Math.max(35, Math.min(98, 100 - Math.round(collapse * .35) + valueList(room?.needs || room?.routingNeeds).length * 6));
-
-  return {
-    severity,
-    collapse,
-    solver,
-    signal: severity >= 85 ? "Immediate pressure signal" : severity >= 70 ? "High-priority execution problem" : "Active problem needing routing",
-    next: valueList(room?.blockers).includes("Capital") ? "Confirm money needed now, collateral, payoff, and deadline, then route to private capital/lender." : valueList(room?.blockers).includes("Title") ? "Collect title facts and route to title/legal specialist before more capital is burned." : "Identify the single blocker stopping execution and route to the highest-fit solver.",
-    consequence: fieldValue(room, "worstCase", "Delay, cost increase, failed closing, loss of control, or legal/financial escalation."),
-    fix: fieldValue(room, "desiredSolution", "Triage blocker, assign solver, message route fit, and track response until resolved."),
-  };
-}
-
-function IntelligenceStrip({ items }: { items: [string, string][] }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: 10, marginTop: 14 }}>
-      {items.map(([label, value], index) => (
-        <div key={`${label}-${index}`} style={{ background: "#070a12", border: "1px solid rgba(245,197,66,.18)", borderRadius: 16, padding: 12 }}>
-          <div style={{ ...eyebrow, fontSize: 11, letterSpacing: 4, marginBottom: 6 }}>{label}</div>
-          <div style={{ color: "#f7f7fb", fontWeight: 900 }}>{value}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Meter({ label, value }: { label: string; value: number }) {
-  return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ ...row, justifyContent: "space-between" }}>
-        <div style={{ ...eyebrow, marginBottom: 6 }}>{label}</div>
-        <strong>{value}%</strong>
-      </div>
-      <div style={{ height: 10, borderRadius: 999, overflow: "hidden", background: "#05070d", border: "1px solid rgba(207,216,230,.12)" }}>
-        <div style={{ width: `${Math.max(0, Math.min(100, value))}%`, height: "100%", background: value > 75 ? "#ff4b5c" : "#ffdc68" }} />
-      </div>
-    </div>
-  );
-}
 
 function Nav() {
   return (
@@ -202,10 +50,8 @@ function PainCard({ room, refresh }: { room: PainRoom; refresh: () => void }) {
       <div style={eyebrow}>Pain • {room.roomState}</div>
       <h2 style={h2}>{room.title}</h2>
       <p style={sub}>{locationFor(room)}</p>
-      <IntelligenceStrip items={painFrontSnapshot(room)} />
-      <p style={muted}>AI: {painEinstein(room).signal} • Severity {painEinstein(room).severity}% • Collapse {painEinstein(room).collapse}%</p>
-      <Meter label="Solver Fit" value={painEinstein(room).solver} />
-      <p style={muted}>Next: {painEinstein(room).next}</p>
+      <p style={muted}>{room.painTypes.join(", ")} • Needs: {room.needs.join(", ")} • Severity {room.severity}</p>
+      <RoomFrontIntelligence kind="pain" room={room} />
       <div style={{ ...row, marginTop: 16 }}>
         <Link href={`/pain-rooms/${encodeURIComponent(room.id)}`} style={goldBtn} onClick={() => markPainRoomRead(room.id)}>Open Room</Link>
         <Link href={`/messages?type=pain&room=${encodeURIComponent(room.id)}&subject=${encodeURIComponent("Pain Room: " + room.title)}`} style={btn}>Messages</Link>
@@ -240,7 +86,7 @@ export default function PainRoomsPage() {
         <section style={hero}>
           <div style={eyebrow}>Pain Rooms</div>
           <h1 style={h1}>Active problem board.</h1>
-          <p style={sub}>Pain rooms are AI problem-solving command centers: triage pressure, identify blockers, route solvers, and track the next move.</p>
+          <p style={sub}>Pain rooms carry pressure, AI diagnosis, routing needs, messages, photos, and execution next steps.</p>
         </section>
 
         <section style={card}>
