@@ -1,4 +1,4 @@
-"use client";
+use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -352,18 +352,31 @@ function normalizeThread(raw: any): Thread {
 
 
 function exactThreadKey(thread: Thread) {
-  return [
-    thread.id,
+  const parts = [
     thread.lane,
+    thread.roomType,
     thread.roomId,
     thread.subject,
     thread.roomTitle,
     thread.createdAt,
-  ].map((part) => String(part || "").trim()).join("::");
+    thread.id,
+  ];
+
+  return parts.map((part) => String(part || "").trim()).join("::");
 }
 
 function sameThread(a: Thread, b: Thread) {
   return exactThreadKey(a) === exactThreadKey(b);
+}
+
+function sameRoomThread(a: Thread, b: Thread) {
+  return (
+    a.lane === b.lane &&
+    a.roomType === b.roomType &&
+    a.roomId === b.roomId &&
+    a.subject === b.subject &&
+    a.roomTitle === b.roomTitle
+  );
 }
 
 
@@ -375,8 +388,9 @@ function readThreads(): Thread[] {
   for (const key of [THREAD_KEY, ...LEGACY_KEYS]) {
     for (const raw of arr<any>(key)) {
       const thread = normalizeThread(raw);
-      if (!thread.id || seen.has(thread.id)) continue;
-      seen.add(thread.id);
+      const exactKey = exactThreadKey(thread);
+      if (!thread.id || seen.has(exactKey)) continue;
+      seen.add(exactKey);
       out.push(thread);
     }
   }
@@ -518,6 +532,7 @@ function ThreadCard({ thread, active, onOpen }: { thread: Thread; active: boolea
       <h2 style={h2}>{thread.subject}</h2>
       <p style={sub}>{thread.roomTitle}</p>
       <p style={muted}>{thread.roomSubtitle}</p>
+      {thread.roomId ? <p style={muted}>Room ID: {thread.roomId.slice(0, 12)}</p> : null}
       <p style={muted}>{thread.messages.length} message(s) • {new Date(thread.updatedAt).toLocaleString()}</p>
       <p style={muted}>Participants: {hydrateParticipants(thread).join(", ") || "Owner/member not attached yet"}</p>
       {latest ? <p style={muted}>Latest: {latest.body.slice(0, 120)}{latest.body.length > 120 ? "..." : ""}</p> : <p style={muted}>No replies yet.</p>}
@@ -574,12 +589,7 @@ export default function MessagesPage() {
     const seeded = seedFromUrl();
 
     if (seeded) {
-      const exists = current.find((thread) =>
-        thread.lane === seeded.lane &&
-        thread.roomId === seeded.roomId &&
-        thread.toEmail === seeded.toEmail &&
-        thread.subject === seeded.subject
-      );
+      const exists = current.find((thread) => sameRoomThread(thread, seeded) && thread.toEmail === seeded.toEmail);
 
       if (!exists) {
         current = [seeded, ...current];
@@ -625,7 +635,6 @@ export default function MessagesPage() {
   }
 
   function openThread(target: Thread) {
-    const now = new Date().toISOString();
     const targetKey = exactThreadKey(target);
 
     const next = threads.map((thread) =>
@@ -633,23 +642,21 @@ export default function MessagesPage() {
         ? {
             ...thread,
             unread: false,
-            updatedAt: now,
             messages: thread.messages.map((msg) => ({ ...msg, read: true })),
           }
         : thread
     );
 
     persist(next);
-
-    const refreshed = next.find((thread) => exactThreadKey(thread) === targetKey) || target;
-    setActiveKey(exactThreadKey(refreshed));
+    setActiveKey(targetKey);
   }
 
   function updateThread(id: string, changes: Partial<Thread>) {
-    const target = threads.find((thread) => thread.id === id && (!activeKey || exactThreadKey(thread) === activeKey));
+    const target = threads.find((thread) => exactThreadKey(thread) === activeKey) || threads.find((thread) => thread.id === id);
     const targetKey = target ? exactThreadKey(target) : "";
+
     persist(threads.map((thread) =>
-      (targetKey ? exactThreadKey(thread) === targetKey : thread.id === id)
+      targetKey && exactThreadKey(thread) === targetKey
         ? { ...thread, ...changes, updatedAt: new Date().toISOString() }
         : thread
     ));
@@ -675,6 +682,7 @@ export default function MessagesPage() {
     );
 
     persist(next);
+    setActiveKey(exactThreadKey(activeThread));
     addRoomActivity(activeThread, "Message Sent", reply.trim().slice(0, 180));
     setReply("");
   }
