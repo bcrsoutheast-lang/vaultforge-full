@@ -793,7 +793,7 @@ export default function MessagesPage() {
                 <p style={muted}>Participants: {hydrateParticipants(activeThread).join(", ") || "Owner/member not attached yet"}</p>
 
                 <div style={{ ...row, marginTop: 16 }}>
-                  <button type="button" style={btn} onClick={() => setActiveId("")}>Back to Cards</button>
+                  <button type="button" style={btn} onClick={() => setActiveKey("")}>Back to Cards</button>
                   <button type="button" style={activeThread.saved || activeThread.status === "saved" ? goldBtn : btn} onClick={() => updateThread(activeThread.id, { saved: !activeThread.saved, status: activeThread.saved ? "active" : "saved" })}>{activeThread.saved || activeThread.status === "saved" ? "Saved" : "Save"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { unread: !activeThread.unread })}>{activeThread.unread ? "Mark Read" : "Mark Unread"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { status: "archived" })}>Archive</button>
