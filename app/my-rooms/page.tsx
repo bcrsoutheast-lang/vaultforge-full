@@ -1022,50 +1022,6 @@ function readIdentityValue(keys: string[]) {
   return "";
 }
 
-function currentMemberIdentity() {
-  if (typeof window === "undefined") {
-    return {
-      name: "Member Workspace",
-      company: "VaultForge Member",
-      email: "",
-      type: "Private Member",
-      states: "States not listed",
-    };
-  }
-
-  let profile: any = {};
-  for (const key of ["vaultforge_profile", "vf_profile", "member_profile", "profile", "vaultforge.member.profile"]) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
-    } catch {
-      // ignore
-    }
-  }
-
-  const email =
-    String(profile.email || profile.memberEmail || profile.member_email || window.localStorage.getItem("vf_email") || window.localStorage.getItem("member_email") || window.localStorage.getItem("email") || "").trim();
-
-  const name =
-    String(profile.fullName || profile.full_name || profile.name || profile.ownerName || "").trim() ||
-    readIdentityValue(["vf_name", "member_name", "full_name"]) ||
-    (email ? email.split("@")[0] : "Member Workspace");
-
-  const company =
-    String(profile.company || profile.companyName || profile.company_name || profile.businessName || "").trim() ||
-    readIdentityValue(["vf_company", "member_company", "company_name"]) ||
-    "Company not listed";
-
-  const type =
-    String(profile.memberType || profile.member_type || profile.role || profile.investorType || "").trim() ||
-    "Private Member";
-
-  const statesRaw = profile.states || profile.operatingStates || profile.statesOperated || profile.serviceStates || profile.markets;
-  const states = Array.isArray(statesRaw) ? statesRaw.join(" • ") : String(statesRaw || "States not listed");
-
-  return { name, company, email, type, states };
-}
-
 function MemberIdentityCard({
   activeDeals,
   activePain,
