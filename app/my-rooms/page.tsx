@@ -1472,7 +1472,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="activeDeals"
               title="Active Deals"
-              count={countForView("activeDeals")}
+              count={countFor("activeDeals")}
               note="open opportunity rooms"
               active={view === "activeDeals"}
               onClick={() => setView("activeDeals")}
@@ -1480,7 +1480,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="activePain"
               title="Active Pain"
-              count={countForView("activePain")}
+              count={countFor("activePain")}
               note="open pressure rooms"
               active={view === "activePain"}
               onClick={() => setView("activePain")}
@@ -1489,7 +1489,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="savedDeals"
               title="Saved Deals"
-              count={countForView("savedDeals")}
+              count={countFor("savedDeals")}
               note="kept opportunity rooms"
               active={view === "savedDeals"}
               onClick={() => setView("savedDeals")}
@@ -1497,7 +1497,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="savedPain"
               title="Saved Pain"
-              count={countForView("savedPain")}
+              count={countFor("savedPain")}
               note="kept pressure rooms"
               active={view === "savedPain"}
               onClick={() => setView("savedPain")}
@@ -1523,7 +1523,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="sold"
               title="Sold Deals"
-              count={countForView("sold")}
+              count={countFor("sold")}
               note="completed opportunity rooms"
               active={view === "sold"}
               onClick={() => setView("sold")}
@@ -1531,7 +1531,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="resolved"
               title="Resolved Pain"
-              count={countForView("resolved")}
+              count={countFor("resolved")}
               note="handled problem rooms"
               active={view === "resolved"}
               onClick={() => setView("resolved")}
@@ -1557,7 +1557,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="assignedToMe"
               title="Assigned To Me"
-              count={countForView("assignedToMe")}
+              count={countFor("assignedToMe")}
               note="rooms assigned into my workspace"
               active={view === "assignedToMe"}
               onClick={() => setView("assignedToMe")}
@@ -1565,7 +1565,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="routedToMe"
               title="Routed To Me"
-              count={countForView("routedToMe")}
+              count={countFor("routedToMe")}
               note="rooms routed for action"
               active={view === "routedToMe"}
               onClick={() => setView("routedToMe")}
@@ -1573,7 +1573,7 @@ export default function MyRoomsPage() {
             <ViewCard
               view="following"
               title="Following"
-              count={countForView("following")}
+              count={countFor("following")}
               note="rooms I am watching"
               active={view === "following"}
               onClick={() => setView("following")}
