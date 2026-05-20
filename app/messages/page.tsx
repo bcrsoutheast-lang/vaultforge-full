@@ -311,7 +311,7 @@ function normalizeThread(raw: any): Thread {
   const roomId = txt(raw?.roomId || raw?.room_id || raw?.room || raw?.itemId || raw?.id_ref);
   const context = lane === "deal" || lane === "pain" ? roomContext(lane, roomId) : {
     state: txt(raw?.state),
-    roomTitle: txt(raw?.roomTitle || raw?.subject, lane === "member" ? "Member Message" : "General Message"),
+    roomTitle: txt(raw?.roomTitle || raw?.subject, lane === "member" ? "Member Message" : "Member Comms Message"),
     roomSubtitle: txt(raw?.roomSubtitle || raw?.lane, lane),
   };
 
@@ -437,7 +437,7 @@ function seedFromUrl() {
   const lane: Lane = type.includes("deal") ? "deal" : type.includes("pain") ? "pain" : type.includes("member") ? "member" : "general";
   const roomId = txt(url.searchParams.get("room") || url.searchParams.get("roomId") || "");
   const toEmail = txt(url.searchParams.get("to") || url.searchParams.get("email") || "");
-  const subject = txt(url.searchParams.get("subject"), lane === "deal" ? "Deal Room Message" : lane === "pain" ? "Pain Room Message" : lane === "member" ? "Member Message" : "General Message");
+  const subject = txt(url.searchParams.get("subject"), lane === "deal" ? "Deal Room Message" : lane === "pain" ? "Pain Room Message" : lane === "member" ? "Member Message" : "Member Comms Message");
 
   if (!roomId && !toEmail && !url.searchParams.get("subject")) return null;
   return makeThread(lane, subject, roomId, toEmail);
@@ -476,6 +476,32 @@ const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+
+const commandBanner: React.CSSProperties = {
+  border: "1px solid rgba(245,197,66,.30)",
+  borderRadius: 30,
+  padding: 26,
+  marginBottom: 20,
+  background: "radial-gradient(circle at top right, rgba(245,197,66,.18), transparent 34%), linear-gradient(180deg,#080d19,#050816)",
+  boxShadow: "0 0 40px rgba(245,197,66,.08)",
+};
+
+const signalGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+  gap: 14,
+  marginBottom: 20,
+};
+
+const signalCard: React.CSSProperties = {
+  background: "#121724",
+  border: "1px solid rgba(207,216,230,.16)",
+  borderRadius: 22,
+  padding: 18,
+  color: "#f7f7fb",
+  textAlign: "left",
+};
+
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
 const textarea: React.CSSProperties = { ...input, minHeight: 120, resize: "vertical" };
 
@@ -488,7 +514,7 @@ function Nav() {
       <Link href="/state-map" style={btn}>State Map</Link>
       <Link href="/network" style={btn}>Network</Link>
       <Link href="/alerts" style={btn}>Alerts</Link>
-      <Link href="/messages" style={goldBtn}>Messages</Link>
+      <Link href="/messages" style={goldBtn}>Execution Messages</Link>
       <Link href="/deal-create" style={btn}>Create Deal</Link>
       <Link href="/pain-intake" style={btn}>Pain Intake</Link>
       <Link href="/profile" style={btn}>Profile</Link>
@@ -505,7 +531,7 @@ function laneLabel(lane: Lane) {
   if (lane === "deal") return "Deal";
   if (lane === "pain") return "Pain";
   if (lane === "member") return "Member";
-  return "General";
+  return "Member Comms";
 }
 
 function ThreadCard({ thread, active, onOpen }: { thread: Thread; active: boolean; onOpen: () => void }) {
@@ -519,8 +545,8 @@ function ThreadCard({ thread, active, onOpen }: { thread: Thread; active: boolea
       <p style={sub}>{thread.roomTitle}</p>
       <p style={muted}>{thread.roomSubtitle}</p>
       <p style={muted}>{thread.messages.length} message(s) • {new Date(thread.updatedAt).toLocaleString()}</p>
-      <p style={muted}>Participants: {hydrateParticipants(thread).join(", ") || "Owner/member not attached yet"}</p>
-      {latest ? <p style={muted}>Latest: {latest.body.slice(0, 120)}{latest.body.length > 120 ? "..." : ""}</p> : <p style={muted}>No replies yet.</p>}
+      <p style={muted}>Operators: {hydrateParticipants(thread).join(", ") || "Owner/member not attached yet"}</p>
+      {latest ? <p style={muted}>Latest Signal: {latest.body.slice(0, 120)}{latest.body.length > 120 ? "..." : ""}</p> : <p style={muted}>No execution replies yet.</p>}
     </button>
   );
 }
@@ -546,13 +572,130 @@ function StatusFolder({ title, count, active, onClick }: { title: string; count:
   );
 }
 
-export default function MessagesPage() {
+
+function safeDisplay(value: unknown, fallback: string) {
+  const clean = String(value || "").trim();
+  return clean && clean !== "undefined" && clean !== "null" ? clean : fallback;
+}
+
+function readCommandMember() {
+  if (typeof window === "undefined") {
+    return { name: "Member Workspace", company: "Company not listed", email: "Email not listed" };
+  }
+
+  let profile: any = {};
+  for (const key of ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"]) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
+    } catch {
+      // ignore
+    }
+  }
+
+  const email = safeDisplay(
+    profile.email ||
+      profile.memberEmail ||
+      profile.member_email ||
+      window.localStorage.getItem("vf_email") ||
+      window.localStorage.getItem("member_email") ||
+      window.localStorage.getItem("email"),
+    "Email not listed"
+  );
+
+  const name = safeDisplay(
+    profile.fullName ||
+      profile.full_name ||
+      profile.name ||
+      window.localStorage.getItem("vf_name") ||
+      window.localStorage.getItem("member_name"),
+    email.includes("@") ? email.split("@")[0] : "Member Workspace"
+  );
+
+  const company = safeDisplay(
+    profile.company ||
+      profile.companyName ||
+      profile.company_name ||
+      profile.businessName ||
+      window.localStorage.getItem("vf_company") ||
+      window.localStorage.getItem("member_company"),
+    "Company not listed"
+  );
+
+  return { name, company, email };
+}
+
+function LaneSignalCard({
+  title,
+  count,
+  note,
+  danger,
+}: {
+  title: string;
+  count: number;
+  note: string;
+  danger?: boolean;
+}) {
+  return (
+    <div style={{ ...signalCard, borderColor: danger && count ? "rgba(255,70,70,.52)" : "rgba(245,197,66,.22)" }}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>{note}</p>
+    </div>
+  );
+}
+
+function MessageCommandHeader({
+  threads,
+  activeLane,
+}: {
+  threads: Thread[];
+  activeLane: Lane;
+}) {
+  const [member, setMember] = useState(() => ({ name: "Member Workspace", company: "Company not listed", email: "Email not listed" }));
+
+  useEffect(() => {
+    setMember(readCommandMember());
+  }, []);
+
+  const active = threads.filter((thread) => thread.status === "active");
+  const unread = active.filter((thread) => thread.unread || thread.messages.some((msg) => !msg.read)).length;
+  const deal = active.filter((thread) => thread.lane === "deal").length;
+  const pain = active.filter((thread) => thread.lane === "pain").length;
+  const routing = active.filter((thread) => thread.lane === "routing" || thread.lane === "introductions").length;
+
+  return (
+    <>
+      <section style={commandBanner}>
+        <div style={eyebrow}>VaultForge Execution Communications</div>
+        <h1 style={h1}>Room-linked command traffic.</h1>
+        <p style={sub}>
+          {member.name} • {member.company} • {member.email}
+        </p>
+        <p style={muted}>
+          Current lane: {laneLabel(activeLane)}. Messages should carry room context, routing intent, and execution next steps.
+        </p>
+      </section>
+
+      <section style={signalGrid}>
+        <LaneSignalCard title="Active Threads" count={active.length} note="open communication lanes" />
+        <LaneSignalCard title="Unread" count={unread} note="threads needing review" danger />
+        <LaneSignalCard title="Deal Comms" count={deal} note="opportunity room traffic" />
+        <LaneSignalCard title="Pain Comms" count={pain} note="problem-solving traffic" danger={pain > 0} />
+        <LaneSignalCard title="Routing / Intros" count={routing} note="assignment and introduction traffic" danger={routing > 0} />
+      </section>
+    </>
+  );
+}
+
+
+export default function Execution MessagesPage() {
   const [tick, setTick] = useState(0);
   const [lane, setLane] = useState<Lane | "all">("all");
   const [folder, setFolder] = useState<ThreadStatus | "unread">("active");
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeKey, setActiveKey] = useState("");
-  const [reply, setReply] = useState("");
+  const [reply, setSend Execution Reply] = useState("");
   const [newSubject, setNewSubject] = useState("");
   const [newLane, setNewLane] = useState<Lane>("general");
   const [newTo, setNewTo] = useState("");
@@ -646,29 +789,16 @@ export default function MessagesPage() {
   }
 
   function updateThread(id: string, changes: Partial<Thread>) {
-    const target = threads.find((thread) => exactThreadKey(thread) === activeKey) || threads.find((thread) => thread.id === id);
+    const target = threads.find((thread) => thread.id === id && (!activeKey || exactThreadKey(thread) === activeKey));
     const targetKey = target ? exactThreadKey(target) : "";
-
     persist(threads.map((thread) =>
-      targetKey && exactThreadKey(thread) === targetKey
+      (targetKey ? exactThreadKey(thread) === targetKey : thread.id === id)
         ? { ...thread, ...changes, updatedAt: new Date().toISOString() }
         : thread
     ));
   }
 
-  function deleteThreadForever(id: string) {
-    const target = threads.find((thread) => exactThreadKey(thread) === activeKey) || threads.find((thread) => thread.id === id);
-    const targetKey = target ? exactThreadKey(target) : "";
-
-    const next = threads.filter((thread) =>
-      targetKey ? exactThreadKey(thread) !== targetKey : thread.id !== id
-    );
-
-    setActiveKey("");
-    persist(next);
-  }
-
-  function sendReply() {
+  function sendSend Execution Reply() {
     if (!activeThread || !reply.trim()) return;
     const member = currentMember();
     const message: Message = {
@@ -689,7 +819,7 @@ export default function MessagesPage() {
 
     persist(next);
     addRoomActivity(activeThread, "Message Sent", reply.trim().slice(0, 180));
-    setReply("");
+    setSend Execution Reply("");
   }
 
   function createThread() {
@@ -730,11 +860,12 @@ export default function MessagesPage() {
       <style>{styleTag}</style>
       <div style={wrap}>
         <Nav />
+        <MessageCommandHeader threads={threads} activeLane={activeLane} />
 
         <section style={hero}>
-          <div style={eyebrow}>Message Command</div>
+          <div style={eyebrow}>Execution Communications</div>
           <h1 style={h1}>Threaded inbox.</h1>
-          <p style={sub}>Cards first. Open a thread to read and reply. Deal, Pain, Member, and General messages stay separated and carry room context.</p>
+          <p style={sub}>Cards first. Open a thread to read and reply. Deal, Pain, Member, and Member Comms messages stay separated and carry room context.</p>
         </section>
 
         <Section title="Message Lanes">
@@ -743,7 +874,7 @@ export default function MessagesPage() {
             {laneButton("deal", "Deal Threads", counts.deal)}
             {laneButton("pain", "Pain Threads", counts.pain)}
             {laneButton("member", "Member Threads", counts.member)}
-            {laneButton("general", "General Threads", counts.general)}
+            {laneButton("general", "Member Comms Threads", counts.general)}
           </div>
         </Section>
 
@@ -752,17 +883,17 @@ export default function MessagesPage() {
             <StatusFolder title="Active" count={counts.all} active={folder === "active"} onClick={() => { setFolder("active"); setActiveKey(""); }} />
             <StatusFolder title="Unread" count={counts.unread} active={folder === "unread"} onClick={() => { setFolder("unread"); setActiveKey(""); }} />
             <StatusFolder title="Saved" count={counts.saved} active={folder === "saved"} onClick={() => { setFolder("saved"); setActiveKey(""); }} />
-            <StatusFolder title="Archived" count={counts.archived} active={folder === "archived"} onClick={() => { setFolder("archived"); setActiveKey(""); }} />
-            <StatusFolder title="Deleted" count={counts.deleted} active={folder === "deleted"} onClick={() => { setFolder("deleted"); setActiveKey(""); }} />
+            <StatusFolder title="Archived Threads" count={counts.archived} active={folder === "archived"} onClick={() => { setFolder("archived"); setActiveKey(""); }} />
+            <StatusFolder title="Deleted Threads" count={counts.deleted} active={folder === "deleted"} onClick={() => { setFolder("deleted"); setActiveKey(""); }} />
           </div>
         </Section>
 
-        <Section title="Create Thread">
+        <Section title="Create Command Thread">
           <div style={grid}>
             <label>
               <div style={eyebrow}>Lane</div>
               <select style={input} value={newLane} onChange={(event) => setNewLane(event.target.value as Lane)}>
-                <option value="general">General</option>
+                <option value="general">Member Comms</option>
                 <option value="member">Member</option>
                 <option value="deal">Deal</option>
                 <option value="pain">Pain</option>
@@ -778,7 +909,7 @@ export default function MessagesPage() {
             </label>
           </div>
           <div style={{ ...row, marginTop: 16 }}>
-            <button type="button" style={goldBtn} onClick={createThread}>Create Thread</button>
+            <button type="button" style={goldBtn} onClick={createThread}>Create Command Thread</button>
           </div>
         </Section>
 
@@ -803,21 +934,14 @@ export default function MessagesPage() {
                 <h2 style={h2}>{activeThread.subject}</h2>
                 <p style={sub}>{activeThread.roomTitle}</p>
                 <p style={muted}>{activeThread.roomSubtitle}</p>
-                <p style={muted}>Participants: {hydrateParticipants(activeThread).join(", ") || "Owner/member not attached yet"}</p>
-                {activeThread.status === "deleted" ? (
-                  <p style={{ ...muted, color: "#ffb8b8" }}>This thread is in Deleted. Restore brings it back. Delete Forever removes it permanently.</p>
-                ) : null}
+                <p style={muted}>Operators: {hydrateParticipants(activeThread).join(", ") || "Owner/member not attached yet"}</p>
 
                 <div style={{ ...row, marginTop: 16 }}>
                   <button type="button" style={btn} onClick={() => setActiveKey("")}>Back to Cards</button>
                   <button type="button" style={activeThread.saved || activeThread.status === "saved" ? goldBtn : btn} onClick={() => updateThread(activeThread.id, { saved: !activeThread.saved, status: activeThread.saved ? "active" : "saved" })}>{activeThread.saved || activeThread.status === "saved" ? "Saved" : "Save"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { unread: !activeThread.unread })}>{activeThread.unread ? "Mark Read" : "Mark Unread"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { status: "archived" })}>Archive</button>
-                  {activeThread.status === "deleted" ? (
-                    <button type="button" style={redBtn} onClick={() => deleteThreadForever(activeThread.id)}>Delete Forever</button>
-                  ) : (
-                    <button type="button" style={redBtn} onClick={() => updateThread(activeThread.id, { status: "deleted" })}>Delete</button>
-                  )}
+                  <button type="button" style={redBtn} onClick={() => updateThread(activeThread.id, { status: "deleted" })}>Delete</button>
                   {activeThread.status !== "active" ? <button type="button" style={goldBtn} onClick={() => updateThread(activeThread.id, { status: "active" })}>Restore</button> : null}
                   {activeThread.roomType === "deal" && activeThread.roomId ? <Link href={`/deal-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Deal Room</Link> : null}
                   {activeThread.roomType === "pain" && activeThread.roomId ? <Link href={`/pain-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Pain Room</Link> : null}
@@ -825,20 +949,20 @@ export default function MessagesPage() {
               </div>
 
               <div style={{ display: "grid", gap: 12 }}>
-                {activeThread.messages.length ? activeThread.messages.map((message) => <MessageBubble key={message.id} message={message} />) : <p style={sub}>No messages yet. Reply below to start this thread.</p>}
+                {activeThread.messages.length ? activeThread.messages.map((message) => <MessageBubble key={message.id} message={message} />) : <p style={sub}>No messages yet. Send Execution Reply below to start this thread.</p>}
               </div>
 
               <div style={panel}>
-                <div style={eyebrow}>Reply</div>
+                <div style={eyebrow}>Send Execution Reply</div>
                 <textarea
                   style={textarea}
                   placeholder="Type reply..."
                   value={reply}
-                  onChange={(event) => setReply(event.target.value)}
+                  onChange={(event) => setSend Execution Reply(event.target.value)}
                   onKeyDownCapture={(event) => event.stopPropagation()}
                 />
                 <div style={{ ...row, marginTop: 14 }}>
-                  <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
+                  <button type="button" style={goldBtn} onClick={sendSend Execution Reply}>Send Send Execution Reply</button>
                 </div>
               </div>
             </div>
