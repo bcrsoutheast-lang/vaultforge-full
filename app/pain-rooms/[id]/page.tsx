@@ -111,6 +111,7 @@ const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
 const ACTIVITY_KEY = "vaultforge_room_activity_v1";
 const WATCH_KEY = "vaultforge_room_watchlist_v1";
 const ROOM_ACTIVITY_KEY = "vaultforge_room_activity_v2";
+const ROUTE_STATUS_KEY = "vaultforge_route_status_v1";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -590,6 +591,87 @@ function MatchCard({ match }: { match: { member: MemberProfile; score: number; r
   );
 }
 
+
+function routeStatusMap() {
+  return ok() ? j<Record<string, { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }>>(localStorage.getItem(ROUTE_STATUS_KEY), {}) : {};
+}
+
+function routeEntriesForRoom(kind: RoomKind, id: string) {
+  return Object.entries(routeStatusMap())
+    .filter(([, value]) => value.kind === kind && value.roomId === id)
+    .map(([key, value]) => ({ key, ...value }))
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+function routeCountsForRoom(kind: RoomKind, id: string) {
+  const entries = routeEntriesForRoom(kind, id);
+  return {
+    pending: entries.filter((entry) => entry.status === "pending").length,
+    accepted: entries.filter((entry) => entry.status === "accepted").length,
+    passed: entries.filter((entry) => entry.status === "passed").length,
+    claimed: entries.filter((entry) => entry.status === "claimed").length,
+  };
+}
+
+function roomRoutedMembers(room: Room) {
+  return Array.from(new Set([...list(room.routedToEmails), ...list(room.routedToIds), ...list(room.routedTo), ...list(room.assignedToEmails), ...list(room.assignedToIds)]));
+}
+
+function RouteHistoryPanel({ kind, id, room }: { kind: RoomKind; id: string; room: Room }) {
+  const entries = routeEntriesForRoom(kind, id);
+  const counts = routeCountsForRoom(kind, id);
+  const members = roomRoutedMembers(room);
+
+  return (
+    <Section title="Routing History">
+      <div style={grid}>
+        <div style={panel}><div style={eyebrow}>Pending</div><h2 style={h2}>{counts.pending}</h2><p style={muted}>awaiting response</p></div>
+        <div style={activePanel}><div style={eyebrow}>Accepted</div><h2 style={h2}>{counts.accepted}</h2><p style={muted}>member accepted</p></div>
+        <div style={panel}><div style={eyebrow}>Passed</div><h2 style={h2}>{counts.passed}</h2><p style={muted}>member passed</p></div>
+        <div style={activePanel}><div style={eyebrow}>Claimed</div><h2 style={h2}>{counts.claimed}</h2><p style={muted}>execution claimed</p></div>
+      </div>
+
+      <div style={{ ...row, marginTop: 18 }}>
+        <Link href="/routing" style={goldBtn}>Open Routing</Link>
+        <Link href={`/messages?type=${kind}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Routing: " + titleFor(room, kind))}`} style={btn}>Message Routed Member</Link>
+      </div>
+
+      <div style={{ marginTop: 22 }}>
+        <div style={eyebrow}>Routed / Assigned Members</div>
+        {members.length ? (
+          <div style={grid}>
+            {members.map((member) => (
+              <div key={member} style={panel}>
+                <p style={sub}>{member}</p>
+                <div style={{ ...row, marginTop: 12 }}>
+                  <Link href={`/messages?type=${kind}&room=${encodeURIComponent(id)}&to=${encodeURIComponent(member)}&subject=${encodeURIComponent("Routing: " + titleFor(room, kind))}`} style={goldBtn}>Message</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p style={sub}>No routed or assigned members yet.</p>}
+      </div>
+
+      <div style={{ marginTop: 22 }}>
+        <div style={eyebrow}>Route Timeline</div>
+        {entries.length ? (
+          <div style={grid}>
+            {entries.map((entry) => (
+              <div key={entry.key} style={entry.status === "passed" ? panel : activePanel}>
+                <div style={eyebrow}>{entry.status}</div>
+                <h2 style={h2}>{entry.memberName || entry.memberEmail || "Member"}</h2>
+                <p style={muted}>{entry.memberEmail || "No email listed"}</p>
+                <p style={muted}>{new Date(entry.at).toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        ) : <p style={sub}>No route responses logged yet.</p>}
+      </div>
+    </Section>
+  );
+}
+
+
 function ActivityStream({ kind, id }: { kind: RoomKind; id: string }) {
   const activity = [...persistentActivity(kind, id).map((event) => ({ at: event.at, text: `${event.action}: ${event.note}` })), ...activityList(kind, id)].slice(0, 40);
   return (
@@ -607,7 +689,7 @@ function ActivityStream({ kind, id }: { kind: RoomKind; id: string }) {
 export default function PainRoomPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id || "");
   const [room, setRoom] = useState<Room | null>(null);
-  const [panelKey, setPanelKey] = useState<"intel" | "problem" | "pressure" | "matches" | "activity" | "messages" | "notes">("intel");
+  const [panelKey, setPanelKey] = useState<"intel" | "problem" | "pressure" | "matches" | "routing" | "activity" | "messages" | "notes">("intel");
   const [watched, setWatched] = useState(false);
   const [watchCount, setWatchCount] = useState(0);
 
@@ -684,6 +766,7 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
             <button type="button" style={panelKey === "problem" ? activePanel : panel} onClick={() => setPanelKey("problem")}><div style={eyebrow}>Problem</div><h2 style={h2}>{list(room.painTypes).length}</h2><p style={muted}>pain type(s)</p></button>
             <button type="button" style={panelKey === "pressure" ? activePanel : panel} onClick={() => setPanelKey("pressure")}><div style={eyebrow}>Pressure</div><h2 style={h2}>{intel.collapse}%</h2><p style={muted}>collapse risk</p></button>
             <button type="button" style={panelKey === "matches" ? activePanel : panel} onClick={() => setPanelKey("matches")}><div style={eyebrow}>Solvers</div><h2 style={h2}>{matches.length}</h2><p style={muted}>member fits</p></button>
+            <button type="button" style={panelKey === "routing" ? activePanel : panel} onClick={() => setPanelKey("routing")}><div style={eyebrow}>Routing</div><h2 style={h2}>{routeEntriesForRoom("pain", id).length}</h2><p style={muted}>route history</p></button>
             <button type="button" style={panelKey === "activity" ? activePanel : panel} onClick={() => setPanelKey("activity")}><div style={eyebrow}>Activity</div><h2 style={h2}>{activityList("pain", id).length}</h2><p style={muted}>room events</p></button>
             <button type="button" style={panelKey === "messages" ? activePanel : panel} onClick={() => setPanelKey("messages")}><div style={eyebrow}>Messages</div><h2 style={h2}>Open</h2><p style={muted}>thread context</p></button>
           </div>
@@ -749,6 +832,8 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
             {matches.length ? <div style={grid}>{matches.map((match) => <MatchCard key={profileId(match.member)} match={match} />)}</div> : <p style={sub}>No matching member profiles yet. Complete Profile to power matching.</p>}
           </Section>
         ) : null}
+
+        {panelKey === "routing" ? <RouteHistoryPanel kind="pain" id={id} room={room} /> : null}
 
         {panelKey === "activity" ? (
           <Section title="Room Activity Stream">
