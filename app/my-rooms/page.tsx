@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type RoomKind = "deal" | "pain";
 type RoomStatus = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
+type RoomStage = "New" | "Reviewing" | "Diagnosing" | "Routed" | "Under Contract" | "In Progress" | "Sold" | "Resolved";
 
 type Room = {
   id?: string;
@@ -27,6 +28,9 @@ type Room = {
   cleanupState?: string;
   stateStatus?: string;
   memberRoomStatus?: RoomStatus;
+  executionStage?: RoomStage;
+  dealStage?: RoomStage;
+  painStage?: RoomStage;
   ownerEmail?: string;
   memberEmail?: string;
   createdBy?: string;
@@ -58,6 +62,9 @@ const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_room
 const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
 const MEMBER_STATE_KEY = "vaultforge_my_room_status_v1";
 const READ_KEY = "vaultforge_room_alert_read_v1";
+const STAGE_KEY = "vaultforge_room_execution_stage_v1";
+const DEAL_STAGES: RoomStage[] = ["New", "Reviewing", "Routed", "Under Contract", "Sold"];
+const PAIN_STAGES: RoomStage[] = ["New", "Diagnosing", "Routed", "In Progress", "Resolved"];
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -152,6 +159,96 @@ function stateMap() {
   return map;
 }
 
+
+function stageMap() {
+  return ok() ? j<Record<string, RoomStage>>(localStorage.getItem(STAGE_KEY), {}) : {};
+}
+
+function defaultStage(kind: RoomKind, room: Room): RoomStage {
+  const status = rawStatus(room);
+  if (kind === "deal" && status === "sold") return "Sold";
+  if (kind === "pain" && status === "resolved") return "Resolved";
+  const existing = txt(room.executionStage || room.dealStage || room.painStage);
+  if (kind === "deal" && DEAL_STAGES.includes(existing as RoomStage)) return existing as RoomStage;
+  if (kind === "pain" && PAIN_STAGES.includes(existing as RoomStage)) return existing as RoomStage;
+  return "New";
+}
+
+function roomStage(kind: RoomKind, room: Room): RoomStage {
+  const id = rid(room);
+  const stages = stageMap();
+  const mapped = stages[id] || stages[`${kind}:${id}`];
+  if (mapped) return mapped;
+  return defaultStage(kind, room);
+}
+
+function saveRoomStage(kind: RoomKind, room: Room, stage: RoomStage) {
+  if (!ok()) return;
+  const id = rid(room);
+  if (!id) return;
+
+  const stages = stageMap();
+  stages[id] = stage;
+  stages[`${kind}:${id}`] = stage;
+  writeJson(STAGE_KEY, stages);
+
+  const finalStatus =
+    kind === "deal" && stage === "Sold" ? "sold"
+    : kind === "pain" && stage === "Resolved" ? "resolved"
+    : rawStatus(room) === "sold" || rawStatus(room) === "resolved" ? "active"
+    : rawStatus(room);
+
+  const next = {
+    ...room,
+    executionStage: stage,
+    dealStage: kind === "deal" ? stage : room.dealStage,
+    painStage: kind === "pain" ? stage : room.painStage,
+    memberRoomStatus: finalStatus,
+    roomState: finalStatus,
+    cleanupState: finalStatus,
+    stateStatus: finalStatus,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const directKey = kind === "deal" ? `vaultforge_deal_room_${id}` : `vaultforge_pain_room_${id}`;
+  writeJson(directKey, next);
+
+  for (const key of keysFor(kind)) {
+    const rows = allRooms(kind).filter((item) => rid(item) !== id);
+    writeJson(key, [next, ...rows]);
+  }
+
+  if (stage === "Sold" || stage === "Resolved") {
+    saveRoomStatus(kind, next, stage === "Sold" ? "sold" : "resolved");
+  }
+
+  window.dispatchEvent(new Event("vaultforge-room-stage-change"));
+  window.dispatchEvent(new Event("vaultforge-my-rooms-change"));
+}
+
+function nextActionFor(kind: RoomKind, room: Room) {
+  const stage = roomStage(kind, room);
+  const health = roomHealth(kind, room);
+  if (stage === "Sold") return "Keep this deal as performance history.";
+  if (stage === "Resolved") return "Keep this pain room as resolution history.";
+  if (stage === "New") return kind === "deal" ? "Review numbers, proof, photos, control, and routing target." : "Diagnose blocker, deadline, money need, risk, and solver type.";
+  if (stage === "Reviewing") return "Move this deal to Routed once a buyer/capital/operator target is chosen.";
+  if (stage === "Diagnosing") return "Move this pain room to Routed once the right solver lane is clear.";
+  if (stage === "Routed") return "Message or intro the best-fit member and track response.";
+  if (stage === "Under Contract") return "Track close path. Mark Sold when complete.";
+  if (stage === "In Progress") return "Track solver progress. Mark Resolved when handled.";
+  return health.next;
+}
+
+function stageCounts(deals: Room[], pains: Room[]) {
+  const out: Record<string, number> = {};
+  for (const stage of [...DEAL_STAGES, ...PAIN_STAGES]) out[stage] = 0;
+  for (const room of deals) out[roomStage("deal", room)] = (out[roomStage("deal", room)] || 0) + 1;
+  for (const room of pains) out[roomStage("pain", room)] = (out[roomStage("pain", room)] || 0) + 1;
+  return out;
+}
+
+
 function allRooms(kind: RoomKind): Room[] {
   if (!ok()) return [];
   const out: Room[] = [];
@@ -198,7 +295,7 @@ function allRooms(kind: RoomKind): Room[] {
     .map((room) => {
       const id = rid(room);
       const status = states[id] || states[`${kind}:${id}`] || rawStatus(room);
-      return { ...room, memberRoomStatus: status, roomState: status, cleanupState: status, stateStatus: status };
+      return { ...room, memberRoomStatus: status, roomState: status, cleanupState: status, stateStatus: status, executionStage: roomStage(kind, { ...room, memberRoomStatus: status, roomState: status, cleanupState: status, stateStatus: status }) };
     })
     .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
 }
@@ -511,6 +608,9 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
   const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`;
   const hot = unread(kind, room);
   const health = roomHealth(kind, room);
+  const stage = roomStage(kind, room);
+  const stages = kind === "deal" ? DEAL_STAGES : PAIN_STAGES;
+  const age = daysOld(room);
   const style = health.attention ? (kind === "pain" ? pulseRed : pulseGold) : hot ? (kind === "pain" ? pulseRed : pulseGold) : panel;
 
   return (
@@ -532,6 +632,27 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
         </div>
         <p style={health.attention ? { ...muted, color: "#ffb8b8" } : muted}>{health.warning}</p>
         <p style={muted}>{health.next}</p>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <div style={eyebrow}>Execution Stage • {stage}</div>
+        <div style={row}>
+          {stages.map((item) => (
+            <button
+              key={item}
+              type="button"
+              style={stage === item ? goldBtn : btn}
+              onClick={() => {
+                saveRoomStage(kind, room, item);
+                refresh();
+              }}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+        <p style={muted}>Last updated: {txt(room.updatedAt || room.createdAt, "Not listed")} • Age: {age} day(s)</p>
+        <p style={muted}>Next action: {nextActionFor(kind, room)}</p>
       </div>
 
       <div style={{ ...row, marginTop: 16 }}>
@@ -572,6 +693,7 @@ export default function MyRoomsPage() {
   const deals = useMemo(() => allRooms("deal"), [tick]);
   const pains = useMemo(() => allRooms("pain"), [tick]);
   const visible = useMemo(() => roomsFor(view, deals, pains), [view, deals, pains]);
+  const stages = useMemo(() => stageCounts(deals, pains), [deals, pains]);
   const refresh = () => setTick((value) => value + 1);
 
   const needsAttention = attentionCount(deals, pains);
@@ -613,6 +735,17 @@ export default function MyRoomsPage() {
             <h2 style={h2}>{needsAttention}</h2>
             <p style={sub}>{needsAttention ? "room(s) need action, update, routing, sold/resolved status, or cleanup." : "No urgent room health warnings."}</p>
             <p style={muted}>This keeps member rooms from piling up stale, unsold, unresolved, or unfinished.</p>
+          </div>
+        </Section>
+
+        <Section title="Execution Timeline">
+          <div style={grid}>
+            <div style={panel}><div style={eyebrow}>Deal New / Reviewing</div><h2 style={h2}>{(stages["New"] || 0) + (stages["Reviewing"] || 0)}</h2><p style={muted}>deals needing review</p></div>
+            <div style={panel}><div style={eyebrow}>Deal Routed / Contract</div><h2 style={h2}>{(stages["Routed"] || 0) + (stages["Under Contract"] || 0)}</h2><p style={muted}>rooms in execution</p></div>
+            <div style={activePanel}><div style={eyebrow}>Sold Deals</div><h2 style={h2}>{stages["Sold"] || 0}</h2><p style={muted}>completed opportunity rooms</p></div>
+            <div style={panel}><div style={eyebrow}>Pain Diagnosing / Routed</div><h2 style={h2}>{(stages["Diagnosing"] || 0) + (stages["Routed"] || 0)}</h2><p style={muted}>pressure rooms moving</p></div>
+            <div style={pulseRed}><div style={eyebrow}>Pain In Progress</div><h2 style={h2}>{stages["In Progress"] || 0}</h2><p style={muted}>solver work underway</p></div>
+            <div style={activePanel}><div style={eyebrow}>Resolved Pain</div><h2 style={h2}>{stages["Resolved"] || 0}</h2><p style={muted}>handled problem rooms</p></div>
           </div>
         </Section>
 
