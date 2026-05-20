@@ -59,6 +59,8 @@ const READ_KEY = "vaultforge_room_alert_read_v1";
 const ALERT_SEEN_KEY = "vaultforge_alert_seen_v2";
 const ALERT_DISMISSED_KEY = "vaultforge_alert_dismissed_v2";
 const ALERT_WATCHLIST_KEY = "vaultforge_alert_watchlist_v2";
+const ROOM_WATCH_KEY = "vaultforge_room_watchlist_v1";
+const ROOM_WATCH_META_KEY = "vaultforge_room_watch_meta_v1";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -250,6 +252,53 @@ function removeId(key: string, id: string) {
   setIdList(key, idList(key).filter((item) => item !== id));
 }
 
+
+function roomWatchList() {
+  return ok() ? j<string[]>(localStorage.getItem(ROOM_WATCH_KEY), []) : [];
+}
+
+function roomWatchMeta() {
+  return ok() ? j<Record<string, { at?: string; updates?: number }>>(localStorage.getItem(ROOM_WATCH_META_KEY), {}) : {};
+}
+
+function roomWatchAlertId(kind: RoomKind, id: string) {
+  return `watch:${kind}:${id}`;
+}
+
+function watchedRoomAlerts(deals: Room[], pains: Room[]): AlertItem[] {
+  const watched = roomWatchList();
+  const meta = roomWatchMeta();
+  const out: AlertItem[] = [];
+
+  for (const key of watched) {
+    const [kindRaw, id] = key.split(":");
+    const kind = kindRaw === "pain" ? "pain" : "deal";
+    if (!id) continue;
+
+    const room = kind === "deal"
+      ? deals.find((item) => rid(item) === id)
+      : pains.find((item) => rid(item) === id);
+
+    if (!room) continue;
+
+    const roomId = rid(room);
+    const hot = !room.alertRead && !room.viewedAt;
+    const updates = meta[key]?.updates || 0;
+
+    out.push({
+      id: roomWatchAlertId(kind, roomId),
+      kind,
+      title: roomTitle(room, kind),
+      subtitle: `${kind === "deal" ? "Following deal" : "Following pain"} • ${loc(room)} • ${updates} update(s)${hot ? " • new activity" : ""}`,
+      href: kind === "deal" ? `/deal-rooms/${encodeURIComponent(roomId)}` : `/pain-rooms/${encodeURIComponent(roomId)}`,
+      severity: kind === "pain" ? "red" : "gold",
+    });
+  }
+
+  return out;
+}
+
+
 function firstPhoto(room: Room) {
   const possible = [txt(room.coverPhoto), txt(room.photoUrl), txt(room.imageUrl), ...list(room.photos), ...list(room.photoUrls)].filter(Boolean);
   return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
@@ -343,12 +392,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function AlertsPage() {
   const [tick, setTick] = useState(0);
-  const [lane, setLane] = useState<"active" | "watchlist" | "history">("active");
+  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "history">("active");
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
-    ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change"].forEach((event) => window.addEventListener(event, refresh));
-    return () => ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change"].forEach((event) => window.removeEventListener(event, refresh));
+    ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change"].forEach((event) => window.addEventListener(event, refresh));
+    return () => ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change"].forEach((event) => window.removeEventListener(event, refresh));
   }, []);
 
   const deals = useMemo(() => activeDeals(), [tick]);
@@ -385,11 +434,12 @@ export default function AlertsPage() {
     severity: "red",
   })), [threads]);
 
-  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts];
+  const followingAlerts = useMemo(() => watchedRoomAlerts(deals, pains), [deals, pains]);
+  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts];
   const activeAlerts = allAlerts.filter((alert) => !seen.includes(alert.id) && !dismissed.includes(alert.id));
   const watchedAlerts = allAlerts.filter((alert) => watchlist.includes(alert.id));
   const historyAlerts = allAlerts.filter((alert) => seen.includes(alert.id) || dismissed.includes(alert.id));
-  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : historyAlerts;
+  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
 
   function markSeen(id: string) {
     addId(ALERT_SEEN_KEY, id);
