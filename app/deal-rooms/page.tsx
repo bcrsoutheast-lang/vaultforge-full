@@ -1,4 +1,4 @@
-"use client";
+use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -477,6 +477,138 @@ function ChipSet({ label, options, selected, onToggle }: { label: string; option
 function Value({ label, value }: { label: string; value: unknown }) {
   return <div style={panel}><div style={eyebrow}>{label}</div><p style={sub}>{txt(value, "Not listed")}</p></div>;
 }
+
+
+
+function dealFrontSnapshot(room: Room) {
+  return [
+    txt(room.assetClass),
+    txt(room.propertyType),
+    txt(room.city),
+    txt(room.state),
+    txt(room.askingPrice),
+    txt(room.propertyValue),
+    txt(room.repairs),
+    list(room.strategy).join(", "),
+    txt(room.controlStatus),
+  ].filter(Boolean);
+}
+
+function painFrontSnapshot(room: Room) {
+  return [
+    list(room.painTypes).join(", "),
+    txt(room.city),
+    txt(room.state),
+    txt(room.severity),
+    txt(room.timePressure),
+    txt(room.capitalPressure),
+    txt(room.controlStatus),
+    txt(room.desiredSolution),
+  ].filter(Boolean);
+}
+
+function IntelligenceStrip({ items }: { items: string[] }) {
+  const visible = items.filter(Boolean);
+
+  if (!visible.length) {
+    return <p style={muted}>No intelligence fields entered yet.</p>;
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 10,
+        marginTop: 12,
+      }}
+    >
+      {visible.map((item, index) => (
+        <div
+          key={`${item}-${index}`}
+          style={{
+            border: "1px solid rgba(245,197,66,.25)",
+            background: "#0d1320",
+            color: "#f7f7fb",
+            borderRadius: 999,
+            padding: "10px 14px",
+            fontSize: 13,
+            fontWeight: 800,
+          }}
+        >
+          {item}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function dealEinstein(room: Room) {
+  const ask = Number(String(room.askingPrice || "0").replace(/[^0-9.-]/g, ""));
+  const value = Number(String(room.propertyValue || "0").replace(/[^0-9.-]/g, ""));
+  const repairs = Number(String(room.repairs || "0").replace(/[^0-9.-]/g, ""));
+
+  const spread = value && ask ? value - ask - repairs : 0;
+
+  let score = 42;
+
+  if (spread > 25000) score += 12;
+  if (spread > 75000) score += 18;
+  if (spread > 150000) score += 15;
+
+  if (txt(room.controlStatus).toLowerCase().includes("controlled")) score += 10;
+
+  score = Math.max(0, Math.min(100, score));
+
+  const risk =
+    (!ask || !value ? 25 : 0) +
+    (txt(room.condition).toLowerCase().includes("full") ? 18 : 0) +
+    (txt(room.occupancy).toLowerCase().includes("squatter") ? 20 : 0) +
+    32;
+
+  return {
+    score,
+    risk: Math.max(0, Math.min(100, risk)),
+    signal:
+      score >= 75
+        ? "Strong opportunity signal"
+        : score >= 55
+        ? "Workable deal — verify facts"
+        : "Needs stronger underwriting",
+    next:
+      "Verify control, title, photos, repairs, and execution path before routing hard.",
+  };
+}
+
+function painEinstein(room: Room) {
+  let severity = 40;
+
+  const sev = txt(room.severity).toLowerCase();
+
+  if (sev.includes("medium")) severity += 10;
+  if (sev.includes("high")) severity += 24;
+  if (sev.includes("critical")) severity += 36;
+  if (sev.includes("emergency")) severity += 46;
+
+  const collapse = Math.max(
+    15,
+    Math.min(100, severity + list(room.riskTypes).length * 6)
+  );
+
+  return {
+    severity: Math.max(0, Math.min(100, severity)),
+    collapse,
+    signal:
+      severity >= 85
+        ? "Immediate pressure signal"
+        : severity >= 70
+        ? "High-priority execution problem"
+        : "Active problem needing routing",
+    next:
+      "Identify the main blocker and route to the highest-fit solver or capital source.",
+  };
+}
+
 
 function RoomCard({ room, kind, pulse = false }: { room: Room; kind: RoomKind; pulse?: boolean }) {
   const img = firstPhoto(room);
