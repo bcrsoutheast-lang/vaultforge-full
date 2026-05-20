@@ -1,20 +1,533 @@
 "use client";
-import Link from "next/link";
-import {useEffect,useMemo,useState} from "react";
-type S="active"|"saved"|"archived"|"deleted";type K="deal"|"pain";
-type R={id?:string;roomId?:string;title?:string;name?:string;state?:string;city?:string;county?:string;address?:string;assetClass?:string;propertyType?:string;askingPrice?:string;propertyValue?:string;repairs?:string;timeline?:string;timePressure?:string;severity?:string;capitalPressure?:string;controlStatus?:string;contactName?:string;contactPhone?:string;contactEmail?:string;bestContact?:string;notes?:string;routeTo?:string[]|string;routingNeeds?:string[]|string;painTypes?:string[]|string;strategy?:string[]|string;blockers?:string[]|string;riskTypes?:string[]|string;documentsAvailable?:string[]|string;condition?:string;occupancy?:string;beds?:string;baths?:string;sqft?:string;units?:string;acres?:string;zoning?:string;noi?:string;capRate?:string;utilities?:string;roadFrontage?:string;entitlementStatus?:string;monthlyBurnRate?:string;moneyNeededNow?:string;deadline?:string;rootCause?:string;bestOutcome?:string;worstCase?:string;desiredSolution?:string;currentStatus?:string;ownerSituation?:string;accessStatus?:string;titleStatus?:string;insuranceStatus?:string;permitStatus?:string;tenantStatus?:string;legalStatus?:string;roomState?:S;cleanupState?:S;stateStatus?:S;alertRead?:boolean;viewedAt?:string;createdAt?:string;updatedAt?:string;coverPhoto?:string;photoUrl?:string;imageUrl?:string;photos?:string[];photoUrls?:string[];analyzer?:string;[key:string]:unknown};
-type M={id?:string;name?:string;company?:string;email?:string;phone?:string;profilePhoto?:string;memberType?:string;basedState?:string;basedCity?:string;basedCounty?:string;statesOperated?:string[];markets?:string[];assetClasses?:string[];strategies?:string[];specialties?:string[];needs?:string[];canProvide?:string[];capitalPosition?:string;proofOfFunds?:string;fundingRange?:string;contactPreference?:string;directContact?:string;bio?:string;[key:string]:unknown};
-const STATES=["GA","TN","AL","FL","NC","SC","TX"],ASSETS=["Residential","Commercial","Land"],RES=["Single Family","Duplex","Triplex","Quad","Townhome","Condo","Mobile Home","Small Multifamily","Apartment"],COM=["Retail","Office","Industrial","Warehouse","Hotel","Self Storage","Mixed Use","Medical","Restaurant","Automotive","Church / Special Use"],LAND=["Infill Lot","Acreage","Entitled Land","Raw Land","Commercial Pad","Subdivision","Timber","Farm","Assemblage","Waterfront"],STRAT=["Wholesale","Flip","Buy & Hold","BRRRR","Development","Seller Finance","JV","Rental","Hotel Conversion","Airbnb"],ROUTES=["Buyer","Lender","Operator","Contractor","Developer","Attorney","Capital Partner","Property Manager"],NEEDS=["Lender","Operator","Contractor","Buyer","Attorney","Insurance Adjuster","City Expeditor","Private Capital","Property Manager","Developer"],PAINS=["Funding Gap","Foreclosure","Stalled Construction","Contractor Problem","Title Problem","Permit Problem","City Violation","Tenant Issue","Partnership Dispute","Emergency Exit","Insurance Claim","Fire Damage","Mold","Structural","Probate","Tax Sale Risk","Squatter Issue","Burn Rate","Seller Pressure","Lender Problem","Failed Closing"],BLOCK=["Capital","Timeline","Title","Access","Contractor","Tenant","Permit","City","Legal","Partner","Seller Pressure","Unknown Numbers","Insurance","Utilities","Appraisal","Inspection"],RISK=["Legal","Financial","Structural","Operational","City/Permit","Occupancy","Environmental","Insurance","Market","Reputation"],DOCS=["Photos","Contract","Title Report","Insurance Claim","Repair Estimate","Scope of Work","Appraisal","Rent Roll","Survey","Plans","Permits","Proof of Funds"],COND=["Unknown","Turnkey","Light Rehab","Medium Rehab","Full Gut","Fire Damage","Shell","Tear Down"],OCC=["Unknown","Vacant","Owner Occupied","Tenant Occupied","Squatter","Partial Vacancy"],TIME=["24 Hours","72 Hours","7 Days","14 Days","30 Days","Flexible"],CAP=["Unknown","Under $25k","$25k-$100k","$100k-$250k","$250k-$1M","$1M+"],SEV=["Low","Medium","High","Critical","Emergency"],YESNO=["Unknown","Yes","No"],MEMBER_TYPES=["Investor","Wholesaler","Lender","Contractor","Developer","Agent","Attorney","Operator","Private Capital","Property Manager"],CONTACT=["VaultForge Message","Phone","Text","Email","Contact Form"],CAP_POS=["Unknown","Cash Buyer","Private Capital","Hard Money","Bank Lending","JV Capital","Needs Capital","Operator With Capital","Operator Needs Capital"],FUND=["Unknown","Under $50k","$50k-$250k","$250k-$1M","$1M-$5M","$5M+"],SPEC=["Distress","Funding Gap","Off Market","Construction","Land","Commercial","Residential","Creative Finance","Insurance","Permits","Probate","Foreclosure","Tax Sale","Stalled Project","Value Add"],PROVIDE=["Capital","Buying","Lending","Contractors","Legal","Insurance","Property Management","Development","Operations","Introductions"],MARKETS=["Atlanta","North Georgia","Chattanooga","Nashville","Knoxville","Birmingham","Huntsville","Montgomery","Jacksonville","Tampa","Orlando","Miami","Charlotte","Raleigh-Durham","Greenville-Spartanburg","Charleston","Dallas-Fort Worth","Houston","Austin","San Antonio"];
-const DKEY=["vaultforge_clean_deal_rooms","vaultforge_deal_rooms","vaultforge_rooms_deals","vf_deal_rooms"],PKEY=["vaultforge_clean_pain_rooms_v1","vaultforge_clean_pain_rooms","vaultforge_pain_rooms","vaultforge_rooms_pain","vf_pain_rooms"],SKEY=["vaultforge_clean_room_states","vaultforge_room_states","vaultforge_deal_room_states","vaultforge_pain_room_states","vaultforge_5s_room_states"],READ="vaultforge_room_alert_read_v1",PKEYS=["vaultforge_profile","vaultforge_member_profile","vaultforge_clean_profile"],DIR="vaultforge_member_directory_v1";
-const CITY:any={atlanta:"Fulton",alpharetta:"Fulton",roswell:"Fulton",marietta:"Cobb",smyrna:"Cobb",kennesaw:"Cobb",cartersville:"Bartow",cville:"Bartow",cvile:"Bartow",adairsville:"Bartow",rome:"Floyd",gainesville:"Hall",savannah:"Chatham",augusta:"Richmond",columbus:"Muscogee",macon:"Bibb",chattanooga:"Hamilton",nashville:"Davidson",knoxville:"Knox",birmingham:"Jefferson",huntsville:"Madison",charlotte:"Mecklenburg",raleigh:"Wake",greenville:"Greenville",charleston:"Charleston",dallas:"Dallas",houston:"Harris",austin:"Travis","san antonio":"Bexar",sanantonio:"Bexar"};
-function ok(){return typeof window!=="undefined"&&!!window.localStorage}function jj<T>(r:string|null,f:T):T{try{return r?JSON.parse(r):f}catch{return f}}function t(v:unknown,f=""){const s=String(v||"").trim();return s||f}function l(v:unknown){if(Array.isArray(v))return v.map(String).map(x=>x.trim()).filter(Boolean);if(typeof v==="string"&&v.trim())return v.split(",").map(x=>x.trim()).filter(Boolean);return [] as string[]}function id(r:R|null|undefined){return t(r?.id||r?.roomId)}function st(r:R):S{const s=t(r.roomState||r.cleanupState||r.stateStatus,"active");return s==="saved"||s==="archived"||s==="deleted"?s:"active"}function keys(k:K){return k==="deal"?DKEY:PKEY}function sk(k:K,i:string){return[`vaultforge_clean_${k}_room_${i}`,`vaultforge_${k}_room_${i}`,`vf_${k}_room_${i}`]}function arr<T>(k:string):T[]{return ok()?jj<unknown>(localStorage.getItem(k),[]) instanceof Array?jj<T[]>(localStorage.getItem(k),[]):[]:[]}function smap(){const m:Record<string,S>={};if(ok())SKEY.forEach(k=>Object.assign(m,jj<Record<string,S>>(localStorage.getItem(k),{})));return m}function save(k:string,v:unknown){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{return false}}function county(c:string){return CITY[c.trim().toLowerCase().replace(/\s+/g," ")]||""}function types(a:string){return a==="Commercial"?COM:a==="Land"?LAND:RES}function title(r:R,k:K){return t(r.title||r.name,k==="deal"?"Untitled Deal Room":"Untitled Pain Room")}function loc(r:R){return[t(r.city),t(r.county),t(r.state)].filter(Boolean).join(", ")||"Market not listed"}function money(v:unknown){const n=Number(String(v||"").replace(/[^0-9.-]/g,""));return Number.isFinite(n)?n:0}function photo(r:R){return[t(r.coverPhoto),t(r.photoUrl),t(r.imageUrl),...l(r.photoUrls),...l(r.photos)].find(x=>x.startsWith("data:image")||x.startsWith("http")||x.startsWith("/")||x.startsWith("blob:"))||""}
-function all(k:K){if(!ok())return[] as R[];const out:R[]=[];const seen=new Set<string>();for(const kk of keys(k))for(const r of arr<R>(kk)){const i=id(r);if(i&&!seen.has(i)){seen.add(i);out.push({...r,id:i,roomId:i})}}for(let i=0;i<localStorage.length;i++){const kk=localStorage.key(i)||"";const m=k==="deal"?kk.includes("deal_room"):kk.includes("pain_room");if(!m)continue;const v=jj<any>(localStorage.getItem(kk),null);const rows=Array.isArray(v)?v:v&&typeof v==="object"?[v]:[];for(const r of rows){const ii=id(r);if(ii&&!seen.has(ii)){seen.add(ii);out.push({...r,id:ii,roomId:ii})}}}const map=smap();return out.map(r=>{const i=id(r);const s=map[i]||map[`${k}:${i}`]||st(r);return{...r,roomState:s,cleanupState:s,stateStatus:s}}).sort((a,b)=>String(b.createdAt||b.updatedAt||"").localeCompare(String(a.createdAt||a.updatedAt||"")))}
-function getRoom(k:K,i:string){if(!ok())return null as R|null;for(const kk of sk(k,i)){const r=jj<R|null>(localStorage.getItem(kk),null);if(r&&id(r))return r}return all(k).find(r=>id(r)===i)||null}function setRoomState(k:K,r:R,s:S){const i=id(r);if(!ok()||!i)return;const n={...r,roomState:s,cleanupState:s,stateStatus:s,updatedAt:new Date().toISOString()};sk(k,i).forEach(kk=>save(kk,n));keys(k).forEach(kk=>save(kk,[n,...arr<R>(kk).filter(x=>id(x)!==i)]));const m=smap();m[i]=s;m[`${k}:${i}`]=s;SKEY.forEach(kk=>save(kk,m));window.dispatchEvent(new Event("vaultforge-room-state-change"))}function saveRoom(k:K,r:R){if(!ok())return"";const i=`${k}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,now=new Date().toISOString(),cover=t(r.coverPhoto||r.photoUrl||r.imageUrl||l(r.photos)[0]||l(r.photoUrls)[0]);const n={...r,id:i,roomId:i,roomState:"active" as S,cleanupState:"active" as S,stateStatus:"active" as S,createdAt:now,updatedAt:now,alertRead:false,viewedAt:"",coverPhoto:cover,photoUrl:cover,imageUrl:cover,photos:cover?[cover]:[],photoUrls:cover?[cover]:[]};sk(k,i).forEach(kk=>save(kk,n));keys(k).forEach(kk=>save(kk,[n,...arr<R>(kk).filter(x=>id(x)!==i)]));const m=smap();m[i]="active";m[`${k}:${i}`]="active";SKEY.forEach(kk=>save(kk,m));window.dispatchEvent(new Event(k==="deal"?"vaultforge-deal-change":"vaultforge-pain-change"));return i}function unread(k:K,rs:R[]){const rd=ok()?jj<Record<string,string>>(localStorage.getItem(READ),{}):{};return rs.filter(r=>{const i=id(r);return st(r)==="active"&&!r.alertRead&&!r.viewedAt&&!rd[i]&&!rd[`${k}:${i}`]})}function mark(k:K,r:R){const i=id(r);if(!ok()||!i)return;const rd=jj<Record<string,string>>(localStorage.getItem(READ),{});rd[i]=new Date().toISOString();rd[`${k}:${i}`]=rd[i];localStorage.setItem(READ,JSON.stringify(rd));window.dispatchEvent(new Event("vaultforge-room-read-change"))}
-function pid(p:M){return t(p.id)||t(p.email).toLowerCase()||"local_member"}function norm(p:M):M{return{...p,id:pid(p),name:t(p.name,"VaultForge Member"),memberType:t(p.memberType,"Investor"),basedState:t(p.basedState,"GA"),statesOperated:l(p.statesOperated).length?l(p.statesOperated):["GA"],markets:l(p.markets),assetClasses:l(p.assetClasses),strategies:l(p.strategies),specialties:l(p.specialties),needs:l(p.needs),canProvide:l(p.canProvide),capitalPosition:t(p.capitalPosition,"Unknown"),proofOfFunds:t(p.proofOfFunds,"Unknown"),fundingRange:t(p.fundingRange,"Unknown"),contactPreference:t(p.contactPreference,"VaultForge Message"),directContact:t(p.directContact,"Unknown")}}function getProfile(){if(!ok())return{} as M;for(const k of PKEYS){const p=jj<M|null>(localStorage.getItem(k),null);if(p&&typeof p==="object")return norm(p)}return norm({id:"local_member",name:"VaultForge Member",basedState:"GA",statesOperated:["GA"]})}function dir(){if(!ok())return[] as M[];const d=jj<M[]>(localStorage.getItem(DIR),[]),cur=getProfile(),ci=pid(cur),seen=new Set<string>();return[cur,...d.filter(p=>pid(p)!==ci)].map(norm).filter(p=>{const i=pid(p);if(seen.has(i))return false;seen.add(i);return true})}function saveProfile(p:M){const n=norm(p);if(ok()){PKEYS.forEach(k=>localStorage.setItem(k,JSON.stringify(n)));localStorage.setItem(DIR,JSON.stringify([n,...dir().filter(x=>pid(x)!==pid(n))]));window.dispatchEvent(new Event("vaultforge-profile-change"));window.dispatchEvent(new Event("vaultforge-network-change"))}return n}function over(a:unknown,b:unknown){const aa=l(a).map(x=>x.toLowerCase()),bb=l(b).map(x=>x.toLowerCase());return aa.filter(x=>bb.includes(x)).length}function score(m:M,r:R,k:K){let s=0;const why:string[]=[];if(l(m.statesOperated).includes(t(r.state))){s+=30;why.push("state fit")}if(over(m.assetClasses,[t(r.assetClass)])){s+=20;why.push("asset fit")}if(k==="deal"){if(over(m.strategies,r.strategy)){s+=20;why.push("strategy fit")}if(over(m.canProvide,r.routeTo)){s+=25;why.push("route fit")}}else{if(over(m.canProvide,r.routingNeeds)){s+=30;why.push("solver fit")}if(over(m.specialties,r.painTypes)){s+=25;why.push("pain specialty")}}return{member:m,score:Math.min(100,s),reasons:why}}function best(r:R,k:K,ms:M[]){return ms.map(m=>score(m,r,k)).filter(x=>x.score>0).sort((a,b)=>b.score-a.score)[0]||null}function matchCount(rs:R[],k:K,ms:M[]){return rs.filter(r=>best(r,k,ms)).length}
-function dealAI(r:R){const spread=money(r.propertyValue)-money(r.askingPrice)-money(r.repairs);let strength=45;if(spread>50000)strength+=20;if(spread>150000)strength+=15;if(t(r.controlStatus).toLowerCase().includes("controlled"))strength+=10;if(l(r.routeTo).length)strength+=10;strength=Math.max(0,Math.min(100,strength));const risk=t(r.condition).includes("Full")||t(r.condition).includes("Fire")?75:t(r.occupancy).includes("Squatter")?80:45;const urg=t(r.timeline).includes("24")||t(r.timeline).includes("72")?90:t(r.timeline).includes("7")?75:45;return{strength,spread,risk,urg,banner:strength>=75?"Strong routing opportunity":strength>=55?"Workable opportunity with missing proof":"Needs verification before routing",next:"Verify control, access, title, photos, numbers, and route to the best fit member before introducing parties."}}function painAI(r:R){let sev=40;if(t(r.severity).includes("High"))sev+=20;if(t(r.severity).includes("Critical")||t(r.severity).includes("Emergency"))sev+=35;if(t(r.timePressure).includes("24")||t(r.timePressure).includes("72"))sev+=20;if(l(r.blockers).includes("Capital"))sev+=10;sev=Math.max(0,Math.min(100,sev));const cap=t(r.capitalPressure)!=="Unknown"?75:l(r.painTypes).includes("Funding Gap")?80:35,block=Math.min(100,l(r.blockers).length*12+l(r.riskTypes).length*8);return{sev,cap,block,banner:sev>=80?"Immediate pressure signal":sev>=60?"High priority execution issue":"Track and route when more facts are verified",next:"Identify the blocking issue, confirm who controls the deal, collect proof documents, and route to the best solver profile.",consequence:t(r.worstCase,"Delay, loss of control, cost increase, or failed closing if no action is taken.")}}
-async function comp(file:File,w=620,q=.42):Promise<string>{return new Promise(res=>{const rd=new FileReader();rd.onerror=()=>res("");rd.onload=()=>{const im=new Image();im.onerror=()=>res("");im.onload=()=>{try{const sc=Math.min(1,w/im.width),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*sc));c.height=Math.max(1,Math.round(im.height*sc));const x=c.getContext("2d");if(!x)return res("");x.drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",q))}catch{res("")}};im.src=String(rd.result||"")};rd.readAsDataURL(file)})}async function photos(fs:FileList|null){const out:string[]=[];for(const f of Array.from(fs||[]).slice(0,10)){const p=await comp(f);if(p)out.push(p)}return out}async function one(fs:FileList|null){const f=Array.from(fs||[])[0];return f?comp(f):""}
-const page:React.CSSProperties={minHeight:"100vh",background:"#05070d",color:"#f7f7fb",padding:18,fontFamily:"Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif"},wrap:React.CSSProperties={maxWidth:1280,margin:"0 auto",paddingBottom:90},nav:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:18},brand:React.CSSProperties={color:"#ffd45a",fontSize:27,fontWeight:950,letterSpacing:-1,marginRight:10},btn:React.CSSProperties={border:"1px solid rgba(207,216,230,.18)",background:"#171c29",color:"#f7f7fb",borderRadius:999,padding:"13px 18px",fontWeight:950,textDecoration:"none",display:"inline-block",cursor:"pointer"},goldBtn:React.CSSProperties={...btn,border:0,background:"#ffdc68",color:"#10131a"},redBtn:React.CSSProperties={...btn,background:"#271016",borderColor:"rgba(255,70,70,.48)",color:"#ffaaaa"},hero:React.CSSProperties={border:"1px solid rgba(245,197,66,.28)",borderRadius:28,padding:30,marginBottom:20,background:"radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)"},redHero:React.CSSProperties={...hero,borderColor:"rgba(255,70,70,.62)",background:"radial-gradient(circle at top right, rgba(255,30,60,.22), transparent 35%), linear-gradient(180deg,#170812,#050816)"},card:React.CSSProperties={background:"linear-gradient(180deg,#080d19,#050816)",border:"1px solid rgba(245,197,66,.28)",borderRadius:26,padding:26,marginBottom:22},panel:React.CSSProperties={background:"#121724",border:"1px solid rgba(207,216,230,.16)",borderRadius:22,padding:22},activePanel:React.CSSProperties={...panel,borderColor:"rgba(255,70,70,.70)",boxShadow:"0 0 26px rgba(255,50,70,.22)"},pulsePanel:React.CSSProperties={...panel,borderColor:"rgba(245,197,66,.75)",boxShadow:"0 0 26px rgba(245,197,66,.18)"},eyebrow:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:7,fontWeight:950,fontSize:15,marginBottom:12},lab:React.CSSProperties={color:"#ffd45a",textTransform:"uppercase",letterSpacing:4,fontSize:12,fontWeight:950,marginBottom:8},h1:React.CSSProperties={fontSize:"clamp(44px,8vw,86px)",lineHeight:.9,letterSpacing:-4,margin:"0 0 18px",fontWeight:950},h2:React.CSSProperties={fontSize:"clamp(30px,5vw,52px)",lineHeight:.95,letterSpacing:-2,margin:"0 0 14px",fontWeight:950},sub:React.CSSProperties={color:"#c9d0dc",fontSize:21,lineHeight:1.35,margin:0},muted:React.CSSProperties={color:"#aeb7c7",margin:"8px 0 0",lineHeight:1.35},grid:React.CSSProperties={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:16},row:React.CSSProperties={display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"},input:React.CSSProperties={width:"100%",boxSizing:"border-box",border:"1px solid rgba(207,216,230,.18)",background:"#151b2a",color:"#f8fafc",borderRadius:18,padding:"15px 16px",fontSize:16},textarea:React.CSSProperties={...input,minHeight:110,resize:"vertical"},photoStyle:React.CSSProperties={width:"100%",height:170,objectFit:"cover",borderRadius:18,border:"1px solid rgba(245,197,66,.25)",marginBottom:12};
-function stop(e:React.KeyboardEvent<HTMLInputElement|HTMLTextAreaElement>){e.stopPropagation()}function Nav({active}:{active:string}){const it=(href:string,label:string,key:string)=><Link href={href} style={active===key?goldBtn:btn}>{label}</Link>;return <nav style={nav}><div style={brand}>VAULTFORGE</div>{it("/command","Command","command")}{it("/members","Members","members")}{it("/network","Network","network")}{it("/alerts","Alerts","alerts")}{it("/messages","Messages","messages")}{it("/deal-rooms","Deal Rooms","deals")}{it("/pain-rooms","Pain Rooms","pain")}{it("/deal-create","Create Deal","deal-create")}{it("/pain-intake","Pain Intake","pain-intake")}{it("/profile","Profile","profile")}<Link href="/logout" style={redBtn}>Logout</Link></nav>}function Section({title,children}:{title:string;children:React.ReactNode}){return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>}function Field({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label><div style={lab}>{label}</div><input type="text" style={input} value={value} onKeyDownCapture={stop} onKeyUpCapture={stop} onKeyPress={stop} onChange={e=>onChange(e.target.value)}/></label>}function TextArea({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label><div style={lab}>{label}</div><textarea style={textarea} value={value} onKeyDownCapture={stop} onKeyUpCapture={stop} onKeyPress={stop} onChange={e=>onChange(e.target.value)}/></label>}function SelectField({label,value,onChange,options}:{label:string;value:string;onChange:(v:string)=>void;options:string[]}){return <label><div style={lab}>{label}</div><select style={input} value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o}>{o}</option>)}</select></label>}function ChipSet({label,options,selected,onToggle}:{label:string;options:string[];selected:string[];onToggle:(v:string)=>void}){return <div><div style={lab}>{label}</div><div style={row}>{options.map(o=><button key={o} type="button" style={selected.includes(o)?goldBtn:btn} onClick={()=>onToggle(o)}>{o}</button>)}</div></div>}function PhotoPicker({photos:setPhotosArr,setPhotos}:{photos:string[];setPhotos:(n:string[])=>void}){async function add(fs:FileList|null){const p=await photos(fs);setPhotos([...setPhotosArr,...p].slice(0,10))}return <div><input type="file" multiple accept="image/*" onChange={e=>add(e.target.files)}/><p style={muted}>{setPhotosArr.length}/10 photo(s). First photo becomes cover.</p>{setPhotosArr.length?<div style={grid}>{setPhotosArr.map((p,i)=><div key={p.slice(0,20)+i} style={panel}><img src={p} alt={`Selected ${i+1}`} style={photoStyle}/><button type="button" style={redBtn} onClick={()=>setPhotos(setPhotosArr.filter((_,x)=>x!==i))}>Delete Photo</button></div>)}</div>:null}</div>}function Value({label,value}:{label:string;value:unknown}){return <div style={panel}><div style={eyebrow}>{label}</div><p style={sub}>{t(value,"Not listed")}</p></div>}function Meter({label,value}:{label:string;value:number}){return <div style={panel}><div style={eyebrow}>{label}</div><h2 style={h2}>{value}%</h2><div style={{height:10,background:"#070a12",borderRadius:999,overflow:"hidden"}}><div style={{width:`${Math.max(0,Math.min(100,value))}%`,height:"100%",background:"#ffdc68"}}/></div></div>}function MatchCard({match}:{match:{member:M;score:number;reasons:string[]}}){return <div style={panel}><div style={eyebrow}>Best Fit</div><h2 style={h2}>{t(match.member.name,"Member")}</h2><p style={sub}>{match.score}% match</p><p style={muted}>{match.reasons.join(", ")||"Profile overlap"}</p><div style={{...row,marginTop:14}}><Link href={`/messages?to=${encodeURIComponent(t(match.member.email,pid(match.member)))}&subject=${encodeURIComponent("Network Match: "+t(match.member.name,"Member"))}`} style={goldBtn}>Contact</Link></div></div>}
 
-function Preview({profile}:{profile:M}){return <div style={activePanel}>{t(profile.profilePhoto)?<img src={t(profile.profilePhoto)} alt={t(profile.name,"Member")} style={photoStyle}/>:null}<div style={eyebrow}>{t(profile.memberType,"Member")} • From {t(profile.basedState,"GA")}</div><h2 style={h2}>{t(profile.name,"VaultForge Member")}</h2><p style={sub}>{t(profile.company,"Company not listed")}</p><p style={muted}>Profile state: {[t(profile.basedCity),t(profile.basedCounty),t(profile.basedState)].filter(Boolean).join(", ")||"Not listed"}</p><p style={muted}>Operates in: {l(profile.statesOperated).join(", ")||"No operating states selected"}</p><p style={muted}>Assets: {l(profile.assetClasses).join(", ")||"Not listed"}</p><p style={muted}>Strategies: {l(profile.strategies).join(", ")||"Not listed"}</p><p style={muted}>Can provide: {l(profile.canProvide).join(", ")||"Not listed"}</p><p style={muted}>Needs: {l(profile.needs).join(", ")||"Not listed"}</p></div>}
-export default function ProfilePage(){const[profile,setProfile]=useState<M>({basedState:"GA",statesOperated:["GA"],memberType:"Investor",contactPreference:"VaultForge Message",capitalPosition:"Unknown",proofOfFunds:"Unknown",fundingRange:"Unknown"}),[banner,setBanner]=useState(""),[error,setError]=useState("");useEffect(()=>setProfile(getProfile()),[]);function up(k:string,v:unknown){setProfile({...profile,[k]:v})}function tog(k:keyof M,v:string){const s=new Set(l(profile[k]));s.has(v)?s.delete(v):s.add(v);up(String(k),Array.from(s))}function city(v:string){setProfile({...profile,basedCity:v,basedCounty:county(v)||profile.basedCounty||""})}async function pic(fs:FileList|null){const p=await one(fs);if(p)setProfile({...profile,profilePhoto:p})}function sv(){setError("");if(!t(profile.name)){setError("Add member name before saving.");return}const n=saveProfile(profile);setProfile(n);setBanner(`Saved. Member card appears under ${t(n.basedState,"GA")}. Routing uses ${l(n.statesOperated).join(", ")||"no operating states"}.`)}return <main style={page}><div style={wrap}><Nav active="profile"/>{banner?<section style={activePanel}><div style={eyebrow}>Saved</div><h2 style={h2}>{banner}</h2></section>:null}{error?<section style={activePanel}><div style={eyebrow}>Error</div><h2 style={h2}>{error}</h2></section>:null}<section style={hero}><div style={eyebrow}>Profile Intelligence</div><h1 style={h1}>Identity drives routing.</h1><p style={sub}>Based State controls where your member card appears. States Operated controls matching, routing, Network project fit, alerts, and AI scoring.</p></section><Section title="Member Card Preview"><Preview profile={profile}/></Section><Section title="Identity"><div style={grid}><Field label="Name" value={t(profile.name)} onChange={v=>up("name",v)}/><Field label="Company" value={t(profile.company)} onChange={v=>up("company",v)}/><Field label="Email" value={t(profile.email)} onChange={v=>up("email",v)}/><Field label="Phone" value={t(profile.phone)} onChange={v=>up("phone",v)}/><SelectField label="Member Type" value={t(profile.memberType,"Investor")} onChange={v=>up("memberType",v)} options={MEMBER_TYPES}/><SelectField label="Contact Preference" value={t(profile.contactPreference,"VaultForge Message")} onChange={v=>up("contactPreference",v)} options={CONTACT}/></div></Section><Section title="Profile Photo">{t(profile.profilePhoto)?<div style={panel}><img src={t(profile.profilePhoto)} alt="Profile" style={photoStyle}/><button type="button" style={redBtn} onClick={()=>up("profilePhoto","")}>Delete Photo</button></div>:null}<input type="file" accept="image/*" onChange={e=>pic(e.target.files)}/></Section><Section title="Based From"><div style={grid}><SelectField label="Based State" value={t(profile.basedState,"GA")} onChange={v=>up("basedState",v)} options={STATES}/><Field label="Based City" value={t(profile.basedCity)} onChange={city}/><Field label="Auto County" value={t(profile.basedCounty)} onChange={v=>up("basedCounty",v)}/></div></Section><Section title="Routing Geography"><ChipSet label="States Operated In" options={STATES} selected={l(profile.statesOperated)} onToggle={v=>tog("statesOperated",v)}/><div style={{height:18}}/><ChipSet label="Markets / Submarkets" options={MARKETS} selected={l(profile.markets)} onToggle={v=>tog("markets",v)}/></Section><Section title="Buy Box + Strategy"><ChipSet label="Asset Classes" options={ASSETS} selected={l(profile.assetClasses)} onToggle={v=>tog("assetClasses",v)}/><div style={{height:18}}/><ChipSet label="Strategies" options={STRAT} selected={l(profile.strategies)} onToggle={v=>tog("strategies",v)}/><div style={{height:18}}/><ChipSet label="Specialties" options={SPEC} selected={l(profile.specialties)} onToggle={v=>tog("specialties",v)}/></Section><Section title="Network Matching"><ChipSet label="Needs" options={NEEDS} selected={l(profile.needs)} onToggle={v=>tog("needs",v)}/><div style={{height:18}}/><ChipSet label="Can Provide" options={PROVIDE} selected={l(profile.canProvide)} onToggle={v=>tog("canProvide",v)}/></Section><Section title="Capital + Contact"><div style={grid}><SelectField label="Capital Position" value={t(profile.capitalPosition,"Unknown")} onChange={v=>up("capitalPosition",v)} options={CAP_POS}/><SelectField label="Proof / POF Available" value={t(profile.proofOfFunds,"Unknown")} onChange={v=>up("proofOfFunds",v)} options={YESNO}/><SelectField label="Funding Range" value={t(profile.fundingRange,"Unknown")} onChange={v=>up("fundingRange",v)} options={FUND}/><SelectField label="Direct Contact Allowed" value={t(profile.directContact,"Unknown")} onChange={v=>up("directContact",v)} options={YESNO}/></div></Section><Section title="AI Bio / Routing Notes"><TextArea label="Bio / Routing Notes" value={t(profile.bio)} onChange={v=>up("bio",v)}/></Section><Section title="Save"><button type="button" style={goldBtn} onClick={sv}>Save Profile</button> <Link href="/members" style={btn}>View Members</Link> <Link href="/network" style={btn}>View Network</Link></Section></div></main>}
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
+type MemberProfile = {
+  id: string;
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  title: string;
+  memberType: string;
+  basedState: string;
+  basedCity: string;
+  basedCounty: string;
+  statesOperated: string[];
+  countiesServed: string[];
+  assetClasses: string[];
+  strategies: string[];
+  specialties: string[];
+  canProvide: string[];
+  needs: string[];
+  fundingRange: string;
+  capitalPosition: string;
+  buyBox: string[];
+  priceRange: string;
+  dealSize: string;
+  responseSpeed: string;
+  verifiedStatus: string;
+  contactPreference: string;
+  bio: string;
+  profilePhoto: string;
+  companyLogo: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+const DIRECTORY_KEY = "vaultforge_member_directory_v1";
+
+const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+const MEMBER_TYPES = ["Investor", "Cash Buyer", "Private Lender", "Hard Money Lender", "Contractor", "Developer", "Wholesaler", "Realtor", "Attorney", "Title", "Property Manager", "Operator", "Insurance", "City / Permit", "Other"];
+const ASSET_CLASSES = ["Residential", "Commercial", "Land", "Multifamily", "Industrial", "Retail", "Office", "Storage", "Hotel", "Mobile Home", "Mixed Use"];
+const STRATEGIES = ["Wholesale", "Flip", "Buy & Hold", "BRRRR", "Development", "Seller Finance", "JV", "Rental", "Airbnb", "Note / Debt", "Ground Up", "Value Add"];
+const SPECIALTIES = ["Distress", "Foreclosure", "Probate", "Fire Damage", "Title Issues", "Permits", "City Violations", "Funding Gap", "Tenant Issues", "Stalled Construction", "Off Market", "Fast Close", "Heavy Rehab", "Land Entitlement"];
+const PROVIDE = ["Capital", "Lending", "Buying", "Contractor", "Legal", "Title", "Insurance", "Property Management", "Development", "Disposition", "Operations", "City Expediting", "Deal Review", "Introductions"];
+const NEEDS = ["Deals", "Capital", "Lender", "Contractor", "Buyer", "Attorney", "Title", "Private Capital", "Property Manager", "City Expeditor", "Operator", "Developer", "Insurance Adjuster"];
+const FUNDING = ["Not listed", "Under $100k", "$100k-$250k", "$250k-$500k", "$500k-$1M", "$1M-$5M", "$5M+"];
+const DEAL_SIZE = ["Not listed", "Small", "Mid", "Large", "Institutional"];
+const RESPONSE = ["Same Day", "24 Hours", "48 Hours", "Weekly", "By Intro Only"];
+const CONTACT = ["VaultForge Message", "Phone", "Text", "Email", "Contact Form"];
+const VERIFIED = ["Unverified", "VaultForge Reviewed", "Verified Capital", "Verified Operator", "Preferred Partner"];
+
+const CITY_COUNTY: Record<string, string> = {
+  atlanta: "Fulton",
+  alpharetta: "Fulton",
+  roswell: "Fulton",
+  marietta: "Cobb",
+  smyrna: "Cobb",
+  kennesaw: "Cobb",
+  cartersville: "Bartow",
+  cville: "Bartow",
+  cvile: "Bartow",
+  adairsville: "Bartow",
+  rome: "Floyd",
+  gainesville: "Hall",
+  savannah: "Chatham",
+  augusta: "Richmond",
+  columbus: "Muscogee",
+  macon: "Bibb",
+  chattanooga: "Hamilton",
+  nashville: "Davidson",
+  knoxville: "Knox",
+  birmingham: "Jefferson",
+  huntsville: "Madison",
+  charlotte: "Mecklenburg",
+  raleigh: "Wake",
+  greenville: "Greenville",
+  charleston: "Charleston",
+  dallas: "Dallas",
+  houston: "Harris",
+  austin: "Travis",
+  "san antonio": "Bexar",
+  sanantonio: "Bexar",
+};
+
+function ok() {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function txt(value: unknown, fallback = "") {
+  const clean = String(value || "").trim();
+  return clean || fallback;
+}
+
+function list(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
+  return [];
+}
+
+function j<T>(raw: string | null, fallback: T): T {
+  try {
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function countyFromCity(city: string) {
+  return CITY_COUNTY[city.trim().toLowerCase().replace(/\s+/g, " ")] || "";
+}
+
+function defaultProfile(): MemberProfile {
+  const now = new Date().toISOString();
+  return {
+    id: "local_member",
+    name: "",
+    company: "",
+    email: "",
+    phone: "",
+    title: "",
+    memberType: "Investor",
+    basedState: "GA",
+    basedCity: "",
+    basedCounty: "",
+    statesOperated: ["GA"],
+    countiesServed: [],
+    assetClasses: ["Residential"],
+    strategies: ["Wholesale"],
+    specialties: [],
+    canProvide: ["Buying"],
+    needs: ["Deals"],
+    fundingRange: "Not listed",
+    capitalPosition: "Not listed",
+    buyBox: [],
+    priceRange: "",
+    dealSize: "Not listed",
+    responseSpeed: "24 Hours",
+    verifiedStatus: "Unverified",
+    contactPreference: "VaultForge Message",
+    bio: "",
+    profilePhoto: "",
+    companyLogo: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function normalizeProfile(row: any): MemberProfile {
+  const base = defaultProfile();
+  const email = txt(row?.email || base.email);
+  const id = txt(row?.id || email.toLowerCase() || "local_member");
+  return {
+    ...base,
+    ...row,
+    id,
+    name: txt(row?.name || row?.fullName || row?.full_name, base.name),
+    company: txt(row?.company || row?.companyName, base.company),
+    email,
+    phone: txt(row?.phone || row?.phoneNumber, base.phone),
+    title: txt(row?.title || row?.roleTitle, base.title),
+    memberType: txt(row?.memberType || row?.member_type, base.memberType),
+    basedState: txt(row?.basedState || row?.state || row?.homeState, base.basedState),
+    basedCity: txt(row?.basedCity || row?.city, base.basedCity),
+    basedCounty: txt(row?.basedCounty || row?.county, base.basedCounty),
+    statesOperated: list(row?.statesOperated || row?.states_served || row?.operatingStates).length ? list(row?.statesOperated || row?.states_served || row?.operatingStates) : base.statesOperated,
+    countiesServed: list(row?.countiesServed || row?.counties_served),
+    assetClasses: list(row?.assetClasses || row?.asset_classes).length ? list(row?.assetClasses || row?.asset_classes) : base.assetClasses,
+    strategies: list(row?.strategies).length ? list(row?.strategies) : base.strategies,
+    specialties: list(row?.specialties),
+    canProvide: list(row?.canProvide || row?.provides).length ? list(row?.canProvide || row?.provides) : base.canProvide,
+    needs: list(row?.needs).length ? list(row?.needs) : base.needs,
+    fundingRange: txt(row?.fundingRange || row?.capitalRange, base.fundingRange),
+    capitalPosition: txt(row?.capitalPosition, base.capitalPosition),
+    buyBox: list(row?.buyBox || row?.buy_box),
+    priceRange: txt(row?.priceRange, base.priceRange),
+    dealSize: txt(row?.dealSize, base.dealSize),
+    responseSpeed: txt(row?.responseSpeed, base.responseSpeed),
+    verifiedStatus: txt(row?.verifiedStatus, base.verifiedStatus),
+    contactPreference: txt(row?.contactPreference, base.contactPreference),
+    bio: txt(row?.bio || row?.about, base.bio),
+    profilePhoto: txt(row?.profilePhoto || row?.photoUrl || row?.avatar, base.profilePhoto),
+    companyLogo: txt(row?.companyLogo || row?.logoUrl, base.companyLogo),
+    createdAt: txt(row?.createdAt, base.createdAt),
+    updatedAt: txt(row?.updatedAt, base.updatedAt),
+  };
+}
+
+function readProfile() {
+  if (!ok()) return defaultProfile();
+  for (const key of PROFILE_KEYS) {
+    const found = j<any | null>(localStorage.getItem(key), null);
+    if (found && typeof found === "object") return normalizeProfile(found);
+  }
+  return defaultProfile();
+}
+
+function readDirectory() {
+  if (!ok()) return [] as MemberProfile[];
+  return j<any[]>(localStorage.getItem(DIRECTORY_KEY), []).map(normalizeProfile);
+}
+
+function saveProfile(profile: MemberProfile) {
+  if (!ok()) return { ok: false, message: "Browser storage unavailable." };
+  const now = new Date().toISOString();
+  const next = normalizeProfile({ ...profile, updatedAt: now, createdAt: profile.createdAt || now });
+
+  let saved = true;
+  for (const key of PROFILE_KEYS) {
+    saved = writeJson(key, next) && saved;
+  }
+
+  const directory = readDirectory().filter((member) => member.id !== next.id && member.email !== next.email);
+  saved = writeJson(DIRECTORY_KEY, [next, ...directory]) && saved;
+
+  if (!saved) {
+    const slim = { ...next, profilePhoto: "", companyLogo: "" };
+    for (const key of PROFILE_KEYS) writeJson(key, slim);
+    writeJson(DIRECTORY_KEY, [slim, ...directory.map((member) => ({ ...member, profilePhoto: "", companyLogo: "" }))]);
+  }
+
+  window.dispatchEvent(new Event("vaultforge-profile-change"));
+  window.dispatchEvent(new Event("vaultforge-member-change"));
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  return { ok: true, message: "Profile saved." };
+}
+
+async function compressImage(file: File, maxWidth = 620, quality = 0.42): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve("");
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve("");
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxWidth / img.width);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve("");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch {
+          resolve("");
+        }
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 120 };
+const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
+const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.75)", boxShadow: "0 0 26px rgba(245,197,66,.18)" };
+const sticky: React.CSSProperties = { position: "sticky", top: 10, zIndex: 10, background: "rgba(5,7,13,.92)", backdropFilter: "blur(10px)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 24, padding: 16, marginBottom: 18 };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const label: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontSize: 12, fontWeight: 950, marginBottom: 8 };
+const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
+const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
+const textarea: React.CSSProperties = { ...input, minHeight: 130, resize: "vertical" };
+const imageStyle: React.CSSProperties = { width: "100%", height: 180, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+
+function Nav() {
+  return (
+    <nav style={nav}>
+      <div style={brand}>VAULTFORGE</div>
+      <Link href="/command" style={btn}>Command</Link>
+      <Link href="/members" style={btn}>Members</Link>
+      <Link href="/network" style={btn}>Network</Link>
+      <Link href="/state-map" style={btn}>State Map</Link>
+      <Link href="/deal-rooms" style={btn}>Deal Rooms</Link>
+      <Link href="/pain-rooms" style={btn}>Pain Rooms</Link>
+      <Link href="/messages" style={btn}>Messages</Link>
+      <Link href="/profile" style={goldBtn}>Profile</Link>
+      <Link href="/logout" style={redBtn}>Logout</Link>
+    </nav>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+}
+
+function stopKeys(event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  event.stopPropagation();
+}
+
+function Field({ title, value, onChange }: { title: string; value: string; onChange: (value: string) => void }) {
+  return <label><div style={label}>{title}</div><input style={input} value={value} onKeyDownCapture={stopKeys} onKeyUpCapture={stopKeys} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function TextArea({ title, value, onChange }: { title: string; value: string; onChange: (value: string) => void }) {
+  return <label><div style={label}>{title}</div><textarea style={textarea} value={value} onKeyDownCapture={stopKeys} onKeyUpCapture={stopKeys} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function SelectField({ title, value, options, onChange }: { title: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return <label><div style={label}>{title}</div><select style={input} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
+}
+
+function ChipSet({ title, options, selected, onToggle }: { title: string; options: string[]; selected: string[]; onToggle: (value: string) => void }) {
+  return (
+    <div>
+      <div style={label}>{title}</div>
+      <div style={row}>
+        {options.map((option) => (
+          <button key={option} type="button" style={selected.includes(option) ? goldBtn : btn} onClick={() => onToggle(option)}>
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScoreCard({ title, value, note }: { title: string; value: number | string; note: string }) {
+  return <div style={panel}><div style={eyebrow}>{title}</div><h2 style={h2}>{value}</h2><p style={muted}>{note}</p></div>;
+}
+
+export default function ProfilePage() {
+  const [profile, setProfile] = useState<MemberProfile>(() => defaultProfile());
+  const [banner, setBanner] = useState("");
+  const [error, setError] = useState("");
+  const directoryCount = useMemo(() => readDirectory().length, [profile.updatedAt]);
+
+  useEffect(() => {
+    setProfile(readProfile());
+  }, []);
+
+  const completion = useMemo(() => {
+    let score = 0;
+    if (profile.name) score += 10;
+    if (profile.email || profile.phone) score += 10;
+    if (profile.basedCity && profile.basedState) score += 10;
+    if (profile.statesOperated.length) score += 10;
+    if (profile.assetClasses.length) score += 10;
+    if (profile.strategies.length) score += 10;
+    if (profile.canProvide.length) score += 12;
+    if (profile.needs.length) score += 8;
+    if (profile.fundingRange !== "Not listed") score += 10;
+    if (profile.bio) score += 10;
+    return Math.min(100, score);
+  }, [profile]);
+
+  function update(key: keyof MemberProfile, value: any) {
+    setProfile({ ...profile, [key]: value });
+  }
+
+  function toggle(key: keyof MemberProfile, value: string) {
+    const current = new Set(list(profile[key]));
+    current.has(value) ? current.delete(value) : current.add(value);
+    update(key, Array.from(current));
+  }
+
+  function setBasedCity(city: string) {
+    setProfile({ ...profile, basedCity: city, basedCounty: countyFromCity(city) || profile.basedCounty });
+  }
+
+  async function setImage(key: "profilePhoto" | "companyLogo", files: FileList | null) {
+    const file = Array.from(files || [])[0];
+    if (!file) return;
+    const image = await compressImage(file);
+    if (image) update(key, image);
+  }
+
+  function save() {
+    setBanner("");
+    setError("");
+
+    if (!txt(profile.name)) {
+      setError("Add member name before saving.");
+      return;
+    }
+
+    const result = saveProfile(profile);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
+    setBanner("Profile saved. Member matching, Network, and Room intelligence can now use this profile.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  return (
+    <main style={page}>
+      <div style={wrap}>
+        <Nav />
+
+        <section style={sticky}>
+          <div style={row}>
+            <button type="button" style={goldBtn} onClick={save}>Save Profile</button>
+            <Link href="/members" style={btn}>Open Members</Link>
+            <Link href="/network" style={btn}>Open Network</Link>
+            <span style={muted}>{txt(profile.name, "No name yet")} • Based {profile.basedCity || "City not set"}, {profile.basedState} • Serves {profile.statesOperated.join(", ")}</span>
+          </div>
+        </section>
+
+        {banner ? <section style={activePanel}><div style={eyebrow}>Saved</div><h2 style={h2}>{banner}</h2></section> : null}
+        {error ? <section style={activePanel}><div style={eyebrow}>Error</div><h2 style={h2}>{error}</h2></section> : null}
+
+        <section style={hero}>
+          <div style={eyebrow}>Member Profile Intelligence</div>
+          <h1 style={h1}>Profile powers the network.</h1>
+          <p style={sub}>Based state controls member cards. States served controls routing, matching, deal/pain fit, and state network intelligence.</p>
+        </section>
+
+        <Section title="Profile Preview">
+          <div style={grid}>
+            <div style={activePanel}>
+              {profile.profilePhoto ? <img src={profile.profilePhoto} alt="Profile" style={imageStyle} /> : null}
+              <div style={eyebrow}>{profile.memberType}</div>
+              <h2 style={h2}>{txt(profile.name, "VaultForge Member")}</h2>
+              <p style={sub}>{txt(profile.company, "Company not listed")}</p>
+              <p style={muted}>Based {profile.basedCity || "City not set"}, {profile.basedState} • Serves {profile.statesOperated.join(", ")}</p>
+            </div>
+            <ScoreCard title="Completion" value={`${completion}%`} note="used for trust and matching" />
+            <ScoreCard title="Directory" value={directoryCount} note="profiles in local member directory" />
+            <ScoreCard title="Routing Identity" value={profile.canProvide.length + profile.needs.length} note="provide/need tags" />
+          </div>
+        </Section>
+
+        <Section title="Photos">
+          <div style={grid}>
+            <div style={panel}>
+              {profile.profilePhoto ? <img src={profile.profilePhoto} alt="Profile" style={imageStyle} /> : null}
+              <div style={eyebrow}>Profile Photo</div>
+              <input type="file" accept="image/*" onChange={(event) => setImage("profilePhoto", event.target.files)} />
+              <div style={{ ...row, marginTop: 12 }}>
+                <button type="button" style={redBtn} onClick={() => update("profilePhoto", "")}>Delete Photo</button>
+              </div>
+            </div>
+            <div style={panel}>
+              {profile.companyLogo ? <img src={profile.companyLogo} alt="Company logo" style={imageStyle} /> : null}
+              <div style={eyebrow}>Company Logo</div>
+              <input type="file" accept="image/*" onChange={(event) => setImage("companyLogo", event.target.files)} />
+              <div style={{ ...row, marginTop: 12 }}>
+                <button type="button" style={redBtn} onClick={() => update("companyLogo", "")}>Delete Logo</button>
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        <Section title="Identity">
+          <div style={grid}>
+            <Field title="Name" value={profile.name} onChange={(value) => update("name", value)} />
+            <Field title="Company" value={profile.company} onChange={(value) => update("company", value)} />
+            <Field title="Title" value={profile.title} onChange={(value) => update("title", value)} />
+            <Field title="Email" value={profile.email} onChange={(value) => update("email", value)} />
+            <Field title="Phone" value={profile.phone} onChange={(value) => update("phone", value)} />
+            <SelectField title="Member Type" value={profile.memberType} options={MEMBER_TYPES} onChange={(value) => update("memberType", value)} />
+            <SelectField title="Verified Status" value={profile.verifiedStatus} options={VERIFIED} onChange={(value) => update("verifiedStatus", value)} />
+            <SelectField title="Contact Preference" value={profile.contactPreference} options={CONTACT} onChange={(value) => update("contactPreference", value)} />
+            <SelectField title="Response Speed" value={profile.responseSpeed} options={RESPONSE} onChange={(value) => update("responseSpeed", value)} />
+          </div>
+        </Section>
+
+        <Section title="Based Location">
+          <div style={grid}>
+            <SelectField title="Based State" value={profile.basedState} options={STATES} onChange={(value) => update("basedState", value)} />
+            <Field title="Based City" value={profile.basedCity} onChange={setBasedCity} />
+            <Field title="Based County" value={profile.basedCounty} onChange={(value) => update("basedCounty", value)} />
+          </div>
+        </Section>
+
+        <Section title="States Served">
+          <ChipSet title="States Operated / Served" options={STATES} selected={profile.statesOperated} onToggle={(value) => toggle("statesOperated", value)} />
+          <div style={{ height: 18 }} />
+          <TextArea title="Counties Served" value={profile.countiesServed.join(", ")} onChange={(value) => update("countiesServed", list(value))} />
+        </Section>
+
+        <Section title="Asset + Strategy Fit">
+          <ChipSet title="Asset Classes" options={ASSET_CLASSES} selected={profile.assetClasses} onToggle={(value) => toggle("assetClasses", value)} />
+          <div style={{ height: 18 }} />
+          <ChipSet title="Strategies" options={STRATEGIES} selected={profile.strategies} onToggle={(value) => toggle("strategies", value)} />
+          <div style={{ height: 18 }} />
+          <ChipSet title="Specialties" options={SPECIALTIES} selected={profile.specialties} onToggle={(value) => toggle("specialties", value)} />
+        </Section>
+
+        <Section title="Routing Tags">
+          <ChipSet title="Can Provide" options={PROVIDE} selected={profile.canProvide} onToggle={(value) => toggle("canProvide", value)} />
+          <div style={{ height: 18 }} />
+          <ChipSet title="Needs" options={NEEDS} selected={profile.needs} onToggle={(value) => toggle("needs", value)} />
+        </Section>
+
+        <Section title="Capital + Buy Box">
+          <div style={grid}>
+            <SelectField title="Funding Range" value={profile.fundingRange} options={FUNDING} onChange={(value) => update("fundingRange", value)} />
+            <SelectField title="Deal Size" value={profile.dealSize} options={DEAL_SIZE} onChange={(value) => update("dealSize", value)} />
+            <Field title="Capital Position" value={profile.capitalPosition} onChange={(value) => update("capitalPosition", value)} />
+            <Field title="Price Range" value={profile.priceRange} onChange={(value) => update("priceRange", value)} />
+          </div>
+          <div style={{ height: 18 }} />
+          <ChipSet title="Buy Box / Target Deals" options={["Off Market", "Distressed", "Light Rehab", "Heavy Rehab", "Rental", "Land", "Commercial", "Multifamily", "Quick Close", "Seller Finance", "JV", "High Equity"]} selected={profile.buyBox} onToggle={(value) => toggle("buyBox", value)} />
+        </Section>
+
+        <Section title="Bio">
+          <TextArea title="Member Bio / AI Context" value={profile.bio} onChange={(value) => update("bio", value)} />
+        </Section>
+
+        <Section title="Save">
+          <button type="button" style={goldBtn} onClick={save}>Save Profile</button>
+        </Section>
+      </div>
+    </main>
+  );
+}
