@@ -347,6 +347,86 @@ function routeEscalationAlerts(deals: Room[], pains: Room[]): AlertItem[] {
   return out.slice(0, 60);
 }
 
+
+function memberRoutePerformanceAlerts(): AlertItem[] {
+  const map = routeStatusMap();
+  const grouped: Record<string, { name: string; email: string; accepted: number; passed: number; claimed: number; pending: number; stale: number; latest: string }> = {};
+
+  for (const value of Object.values(map)) {
+    const key = txt(value.memberEmail || value.memberName, "member").toLowerCase();
+    if (!grouped[key]) {
+      grouped[key] = {
+        name: txt(value.memberName, "Member"),
+        email: txt(value.memberEmail),
+        accepted: 0,
+        passed: 0,
+        claimed: 0,
+        pending: 0,
+        stale: 0,
+        latest: txt(value.at),
+      };
+    }
+
+    if (value.status === "accepted") grouped[key].accepted += 1;
+    if (value.status === "passed") grouped[key].passed += 1;
+    if (value.status === "claimed") grouped[key].claimed += 1;
+    if (value.status === "pending") grouped[key].pending += 1;
+    if (value.status === "pending" && routeAgeDays(value) >= 3) grouped[key].stale += 1;
+    if (String(value.at) > grouped[key].latest) grouped[key].latest = txt(value.at);
+  }
+
+  const alerts: AlertItem[] = [];
+
+  for (const [key, perf] of Object.entries(grouped)) {
+    const reliability = Math.max(0, Math.min(100, 55 + perf.accepted * 8 + perf.claimed * 12 - perf.passed * 10 - perf.stale * 8));
+
+    if (perf.claimed >= 2 || reliability >= 85) {
+      alerts.push({
+        id: `perf:best:${key}:${perf.latest}`,
+        kind: "deal",
+        title: `Best Performer Detected: ${perf.name}`,
+        subtitle: `Reliability ${reliability}% • accepted ${perf.accepted} • claimed ${perf.claimed} • passed ${perf.passed}`,
+        href: "/routing",
+        severity: "gold",
+      });
+    } else if (perf.accepted >= 1 || reliability >= 70) {
+      alerts.push({
+        id: `perf:reliable:${key}:${perf.latest}`,
+        kind: "deal",
+        title: `Reliable Solver Detected: ${perf.name}`,
+        subtitle: `Reliability ${reliability}% • accepted ${perf.accepted} • claimed ${perf.claimed}`,
+        href: "/routing",
+        severity: "gold",
+      });
+    }
+
+    if (perf.passed >= 2 || perf.stale >= 2 || reliability <= 35) {
+      alerts.push({
+        id: `perf:review:${key}:${perf.latest}`,
+        kind: "pain",
+        title: `Member Needs Review: ${perf.name}`,
+        subtitle: `Reliability ${reliability}% • passed ${perf.passed} • stale pending ${perf.stale}`,
+        href: "/routing",
+        severity: "red",
+      });
+    }
+
+    if (perf.claimed >= 1) {
+      alerts.push({
+        id: `perf:claimed:${key}:${perf.latest}`,
+        kind: "deal",
+        title: `Claimed Execution Milestone: ${perf.name}`,
+        subtitle: `${perf.claimed} claimed execution route(s). Check routing performance.`,
+        href: "/routing",
+        severity: "gold",
+      });
+    }
+  }
+
+  return alerts.slice(0, 80);
+}
+
+
 function routingActivityAlerts(deals: Room[], pains: Room[]): AlertItem[] {
   const activity = roomActivityMap();
   const out: AlertItem[] = [];
@@ -646,7 +726,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function AlertsPage() {
   const [tick, setTick] = useState(0);
-  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "activity" | "routes" | "escalations" | "history">("active");
+  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "activity" | "routes" | "escalations" | "performance" | "history">("active");
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
@@ -692,11 +772,12 @@ export default function AlertsPage() {
   const activityAlerts = useMemo(() => roomActivityAlerts(deals, pains), [deals, pains, tick]);
   const routeAlerts = useMemo(() => routeStatusAlerts(deals, pains), [deals, pains, tick]);
   const escalationAlerts = useMemo(() => [...routeEscalationAlerts(deals, pains), ...routingActivityAlerts(deals, pains)], [deals, pains, tick]);
-  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts, ...activityAlerts, ...routeAlerts, ...escalationAlerts];
+  const performanceAlerts = useMemo(() => memberRoutePerformanceAlerts(), [tick]);
+  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts, ...activityAlerts, ...routeAlerts, ...escalationAlerts, ...performanceAlerts];
   const activeAlerts = allAlerts.filter((alert) => !seen.includes(alert.id) && !dismissed.includes(alert.id));
   const watchedAlerts = allAlerts.filter((alert) => watchlist.includes(alert.id));
   const historyAlerts = allAlerts.filter((alert) => seen.includes(alert.id) || dismissed.includes(alert.id));
-  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "activity" ? activityAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "routes" ? routeAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "escalations" ? escalationAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
+  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "activity" ? activityAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "routes" ? routeAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "escalations" ? escalationAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "performance" ? performanceAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
 
   function markSeen(id: string) {
     addId(ALERT_SEEN_KEY, id);
