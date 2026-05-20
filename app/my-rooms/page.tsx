@@ -66,6 +66,7 @@ const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state
 const MEMBER_STATE_KEY = "vaultforge_my_room_status_v1";
 const WATCH_KEY = "vaultforge_room_watchlist_v1";
 const WATCH_META_KEY = "vaultforge_room_watch_meta_v1";
+const ROOM_ACTIVITY_KEY = "vaultforge_room_activity_v2";
 const READ_KEY = "vaultforge_room_alert_read_v1";
 const STAGE_KEY = "vaultforge_room_execution_stage_v1";
 const DEAL_STAGES: RoomStage[] = ["New", "Reviewing", "Routed", "Under Contract", "Sold"];
@@ -223,6 +224,8 @@ function saveRoomStage(kind: RoomKind, room: Room, stage: RoomStage) {
     writeJson(key, [next, ...rows]);
   }
 
+  addRoomActivity(kind, room, "Stage Change", `Execution stage moved to ${stage}.`);
+
   if (stage === "Sold" || stage === "Resolved") {
     saveRoomStatus(kind, next, stage === "Sold" ? "sold" : "resolved");
   }
@@ -343,6 +346,7 @@ function saveRoomStatus(kind: RoomKind, room: Room, status: RoomStatus) {
     writeJson(key, [next, ...rows]);
   }
 
+  addRoomActivity(kind, room, "Status Change", `Room moved to ${status}.`);
   window.dispatchEvent(new Event("vaultforge-room-state-change"));
   window.dispatchEvent(new Event("vaultforge-my-rooms-change"));
   window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
@@ -506,6 +510,27 @@ function healthColor(score: number) {
 
 
 
+
+function activityKey(kind: RoomKind, room: Room) {
+  return `${kind}:${rid(room)}`;
+}
+
+function readRoomActivity(kind: RoomKind, room: Room) {
+  if (!ok()) return [] as { at: string; action: string; note: string }[];
+  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ROOM_ACTIVITY_KEY), {});
+  return all[activityKey(kind, room)] || [];
+}
+
+function addRoomActivity(kind: RoomKind, room: Room, action: string, note: string) {
+  if (!ok()) return;
+  const key = activityKey(kind, room);
+  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ROOM_ACTIVITY_KEY), {});
+  all[key] = [{ at: new Date().toISOString(), action, note }, ...(all[key] || [])].slice(0, 75);
+  writeJson(ROOM_ACTIVITY_KEY, all);
+  window.dispatchEvent(new Event("vaultforge-room-activity-change"));
+}
+
+
 function watchKey(kind: RoomKind, room: Room) {
   return `${kind}:${rid(room)}`;
 }
@@ -543,6 +568,7 @@ function toggleWatchRoom(kind: RoomKind, room: Room) {
 
   writeJson(WATCH_KEY, next);
   writeJson(WATCH_META_KEY, meta);
+  addRoomActivity(kind, room, watching ? "Watch" : "Unwatch", watching ? "Started following this room." : "Stopped following this room.");
   window.dispatchEvent(new Event("vaultforge-room-watch-change"));
   window.dispatchEvent(new Event("vaultforge-alert-change"));
   return watching;
@@ -852,6 +878,19 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
         <p style={muted}>Next action: {nextActionFor(kind, room)}</p>
       </div>
 
+      <div style={{ marginTop: 16 }}>
+        <div style={eyebrow}>Recent Activity</div>
+        {readRoomActivity(kind, room).slice(0, 3).length ? (
+          readRoomActivity(kind, room).slice(0, 3).map((event, index) => (
+            <p key={`${event.at}-${index}`} style={muted}>
+              {new Date(event.at).toLocaleString()} • {event.action}: {event.note}
+            </p>
+          ))
+        ) : (
+          <p style={muted}>No room activity logged yet.</p>
+        )}
+      </div>
+
       <div style={{ ...row, marginTop: 16 }}>
         <Link href={href} style={goldBtn}>Open</Link>
         <button type="button" style={watching ? goldBtn : btn} onClick={() => { toggleWatchRoom(kind, room); refresh(); }}>{watching ? "Following" : "Watch"}</button>
@@ -878,6 +917,7 @@ export default function MyRoomsPage() {
     window.addEventListener("vaultforge-room-state-change", refresh);
     window.addEventListener("vaultforge-my-rooms-change", refresh);
     window.addEventListener("vaultforge-room-watch-change", refresh);
+    window.addEventListener("vaultforge-room-activity-change", refresh);
     window.addEventListener("vaultforge-deal-change", refresh);
     window.addEventListener("vaultforge-pain-change", refresh);
     return () => {
@@ -885,6 +925,7 @@ export default function MyRoomsPage() {
       window.removeEventListener("vaultforge-room-state-change", refresh);
       window.removeEventListener("vaultforge-my-rooms-change", refresh);
       window.removeEventListener("vaultforge-room-watch-change", refresh);
+      window.removeEventListener("vaultforge-room-activity-change", refresh);
       window.removeEventListener("vaultforge-deal-change", refresh);
       window.removeEventListener("vaultforge-pain-change", refresh);
     };
