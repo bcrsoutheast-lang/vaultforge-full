@@ -352,31 +352,18 @@ function normalizeThread(raw: any): Thread {
 
 
 function exactThreadKey(thread: Thread) {
-  const parts = [
+  return [
+    thread.id,
     thread.lane,
-    thread.roomType,
     thread.roomId,
     thread.subject,
     thread.roomTitle,
     thread.createdAt,
-    thread.id,
-  ];
-
-  return parts.map((part) => String(part || "").trim()).join("::");
+  ].map((part) => String(part || "").trim()).join("::");
 }
 
 function sameThread(a: Thread, b: Thread) {
   return exactThreadKey(a) === exactThreadKey(b);
-}
-
-function sameRoomThread(a: Thread, b: Thread) {
-  return (
-    a.lane === b.lane &&
-    a.roomType === b.roomType &&
-    a.roomId === b.roomId &&
-    a.subject === b.subject &&
-    a.roomTitle === b.roomTitle
-  );
 }
 
 
@@ -388,9 +375,8 @@ function readThreads(): Thread[] {
   for (const key of [THREAD_KEY, ...LEGACY_KEYS]) {
     for (const raw of arr<any>(key)) {
       const thread = normalizeThread(raw);
-      const exactKey = exactThreadKey(thread);
-      if (!thread.id || seen.has(exactKey)) continue;
-      seen.add(exactKey);
+      if (!thread.id || seen.has(thread.id)) continue;
+      seen.add(thread.id);
       out.push(thread);
     }
   }
@@ -532,7 +518,6 @@ function ThreadCard({ thread, active, onOpen }: { thread: Thread; active: boolea
       <h2 style={h2}>{thread.subject}</h2>
       <p style={sub}>{thread.roomTitle}</p>
       <p style={muted}>{thread.roomSubtitle}</p>
-      {thread.roomId ? <p style={muted}>Room ID: {thread.roomId.slice(0, 12)}</p> : null}
       <p style={muted}>{thread.messages.length} message(s) • {new Date(thread.updatedAt).toLocaleString()}</p>
       <p style={muted}>Participants: {hydrateParticipants(thread).join(", ") || "Owner/member not attached yet"}</p>
       {latest ? <p style={muted}>Latest: {latest.body.slice(0, 120)}{latest.body.length > 120 ? "..." : ""}</p> : <p style={muted}>No replies yet.</p>}
@@ -589,7 +574,12 @@ export default function MessagesPage() {
     const seeded = seedFromUrl();
 
     if (seeded) {
-      const exists = current.find((thread) => sameRoomThread(thread, seeded) && thread.toEmail === seeded.toEmail);
+      const exists = current.find((thread) =>
+        thread.lane === seeded.lane &&
+        thread.roomId === seeded.roomId &&
+        thread.toEmail === seeded.toEmail &&
+        thread.subject === seeded.subject
+      );
 
       if (!exists) {
         current = [seeded, ...current];
@@ -635,6 +625,7 @@ export default function MessagesPage() {
   }
 
   function openThread(target: Thread) {
+    const now = new Date().toISOString();
     const targetKey = exactThreadKey(target);
 
     const next = threads.map((thread) =>
@@ -642,13 +633,16 @@ export default function MessagesPage() {
         ? {
             ...thread,
             unread: false,
+            updatedAt: now,
             messages: thread.messages.map((msg) => ({ ...msg, read: true })),
           }
         : thread
     );
 
     persist(next);
-    setActiveKey(targetKey);
+
+    const refreshed = next.find((thread) => exactThreadKey(thread) === targetKey) || target;
+    setActiveKey(exactThreadKey(refreshed));
   }
 
   function updateThread(id: string, changes: Partial<Thread>) {
@@ -660,6 +654,18 @@ export default function MessagesPage() {
         ? { ...thread, ...changes, updatedAt: new Date().toISOString() }
         : thread
     ));
+  }
+
+  function deleteThreadForever(id: string) {
+    const target = threads.find((thread) => exactThreadKey(thread) === activeKey) || threads.find((thread) => thread.id === id);
+    const targetKey = target ? exactThreadKey(target) : "";
+
+    const next = threads.filter((thread) =>
+      targetKey ? exactThreadKey(thread) !== targetKey : thread.id !== id
+    );
+
+    setActiveKey("");
+    persist(next);
   }
 
   function sendReply() {
@@ -682,7 +688,6 @@ export default function MessagesPage() {
     );
 
     persist(next);
-    setActiveKey(exactThreadKey(activeThread));
     addRoomActivity(activeThread, "Message Sent", reply.trim().slice(0, 180));
     setReply("");
   }
@@ -799,13 +804,20 @@ export default function MessagesPage() {
                 <p style={sub}>{activeThread.roomTitle}</p>
                 <p style={muted}>{activeThread.roomSubtitle}</p>
                 <p style={muted}>Participants: {hydrateParticipants(activeThread).join(", ") || "Owner/member not attached yet"}</p>
+                {activeThread.status === "deleted" ? (
+                  <p style={{ ...muted, color: "#ffb8b8" }}>This thread is in Deleted. Restore brings it back. Delete Forever removes it permanently.</p>
+                ) : null}
 
                 <div style={{ ...row, marginTop: 16 }}>
                   <button type="button" style={btn} onClick={() => setActiveKey("")}>Back to Cards</button>
                   <button type="button" style={activeThread.saved || activeThread.status === "saved" ? goldBtn : btn} onClick={() => updateThread(activeThread.id, { saved: !activeThread.saved, status: activeThread.saved ? "active" : "saved" })}>{activeThread.saved || activeThread.status === "saved" ? "Saved" : "Save"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { unread: !activeThread.unread })}>{activeThread.unread ? "Mark Read" : "Mark Unread"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { status: "archived" })}>Archive</button>
-                  <button type="button" style={redBtn} onClick={() => updateThread(activeThread.id, { status: "deleted" })}>Delete</button>
+                  {activeThread.status === "deleted" ? (
+                    <button type="button" style={redBtn} onClick={() => deleteThreadForever(activeThread.id)}>Delete Forever</button>
+                  ) : (
+                    <button type="button" style={redBtn} onClick={() => updateThread(activeThread.id, { status: "deleted" })}>Delete</button>
+                  )}
                   {activeThread.status !== "active" ? <button type="button" style={goldBtn} onClick={() => updateThread(activeThread.id, { status: "active" })}>Restore</button> : null}
                   {activeThread.roomType === "deal" && activeThread.roomId ? <Link href={`/deal-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Deal Room</Link> : null}
                   {activeThread.roomType === "pain" && activeThread.roomId ? <Link href={`/pain-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Pain Room</Link> : null}
