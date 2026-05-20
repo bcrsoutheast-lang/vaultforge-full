@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { RoomInsideIntelligence } from "../../components/VaultForgeRoomIntelligence";
 
 type RoomState = "active" | "saved" | "archived" | "deleted";
 type RoomKind = "deal" | "pain";
@@ -549,7 +550,7 @@ function Nav({ active }: { active: RoomKind }) {
       <Link href="/routing" style={btn}>Routing</Link>
       <Link href="/network" style={btn}>Network</Link>
       <Link href="/deal-rooms" style={active === "deal" ? goldBtn : btn}>Deal Rooms</Link>
-      <Link href="/deal-rooms" style={active === "pain" ? goldBtn : btn}>Pain Rooms</Link>
+      <Link href="/pain-rooms" style={active === "pain" ? goldBtn : btn}>Pain Rooms</Link>
       <Link href="/messages" style={btn}>Messages</Link>
       <Link href="/profile" style={btn}>Profile</Link>
       <Link href="/logout" style={redBtn}>Logout</Link>
@@ -686,169 +687,6 @@ function ActivityStream({ kind, id }: { kind: RoomKind; id: string }) {
   );
 }
 
-
-
-function dealEinstein(room: Room) {
-  const ask = moneyNum(room.askingPrice || room.askPrice);
-  const arv = moneyNum(room.propertyValue || room.value);
-  const repairs = moneyNum(room.repairs);
-  const spread = arv && ask ? arv - ask - repairs : 0;
-
-  let score = 38;
-  if (spread > 25000) score += 12;
-  if (spread > 75000) score += 18;
-  if (spread > 150000) score += 15;
-  if (txt(room.controlStatus).toLowerCase().includes("controlled")) score += 10;
-  if (list(room.routeTo).length) score += 7;
-  if (!ask || !arv) score -= 8;
-  score = Math.max(0, Math.min(100, score));
-
-  const risk = Math.max(10, Math.min(100,
-    (!ask || !arv ? 22 : 0) +
-    (txt(room.condition).toLowerCase().includes("full") ? 24 : 0) +
-    (txt(room.occupancy).toLowerCase().includes("squatter") ? 28 : 0) +
-    (txt(room.controlStatus).toLowerCase().includes("no") ? 18 : 0) +
-    28
-  ));
-
-  return {
-    score,
-    risk,
-    spread,
-    signal: score >= 75 ? "Strong opportunity signal" : score >= 55 ? "Workable deal — verify proof" : "Needs stronger facts before hard routing",
-    next: !ask || !arv ? "Collect ask, ARV/value, repairs, control, photos, and access before routing hard." : "Verify control, title/access, photos, and numbers, then route to the highest-fit buyer/capital/operator.",
-    hidden: spread > 75000 ? "Margin may support buyer spread, capital stack, or JV route." : "Upside depends on cleaner numbers, control, and execution path.",
-    killer: !ask || !arv ? "Missing underwriting values." : risk > 70 ? "Risk stack may kill buyer confidence." : "No major killer detected yet.",
-  };
-}
-
-function painEinstein(room: Room) {
-  let severity = 35;
-  const sev = txt(room.severity).toLowerCase();
-  if (sev.includes("medium")) severity += 10;
-  if (sev.includes("high")) severity += 25;
-  if (sev.includes("critical")) severity += 38;
-  if (sev.includes("emergency")) severity += 48;
-
-  const pressure = txt(room.timePressure).toLowerCase();
-  if (pressure.includes("24") || pressure.includes("72")) severity += 15;
-  if (list(room.blockers).some((b) => ["capital", "title", "legal", "city"].includes(b.toLowerCase()))) severity += 10;
-
-  severity = Math.max(0, Math.min(100, severity));
-  const collapse = Math.max(10, Math.min(100, severity + list(room.riskTypes || room.risks).length * 5));
-  const solver = Math.max(35, Math.min(98, 100 - Math.round(collapse * 0.35) + list(room.needs || room.routingNeeds).length * 6));
-
-  return {
-    severity,
-    collapse,
-    solver,
-    signal: severity >= 85 ? "Immediate pressure signal" : severity >= 70 ? "High-priority execution problem" : "Active problem needing routing",
-    next: list(room.blockers).includes("Capital") ? "Confirm money needed now, collateral, payoff, and deadline, then route to private capital/lender." : list(room.blockers).includes("Title") ? "Collect title facts and route to title/legal specialist before more capital is burned." : "Identify the single blocker stopping execution and route to the highest-fit solver.",
-    consequence: txt(room.worstCase, "Delay, cost increase, failed closing, loss of control, or legal/financial escalation."),
-    fix: txt(room.desiredSolution, "Triage blocker, assign solver, message route fit, and track response until resolved."),
-  };
-}
-
-
-
-function dealFrontSnapshot(room: Room) {
-  return [
-    txt(room.assetClass),
-    txt(room.propertyType),
-    txt(room.city),
-    txt(room.state),
-    txt(room.askingPrice || room.askPrice),
-    txt(room.propertyValue || room.value),
-    txt(room.repairs),
-    list(room.strategy).join(", "),
-    txt(room.controlStatus),
-  ].filter(Boolean);
-}
-
-function painFrontSnapshot(room: Room) {
-  return [
-    list(room.painTypes).join(", "),
-    txt(room.city),
-    txt(room.state),
-    txt(room.severity),
-    txt(room.timePressure),
-    txt(room.capitalPressure),
-    txt(room.controlStatus),
-    txt(room.desiredSolution),
-  ].filter(Boolean);
-}
-
-function IntelligenceStrip({ items }: { items: string[] }) {
-  const visible = items.filter(Boolean);
-  if (!visible.length) return <p style={muted}>No snapshot fields entered yet.</p>;
-
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
-      {visible.map((item, index) => (
-        <div
-          key={`${item}-${index}`}
-          style={{
-            border: "1px solid rgba(245,197,66,.25)",
-            background: "#0d1320",
-            color: "#f7f7fb",
-            borderRadius: 999,
-            padding: "10px 14px",
-            fontSize: 13,
-            fontWeight: 800,
-          }}
-        >
-          {item}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EinsteinPanel({ kind, room }: { kind: RoomKind; room: Room }) {
-  const deal = kind === "deal" ? dealIntel(room) : null;
-  const pain = kind === "pain" ? painIntel(room) : null;
-  const dealExtra = kind === "deal" ? dealEinstein(room) : null;
-  const painExtra = kind === "pain" ? painEinstein(room) : null;
-
-  return (
-    <Section title={kind === "deal" ? "AI Deal Intelligence" : "AI Problem Solver Intelligence"}>
-      {kind === "deal" && deal && dealExtra ? (
-        <>
-          <div style={grid}>
-            <div style={activePanel}><div style={eyebrow}>Opportunity Score</div><h2 style={h2}>{deal.score}%</h2><p style={muted}>{deal.signal}</p></div>
-            <div style={panel}><div style={eyebrow}>Risk Engine</div><h2 style={h2}>{deal.risk}%</h2><p style={muted}>{dealExtra.killer}</p></div>
-            <div style={panel}><div style={eyebrow}>Spread</div><h2 style={h2}>${Math.round(deal.spread).toLocaleString()}</h2><p style={muted}>AI-estimated gross spread after repairs.</p></div>
-            <div style={panel}><div style={eyebrow}>Confidence</div><h2 style={h2}>{deal.confidence}%</h2><p style={muted}>Based on numbers, control, condition, and routing fields.</p></div>
-          </div>
-          <div style={{ ...grid, marginTop: 16 }}>
-            <div style={panel}><div style={eyebrow}>Field Snapshot</div><IntelligenceStrip items={dealFrontSnapshot(room)} /></div>
-            <div style={panel}><div style={eyebrow}>Best Next Move</div><p style={sub}>{deal.next}</p></div>
-            <div style={panel}><div style={eyebrow}>Hidden Opportunity</div><p style={sub}>{dealExtra.hidden}</p></div>
-            <div style={panel}><div style={eyebrow}>Exit Strategy</div><p style={sub}>{deal.exit}</p></div>
-          </div>
-        </>
-      ) : null}
-
-      {kind === "pain" && pain && painExtra ? (
-        <>
-          <div style={grid}>
-            <div style={activePanel}><div style={eyebrow}>Severity</div><h2 style={h2}>{pain.severity}%</h2><p style={muted}>{pain.signal}</p></div>
-            <div style={panel}><div style={eyebrow}>Collapse Risk</div><h2 style={h2}>{pain.collapse}%</h2><p style={muted}>If nobody acts, this can become loss of control, money, deal, or time.</p></div>
-            <div style={panel}><div style={eyebrow}>Capital Need</div><h2 style={h2}>{pain.capital}%</h2><p style={muted}>Funding pressure based on problem type and capital fields.</p></div>
-            <div style={panel}><div style={eyebrow}>Solver Fit</div><h2 style={h2}>{painExtra.solver}%</h2><p style={muted}>How clear the next solver lane appears.</p></div>
-          </div>
-          <div style={{ ...grid, marginTop: 16 }}>
-            <div style={panel}><div style={eyebrow}>Problem Snapshot</div><IntelligenceStrip items={painFrontSnapshot(room)} /></div>
-            <div style={panel}><div style={eyebrow}>Best Next Move</div><p style={sub}>{pain.next}</p></div>
-            <div style={panel}><div style={eyebrow}>Problem Fix</div><p style={sub}>{painExtra.fix}</p></div>
-            <div style={panel}><div style={eyebrow}>If Nothing Happens</div><p style={sub}>{pain.consequence}</p></div>
-          </div>
-        </>
-      ) : null}
-    </Section>
-  );
-}
-
 export default function DealRoomPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id || "");
   const [room, setRoom] = useState<Room | null>(null);
@@ -923,7 +761,8 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
           </div>
         </Section>
 
-        <EinsteinPanel kind="deal" room={room} />
+        
+        <RoomInsideIntelligence kind="deal" room={room} />
 
         <Section title="Intelligence Tabs">
           <div style={grid}>
@@ -940,9 +779,9 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
         {panelKey === "intel" ? (
           <Section title="AI Deal Intelligence">
             <div style={grid}>
-              <Meter title="Deal Strength" value={intel.score} />
-              <Meter title="Risk" value={intel.risk} />
-              <Meter title="Confidence" value={intel.confidence} />
+              
+              
+              
               <Value title="Signal" value={intel.signal} />
               <Value title="Best Next Move" value={intel.next} />
               <Value title="Exit Paths" value={intel.exit} />
