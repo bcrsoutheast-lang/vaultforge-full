@@ -10,7 +10,10 @@ type Message = {
   id: string;
   body: string;
   from: string;
+  fromEmail: string;
   at: string;
+  read: boolean;
+  attachments: string[];
 };
 
 type Thread = {
@@ -22,6 +25,8 @@ type Thread = {
   state: string;
   roomTitle: string;
   roomSubtitle: string;
+  participants: string[];
+  toEmail: string;
   status: ThreadStatus;
   unread: boolean;
   saved: boolean;
@@ -58,6 +63,7 @@ const THREAD_KEY = "vaultforge_message_threads_v2";
 const LEGACY_KEYS = ["vaultforge_message_command_messages", "vf_message_threads"];
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
+const ACTIVITY_KEY = "vaultforge_room_activity_v2";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -95,6 +101,24 @@ function arr<T>(key: string): T[] {
   if (!ok()) return [];
   const parsed = j<unknown>(localStorage.getItem(key), []);
   return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
+
+function currentMember() {
+  if (!ok()) return { id: "local_member", email: "", name: "Me" };
+  const profileKeys = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+
+  for (const key of profileKeys) {
+    const profile = j<any | null>(localStorage.getItem(key), null);
+    if (profile && typeof profile === "object") {
+      const email = txt(profile.email).toLowerCase();
+      const name = txt(profile.name || profile.fullName || profile.full_name || profile.company, "Me");
+      const id = txt(profile.id || email || "local_member");
+      return { id, email, name };
+    }
+  }
+
+  const email = txt(localStorage.getItem("vf_email") || localStorage.getItem("vaultforge_email") || localStorage.getItem("member_email")).toLowerCase();
+  return { id: email || "local_member", email, name: "Me" };
 }
 
 function rid(room: Room | null | undefined) {
@@ -171,6 +195,7 @@ function getRoom(kind: "deal" | "pain", id: string) {
 
 function roomContext(kind: "deal" | "pain", roomId: string) {
   const room = getRoom(kind, roomId);
+
   if (!room) {
     return {
       state: "",
@@ -194,31 +219,49 @@ function roomContext(kind: "deal" | "pain", roomId: string) {
   };
 }
 
+function cleanLane(raw: unknown): Lane {
+  const lane = txt(raw, "general").toLowerCase();
+  if (lane.includes("deal")) return "deal";
+  if (lane.includes("pain")) return "pain";
+  if (lane.includes("member")) return "member";
+  return "general";
+}
+
+function normalizeMessage(raw: any, fallbackId: string, index: number): Message {
+  const now = new Date().toISOString();
+  return {
+    id: txt(raw?.id, `${fallbackId}_msg_${index}`),
+    body: txt(raw?.body || raw?.text || raw?.message),
+    from: txt(raw?.from || raw?.sender || raw?.author, "VaultForge"),
+    fromEmail: txt(raw?.fromEmail || raw?.senderEmail || raw?.email),
+    at: txt(raw?.at || raw?.createdAt || raw?.updatedAt, now),
+    read: Boolean(raw?.read),
+    attachments: list(raw?.attachments),
+  };
+}
+
 function normalizeThread(raw: any): Thread {
   const now = new Date().toISOString();
-  const rawLane = txt(raw?.lane || raw?.type || raw?.roomType, "general").toLowerCase();
-  const lane: Lane = rawLane.includes("deal") ? "deal" : rawLane.includes("pain") ? "pain" : rawLane.includes("member") ? "member" : "general";
+  const lane = cleanLane(raw?.lane || raw?.type || raw?.roomType);
   const roomType: Thread["roomType"] = lane === "deal" || lane === "pain" ? lane : lane === "member" ? "member" : "general";
   const roomId = txt(raw?.roomId || raw?.room_id || raw?.room || raw?.itemId || raw?.id_ref);
-  const context = lane === "deal" || lane === "pain" ? roomContext(lane, roomId) : { state: txt(raw?.state), roomTitle: txt(raw?.roomTitle || raw?.subject, "General Message"), roomSubtitle: txt(raw?.roomSubtitle || raw?.lane, "General") };
-  const id = txt(raw?.id || raw?.threadKey || raw?.thread_id || raw?.message_id) || `${lane}_${roomId || "general"}_${Date.now()}`;
+  const context = lane === "deal" || lane === "pain" ? roomContext(lane, roomId) : {
+    state: txt(raw?.state),
+    roomTitle: txt(raw?.roomTitle || raw?.subject, lane === "member" ? "Member Message" : "General Message"),
+    roomSubtitle: txt(raw?.roomSubtitle || raw?.lane, lane),
+  };
 
+  const id = txt(raw?.id || raw?.threadKey || raw?.thread_id || raw?.message_id) || `${lane}_${roomId || "general"}_${Date.now()}`;
   let messages: Message[] = [];
+
   if (Array.isArray(raw?.messages)) {
-    messages = raw.messages.map((msg: any, index: number) => ({
-      id: txt(msg?.id, `${id}_msg_${index}`),
-      body: txt(msg?.body || msg?.text || msg?.message, ""),
-      from: txt(msg?.from || msg?.sender || msg?.author, "VaultForge"),
-      at: txt(msg?.at || msg?.createdAt || msg?.updatedAt, now),
-    })).filter((msg: Message) => msg.body);
+    messages = raw.messages.map((msg: any, index: number) => normalizeMessage(msg, id, index)).filter((msg: Message) => msg.body);
   } else if (txt(raw?.body || raw?.text || raw?.message)) {
-    messages = [{
-      id: `${id}_msg_0`,
-      body: txt(raw?.body || raw?.text || raw?.message),
-      from: txt(raw?.from || raw?.sender || raw?.author, "VaultForge"),
-      at: txt(raw?.createdAt || raw?.updatedAt, now),
-    }];
+    messages = [normalizeMessage(raw, id, 0)];
   }
+
+  const status = txt(raw?.status, "active");
+  const unread = Boolean(raw?.unread || raw?.isUnread || messages.some((msg) => !msg.read && msg.from !== "Me"));
 
   return {
     id,
@@ -229,8 +272,10 @@ function normalizeThread(raw: any): Thread {
     state: txt(raw?.state || context.state),
     roomTitle: context.roomTitle,
     roomSubtitle: context.roomSubtitle,
-    status: (["active", "saved", "archived", "deleted"].includes(txt(raw?.status)) ? txt(raw?.status) : "active") as ThreadStatus,
-    unread: Boolean(raw?.unread || raw?.isUnread),
+    participants: list(raw?.participants),
+    toEmail: txt(raw?.toEmail || raw?.to || raw?.recipient),
+    status: (["active", "saved", "archived", "deleted"].includes(status) ? status : "active") as ThreadStatus,
+    unread,
     saved: Boolean(raw?.saved),
     createdAt: txt(raw?.createdAt, now),
     updatedAt: txt(raw?.updatedAt || raw?.createdAt, now),
@@ -261,11 +306,25 @@ function writeThreads(threads: Thread[]) {
   window.dispatchEvent(new Event("vaultforge-alert-change"));
 }
 
-function makeSeedThread(lane: Lane, subject: string, roomId = ""): Thread {
+function addRoomActivity(thread: Thread, action: string, note: string) {
+  if (!ok()) return;
+  if (thread.roomType !== "deal" && thread.roomType !== "pain") return;
+  if (!thread.roomId) return;
+
+  const key = `${thread.roomType}:${thread.roomId}`;
+  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ACTIVITY_KEY), {});
+  all[key] = [{ at: new Date().toISOString(), action, note }, ...(all[key] || [])].slice(0, 75);
+  writeJson(ACTIVITY_KEY, all);
+  window.dispatchEvent(new Event("vaultforge-room-activity-change"));
+}
+
+function makeThread(lane: Lane, subject: string, roomId = "", toEmail = ""): Thread {
   const now = new Date().toISOString();
   const context = lane === "deal" || lane === "pain" ? roomContext(lane, roomId) : { state: "", roomTitle: subject, roomSubtitle: lane };
+  const member = currentMember();
+
   return {
-    id: `${lane}_${roomId || "general"}_${Date.now()}`,
+    id: `${lane}_${roomId || toEmail || "general"}_${Date.now()}`,
     lane,
     roomId,
     roomType: lane === "deal" || lane === "pain" ? lane : lane === "member" ? "member" : "general",
@@ -273,6 +332,8 @@ function makeSeedThread(lane: Lane, subject: string, roomId = ""): Thread {
     state: context.state,
     roomTitle: context.roomTitle,
     roomSubtitle: context.roomSubtitle,
+    participants: [member.email || member.name, toEmail].filter(Boolean),
+    toEmail,
     status: "active",
     unread: false,
     saved: false,
@@ -288,10 +349,11 @@ function seedFromUrl() {
   const type = txt(url.searchParams.get("type") || url.searchParams.get("lane") || "general").toLowerCase();
   const lane: Lane = type.includes("deal") ? "deal" : type.includes("pain") ? "pain" : type.includes("member") ? "member" : "general";
   const roomId = txt(url.searchParams.get("room") || url.searchParams.get("roomId") || "");
-  const subject = txt(url.searchParams.get("subject"), lane === "deal" ? "Deal Room Message" : lane === "pain" ? "Pain Room Message" : "General Message");
+  const toEmail = txt(url.searchParams.get("to") || url.searchParams.get("email") || "");
+  const subject = txt(url.searchParams.get("subject"), lane === "deal" ? "Deal Room Message" : lane === "pain" ? "Pain Room Message" : lane === "member" ? "Member Message" : "General Message");
 
-  if (!roomId && !url.searchParams.get("subject")) return null;
-  return makeSeedThread(lane, subject, roomId);
+  if (!roomId && !toEmail && !url.searchParams.get("subject")) return null;
+  return makeThread(lane, subject, roomId, toEmail);
 }
 
 const styleTag = `
@@ -361,33 +423,51 @@ function laneLabel(lane: Lane) {
 
 function ThreadCard({ thread, active, onOpen }: { thread: Thread; active: boolean; onOpen: () => void }) {
   const style = active ? activePanel : thread.unread ? (thread.lane === "pain" ? pulseRed : pulseGold) : panel;
+  const latest = thread.messages[thread.messages.length - 1];
+
   return (
     <button type="button" style={{ ...style, textAlign: "left", cursor: "pointer" }} onClick={onOpen}>
-      <div style={eyebrow}>{laneLabel(thread.lane)} Message {thread.unread ? "• Unread" : ""}</div>
+      <div style={eyebrow}>{laneLabel(thread.lane)} Thread {thread.unread ? "• Unread" : ""}</div>
       <h2 style={h2}>{thread.subject}</h2>
       <p style={sub}>{thread.roomTitle}</p>
       <p style={muted}>{thread.roomSubtitle}</p>
       <p style={muted}>{thread.messages.length} message(s) • {new Date(thread.updatedAt).toLocaleString()}</p>
+      {latest ? <p style={muted}>Latest: {latest.body.slice(0, 120)}{latest.body.length > 120 ? "..." : ""}</p> : <p style={muted}>No replies yet.</p>}
     </button>
   );
 }
 
 function MessageBubble({ message }: { message: Message }) {
+  const mine = message.from === "Me";
   return (
-    <div style={panel}>
+    <div style={{ ...panel, marginLeft: mine ? "auto" : 0, maxWidth: 860, borderColor: mine ? "rgba(245,197,66,.5)" : "rgba(207,216,230,.16)" }}>
       <div style={eyebrow}>{message.from} • {new Date(message.at).toLocaleString()}</div>
       <p style={sub}>{message.body}</p>
+      {message.attachments.length ? <p style={muted}>Attachments: {message.attachments.length}</p> : null}
     </div>
+  );
+}
+
+function StatusFolder({ title, count, active, onClick }: { title: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" style={active ? activePanel : count ? pulseGold : panel} onClick={onClick}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>thread(s)</p>
+    </button>
   );
 }
 
 export default function MessagesPage() {
   const [tick, setTick] = useState(0);
   const [lane, setLane] = useState<Lane | "all">("all");
+  const [folder, setFolder] = useState<ThreadStatus | "unread">("active");
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeId, setActiveId] = useState("");
   const [reply, setReply] = useState("");
-  const [newGeneral, setNewGeneral] = useState("");
+  const [newSubject, setNewSubject] = useState("");
+  const [newLane, setNewLane] = useState<Lane>("general");
+  const [newTo, setNewTo] = useState("");
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
@@ -409,12 +489,15 @@ export default function MessagesPage() {
       const exists = current.find((thread) =>
         thread.lane === seeded.lane &&
         thread.roomId === seeded.roomId &&
+        thread.toEmail === seeded.toEmail &&
         thread.subject === seeded.subject
       );
 
       if (!exists) {
         current = [seeded, ...current];
         writeThreads(current);
+      } else {
+        setActiveId(exists.id);
       }
     }
 
@@ -428,15 +511,22 @@ export default function MessagesPage() {
     member: threads.filter((thread) => thread.status === "active" && thread.lane === "member").length,
     general: threads.filter((thread) => thread.status === "active" && thread.lane === "general").length,
     unread: threads.filter((thread) => thread.status === "active" && thread.unread).length,
-    saved: threads.filter((thread) => thread.saved || thread.status === "saved").length,
+    saved: threads.filter((thread) => thread.status === "saved" || thread.saved).length,
     archived: threads.filter((thread) => thread.status === "archived").length,
     deleted: threads.filter((thread) => thread.status === "deleted").length,
   }), [threads]);
 
   const visible = useMemo(() => {
-    const active = threads.filter((thread) => thread.status === "active");
-    return lane === "all" ? active : active.filter((thread) => thread.lane === lane);
-  }, [threads, lane]);
+    let next = threads;
+
+    if (folder === "unread") next = next.filter((thread) => thread.status === "active" && thread.unread);
+    else if (folder === "saved") next = next.filter((thread) => thread.status === "saved" || thread.saved);
+    else next = next.filter((thread) => thread.status === folder);
+
+    if (lane !== "all") next = next.filter((thread) => thread.lane === lane);
+
+    return next;
+  }, [threads, lane, folder]);
 
   const activeThread = threads.find((thread) => thread.id === activeId) || null;
 
@@ -446,7 +536,17 @@ export default function MessagesPage() {
   }
 
   function openThread(id: string) {
-    const next = threads.map((thread) => thread.id === id ? { ...thread, unread: false, updatedAt: new Date().toISOString() } : thread);
+    const now = new Date().toISOString();
+    const next = threads.map((thread) =>
+      thread.id === id
+        ? {
+            ...thread,
+            unread: false,
+            updatedAt: now,
+            messages: thread.messages.map((msg) => ({ ...msg, read: true })),
+          }
+        : thread
+    );
     persist(next);
     setActiveId(id);
   }
@@ -457,33 +557,45 @@ export default function MessagesPage() {
 
   function sendReply() {
     if (!activeThread || !reply.trim()) return;
+    const member = currentMember();
     const message: Message = {
       id: `${activeThread.id}_msg_${Date.now()}`,
       body: reply.trim(),
       from: "Me",
+      fromEmail: member.email,
       at: new Date().toISOString(),
+      read: true,
+      attachments: [],
     };
 
-    persist(threads.map((thread) =>
+    const next = threads.map((thread) =>
       thread.id === activeThread.id
-        ? { ...thread, messages: [...thread.messages, message], unread: false, updatedAt: message.at }
+        ? { ...thread, messages: [...thread.messages, message], unread: false, updatedAt: message.at, status: thread.status === "deleted" ? "active" : thread.status }
         : thread
-    ));
+    );
+
+    persist(next);
+    addRoomActivity(activeThread, "Message Sent", reply.trim().slice(0, 180));
     setReply("");
   }
 
-  function createGeneral() {
-    if (!newGeneral.trim()) return;
-    const thread = makeSeedThread("general", newGeneral.trim());
-    thread.messages = [{
+  function createThread() {
+    if (!newSubject.trim()) return;
+    const thread = makeThread(newLane, newSubject.trim(), "", newTo.trim());
+    const message: Message = {
       id: `${thread.id}_msg_0`,
-      body: "General message thread created.",
+      body: "Thread created.",
       from: "VaultForge",
+      fromEmail: "",
       at: new Date().toISOString(),
-    }];
+      read: true,
+      attachments: [],
+    };
+    thread.messages = [message];
     persist([thread, ...threads]);
     setActiveId(thread.id);
-    setNewGeneral("");
+    setNewSubject("");
+    setNewTo("");
   }
 
   function laneButton(value: Lane | "all", label: string, count: number) {
@@ -508,42 +620,56 @@ export default function MessagesPage() {
 
         <section style={hero}>
           <div style={eyebrow}>Message Command</div>
-          <h1 style={h1}>Message cards first.</h1>
-          <p style={sub}>Deal, Pain, Member, and General messages stay separated. Click a card to read or reply.</p>
+          <h1 style={h1}>Threaded inbox.</h1>
+          <p style={sub}>Cards first. Open a thread to read and reply. Deal, Pain, Member, and General messages stay separated and carry room context.</p>
         </section>
 
         <Section title="Message Lanes">
           <div style={grid}>
             {laneButton("all", "All Cards", counts.all)}
-            {laneButton("deal", "Deal Messages", counts.deal)}
-            {laneButton("pain", "Pain Messages", counts.pain)}
-            {laneButton("member", "Member Messages", counts.member)}
-            {laneButton("general", "General Messages", counts.general)}
+            {laneButton("deal", "Deal Threads", counts.deal)}
+            {laneButton("pain", "Pain Threads", counts.pain)}
+            {laneButton("member", "Member Threads", counts.member)}
+            {laneButton("general", "General Threads", counts.general)}
           </div>
         </Section>
 
-        <Section title="Folders">
+        <Section title="Thread Folders">
           <div style={grid}>
-            <div style={counts.saved ? pulseGold : panel}><div style={eyebrow}>Saved</div><h2 style={h2}>{counts.saved}</h2><p style={muted}>saved message threads</p></div>
-            <div style={panel}><div style={eyebrow}>Archived</div><h2 style={h2}>{counts.archived}</h2><p style={muted}>archived threads</p></div>
-            <div style={panel}><div style={eyebrow}>Deleted</div><h2 style={h2}>{counts.deleted}</h2><p style={muted}>deleted threads</p></div>
+            <StatusFolder title="Active" count={counts.all} active={folder === "active"} onClick={() => { setFolder("active"); setActiveId(""); }} />
+            <StatusFolder title="Unread" count={counts.unread} active={folder === "unread"} onClick={() => { setFolder("unread"); setActiveId(""); }} />
+            <StatusFolder title="Saved" count={counts.saved} active={folder === "saved"} onClick={() => { setFolder("saved"); setActiveId(""); }} />
+            <StatusFolder title="Archived" count={counts.archived} active={folder === "archived"} onClick={() => { setFolder("archived"); setActiveId(""); }} />
+            <StatusFolder title="Deleted" count={counts.deleted} active={folder === "deleted"} onClick={() => { setFolder("deleted"); setActiveId(""); }} />
           </div>
         </Section>
 
-        <Section title="Create General Message">
-          <div style={row}>
-            <input
-              style={{ ...input, flex: "1 1 320px" }}
-              placeholder="Start a general/member message thread"
-              value={newGeneral}
-              onChange={(event) => setNewGeneral(event.target.value)}
-              onKeyDownCapture={(event) => event.stopPropagation()}
-            />
-            <button type="button" style={goldBtn} onClick={createGeneral}>Create Thread</button>
+        <Section title="Create Thread">
+          <div style={grid}>
+            <label>
+              <div style={eyebrow}>Lane</div>
+              <select style={input} value={newLane} onChange={(event) => setNewLane(event.target.value as Lane)}>
+                <option value="general">General</option>
+                <option value="member">Member</option>
+                <option value="deal">Deal</option>
+                <option value="pain">Pain</option>
+              </select>
+            </label>
+            <label>
+              <div style={eyebrow}>Subject</div>
+              <input style={input} value={newSubject} onKeyDownCapture={(event) => event.stopPropagation()} onChange={(event) => setNewSubject(event.target.value)} placeholder="Thread subject" />
+            </label>
+            <label>
+              <div style={eyebrow}>To / Email</div>
+              <input style={input} value={newTo} onKeyDownCapture={(event) => event.stopPropagation()} onChange={(event) => setNewTo(event.target.value)} placeholder="optional" />
+            </label>
+          </div>
+          <div style={{ ...row, marginTop: 16 }}>
+            <button type="button" style={goldBtn} onClick={createThread}>Create Thread</button>
           </div>
         </Section>
 
-        <Section title={activeThread ? "Selected Thread" : "Message Cards"}>
+        <Section title={activeThread ? "Open Thread" : "Thread Cards"}>
           {!activeThread ? (
             visible.length ? (
               <div style={grid}>
@@ -551,7 +677,12 @@ export default function MessagesPage() {
                   <ThreadCard key={thread.id} thread={thread} active={activeId === thread.id} onOpen={() => openThread(thread.id)} />
                 ))}
               </div>
-            ) : <p style={sub}>No message cards in this lane.</p>
+            ) : (
+              <div style={panel}>
+                <h2 style={h2}>No threads here.</h2>
+                <p style={sub}>Create a thread or open another lane/folder.</p>
+              </div>
+            )
           ) : (
             <div style={{ display: "grid", gap: 16 }}>
               <div style={activeThread.unread ? pulseRed : activePanel}>
@@ -559,12 +690,15 @@ export default function MessagesPage() {
                 <h2 style={h2}>{activeThread.subject}</h2>
                 <p style={sub}>{activeThread.roomTitle}</p>
                 <p style={muted}>{activeThread.roomSubtitle}</p>
+                <p style={muted}>Participants: {activeThread.participants.join(", ") || activeThread.toEmail || "Not listed"}</p>
+
                 <div style={{ ...row, marginTop: 16 }}>
                   <button type="button" style={btn} onClick={() => setActiveId("")}>Back to Cards</button>
-                  <button type="button" style={activeThread.saved ? goldBtn : btn} onClick={() => updateThread(activeThread.id, { saved: !activeThread.saved })}>{activeThread.saved ? "Saved" : "Save"}</button>
+                  <button type="button" style={activeThread.saved || activeThread.status === "saved" ? goldBtn : btn} onClick={() => updateThread(activeThread.id, { saved: !activeThread.saved, status: activeThread.saved ? "active" : "saved" })}>{activeThread.saved || activeThread.status === "saved" ? "Saved" : "Save"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { unread: !activeThread.unread })}>{activeThread.unread ? "Mark Read" : "Mark Unread"}</button>
                   <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { status: "archived" })}>Archive</button>
                   <button type="button" style={redBtn} onClick={() => updateThread(activeThread.id, { status: "deleted" })}>Delete</button>
+                  {activeThread.status !== "active" ? <button type="button" style={goldBtn} onClick={() => updateThread(activeThread.id, { status: "active" })}>Restore</button> : null}
                   {activeThread.roomType === "deal" && activeThread.roomId ? <Link href={`/deal-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Deal Room</Link> : null}
                   {activeThread.roomType === "pain" && activeThread.roomId ? <Link href={`/pain-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Pain Room</Link> : null}
                 </div>
