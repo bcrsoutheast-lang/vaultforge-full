@@ -508,6 +508,7 @@ function Nav({ active }: { active: RoomKind }) {
     <nav style={nav}>
       <div style={brand}>VAULTFORGE</div>
       <Link href="/command" style={btn}>Command</Link>
+      <Link href="/my-rooms" style={btn}>My Rooms</Link>
       <Link href="/network" style={btn}>Network</Link>
       <Link href="/deal-rooms" style={active === "deal" ? goldBtn : btn}>Deal Rooms</Link>
       <Link href="/pain-rooms" style={active === "pain" ? goldBtn : btn}>Pain Rooms</Link>
