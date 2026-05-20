@@ -3,57 +3,80 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type Member = {
-  id: string;
-  name: string;
-  email: string;
-  company: string;
-  state: string;
-  states: string[];
-  counties: string[];
-  memberType: string;
-  strategies: string[];
-  painFocus: string[];
-  capitalRange: string;
-  score: number;
-};
+type RoomKind = "deal" | "pain";
+type RouteFilter = "active" | "urgent" | "capital" | "operator" | "buyer" | "legal" | "closed";
+type RouteStatus = "pending" | "accepted" | "passed" | "claimed" | "closed";
 
 type Room = {
   id?: string;
   roomId?: string;
   title?: string;
+  name?: string;
   state?: string;
   city?: string;
   county?: string;
   assetClass?: string;
   propertyType?: string;
-  strategy?: string[] | string;
-  routeTo?: string[] | string;
   severity?: string;
+  timePressure?: string;
   painTypes?: string[] | string;
   needs?: string[] | string;
   routingNeeds?: string[] | string;
+  routeTo?: string[] | string;
+  strategy?: string[] | string;
+  blockers?: string[] | string;
+  risks?: string[] | string;
+  riskTypes?: string[] | string;
   roomState?: string;
   cleanupState?: string;
   stateStatus?: string;
+  memberRoomStatus?: string;
+  executionStage?: string;
+  dealStage?: string;
+  painStage?: string;
+  askingPrice?: string;
+  askPrice?: string;
+  propertyValue?: string;
+  value?: string;
+  repairs?: string;
+  capitalPressure?: string;
+  moneyNeededNow?: string;
   ownerEmail?: string;
-  ownerId?: string;
-  routedToIds?: string[] | string;
-  routedToEmails?: string[] | string;
+  memberEmail?: string;
+  createdBy?: string;
+  createdByEmail?: string;
+  assignedTo?: string[] | string;
   assignedToIds?: string[] | string;
+  assignedToEmail?: string[] | string;
   assignedToEmails?: string[] | string;
-  updatedAt?: string;
+  routedTo?: string[] | string;
+  routedToIds?: string[] | string;
+  routedToEmail?: string[] | string;
+  routedToEmails?: string[] | string;
   createdAt?: string;
+  updatedAt?: string;
   [key: string]: unknown;
 };
 
-const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
-const MEMBER_DIRECTORY_KEYS = ["vaultforge_member_directory", "vaultforge_members", "vf_members"];
+type RouteEntry = {
+  id: string;
+  kind: RoomKind;
+  room: Room;
+  status: RouteStatus;
+  score: number;
+  urgency: number;
+  requiredParty: string;
+  bestNextMove: string;
+  pressure: string;
+  lastMovement: string;
+};
+
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
-const THREAD_KEY = "vaultforge_message_threads_v2";
-const ACTIVITY_KEY = "vaultforge_room_activity_v2";
+const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
+const MEMBER_STATE_KEY = "vaultforge_my_room_status_v1";
 const ROUTE_STATUS_KEY = "vaultforge_route_status_v1";
+const ACTIVITY_KEY = "vaultforge_room_activity_v2";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -82,9 +105,14 @@ function txt(value: unknown, fallback = "") {
 }
 
 function list(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
-  if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
   return [];
+}
+
+function num(value: unknown) {
+  const parsed = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function arr<T>(key: string): T[] {
@@ -93,37 +121,57 @@ function arr<T>(key: string): T[] {
   return Array.isArray(parsed) ? (parsed as T[]) : [];
 }
 
-function rid(room: Room) {
-  return txt(room.id || room.roomId);
+function rid(room: Room | null | undefined) {
+  return txt(room?.id || room?.roomId);
+}
+
+function keysFor(kind: RoomKind) {
+  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
+}
+
+function roomTitle(room: Room, kind: RoomKind) {
+  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
 }
 
 function loc(room: Room) {
   return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
 }
 
-function roomTitle(room: Room, kind: "deal" | "pain") {
-  return txt(room.title, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
-}
-
-function normalizeRoom(raw: any): Room {
-  const id = txt(raw?.id || raw?.roomId || raw?.dealId || raw?.painId || raw?.signalId);
+function normalizeRoom(row: any, kind: RoomKind): Room {
+  const id = txt(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId);
   return {
-    ...raw,
+    ...row,
     id,
     roomId: id,
-    title: txt(raw?.title || raw?.name || raw?.dealTitle || raw?.painTitle || raw?.problemTitle),
+    title: txt(row?.title || row?.name || row?.dealTitle || row?.painTitle || row?.problemTitle, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room"),
+    state: txt(row?.state, "GA"),
+    city: txt(row?.city),
+    county: txt(row?.county),
   };
 }
 
-function readRooms(kind: "deal" | "pain") {
+function stateMap() {
+  const map: Record<string, string> = {};
+  if (!ok()) return map;
+  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, string>>(localStorage.getItem(key), {})));
+  Object.assign(map, j<Record<string, string>>(localStorage.getItem(MEMBER_STATE_KEY), {}));
+  return map;
+}
+
+function rawStatus(room: Room) {
+  const state = txt(room.memberRoomStatus || room.roomState || room.cleanupState || room.stateStatus, "active");
+  if (state === "saved" || state === "archived" || state === "deleted" || state === "sold" || state === "resolved") return state;
+  return "active";
+}
+
+function allRooms(kind: RoomKind): Room[] {
   if (!ok()) return [];
-  const keys = kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
   const out: Room[] = [];
   const seen = new Set<string>();
 
-  for (const key of keys) {
+  for (const key of keysFor(kind)) {
     for (const row of arr<any>(key)) {
-      const room = normalizeRoom(row);
+      const room = normalizeRoom(row, kind);
       const id = rid(room);
       if (!id || seen.has(id)) continue;
       seen.add(id);
@@ -131,437 +179,287 @@ function readRooms(kind: "deal" | "pain") {
     }
   }
 
-  return out.filter((room) => {
-    const status = txt(room.roomState || room.cleanupState || room.stateStatus, "active");
-    return !["deleted", "archived"].includes(status);
-  });
-}
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i) || "";
+    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
+    if (!match) continue;
 
-function defaultMembers(): Member[] {
-  return [
-    {
-      id: "ga_buyer",
-      name: "Georgia Buyer Group",
-      email: "ga@vaultforge.local",
-      company: "Atlanta Acquisitions",
-      state: "GA",
-      states: ["GA", "TN"],
-      counties: ["Cobb", "Fulton", "Cherokee"],
-      memberType: "Buyer",
-      strategies: ["Fix & Flip", "Rental"],
-      painFocus: ["Distress", "Foreclosure"],
-      capitalRange: "$500k-$5M",
-      score: 91,
-    },
-    {
-      id: "fl_operator",
-      name: "Florida Operator",
-      email: "fl@vaultforge.local",
-      company: "Sunbelt Operations",
-      state: "FL",
-      states: ["FL", "GA"],
-      counties: ["Miami-Dade", "Orange"],
-      memberType: "Operator",
-      strategies: ["Multifamily", "Value Add"],
-      painFocus: ["Construction", "Capital"],
-      capitalRange: "$1M-$10M",
-      score: 87,
-    },
-    {
-      id: "capital_partner",
-      name: "Capital Partner",
-      email: "capital@vaultforge.local",
-      company: "Forge Capital",
-      state: "TX",
-      states: ["TX", "GA", "FL"],
-      counties: [],
-      memberType: "Lender",
-      strategies: ["Bridge", "Equity"],
-      painFocus: ["Capital", "Liquidity"],
-      capitalRange: "$5M-$50M",
-      score: 94,
-    },
-  ];
-}
-
-function readMembers(): Member[] {
-  if (!ok()) return defaultMembers();
-
-  const out: Member[] = [];
-  const seen = new Set<string>();
-
-  for (const key of MEMBER_DIRECTORY_KEYS) {
-    for (const raw of arr<any>(key)) {
-      const email = txt(raw?.email).toLowerCase();
-      const id = txt(raw?.id || email || raw?.name);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-
-      out.push({
-        id,
-        name: txt(raw?.name || raw?.fullName || raw?.full_name || raw?.company, "VaultForge Member"),
-        email,
-        company: txt(raw?.company || raw?.businessName || raw?.name, "VaultForge"),
-        state: txt(raw?.state, "GA"),
-        states: list(raw?.states || raw?.statesOperatedIn || raw?.markets || raw?.operatingStates),
-        counties: list(raw?.counties || raw?.markets),
-        memberType: txt(raw?.memberType || raw?.role || raw?.type, "Operator"),
-        strategies: list(raw?.strategies || raw?.buyBox || raw?.focus),
-        painFocus: list(raw?.painFocus || raw?.painTypes || raw?.problemsSolved),
-        capitalRange: txt(raw?.capitalRange || raw?.capital || raw?.fundSize, "Not listed"),
-        score: Number(raw?.score || 70),
-      });
+    const value = j<any>(localStorage.getItem(key), null);
+    if (Array.isArray(value)) {
+      for (const row of value) {
+        const room = normalizeRoom(row, kind);
+        const id = rid(room);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push(room);
+      }
+    } else if (value && typeof value === "object") {
+      const room = normalizeRoom(value, kind);
+      const id = rid(room);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        out.push(room);
+      }
     }
   }
 
-  for (const key of PROFILE_KEYS) {
-    const raw = j<any | null>(localStorage.getItem(key), null);
-    if (!raw || typeof raw !== "object") continue;
+  const states = stateMap();
 
-    const email = txt(raw?.email).toLowerCase();
-    const id = txt(raw?.id || email || raw?.name);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-
-    out.push({
-      id,
-      name: txt(raw?.name || raw?.fullName || raw?.full_name || raw?.company, "Me"),
-      email,
-      company: txt(raw?.company || raw?.businessName || raw?.name, "VaultForge"),
-      state: txt(raw?.state, "GA"),
-      states: list(raw?.states || raw?.statesOperatedIn || raw?.markets || raw?.operatingStates),
-      counties: list(raw?.counties || raw?.markets),
-      memberType: txt(raw?.memberType || raw?.role || raw?.type, "Operator"),
-      strategies: list(raw?.strategies || raw?.buyBox || raw?.focus),
-      painFocus: list(raw?.painFocus || raw?.painTypes || raw?.problemsSolved),
-      capitalRange: txt(raw?.capitalRange || raw?.capital || raw?.fundSize, "Not listed"),
-      score: Number(raw?.score || 88),
-    });
-  }
-
-  return out.length ? out : defaultMembers();
+  return out
+    .map((room) => {
+      const id = rid(room);
+      const status = states[id] || states[`${kind}:${id}`] || rawStatus(room);
+      return { ...room, memberRoomStatus: status, roomState: status, cleanupState: status, stateStatus: status };
+    })
+    .filter((room) => rawStatus(room) !== "deleted")
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
 }
 
-function scoreDeal(room: Room, member: Member) {
-  let score = member.score;
+function currentMemberIdentity() {
+  if (!ok()) return { id: "", email: "", hasIdentity: false };
 
-  if (member.states.includes(txt(room.state))) score += 18;
-  if (member.counties.includes(txt(room.county))) score += 12;
-
-  const strategies = list(room.strategy);
-  for (const strat of strategies) {
-    if (member.strategies.some((item) => item.toLowerCase().includes(strat.toLowerCase()))) score += 10;
+  let profile: any = {};
+  for (const key of ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"]) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
+    } catch {
+      // ignore bad cache
+    }
   }
 
-  if (member.memberType.toLowerCase().includes("buyer")) score += 8;
-  if (member.memberType.toLowerCase().includes("lender")) score += 4;
+  const email = txt(
+    profile.email ||
+      profile.memberEmail ||
+      profile.member_email ||
+      localStorage.getItem("vf_email") ||
+      localStorage.getItem("member_email") ||
+      localStorage.getItem("email")
+  ).toLowerCase();
 
-  return Math.min(99, score);
-}
+  const id = txt(
+    profile.id ||
+      profile.memberId ||
+      profile.member_id ||
+      profile.auth_user_id ||
+      profile.user_id ||
+      email ||
+      "local_member"
+  ).toLowerCase();
 
-function scorePain(room: Room, member: Member) {
-  let score = member.score;
-
-  if (member.states.includes(txt(room.state))) score += 18;
-  if (member.counties.includes(txt(room.county))) score += 10;
-
-  const pain = list(room.painTypes);
-  for (const p of pain) {
-    if (member.painFocus.some((item) => item.toLowerCase().includes(p.toLowerCase()))) score += 12;
-  }
-
-  if (member.memberType.toLowerCase().includes("operator")) score += 7;
-  if (member.memberType.toLowerCase().includes("lender") && txt(room.severity).includes("Capital")) score += 6;
-
-  return Math.min(99, score);
-}
-
-
-function routeKey(kind: "deal" | "pain", roomId: string, member: Member) {
-  return `${kind}:${roomId}:${member.id || member.email}`;
+  return { id, email, hasIdentity: Boolean(id || email) };
 }
 
 function routeStatusMap() {
   return ok() ? j<Record<string, { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }>>(localStorage.getItem(ROUTE_STATUS_KEY), {}) : {};
 }
 
-function setRouteStatus(kind: "deal" | "pain", roomId: string, member: Member, status: "pending" | "accepted" | "passed" | "claimed") {
-  const map = routeStatusMap();
-  map[routeKey(kind, roomId, member)] = {
-    status,
-    at: new Date().toISOString(),
-    memberName: member.name,
-    memberEmail: member.email,
-    roomId,
-    kind,
-  };
-  writeJson(ROUTE_STATUS_KEY, map);
-  window.dispatchEvent(new Event("vaultforge-route-status-change"));
+function routeKey(kind: RoomKind, room: Room) {
+  const current = currentMemberIdentity();
+  const id = rid(room);
+  return `${kind}:${id}:${current.id || current.email || "local_member"}`;
 }
 
-function countRouteStatuses() {
+function routeStatusFor(kind: RoomKind, room: Room): RouteStatus {
+  const id = rid(room);
+  const current = currentMemberIdentity();
   const map = routeStatusMap();
-  const values = Object.values(map);
-  return {
-    pending: values.filter((item) => item.status === "pending").length,
-    accepted: values.filter((item) => item.status === "accepted").length,
-    passed: values.filter((item) => item.status === "passed").length,
-    claimed: values.filter((item) => item.status === "claimed").length,
-  };
-}
 
-
-
-function routePerformanceForMember(member: Member) {
-  const entries = routeEntries().filter((entry) => {
-    const email = txt(entry.memberEmail).toLowerCase();
-    const name = txt(entry.memberName).toLowerCase();
+  const entries = Object.entries(map).filter(([key, value]) => {
+    if (value.kind !== kind || value.roomId !== id) return false;
+    const keyLower = key.toLowerCase();
     return Boolean(
-      (member.email && email === member.email.toLowerCase()) ||
-      (member.id && entry.key.toLowerCase().includes(member.id.toLowerCase())) ||
-      (member.name && name === member.name.toLowerCase())
+      (current.id && keyLower.includes(current.id.toLowerCase())) ||
+      (current.email && keyLower.includes(current.email.toLowerCase())) ||
+      txt(value.memberEmail).toLowerCase() === current.email
     );
   });
 
-  const accepted = entries.filter((entry) => entry.status === "accepted").length;
-  const passed = entries.filter((entry) => entry.status === "passed").length;
-  const claimed = entries.filter((entry) => entry.status === "claimed").length;
-  const pending = entries.filter((entry) => entry.status === "pending").length;
-  const stalePending = entries.filter((entry) => entry.status === "pending" && routeAgeDays(entry) >= 3).length;
-  const total = entries.length;
-
-  const boost = accepted * 4 + claimed * 8 - passed * 5 - stalePending * 4;
-  const reliability = Math.max(0, Math.min(100, 55 + accepted * 8 + claimed * 12 - passed * 10 - stalePending * 8));
-
-  let badge = "";
-  if (claimed >= 2 || reliability >= 85) badge = "Best Performer";
-  else if (accepted >= 1 || reliability >= 70) badge = "Reliable Solver";
-  else if (passed >= 2 || stalePending >= 2) badge = "Needs Review";
-
-  return { accepted, passed, claimed, pending, stalePending, total, boost, reliability, badge };
-}
-
-function performanceAdjustedDealScore(room: Room, member: Member) {
-  return Math.max(0, Math.min(99, scoreDeal(room, member) + routePerformanceForMember(member).boost));
-}
-
-function performanceAdjustedPainScore(room: Room, member: Member) {
-  return Math.max(0, Math.min(99, scorePain(room, member) + routePerformanceForMember(member).boost));
-}
-
-function topPerformers(members: Member[]) {
-  return members
-    .map((member) => ({ member, performance: routePerformanceForMember(member) }))
-    .filter((item) => item.performance.total > 0)
-    .sort((a, b) => b.performance.reliability - a.performance.reliability)
-    .slice(0, 6);
-}
-
-
-function routeEntries() {
-  return Object.entries(routeStatusMap()).map(([key, value]) => ({ key, ...value }));
-}
-
-function routeEntriesByStatus(status: string) {
-  return routeEntries().filter((entry) => entry.status === status);
-}
-
-function roomRouteEntries(kind: "deal" | "pain", roomId: string) {
-  return routeEntries().filter((entry) => entry.kind === kind && entry.roomId === roomId);
-}
-
-function roomHasRoute(kind: "deal" | "pain", roomId: string) {
-  return roomRouteEntries(kind, roomId).length > 0;
-}
-
-function routeRoomTitle(kind: "deal" | "pain", roomId: string) {
-  const room = kind === "deal"
-    ? readRooms("deal").find((item) => rid(item) === roomId)
-    : readRooms("pain").find((item) => rid(item) === roomId);
-
-  return room ? roomTitle(room, kind) : `${kind.toUpperCase()} ROOM ${roomId.slice(0, 8)}`;
-}
-
-function routeRoomLocation(kind: "deal" | "pain", roomId: string) {
-  const room = kind === "deal"
-    ? readRooms("deal").find((item) => rid(item) === roomId)
-    : readRooms("pain").find((item) => rid(item) === roomId);
-
-  return room ? loc(room) : "Room context";
-}
-
-function unmatchedRooms(kind: "deal" | "pain") {
-  return readRooms(kind).filter((room) => !roomHasRoute(kind, rid(room)));
-}
-
-
-function routeAgeDays(entry: { at: string }) {
-  const time = new Date(entry.at).getTime();
-  if (!Number.isFinite(time)) return 0;
-  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
-}
-
-function isUrgentPainRoom(room: Room | undefined) {
-  if (!room) return false;
-  const severity = txt(room.severity);
-  const timePressure = txt(room.timePressure);
-  return severity === "Critical" || severity === "Emergency" || timePressure.includes("24") || timePressure.includes("72");
-}
-
-function escalationRoutes() {
-  return routeEntries().filter((entry) => {
-    const kind = entry.kind === "pain" ? "pain" : "deal";
-    const room = kind === "deal"
-      ? readRooms("deal").find((item) => rid(item) === entry.roomId)
-      : readRooms("pain").find((item) => rid(item) === entry.roomId);
-
-    const stalePending = entry.status === "pending" && routeAgeDays(entry) >= 3;
-    const urgentPainPending = kind === "pain" && entry.status === "pending" && isUrgentPainRoom(room);
-    return stalePending || urgentPainPending;
-  });
-}
-
-function rerouteEntry(entry: { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }) {
-  const kind = entry.kind === "pain" ? "pain" : "deal";
-  const room = kind === "deal"
-    ? readRooms("deal").find((item) => rid(item) === entry.roomId)
-    : readRooms("pain").find((item) => rid(item) === entry.roomId);
-
-  const members = readMembers();
-  const ranked = members
-    .filter((member) => member.email !== entry.memberEmail)
-    .map((member) => ({ member, score: kind === "deal" ? scoreDeal(room || {}, member) : scorePain(room || {}, member) }))
-    .sort((a, b) => b.score - a.score);
-
-  const nextMember = ranked[0]?.member;
-  if (!nextMember) return;
-
-  routeRoom(kind, entry.roomId, nextMember);
-  messageMember(kind, entry.roomId, nextMember);
-}
-
-function followUpEntry(entry: { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }) {
-  const kind = entry.kind === "pain" ? "pain" : "deal";
-  const room = kind === "deal"
-    ? readRooms("deal").find((item) => rid(item) === entry.roomId)
-    : readRooms("pain").find((item) => rid(item) === entry.roomId);
-
-  const member: Member = {
-    id: entry.memberEmail || entry.memberName || "member",
-    name: entry.memberName || entry.memberEmail || "Member",
-    email: entry.memberEmail || "",
-    company: "VaultForge",
-    state: txt(room?.state, "GA"),
-    states: [txt(room?.state, "GA")],
-    counties: [txt(room?.county)],
-    memberType: "Routed Member",
-    strategies: [],
-    painFocus: [],
-    capitalRange: "Not listed",
-    score: 70,
-  };
-
-  messageMember(kind, entry.roomId, member);
-}
-
-
-
-function memberRouteStatus(kind: "deal" | "pain", roomId: string, member: Member) {
-  return routeStatusMap()[routeKey(kind, roomId, member)]?.status || "";
-}
-
-
-function routeRoom(kind: "deal" | "pain", roomId: string, member: Member) {
-  if (!ok()) return;
-
-  const keys = kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
-
-  for (const key of keys) {
-    const rooms = arr<any>(key);
-    const next = rooms.map((raw) => {
-      const room = normalizeRoom(raw);
-      if (rid(room) !== roomId) return raw;
-
-      const ids = new Set(list(room.routedToIds).concat(list(room.assignedToIds)));
-      const emails = new Set(list(room.routedToEmails).concat(list(room.assignedToEmails)));
-
-      ids.add(member.id);
-      emails.add(member.email);
-
-      return {
-        ...room,
-        routedToIds: Array.from(ids),
-        assignedToIds: Array.from(ids),
-        routedToEmails: Array.from(emails),
-        assignedToEmails: Array.from(emails),
-        updatedAt: new Date().toISOString(),
-      };
-    });
-
-    writeJson(key, next);
+  for (const status of ["claimed", "accepted", "pending", "passed", "closed"]) {
+    if (entries.some(([, value]) => value.status === status)) return status as RouteStatus;
   }
 
-  const activity = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ACTIVITY_KEY), {});
-  const activityKey = `${kind}:${roomId}`;
-  activity[activityKey] = [
-    {
-      at: new Date().toISOString(),
-      action: "Routed",
-      note: `Room routed to ${member.name}.`,
-    },
-    ...(activity[activityKey] || []),
-  ].slice(0, 75);
-
-  writeJson(ACTIVITY_KEY, activity);
-  setRouteStatus(kind, roomId, member, "pending");
-
-  window.dispatchEvent(new Event("vaultforge-room-activity-change"));
-  window.dispatchEvent(new Event("vaultforge-my-rooms-change"));
-  window.dispatchEvent(new Event("vaultforge-alert-change"));
+  const roomStatus = rawStatus(room);
+  if (roomStatus === "sold" || roomStatus === "resolved" || roomStatus === "archived") return "closed";
+  return entries[0]?.[1]?.status as RouteStatus || "pending";
 }
 
-function messageMember(kind: "deal" | "pain", roomId: string, member: Member) {
+function setRouteStatus(kind: RoomKind, room: Room, status: RouteStatus) {
   if (!ok()) return;
+  const map = routeStatusMap();
+  const current = currentMemberIdentity();
+  const id = rid(room);
+  const key = routeKey(kind, room);
 
-  const room = kind === "deal"
-    ? readRooms("deal").find((item) => rid(item) === roomId)
-    : readRooms("pain").find((item) => rid(item) === roomId);
+  map[key] = {
+    status,
+    at: new Date().toISOString(),
+    memberName: current.id || "local_member",
+    memberEmail: current.email,
+    roomId: id,
+    kind,
+  };
 
-  const threads = arr<any>(THREAD_KEY);
-
-  threads.unshift({
-    id: `route_${kind}_${roomId}_${Date.now()}`,
-    lane: kind,
-    roomId,
-    roomType: kind,
-    subject: `${kind === "deal" ? "Deal Route" : "Pain Route"} • ${roomTitle(room || {}, kind)}`,
-    state: txt(room?.state),
-    roomTitle: roomTitle(room || {}, kind),
-    roomSubtitle: loc(room || {}),
-    participants: [member.email],
-    toEmail: member.email,
-    status: "active",
-    unread: true,
-    saved: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messages: [
-      {
-        id: `msg_${Date.now()}`,
-        body: `VaultForge routing request sent to ${member.name}.`,
-        from: "VaultForge",
-        fromEmail: "",
-        at: new Date().toISOString(),
-        read: false,
-        attachments: [],
-      },
-    ],
-  });
-
-  writeJson(THREAD_KEY, threads);
-
-  window.dispatchEvent(new Event("vaultforge-messages-change"));
+  writeJson(ROUTE_STATUS_KEY, map);
+  addRouteActivity(kind, room, "Route Status", `Route marked ${status}.`);
+  window.dispatchEvent(new Event("vaultforge-route-status-change"));
   window.dispatchEvent(new Event("vaultforge-alert-change"));
+  window.dispatchEvent(new Event("vaultforge-my-rooms-change"));
+}
+
+function addRouteActivity(kind: RoomKind, room: Room, action: string, note: string) {
+  if (!ok()) return;
+  const id = rid(room);
+  if (!id) return;
+  const key = `${kind}:${id}`;
+  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ACTIVITY_KEY), {});
+  all[key] = [{ at: new Date().toISOString(), action, note }, ...(all[key] || [])].slice(0, 75);
+  writeJson(ACTIVITY_KEY, all);
+  window.dispatchEvent(new Event("vaultforge-room-activity-change"));
+}
+
+function lastMovement(kind: RoomKind, room: Room) {
+  if (!ok()) return txt(room.updatedAt || room.createdAt, "Not listed");
+  const id = rid(room);
+  const activity = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ACTIVITY_KEY), {});
+  const events = activity[`${kind}:${id}`] || [];
+  return events[0]?.at || txt(room.updatedAt || room.createdAt, "Not listed");
+}
+
+function pressureLabel(kind: RoomKind, room: Room) {
+  if (kind === "pain") {
+    const sev = txt(room.severity, "High");
+    const time = txt(room.timePressure, "Timeline open");
+    return `${sev} • ${time}`;
+  }
+
+  const ask = num(room.askingPrice || room.askPrice);
+  const value = num(room.propertyValue || room.value);
+  const repairs = num(room.repairs);
+  const spread = value && ask ? value - ask - repairs : 0;
+  if (!ask || !value) return "Numbers incomplete";
+  if (spread > 150000) return "High spread";
+  if (spread > 50000) return "Working spread";
+  if (spread <= 0) return "Margin weak";
+  return "Verify spread";
+}
+
+function urgencyScore(kind: RoomKind, room: Room) {
+  if (kind === "pain") {
+    let score = 40;
+    const severity = txt(room.severity).toLowerCase();
+    const time = txt(room.timePressure).toLowerCase();
+    if (severity.includes("medium")) score += 10;
+    if (severity.includes("high")) score += 25;
+    if (severity.includes("critical")) score += 38;
+    if (severity.includes("emergency")) score += 48;
+    if (time.includes("24")) score += 18;
+    if (time.includes("72")) score += 14;
+    if (list(room.blockers).length) score += 8;
+    return Math.max(0, Math.min(100, score));
+  }
+
+  let score = 35;
+  const ask = num(room.askingPrice || room.askPrice);
+  const value = num(room.propertyValue || room.value);
+  const repairs = num(room.repairs);
+  const spread = value && ask ? value - ask - repairs : 0;
+  if (!ask || !value) score += 18;
+  if (spread > 50000) score += 15;
+  if (spread > 150000) score += 15;
+  if (list(room.routeTo).length) score += 10;
+  if (txt(room.timePressure).includes("24") || txt(room.timePressure).includes("72")) score += 14;
+  return Math.max(0, Math.min(100, score));
+}
+
+function routeFitScore(kind: RoomKind, room: Room) {
+  let score = 40;
+  if (kind === "deal") {
+    if (list(room.routeTo).length) score += 20;
+    if (txt(room.assetClass)) score += 10;
+    if (txt(room.propertyType)) score += 10;
+    if (num(room.askingPrice || room.askPrice) && num(room.propertyValue || room.value)) score += 15;
+    if (txt(room.state)) score += 5;
+  } else {
+    if (list(room.needs || room.routingNeeds).length) score += 25;
+    if (list(room.painTypes).length) score += 15;
+    if (txt(room.severity)) score += 10;
+    if (txt(room.timePressure)) score += 10;
+  }
+  return Math.max(0, Math.min(100, score));
+}
+
+function requiredParty(kind: RoomKind, room: Room) {
+  const combined = [
+    ...list(room.routeTo),
+    ...list(room.needs),
+    ...list(room.routingNeeds),
+    ...list(room.blockers),
+    ...list(room.painTypes),
+    txt(room.assetClass),
+    txt(room.propertyType),
+  ].join(" ").toLowerCase();
+
+  if (combined.includes("capital") || combined.includes("lender") || combined.includes("money") || combined.includes("fund")) return "Capital / Lender";
+  if (combined.includes("buyer") || combined.includes("dispo")) return "Buyer / Disposition";
+  if (combined.includes("legal") || combined.includes("title") || combined.includes("attorney")) return "Legal / Title";
+  if (combined.includes("contractor") || combined.includes("operator") || combined.includes("rehab") || combined.includes("construction")) return "Operator / Contractor";
+  if (combined.includes("developer") || combined.includes("land") || combined.includes("zoning")) return "Developer / Land";
+  return kind === "deal" ? "Buyer / Capital / Operator" : "Solver / Operator / Capital";
+}
+
+function bestNextMove(kind: RoomKind, room: Room) {
+  const party = requiredParty(kind, room);
+  const status = routeStatusFor(kind, room);
+
+  if (status === "claimed") return "Execution claimed. Track follow-through and next movement.";
+  if (status === "accepted") return "Accepted. Send next room context and request firm action window.";
+  if (status === "passed") return "Passed. Re-route to a better-fit member or archive if stale.";
+  if (status === "closed") return "Closed route. Keep for performance/history.";
+
+  if (kind === "deal") {
+    if (!num(room.askingPrice || room.askPrice) || !num(room.propertyValue || room.value)) return "Collect ask, value/ARV, repairs, photos, control, and access before pushing hard.";
+    return `Route to ${party}. Ask for decision, proof review, and execution response.`;
+  }
+
+  if (!list(room.needs || room.routingNeeds).length && !list(room.blockers).length) return "Classify blocker, solver type, deadline, and money need before routing.";
+  return `Route to ${party}. Confirm blocker owner, deadline, and required fix.`;
+}
+
+function buildRouteEntries(deals: Room[], pains: Room[]): RouteEntry[] {
+  return [
+    ...deals.map((room) => ({ kind: "deal" as RoomKind, room })),
+    ...pains.map((room) => ({ kind: "pain" as RoomKind, room })),
+  ].map((item) => ({
+    id: `${item.kind}:${rid(item.room)}`,
+    kind: item.kind,
+    room: item.room,
+    status: routeStatusFor(item.kind, item.room),
+    score: routeFitScore(item.kind, item.room),
+    urgency: urgencyScore(item.kind, item.room),
+    requiredParty: requiredParty(item.kind, item.room),
+    bestNextMove: bestNextMove(item.kind, item.room),
+    pressure: pressureLabel(item.kind, item.room),
+    lastMovement: lastMovement(item.kind, item.room),
+  }));
+}
+
+function filterEntries(entries: RouteEntry[], filter: RouteFilter) {
+  if (filter === "active") return entries.filter((entry) => entry.status !== "closed");
+  if (filter === "urgent") return entries.filter((entry) => entry.urgency >= 70 && entry.status !== "closed");
+  if (filter === "capital") return entries.filter((entry) => entry.requiredParty.toLowerCase().includes("capital") || entry.requiredParty.toLowerCase().includes("lender"));
+  if (filter === "operator") return entries.filter((entry) => entry.requiredParty.toLowerCase().includes("operator") || entry.requiredParty.toLowerCase().includes("contractor"));
+  if (filter === "buyer") return entries.filter((entry) => entry.requiredParty.toLowerCase().includes("buyer"));
+  if (filter === "legal") return entries.filter((entry) => entry.requiredParty.toLowerCase().includes("legal") || entry.requiredParty.toLowerCase().includes("title"));
+  if (filter === "closed") return entries.filter((entry) => entry.status === "closed" || entry.status === "passed");
+  return entries;
+}
+
+function dateText(value: string) {
+  if (!value || value === "Not listed") return "Not listed";
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return value;
+  return new Date(value).toLocaleString();
 }
 
 const styleTag = `
@@ -578,25 +476,26 @@ const styleTag = `
 `;
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
-const wrap: React.CSSProperties = { maxWidth: 1400, margin: "0 auto", paddingBottom: 90 };
+const wrap: React.CSSProperties = { maxWidth: 1320, margin: "0 auto", paddingBottom: 90 };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
 const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
 const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
 const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22 };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
 const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.75)", boxShadow: "0 0 26px rgba(245,197,66,.18)" };
 const pulseRed: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", animation: "vfPulseRed 2.1s ease-in-out infinite" };
 const pulseGold: React.CSSProperties = { ...panel, borderColor: "rgba(255,220,104,.70)", animation: "vfPulseGold 2.3s ease-in-out infinite" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 14, marginBottom: 12 };
 const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(26px,5vw,44px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 18, lineHeight: 1.35, margin: 0 };
+const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 20, lineHeight: 1.35, margin: 0 };
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const meterBg: React.CSSProperties = { height: 11, background: "#070a12", borderRadius: 999, overflow: "hidden", border: "1px solid rgba(207,216,230,.12)" };
 
 function Nav() {
   return (
@@ -604,11 +503,15 @@ function Nav() {
       <div style={brand}>VAULTFORGE</div>
       <Link href="/command" style={btn}>Command</Link>
       <Link href="/my-rooms" style={btn}>My Rooms</Link>
+      <Link href="/routing" style={goldBtn}>Routing</Link>
+      <Link href="/members" style={btn}>Members</Link>
+      <Link href="/network" style={btn}>Network</Link>
       <Link href="/state-map" style={btn}>State Map</Link>
       <Link href="/alerts" style={btn}>Alerts</Link>
       <Link href="/messages" style={btn}>Messages</Link>
-      <Link href="/routing" style={goldBtn}>Routing</Link>
-      <Link href="/network" style={btn}>Network</Link>
+      <Link href="/deal-create" style={btn}>Create Deal</Link>
+      <Link href="/pain-intake" style={btn}>Pain Intake</Link>
+      <Link href="/profile" style={btn}>Profile</Link>
       <Link href="/logout" style={redBtn}>Logout</Link>
     </nav>
   );
@@ -618,345 +521,195 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
-function MemberCard({ member, score, routeStatus, onRoute, onMessage }: { member: Member; score: number; routeStatus: string; onRoute: () => void; onMessage: () => void }) {
-  const performance = routePerformanceForMember(member);
+function MetricCard({ title, count, note, danger }: { title: string; count: number; note: string; danger?: boolean }) {
   return (
-    <div style={score >= 92 ? pulseGold : activePanel}>
-      <div style={eyebrow}>Match Score • {score}{performance.badge ? ` • ${performance.badge}` : ""}</div>
-      <h2 style={h2}>{member.name}</h2>
-      <p style={sub}>{member.company}</p>
-      <p style={muted}>{member.memberType} • {member.capitalRange}</p>
-      <p style={muted}>States: {member.states.join(", ") || member.state}</p>
-      <p style={muted}>Strategies: {member.strategies.join(", ") || "Not listed"}</p>
-      <p style={muted}>Pain Focus: {member.painFocus.join(", ") || "Not listed"}</p>
-      <p style={muted}>Route Status: {routeStatus || "not routed"}</p>
-      <p style={muted}>Performance: accepted {performance.accepted} • claimed {performance.claimed} • passed {performance.passed} • stale {performance.stalePending}</p>
-      <p style={muted}>Reliability: {performance.reliability}% {performance.boost ? `• score adjustment ${performance.boost > 0 ? "+" : ""}${performance.boost}` : ""}</p>
-
-      <div style={{ ...row, marginTop: 16 }}>
-        <button type="button" style={routeStatus ? btn : goldBtn} onClick={onRoute}>{routeStatus ? "Re-Route" : "Route"}</button>
-        <button type="button" style={btn} onClick={onMessage}>Message</button>
-      </div>
+    <div style={danger && count ? pulseRed : count ? pulseGold : panel}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>{note}</p>
     </div>
   );
 }
 
-
-
-function EscalationEntryCard({ entry, refresh }: { entry: { key: string; status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }; refresh: () => void }) {
-  const kind = entry.kind === "pain" ? "pain" : "deal";
-  const roomHref = kind === "deal" ? `/deal-rooms/${encodeURIComponent(entry.roomId)}` : `/pain-rooms/${encodeURIComponent(entry.roomId)}`;
-  const age = routeAgeDays(entry);
-  const room = kind === "deal"
-    ? readRooms("deal").find((item) => rid(item) === entry.roomId)
-    : readRooms("pain").find((item) => rid(item) === entry.roomId);
-  const urgent = kind === "pain" && isUrgentPainRoom(room);
-
+function FilterButton({ filter, current, title, count, onClick }: { filter: RouteFilter; current: RouteFilter; title: string; count: number; onClick: () => void }) {
   return (
-    <div style={urgent ? pulseRed : pulseGold}>
-      <div style={eyebrow}>Escalation • {urgent ? "Urgent Pain" : "Stale Pending"}</div>
-      <h2 style={h2}>{routeRoomTitle(kind, entry.roomId)}</h2>
-      <p style={sub}>{routeRoomLocation(kind, entry.roomId)}</p>
-      <p style={muted}>Member: {entry.memberName || entry.memberEmail || "Member"}</p>
-      <p style={muted}>Pending age: {age} day(s) • Status: {entry.status}</p>
-      <p style={muted}>{urgent ? "High-pressure pain route needs response." : "Route has been pending too long."}</p>
-      <div style={{ ...row, marginTop: 14 }}>
-        <Link href={roomHref} style={goldBtn}>Open Room</Link>
-        <button type="button" style={btn} onClick={() => { followUpEntry(entry); refresh(); }}>Message Follow-Up</button>
-        <button type="button" style={goldBtn} onClick={() => { rerouteEntry(entry); refresh(); }}>Reroute Best Fit</button>
-      </div>
-    </div>
+    <button type="button" style={current === filter ? activePanel : count ? pulseGold : panel} onClick={onClick}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>route item(s)</p>
+    </button>
   );
 }
 
-
-function RouteEntryCard({ entry }: { entry: { key: string; status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string } }) {
-  const kind = entry.kind === "pain" ? "pain" : "deal";
-  const roomHref = kind === "deal" ? `/deal-rooms/${encodeURIComponent(entry.roomId)}` : `/pain-rooms/${encodeURIComponent(entry.roomId)}`;
-
-  return (
-    <div style={entry.status === "passed" ? panel : entry.status === "pending" ? pulseGold : activePanel}>
-      <div style={eyebrow}>{entry.status}</div>
-      <h2 style={h2}>{routeRoomTitle(kind, entry.roomId)}</h2>
-      <p style={sub}>{routeRoomLocation(kind, entry.roomId)}</p>
-      <p style={muted}>Member: {entry.memberName || entry.memberEmail || "Member"}</p>
-      <p style={muted}>{new Date(entry.at).toLocaleString()}</p>
-      <div style={{ ...row, marginTop: 14 }}>
-        <Link href={roomHref} style={goldBtn}>Open Room</Link>
-        <Link href={`/messages?type=${kind}&room=${encodeURIComponent(entry.roomId)}&to=${encodeURIComponent(entry.memberEmail || "")}&subject=${encodeURIComponent("Route Follow Up: " + routeRoomTitle(kind, entry.roomId))}`} style={btn}>Message</Link>
-      </div>
-    </div>
-  );
-}
-
-function UnmatchedRoomCard({ kind, room }: { kind: "deal" | "pain"; room: Room }) {
-  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
+function RouteCard({ entry, refresh }: { entry: RouteEntry; refresh: () => void }) {
+  const room = entry.room;
+  const id = rid(room);
+  const href = entry.kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`;
+  const style = entry.status === "pending" && entry.urgency >= 70 ? pulseRed : entry.status === "accepted" || entry.status === "claimed" ? pulseGold : panel;
+  const meterColor = entry.urgency >= 75 ? "#ff4b5c" : entry.score >= 70 ? "#ffdc68" : "#f5a742";
 
   return (
-    <div style={kind === "pain" ? pulseRed : pulseGold}>
-      <div style={eyebrow}>{kind === "deal" ? "Unmatched Deal" : "Unmatched Pain"}</div>
-      <h2 style={h2}>{roomTitle(room, kind)}</h2>
+    <div style={style}>
+      <div style={eyebrow}>{entry.kind === "deal" ? "Deal Route" : "Pain Route"} • {entry.status}</div>
+      <h2 style={h2}>{roomTitle(room, entry.kind)}</h2>
       <p style={sub}>{loc(room)}</p>
       <p style={muted}>
-        {kind === "deal"
-          ? `${txt(room.assetClass, "Deal")} • ${txt(room.propertyType, "Type")}`
-          : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")}`}
+        {entry.kind === "deal"
+          ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • ${list(room.strategy).join(", ") || "Strategy open"}`
+          : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "Severity open")} • ${txt(room.timePressure, "Timeline open")}`}
       </p>
-      <div style={{ ...row, marginTop: 14 }}>
+
+      <div style={{ ...grid, marginTop: 16 }}>
+        <div style={panel}>
+          <div style={eyebrow}>Fit Score</div>
+          <h2 style={{ ...h2, fontSize: "clamp(26px,4vw,40px)" }}>{entry.score}%</h2>
+          <div style={meterBg}><div style={{ width: `${entry.score}%`, height: "100%", background: "#ffdc68" }} /></div>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Urgency</div>
+          <h2 style={{ ...h2, fontSize: "clamp(26px,4vw,40px)" }}>{entry.urgency}%</h2>
+          <div style={meterBg}><div style={{ width: `${entry.urgency}%`, height: "100%", background: meterColor }} /></div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <div style={eyebrow}>VaultForge Route Read</div>
+        <p style={sub}>{entry.bestNextMove}</p>
+        <p style={muted}>Required party: {entry.requiredParty}</p>
+        <p style={muted}>Pressure: {entry.pressure}</p>
+        <p style={muted}>Last movement: {dateText(entry.lastMovement)}</p>
+      </div>
+
+      <div style={{ ...row, marginTop: 18 }}>
         <Link href={href} style={goldBtn}>Open Room</Link>
+        <Link href={`/messages?type=${entry.kind}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent((entry.kind === "deal" ? "Deal Route: " : "Pain Route: ") + roomTitle(room, entry.kind))}`} style={btn}>Message</Link>
+        {entry.status !== "accepted" ? <button type="button" style={goldBtn} onClick={() => { setRouteStatus(entry.kind, room, "accepted"); refresh(); }}>Accept</button> : null}
+        {entry.status !== "claimed" ? <button type="button" style={goldBtn} onClick={() => { setRouteStatus(entry.kind, room, "claimed"); refresh(); }}>Claim</button> : null}
+        {entry.status !== "passed" ? <button type="button" style={btn} onClick={() => { setRouteStatus(entry.kind, room, "passed"); refresh(); }}>Pass</button> : null}
+        {entry.status !== "closed" ? <button type="button" style={btn} onClick={() => { setRouteStatus(entry.kind, room, "closed"); refresh(); }}>Close</button> : null}
       </div>
     </div>
   );
 }
-
 
 export default function RoutingPage() {
   const [tick, setTick] = useState(0);
+  const [filter, setFilter] = useState<RouteFilter>("active");
 
   useEffect(() => {
     const refresh = () => setTick((value) => value + 1);
-
     window.addEventListener("storage", refresh);
-    window.addEventListener("vaultforge-room-activity-change", refresh);
-    window.addEventListener("vaultforge-messages-change", refresh);
     window.addEventListener("vaultforge-route-status-change", refresh);
-
+    window.addEventListener("vaultforge-my-rooms-change", refresh);
+    window.addEventListener("vaultforge-room-activity-change", refresh);
+    window.addEventListener("vaultforge-deal-change", refresh);
+    window.addEventListener("vaultforge-pain-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
-      window.removeEventListener("vaultforge-room-activity-change", refresh);
-      window.removeEventListener("vaultforge-messages-change", refresh);
       window.removeEventListener("vaultforge-route-status-change", refresh);
+      window.removeEventListener("vaultforge-my-rooms-change", refresh);
+      window.removeEventListener("vaultforge-room-activity-change", refresh);
+      window.removeEventListener("vaultforge-deal-change", refresh);
+      window.removeEventListener("vaultforge-pain-change", refresh);
     };
   }, []);
 
-  const deals = useMemo(() => readRooms("deal"), [tick]);
-  const pains = useMemo(() => readRooms("pain"), [tick]);
-  const members = useMemo(() => readMembers(), [tick]);
-  const routeCounts = useMemo(() => countRouteStatuses(), [tick]);
-  const pendingRoutes = useMemo(() => routeEntriesByStatus("pending"), [tick]);
-  const acceptedRoutes = useMemo(() => routeEntriesByStatus("accepted"), [tick]);
-  const passedRoutes = useMemo(() => routeEntriesByStatus("passed"), [tick]);
-  const claimedRoutes = useMemo(() => routeEntriesByStatus("claimed"), [tick]);
-  const unmatchedDeals = useMemo(() => unmatchedRooms("deal"), [deals, tick]);
-  const unmatchedPains = useMemo(() => unmatchedRooms("pain"), [pains, tick]);
-  const escalations = useMemo(() => escalationRoutes(), [tick, deals, pains]);
-  const performers = useMemo(() => topPerformers(members), [members, tick]);
+  const deals = useMemo(() => allRooms("deal"), [tick]);
+  const pains = useMemo(() => allRooms("pain"), [tick]);
+  const entries = useMemo(() => buildRouteEntries(deals, pains), [deals, pains]);
+  const visible = useMemo(() => filterEntries(entries, filter), [entries, filter]);
+  const refresh = () => setTick((value) => value + 1);
+
+  const active = entries.filter((entry) => entry.status !== "closed").length;
+  const urgent = entries.filter((entry) => entry.urgency >= 70 && entry.status !== "closed").length;
+  const pending = entries.filter((entry) => entry.status === "pending").length;
+  const claimed = entries.filter((entry) => entry.status === "claimed").length;
+
+  const filters: { key: RouteFilter; title: string; count: number }[] = [
+    { key: "active", title: "Active", count: active },
+    { key: "urgent", title: "Urgent", count: urgent },
+    { key: "capital", title: "Capital", count: filterEntries(entries, "capital").length },
+    { key: "operator", title: "Operator", count: filterEntries(entries, "operator").length },
+    { key: "buyer", title: "Buyer", count: filterEntries(entries, "buyer").length },
+    { key: "legal", title: "Legal", count: filterEntries(entries, "legal").length },
+    { key: "closed", title: "Closed", count: filterEntries(entries, "closed").length },
+  ];
 
   return (
     <main style={page}>
       <style>{styleTag}</style>
-
       <div style={wrap}>
         <Nav />
 
         <section style={hero}>
-          <div style={eyebrow}>Routing Engine</div>
-          <h1 style={h1}>AI member matching.</h1>
-          <p style={sub}>Best fit members, operators, lenders, and buyers for each room. Route directly into their workspace.</p>
+          <div style={eyebrow}>VaultForge Routing</div>
+          <h1 style={h1}>Execution route board.</h1>
+          <p style={sub}>
+            Route deals and pain rooms to the right buyer, capital, operator, legal, developer, or solver lane. Keep routing tight, accountable, and execution driven.
+          </p>
+          <div style={{ ...row, marginTop: 18 }}>
+            <Link href="/my-rooms" style={goldBtn}>My Rooms</Link>
+            <Link href="/messages" style={btn}>Messages</Link>
+            <Link href="/network" style={btn}>Network</Link>
+            <Link href="/state-map" style={btn}>State Map</Link>
+          </div>
         </section>
 
-        <Section title="Route Status Board">
+        <section style={{ marginBottom: 20 }}>
           <div style={grid}>
-            <div style={pulseGold}><div style={eyebrow}>Pending</div><h2 style={h2}>{routeCounts.pending}</h2><p style={muted}>sent routes awaiting member action</p></div>
-            <div style={activePanel}><div style={eyebrow}>Accepted</div><h2 style={h2}>{routeCounts.accepted}</h2><p style={muted}>members accepted route</p></div>
-            <div style={panel}><div style={eyebrow}>Passed</div><h2 style={h2}>{routeCounts.passed}</h2><p style={muted}>members passed or rejected</p></div>
-            <div style={pulseGold}><div style={eyebrow}>Claimed</div><h2 style={h2}>{routeCounts.claimed}</h2><p style={muted}>execution claimed</p></div>
+            <MetricCard title="Active Routes" count={active} note="routes not closed" />
+            <MetricCard title="Urgent Routes" count={urgent} note="high pressure rooms" danger />
+            <MetricCard title="Pending" count={pending} note="waiting on accept/pass/claim" danger />
+            <MetricCard title="Claimed" count={claimed} note="execution owned by a member" />
+          </div>
+        </section>
+
+        <Section title="Route Filters">
+          <div style={grid}>
+            {filters.map((item) => (
+              <FilterButton key={item.key} filter={item.key} current={filter} title={item.title} count={item.count} onClick={() => setFilter(item.key)} />
+            ))}
           </div>
         </Section>
 
-        <Section title="Route Performance Memory">
-          {performers.length ? (
+        <Section title={`${filters.find((item) => item.key === filter)?.title || "Active"} Route Queue`}>
+          {visible.length ? (
             <div style={grid}>
-              {performers.map(({ member, performance }) => (
-                <div key={member.id} style={performance.badge === "Needs Review" ? panel : pulseGold}>
-                  <div style={eyebrow}>{performance.badge || "Route History"}</div>
-                  <h2 style={h2}>{member.name}</h2>
-                  <p style={sub}>{member.company}</p>
-                  <p style={muted}>Reliability {performance.reliability}% • Boost {performance.boost > 0 ? "+" : ""}{performance.boost}</p>
-                  <p style={muted}>Accepted {performance.accepted} • Claimed {performance.claimed} • Passed {performance.passed} • Stale {performance.stalePending}</p>
-                </div>
+              {visible.map((entry) => (
+                <RouteCard key={entry.id} entry={entry} refresh={refresh} />
               ))}
             </div>
           ) : (
             <div style={panel}>
-              <h2 style={h2}>No route performance yet.</h2>
-              <p style={sub}>As members accept, pass, and claim execution, routing will start adjusting match scores.</p>
+              <h2 style={h2}>No routes here.</h2>
+              <p style={sub}>Create rooms, route rooms, or open a different filter.</p>
+              <div style={{ ...row, marginTop: 16 }}>
+                <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
+                <Link href="/pain-intake" style={goldBtn}>Create Pain</Link>
+                <Link href="/my-rooms" style={btn}>My Rooms</Link>
+              </div>
             </div>
           )}
         </Section>
 
-        <Section title="Route Queues">
+        <Section title="Routing Doctrine">
           <div style={grid}>
-            <button type="button" style={pendingRoutes.length ? pulseGold : panel}>
-              <div style={eyebrow}>Pending Routes</div>
-              <h2 style={h2}>{pendingRoutes.length}</h2>
-              <p style={muted}>sent, waiting on member action</p>
-            </button>
-            <button type="button" style={acceptedRoutes.length ? activePanel : panel}>
-              <div style={eyebrow}>Accepted Routes</div>
-              <h2 style={h2}>{acceptedRoutes.length}</h2>
-              <p style={muted}>member accepted route</p>
-            </button>
-            <button type="button" style={passedRoutes.length ? panel : panel}>
-              <div style={eyebrow}>Passed Routes</div>
-              <h2 style={h2}>{passedRoutes.length}</h2>
-              <p style={muted}>not a fit / rejected</p>
-            </button>
-            <button type="button" style={claimedRoutes.length ? pulseGold : panel}>
-              <div style={eyebrow}>Claimed Execution</div>
-              <h2 style={h2}>{claimedRoutes.length}</h2>
-              <p style={muted}>member claimed execution</p>
-            </button>
-            <button type="button" style={unmatchedDeals.length ? pulseGold : panel}>
-              <div style={eyebrow}>Unmatched Deals</div>
-              <h2 style={h2}>{unmatchedDeals.length}</h2>
-              <p style={muted}>deal rooms needing route</p>
-            </button>
-            <button type="button" style={unmatchedPains.length ? pulseRed : panel}>
-              <div style={eyebrow}>Unmatched Pain</div>
-              <h2 style={h2}>{unmatchedPains.length}</h2>
-              <p style={muted}>pain rooms needing solver</p>
-            </button>
-            <button type="button" style={escalations.length ? pulseRed : panel}>
-              <div style={eyebrow}>Escalations</div>
-              <h2 style={h2}>{escalations.length}</h2>
-              <p style={muted}>stale or urgent routes</p>
-            </button>
+            <div style={panel}>
+              <div style={eyebrow}>Tight Routing</div>
+              <p style={sub}>Do not broadcast weak rooms.</p>
+              <p style={muted}>Classify the constraint first, then route to the smallest team that can remove it.</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Execution Response</div>
+              <p style={sub}>Accept, pass, claim, or close.</p>
+              <p style={muted}>Every route should create movement or be removed from the active board.</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>VaultForge Intelligence</div>
+              <p style={sub}>Route by problem fit, not just state.</p>
+              <p style={muted}>Capital, operator, buyer, legal, developer, and solver lanes all need different facts.</p>
+            </div>
           </div>
-        </Section>
-
-        <Section title="Escalation Queue">
-          {escalations.length ? (
-            <div style={grid}>
-              {escalations.map((entry) => <EscalationEntryCard key={entry.key} entry={entry} refresh={() => setTick((value) => value + 1)} />)}
-            </div>
-          ) : <p style={sub}>No stale or urgent route escalations.</p>}
-        </Section>
-
-        <Section title="Pending Route Queue">
-          {pendingRoutes.length ? <div style={grid}>{pendingRoutes.map((entry) => <RouteEntryCard key={entry.key} entry={entry} />)}</div> : <p style={sub}>No pending routes.</p>}
-        </Section>
-
-        <Section title="Accepted / Claimed Queue">
-          {[...acceptedRoutes, ...claimedRoutes].length ? <div style={grid}>{[...acceptedRoutes, ...claimedRoutes].map((entry) => <RouteEntryCard key={entry.key} entry={entry} />)}</div> : <p style={sub}>No accepted or claimed routes yet.</p>}
-        </Section>
-
-        <Section title="Unmatched Deal Rooms">
-          {unmatchedDeals.length ? <div style={grid}>{unmatchedDeals.map((room) => <UnmatchedRoomCard key={rid(room)} kind="deal" room={room} />)}</div> : <p style={sub}>All active deal rooms have route history.</p>}
-        </Section>
-
-        <Section title="Unmatched Pain Rooms">
-          {unmatchedPains.length ? <div style={grid}>{unmatchedPains.map((room) => <UnmatchedRoomCard key={rid(room)} kind="pain" room={room} />)}</div> : <p style={sub}>All active pain rooms have route history.</p>}
-        </Section>
-
-        <Section title="Deal Routing Lane">
-          {deals.length ? (
-            <div style={{ display: "grid", gap: 24 }}>
-              {deals.map((room) => {
-                const ranked = members
-                  .map((member) => ({ member, score: performanceAdjustedDealScore(room, member) }))
-                  .sort((a, b) => b.score - a.score)
-                  .slice(0, 3);
-
-                return (
-                  <div key={rid(room)} style={activePanel}>
-                    <div style={eyebrow}>Deal Room</div>
-                    <h2 style={h2}>{roomTitle(room, "deal")}</h2>
-                    <p style={sub}>{loc(room)}</p>
-                    <p style={muted}>
-                      {txt(room.assetClass, "Deal")} • {txt(room.propertyType, "Type")} • Strategy {list(room.strategy).join(", ") || "open"}
-                    </p>
-                    <p style={muted}>
-                      Routed: {list(room.routedToIds).length} • Assigned: {list(room.assignedToIds).length}
-                    </p>
-
-                    <div style={{ ...row, marginTop: 14, marginBottom: 18 }}>
-                      <Link href={`/deal-rooms/${encodeURIComponent(rid(room))}`} style={goldBtn}>Open Deal Room</Link>
-                    </div>
-
-                    <div style={grid}>
-                      {ranked.map(({ member, score }) => (
-                        <MemberCard
-                          key={`${rid(room)}_${member.id}`}
-                          member={member}
-                          score={score}
-                          routeStatus={memberRouteStatus("deal", rid(room), member)}
-                          onRoute={() => {
-                            routeRoom("deal", rid(room), member);
-                            setTick((value) => value + 1);
-                          }}
-                          onMessage={() => {
-                            messageMember("deal", rid(room), member);
-                            setTick((value) => value + 1);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={panel}>
-              <h2 style={h2}>No active deal rooms.</h2>
-              <p style={sub}>Create deal rooms to generate routing matches.</p>
-            </div>
-          )}
-        </Section>
-
-        <Section title="Pain Solver Lane">
-          {pains.length ? (
-            <div style={{ display: "grid", gap: 24 }}>
-              {pains.map((room) => {
-                const ranked = members
-                  .map((member) => ({ member, score: performanceAdjustedPainScore(room, member) }))
-                  .sort((a, b) => b.score - a.score)
-                  .slice(0, 3);
-
-                return (
-                  <div key={rid(room)} style={txt(room.severity).includes("Critical") || txt(room.severity).includes("Emergency") ? pulseRed : activePanel}>
-                    <div style={eyebrow}>Pain Room</div>
-                    <h2 style={h2}>{roomTitle(room, "pain")}</h2>
-                    <p style={sub}>{loc(room)}</p>
-                    <p style={muted}>
-                      {list(room.painTypes).join(", ") || "Pain"} • {txt(room.severity, "High")} • Needs {list(room.needs || room.routingNeeds).join(", ") || "solver"}
-                    </p>
-                    <p style={muted}>
-                      Routed: {list(room.routedToIds).length} • Assigned: {list(room.assignedToIds).length}
-                    </p>
-
-                    <div style={{ ...row, marginTop: 14, marginBottom: 18 }}>
-                      <Link href={`/pain-rooms/${encodeURIComponent(rid(room))}`} style={goldBtn}>Open Pain Room</Link>
-                    </div>
-
-                    <div style={grid}>
-                      {ranked.map(({ member, score }) => (
-                        <MemberCard
-                          key={`${rid(room)}_${member.id}`}
-                          member={member}
-                          score={score}
-                          routeStatus={memberRouteStatus("pain", rid(room), member)}
-                          onRoute={() => {
-                            routeRoom("pain", rid(room), member);
-                            setTick((value) => value + 1);
-                          }}
-                          onMessage={() => {
-                            messageMember("pain", rid(room), member);
-                            setTick((value) => value + 1);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={panel}>
-              <h2 style={h2}>No active pain rooms.</h2>
-              <p style={sub}>Create pain rooms to generate solver matches.</p>
-            </div>
-          )}
         </Section>
       </div>
     </main>
