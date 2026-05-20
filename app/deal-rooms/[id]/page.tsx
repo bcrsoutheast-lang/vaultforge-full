@@ -686,6 +686,52 @@ function ActivityStream({ kind, id }: { kind: RoomKind; id: string }) {
   );
 }
 
+
+function EinsteinPanel({ kind, room }: { kind: RoomKind; room: Room }) {
+  const deal = kind === "deal" ? dealIntel(room) : null;
+  const pain = kind === "pain" ? painIntel(room) : null;
+  const dealExtra = kind === "deal" ? dealEinstein(room) : null;
+  const painExtra = kind === "pain" ? painEinstein(room) : null;
+
+  return (
+    <Section title={kind === "deal" ? "AI Deal Intelligence" : "AI Problem Solver Intelligence"}>
+      {kind === "deal" && deal && dealExtra ? (
+        <>
+          <div style={grid}>
+            <div style={activePanel}><div style={eyebrow}>Opportunity Score</div><h2 style={h2}>{deal.score}%</h2><p style={muted}>{deal.signal}</p></div>
+            <div style={panel}><div style={eyebrow}>Risk Engine</div><h2 style={h2}>{deal.risk}%</h2><p style={muted}>{dealExtra.killer}</p></div>
+            <div style={panel}><div style={eyebrow}>Spread</div><h2 style={h2}>${Math.round(deal.spread).toLocaleString()}</h2><p style={muted}>AI-estimated gross spread after repairs.</p></div>
+            <div style={panel}><div style={eyebrow}>Confidence</div><h2 style={h2}>{deal.confidence}%</h2><p style={muted}>Based on numbers, control, condition, and routing fields.</p></div>
+          </div>
+          <div style={{ ...grid, marginTop: 16 }}>
+            <div style={panel}><div style={eyebrow}>Field Snapshot</div><IntelligenceStrip items={dealFrontSnapshot(room)} /></div>
+            <div style={panel}><div style={eyebrow}>Best Next Move</div><p style={sub}>{deal.next}</p></div>
+            <div style={panel}><div style={eyebrow}>Hidden Opportunity</div><p style={sub}>{dealExtra.hidden}</p></div>
+            <div style={panel}><div style={eyebrow}>Exit Strategy</div><p style={sub}>{deal.exit}</p></div>
+          </div>
+        </>
+      ) : null}
+
+      {kind === "pain" && pain && painExtra ? (
+        <>
+          <div style={grid}>
+            <div style={activePanel}><div style={eyebrow}>Severity</div><h2 style={h2}>{pain.severity}%</h2><p style={muted}>{pain.signal}</p></div>
+            <div style={panel}><div style={eyebrow}>Collapse Risk</div><h2 style={h2}>{pain.collapse}%</h2><p style={muted}>If nobody acts, this can become loss of control, money, deal, or time.</p></div>
+            <div style={panel}><div style={eyebrow}>Capital Need</div><h2 style={h2}>{pain.capital}%</h2><p style={muted}>Funding pressure based on problem type and capital fields.</p></div>
+            <div style={panel}><div style={eyebrow}>Solver Fit</div><h2 style={h2}>{painExtra.solver}%</h2><p style={muted}>How clear the next solver lane appears.</p></div>
+          </div>
+          <div style={{ ...grid, marginTop: 16 }}>
+            <div style={panel}><div style={eyebrow}>Problem Snapshot</div><IntelligenceStrip items={painFrontSnapshot(room)} /></div>
+            <div style={panel}><div style={eyebrow}>Best Next Move</div><p style={sub}>{pain.next}</p></div>
+            <div style={panel}><div style={eyebrow}>Problem Fix</div><p style={sub}>{painExtra.fix}</p></div>
+            <div style={panel}><div style={eyebrow}>If Nothing Happens</div><p style={sub}>{pain.consequence}</p></div>
+          </div>
+        </>
+      ) : null}
+    </Section>
+  );
+}
+
 export default function DealRoomPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id || "");
   const [room, setRoom] = useState<Room | null>(null);
@@ -759,6 +805,8 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
             <Link href="/deal-rooms" style={btn}>Back</Link>
           </div>
         </Section>
+
+        <EinsteinPanel kind="deal" room={room} />
 
         <Section title="Intelligence Tabs">
           <div style={grid}>
