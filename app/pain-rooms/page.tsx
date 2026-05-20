@@ -150,11 +150,18 @@ function painEinstein(room: any) {
   };
 }
 
-function IntelligenceStrip({ items }: { items: [string, string][] }) {
+function IntelligenceStrip({ items }: { items: Array<[string, string] | string> }) {
+  const normalized: [string, string][] = items
+    .map((item, index) => {
+      if (Array.isArray(item)) return [String(item[0] || `Field ${index + 1}`), String(item[1] || "Not listed")] as [string, string];
+      return [`Field ${index + 1}`, String(item || "Not listed")] as [string, string];
+    })
+    .filter(([, value]) => value.trim());
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: 10, marginTop: 14 }}>
-      {items.map(([label, value]) => (
-        <div key={label} style={{ background: "#070a12", border: "1px solid rgba(245,197,66,.18)", borderRadius: 16, padding: 12 }}>
+      {normalized.map(([label, value], index) => (
+        <div key={`${label}-${index}`} style={{ background: "#070a12", border: "1px solid rgba(245,197,66,.18)", borderRadius: 16, padding: 12 }}>
           <div style={{ ...eyebrow, fontSize: 11, letterSpacing: 4, marginBottom: 6 }}>{label}</div>
           <div style={{ color: "#f7f7fb", fontWeight: 900 }}>{value}</div>
         </div>
