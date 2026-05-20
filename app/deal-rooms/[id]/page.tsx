@@ -467,6 +467,19 @@ function addActivity(kind: RoomKind, id: string, text: string) {
   writeJson(ACTIVITY_KEY, map);
 }
 
+
+function watchingCount(kind: RoomKind, id: string) {
+  if (!ok()) return 0;
+  const key = `${kind}:${id}`;
+  const current = j<string[]>(localStorage.getItem(WATCH_KEY), []);
+  const room = getRoom(kind, id);
+  let count = current.includes(key) ? 1 : 0;
+  if (room) {
+    count += list(room.watchers).length + list(room.watcherIds).length + list(room.watcherEmails).length;
+  }
+  return count;
+}
+
 function isWatched(kind: RoomKind, id: string) {
   if (!ok()) return false;
   return j<string[]>(localStorage.getItem(WATCH_KEY), []).includes(`${kind}:${id}`);
@@ -479,6 +492,8 @@ function toggleWatch(kind: RoomKind, id: string) {
   const next = listIds.includes(key) ? listIds.filter((item) => item !== key) : [key, ...listIds];
   writeJson(WATCH_KEY, next);
   addActivity(kind, id, listIds.includes(key) ? "Removed from watchlist" : "Added to watchlist");
+  window.dispatchEvent(new Event("vaultforge-room-watch-change"));
+  window.dispatchEvent(new Event("vaultforge-alert-change"));
   return !listIds.includes(key);
 }
 
@@ -572,11 +587,13 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [panelKey, setPanelKey] = useState<"intel" | "numbers" | "execution" | "matches" | "activity" | "messages" | "notes">("intel");
   const [watched, setWatched] = useState(false);
+  const [watchCount, setWatchCount] = useState(0);
 
   useEffect(() => {
     const found = getRoom("deal", id);
     setRoom(found);
     setWatched(isWatched("deal", id));
+    setWatchCount(watchingCount("deal", id));
     if (found) addActivity("deal", id, "Room viewed");
   }, [id]);
 
@@ -608,6 +625,7 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
   function watch() {
     const next = toggleWatch("deal", id);
     setWatched(next);
+    setWatchCount(watchingCount("deal", id));
   }
 
   return (
@@ -625,7 +643,7 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
 
         <Section title="Room Actions">
           <div style={row}>
-            <button type="button" style={goldBtn} onClick={watch}>{watched ? "Watching" : "Watch"}</button>
+            <button type="button" style={goldBtn} onClick={watch}>{watched ? `Following (${watchCount})` : `Watch (${watchCount})`}</button>
             <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Deal Room: " + titleFor(room, "deal"))}`} style={goldBtn}>Message</Link>
             <Link href={`/messages?type=deal&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Intro Request: " + titleFor(room, "deal"))}`} style={btn}>Request Intro</Link>
             <button type="button" style={btn} onClick={() => move("saved")}>Save</button>
