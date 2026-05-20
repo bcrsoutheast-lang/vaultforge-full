@@ -227,7 +227,8 @@ const textarea: React.CSSProperties = { ...input, minHeight: 120, resize: "verti
 const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
 function Nav() {
-  return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={btn}>Command</Link><Link href="/state-map" style={btn}>State Map</Link><Link href="/network" style={btn}>Network</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/deal-create" style={goldBtn}>Create Deal</Link><Link href="/pain-intake" style={btn}>Pain Intake</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>;
+  return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={btn}>Command</Link>
+      <Link href="/my-rooms" style={btn}>My Rooms</Link><Link href="/state-map" style={btn}>State Map</Link><Link href="/network" style={btn}>Network</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/deal-create" style={goldBtn}>Create Deal</Link><Link href="/pain-intake" style={btn}>Pain Intake</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>;
 }
 function Section({ title, children }: { title: string; children: React.ReactNode }) { return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>; }
 function stopKeys(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) { e.stopPropagation(); }
