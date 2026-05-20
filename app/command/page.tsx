@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type RoomState = "active" | "saved" | "archived" | "deleted";
 type RoomKind = "deal" | "pain";
+type RoomStatus = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
 
 type Room = {
   id?: string;
@@ -18,51 +18,47 @@ type Room = {
   propertyType?: string;
   severity?: string;
   timePressure?: string;
-  capitalPressure?: string;
   painTypes?: string[] | string;
   needs?: string[] | string;
   routingNeeds?: string[] | string;
   routeTo?: string[] | string;
   strategy?: string[] | string;
-  blockers?: string[] | string;
-  risks?: string[] | string;
-  riskTypes?: string[] | string;
-  roomState?: RoomState;
-  cleanupState?: RoomState;
-  stateStatus?: RoomState;
-  alertRead?: boolean;
-  viewedAt?: string;
-  coverPhoto?: string;
-  photoUrl?: string;
-  imageUrl?: string;
-  photos?: string[];
-  photoUrls?: string[];
-  createdAt?: string;
-  updatedAt?: string;
-  [key: string]: unknown;
-};
-
-type MessageThread = {
-  id?: string;
-  subject?: string;
-  lane?: string;
-  state?: string;
   roomState?: string;
-  status?: string;
-  unread?: boolean;
-  isUnread?: boolean;
-  updatedAt?: string;
+  cleanupState?: string;
+  stateStatus?: string;
+  memberRoomStatus?: RoomStatus;
+  ownerEmail?: string;
+  memberEmail?: string;
+  createdBy?: string;
+  createdByEmail?: string;
+  assignedTo?: string[] | string;
+  assignedToIds?: string[] | string;
+  assignedToEmail?: string[] | string;
+  assignedToEmails?: string[] | string;
+  routedTo?: string[] | string;
+  routedToIds?: string[] | string;
+  routedToEmail?: string[] | string;
+  routedToEmails?: string[] | string;
   createdAt?: string;
-  messages?: unknown[];
+  updatedAt?: string;
   [key: string]: unknown;
 };
 
-const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+type MemberDisplay = {
+  displayName: string;
+  company: string;
+  email: string;
+  memberType: string;
+  states: string;
+};
+
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
-const MESSAGE_KEYS = ["vaultforge_message_threads_v2", "vaultforge_message_command_messages", "vf_message_threads"];
 const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
-const READ_KEY = "vaultforge_room_alert_read_v1";
+const MEMBER_STATE_KEY = "vaultforge_my_room_status_v1";
+const ROUTE_STATUS_KEY = "vaultforge_route_status_v1";
+const MESSAGE_KEYS = ["vaultforge_message_command_threads_v1", "vaultforge_messages_v1", "vf_messages", "vaultforge_threads"];
+const ALERT_KEYS = ["vaultforge_alerts_v1", "vaultforge_smart_alerts", "vf_alerts", "vaultforge_room_alerts"];
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -82,9 +78,15 @@ function txt(value: unknown, fallback = "") {
 }
 
 function list(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
-  if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
   return [];
+}
+
+function arr<T>(key: string): T[] {
+  if (!ok()) return [];
+  const parsed = j<unknown>(localStorage.getItem(key), []);
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
 }
 
 function rid(room: Room | null | undefined) {
@@ -103,28 +105,8 @@ function keysFor(kind: RoomKind) {
   return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
 }
 
-function arr<T>(key: string): T[] {
-  if (!ok()) return [];
-  const parsed = j<unknown>(localStorage.getItem(key), []);
-  return Array.isArray(parsed) ? (parsed as T[]) : [];
-}
-
-function stateMap() {
-  const map: Record<string, RoomState> = {};
-  if (!ok()) return map;
-  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomState>>(localStorage.getItem(key), {})));
-  return map;
-}
-
-function roomState(room: Room): RoomState {
-  const state = txt(room.roomState || room.cleanupState || room.stateStatus, "active");
-  return state === "saved" || state === "archived" || state === "deleted" ? state : "active";
-}
-
 function normalizeRoom(row: any, kind: RoomKind): Room {
   const id = txt(row?.id || row?.roomId || row?.painId || row?.dealId || row?.signalId);
-  const photos = list(row?.photos || row?.photoUrls);
-  const cover = txt(row?.coverPhoto || row?.photoUrl || row?.imageUrl || photos[0]);
   return {
     ...row,
     id,
@@ -133,12 +115,21 @@ function normalizeRoom(row: any, kind: RoomKind): Room {
     state: txt(row?.state, "GA"),
     city: txt(row?.city),
     county: txt(row?.county),
-    photos,
-    photoUrls: photos,
-    coverPhoto: cover,
-    photoUrl: cover,
-    imageUrl: cover,
   };
+}
+
+function rawStatus(room: Room): RoomStatus {
+  const state = txt(room.memberRoomStatus || room.roomState || room.cleanupState || room.stateStatus, "active");
+  if (state === "saved" || state === "archived" || state === "deleted" || state === "sold" || state === "resolved") return state;
+  return "active";
+}
+
+function stateMap() {
+  const map: Record<string, RoomStatus> = {};
+  if (!ok()) return map;
+  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomStatus>>(localStorage.getItem(key), {})));
+  Object.assign(map, j<Record<string, RoomStatus>>(localStorage.getItem(MEMBER_STATE_KEY), {}));
+  return map;
 }
 
 function allRooms(kind: RoomKind): Room[] {
@@ -160,7 +151,9 @@ function allRooms(kind: RoomKind): Room[] {
     const key = localStorage.key(i) || "";
     const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
     if (!match) continue;
+
     const value = j<any>(localStorage.getItem(key), null);
+
     if (Array.isArray(value)) {
       for (const row of value) {
         const room = normalizeRoom(row, kind);
@@ -180,192 +173,237 @@ function allRooms(kind: RoomKind): Room[] {
   }
 
   const states = stateMap();
+
   return out
     .map((room) => {
       const id = rid(room);
-      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+      const status = states[id] || states[`${kind}:${id}`] || rawStatus(room);
+      return { ...room, memberRoomStatus: status, roomState: status, cleanupState: status, stateStatus: status };
     })
     .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
 }
 
-function readMap() {
-  return ok() ? j<Record<string, string>>(localStorage.getItem(READ_KEY), {}) : {};
-}
+function currentMemberIdentity() {
+  if (!ok()) return { id: "", email: "", hasIdentity: false };
 
-function unreadRooms(kind: RoomKind, rooms: Room[]) {
-  const reads = readMap();
-  return rooms.filter((room) => {
-    const id = rid(room);
-    if (roomState(room) !== "active") return false;
-    return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
-  });
-}
-
-function getThreads() {
-  if (!ok()) return [] as MessageThread[];
-  const out: MessageThread[] = [];
-  const seen = new Set<string>();
-
-  for (const key of MESSAGE_KEYS) {
-    const rows = arr<any>(key);
-    for (const row of rows) {
-      const id = txt(row?.id || row?.threadKey || row?.thread_id || row?.message_id);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push({
-        ...row,
-        id,
-        subject: txt(row?.subject || row?.title || row?.lane, "Message Thread"),
-        lane: txt(row?.lane || row?.type, "general"),
-        state: txt(row?.state || row?.roomState || ""),
-        status: txt(row?.status, "active"),
-        unread: Boolean(row?.unread || row?.isUnread),
-        updatedAt: txt(row?.updatedAt || row?.createdAt),
-        createdAt: txt(row?.createdAt || row?.updatedAt),
-        messages: Array.isArray(row?.messages) ? row.messages : [],
-      });
+  let profile: any = {};
+  for (const key of ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"]) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
+    } catch {
+      // ignore bad profile cache
     }
   }
 
-  return out.filter((thread) => thread.status !== "deleted" && thread.status !== "archived");
+  const email = txt(
+    profile.email ||
+      profile.memberEmail ||
+      profile.member_email ||
+      localStorage.getItem("vf_email") ||
+      localStorage.getItem("member_email") ||
+      localStorage.getItem("email")
+  ).toLowerCase();
+
+  const id = txt(
+    profile.id ||
+      profile.memberId ||
+      profile.member_id ||
+      profile.auth_user_id ||
+      profile.user_id ||
+      email ||
+      "local_member"
+  ).toLowerCase();
+
+  return { id, email, hasIdentity: Boolean(id || email) };
 }
 
-function firstPhoto(room: Room) {
-  const possible = [txt(room.coverPhoto), txt(room.photoUrl), txt(room.imageUrl), ...list(room.photos), ...list(room.photoUrls)].filter(Boolean);
-  return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
+function safeProfileText(value: unknown, fallback: string) {
+  const clean = String(value || "").trim();
+  return clean && clean !== "undefined" && clean !== "null" ? clean : fallback;
 }
 
-function activeDeals() {
-  return allRooms("deal").filter((room) => roomState(room) === "active");
-}
-
-function activePains() {
-  return allRooms("pain").filter((room) => roomState(room) === "active");
-}
-
-function painScore(room: Room) {
-  let score = 20;
-  const sev = txt(room.severity);
-  if (sev === "Medium") score += 12;
-  if (sev === "High") score += 28;
-  if (sev === "Critical") score += 42;
-  if (sev === "Emergency") score += 52;
-  if (txt(room.timePressure).includes("24") || txt(room.timePressure).includes("72")) score += 20;
-  if (list(room.blockers).includes("Capital")) score += 10;
-  if (txt(room.capitalPressure) !== "Unknown" && txt(room.capitalPressure)) score += 7;
-  return Math.max(0, Math.min(100, score));
-}
-
-function dealScore(room: Room) {
-  let score = 25;
-  if (txt(room.assetClass)) score += 10;
-  if (txt(room.propertyType)) score += 8;
-  if (list(room.routeTo).length) score += 12;
-  if (list(room.strategy).length) score += 12;
-  if (txt(room.city)) score += 8;
-  return Math.max(0, Math.min(100, score));
-}
-
-function stateStats(state: string, deals: Room[], pains: Room[], threads: MessageThread[]) {
-  const stateDeals = deals.filter((room) => txt(room.state, "GA") === state);
-  const statePains = pains.filter((room) => txt(room.state, "GA") === state);
-  const unreadDeals = unreadRooms("deal", stateDeals);
-  const unreadPains = unreadRooms("pain", statePains);
-  const stateMessages = threads.filter((thread) => txt(thread.state) === state || txt(thread.subject).includes(state));
-  const unreadMessages = stateMessages.filter((thread) => thread.unread);
-  const pressure = statePains.length
-    ? Math.round(statePains.reduce((sum, room) => sum + painScore(room), 0) / statePains.length)
-    : 0;
-  const opportunity = stateDeals.length
-    ? Math.round(stateDeals.reduce((sum, room) => sum + dealScore(room), 0) / stateDeals.length)
-    : 0;
-  const hot = unreadDeals.length + unreadPains.length + unreadMessages.length;
-  return { stateDeals, statePains, unreadDeals, unreadPains, stateMessages, unreadMessages, pressure, opportunity, hot };
-}
-
-function tickerItems(deals: Room[], pains: Room[], threads: MessageThread[]) {
-  const out: string[] = [];
-  for (const state of STATES) {
-    const s = stateStats(state, deals, pains, threads);
-    if (s.pressure) out.push(`${state} PRESSURE ${s.pressure}% • ${s.statePains.length} PAIN`);
-    if (s.opportunity) out.push(`${state} OPPORTUNITY ${s.opportunity}% • ${s.stateDeals.length} DEALS`);
-    if (s.unreadMessages.length) out.push(`${state} MESSAGES • ${s.unreadMessages.length} UNREAD`);
+function readMemberDisplay(): MemberDisplay {
+  if (!ok()) {
+    return {
+      displayName: "Member Workspace",
+      company: "Company not listed",
+      email: "Email not listed",
+      memberType: "Private Member",
+      states: "States not listed",
+    };
   }
-  return out.length ? out : ["STATE MAP LIVE • SUBMIT DEALS • SUBMIT PAIN • WATCH PRESSURE"];
+
+  let profile: any = {};
+  for (const key of ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"]) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
+    } catch {
+      // ignore local storage parse errors
+    }
+  }
+
+  const email = safeProfileText(
+    profile.email ||
+      profile.memberEmail ||
+      profile.member_email ||
+      window.localStorage.getItem("vf_email") ||
+      window.localStorage.getItem("member_email") ||
+      window.localStorage.getItem("email"),
+    "Email not listed"
+  );
+
+  const displayName = safeProfileText(
+    profile.fullName ||
+      profile.full_name ||
+      profile.name ||
+      profile.ownerName ||
+      window.localStorage.getItem("vf_name") ||
+      window.localStorage.getItem("member_name"),
+    email.includes("@") ? email.split("@")[0] : "Member Workspace"
+  );
+
+  const company = safeProfileText(
+    profile.company ||
+      profile.companyName ||
+      profile.company_name ||
+      profile.businessName ||
+      window.localStorage.getItem("vf_company") ||
+      window.localStorage.getItem("member_company"),
+    "Company not listed"
+  );
+
+  const memberType = safeProfileText(profile.memberType || profile.member_type || profile.role || profile.investorType, "Private Member");
+  const statesRaw = profile.states || profile.operatingStates || profile.statesOperated || profile.serviceStates || profile.markets;
+  const states = Array.isArray(statesRaw) ? statesRaw.join(" • ") : safeProfileText(statesRaw, "States not listed");
+
+  return { displayName, company, email, memberType, states };
 }
 
-const styleTag = `
-@keyframes vfPulseRed {
-  0% { box-shadow: 0 0 0 rgba(255,60,70,.0); transform: translateY(0); }
-  50% { box-shadow: 0 0 34px rgba(255,60,70,.34); transform: translateY(-1px); }
-  100% { box-shadow: 0 0 0 rgba(255,60,70,.0); transform: translateY(0); }
+function roomAssignedIds(room: Room) {
+  return [
+    ...list(room.assignedTo),
+    ...list(room.assignedToIds),
+    ...list(room.routedTo),
+    ...list(room.routedToIds),
+  ].map((value) => value.toLowerCase());
 }
-@keyframes vfPulseGold {
-  0% { box-shadow: 0 0 0 rgba(255,220,104,.0); transform: translateY(0); }
-  50% { box-shadow: 0 0 34px rgba(255,220,104,.28); transform: translateY(-1px); }
-  100% { box-shadow: 0 0 0 rgba(255,220,104,.0); transform: translateY(0); }
-}
-@keyframes vfTicker {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-`;
 
-const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
-const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
+function roomAssignedEmails(room: Room) {
+  return [
+    ...list(room.assignedToEmail),
+    ...list(room.assignedToEmails),
+    ...list(room.routedToEmail),
+    ...list(room.routedToEmails),
+  ].map((value) => value.toLowerCase());
+}
+
+function roomAssignedToCurrentMember(room: Room) {
+  const current = currentMemberIdentity();
+  if (!current.id && !current.email) return false;
+  return Boolean(
+    (current.id && roomAssignedIds(room).includes(current.id.toLowerCase())) ||
+    (current.email && roomAssignedEmails(room).includes(current.email))
+  );
+}
+
+function roomBelongsToCurrentMember(room: Room) {
+  const current = currentMemberIdentity();
+  const ownerId = txt(room.ownerId || room.createdBy || room.memberId || room.createdById).toLowerCase();
+  const ownerEmail = txt(room.ownerEmail || room.createdByEmail || room.memberEmail).toLowerCase();
+
+  const assignedIds = roomAssignedIds(room);
+  const assignedEmails = roomAssignedEmails(room);
+  const hasOwnershipData = Boolean(ownerId) || Boolean(ownerEmail) || assignedIds.length > 0 || assignedEmails.length > 0;
+
+  if (!hasOwnershipData) return true;
+  if (current.id && ownerId && ownerId === current.id.toLowerCase()) return true;
+  if (current.email && ownerEmail && ownerEmail === current.email) return true;
+  if (current.id && assignedIds.includes(current.id.toLowerCase())) return true;
+  if (current.email && assignedEmails.includes(current.email)) return true;
+
+  return false;
+}
+
+function routeStatusMap() {
+  return ok() ? j<Record<string, { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }>>(localStorage.getItem(ROUTE_STATUS_KEY), {}) : {};
+}
+
+function routedCount(deals: Room[], pains: Room[]) {
+  const current = currentMemberIdentity();
+  const routeMap = routeStatusMap();
+
+  const local = [...deals, ...pains].filter(roomAssignedToCurrentMember).length;
+  const routed = Object.entries(routeMap).filter(([key, value]) => {
+    const keyLower = key.toLowerCase();
+    return Boolean(
+      (current.id && keyLower.includes(current.id.toLowerCase())) ||
+        (current.email && keyLower.includes(current.email.toLowerCase())) ||
+        (current.email && txt(value.memberEmail).toLowerCase() === current.email)
+    );
+  }).length;
+
+  return Math.max(local, routed);
+}
+
+function isOpenDealRoom(room: Room) {
+  const status = rawStatus(room);
+  return status === "active";
+}
+
+function isOpenPainRoom(room: Room) {
+  const status = rawStatus(room);
+  return status === "active";
+}
+
+function countStoredItems(keys: string[]) {
+  if (!ok()) return 0;
+  let total = 0;
+  for (const key of keys) {
+    const parsed = j<unknown>(localStorage.getItem(key), []);
+    if (Array.isArray(parsed)) total += parsed.length;
+    else if (parsed && typeof parsed === "object") total += Object.keys(parsed as Record<string, unknown>).length;
+  }
+  return total;
+}
+
+function recentRooms(deals: Room[], pains: Room[]) {
+  return [
+    ...deals.slice(0, 3).map((room) => ({ kind: "deal" as RoomKind, room })),
+    ...pains.slice(0, 3).map((room) => ({ kind: "pain" as RoomKind, room })),
+  ].slice(0, 5);
+}
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "#05070d",
+  color: "#f7f7fb",
+  padding: 18,
+  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+};
+
+const wrap: React.CSSProperties = { maxWidth: 1320, margin: "0 auto", paddingBottom: 90 };
 const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
 const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
 const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
 const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
-const pulseRed: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", animation: "vfPulseRed 2.1s ease-in-out infinite" };
-const pulseGold: React.CSSProperties = { ...panel, borderColor: "rgba(255,220,104,.70)", animation: "vfPulseGold 2.3s ease-in-out infinite" };
-const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.75)", boxShadow: "0 0 26px rgba(245,197,66,.18)" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 24, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
+const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.55)", boxShadow: "0 0 28px rgba(245,197,66,.12)" };
+const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.56)", boxShadow: "0 0 28px rgba(255,70,70,.10)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 6, fontWeight: 950, fontSize: 13, marginBottom: 12 };
 const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
 const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 20, lineHeight: 1.35, margin: 0 };
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const tickerOuter: React.CSSProperties = { overflow: "hidden", border: "1px solid rgba(245,197,66,.28)", borderRadius: 20, background: "#090e1a", marginBottom: 18 };
-const tickerInner: React.CSSProperties = { display: "inline-flex", minWidth: "200%", whiteSpace: "nowrap", animation: "vfTicker 42s linear infinite" };
-const tickerItem: React.CSSProperties = { padding: "14px 28px", borderRight: "1px solid rgba(245,197,66,.18)", color: "#ffd45a", fontWeight: 950, letterSpacing: 1 };
-const photoStyle: React.CSSProperties = { width: "100%", height: 140, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
-}
-
-function Meter({ title, value }: { title: string; value: number }) {
-  return (
-    <div style={panel}>
-      <div style={eyebrow}>{title}</div>
-      <h2 style={h2}>{value}%</h2>
-      <div style={{ height: 10, background: "#070a12", borderRadius: 999, overflow: "hidden" }}>
-        <div style={{ width: `${Math.max(0, Math.min(100, value))}%`, height: "100%", background: "#ffdc68" }} />
-      </div>
-    </div>
-  );
-}
-
-function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
-  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
-  const img = firstPhoto(room);
-  return (
-    <Link href={href} style={kind === "pain" ? pulseRed : pulseGold}>
-      {img ? <img src={img} alt={roomTitle(room, kind)} style={photoStyle} /> : null}
-      <div style={eyebrow}>{kind === "deal" ? "Opportunity" : "Pain"}</div>
-      <h2 style={h2}>{roomTitle(room, kind)}</h2>
-      <p style={sub}>{loc(room)}</p>
-      <p style={muted}>{kind === "deal" ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")}` : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")}`}</p>
-    </Link>
-  );
-}
+const logoWrap: React.CSSProperties = { display: "flex", justifyContent: "center", alignItems: "center", margin: "6px 0 22px" };
+const logoShell: React.CSSProperties = { width: "min(520px,92vw)", border: "1px solid rgba(245,197,66,.32)", borderRadius: 34, background: "radial-gradient(circle at top, rgba(245,197,66,.18), transparent 38%), linear-gradient(180deg,#0b101d,#050816)", boxShadow: "0 0 42px rgba(245,197,66,.13)", padding: 22, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", textAlign: "center" };
+const logoImg: React.CSSProperties = { maxWidth: "min(390px,78vw)", maxHeight: 140, width: "auto", height: "auto", objectFit: "contain", display: "block" };
+const logoFallback: React.CSSProperties = { color: "#ffd45a", fontSize: "clamp(40px,9vw,82px)", fontWeight: 950, letterSpacing: -4, lineHeight: 0.9 };
 
 function Nav() {
   return (
@@ -374,121 +412,224 @@ function Nav() {
       <Link href="/command" style={goldBtn}>Command</Link>
       <Link href="/my-rooms" style={btn}>My Rooms</Link>
       <Link href="/routing" style={btn}>Routing</Link>
-      <Link href="/state-map" style={btn}>State Map</Link>
       <Link href="/members" style={btn}>Members</Link>
       <Link href="/network" style={btn}>Network</Link>
+      <Link href="/state-map" style={btn}>State Map</Link>
       <Link href="/alerts" style={btn}>Alerts</Link>
       <Link href="/messages" style={btn}>Messages</Link>
       <Link href="/deal-create" style={btn}>Create Deal</Link>
       <Link href="/pain-intake" style={btn}>Pain Intake</Link>
-      <Link href="/saved-rooms" style={btn}>Saved</Link>
-      <Link href="/archived-rooms" style={btn}>Archived</Link>
-      <Link href="/deleted-rooms" style={btn}>Deleted</Link>
+      <Link href="/profile" style={btn}>Profile</Link>
       <Link href="/logout" style={redBtn}>Logout</Link>
     </nav>
   );
 }
 
+function VaultForgeBrandLogo() {
+  const logoPaths = ["/vaultforge-logo.png", "/VaultForge-logo.png", "/vaultforge-logo.jpg", "/vaultforge-logo.webp", "/logo.png", "/logo.jpg", "/logo.webp", "/vf-logo.png", "/brand/logo.png"];
+  const [index, setIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const src = logoPaths[index];
+
+  return (
+    <div style={logoWrap}>
+      <div style={logoShell}>
+        {!failed && src ? (
+          <img
+            src={src}
+            alt="VaultForge"
+            style={logoImg}
+            onError={() => {
+              const next = index + 1;
+              if (next < logoPaths.length) setIndex(next);
+              else setFailed(true);
+            }}
+          />
+        ) : (
+          <div style={logoFallback}>VaultForge</div>
+        )}
+        <p style={{ ...muted, marginTop: 12 }}>Private real estate execution intelligence network</p>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ title, value, note, href, danger }: { title: string; value: number | string; note: string; href: string; danger?: boolean }) {
+  return (
+    <Link href={href} style={danger ? redPanel : goldPanel}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{value}</h2>
+      <p style={muted}>{note}</p>
+      <p style={muted}>Open</p>
+    </Link>
+  );
+}
+
+function LaneCard({ title, note, href, badge, danger }: { title: string; note: string; href: string; badge: string; danger?: boolean }) {
+  return (
+    <Link href={href} style={danger ? redPanel : panel}>
+      <div style={eyebrow}>{badge}</div>
+      <h2 style={{ ...h2, fontSize: "clamp(26px,4vw,42px)" }}>{title}</h2>
+      <p style={muted}>{note}</p>
+    </Link>
+  );
+}
+
+function MemberIdentity({ member }: { member: MemberDisplay }) {
+  return (
+    <section style={{ ...panel, borderColor: "rgba(245,197,66,.32)", marginBottom: 20 }}>
+      <div style={eyebrow}>Member Command Identity</div>
+      <h2 style={h2}>{member.displayName}</h2>
+      <p style={sub}>{member.company}</p>
+      <p style={muted}>{member.email} • {member.memberType}</p>
+      <p style={muted}>{member.states}</p>
+    </section>
+  );
+}
+
+function RecentRoomCard({ kind, room }: { kind: RoomKind; room: Room }) {
+  const id = rid(room);
+  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`;
+  const status = rawStatus(room);
+
+  return (
+    <Link href={href} style={panel}>
+      <div style={eyebrow}>{kind === "deal" ? "Deal Room" : "Pain Room"} • {status}</div>
+      <h2 style={{ ...h2, fontSize: "clamp(24px,4vw,38px)" }}>{roomTitle(room, kind)}</h2>
+      <p style={sub}>{loc(room)}</p>
+      <p style={muted}>
+        {kind === "deal"
+          ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • ${list(room.strategy).join(", ") || "Strategy open"}`
+          : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "Severity open")} • ${txt(room.timePressure, "Timeline open")}`}
+      </p>
+    </Link>
+  );
+}
+
 export default function CommandPage() {
   const [tick, setTick] = useState(0);
+  const [member, setMember] = useState<MemberDisplay>({
+    displayName: "Member Workspace",
+    company: "Company not listed",
+    email: "Email not listed",
+    memberType: "Private Member",
+    states: "States not listed",
+  });
 
   useEffect(() => {
-    const refresh = () => setTick((x) => x + 1);
-    ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change"].forEach((event) => window.addEventListener(event, refresh));
-    const timer = window.setInterval(refresh, 5000);
+    setMember(readMemberDisplay());
+
+    const refresh = () => setTick((value) => value + 1);
+    window.addEventListener("storage", refresh);
+    window.addEventListener("vaultforge-room-state-change", refresh);
+    window.addEventListener("vaultforge-my-rooms-change", refresh);
+    window.addEventListener("vaultforge-route-status-change", refresh);
+    window.addEventListener("vaultforge-deal-change", refresh);
+    window.addEventListener("vaultforge-pain-change", refresh);
+
     return () => {
-      ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change"].forEach((event) => window.removeEventListener(event, refresh));
-      window.clearInterval(timer);
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("vaultforge-room-state-change", refresh);
+      window.removeEventListener("vaultforge-my-rooms-change", refresh);
+      window.removeEventListener("vaultforge-route-status-change", refresh);
+      window.removeEventListener("vaultforge-deal-change", refresh);
+      window.removeEventListener("vaultforge-pain-change", refresh);
     };
   }, []);
 
-  const deals = useMemo(() => activeDeals(), [tick]);
-  const pains = useMemo(() => activePains(), [tick]);
-  const threads = useMemo(() => getThreads(), [tick]);
-  const unreadDeals = useMemo(() => unreadRooms("deal", deals), [deals]);
-  const unreadPains = useMemo(() => unreadRooms("pain", pains), [pains]);
-  const unreadMessages = useMemo(() => threads.filter((thread) => thread.unread), [threads]);
-  const savedDeals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "saved"), [tick]);
-  const archivedDeals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "archived"), [tick]);
-  const deletedDeals = useMemo(() => allRooms("deal").filter((room) => roomState(room) === "deleted"), [tick]);
-  const savedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "saved"), [tick]);
-  const archivedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "archived"), [tick]);
-  const deletedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "deleted"), [tick]);
-  const ticker = useMemo(() => tickerItems(deals, pains, threads), [deals, pains, threads]);
-  const totalHot = unreadDeals.length + unreadPains.length + unreadMessages.length;
+  const allDealRooms = useMemo(() => allRooms("deal"), [tick]);
+  const allPainRooms = useMemo(() => allRooms("pain"), [tick]);
+  const deals = useMemo(() => allDealRooms.filter(roomBelongsToCurrentMember), [allDealRooms]);
+  const pains = useMemo(() => allPainRooms.filter(roomBelongsToCurrentMember), [allPainRooms]);
 
-  const stateTotals = STATES.map((state) => stateStats(state, deals, pains, threads));
-  const hottest = stateTotals.slice().sort((a, b) => (b.pressure + b.opportunity + b.hot * 20) - (a.pressure + a.opportunity + a.hot * 20))[0];
+  const activeDeals = deals.filter(isOpenDealRoom).length;
+  const activePain = pains.filter(isOpenPainRoom).length;
+  const routed = routedCount(deals, pains);
+  const saved = [...deals, ...pains].filter((room) => rawStatus(room) === "saved").length;
+  const archived = [...deals, ...pains].filter((room) => rawStatus(room) === "archived").length;
+  const deleted = [...deals, ...pains].filter((room) => rawStatus(room) === "deleted").length;
+  const messages = countStoredItems(MESSAGE_KEYS);
+  const alerts = countStoredItems(ALERT_KEYS);
+  const recent = recentRooms(deals, pains);
 
   return (
     <main style={page}>
-      <style>{styleTag}</style>
       <div style={wrap}>
         <Nav />
-
-        <div style={tickerOuter}>
-          <div style={tickerInner}>
-            {[...ticker, ...ticker].map((item, index) => <span key={`${item}-${index}`} style={tickerItem}>{item}</span>)}
-          </div>
-        </div>
+        <VaultForgeBrandLogo />
 
         <section style={hero}>
-          <div style={eyebrow}>Command Center</div>
-          <h1 style={h1}>Live operating board.</h1>
-          <p style={sub}>Ticker, pulse cards, state intelligence, alert lanes, room counts, and cleanup folders.</p>
+          <div style={eyebrow}>VaultForge Member Command</div>
+          <h1 style={h1}>Execution intelligence desk.</h1>
+          <p style={sub}>
+            Your member command center for rooms, routing, pressure, messages, alerts, and operational execution.
+          </p>
+
+          <div style={{ ...row, marginTop: 18 }}>
+            <Link href="/my-rooms" style={goldBtn}>Open My Rooms</Link>
+            <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
+            <Link href="/pain-intake" style={goldBtn}>Create Pain</Link>
+            <Link href="/messages" style={btn}>Messages</Link>
+          </div>
         </section>
 
-        <Section title="Primary Command Cards">
-          <div style={grid}>
-            <Link href="/state-map" style={hottest?.hot ? pulseRed : pulseGold}>
-              <div style={eyebrow}>State Pressure Map</div>
-              <h2 style={h2}>{hottest ? STATES[stateTotals.indexOf(hottest)] : "Open"}</h2>
-              <p style={muted}>pressure {hottest?.pressure || 0}% • opportunity {hottest?.opportunity || 0}% • hot {hottest?.hot || 0}</p>
-            </Link>
-            <Link href="/alerts" style={totalHot ? pulseRed : panel}><div style={eyebrow}>Live Alerts</div><h2 style={h2}>{totalHot}</h2><p style={muted}>unread signals</p></Link>
-            <Link href="/network" style={unreadDeals.length ? pulseGold : panel}><div style={eyebrow}>Opportunity Cards</div><h2 style={h2}>{unreadDeals.length}</h2><p style={muted}>{deals.length} active deal card(s)</p></Link>
-            <Link href="/network" style={unreadPains.length ? pulseRed : panel}><div style={eyebrow}>Pain Cards</div><h2 style={h2}>{unreadPains.length}</h2><p style={muted}>{pains.length} active pain card(s)</p></Link>
-            <Link href="/messages" style={unreadMessages.length ? pulseRed : panel}><div style={eyebrow}>Unread Messages</div><h2 style={h2}>{unreadMessages.length}</h2><p style={muted}>message cards</p></Link>
-          </div>
-        </Section>
+        <MemberIdentity member={member} />
 
-        <Section title="Room Folders">
+        <section style={{ marginBottom: 20 }}>
           <div style={grid}>
-            <Link href="/saved-rooms" style={savedDeals.length ? pulseGold : panel}><div style={eyebrow}>Deal Saved</div><h2 style={h2}>{savedDeals.length}</h2><p style={muted}>saved opportunity room(s)</p></Link>
-            <Link href="/archived-rooms" style={panel}><div style={eyebrow}>Deal Archived</div><h2 style={h2}>{archivedDeals.length}</h2><p style={muted}>archived opportunity room(s)</p></Link>
-            <Link href="/deleted-rooms" style={panel}><div style={eyebrow}>Deal Deleted</div><h2 style={h2}>{deletedDeals.length}</h2><p style={muted}>deleted opportunity room(s)</p></Link>
-            <Link href="/saved-rooms" style={savedPains.length ? pulseGold : panel}><div style={eyebrow}>Pain Saved</div><h2 style={h2}>{savedPains.length}</h2><p style={muted}>saved pain room(s)</p></Link>
-            <Link href="/archived-rooms" style={panel}><div style={eyebrow}>Pain Archived</div><h2 style={h2}>{archivedPains.length}</h2><p style={muted}>archived pain room(s)</p></Link>
-            <Link href="/deleted-rooms" style={panel}><div style={eyebrow}>Pain Deleted</div><h2 style={h2}>{deletedPains.length}</h2><p style={muted}>deleted pain room(s)</p></Link>
+            <MetricCard title="Active Deal Rooms" value={activeDeals} note="open opportunity rooms tied to this workspace" href="/my-rooms" />
+            <MetricCard title="Active Pain Rooms" value={activePain} note="open pressure/problem rooms tied to this workspace" href="/my-rooms" danger={activePain > 0} />
+            <MetricCard title="Routed / Assigned" value={routed} note="rooms requiring member response or execution" href="/my-rooms" danger={routed > 0} />
+            <MetricCard title="Messages" value={messages} note="stored message threads and room communication" href="/messages" />
           </div>
-        </Section>
+        </section>
 
-        <Section title="State Intelligence Preview">
+        <section style={{ marginBottom: 20 }}>
           <div style={grid}>
-            {STATES.map((state) => {
-              const s = stateStats(state, deals, pains, threads);
-              return (
-                <Link key={state} href={`/state-map`} style={s.hot ? (s.unreadPains.length ? pulseRed : pulseGold) : panel}>
-                  <div style={eyebrow}>{state}</div>
-                  <h2 style={h2}>{s.stateDeals.length + s.statePains.length}</h2>
-                  <p style={muted}>Deals {s.stateDeals.length} • Pain {s.statePains.length} • Hot {s.hot}</p>
-                  <p style={muted}>Pressure {s.pressure}% • Opportunity {s.opportunity}%</p>
-                </Link>
-              );
-            })}
+            <LaneCard title="My Rooms" badge="Operating Queue" note="active, saved, archived, sold, resolved, and deleted room folders." href="/my-rooms" />
+            <LaneCard title="Routing" badge="Route Queue" note="review routed rooms, accept/pass/claim execution, and track route response." href="/routing" danger={routed > 0} />
+            <LaneCard title="Intelligence Alerts" badge="Signal Feed" note={`${alerts} alert record(s) found locally. Open alerts for market pressure and route signals.`} href="/alerts" danger={alerts > 0} />
+            <LaneCard title="Member Network" badge="Network" note="find buyers, lenders, operators, developers, and execution partners." href="/network" />
           </div>
-        </Section>
+        </section>
 
-        <Section title="Latest Signals">
+        <section style={{ ...panel, marginBottom: 20 }}>
+          <div style={eyebrow}>Workspace Cleanup State</div>
           <div style={grid}>
-            {[...unreadPains.slice(0, 3), ...unreadDeals.slice(0, 3)].map((room) => {
-              const isPain = list(room.painTypes).length > 0 || txt(room.severity);
-              const kind: RoomKind = isPain ? "pain" : "deal";
-              const href = kind === "pain" ? `/pain-rooms/${encodeURIComponent(rid(room))}` : `/deal-rooms/${encodeURIComponent(rid(room))}`;
-              return <RoomCard key={`${kind}-${rid(room)}`} room={room} kind={kind} />;
-            })}
+            <MetricCard title="Saved" value={saved} note="rooms kept for review" href="/my-rooms" />
+            <MetricCard title="Archived" value={archived} note="hidden from active workspace but preserved" href="/my-rooms" />
+            <MetricCard title="Deleted" value={deleted} note="cleanup folder for hidden rooms" href="/my-rooms" danger={deleted > 0} />
+            <MetricCard title="Total Rooms" value={deals.length + pains.length} note="member-visible rooms across deal and pain lanes" href="/my-rooms" />
           </div>
-        </Section>
+        </section>
+
+        <section style={{ ...panel, marginBottom: 20 }}>
+          <div style={eyebrow}>Recent Room Activity</div>
+          {recent.length ? (
+            <div style={grid}>
+              {recent.map((item) => (
+                <RecentRoomCard key={`${item.kind}-${rid(item.room)}`} kind={item.kind} room={item.room} />
+              ))}
+            </div>
+          ) : (
+            <div style={panel}>
+              <h2 style={h2}>No room activity yet.</h2>
+              <p style={sub}>Create a Deal or Pain room to start the execution system.</p>
+              <div style={{ ...row, marginTop: 16 }}>
+                <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
+                <Link href="/pain-intake" style={goldBtn}>Create Pain</Link>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section style={hero}>
+          <div style={eyebrow}>VaultForge Intelligence</div>
+          <h2 style={h2}>The command center is the front door. Rooms are the operating system.</h2>
+          <p style={sub}>
+            Keep Command clean. Use My Rooms for execution. Use room intelligence for underwriting, root cause, route fit, and operational next moves.
+          </p>
+        </section>
       </div>
     </main>
   );
