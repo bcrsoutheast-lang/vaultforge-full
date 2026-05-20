@@ -879,6 +879,34 @@ function roomsFor(view: ViewKey, deals: Room[], pains: Room[]) {
   return [];
 }
 
+
+function DashboardMetricCard({
+  title,
+  count,
+  note,
+  active,
+  danger,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  note: string;
+  active?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  const style = active ? activePanel : danger && count ? pulseRed : count ? panel : panel;
+
+  return (
+    <button type="button" style={{ ...style, textAlign: "left", cursor: "pointer" }} onClick={onClick}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>{note}</p>
+      <p style={muted}>Click to open</p>
+    </button>
+  );
+}
+
 function ViewCard({ view, title, note, count, active, onClick }: { view: ViewKey; title: string; note: string; count: number; active: boolean; onClick: () => void }) {
   const style = active ? activePanel : count ? (view.includes("Pain") || view === "resolved" ? pulseRed : pulseGold) : panel;
 
@@ -1084,31 +1112,97 @@ export default function MyRoomsPage() {
         </Section>
 
         <Section title="Needs Attention">
-          <div style={needsAttention ? pulseRed : activePanel}>
+          <button
+            type="button"
+            style={{ ...(needsAttention ? pulseRed : panel), textAlign: "left", cursor: "pointer", width: "100%" }}
+            onClick={() => setView("activeDeals")}
+          >
             <div style={eyebrow}>AI Room Health</div>
             <h2 style={h2}>{needsAttention}</h2>
             <p style={sub}>{needsAttention ? "room(s) need action, update, routing, sold/resolved status, or cleanup." : "No urgent room health warnings."}</p>
-            <p style={muted}>This keeps member rooms from piling up stale, unsold, unresolved, or unfinished.</p>
-          </div>
+            <p style={muted}>Click to review active rooms.</p>
+          </button>
         </Section>
 
         <Section title="Execution Timeline">
           <div style={grid}>
-            <div style={panel}><div style={eyebrow}>Deal New / Reviewing</div><h2 style={h2}>{(stages["New"] || 0) + (stages["Reviewing"] || 0)}</h2><p style={muted}>deals needing review</p></div>
-            <div style={panel}><div style={eyebrow}>Deal Routed / Contract</div><h2 style={h2}>{(stages["Routed"] || 0) + (stages["Under Contract"] || 0)}</h2><p style={muted}>rooms in execution</p></div>
-            <div style={activePanel}><div style={eyebrow}>Sold Deals</div><h2 style={h2}>{stages["Sold"] || 0}</h2><p style={muted}>completed opportunity rooms</p></div>
-            <div style={panel}><div style={eyebrow}>Pain Diagnosing / Routed</div><h2 style={h2}>{(stages["Diagnosing"] || 0) + (stages["Routed"] || 0)}</h2><p style={muted}>pressure rooms moving</p></div>
-            <div style={pulseRed}><div style={eyebrow}>Pain In Progress</div><h2 style={h2}>{stages["In Progress"] || 0}</h2><p style={muted}>solver work underway</p></div>
-            <div style={activePanel}><div style={eyebrow}>Resolved Pain</div><h2 style={h2}>{stages["Resolved"] || 0}</h2><p style={muted}>handled problem rooms</p></div>
+            <DashboardMetricCard
+              title="Deal New / Reviewing"
+              count={(stages["New"] || 0) + (stages["Reviewing"] || 0)}
+              note="deals needing review"
+              active={view === "activeDeals"}
+              onClick={() => setView("activeDeals")}
+            />
+            <DashboardMetricCard
+              title="Deal Routed / Contract"
+              count={(stages["Routed"] || 0) + (stages["Under Contract"] || 0)}
+              note="rooms in execution"
+              active={view === "routedToMe"}
+              onClick={() => setView("routedToMe")}
+            />
+            <DashboardMetricCard
+              title="Sold Deals"
+              count={stages["Sold"] || 0}
+              note="completed opportunity rooms"
+              active={view === "sold"}
+              onClick={() => setView("sold")}
+            />
+            <DashboardMetricCard
+              title="Pain Diagnosing / Routed"
+              count={(stages["Diagnosing"] || 0) + (stages["Routed"] || 0)}
+              note="pressure rooms moving"
+              active={view === "activePain"}
+              onClick={() => setView("activePain")}
+            />
+            <DashboardMetricCard
+              title="Pain In Progress"
+              count={stages["In Progress"] || 0}
+              note="solver work underway"
+              active={view === "activePain"}
+              danger
+              onClick={() => setView("activePain")}
+            />
+            <DashboardMetricCard
+              title="Resolved Pain"
+              count={stages["Resolved"] || 0}
+              note="handled problem rooms"
+              active={view === "resolved"}
+              onClick={() => setView("resolved")}
+            />
           </div>
         </Section>
 
         <Section title="Route Response Board">
           <div style={grid}>
-            <div style={pulseRed}><div style={eyebrow}>Pending Routes</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "pending").length}</h2><p style={muted}>waiting on accept/pass/claim</p></div>
-            <div style={activePanel}><div style={eyebrow}>Accepted</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "accepted").length}</h2><p style={muted}>accepted by this workspace</p></div>
-            <div style={panel}><div style={eyebrow}>Passed</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "passed").length}</h2><p style={muted}>not a fit / rejected</p></div>
-            <div style={pulseGold}><div style={eyebrow}>Claimed</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "claimed").length}</h2><p style={muted}>member claimed execution</p></div>
+            <DashboardMetricCard
+              title="Pending Routes"
+              count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "pending").length}
+              note="waiting on accept/pass/claim"
+              active={view === "routedToMe"}
+              danger
+              onClick={() => setView("routedToMe")}
+            />
+            <DashboardMetricCard
+              title="Accepted"
+              count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "accepted").length}
+              note="accepted by this workspace"
+              active={view === "assignedToMe"}
+              onClick={() => setView("assignedToMe")}
+            />
+            <DashboardMetricCard
+              title="Passed"
+              count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "passed").length}
+              note="not a fit / rejected"
+              active={view === "assignedToMe"}
+              onClick={() => setView("assignedToMe")}
+            />
+            <DashboardMetricCard
+              title="Claimed"
+              count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "claimed").length}
+              note="member claimed execution"
+              active={view === "routedToMe"}
+              onClick={() => setView("routedToMe")}
+            />
           </div>
         </Section>
 
