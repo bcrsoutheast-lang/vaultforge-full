@@ -61,6 +61,7 @@ const ALERT_DISMISSED_KEY = "vaultforge_alert_dismissed_v2";
 const ALERT_WATCHLIST_KEY = "vaultforge_alert_watchlist_v2";
 const ROOM_WATCH_KEY = "vaultforge_room_watchlist_v1";
 const ROOM_WATCH_META_KEY = "vaultforge_room_watch_meta_v1";
+const ROOM_ACTIVITY_KEY = "vaultforge_room_activity_v2";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -253,6 +254,119 @@ function removeId(key: string, id: string) {
 }
 
 
+
+function roomActivityMap() {
+  return ok() ? j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ROOM_ACTIVITY_KEY), {}) : {};
+}
+
+function daysSince(value: unknown) {
+  const raw = txt(value);
+  if (!raw) return 0;
+  const time = new Date(raw).getTime();
+  if (!Number.isFinite(time)) return 0;
+  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
+}
+
+function roomStatus(room: Room) {
+  const state = txt(room.roomState || room.cleanupState || room.stateStatus, "active");
+  if (state === "sold" || state === "resolved" || state === "archived" || state === "deleted" || state === "saved") return state;
+  return "active";
+}
+
+function roomActivityAlerts(deals: Room[], pains: Room[]): AlertItem[] {
+  const activity = roomActivityMap();
+  const watched = new Set(roomWatchList());
+  const out: AlertItem[] = [];
+
+  for (const [key, events] of Object.entries(activity)) {
+    const [kindRaw, id] = key.split(":");
+    const kind = kindRaw === "pain" ? "pain" : "deal";
+    if (!id || !Array.isArray(events) || !events.length) continue;
+
+    const room = kind === "deal"
+      ? deals.find((item) => rid(item) === id)
+      : pains.find((item) => rid(item) === id);
+
+    if (!room) continue;
+
+    const latest = events[0];
+    const watchedLabel = watched.has(key) ? " • watched" : "";
+    const action = txt(latest.action, "Activity");
+    const note = txt(latest.note);
+
+    if (["Viewed"].includes(action)) continue;
+
+    out.push({
+      id: `activity:${key}:${txt(latest.at)}`,
+      kind,
+      title: `${action}: ${roomTitle(room, kind)}`,
+      subtitle: `${loc(room)}${watchedLabel} • ${note || "room activity"} • ${new Date(latest.at).toLocaleString()}`,
+      href: kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`,
+      severity: action.includes("Sold") || action.includes("Resolved") || action.includes("Watch") ? "gold" : kind === "pain" ? "red" : "gold",
+    });
+  }
+
+  for (const room of deals) {
+    const id = rid(room);
+    if (!id) continue;
+    const status = roomStatus(room);
+    if (status === "sold") {
+      out.push({
+        id: `status:deal:${id}:sold`,
+        kind: "deal",
+        title: `Sold Deal: ${roomTitle(room, "deal")}`,
+        subtitle: `${loc(room)} • completed opportunity room`,
+        href: `/deal-rooms/${encodeURIComponent(id)}`,
+        severity: "gold",
+      });
+    } else if (status === "active" && daysSince(room.updatedAt || room.createdAt) >= 7) {
+      out.push({
+        id: `stale:deal:${id}`,
+        kind: "deal",
+        title: `Stale Deal Room: ${roomTitle(room, "deal")}`,
+        subtitle: `${loc(room)} • ${daysSince(room.updatedAt || room.createdAt)} day(s) without update`,
+        href: `/deal-rooms/${encodeURIComponent(id)}`,
+        severity: "gold",
+      });
+    }
+  }
+
+  for (const room of pains) {
+    const id = rid(room);
+    if (!id) continue;
+    const status = roomStatus(room);
+    if (status === "resolved") {
+      out.push({
+        id: `status:pain:${id}:resolved`,
+        kind: "pain",
+        title: `Resolved Pain: ${roomTitle(room, "pain")}`,
+        subtitle: `${loc(room)} • pressure room handled`,
+        href: `/pain-rooms/${encodeURIComponent(id)}`,
+        severity: "gold",
+      });
+    } else if (status === "active" && daysSince(room.updatedAt || room.createdAt) >= 3 && (txt(room.severity) === "High" || txt(room.severity) === "Critical" || txt(room.severity) === "Emergency")) {
+      out.push({
+        id: `stale:pain:${id}`,
+        kind: "pain",
+        title: `Stale High-Pressure Pain: ${roomTitle(room, "pain")}`,
+        subtitle: `${loc(room)} • ${txt(room.severity, "High")} • ${daysSince(room.updatedAt || room.createdAt)} day(s) without update`,
+        href: `/pain-rooms/${encodeURIComponent(id)}`,
+        severity: "red",
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+  return out
+    .filter((alert) => {
+      if (seen.has(alert.id)) return false;
+      seen.add(alert.id);
+      return true;
+    })
+    .slice(0, 50);
+}
+
+
 function roomWatchList() {
   return ok() ? j<string[]>(localStorage.getItem(ROOM_WATCH_KEY), []) : [];
 }
@@ -392,12 +506,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function AlertsPage() {
   const [tick, setTick] = useState(0);
-  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "history">("active");
+  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "activity" | "history">("active");
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
-    ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change"].forEach((event) => window.addEventListener(event, refresh));
-    return () => ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change"].forEach((event) => window.removeEventListener(event, refresh));
+    ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change", "vaultforge-room-activity-change"].forEach((event) => window.addEventListener(event, refresh));
+    return () => ["storage", "vaultforge-deal-change", "vaultforge-pain-change", "vaultforge-room-state-change", "vaultforge-room-read-change", "vaultforge-messages-change", "vaultforge-alert-change", "vaultforge-room-watch-change", "vaultforge-room-activity-change"].forEach((event) => window.removeEventListener(event, refresh));
   }, []);
 
   const deals = useMemo(() => activeDeals(), [tick]);
@@ -435,11 +549,12 @@ export default function AlertsPage() {
   })), [threads]);
 
   const followingAlerts = useMemo(() => watchedRoomAlerts(deals, pains), [deals, pains]);
-  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts];
+  const activityAlerts = useMemo(() => roomActivityAlerts(deals, pains), [deals, pains, tick]);
+  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts, ...activityAlerts];
   const activeAlerts = allAlerts.filter((alert) => !seen.includes(alert.id) && !dismissed.includes(alert.id));
   const watchedAlerts = allAlerts.filter((alert) => watchlist.includes(alert.id));
   const historyAlerts = allAlerts.filter((alert) => seen.includes(alert.id) || dismissed.includes(alert.id));
-  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
+  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "activity" ? activityAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
 
   function markSeen(id: string) {
     addId(ALERT_SEEN_KEY, id);
