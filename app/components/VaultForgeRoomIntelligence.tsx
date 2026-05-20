@@ -551,11 +551,62 @@ export function RoomFrontIntelligence({ kind, room }: { kind: RoomKind; room: An
   return (
     <div style={{ marginTop: 16 }}>
       <SnapshotGrid items={roomFieldSnapshot(kind, room)} />
-      <div style={{ ...goldPanel, marginTop: 14 }}>
-        <div style={eyebrow}>VaultForge Underwriting</div>
-        <p style={sub}>{ai.primaryConstraint}</p>
-        <Meter label="Close Probability" value={ai.closeProbability} />
-        <p style={muted}>Spread: {money(ai.spread)} • Equity: {pct(ai.equity)}</p>
+      <div
+        style={{
+          ...goldPanel,
+          marginTop: 14,
+          background: "linear-gradient(180deg,#18150d,#0b0f18)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+          <div>
+            <div style={eyebrow}>VaultForge Underwriting</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#f7f7fb" }}>
+              {pct(ai.closeProbability)} Execution
+            </div>
+          </div>
+
+          <div
+            style={{
+              border: "1px solid rgba(255,220,104,.4)",
+              borderRadius: 999,
+              padding: "8px 14px",
+              color: "#ffd45a",
+              fontWeight: 900,
+              fontSize: 12,
+              textTransform: "uppercase",
+              letterSpacing: 2,
+            }}
+          >
+            Institutional Review
+          </div>
+        </div>
+
+        <div style={{ ...grid, marginTop: 14 }}>
+          <div style={panel}>
+            <div style={eyebrow}>Opportunity</div>
+            <div style={{ fontSize: 34, fontWeight: 900 }}>{pct(ai.opportunity)}</div>
+          </div>
+
+          <div style={panel}>
+            <div style={eyebrow}>Risk</div>
+            <div style={{ fontSize: 34, fontWeight: 900 }}>{pct(ai.risk)}</div>
+          </div>
+
+          <div style={panel}>
+            <div style={eyebrow}>Spread</div>
+            <div style={{ fontSize: 26, fontWeight: 900 }}>{money(ai.spread)}</div>
+          </div>
+
+          <div style={panel}>
+            <div style={eyebrow}>Liquidity</div>
+            <div style={{ fontSize: 34, fontWeight: 900 }}>{pct(ai.liquidity)}</div>
+          </div>
+        </div>
+
+        <p style={{ ...muted, marginTop: 16 }}>
+          {ai.primaryConstraint}
+        </p>
       </div>
     </div>
   );
