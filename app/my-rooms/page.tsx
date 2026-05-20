@@ -533,6 +533,65 @@ function addRoomActivity(kind: RoomKind, room: Room, action: string, note: strin
 
 
 
+
+type CurrentMemberIdentity = {
+  id: string;
+  email: string;
+  hasIdentity: boolean;
+};
+
+function currentMemberIdentity(): CurrentMemberIdentity {
+  if (!ok()) {
+    return { id: "", email: "", hasIdentity: false };
+  }
+
+  let profile: any = {};
+  const profileKeys = [
+    "vaultforge_profile",
+    "vaultforge_member_profile",
+    "vf_profile",
+    "member_profile",
+    "profile",
+  ];
+
+  for (const key of profileKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw && raw.startsWith("{")) {
+        profile = { ...profile, ...JSON.parse(raw) };
+      }
+    } catch {
+      // ignore bad local storage values
+    }
+  }
+
+  const email = txt(
+    profile.email ||
+      profile.memberEmail ||
+      profile.member_email ||
+      localStorage.getItem("vf_email") ||
+      localStorage.getItem("member_email") ||
+      localStorage.getItem("email")
+  ).toLowerCase();
+
+  const id = txt(
+    profile.id ||
+      profile.memberId ||
+      profile.member_id ||
+      profile.auth_user_id ||
+      profile.user_id ||
+      email ||
+      "local_member"
+  ).toLowerCase();
+
+  return {
+    id,
+    email,
+    hasIdentity: Boolean(id || email),
+  };
+}
+
+
 function routeStatusMap() {
   return ok() ? j<Record<string, { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }>>(localStorage.getItem(ROUTE_STATUS_KEY), {}) : {};
 }
