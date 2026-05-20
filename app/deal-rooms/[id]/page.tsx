@@ -750,6 +750,60 @@ function painEinstein(room: Room) {
 }
 
 
+
+function dealFrontSnapshot(room: Room) {
+  return [
+    txt(room.assetClass),
+    txt(room.propertyType),
+    txt(room.city),
+    txt(room.state),
+    txt(room.askingPrice || room.askPrice),
+    txt(room.propertyValue || room.value),
+    txt(room.repairs),
+    list(room.strategy).join(", "),
+    txt(room.controlStatus),
+  ].filter(Boolean);
+}
+
+function painFrontSnapshot(room: Room) {
+  return [
+    list(room.painTypes).join(", "),
+    txt(room.city),
+    txt(room.state),
+    txt(room.severity),
+    txt(room.timePressure),
+    txt(room.capitalPressure),
+    txt(room.controlStatus),
+    txt(room.desiredSolution),
+  ].filter(Boolean);
+}
+
+function IntelligenceStrip({ items }: { items: string[] }) {
+  const visible = items.filter(Boolean);
+  if (!visible.length) return <p style={muted}>No snapshot fields entered yet.</p>;
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+      {visible.map((item, index) => (
+        <div
+          key={`${item}-${index}`}
+          style={{
+            border: "1px solid rgba(245,197,66,.25)",
+            background: "#0d1320",
+            color: "#f7f7fb",
+            borderRadius: 999,
+            padding: "10px 14px",
+            fontSize: 13,
+            fontWeight: 800,
+          }}
+        >
+          {item}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function EinsteinPanel({ kind, room }: { kind: RoomKind; room: Room }) {
   const deal = kind === "deal" ? dealIntel(room) : null;
   const pain = kind === "pain" ? painIntel(room) : null;
