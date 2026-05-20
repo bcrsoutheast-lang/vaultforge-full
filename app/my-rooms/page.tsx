@@ -246,6 +246,162 @@ function saveRoomStatus(kind: RoomKind, room: Room, status: RoomStatus) {
   window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
 }
 
+
+function num(value: unknown) {
+  const parsed = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function daysOld(room: Room) {
+  const date = txt(room.updatedAt || room.createdAt);
+  if (!date) return 0;
+  const time = new Date(date).getTime();
+  if (!Number.isFinite(time)) return 0;
+  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
+}
+
+function roomHealth(kind: RoomKind, room: Room) {
+  const status = rawStatus(room);
+  const age = daysOld(room);
+  let score = 70;
+  let label = "Healthy";
+  let next = "Keep monitoring and move the room through the execution path.";
+  let warning = "";
+
+  if (status === "sold") {
+    return {
+      score: 100,
+      label: "Sold",
+      warning: "Completed deal room.",
+      next: "Keep as performance history. Later this can feed close-rate and member trust scores.",
+      attention: false,
+    };
+  }
+
+  if (status === "resolved") {
+    return {
+      score: 100,
+      label: "Resolved",
+      warning: "Problem handled.",
+      next: "Keep as resolution history. Later this can feed solver performance and routing intelligence.",
+      attention: false,
+    };
+  }
+
+  if (status === "deleted") {
+    return {
+      score: 10,
+      label: "Deleted",
+      warning: "Hidden from active workspace.",
+      next: "Restore active only if this room needs work again.",
+      attention: false,
+    };
+  }
+
+  if (status === "archived") {
+    return {
+      score: 45,
+      label: "Archived",
+      warning: "Not active right now.",
+      next: "Restore active if execution resumes, or leave archived for records.",
+      attention: false,
+    };
+  }
+
+  if (status === "saved") score += 8;
+
+  if (kind === "deal") {
+    const ask = num(room.askingPrice || room.askPrice);
+    const value = num(room.propertyValue || room.value);
+    const repairs = num(room.repairs);
+    const spread = value && ask ? value - ask - repairs : 0;
+    const hasPhotos = list(room.photos || room.photoUrls).length > 0 || firstPhoto(room);
+
+    if (!ask || !value) {
+      score -= 18;
+      warning = "Missing deal numbers.";
+      next = "Add ask price, value/ARV, repairs, control status, and proof before routing hard.";
+    }
+
+    if (spread > 25000) score += 8;
+    if (spread > 75000) score += 12;
+    if (spread <= 0 && ask && value) {
+      score -= 15;
+      warning = "Weak or unclear spread.";
+      next = "Verify numbers before sending this to buyers or capital.";
+    }
+
+    if (!hasPhotos) {
+      score -= 8;
+      if (!warning) warning = "No room photos.";
+    }
+
+    if (age >= 7 && status === "active") {
+      score -= 12;
+      warning = "Stale active deal.";
+      next = "Update status, message a fit, archive it, or mark sold if done.";
+    }
+
+    if (score >= 85) label = "High Momentum";
+    else if (score >= 65) label = "Working";
+    else if (score >= 45) label = "Needs Proof";
+    else label = "Needs Attention";
+  } else {
+    let severity = 35;
+    const sev = txt(room.severity);
+    if (sev === "Medium") severity = 50;
+    if (sev === "High") severity = 70;
+    if (sev === "Critical") severity = 88;
+    if (sev === "Emergency") severity = 96;
+    if (txt(room.timePressure).includes("24") || txt(room.timePressure).includes("72")) severity += 8;
+    severity = Math.min(100, severity);
+
+    score = 100 - Math.round(severity * 0.45);
+
+    if (severity >= 85) {
+      warning = "Critical pressure.";
+      next = "Message or route this to a solver now. Do not let it sit in active.";
+    } else if (severity >= 70) {
+      warning = "High pressure.";
+      next = "Confirm blocker, money needed, deadline, and route to a fit.";
+    }
+
+    if (age >= 3 && status === "active" && severity >= 70) {
+      score -= 12;
+      warning = "High pressure and stale.";
+      next = "Update, route, message, resolve, or archive. This needs action.";
+    }
+
+    if (list(room.blockers).length === 0 && list(room.painTypes).length === 0) {
+      score -= 10;
+      if (!warning) warning = "Missing problem classification.";
+      next = "Add pain type, blockers, risk, deadline, and next required solver.";
+    }
+
+    if (score >= 75) label = "Controlled";
+    else if (score >= 55) label = "Active Pressure";
+    else if (score >= 35) label = "Needs Solver";
+    else label = "Needs Attention";
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  const attention = status === "active" && (score < 55 || Boolean(warning));
+
+  return {
+    score,
+    label,
+    warning: warning || "No urgent warning.",
+    next,
+    attention,
+  };
+}
+
+function healthColor(score: number) {
+  if (score >= 75) return "#ffdc68";
+  if (score >= 50) return "#f5a742";
+  return "#ff4b5c";
+}
+
 const styleTag = `
 @keyframes vfPulseRed {
   0% { box-shadow: 0 0 0 rgba(255,60,70,.0); transform: translateY(0); }
@@ -316,6 +472,14 @@ function countFor(view: ViewKey, deals: Room[], pains: Room[]) {
   return 0;
 }
 
+
+function attentionCount(deals: Room[], pains: Room[]) {
+  return [
+    ...deals.map((room) => ({ kind: "deal" as RoomKind, room })),
+    ...pains.map((room) => ({ kind: "pain" as RoomKind, room })),
+  ].filter((item) => roomHealth(item.kind, item.room).attention).length;
+}
+
 function roomsFor(view: ViewKey, deals: Room[], pains: Room[]) {
   if (view === "activeDeals") return deals.filter((room) => rawStatus(room) === "active").map((room) => ({ kind: "deal" as RoomKind, room }));
   if (view === "activePain") return pains.filter((room) => rawStatus(room) === "active").map((room) => ({ kind: "pain" as RoomKind, room }));
@@ -346,7 +510,8 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
   const img = firstPhoto(room);
   const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`;
   const hot = unread(kind, room);
-  const style = hot ? (kind === "pain" ? pulseRed : pulseGold) : panel;
+  const health = roomHealth(kind, room);
+  const style = health.attention ? (kind === "pain" ? pulseRed : pulseGold) : hot ? (kind === "pain" ? pulseRed : pulseGold) : panel;
 
   return (
     <div style={style}>
@@ -359,6 +524,15 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
           ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • ${list(room.strategy).join(", ") || "Strategy open"}`
           : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")} • ${txt(room.timePressure, "Timeline open")}`}
       </p>
+
+      <div style={{ marginTop: 16 }}>
+        <div style={eyebrow}>{kind === "deal" ? "Deal Momentum" : "Pain Health"} • {health.label}</div>
+        <div style={{ height: 11, background: "#070a12", borderRadius: 999, overflow: "hidden", border: "1px solid rgba(207,216,230,.12)" }}>
+          <div style={{ width: `${health.score}%`, height: "100%", background: healthColor(health.score) }} />
+        </div>
+        <p style={health.attention ? { ...muted, color: "#ffb8b8" } : muted}>{health.warning}</p>
+        <p style={muted}>{health.next}</p>
+      </div>
 
       <div style={{ ...row, marginTop: 16 }}>
         <Link href={href} style={goldBtn}>Open</Link>
@@ -400,6 +574,8 @@ export default function MyRoomsPage() {
   const visible = useMemo(() => roomsFor(view, deals, pains), [view, deals, pains]);
   const refresh = () => setTick((value) => value + 1);
 
+  const needsAttention = attentionCount(deals, pains);
+
   const cards: { view: ViewKey; title: string; note: string }[] = [
     { view: "activeDeals", title: "Active Deals", note: "my open opportunity rooms" },
     { view: "activePain", title: "Active Pain", note: "my open pressure rooms" },
@@ -430,6 +606,15 @@ export default function MyRoomsPage() {
             <Link href="/state-map" style={btn}>State Map</Link>
           </div>
         </section>
+
+        <Section title="Needs Attention">
+          <div style={needsAttention ? pulseRed : activePanel}>
+            <div style={eyebrow}>AI Room Health</div>
+            <h2 style={h2}>{needsAttention}</h2>
+            <p style={sub}>{needsAttention ? "room(s) need action, update, routing, sold/resolved status, or cleanup." : "No urgent room health warnings."}</p>
+            <p style={muted}>This keeps member rooms from piling up stale, unsold, unresolved, or unfinished.</p>
+          </div>
+        </Section>
 
         <Section title="Folder Cards">
           <div style={grid}>
