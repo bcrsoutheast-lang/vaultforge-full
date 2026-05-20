@@ -110,6 +110,7 @@ const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultf
 const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
 const ACTIVITY_KEY = "vaultforge_room_activity_v1";
 const WATCH_KEY = "vaultforge_room_watchlist_v1";
+const ROOM_ACTIVITY_KEY = "vaultforge_room_activity_v2";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -286,6 +287,7 @@ function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
   for (const key of STATE_KEYS) writeJson(key, states);
   saveRoom(kind, next);
   addActivity(kind, id, `${state.toUpperCase()} room`);
+  addPersistentActivity(kind, id, "Status Change", `Room moved to ${state}.`);
 }
 
 function firstPhoto(room: Room) {
@@ -450,6 +452,23 @@ function painIntel(room: Room) {
   };
 }
 
+
+function addPersistentActivity(kind: RoomKind, id: string, action: string, note: string) {
+  if (!ok()) return;
+  const key = `${kind}:${id}`;
+  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ROOM_ACTIVITY_KEY), {});
+  all[key] = [{ at: new Date().toISOString(), action, note }, ...(all[key] || [])].slice(0, 75);
+  writeJson(ROOM_ACTIVITY_KEY, all);
+  window.dispatchEvent(new Event("vaultforge-room-activity-change"));
+}
+
+function persistentActivity(kind: RoomKind, id: string) {
+  if (!ok()) return [] as { at: string; action: string; note: string }[];
+  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ROOM_ACTIVITY_KEY), {});
+  return all[`${kind}:${id}`] || [];
+}
+
+
 function activityList(kind: RoomKind, id: string) {
   if (!ok()) return [] as { at: string; text: string }[];
   const map = j<Record<string, { at: string; text: string }[]>>(localStorage.getItem(ACTIVITY_KEY), {});
@@ -491,7 +510,9 @@ function toggleWatch(kind: RoomKind, id: string) {
   const listIds = j<string[]>(localStorage.getItem(WATCH_KEY), []);
   const next = listIds.includes(key) ? listIds.filter((item) => item !== key) : [key, ...listIds];
   writeJson(WATCH_KEY, next);
+  const actionText = listIds.includes(key) ? "Unwatch" : "Watch";
   addActivity(kind, id, listIds.includes(key) ? "Removed from watchlist" : "Added to watchlist");
+  addPersistentActivity(kind, id, actionText, listIds.includes(key) ? "Stopped following this room." : "Started following this room.");
   window.dispatchEvent(new Event("vaultforge-room-watch-change"));
   window.dispatchEvent(new Event("vaultforge-alert-change"));
   return !listIds.includes(key);
@@ -569,7 +590,7 @@ function MatchCard({ match }: { match: { member: MemberProfile; score: number; r
 }
 
 function ActivityStream({ kind, id }: { kind: RoomKind; id: string }) {
-  const activity = activityList(kind, id);
+  const activity = [...persistentActivity(kind, id).map((event) => ({ at: event.at, text: `${event.action}: ${event.note}` })), ...activityList(kind, id)].slice(0, 40);
   return (
     <div style={grid}>
       {activity.map((item, index) => (
@@ -594,7 +615,10 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
     setRoom(found);
     setWatched(isWatched("deal", id));
     setWatchCount(watchingCount("deal", id));
-    if (found) addActivity("deal", id, "Room viewed");
+    if (found) {
+      addActivity("deal", id, "Room viewed");
+      addPersistentActivity("deal", id, "Viewed", "Room opened.");
+    }
   }, [id]);
 
   const intel = useMemo(() => room ? dealIntel(room) : null, [room]);
