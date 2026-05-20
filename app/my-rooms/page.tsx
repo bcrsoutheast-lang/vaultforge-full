@@ -659,7 +659,7 @@ function roomIsFollowedByCurrentMember(kind: RoomKind, room: Room) {
 }
 
 
-function currentMemberIdentity() {
+function currentMemberIdentity(): MemberIdentity {
   if (!ok()) {
     return { id: "local_member", email: "", hasIdentity: false };
   }
@@ -989,6 +989,15 @@ function openAssignedOrRoutedCount(deals: Room[], pains: Room[]) {
 
 
 
+
+type MemberIdentity = {
+  name: string;
+  company: string;
+  email: string;
+  type: string;
+  states: string;
+};
+
 function readIdentityValue(keys: string[]) {
   if (typeof window === "undefined") return "";
   for (const key of keys) {
@@ -1031,7 +1040,7 @@ function MemberIdentityCard({
   activePain: number;
   routed: number;
 }) {
-  const [identity, setIdentity] = useState(() => currentMemberIdentity());
+  const [identity, setIdentity] = useState<MemberIdentity>(() => currentMemberIdentity());
 
   useEffect(() => {
     setIdentity(currentMemberIdentity());
