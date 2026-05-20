@@ -219,6 +219,70 @@ function roomContext(kind: "deal" | "pain", roomId: string) {
   };
 }
 
+
+function roomParticipants(kind: "deal" | "pain", roomId: string, toEmail = "") {
+  const current = currentMember();
+  const room = getRoom(kind, roomId);
+  const people = new Set<string>();
+
+  if (current.email) people.add(current.email);
+  if (current.name && !current.email) people.add(current.name);
+  if (toEmail) people.add(toEmail);
+
+  if (room) {
+    const possible = [
+      txt(room.ownerEmail),
+      txt(room.createdByEmail),
+      txt(room.memberEmail),
+      txt(room.email),
+      txt(room.contactEmail),
+      txt(room.sellerEmail),
+      txt(room.buyerEmail),
+      txt(room.contactName),
+      txt(room.ownerId),
+      txt(room.createdBy),
+      ...list(room.routedToEmails),
+      ...list(room.routedToEmail),
+      ...list(room.assignedToEmails),
+      ...list(room.assignedToEmail),
+      ...list(room.routedTo),
+      ...list(room.assignedTo),
+      ...list(room.participants),
+      ...list(room.participantEmails),
+      ...list(room.collaboratorEmails),
+      ...list(room.watcherEmails),
+    ];
+
+    for (const item of possible) {
+      const clean = txt(item);
+      if (clean) people.add(clean);
+    }
+  }
+
+  return Array.from(people).filter(Boolean);
+}
+
+function hydrateParticipants(thread: Thread) {
+  const current = currentMember();
+  const people = new Set<string>();
+
+  for (const p of list(thread.participants)) people.add(p);
+  if (thread.toEmail) people.add(thread.toEmail);
+  if (current.email) people.add(current.email);
+
+  if ((thread.roomType === "deal" || thread.roomType === "pain") && thread.roomId) {
+    for (const p of roomParticipants(thread.roomType, thread.roomId, thread.toEmail)) people.add(p);
+  }
+
+  for (const msg of thread.messages) {
+    if (msg.fromEmail) people.add(msg.fromEmail);
+    else if (msg.from && msg.from !== "VaultForge" && msg.from !== "Me") people.add(msg.from);
+  }
+
+  return Array.from(people).filter(Boolean);
+}
+
+
 function cleanLane(raw: unknown): Lane {
   const lane = txt(raw, "general").toLowerCase();
   if (lane.includes("deal")) return "deal";
@@ -263,7 +327,7 @@ function normalizeThread(raw: any): Thread {
   const status = txt(raw?.status, "active");
   const unread = Boolean(raw?.unread || raw?.isUnread || messages.some((msg) => !msg.read && msg.from !== "Me"));
 
-  return {
+  const baseThread: Thread = {
     id,
     lane,
     roomId,
@@ -272,7 +336,7 @@ function normalizeThread(raw: any): Thread {
     state: txt(raw?.state || context.state),
     roomTitle: context.roomTitle,
     roomSubtitle: context.roomSubtitle,
-    participants: list(raw?.participants),
+    participants: [],
     toEmail: txt(raw?.toEmail || raw?.to || raw?.recipient),
     status: (["active", "saved", "archived", "deleted"].includes(status) ? status : "active") as ThreadStatus,
     unread,
@@ -281,6 +345,9 @@ function normalizeThread(raw: any): Thread {
     updatedAt: txt(raw?.updatedAt || raw?.createdAt, now),
     messages,
   };
+
+  baseThread.participants = hydrateParticipants(baseThread);
+  return baseThread;
 }
 
 function readThreads(): Thread[] {
@@ -323,7 +390,7 @@ function makeThread(lane: Lane, subject: string, roomId = "", toEmail = ""): Thr
   const context = lane === "deal" || lane === "pain" ? roomContext(lane, roomId) : { state: "", roomTitle: subject, roomSubtitle: lane };
   const member = currentMember();
 
-  return {
+  const thread: Thread = {
     id: `${lane}_${roomId || toEmail || "general"}_${Date.now()}`,
     lane,
     roomId,
@@ -332,7 +399,7 @@ function makeThread(lane: Lane, subject: string, roomId = "", toEmail = ""): Thr
     state: context.state,
     roomTitle: context.roomTitle,
     roomSubtitle: context.roomSubtitle,
-    participants: [member.email || member.name, toEmail].filter(Boolean),
+    participants: [],
     toEmail,
     status: "active",
     unread: false,
@@ -341,6 +408,9 @@ function makeThread(lane: Lane, subject: string, roomId = "", toEmail = ""): Thr
     updatedAt: now,
     messages: [],
   };
+
+  thread.participants = hydrateParticipants(thread);
+  return thread;
 }
 
 function seedFromUrl() {
@@ -398,7 +468,6 @@ function Nav() {
       <div style={brand}>VAULTFORGE</div>
       <Link href="/command" style={btn}>Command</Link>
       <Link href="/my-rooms" style={btn}>My Rooms</Link>
-      <Link href="/routing" style={btn}>Routing</Link>
       <Link href="/state-map" style={btn}>State Map</Link>
       <Link href="/network" style={btn}>Network</Link>
       <Link href="/alerts" style={btn}>Alerts</Link>
@@ -433,6 +502,7 @@ function ThreadCard({ thread, active, onOpen }: { thread: Thread; active: boolea
       <p style={sub}>{thread.roomTitle}</p>
       <p style={muted}>{thread.roomSubtitle}</p>
       <p style={muted}>{thread.messages.length} message(s) • {new Date(thread.updatedAt).toLocaleString()}</p>
+      <p style={muted}>Participants: {hydrateParticipants(thread).join(", ") || "Owner/member not attached yet"}</p>
       {latest ? <p style={muted}>Latest: {latest.body.slice(0, 120)}{latest.body.length > 120 ? "..." : ""}</p> : <p style={muted}>No replies yet.</p>}
     </button>
   );
@@ -532,8 +602,9 @@ export default function MessagesPage() {
   const activeThread = threads.find((thread) => thread.id === activeId) || null;
 
   function persist(next: Thread[]) {
-    setThreads(next);
-    writeThreads(next);
+    const hydrated = next.map((thread) => ({ ...thread, participants: hydrateParticipants(thread) }));
+    setThreads(hydrated);
+    writeThreads(hydrated);
   }
 
   function openThread(id: string) {
@@ -571,7 +642,7 @@ export default function MessagesPage() {
 
     const next = threads.map((thread) =>
       thread.id === activeThread.id
-        ? { ...thread, messages: [...thread.messages, message], unread: false, updatedAt: message.at, status: thread.status === "deleted" ? "active" : thread.status }
+        ? { ...thread, messages: [...thread.messages, message], participants: hydrateParticipants({ ...thread, messages: [...thread.messages, message] }), unread: false, updatedAt: message.at, status: thread.status === "deleted" ? "active" : thread.status }
         : thread
     );
 
@@ -691,7 +762,7 @@ export default function MessagesPage() {
                 <h2 style={h2}>{activeThread.subject}</h2>
                 <p style={sub}>{activeThread.roomTitle}</p>
                 <p style={muted}>{activeThread.roomSubtitle}</p>
-                <p style={muted}>Participants: {activeThread.participants.join(", ") || activeThread.toEmail || "Not listed"}</p>
+                <p style={muted}>Participants: {hydrateParticipants(activeThread).join(", ") || "Owner/member not attached yet"}</p>
 
                 <div style={{ ...row, marginTop: 16 }}>
                   <button type="button" style={btn} onClick={() => setActiveId("")}>Back to Cards</button>
