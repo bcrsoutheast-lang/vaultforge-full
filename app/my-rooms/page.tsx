@@ -499,6 +499,95 @@ function healthColor(score: number) {
   return "#ff4b5c";
 }
 
+
+function currentMemberIdentity() {
+  if (!ok()) {
+    return { id: "local_member", email: "", hasIdentity: false };
+  }
+
+  const profileKeys = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+  for (const key of profileKeys) {
+    const profile = j<any | null>(localStorage.getItem(key), null);
+    if (profile && typeof profile === "object") {
+      const email = txt(profile.email || profile.ownerEmail || profile.createdByEmail).toLowerCase();
+      const id = txt(profile.id || email || "local_member");
+      return { id, email, hasIdentity: Boolean(id || email) };
+    }
+  }
+
+  const fallbackEmail =
+    txt(localStorage.getItem("vf_email")) ||
+    txt(localStorage.getItem("vaultforge_email")) ||
+    txt(localStorage.getItem("member_email"));
+
+  return {
+    id: fallbackEmail || "local_member",
+    email: fallbackEmail.toLowerCase(),
+    hasIdentity: Boolean(fallbackEmail),
+  };
+}
+
+function roomAssignedIds(room: Room) {
+  return [
+    ...list(room.assignedTo),
+    ...list(room.assignedToIds),
+    ...list(room.routedTo),
+    ...list(room.routedToIds),
+    ...list(room.watchers),
+    ...list(room.collaborators),
+  ].map((value) => value.toLowerCase());
+}
+
+function roomAssignedEmails(room: Room) {
+  return [
+    ...list(room.assignedToEmail),
+    ...list(room.assignedToEmails),
+    ...list(room.routedToEmail),
+    ...list(room.routedToEmails),
+    ...list(room.watcherEmails),
+    ...list(room.collaboratorEmails),
+  ].map((value) => value.toLowerCase());
+}
+
+function roomBelongsToCurrentMember(room: Room) {
+  const current = currentMemberIdentity();
+
+  const ownerId = txt(room.ownerId || room.createdBy || room.memberId || room.createdById).toLowerCase();
+  const ownerEmail = txt(room.ownerEmail || room.createdByEmail || room.memberEmail).toLowerCase();
+
+  const assignedIds = roomAssignedIds(room);
+  const assignedEmails = roomAssignedEmails(room);
+
+  const hasOwnershipData =
+    Boolean(ownerId) ||
+    Boolean(ownerEmail) ||
+    assignedIds.length > 0 ||
+    assignedEmails.length > 0;
+
+  if (!hasOwnershipData) {
+    return true;
+  }
+
+  if (current.id && ownerId && ownerId === current.id.toLowerCase()) return true;
+  if (current.email && ownerEmail && ownerEmail === current.email) return true;
+  if (current.id && assignedIds.includes(current.id.toLowerCase())) return true;
+  if (current.email && assignedEmails.includes(current.email)) return true;
+
+  return false;
+}
+
+function ownershipLabel(room: Room) {
+  const current = currentMemberIdentity();
+  const ownerId = txt(room.ownerId || room.createdBy || room.memberId || room.createdById);
+  const ownerEmail = txt(room.ownerEmail || room.createdByEmail || room.memberEmail);
+
+  if (!ownerId && !ownerEmail) return "Local/demo room";
+  if ((current.id && ownerId.toLowerCase() === current.id.toLowerCase()) || (current.email && ownerEmail.toLowerCase() === current.email)) return "Owned by me";
+  if (roomAssignedIds(room).includes(current.id.toLowerCase()) || roomAssignedEmails(room).includes(current.email)) return "Assigned/routed to me";
+  return "Other member room";
+}
+
+
 const styleTag = `
 @keyframes vfPulseRed {
   0% { box-shadow: 0 0 0 rgba(255,60,70,.0); transform: translateY(0); }
@@ -624,6 +713,7 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
           ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • ${list(room.strategy).join(", ") || "Strategy open"}`
           : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")} • ${txt(room.timePressure, "Timeline open")}`}
       </p>
+      <p style={muted}>Workspace: {ownershipLabel(room)}</p>
 
       <div style={{ marginTop: 16 }}>
         <div style={eyebrow}>{kind === "deal" ? "Deal Momentum" : "Pain Health"} • {health.label}</div>
@@ -690,8 +780,10 @@ export default function MyRoomsPage() {
     };
   }, []);
 
-  const deals = useMemo(() => allRooms("deal"), [tick]);
-  const pains = useMemo(() => allRooms("pain"), [tick]);
+  const allDealRooms = useMemo(() => allRooms("deal"), [tick]);
+  const allPainRooms = useMemo(() => allRooms("pain"), [tick]);
+  const deals = useMemo(() => allDealRooms.filter(roomBelongsToCurrentMember), [allDealRooms]);
+  const pains = useMemo(() => allPainRooms.filter(roomBelongsToCurrentMember), [allPainRooms]);
   const visible = useMemo(() => roomsFor(view, deals, pains), [view, deals, pains]);
   const stages = useMemo(() => stageCounts(deals, pains), [deals, pains]);
   const refresh = () => setTick((value) => value + 1);
@@ -728,6 +820,26 @@ export default function MyRoomsPage() {
             <Link href="/state-map" style={btn}>State Map</Link>
           </div>
         </section>
+
+        <Section title="Workspace Ownership">
+          <div style={grid}>
+            <div style={activePanel}>
+              <div style={eyebrow}>My Deal Rooms</div>
+              <h2 style={h2}>{deals.length}</h2>
+              <p style={muted}>owned, created, assigned, routed, or local/demo rooms</p>
+            </div>
+            <div style={activePanel}>
+              <div style={eyebrow}>My Pain Rooms</div>
+              <h2 style={h2}>{pains.length}</h2>
+              <p style={muted}>owned, created, assigned, routed, or local/demo rooms</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Global Hidden</div>
+              <h2 style={h2}>{Math.max(0, allDealRooms.length + allPainRooms.length - deals.length - pains.length)}</h2>
+              <p style={muted}>rooms not tied to this member identity</p>
+            </div>
+          </div>
+        </Section>
 
         <Section title="Needs Attention">
           <div style={needsAttention ? pulseRed : activePanel}>
