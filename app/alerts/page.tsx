@@ -297,6 +297,104 @@ function routeStatusAlerts(deals: Room[], pains: Room[]): AlertItem[] {
 }
 
 
+function routeAgeDays(value: { at?: string }) {
+  const time = new Date(txt(value.at)).getTime();
+  if (!Number.isFinite(time)) return 0;
+  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
+}
+
+function isUrgentPainRoute(room: Room | undefined) {
+  if (!room) return false;
+  const severity = txt(room.severity);
+  const timePressure = txt(room.timePressure);
+  return severity === "Critical" || severity === "Emergency" || timePressure.includes("24") || timePressure.includes("72");
+}
+
+function routeEscalationAlerts(deals: Room[], pains: Room[]): AlertItem[] {
+  const out: AlertItem[] = [];
+  const map = routeStatusMap();
+
+  for (const [key, value] of Object.entries(map)) {
+    const kind = value.kind === "pain" ? "pain" : "deal";
+    const id = txt(value.roomId);
+    if (!id) continue;
+
+    const room = kind === "deal"
+      ? deals.find((item) => rid(item) === id)
+      : pains.find((item) => rid(item) === id);
+
+    const age = routeAgeDays(value);
+    const stalePending = value.status === "pending" && age >= 3;
+    const urgentPainPending = kind === "pain" && value.status === "pending" && isUrgentPainRoute(room);
+    const claimed = value.status === "claimed";
+
+    if (!stalePending && !urgentPainPending && !claimed) continue;
+
+    const title = room ? roomTitle(room, kind) : `${kind.toUpperCase()} ROOM ${id.slice(0, 8)}`;
+    const label = claimed ? "Execution Claimed" : urgentPainPending ? "Urgent Pain Route" : "Stale Pending Route";
+    const member = txt(value.memberName || value.memberEmail, "member");
+
+    out.push({
+      id: `route-escalation:${key}:${value.status}:${txt(value.at)}`,
+      kind,
+      title: `${label}: ${title}`,
+      subtitle: `${member} • ${room ? loc(room) : "room context"} • ${age} day(s) old • ${new Date(value.at).toLocaleString()}`,
+      href: kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`,
+      severity: urgentPainPending || stalePending ? "red" : "gold",
+    });
+  }
+
+  return out.slice(0, 60);
+}
+
+function routingActivityAlerts(deals: Room[], pains: Room[]): AlertItem[] {
+  const activity = roomActivityMap();
+  const out: AlertItem[] = [];
+
+  for (const [key, events] of Object.entries(activity)) {
+    const [kindRaw, id] = key.split(":");
+    const kind = kindRaw === "pain" ? "pain" : "deal";
+    if (!id || !Array.isArray(events)) continue;
+
+    const room = kind === "deal"
+      ? deals.find((item) => rid(item) === id)
+      : pains.find((item) => rid(item) === id);
+
+    for (const event of events.slice(0, 5)) {
+      const action = txt(event.action);
+      const note = txt(event.note);
+      const isRouting =
+        action.toLowerCase().includes("route") ||
+        note.toLowerCase().includes("route") ||
+        note.toLowerCase().includes("routed") ||
+        note.toLowerCase().includes("follow") ||
+        note.toLowerCase().includes("claimed");
+
+      if (!isRouting) continue;
+
+      const title = room ? roomTitle(room, kind) : `${kind.toUpperCase()} ROOM ${id.slice(0, 8)}`;
+
+      out.push({
+        id: `routing-activity:${key}:${action}:${txt(event.at)}`,
+        kind,
+        title: `${action || "Routing Activity"}: ${title}`,
+        subtitle: `${room ? loc(room) : "room context"} • ${note || "routing update"} • ${new Date(event.at).toLocaleString()}`,
+        href: kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`,
+        severity: kind === "pain" ? "red" : "gold",
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+  return out.filter((alert) => {
+    if (seen.has(alert.id)) return false;
+    seen.add(alert.id);
+    return true;
+  }).slice(0, 60);
+}
+
+
+
 function roomActivityMap() {
   return ok() ? j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ROOM_ACTIVITY_KEY), {}) : {};
 }
@@ -548,7 +646,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function AlertsPage() {
   const [tick, setTick] = useState(0);
-  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "activity" | "routes" | "history">("active");
+  const [lane, setLane] = useState<"active" | "watchlist" | "following" | "activity" | "routes" | "escalations" | "history">("active");
 
   useEffect(() => {
     const refresh = () => setTick((x) => x + 1);
@@ -593,11 +691,12 @@ export default function AlertsPage() {
   const followingAlerts = useMemo(() => watchedRoomAlerts(deals, pains), [deals, pains]);
   const activityAlerts = useMemo(() => roomActivityAlerts(deals, pains), [deals, pains, tick]);
   const routeAlerts = useMemo(() => routeStatusAlerts(deals, pains), [deals, pains, tick]);
-  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts, ...activityAlerts, ...routeAlerts];
+  const escalationAlerts = useMemo(() => [...routeEscalationAlerts(deals, pains), ...routingActivityAlerts(deals, pains)], [deals, pains, tick]);
+  const allAlerts = [...painAlerts, ...dealAlerts, ...messageAlerts, ...followingAlerts, ...activityAlerts, ...routeAlerts, ...escalationAlerts];
   const activeAlerts = allAlerts.filter((alert) => !seen.includes(alert.id) && !dismissed.includes(alert.id));
   const watchedAlerts = allAlerts.filter((alert) => watchlist.includes(alert.id));
   const historyAlerts = allAlerts.filter((alert) => seen.includes(alert.id) || dismissed.includes(alert.id));
-  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "activity" ? activityAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "routes" ? routeAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
+  const visible = lane === "active" ? activeAlerts : lane === "watchlist" ? watchedAlerts : lane === "following" ? followingAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "activity" ? activityAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "routes" ? routeAlerts.filter((alert) => !dismissed.includes(alert.id)) : lane === "escalations" ? escalationAlerts.filter((alert) => !dismissed.includes(alert.id)) : historyAlerts;
 
   function markSeen(id: string) {
     addId(ALERT_SEEN_KEY, id);
