@@ -55,6 +55,12 @@ type DealRoom = {
   coverPhoto: string;
   photoUrl: string;
   imageUrl: string;
+  ownerId: string;
+  ownerEmail: string;
+  createdBy: string;
+  createdByEmail: string;
+  memberRoomStatus: "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
+  executionStage: "New" | "Reviewing" | "Routed" | "Under Contract" | "Sold";
   roomState: "active" | "saved" | "archived" | "deleted";
   cleanupState: "active" | "saved" | "archived" | "deleted";
   stateStatus: "active" | "saved" | "archived" | "deleted";
@@ -103,10 +109,39 @@ function countyFromCity(city: string) { return CITY_COUNTY[city.trim().toLowerCa
 function moneyNumber(value: unknown) { const n = Number(String(value || "").replace(/[^0-9.-]/g, "")); return Number.isFinite(n) ? n : 0; }
 function locationFor(room: Partial<DealRoom>) { return [safeText(room.city), safeText(room.county), safeText(room.state)].filter(Boolean).join(", ") || "Market not listed"; }
 
+
+function currentOwner() {
+  if (!browserReady()) {
+    return { ownerId: "local_member", ownerEmail: "", createdBy: "local_member", createdByEmail: "" };
+  }
+
+  const profileKeys = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
+  for (const key of profileKeys) {
+    const profile = parseJson<any | null>(localStorage.getItem(key), null);
+    if (profile && typeof profile === "object") {
+      const email = safeText(profile.email || profile.ownerEmail || profile.createdByEmail);
+      const id = safeText(profile.id || email || "local_member");
+      return { ownerId: id, ownerEmail: email, createdBy: id, createdByEmail: email };
+    }
+  }
+
+  const fallbackEmail =
+    safeText(localStorage.getItem("vf_email")) ||
+    safeText(localStorage.getItem("vaultforge_email")) ||
+    safeText(localStorage.getItem("member_email"));
+
+  return {
+    ownerId: fallbackEmail || "local_member",
+    ownerEmail: fallbackEmail,
+    createdBy: fallbackEmail || "local_member",
+    createdByEmail: fallbackEmail,
+  };
+}
+
 function defaultDeal(): DealRoom {
   const now = new Date().toISOString();
   return {
-    id: "", roomId: "", title: "", state: "GA", city: "", county: "", address: "",
+    id: "", roomId: "", ownerId: "", ownerEmail: "", createdBy: "", createdByEmail: "", memberRoomStatus: "active", executionStage: "New", title: "", state: "GA", city: "", county: "", address: "",
     assetClass: "Residential", propertyType: "Single Family", strategy: ["Wholesale"], routeTo: ["Buyer"],
     condition: "Unknown", occupancy: "Unknown", controlStatus: "Unknown", timeline: "14 Days",
     askingPrice: "", propertyValue: "", repairs: "", beds: "", baths: "", sqft: "", units: "", noi: "", capRate: "", monthlyRent: "",
@@ -154,7 +189,8 @@ function saveDeal(room: DealRoom) {
   const now = new Date().toISOString();
   const intel = dealIntel(room);
   const cover = room.photos[0] || room.coverPhoto || "";
-  const next: DealRoom = { ...room, id, roomId: id, coverPhoto: cover, photoUrl: cover, imageUrl: cover, photoUrls: room.photos, roomState: "active", cleanupState: "active", stateStatus: "active", alertRead: false, viewedAt: "", createdAt: room.createdAt || now, updatedAt: now, analyzer: intel.analyzer };
+  const owner = currentOwner();
+  const next: DealRoom = { ...room, ...owner, id, roomId: id, coverPhoto: cover, photoUrl: cover, imageUrl: cover, photoUrls: room.photos, memberRoomStatus: "active", executionStage: "New", roomState: "active", cleanupState: "active", stateStatus: "active", alertRead: false, viewedAt: "", createdAt: room.createdAt || now, updatedAt: now, analyzer: intel.analyzer };
   const existing = readDeals().filter((item) => item.id !== id);
   const saved = writeJson(STORE_KEY, [next, ...existing]) && writeJson(`vaultforge_deal_room_${id}`, next);
   if (!saved) {
@@ -227,8 +263,7 @@ const textarea: React.CSSProperties = { ...input, minHeight: 120, resize: "verti
 const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
 function Nav() {
-  return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={btn}>Command</Link>
-      <Link href="/my-rooms" style={btn}>My Rooms</Link><Link href="/state-map" style={btn}>State Map</Link><Link href="/network" style={btn}>Network</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/deal-create" style={goldBtn}>Create Deal</Link><Link href="/pain-intake" style={btn}>Pain Intake</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>;
+  return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={btn}>Command</Link><Link href="/state-map" style={btn}>State Map</Link><Link href="/network" style={btn}>Network</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/deal-create" style={goldBtn}>Create Deal</Link><Link href="/pain-intake" style={btn}>Pain Intake</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>;
 }
 function Section({ title, children }: { title: string; children: React.ReactNode }) { return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>; }
 function stopKeys(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) { e.stopPropagation(); }
