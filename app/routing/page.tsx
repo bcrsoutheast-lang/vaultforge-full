@@ -311,6 +311,53 @@ function countRouteStatuses() {
 }
 
 
+
+function routePerformanceForMember(member: Member) {
+  const entries = routeEntries().filter((entry) => {
+    const email = txt(entry.memberEmail).toLowerCase();
+    const name = txt(entry.memberName).toLowerCase();
+    return Boolean(
+      (member.email && email === member.email.toLowerCase()) ||
+      (member.id && entry.key.toLowerCase().includes(member.id.toLowerCase())) ||
+      (member.name && name === member.name.toLowerCase())
+    );
+  });
+
+  const accepted = entries.filter((entry) => entry.status === "accepted").length;
+  const passed = entries.filter((entry) => entry.status === "passed").length;
+  const claimed = entries.filter((entry) => entry.status === "claimed").length;
+  const pending = entries.filter((entry) => entry.status === "pending").length;
+  const stalePending = entries.filter((entry) => entry.status === "pending" && routeAgeDays(entry) >= 3).length;
+  const total = entries.length;
+
+  const boost = accepted * 4 + claimed * 8 - passed * 5 - stalePending * 4;
+  const reliability = Math.max(0, Math.min(100, 55 + accepted * 8 + claimed * 12 - passed * 10 - stalePending * 8));
+
+  let badge = "";
+  if (claimed >= 2 || reliability >= 85) badge = "Best Performer";
+  else if (accepted >= 1 || reliability >= 70) badge = "Reliable Solver";
+  else if (passed >= 2 || stalePending >= 2) badge = "Needs Review";
+
+  return { accepted, passed, claimed, pending, stalePending, total, boost, reliability, badge };
+}
+
+function performanceAdjustedDealScore(room: Room, member: Member) {
+  return Math.max(0, Math.min(99, scoreDeal(room, member) + routePerformanceForMember(member).boost));
+}
+
+function performanceAdjustedPainScore(room: Room, member: Member) {
+  return Math.max(0, Math.min(99, scorePain(room, member) + routePerformanceForMember(member).boost));
+}
+
+function topPerformers(members: Member[]) {
+  return members
+    .map((member) => ({ member, performance: routePerformanceForMember(member) }))
+    .filter((item) => item.performance.total > 0)
+    .sort((a, b) => b.performance.reliability - a.performance.reliability)
+    .slice(0, 6);
+}
+
+
 function routeEntries() {
   return Object.entries(routeStatusMap()).map(([key, value]) => ({ key, ...value }));
 }
@@ -572,9 +619,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function MemberCard({ member, score, routeStatus, onRoute, onMessage }: { member: Member; score: number; routeStatus: string; onRoute: () => void; onMessage: () => void }) {
+  const performance = routePerformanceForMember(member);
   return (
     <div style={score >= 92 ? pulseGold : activePanel}>
-      <div style={eyebrow}>Match Score • {score}</div>
+      <div style={eyebrow}>Match Score • {score}{performance.badge ? ` • ${performance.badge}` : ""}</div>
       <h2 style={h2}>{member.name}</h2>
       <p style={sub}>{member.company}</p>
       <p style={muted}>{member.memberType} • {member.capitalRange}</p>
@@ -582,6 +630,8 @@ function MemberCard({ member, score, routeStatus, onRoute, onMessage }: { member
       <p style={muted}>Strategies: {member.strategies.join(", ") || "Not listed"}</p>
       <p style={muted}>Pain Focus: {member.painFocus.join(", ") || "Not listed"}</p>
       <p style={muted}>Route Status: {routeStatus || "not routed"}</p>
+      <p style={muted}>Performance: accepted {performance.accepted} • claimed {performance.claimed} • passed {performance.passed} • stale {performance.stalePending}</p>
+      <p style={muted}>Reliability: {performance.reliability}% {performance.boost ? `• score adjustment ${performance.boost > 0 ? "+" : ""}${performance.boost}` : ""}</p>
 
       <div style={{ ...row, marginTop: 16 }}>
         <button type="button" style={routeStatus ? btn : goldBtn} onClick={onRoute}>{routeStatus ? "Re-Route" : "Route"}</button>
@@ -690,6 +740,7 @@ export default function RoutingPage() {
   const unmatchedDeals = useMemo(() => unmatchedRooms("deal"), [deals, tick]);
   const unmatchedPains = useMemo(() => unmatchedRooms("pain"), [pains, tick]);
   const escalations = useMemo(() => escalationRoutes(), [tick, deals, pains]);
+  const performers = useMemo(() => topPerformers(members), [members, tick]);
 
   return (
     <main style={page}>
@@ -711,6 +762,27 @@ export default function RoutingPage() {
             <div style={panel}><div style={eyebrow}>Passed</div><h2 style={h2}>{routeCounts.passed}</h2><p style={muted}>members passed or rejected</p></div>
             <div style={pulseGold}><div style={eyebrow}>Claimed</div><h2 style={h2}>{routeCounts.claimed}</h2><p style={muted}>execution claimed</p></div>
           </div>
+        </Section>
+
+        <Section title="Route Performance Memory">
+          {performers.length ? (
+            <div style={grid}>
+              {performers.map(({ member, performance }) => (
+                <div key={member.id} style={performance.badge === "Needs Review" ? panel : pulseGold}>
+                  <div style={eyebrow}>{performance.badge || "Route History"}</div>
+                  <h2 style={h2}>{member.name}</h2>
+                  <p style={sub}>{member.company}</p>
+                  <p style={muted}>Reliability {performance.reliability}% • Boost {performance.boost > 0 ? "+" : ""}{performance.boost}</p>
+                  <p style={muted}>Accepted {performance.accepted} • Claimed {performance.claimed} • Passed {performance.passed} • Stale {performance.stalePending}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={panel}>
+              <h2 style={h2}>No route performance yet.</h2>
+              <p style={sub}>As members accept, pass, and claim execution, routing will start adjusting match scores.</p>
+            </div>
+          )}
         </Section>
 
         <Section title="Route Queues">
@@ -782,7 +854,7 @@ export default function RoutingPage() {
             <div style={{ display: "grid", gap: 24 }}>
               {deals.map((room) => {
                 const ranked = members
-                  .map((member) => ({ member, score: scoreDeal(room, member) }))
+                  .map((member) => ({ member, score: performanceAdjustedDealScore(room, member) }))
                   .sort((a, b) => b.score - a.score)
                   .slice(0, 3);
 
@@ -837,7 +909,7 @@ export default function RoutingPage() {
             <div style={{ display: "grid", gap: 24 }}>
               {pains.map((room) => {
                 const ranked = members
-                  .map((member) => ({ member, score: scorePain(room, member) }))
+                  .map((member) => ({ member, score: performanceAdjustedPainScore(room, member) }))
                   .sort((a, b) => b.score - a.score)
                   .slice(0, 3);
 
