@@ -302,6 +302,156 @@ export function RoomFrontIntelligence({ kind, room }: { kind: RoomKind; room: An
   );
 }
 
+
+function DiagnosticQA({
+  question,
+  answer,
+  action,
+}: {
+  question: string;
+  answer: string;
+  action: string;
+}) {
+  return (
+    <div style={{ borderTop: "1px solid rgba(207,216,230,.12)", paddingTop: 12, marginTop: 12 }}>
+      <div style={{ ...eyebrow, marginBottom: 6 }}>Question</div>
+      <p style={muted}>{question}</p>
+      <div style={{ ...eyebrow, marginBottom: 6, marginTop: 10 }}>AI Answer</div>
+      <p style={sub}>{answer}</p>
+      <div style={{ ...eyebrow, marginBottom: 6, marginTop: 10 }}>Action</div>
+      <p style={muted}>{action}</p>
+    </div>
+  );
+}
+
+function DiagnosticList({
+  title,
+  items,
+}: {
+  title: string;
+  items: { question: string; answer: string; action: string }[];
+}) {
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>{title}</div>
+      {items.map((item) => (
+        <DiagnosticQA key={item.question} question={item.question} answer={item.answer} action={item.action} />
+      ))}
+    </div>
+  );
+}
+
+function painFiveWhyAnswers(room: AnyRoom, ai: ReturnType<typeof painAnalysis>) {
+  const blockers = list(room.blockers);
+  const needs = list(room.needs || room.routingNeeds);
+
+  return [
+    {
+      question: "What is stopping execution right now?",
+      answer: blockers.length
+        ? `${blockers.join(", ")} is the current constraint stack. The room is not blocked by generic activity; it is blocked by a named execution constraint.`
+        : ai.root,
+      action: "Assign one owner to the top blocker and create a 24-hour evidence request: documents, dollar amount, deadline, decision maker, and required approval.",
+    },
+    {
+      question: "Why has that blocker not been removed?",
+      answer: ai.detectionGap >= 50
+        ? "The detection gap is high. The system does not yet have enough clean facts to separate cause from symptom."
+        : "The facts are strong enough to move from diagnosis to solver routing.",
+      action: ai.detectionGap >= 50
+        ? "Collect missing facts before routing broadly. Do not let members guess at the solution."
+        : "Route to the highest-fit solver and set a response deadline.",
+    },
+    {
+      question: "Which party owns the next decision?",
+      answer: txt(room.ownerSituation, "Decision ownership is not fully mapped. That creates delay risk because nobody is clearly accountable for the next move."),
+      action: "Name the decision owner, backup owner, and approval path before spending more time or capital.",
+    },
+    {
+      question: "What resource is missing?",
+      answer: needs.length
+        ? `The room is asking for ${needs.join(", ")}. That is the resource lane VaultForge should route first.`
+        : "The missing resource is not clearly classified. This makes routing weaker.",
+      action: needs.length
+        ? "Route by exact need, not by general member type. Match lender to capital gap, attorney to title/legal, operator to execution, contractor to scope."
+        : "Force-select the missing resource before routing.",
+    },
+    {
+      question: "What happens if no action occurs inside the decision window?",
+      answer: txt(room.worstCase, "Pressure compounds: cost increases, leverage weakens, options narrow, and the room can move from solvable to distressed."),
+      action: "Set the room to escalation watch if no member response occurs within the stated time pressure window.",
+    },
+  ];
+}
+
+function painFishboneAnswers(room: AnyRoom) {
+  return [
+    {
+      question: "People",
+      answer: txt(room.ownerSituation, "Stakeholder alignment is not mapped. This can create hidden veto power, slow approvals, and unclear authority."),
+      action: "Identify owner, decision maker, payer, operator, and any blocking party.",
+    },
+    {
+      question: "Process",
+      answer: list(room.blockers).length
+        ? `Process breakdown is tied to ${list(room.blockers).join(", ")}.`
+        : "The process failure is not yet classified.",
+      action: "Convert the blocker into a step-by-step checklist with owner and deadline.",
+    },
+    {
+      question: "Capital",
+      answer: txt(room.capitalPressure || room.moneyNeededNow, "Capital pressure is not quantified. That makes lender routing weak."),
+      action: "Document amount needed, timing, collateral, use of funds, and repayment/exit path.",
+    },
+    {
+      question: "Legal / Compliance",
+      answer: txt(room.titleStatus || room.permitStatus || room.legalStatus, "Legal, title, permit, or compliance exposure is not listed."),
+      action: "Separate legal/title risk from operational risk and route to specialist if unclear.",
+    },
+    {
+      question: "Asset Condition",
+      answer: txt(room.condition, "Physical condition is not listed. Repair, safety, access, and scope risk remain open."),
+      action: "Add photos, scope category, immediate safety issues, and repair owner.",
+    },
+    {
+      question: "Time",
+      answer: txt(room.timePressure || room.deadline, "No deadline listed. Without a deadline, the system cannot prioritize urgency correctly."),
+      action: "Add a real decision deadline and escalation threshold.",
+    },
+  ];
+}
+
+function painControlPlanAnswers(room: AnyRoom, ai: ReturnType<typeof painAnalysis>) {
+  return [
+    {
+      question: "Sort",
+      answer: "Separate symptoms from the one constraint that actually stops progress.",
+      action: `Primary constraint: ${ai.root}`,
+    },
+    {
+      question: "Set In Order",
+      answer: "Put the fix sequence in the order that reduces risk fastest.",
+      action: ai.corrective,
+    },
+    {
+      question: "Shine",
+      answer: "Clean the room data so members do not waste time interpreting incomplete facts.",
+      action: "Add missing documents, photos, amounts, dates, authority, and contact path.",
+    },
+    {
+      question: "Standardize",
+      answer: "Make the response path repeatable so every similar problem can be routed faster next time.",
+      action: "Use the same blocker-owner-deadline-solver format on every pain room.",
+    },
+    {
+      question: "Sustain",
+      answer: "Keep the room from going stale after the first message.",
+      action: "Create 24/72-hour follow-up checks until blocker is removed or room is archived/resolved.",
+    },
+  ];
+}
+
+
 export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: AnyRoom }) {
   if (kind === "pain") {
     const ai = painAnalysis(room);
@@ -324,18 +474,9 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
         </div>
 
         <div style={{ ...grid, marginTop: 16 }}>
-          <div style={panel}>
-            <div style={eyebrow}>5 Whys</div>
-            {ai.fiveWhy.map((item) => <p key={item} style={muted}>• {item}</p>)}
-          </div>
-          <div style={panel}>
-            <div style={eyebrow}>Fishbone / Ishikawa</div>
-            {ai.fishbone.map((item) => <p key={item} style={muted}>• {item}</p>)}
-          </div>
-          <div style={panel}>
-            <div style={eyebrow}>5S / Control Plan</div>
-            {ai.actionPlan.map((item) => <p key={item} style={muted}>• {item}</p>)}
-          </div>
+          <DiagnosticList title="5 Whys / AI Answers" items={painFiveWhyAnswers(room, ai)} />
+          <DiagnosticList title="Fishbone / Ishikawa Answers" items={painFishboneAnswers(room)} />
+          <DiagnosticList title="5S / Control Plan Answers" items={painControlPlanAnswers(room, ai)} />
         </div>
       </section>
     );
