@@ -659,51 +659,6 @@ function roomIsFollowedByCurrentMember(kind: RoomKind, room: Room) {
 }
 
 
-function currentMemberIdentity(): MemberIdentity {
-  if (!ok()) {
-    return {
-      id: "local_member",
-      email: "",
-      hasIdentity: false,
-      name: "Member Workspace",
-      company: "VaultForge Member",
-      type: "Private Member",
-      states: "States not listed",
-    ,
-      name: "" ? String("").split("@")[0] : "Member Workspace",
-      company: "Company not listed",
-      type: "Private Member",
-      states: "States not listed",
-    };
-  }
-
-  const profileKeys = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
-  for (const key of profileKeys) {
-    const profile = j<any | null>(localStorage.getItem(key), null);
-    if (profile && typeof profile === "object") {
-      const email = txt(profile.email || profile.ownerEmail || profile.createdByEmail).toLowerCase();
-      const id = txt(profile.id || email || "local_member");
-      return { id, email, hasIdentity: Boolean(id || email) };
-    }
-  }
-
-  const fallbackEmail =
-    txt(localStorage.getItem("vf_email")) ||
-    txt(localStorage.getItem("vaultforge_email")) ||
-    txt(localStorage.getItem("member_email"));
-
-  return {
-      id: fallbackEmail || "local_member",
-      email: fallbackEmail.toLowerCase(),
-      hasIdentity: Boolean(fallbackEmail),
-  ,
-      name: fallbackEmail.toLowerCase() ? String(fallbackEmail.toLowerCase()).split("@")[0] : "Member Workspace",
-      company: "Company not listed",
-      type: "Private Member",
-      states: "States not listed",
-    };
-}
-
 function roomAssignedIds(room: Room) {
   return [
     ...list(room.assignedTo),
@@ -808,7 +763,6 @@ const logoWrap: React.CSSProperties = {
 
 const logoShell: React.CSSProperties = {
   width: "min(520px, 92vw)",
-  minHeight: 150,
   border: "1px solid rgba(245,197,66,.32)",
   borderRadius: 34,
   background: "radial-gradient(circle at top, rgba(245,197,66,.18), transparent 38%), linear-gradient(180deg,#0b101d,#050816)",
@@ -856,7 +810,6 @@ function VaultForgeBrandLogo() {
 
   const [index, setIndex] = useState(0);
   const [failed, setFailed] = useState(false);
-
   const src = logoPaths[index];
 
   return (
@@ -879,6 +832,96 @@ function VaultForgeBrandLogo() {
         <p style={{ ...muted, marginTop: 12 }}>Private real estate execution intelligence network</p>
       </div>
     </div>
+  );
+}
+
+function safeProfileText(value: unknown, fallback: string) {
+  const clean = String(value || "").trim();
+  return clean && clean !== "undefined" && clean !== "null" ? clean : fallback;
+}
+
+function readMemberDisplay() {
+  if (typeof window === "undefined") {
+    return {
+      displayName: "Member Workspace",
+      company: "Company not listed",
+      email: "Email not listed",
+      memberType: "Private Member",
+      states: "States not listed",
+    };
+  }
+
+  let profile: any = {};
+  const keys = ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"];
+
+  for (const key of keys) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
+    } catch {
+      // ignore local storage parse errors
+    }
+  }
+
+  const email = safeProfileText(
+    profile.email ||
+      profile.memberEmail ||
+      profile.member_email ||
+      window.localStorage.getItem("vf_email") ||
+      window.localStorage.getItem("member_email") ||
+      window.localStorage.getItem("email"),
+    "Email not listed"
+  );
+
+  const displayName = safeProfileText(
+    profile.fullName ||
+      profile.full_name ||
+      profile.name ||
+      profile.ownerName ||
+      window.localStorage.getItem("vf_name") ||
+      window.localStorage.getItem("member_name"),
+    email.includes("@") ? email.split("@")[0] : "Member Workspace"
+  );
+
+  const company = safeProfileText(
+    profile.company ||
+      profile.companyName ||
+      profile.company_name ||
+      profile.businessName ||
+      window.localStorage.getItem("vf_company") ||
+      window.localStorage.getItem("member_company"),
+    "Company not listed"
+  );
+
+  const memberType = safeProfileText(profile.memberType || profile.member_type || profile.role || profile.investorType, "Private Member");
+
+  const statesRaw = profile.states || profile.operatingStates || profile.statesOperated || profile.serviceStates || profile.markets;
+  const states = Array.isArray(statesRaw) ? statesRaw.join(" • ") : safeProfileText(statesRaw, "States not listed");
+
+  return { displayName, company, email, memberType, states };
+}
+
+function MemberDisplayCard() {
+  const [member, setMember] = useState(() => ({
+    displayName: "Member Workspace",
+    company: "Company not listed",
+    email: "Email not listed",
+    memberType: "Private Member",
+    states: "States not listed",
+  }));
+
+  useEffect(() => {
+    setMember(readMemberDisplay());
+  }, []);
+
+  return (
+    <section style={{ ...panel, borderColor: "rgba(245,197,66,.32)", marginBottom: 22 }}>
+      <div style={eyebrow}>Member Command Identity</div>
+      <h2 style={h2}>{member.displayName}</h2>
+      <p style={sub}>{member.company}</p>
+      <p style={muted}>{member.email} • {member.memberType}</p>
+      <p style={muted}>{member.states}</p>
+    </section>
   );
 }
 
@@ -1002,119 +1045,6 @@ function openAssignedOrRoutedCount(deals: Room[], pains: Room[]) {
     if (status !== "active") return false;
     return roomAssignedToCurrentMember(item.room) || roomRoutedToCurrentMember(item.room);
   }).length;
-}
-
-
-
-
-
-type MemberIdentity = {
-  id: string;
-  email: string;
-  hasIdentity: boolean;
-  name: string;
-  company: string;
-  type: string;
-  states: string;
-};
-
-function readIdentityValue(keys: string[]) {
-  if (typeof window === "undefined") return "";
-  for (const key of keys) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) continue;
-
-      if (raw.startsWith("{")) {
-        const parsed = JSON.parse(raw);
-        const possible = [
-          parsed.fullName,
-          parsed.full_name,
-          parsed.name,
-          parsed.company,
-          parsed.companyName,
-          parsed.email,
-          parsed.memberEmail,
-          parsed.member_email,
-          parsed.userEmail,
-        ];
-        const found = possible.map((item) => String(item || "").trim()).find(Boolean);
-        if (found) return found;
-      }
-
-      const clean = String(raw || "").trim();
-      if (clean && clean !== "undefined" && clean !== "null") return clean;
-    } catch {
-      // ignore bad local storage values
-    }
-  }
-  return "";
-}
-
-function MemberIdentityCard({
-  activeDeals,
-  activePain,
-  routed,
-}: {
-  activeDeals: number;
-  activePain: number;
-  routed: number;
-}) {
-  const [identity, setIdentity] = useState<MemberIdentity>(() => currentMemberIdentity());
-
-  useEffect(() => {
-    setIdentity(currentMemberIdentity());
-  }, []);
-
-  return (
-    <section style={{ ...panel, borderColor: "rgba(245,197,66,.32)", marginBottom: 22 }}>
-      <div style={eyebrow}>Member Command Identity</div>
-      <h2 style={h2}>{identity.name}</h2>
-      <p style={sub}>{identity.company}</p>
-      <p style={muted}>{identity.email || "Email not listed"} • {identity.type}</p>
-      <p style={muted}>{identity.states}</p>
-
-      <div style={{ ...grid, marginTop: 18 }}>
-        <div style={panel}><div style={eyebrow}>Active Deals</div><h2 style={h2}>{activeDeals}</h2></div>
-        <div style={panel}><div style={eyebrow}>Active Pain</div><h2 style={h2}>{activePain}</h2></div>
-        <div style={panel}><div style={eyebrow}>Routed</div><h2 style={h2}>{routed}</h2></div>
-      </div>
-    </section>
-  );
-}
-
-
-function MetricButton({
-  title,
-  count,
-  note,
-  active,
-  alert,
-  danger,
-  onClick,
-}: {
-  title: string;
-  count: number;
-  note: string;
-  active?: boolean;
-  alert?: boolean;
-  danger?: boolean;
-  onClick: () => void;
-}) {
-  const style = active ? activePanel : alert && count ? (danger ? pulseRed : pulseGold) : panel;
-
-  return (
-    <button
-      type="button"
-      style={{ ...style, textAlign: "left", cursor: "pointer", width: "100%" }}
-      onClick={onClick}
-    >
-      <div style={eyebrow}>{title}</div>
-      <h2 style={h2}>{count}</h2>
-      <p style={muted}>{note}</p>
-      <p style={muted}>Click to open</p>
-    </button>
-  );
 }
 
 
@@ -1283,12 +1213,7 @@ export default function MyRoomsPage() {
       <div style={wrap}>
         <Nav />
         <VaultForgeBrandLogo />
-
-        <MemberIdentityCard
-          activeDeals={deals.filter(isOpenDealRoom).length}
-          activePain={pains.filter(isOpenPainRoom).length}
-          routed={openAssignedOrRoutedCount(deals, pains)}
-        />
+        <MemberDisplayCard />
 
         <section style={hero}>
           <div style={eyebrow}>My Rooms</div>
@@ -1306,67 +1231,55 @@ export default function MyRoomsPage() {
 
         <Section title="Workspace Ownership">
           <div style={grid}>
-            <MetricButton
-              title="My Deal Rooms"
-              count={deals.filter(isOpenDealRoom).length}
-              note="open active opportunity rooms only"
-              active={view === "activeDeals"}
-              onClick={() => setView("activeDeals")}
-            />
-            <MetricButton
-              title="My Pain Rooms"
-              count={pains.filter(isOpenPainRoom).length}
-              note="open active pressure rooms only"
-              active={view === "activePain"}
-              onClick={() => setView("activePain")}
-            />
-            <MetricButton
-              title="Assigned / Routed"
-              count={openAssignedOrRoutedCount(deals, pains)}
-              note="open rooms sent to this member for action"
-              active={view === "assignedToMe" || view === "routedToMe"}
-              onClick={() => setView("assignedToMe")}
-            />
-            <MetricButton
-              title="Global Hidden"
-              count={Math.max(0, allDealRooms.length + allPainRooms.length - deals.length - pains.length)}
-              note="rooms not tied to this member identity"
-              active={false}
-              onClick={() => setView("activeDeals")}
-            />
+            <div style={activePanel}>
+              <div style={eyebrow}>My Deal Rooms</div>
+              <h2 style={h2}>{deals.filter(isOpenDealRoom).length}</h2>
+              <p style={muted}>open active opportunity rooms only</p>
+            </div>
+            <div style={activePanel}>
+              <div style={eyebrow}>My Pain Rooms</div>
+              <h2 style={h2}>{pains.filter(isOpenPainRoom).length}</h2>
+              <p style={muted}>open active pressure rooms only</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Assigned / Routed</div>
+              <h2 style={h2}>{openAssignedOrRoutedCount(deals, pains)}</h2>
+              <p style={muted}>open rooms sent to this member for action</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Global Hidden</div>
+              <h2 style={h2}>{Math.max(0, allDealRooms.length + allPainRooms.length - deals.length - pains.length)}</h2>
+              <p style={muted}>rooms not tied to this member identity</p>
+            </div>
           </div>
         </Section>
 
         <Section title="Needs Attention">
-          <button
-            type="button"
-            style={{ ...(needsAttention ? pulseRed : panel), textAlign: "left", cursor: "pointer", width: "100%" }}
-            onClick={() => setView("activeDeals")}
-          >
-            <div style={eyebrow}>VaultForge Room Health</div>
+          <div style={needsAttention ? pulseRed : activePanel}>
+            <div style={eyebrow}>AI Room Health</div>
             <h2 style={h2}>{needsAttention}</h2>
             <p style={sub}>{needsAttention ? "room(s) need action, update, routing, sold/resolved status, or cleanup." : "No urgent room health warnings."}</p>
-            <p style={muted}>Click to review active rooms.</p>
-          </button>
+            <p style={muted}>This keeps member rooms from piling up stale, unsold, unresolved, or unfinished.</p>
+          </div>
         </Section>
 
         <Section title="Execution Timeline">
           <div style={grid}>
-            <MetricButton title="Deal New / Reviewing" count={deals.filter(isOpenDealRoom).filter((room) => roomStage("deal", room) === "New" || roomStage("deal", room) === "Reviewing").length} note="deals needing review" active={view === "activeDeals"} onClick={() => setView("activeDeals")} />
-            <MetricButton title="Deal Routed / Contract" count={(stages["Routed"] || 0) + (stages["Under Contract"] || 0)} note="rooms in execution" active={view === "routedToMe"} onClick={() => setView("routedToMe")} />
-            <MetricButton title="Sold Deals" count={stages["Sold"] || 0} note="completed opportunity rooms" active={view === "sold"} onClick={() => setView("sold")} />
-            <MetricButton title="Pain Diagnosing / Routed" count={pains.filter(isOpenPainRoom).filter((room) => roomStage("pain", room) === "Diagnosing" || roomStage("pain", room) === "Routed").length} note="pressure rooms moving" active={view === "activePain"} onClick={() => setView("activePain")} />
-            <MetricButton title="Pain In Progress" count={pains.filter(isOpenPainRoom).filter((room) => roomStage("pain", room) === "In Progress").length} note="solver work underway" active={view === "activePain"} alert danger onClick={() => setView("activePain")} />
-            <MetricButton title="Resolved Pain" count={stages["Resolved"] || 0} note="handled problem rooms" active={view === "resolved"} onClick={() => setView("resolved")} />
+            <div style={panel}><div style={eyebrow}>Deal New / Reviewing</div><h2 style={h2}>{(stages["New"] || 0) + (stages["Reviewing"] || 0)}</h2><p style={muted}>deals needing review</p></div>
+            <div style={panel}><div style={eyebrow}>Deal Routed / Contract</div><h2 style={h2}>{(stages["Routed"] || 0) + (stages["Under Contract"] || 0)}</h2><p style={muted}>rooms in execution</p></div>
+            <div style={activePanel}><div style={eyebrow}>Sold Deals</div><h2 style={h2}>{stages["Sold"] || 0}</h2><p style={muted}>completed opportunity rooms</p></div>
+            <div style={panel}><div style={eyebrow}>Pain Diagnosing / Routed</div><h2 style={h2}>{(stages["Diagnosing"] || 0) + (stages["Routed"] || 0)}</h2><p style={muted}>pressure rooms moving</p></div>
+            <div style={pulseRed}><div style={eyebrow}>Pain In Progress</div><h2 style={h2}>{stages["In Progress"] || 0}</h2><p style={muted}>solver work underway</p></div>
+            <div style={activePanel}><div style={eyebrow}>Resolved Pain</div><h2 style={h2}>{stages["Resolved"] || 0}</h2><p style={muted}>handled problem rooms</p></div>
           </div>
         </Section>
 
         <Section title="Route Response Board">
           <div style={grid}>
-            <MetricButton title="Pending Routes" count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "pending").length} note="waiting on accept/pass/claim" active={view === "routedToMe"} alert danger onClick={() => setView("routedToMe")} />
-            <MetricButton title="Accepted" count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "accepted").length} note="accepted by this workspace" active={view === "assignedToMe"} onClick={() => setView("assignedToMe")} />
-            <MetricButton title="Passed" count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "passed").length} note="not a fit / rejected" active={view === "assignedToMe"} onClick={() => setView("assignedToMe")} />
-            <MetricButton title="Claimed" count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "claimed").length} note="member claimed execution" active={view === "routedToMe"} onClick={() => setView("routedToMe")} />
+            <div style={pulseRed}><div style={eyebrow}>Pending Routes</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "pending").length}</h2><p style={muted}>waiting on accept/pass/claim</p></div>
+            <div style={activePanel}><div style={eyebrow}>Accepted</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "accepted").length}</h2><p style={muted}>accepted by this workspace</p></div>
+            <div style={panel}><div style={eyebrow}>Passed</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "passed").length}</h2><p style={muted}>not a fit / rejected</p></div>
+            <div style={pulseGold}><div style={eyebrow}>Claimed</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "claimed").length}</h2><p style={muted}>member claimed execution</p></div>
           </div>
         </Section>
 
