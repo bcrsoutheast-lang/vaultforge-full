@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type RoomKind = "deal" | "pain";
-type RoomStatus = "active" | "saved" | "archived" | "archivedDeals" | "archivedPain" | "deleted" | "deletedDeals" | "deletedPain" | "sold" | "resolved";
+type RoomStatus = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
 type RoomStage = "New" | "Reviewing" | "Diagnosing" | "Routed" | "Under Contract" | "In Progress" | "Sold" | "Resolved";
 
 type Room = {
@@ -1052,17 +1052,9 @@ function countFor(view: ViewKey, deals: Room[], pains: Room[]) {
   if (view === "assignedToMe") return [...deals, ...pains].filter(roomAssignedToCurrentMember).length;
   if (view === "routedToMe") return [...deals, ...pains].filter(roomRoutedToCurrentMember).length;
   if (view === "following") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomIsFollowedByCurrentMember(item.kind, item.room)).length;
-      if (view === "archivedDeals") return countDealStatus(deals, "archived");
-    if (view === "archivedPain") return countPainStatus(pains, "archived");
-    if (view === "deletedDeals") return countDealStatus(deals, "deleted");
-    if (view === "deletedPain") return countPainStatus(pains, "deleted");
     if (view === "archived") return [...deals, ...pains].filter((room) => rawStatus(room) === "archived").length;
   if (view === "sold") return deals.filter((room) => rawStatus(room) === "sold").length;
   if (view === "resolved") return pains.filter((room) => rawStatus(room) === "resolved").length;
-      if (view === "archivedDeals") return deals.filter((room) => roomStatusIs(room, "archived")).map((room) => ({ kind: "deal" as RoomKind, room }));
-    if (view === "archivedPain") return pains.filter((room) => roomStatusIs(room, "archived")).map((room) => ({ kind: "pain" as RoomKind, room }));
-    if (view === "deletedDeals") return deals.filter((room) => roomStatusIs(room, "deleted")).map((room) => ({ kind: "deal" as RoomKind, room }));
-    if (view === "deletedPain") return pains.filter((room) => roomStatusIs(room, "deleted")).map((room) => ({ kind: "pain" as RoomKind, room }));
     if (view === "deleted") return [...deals, ...pains].filter((room) => rawStatus(room) === "deleted").length;
   return 0;
 }
@@ -1483,14 +1475,14 @@ export default function MyRoomsPage() {
             <ViewCard view="savedDeals" title="Saved Deals" count={countForView("savedDeals")} note="kept opportunity rooms" />
             <ViewCard view="savedPain" title="Saved Pain" count={countForView("savedPain")} note="kept pressure rooms" />
 
-            <ViewCard view="archivedDeals" title="Archived Deals" count={countForView("archivedDeals")} note="inactive deal rooms" />
-            <ViewCard view="archivedPain" title="Archived Pain" count={countForView("archivedPain")} note="inactive pain rooms" />
+            <ViewCard view="archived" title="Archived Deals" count={countDealStatus(deals, "archived")} note="inactive deal rooms" />
+            <ViewCard view="archived" title="Archived Pain" count={countPainStatus(pains, "archived")} note="inactive pain rooms" />
 
             <ViewCard view="sold" title="Sold Deals" count={countForView("sold")} note="completed opportunity rooms" />
             <ViewCard view="resolved" title="Resolved Pain" count={countForView("resolved")} note="handled problem rooms" />
 
-            <ViewCard view="deletedDeals" title="Deleted Deals" count={countForView("deletedDeals")} note="hidden deal cleanup" />
-            <ViewCard view="deletedPain" title="Deleted Pain" count={countForView("deletedPain")} note="hidden pain cleanup" />
+            <ViewCard view="deleted" title="Deleted Deals" count={countDealStatus(deals, "deleted")} note="hidden deal cleanup" />
+            <ViewCard view="deleted" title="Deleted Pain" count={countPainStatus(pains, "deleted")} note="hidden pain cleanup" />
 
             <ViewCard view="assignedToMe" title="Assigned To Me" count={countForView("assignedToMe")} note="rooms assigned into my workspace" />
             <ViewCard view="routedToMe" title="Routed To Me" count={countForView("routedToMe")} note="rooms routed for action" />
