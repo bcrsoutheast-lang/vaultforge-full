@@ -452,6 +452,138 @@ function painControlPlanAnswers(room: AnyRoom, ai: ReturnType<typeof painAnalysi
 }
 
 
+
+function dealFiveWhyAnswers(room: AnyRoom, ai: ReturnType<typeof dealAnalysis>) {
+  const lane = ai.lane;
+  const missing = ai.missing;
+
+  return [
+    {
+      question: "Is this actually executable or only attractive on the surface?",
+      answer: ai.closeProbability >= 70
+        ? "Execution probability is strong because the room has enough margin, route readiness, and/or control support."
+        : ai.closeProbability >= 45
+        ? "This is not dead, but it is not fully executable yet. The deal needs proof cleanup before it should be pushed hard."
+        : "This currently behaves more like a prospect than an executable deal. The visible opportunity is weaker than the operational risk.",
+      action: ai.closeProbability >= 70
+        ? "Route to the highest-fit buyer/capital/operator with a decision deadline."
+        : "Do not broad-blast. Close the proof gaps first, then route selectively.",
+    },
+    {
+      question: "What kills this deal first?",
+      answer: ai.missing.length
+        ? `The first kill shot is missing proof: ${missing.join(", ")}. Buyers and lenders will discount or ignore the room until those gaps are resolved.`
+        : ai.risk >= 70
+        ? "Risk stacking is the first kill shot. Too many unresolved conditions can collapse confidence even if the spread looks attractive."
+        : "The first deal killer is likely execution delay, not price. If routing, access, and decision timing drift, the deal loses momentum.",
+      action: ai.missing.length
+        ? "Collect missing proof before sending the deal to serious buyers or capital."
+        : "Convert the risk stack into named owners: title, access, scope, capital, operator, buyer.",
+    },
+    {
+      question: "What would an institutional operator notice immediately?",
+      answer: ai.lane === "commercial"
+        ? "An operator will look for rent roll quality, NOI reliability, occupancy risk, tenant rollover, debt pressure, and cap-rate logic before caring about the story."
+        : ai.lane === "land"
+        ? "A land buyer will look for zoning, utilities, access, entitlement path, road frontage, flood/topography risk, and realistic highest/best use."
+        : "A residential operator will look for control, ARV proof, rehab scope, occupancy/access, title clarity, and whether the timeline supports the exit.",
+      action: ai.lane === "commercial"
+        ? "Add NOI, occupancy, rent roll notes, tenant risk, cap rate, debt, and reposition thesis."
+        : ai.lane === "land"
+        ? "Add zoning, utilities, entitlement status, road frontage, acreage, and development path."
+        : "Add beds, baths, sqft, occupancy, access, rehab, ARV, ask, and title/control status.",
+    },
+    {
+      question: "Where is margin most likely to compress?",
+      answer: ai.spread <= 0
+        ? "Margin is not proven. Without a positive spread, the system should treat the room as unverified."
+        : ai.risk >= 65
+        ? "Margin can compress through repair creep, title/access delay, buyer discounting, financing friction, or timeline drag."
+        : "Margin appears workable, but it still depends on repair scope, buyer liquidity, and verified exit value.",
+      action: "Stress-test repairs, holding cost, buyer discount, lender fees, and timeline delay before calling the deal strong.",
+    },
+    {
+      question: "What resource is truly missing?",
+      answer: ai.primaryConstraint,
+      action: "Route the missing resource directly: buyer for liquidity, lender for capital, operator for execution, attorney/title for legal risk, contractor for scope risk.",
+    },
+  ];
+}
+
+function dealExecutionAnswers(room: AnyRoom, ai: ReturnType<typeof dealAnalysis>) {
+  return [
+    {
+      question: "Capital Stack Stress",
+      answer: ai.spread > 75000
+        ? "Spread may support multiple capital structures, but lender confidence still depends on collateral quality, exit clarity, and clean control."
+        : "Capital stack is fragile because the visible spread is thin or unproven. Financing friction can erase the opportunity.",
+      action: "Show ask, ARV/value, repairs, use of funds, collateral, payoff path, and repayment/exit before routing to capital.",
+    },
+    {
+      question: "Timeline Compression",
+      answer: txt(room.timeline || room.timePressure, "").includes("24") || txt(room.timeline || room.timePressure, "").includes("72")
+        ? "Timeline pressure is severe. The room needs decision-ready facts, not more discovery."
+        : "Timeline pressure is manageable if proof and routing are tightened now.",
+      action: "Set a decision deadline, route the correct counterparty, and stop non-critical discovery until the primary constraint is removed.",
+    },
+    {
+      question: "Lender Rejection Risk",
+      answer: empty(room.propertyValue || room.value) || empty(room.askingPrice || room.askPrice)
+        ? "A lender will likely reject or stall because collateral value and purchase basis are not complete."
+        : empty(room.controlStatus) || txt(room.controlStatus, "").toLowerCase().includes("no")
+        ? "A lender may hesitate because control/authority is not clear."
+        : "Lender risk is moderate. The next weakness is documentation quality and exit proof.",
+      action: "Package collateral value, basis, repairs, title/control, exit strategy, borrower/operator, and timeline.",
+    },
+    {
+      question: "Operator Choke Point",
+      answer: ai.lane === "residential"
+        ? "Operator choke point is rehab scope, access, contractor reliability, and exit buyer confidence."
+        : ai.lane === "commercial"
+        ? "Operator choke point is NOI verification, tenant risk, vacancy absorption, and reposition plan."
+        : "Operator choke point is entitlement, utilities, access, zoning, and development feasibility.",
+      action: "Route to an operator who specifically solves that choke point, not just someone in the same state.",
+    },
+    {
+      question: "Route Recommendation",
+      answer: list(room.routeTo).length
+        ? `Current selected route is ${list(room.routeTo).join(", ")}. Use that, but rank members by strategy, asset type, and proof fit.`
+        : "No route lane is selected. This weakens execution because the platform cannot tell whether the room needs buyer, lender, operator, developer, attorney, or contractor first.",
+      action: list(room.routeTo).length ? "Open routing and send to highest-fit member first." : "Select route lane before sending messages.",
+    },
+  ];
+}
+
+function dealExitScenarioAnswers(room: AnyRoom, ai: ReturnType<typeof dealAnalysis>) {
+  return [
+    {
+      question: "Best Case",
+      answer: ai.opportunity >= 70
+        ? "Control and proof hold, buyer/capital responds quickly, and the deal converts into executable acquisition, JV, wholesale, flip, or hold path."
+        : "Best case requires proof cleanup first, then selective routing to a high-fit counterparty.",
+      action: "Move only after the deal has enough proof to survive buyer/lender scrutiny.",
+    },
+    {
+      question: "Base Case",
+      answer: ai.closeProbability >= 50
+        ? "The deal can progress if the current constraint is removed and routing is targeted."
+        : "The deal likely stalls until the missing facts or control issue is corrected.",
+      action: "Work the primary constraint before adding more audience.",
+    },
+    {
+      question: "Worst Case",
+      answer: ai.killShot,
+      action: "Treat the deal killer as the first work order in the room.",
+    },
+    {
+      question: "VaultForge Edge",
+      answer: "The advantage is not listing the deal. The advantage is diagnosing what must be fixed, who should fix it, and what proof is needed before capital or buyers engage.",
+      action: "Keep the room intelligence-first: proof, constraint, route, response, execution.",
+    },
+  ];
+}
+
+
 export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: AnyRoom }) {
   if (kind === "pain") {
     const ai = painAnalysis(room);
@@ -505,6 +637,12 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
           <div style={eyebrow}>Decision Tree</div>
           {ai.decisionTree.map((item) => <p key={item} style={muted}>• {item}</p>)}
         </div>
+      </div>
+
+      <div style={{ ...grid, marginTop: 16 }}>
+        <DiagnosticList title="Deal 5 Whys / AI Answers" items={dealFiveWhyAnswers(room, ai)} />
+        <DiagnosticList title="Execution Failure Analysis" items={dealExecutionAnswers(room, ai)} />
+        <DiagnosticList title="Exit Scenario Analysis" items={dealExitScenarioAnswers(room, ai)} />
       </div>
     </section>
   );
