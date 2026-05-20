@@ -54,6 +54,7 @@ type ViewKey =
   | "savedPain"
   | "assignedToMe"
   | "routedToMe"
+  | "following"
   | "archived"
   | "sold"
   | "resolved"
@@ -63,6 +64,8 @@ const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaul
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
 const MEMBER_STATE_KEY = "vaultforge_my_room_status_v1";
+const WATCH_KEY = "vaultforge_room_watchlist_v1";
+const WATCH_META_KEY = "vaultforge_room_watch_meta_v1";
 const READ_KEY = "vaultforge_room_alert_read_v1";
 const STAGE_KEY = "vaultforge_room_execution_stage_v1";
 const DEAL_STAGES: RoomStage[] = ["New", "Reviewing", "Routed", "Under Contract", "Sold"];
@@ -502,6 +505,65 @@ function healthColor(score: number) {
 }
 
 
+
+function watchKey(kind: RoomKind, room: Room) {
+  return `${kind}:${rid(room)}`;
+}
+
+function watchList() {
+  return ok() ? j<string[]>(localStorage.getItem(WATCH_KEY), []) : [];
+}
+
+function watchMeta() {
+  return ok() ? j<Record<string, { at: string; updates: number }>>(localStorage.getItem(WATCH_META_KEY), {}) : {};
+}
+
+function isWatchingRoom(kind: RoomKind, room: Room) {
+  return watchList().includes(watchKey(kind, room));
+}
+
+function toggleWatchRoom(kind: RoomKind, room: Room) {
+  if (!ok()) return false;
+  const key = watchKey(kind, room);
+  const current = watchList();
+  const meta = watchMeta();
+
+  let next: string[];
+  let watching: boolean;
+
+  if (current.includes(key)) {
+    next = current.filter((item) => item !== key);
+    delete meta[key];
+    watching = false;
+  } else {
+    next = [key, ...current];
+    meta[key] = { at: new Date().toISOString(), updates: 0 };
+    watching = true;
+  }
+
+  writeJson(WATCH_KEY, next);
+  writeJson(WATCH_META_KEY, meta);
+  window.dispatchEvent(new Event("vaultforge-room-watch-change"));
+  window.dispatchEvent(new Event("vaultforge-alert-change"));
+  return watching;
+}
+
+function watchingCount(kind: RoomKind, room: Room) {
+  const key = watchKey(kind, room);
+  let count = isWatchingRoom(kind, room) ? 1 : 0;
+  count += list(room.watchers).length + list(room.watcherIds).length + list(room.watcherEmails).length;
+  return count;
+}
+
+function roomIsFollowedByCurrentMember(kind: RoomKind, room: Room) {
+  const current = currentMemberIdentity();
+  if (isWatchingRoom(kind, room)) return true;
+  const ids = list(room.watchers).concat(list(room.watcherIds)).map((value) => value.toLowerCase());
+  const emails = list(room.watcherEmails).map((value) => value.toLowerCase());
+  return Boolean((current.id && ids.includes(current.id.toLowerCase())) || (current.email && emails.includes(current.email)));
+}
+
+
 function currentMemberIdentity() {
   if (!ok()) {
     return { id: "local_member", email: "", hasIdentity: false };
@@ -690,6 +752,7 @@ function countFor(view: ViewKey, deals: Room[], pains: Room[]) {
   if (view === "savedPain") return pains.filter((room) => rawStatus(room) === "saved").length;
   if (view === "assignedToMe") return [...deals, ...pains].filter(roomAssignedToCurrentMember).length;
   if (view === "routedToMe") return [...deals, ...pains].filter(roomRoutedToCurrentMember).length;
+  if (view === "following") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomIsFollowedByCurrentMember(item.kind, item.room)).length;
   if (view === "archived") return [...deals, ...pains].filter((room) => rawStatus(room) === "archived").length;
   if (view === "sold") return deals.filter((room) => rawStatus(room) === "sold").length;
   if (view === "resolved") return pains.filter((room) => rawStatus(room) === "resolved").length;
@@ -712,6 +775,7 @@ function roomsFor(view: ViewKey, deals: Room[], pains: Room[]) {
   if (view === "savedPain") return pains.filter((room) => rawStatus(room) === "saved").map((room) => ({ kind: "pain" as RoomKind, room }));
   if (view === "assignedToMe") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomAssignedToCurrentMember(item.room));
   if (view === "routedToMe") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomRoutedToCurrentMember(item.room));
+  if (view === "following") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomIsFollowedByCurrentMember(item.kind, item.room));
   if (view === "archived") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => rawStatus(item.room) === "archived");
   if (view === "sold") return deals.filter((room) => rawStatus(room) === "sold").map((room) => ({ kind: "deal" as RoomKind, room }));
   if (view === "resolved") return pains.filter((room) => rawStatus(room) === "resolved").map((room) => ({ kind: "pain" as RoomKind, room }));
@@ -741,7 +805,9 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
   const stage = roomStage(kind, room);
   const stages = kind === "deal" ? DEAL_STAGES : PAIN_STAGES;
   const age = daysOld(room);
-  const style = health.attention ? (kind === "pain" ? pulseRed : pulseGold) : hot ? (kind === "pain" ? pulseRed : pulseGold) : panel;
+  const watching = isWatchingRoom(kind, room);
+  const watchCount = watchingCount(kind, room);
+  const style = watching ? pulseGold : health.attention ? (kind === "pain" ? pulseRed : pulseGold) : hot ? (kind === "pain" ? pulseRed : pulseGold) : panel;
 
   return (
     <div style={style}>
@@ -754,7 +820,7 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
           ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • ${list(room.strategy).join(", ") || "Strategy open"}`
           : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")} • ${txt(room.timePressure, "Timeline open")}`}
       </p>
-      <p style={muted}>Workspace: {ownershipLabel(room)}</p>
+      <p style={muted}>Workspace: {ownershipLabel(room)} • Watching {watchCount}</p>
 
       <div style={{ marginTop: 16 }}>
         <div style={eyebrow}>{kind === "deal" ? "Deal Momentum" : "Pain Health"} • {health.label}</div>
@@ -788,6 +854,7 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
 
       <div style={{ ...row, marginTop: 16 }}>
         <Link href={href} style={goldBtn}>Open</Link>
+        <button type="button" style={watching ? goldBtn : btn} onClick={() => { toggleWatchRoom(kind, room); refresh(); }}>{watching ? "Following" : "Watch"}</button>
         <Link href={`/messages?type=${kind}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent((kind === "deal" ? "Deal Room: " : "Pain Room: ") + roomTitle(room, kind))}`} style={btn}>Message</Link>
 
         {status !== "saved" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "saved"); refresh(); }}>Save</button> : null}
@@ -810,12 +877,14 @@ export default function MyRoomsPage() {
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-room-state-change", refresh);
     window.addEventListener("vaultforge-my-rooms-change", refresh);
+    window.addEventListener("vaultforge-room-watch-change", refresh);
     window.addEventListener("vaultforge-deal-change", refresh);
     window.addEventListener("vaultforge-pain-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-room-state-change", refresh);
       window.removeEventListener("vaultforge-my-rooms-change", refresh);
+      window.removeEventListener("vaultforge-room-watch-change", refresh);
       window.removeEventListener("vaultforge-deal-change", refresh);
       window.removeEventListener("vaultforge-pain-change", refresh);
     };
@@ -838,6 +907,7 @@ export default function MyRoomsPage() {
     { view: "savedPain", title: "Saved Pain", note: "kept pain rooms" },
     { view: "assignedToMe", title: "Assigned To Me", note: "rooms assigned into my workspace" },
     { view: "routedToMe", title: "Routed To Me", note: "rooms routed for action" },
+    { view: "following", title: "Following", note: "rooms I am watching" },
     { view: "archived", title: "Archived", note: "not active, not deleted" },
     { view: "sold", title: "Sold Deals", note: "completed opportunity rooms" },
     { view: "resolved", title: "Resolved Pain", note: "handled problem rooms" },
