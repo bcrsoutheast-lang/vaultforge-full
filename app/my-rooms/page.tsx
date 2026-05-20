@@ -67,6 +67,7 @@ const MEMBER_STATE_KEY = "vaultforge_my_room_status_v1";
 const WATCH_KEY = "vaultforge_room_watchlist_v1";
 const WATCH_META_KEY = "vaultforge_room_watch_meta_v1";
 const ROOM_ACTIVITY_KEY = "vaultforge_room_activity_v2";
+const ROUTE_STATUS_KEY = "vaultforge_route_status_v1";
 const READ_KEY = "vaultforge_room_alert_read_v1";
 const STAGE_KEY = "vaultforge_room_execution_stage_v1";
 const DEAL_STAGES: RoomStage[] = ["New", "Reviewing", "Routed", "Under Contract", "Sold"];
@@ -531,6 +532,74 @@ function addRoomActivity(kind: RoomKind, room: Room, action: string, note: strin
 }
 
 
+
+function routeStatusMap() {
+  return ok() ? j<Record<string, { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }>>(localStorage.getItem(ROUTE_STATUS_KEY), {}) : {};
+}
+
+function currentRouteEntriesForRoom(kind: RoomKind, room: Room) {
+  const id = rid(room);
+  const current = currentMemberIdentity();
+  return Object.entries(routeStatusMap()).filter(([key, value]) => {
+    if (value.kind !== kind || value.roomId !== id) return false;
+    const keyLower = key.toLowerCase();
+    return Boolean(
+      (current.id && keyLower.includes(current.id.toLowerCase())) ||
+      (current.email && keyLower.includes(current.email.toLowerCase())) ||
+      roomAssignedToCurrentMember(room) ||
+      roomRoutedToCurrentMember(room)
+    );
+  });
+}
+
+function currentRouteStatusForRoom(kind: RoomKind, room: Room) {
+  const entries = currentRouteEntriesForRoom(kind, room);
+  const ranked = ["claimed", "accepted", "pending", "passed"];
+  for (const status of ranked) {
+    if (entries.some(([, value]) => value.status === status)) return status;
+  }
+  return entries[0]?.[1]?.status || "";
+}
+
+function setCurrentRouteStatus(kind: RoomKind, room: Room, status: "accepted" | "passed" | "claimed") {
+  if (!ok()) return;
+  const id = rid(room);
+  const current = currentMemberIdentity();
+  const map = routeStatusMap();
+  let touched = false;
+
+  for (const [key, value] of Object.entries(map)) {
+    if (value.kind !== kind || value.roomId !== id) continue;
+    const keyLower = key.toLowerCase();
+    const belongs =
+      (current.id && keyLower.includes(current.id.toLowerCase())) ||
+      (current.email && keyLower.includes(current.email.toLowerCase()));
+
+    if (belongs || roomAssignedToCurrentMember(room) || roomRoutedToCurrentMember(room)) {
+      map[key] = { ...value, status, at: new Date().toISOString() };
+      touched = true;
+    }
+  }
+
+  if (!touched) {
+    const routeKey = `${kind}:${id}:${current.id || current.email || "local_member"}`;
+    map[routeKey] = {
+      status,
+      at: new Date().toISOString(),
+      memberName: current.id || "local_member",
+      memberEmail: current.email,
+      roomId: id,
+      kind,
+    };
+  }
+
+  writeJson(ROUTE_STATUS_KEY, map);
+  addRoomActivity(kind, room, "Route Response", `Route marked ${status}.`);
+  window.dispatchEvent(new Event("vaultforge-route-status-change"));
+  window.dispatchEvent(new Event("vaultforge-alert-change"));
+}
+
+
 function watchKey(kind: RoomKind, room: Room) {
   return `${kind}:${rid(room)}`;
 }
@@ -833,7 +902,8 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
   const age = daysOld(room);
   const watching = isWatchingRoom(kind, room);
   const watchCount = watchingCount(kind, room);
-  const style = watching ? pulseGold : health.attention ? (kind === "pain" ? pulseRed : pulseGold) : hot ? (kind === "pain" ? pulseRed : pulseGold) : panel;
+  const routeStatus = currentRouteStatusForRoom(kind, room);
+  const style = routeStatus === "pending" ? pulseRed : routeStatus === "accepted" || routeStatus === "claimed" ? pulseGold : watching ? pulseGold : health.attention ? (kind === "pain" ? pulseRed : pulseGold) : hot ? (kind === "pain" ? pulseRed : pulseGold) : panel;
 
   return (
     <div style={style}>
@@ -846,7 +916,7 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
           ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • ${list(room.strategy).join(", ") || "Strategy open"}`
           : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")} • ${txt(room.timePressure, "Timeline open")}`}
       </p>
-      <p style={muted}>Workspace: {ownershipLabel(room)} • Watching {watchCount}</p>
+      <p style={muted}>Workspace: {ownershipLabel(room)} • Watching {watchCount} • Route Status: {routeStatus || "none"}</p>
 
       <div style={{ marginTop: 16 }}>
         <div style={eyebrow}>{kind === "deal" ? "Deal Momentum" : "Pain Health"} • {health.label}</div>
@@ -896,6 +966,16 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
         <button type="button" style={watching ? goldBtn : btn} onClick={() => { toggleWatchRoom(kind, room); refresh(); }}>{watching ? "Following" : "Watch"}</button>
         <Link href={`/messages?type=${kind}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent((kind === "deal" ? "Deal Room: " : "Pain Room: ") + roomTitle(room, kind))}`} style={btn}>Message</Link>
 
+        {(roomAssignedToCurrentMember(room) || roomRoutedToCurrentMember(room) || routeStatus) && routeStatus !== "accepted" && routeStatus !== "claimed" ? (
+          <button type="button" style={goldBtn} onClick={() => { setCurrentRouteStatus(kind, room, "accepted"); refresh(); }}>Accept Route</button>
+        ) : null}
+        {(roomAssignedToCurrentMember(room) || roomRoutedToCurrentMember(room) || routeStatus) && routeStatus !== "passed" ? (
+          <button type="button" style={btn} onClick={() => { setCurrentRouteStatus(kind, room, "passed"); refresh(); }}>Pass</button>
+        ) : null}
+        {(roomAssignedToCurrentMember(room) || roomRoutedToCurrentMember(room) || routeStatus) && routeStatus !== "claimed" ? (
+          <button type="button" style={goldBtn} onClick={() => { setCurrentRouteStatus(kind, room, "claimed"); refresh(); }}>Claim Execution</button>
+        ) : null}
+
         {status !== "saved" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "saved"); refresh(); }}>Save</button> : null}
         {status !== "archived" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "archived"); refresh(); }}>Archive</button> : null}
         {kind === "deal" && status !== "sold" ? <button type="button" style={goldBtn} onClick={() => { saveRoomStatus(kind, room, "sold"); refresh(); }}>Mark Sold</button> : null}
@@ -918,6 +998,7 @@ export default function MyRoomsPage() {
     window.addEventListener("vaultforge-my-rooms-change", refresh);
     window.addEventListener("vaultforge-room-watch-change", refresh);
     window.addEventListener("vaultforge-room-activity-change", refresh);
+    window.addEventListener("vaultforge-route-status-change", refresh);
     window.addEventListener("vaultforge-deal-change", refresh);
     window.addEventListener("vaultforge-pain-change", refresh);
     return () => {
@@ -926,6 +1007,7 @@ export default function MyRoomsPage() {
       window.removeEventListener("vaultforge-my-rooms-change", refresh);
       window.removeEventListener("vaultforge-room-watch-change", refresh);
       window.removeEventListener("vaultforge-room-activity-change", refresh);
+      window.removeEventListener("vaultforge-route-status-change", refresh);
       window.removeEventListener("vaultforge-deal-change", refresh);
       window.removeEventListener("vaultforge-pain-change", refresh);
     };
@@ -1017,6 +1099,15 @@ export default function MyRoomsPage() {
             <div style={panel}><div style={eyebrow}>Pain Diagnosing / Routed</div><h2 style={h2}>{(stages["Diagnosing"] || 0) + (stages["Routed"] || 0)}</h2><p style={muted}>pressure rooms moving</p></div>
             <div style={pulseRed}><div style={eyebrow}>Pain In Progress</div><h2 style={h2}>{stages["In Progress"] || 0}</h2><p style={muted}>solver work underway</p></div>
             <div style={activePanel}><div style={eyebrow}>Resolved Pain</div><h2 style={h2}>{stages["Resolved"] || 0}</h2><p style={muted}>handled problem rooms</p></div>
+          </div>
+        </Section>
+
+        <Section title="Route Response Board">
+          <div style={grid}>
+            <div style={pulseRed}><div style={eyebrow}>Pending Routes</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "pending").length}</h2><p style={muted}>waiting on accept/pass/claim</p></div>
+            <div style={activePanel}><div style={eyebrow}>Accepted</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "accepted").length}</h2><p style={muted}>accepted by this workspace</p></div>
+            <div style={panel}><div style={eyebrow}>Passed</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "passed").length}</h2><p style={muted}>not a fit / rejected</p></div>
+            <div style={pulseGold}><div style={eyebrow}>Claimed</div><h2 style={h2}>{[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "claimed").length}</h2><p style={muted}>member claimed execution</p></div>
           </div>
         </Section>
 
