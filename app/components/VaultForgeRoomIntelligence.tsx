@@ -306,7 +306,7 @@ function painAnalysis(room: AnyRoom) {
   return { severity, collapseRisk, detectionGap, solverClarity, rpn, root, corrective };
 }
 
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 };
 const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 20 };
 const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,220,104,.55)", boxShadow: "0 0 26px rgba(255,220,104,.14)" };
 const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.58)", boxShadow: "0 0 26px rgba(255,70,70,.12)" };
@@ -314,6 +314,29 @@ const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "upperca
 const h2: React.CSSProperties = { fontSize: "clamp(28px,5vw,48px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 12px", fontWeight: 950, color: "#f7f7fb" };
 const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 18, lineHeight: 1.38, margin: 0 };
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
+
+const diagnosticBlock: React.CSSProperties = {
+  borderTop: "1px solid rgba(207,216,230,.12)",
+  paddingTop: 16,
+  marginTop: 16,
+};
+
+const answerPanel: React.CSSProperties = {
+  background: "rgba(255,255,255,.035)",
+  border: "1px solid rgba(207,216,230,.12)",
+  borderRadius: 16,
+  padding: 14,
+  marginTop: 8,
+};
+
+const actionPanel: React.CSSProperties = {
+  background: "rgba(255,220,104,.055)",
+  border: "1px solid rgba(255,220,104,.18)",
+  borderRadius: 16,
+  padding: 14,
+  marginTop: 8,
+};
+
 
 function Meter({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
   const clean = Math.max(0, Math.min(100, Math.round(value)));
@@ -400,28 +423,40 @@ function IntelligenceSection({
         </div>
       </button>
 
-      {open ? <div style={{ padding: "0 20px 20px" }}>{children}</div> : null}
+      {open ? <div style={{ padding: "0 18px 22px" }}>{children}</div> : null}
     </section>
   );
 }
 
 function DiagnosticQA({ question, answer, action }: { question: string; answer: string; action: string }) {
   return (
-    <div style={{ borderTop: "1px solid rgba(207,216,230,.12)", paddingTop: 12, marginTop: 12 }}>
-      <div style={{ ...eyebrow, marginBottom: 6 }}>Question</div>
-      <p style={muted}>{question}</p>
-      <div style={{ ...eyebrow, marginBottom: 6, marginTop: 10 }}>VaultForge Analysis</div>
-      <p style={sub}>{answer}</p>
-      <div style={{ ...eyebrow, marginBottom: 6, marginTop: 10 }}>Action</div>
-      <p style={muted}>{action}</p>
+    <div style={diagnosticBlock}>
+      <div style={eyebrow}>Question</div>
+      <p style={{ ...sub, fontSize: 17 }}>{question}</p>
+
+      <div style={answerPanel}>
+        <div style={eyebrow}>VaultForge Analysis</div>
+        <p style={{ ...muted, fontSize: 16, color: "#d7dde8" }}>{answer}</p>
+      </div>
+
+      <div style={actionPanel}>
+        <div style={eyebrow}>Action</div>
+        <p style={{ ...muted, fontSize: 16, color: "#f1df9a" }}>{action}</p>
+      </div>
     </div>
   );
 }
 
 function DiagnosticList({ title, items }: { title: string; items: { question: string; answer: string; action: string }[] }) {
   return (
-    <div style={panel}>
-      <div style={eyebrow}>{title}</div>
+    <div
+      style={{
+        ...panel,
+        padding: 22,
+        background: "linear-gradient(180deg,rgba(18,23,36,.96),rgba(8,12,22,.96))",
+      }}
+    >
+      <div style={{ ...eyebrow, fontSize: 13 }}>{title}</div>
       {items.map((item) => (
         <DiagnosticQA key={item.question} question={item.question} answer={item.answer} action={item.action} />
       ))}
@@ -629,14 +664,14 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
           <div style={panel}><div style={eyebrow}>Detection Gap</div><h2 style={h2}>{pct(ai.detectionGap)}</h2><p style={muted}>How much critical info is still missing.</p></div>
         </div>
 
-        <div style={{ ...grid, marginTop: 16 }}>
+        <div style={{ ...grid, marginTop: 18, marginBottom: 18 }}>
           <div style={panel}><div style={eyebrow}>Root Cause</div><p style={sub}>{ai.root}</p></div>
           <div style={panel}><div style={eyebrow}>Corrective Action</div><p style={sub}>{ai.corrective}</p></div>
           <div style={panel}><div style={eyebrow}>If Nothing Happens</div><p style={sub}>{txt(room.worstCase, "Cost increases, leverage weakens, timeline compresses, and resolution options shrink.")}</p></div>
           <div style={panel}><div style={eyebrow}>Target Outcome</div><p style={sub}>{txt(room.bestOutcome || room.desiredSolution, "Blocker removed, owner stabilized, capital/solver assigned, and room moved to resolved.")}</p></div>
         </div>
 
-        <div style={{ ...grid, marginTop: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18, marginTop: 18 }}>
           <DiagnosticList title="5 Whys / VaultForge Analysis" items={painFiveWhyAnswers(room, ai)} />
           <DiagnosticList title="Fishbone / Ishikawa Answers" items={painFishboneAnswers(room)} />
           <DiagnosticList title="5S / Control Plan Answers" items={painControlPlanAnswers(room, ai)} />
@@ -660,7 +695,7 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
         <div style={panel}><div style={eyebrow}>Liquidity</div><h2 style={h2}>{pct(ai.liquidity)}</h2><p style={muted}>Estimated marketability by asset lane.</p></div>
       </div>
 
-      <div style={{ ...grid, marginTop: 16 }}>
+      <div style={{ ...grid, marginTop: 18, marginBottom: 18 }}>
         <div style={panel}><div style={eyebrow}>Field Snapshot</div><SnapshotGrid items={roomFieldSnapshot(kind, room)} /></div>
         <div style={panel}><div style={eyebrow}>Primary Constraint</div><p style={sub}>{ai.primaryConstraint}</p></div>
         <div style={panel}><div style={eyebrow}>Best Next Move</div><p style={sub}>{ai.nextMove}</p></div>
@@ -669,7 +704,7 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
         <div style={panel}>{ai.decisionTree.map((item) => <p key={item} style={muted}>• {item}</p>)}</div>
       </div>
 
-      <div style={{ ...grid, marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18, marginTop: 18 }}>
         <DiagnosticList title="Deal 5 Whys / VaultForge Analysis" items={dealFiveWhyAnswers(room, ai)} />
         <DiagnosticList title="Execution Failure Analysis" items={dealExecutionAnswers(room, ai)} />
         <DiagnosticList title="Exit Scenario Analysis" items={dealExitScenarioAnswers(room, ai)} />
