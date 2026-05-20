@@ -661,7 +661,20 @@ function roomIsFollowedByCurrentMember(kind: RoomKind, room: Room) {
 
 function currentMemberIdentity(): MemberIdentity {
   if (!ok()) {
-    return { id: "local_member", email: "", hasIdentity: false };
+    return {
+      id: "local_member",
+      email: "",
+      hasIdentity: false,
+      name: "Member Workspace",
+      company: "VaultForge Member",
+      type: "Private Member",
+      states: "States not listed",
+    ,
+      name: "" ? String("").split("@")[0] : "Member Workspace",
+      company: "Company not listed",
+      type: "Private Member",
+      states: "States not listed",
+    };
   }
 
   const profileKeys = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
@@ -680,10 +693,15 @@ function currentMemberIdentity(): MemberIdentity {
     txt(localStorage.getItem("member_email"));
 
   return {
-    id: fallbackEmail || "local_member",
-    email: fallbackEmail.toLowerCase(),
-    hasIdentity: Boolean(fallbackEmail),
-  };
+      id: fallbackEmail || "local_member",
+      email: fallbackEmail.toLowerCase(),
+      hasIdentity: Boolean(fallbackEmail),
+  ,
+      name: fallbackEmail.toLowerCase() ? String(fallbackEmail.toLowerCase()).split("@")[0] : "Member Workspace",
+      company: "Company not listed",
+      type: "Private Member",
+      states: "States not listed",
+    };
 }
 
 function roomAssignedIds(room: Room) {
@@ -992,9 +1010,10 @@ function openAssignedOrRoutedCount(deals: Room[], pains: Room[]) {
 
 type MemberIdentity = {
   id: string;
+  email: string;
+  hasIdentity: boolean;
   name: string;
   company: string;
-  email: string;
   type: string;
   states: string;
 };
