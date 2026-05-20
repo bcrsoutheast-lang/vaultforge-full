@@ -548,7 +548,7 @@ function Nav({ active }: { active: RoomKind }) {
       <Link href="/my-rooms" style={btn}>My Rooms</Link>
       <Link href="/routing" style={btn}>Routing</Link>
       <Link href="/network" style={btn}>Network</Link>
-      <Link href="/deal-rooms" style={active === "deal" ? goldBtn : btn}>Deal Rooms</Link>
+      <Link href="/pain-rooms" style={active === "deal" ? goldBtn : btn}>Deal Rooms</Link>
       <Link href="/pain-rooms" style={active === "pain" ? goldBtn : btn}>Pain Rooms</Link>
       <Link href="/messages" style={btn}>Messages</Link>
       <Link href="/profile" style={btn}>Profile</Link>
@@ -687,6 +687,123 @@ function ActivityStream({ kind, id }: { kind: RoomKind; id: string }) {
 }
 
 
+
+function dealEinstein(room: Room) {
+  const ask = moneyNum(room.askingPrice || room.askPrice);
+  const arv = moneyNum(room.propertyValue || room.value);
+  const repairs = moneyNum(room.repairs);
+  const spread = arv && ask ? arv - ask - repairs : 0;
+
+  let score = 38;
+  if (spread > 25000) score += 12;
+  if (spread > 75000) score += 18;
+  if (spread > 150000) score += 15;
+  if (txt(room.controlStatus).toLowerCase().includes("controlled")) score += 10;
+  if (list(room.routeTo).length) score += 7;
+  if (!ask || !arv) score -= 8;
+  score = Math.max(0, Math.min(100, score));
+
+  const risk = Math.max(10, Math.min(100,
+    (!ask || !arv ? 22 : 0) +
+    (txt(room.condition).toLowerCase().includes("full") ? 24 : 0) +
+    (txt(room.occupancy).toLowerCase().includes("squatter") ? 28 : 0) +
+    (txt(room.controlStatus).toLowerCase().includes("no") ? 18 : 0) +
+    28
+  ));
+
+  return {
+    score,
+    risk,
+    spread,
+    signal: score >= 75 ? "Strong opportunity signal" : score >= 55 ? "Workable deal — verify proof" : "Needs stronger facts before hard routing",
+    next: !ask || !arv ? "Collect ask, ARV/value, repairs, control, photos, and access before routing hard." : "Verify control, title/access, photos, and numbers, then route to the highest-fit buyer/capital/operator.",
+    hidden: spread > 75000 ? "Margin may support buyer spread, capital stack, or JV route." : "Upside depends on cleaner numbers, control, and execution path.",
+    killer: !ask || !arv ? "Missing underwriting values." : risk > 70 ? "Risk stack may kill buyer confidence." : "No major killer detected yet.",
+  };
+}
+
+function painEinstein(room: Room) {
+  let severity = 35;
+  const sev = txt(room.severity).toLowerCase();
+  if (sev.includes("medium")) severity += 10;
+  if (sev.includes("high")) severity += 25;
+  if (sev.includes("critical")) severity += 38;
+  if (sev.includes("emergency")) severity += 48;
+
+  const pressure = txt(room.timePressure).toLowerCase();
+  if (pressure.includes("24") || pressure.includes("72")) severity += 15;
+  if (list(room.blockers).some((b) => ["capital", "title", "legal", "city"].includes(b.toLowerCase()))) severity += 10;
+
+  severity = Math.max(0, Math.min(100, severity));
+  const collapse = Math.max(10, Math.min(100, severity + list(room.riskTypes || room.risks).length * 5));
+  const solver = Math.max(35, Math.min(98, 100 - Math.round(collapse * 0.35) + list(room.needs || room.routingNeeds).length * 6));
+
+  return {
+    severity,
+    collapse,
+    solver,
+    signal: severity >= 85 ? "Immediate pressure signal" : severity >= 70 ? "High-priority execution problem" : "Active problem needing routing",
+    next: list(room.blockers).includes("Capital") ? "Confirm money needed now, collateral, payoff, and deadline, then route to private capital/lender." : list(room.blockers).includes("Title") ? "Collect title facts and route to title/legal specialist before more capital is burned." : "Identify the single blocker stopping execution and route to the highest-fit solver.",
+    consequence: txt(room.worstCase, "Delay, cost increase, failed closing, loss of control, or legal/financial escalation."),
+    fix: txt(room.desiredSolution, "Triage blocker, assign solver, message route fit, and track response until resolved."),
+  };
+}
+
+
+
+function dealFrontSnapshot(room: Room) {
+  return [
+    txt(room.assetClass),
+    txt(room.propertyType),
+    txt(room.city),
+    txt(room.state),
+    txt(room.askingPrice || room.askPrice),
+    txt(room.propertyValue || room.value),
+    txt(room.repairs),
+    list(room.strategy).join(", "),
+    txt(room.controlStatus),
+  ].filter(Boolean);
+}
+
+function painFrontSnapshot(room: Room) {
+  return [
+    list(room.painTypes).join(", "),
+    txt(room.city),
+    txt(room.state),
+    txt(room.severity),
+    txt(room.timePressure),
+    txt(room.capitalPressure),
+    txt(room.controlStatus),
+    txt(room.desiredSolution),
+  ].filter(Boolean);
+}
+
+function IntelligenceStrip({ items }: { items: string[] }) {
+  const visible = items.filter(Boolean);
+  if (!visible.length) return <p style={muted}>No snapshot fields entered yet.</p>;
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+      {visible.map((item, index) => (
+        <div
+          key={`${item}-${index}`}
+          style={{
+            border: "1px solid rgba(245,197,66,.25)",
+            background: "#0d1320",
+            color: "#f7f7fb",
+            borderRadius: 999,
+            padding: "10px 14px",
+            fontSize: 13,
+            fontWeight: 800,
+          }}
+        >
+          {item}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function EinsteinPanel({ kind, room }: { kind: RoomKind; room: Room }) {
   const deal = kind === "deal" ? dealIntel(room) : null;
   const pain = kind === "pain" ? painIntel(room) : null;
@@ -735,7 +852,7 @@ function EinsteinPanel({ kind, room }: { kind: RoomKind; room: Room }) {
 export default function PainRoomPage({ params }: { params: { id: string } }) {
   const id = decodeURIComponent(params.id || "");
   const [room, setRoom] = useState<Room | null>(null);
-  const [panelKey, setPanelKey] = useState<"intel" | "problem" | "pressure" | "matches" | "routing" | "activity" | "messages" | "notes">("intel");
+  const [panelKey, setPanelKey] = useState<"intel" | "numbers" | "execution" | "matches" | "routing" | "activity" | "messages" | "notes">("intel");
   const [watched, setWatched] = useState(false);
   const [watchCount, setWatchCount] = useState(0);
 
@@ -760,7 +877,7 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
         <div style={wrap}>
           <Nav active="pain" />
           <section style={hero}>
-            <div style={eyebrow}>Pain Room</div>
+            <div style={eyebrow}>Deal Room</div>
             <h1 style={h1}>Room not found.</h1>
             <p style={sub}>Go back to Pain Rooms and open a current room.</p>
             <div style={{ ...row, marginTop: 20 }}><Link href="/pain-rooms" style={goldBtn}>Back to Pain Rooms</Link></div>
@@ -786,19 +903,19 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
       <div style={wrap}>
         <Nav active="pain" />
 
-        <section style={intel.severity >= 80 ? dangerHero : hero}>
+        <section style={intel.collapse >= 75 ? dangerHero : hero}>
           {img ? <img src={img} alt={titleFor(room, "pain")} style={photoStyle} /> : null}
           <div style={eyebrow}>Pain Room • {roomState(room)}</div>
           <h1 style={h1}>{titleFor(room, "pain")}</h1>
           <p style={sub}>{loc(room)}</p>
-          <p style={muted}>{list(room.painTypes).join(", ") || "Problem not classified"} • Needs {list(room.needs || room.routingNeeds).join(", ") || "Solver"}</p>
+          <p style={muted}>{txt(room.assetClass, "Asset")} • {txt(room.propertyType, "Type")} • Pain {list(room.painTypes).join(", ") || "Not selected"} • Needs {list(room.needs || room.routingNeeds).join(", ") || "Not selected"}</p>
         </section>
 
         <Section title="Room Actions">
           <div style={row}>
             <button type="button" style={goldBtn} onClick={watch}>{watched ? `Following (${watchCount})` : `Watch (${watchCount})`}</button>
             <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Pain Room: " + titleFor(room, "pain"))}`} style={goldBtn}>Message</Link>
-            <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Solver Request: " + titleFor(room, "pain"))}`} style={btn}>Request Solver</Link>
+            <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Intro Request: " + titleFor(room, "pain"))}`} style={btn}>Request Intro</Link>
             <button type="button" style={btn} onClick={() => move("saved")}>Save</button>
             <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
             <button type="button" style={redBtn} onClick={() => move("deleted")}>Delete</button>
@@ -810,10 +927,10 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
 
         <Section title="Intelligence Tabs">
           <div style={grid}>
-            <button type="button" style={panelKey === "intel" ? activePanel : panel} onClick={() => setPanelKey("intel")}><div style={eyebrow}>AI Diagnosis</div><h2 style={h2}>{intel.severity}%</h2><p style={muted}>{intel.signal}</p></button>
-            <button type="button" style={panelKey === "problem" ? activePanel : panel} onClick={() => setPanelKey("problem")}><div style={eyebrow}>Problem</div><h2 style={h2}>{list(room.painTypes).length}</h2><p style={muted}>pain type(s)</p></button>
-            <button type="button" style={panelKey === "pressure" ? activePanel : panel} onClick={() => setPanelKey("pressure")}><div style={eyebrow}>Pressure</div><h2 style={h2}>{intel.collapse}%</h2><p style={muted}>collapse risk</p></button>
-            <button type="button" style={panelKey === "matches" ? activePanel : panel} onClick={() => setPanelKey("matches")}><div style={eyebrow}>Solvers</div><h2 style={h2}>{matches.length}</h2><p style={muted}>member fits</p></button>
+            <button type="button" style={panelKey === "intel" ? activePanel : panel} onClick={() => setPanelKey("intel")}><div style={eyebrow}>AI Snapshot</div><h2 style={h2}>{intel.severity}%</h2><p style={muted}>{intel.signal}</p></button>
+            <button type="button" style={panelKey === "numbers" ? activePanel : panel} onClick={() => setPanelKey("numbers")}><div style={eyebrow}>Collapse</div><h2 style={h2}>{intel.collapse}%</h2><p style={muted}>pressure risk</p></button>
+            <button type="button" style={panelKey === "execution" ? activePanel : panel} onClick={() => setPanelKey("execution")}><div style={eyebrow}>Execution</div><h2 style={h2}>{intel.blocker}%</h2><p style={muted}>blocker load</p></button>
+            <button type="button" style={panelKey === "matches" ? activePanel : panel} onClick={() => setPanelKey("matches")}><div style={eyebrow}>Matches</div><h2 style={h2}>{matches.length}</h2><p style={muted}>member fits</p></button>
             <button type="button" style={panelKey === "routing" ? activePanel : panel} onClick={() => setPanelKey("routing")}><div style={eyebrow}>Routing</div><h2 style={h2}>{routeEntriesForRoom("pain", id).length}</h2><p style={muted}>route history</p></button>
             <button type="button" style={panelKey === "activity" ? activePanel : panel} onClick={() => setPanelKey("activity")}><div style={eyebrow}>Activity</div><h2 style={h2}>{activityList("pain", id).length}</h2><p style={muted}>room events</p></button>
             <button type="button" style={panelKey === "messages" ? activePanel : panel} onClick={() => setPanelKey("messages")}><div style={eyebrow}>Messages</div><h2 style={h2}>Open</h2><p style={muted}>thread context</p></button>
@@ -821,12 +938,12 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
         </Section>
 
         {panelKey === "intel" ? (
-          <Section title="AI Pain Intelligence">
+          <Section title="AI Problem Solver Intelligence">
             <div style={grid}>
-              <Meter title="Severity" value={intel.severity} />
-              <Meter title="Capital Need" value={intel.capital} />
+              <Meter title="Pain Severity" value={intel.severity} />
               <Meter title="Collapse Risk" value={intel.collapse} />
-              <Meter title="Blocker Score" value={intel.blocker} />
+              <Meter title="Capital Pressure" value={intel.capital} />
+              <Meter title="Blocker Load" value={intel.blocker} />
               <Value title="Signal" value={intel.signal} />
               <Value title="Best Next Move" value={intel.next} />
               <Value title="If Nothing Happens" value={intel.consequence} />
@@ -834,49 +951,39 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
           </Section>
         ) : null}
 
-        {panelKey === "problem" ? (
-          <Section title="Problem Facts">
+        {panelKey === "numbers" ? (
+          <Section title="Pain Details">
             <div style={grid}>
-              <Value title="Pain Type" value={list(room.painTypes).join(", ")} />
-              <Value title="Needs" value={list(room.needs || room.routingNeeds).join(", ")} />
+              <Value title="Pain Types" value={list(room.painTypes).join(", ")} />
               <Value title="Severity" value={room.severity} />
               <Value title="Time Pressure" value={room.timePressure} />
-              <Value title="Control Status" value={room.controlStatus} />
-              <Value title="Current Status" value={room.currentStatus} />
-              <Value title="Owner / Seller Situation" value={room.ownerSituation} />
-              <Value title="Access Status" value={room.accessStatus} />
+              <Value title="Capital Pressure" value={room.capitalPressure} />
+              <Value title="Money Needed Now" value={room.moneyNeededNow || room.monthlyBurn || room.monthlyBurnRate} />
+              <Value title="Deadline" value={room.deadline} />
+              <Value title="Root Cause" value={room.rootCause} />
+              <Value title="Best Outcome" value={room.bestOutcome} />
+              <Value title="Worst Case" value={room.worstCase} />
             </div>
           </Section>
         ) : null}
 
-        {panelKey === "pressure" ? (
-          <>
-            <Section title="Blockers + Risk">
-              <div style={grid}>
-                <Value title="Blockers" value={list(room.blockers).join(", ")} />
-                <Value title="Risks" value={list(room.risks || room.riskTypes).join(", ")} />
-                <Value title="Root Cause" value={room.rootCause} />
-                <Value title="Title Status" value={room.titleStatus} />
-                <Value title="Permit Status" value={room.permitStatus} />
-                <Value title="Insurance Status" value={room.insuranceStatus} />
-                <Value title="Legal Status" value={room.legalStatus} />
-              </div>
-            </Section>
-            <Section title="Money + Deadline">
-              <div style={grid}>
-                <Value title="Ask Price" value={txt(room.askingPrice || room.askPrice)} />
-                <Value title="Value / ARV" value={txt(room.propertyValue || room.value)} />
-                <Value title="Repairs / Work" value={room.repairs} />
-                <Value title="Monthly Burn" value={txt(room.monthlyBurn || room.monthlyBurnRate)} />
-                <Value title="Money Needed Now" value={room.moneyNeededNow} />
-                <Value title="Deadline" value={room.deadline} />
-              </div>
-            </Section>
-          </>
+        {panelKey === "execution" ? (
+          <Section title="Execution Plan">
+            <div style={grid}>
+              <Value title="Needs / Routing Needs" value={list(room.needs || room.routingNeeds).join(", ")} />
+              <Value title="Blockers" value={list(room.blockers).join(", ")} />
+              <Value title="Risks" value={list(room.risks || room.riskTypes).join(", ")} />
+              <Value title="Control" value={room.controlStatus} />
+              <Value title="Current Status" value={room.currentStatus || room.ownerSituation} />
+              <Value title="Timeline" value={room.timeline || room.timePressure} />
+              <Value title="Contact" value={[txt(room.contactName), txt(room.contactPhone || room.phone), txt(room.contactEmail || room.email)].filter(Boolean).join(" • ")} />
+              <Value title="Next 7 Days" value="Confirm blocker, verify authority, route to the highest-fit solver, and open a tracked message thread." />
+            </div>
+          </Section>
         ) : null}
 
         {panelKey === "matches" ? (
-          <Section title="Best Solver Matches">
+          <Section title="Best Fit Members">
             {matches.length ? <div style={grid}>{matches.map((match) => <MatchCard key={profileId(match.member)} match={match} />)}</div> : <p style={sub}>No matching member profiles yet. Complete Profile to power matching.</p>}
           </Section>
         ) : null}
@@ -891,10 +998,10 @@ export default function PainRoomPage({ params }: { params: { id: string } }) {
 
         {panelKey === "messages" ? (
           <Section title="Message Context">
-            <p style={sub}>Messages opened from here carry this pain room title, state, and severity context.</p>
+            <p style={sub}>Messages opened from here carry this room title and type.</p>
             <div style={{ ...row, marginTop: 18 }}>
               <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Pain Room: " + titleFor(room, "pain"))}`} style={goldBtn}>Open Message Thread</Link>
-              <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Route Solver: " + titleFor(room, "pain"))}`} style={btn}>Route Solver Request</Link>
+              <Link href={`/messages?type=pain&room=${encodeURIComponent(id)}&subject=${encodeURIComponent("Route This Pain: " + titleFor(room, "pain"))}`} style={btn}>Route Request</Link>
             </div>
           </Section>
         ) : null}
