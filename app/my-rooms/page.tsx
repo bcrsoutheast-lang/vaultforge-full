@@ -52,6 +52,8 @@ type ViewKey =
   | "activePain"
   | "savedDeals"
   | "savedPain"
+  | "assignedToMe"
+  | "routedToMe"
   | "archived"
   | "sold"
   | "resolved"
@@ -646,11 +648,48 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
+
+function roomAssignedToCurrentMember(room: Room) {
+  const current = currentMemberIdentity();
+  if (!current.id && !current.email) return false;
+  const ids = roomAssignedIds(room);
+  const emails = roomAssignedEmails(room);
+  return Boolean(
+    (current.id && ids.includes(current.id.toLowerCase())) ||
+    (current.email && emails.includes(current.email))
+  );
+}
+
+function roomRoutedToCurrentMember(room: Room) {
+  const current = currentMemberIdentity();
+  if (!current.id && !current.email) return false;
+
+  const routedIds = [
+    ...list(room.routedTo),
+    ...list(room.routedToIds),
+    ...list(room.routingMemberIds),
+  ].map((value) => value.toLowerCase());
+
+  const routedEmails = [
+    ...list(room.routedToEmail),
+    ...list(room.routedToEmails),
+    ...list(room.routingMemberEmails),
+  ].map((value) => value.toLowerCase());
+
+  return Boolean(
+    (current.id && routedIds.includes(current.id.toLowerCase())) ||
+    (current.email && routedEmails.includes(current.email))
+  );
+}
+
+
 function countFor(view: ViewKey, deals: Room[], pains: Room[]) {
   if (view === "activeDeals") return deals.filter((room) => rawStatus(room) === "active").length;
   if (view === "activePain") return pains.filter((room) => rawStatus(room) === "active").length;
   if (view === "savedDeals") return deals.filter((room) => rawStatus(room) === "saved").length;
   if (view === "savedPain") return pains.filter((room) => rawStatus(room) === "saved").length;
+  if (view === "assignedToMe") return [...deals, ...pains].filter(roomAssignedToCurrentMember).length;
+  if (view === "routedToMe") return [...deals, ...pains].filter(roomRoutedToCurrentMember).length;
   if (view === "archived") return [...deals, ...pains].filter((room) => rawStatus(room) === "archived").length;
   if (view === "sold") return deals.filter((room) => rawStatus(room) === "sold").length;
   if (view === "resolved") return pains.filter((room) => rawStatus(room) === "resolved").length;
@@ -671,6 +710,8 @@ function roomsFor(view: ViewKey, deals: Room[], pains: Room[]) {
   if (view === "activePain") return pains.filter((room) => rawStatus(room) === "active").map((room) => ({ kind: "pain" as RoomKind, room }));
   if (view === "savedDeals") return deals.filter((room) => rawStatus(room) === "saved").map((room) => ({ kind: "deal" as RoomKind, room }));
   if (view === "savedPain") return pains.filter((room) => rawStatus(room) === "saved").map((room) => ({ kind: "pain" as RoomKind, room }));
+  if (view === "assignedToMe") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomAssignedToCurrentMember(item.room));
+  if (view === "routedToMe") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomRoutedToCurrentMember(item.room));
   if (view === "archived") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => rawStatus(item.room) === "archived");
   if (view === "sold") return deals.filter((room) => rawStatus(room) === "sold").map((room) => ({ kind: "deal" as RoomKind, room }));
   if (view === "resolved") return pains.filter((room) => rawStatus(room) === "resolved").map((room) => ({ kind: "pain" as RoomKind, room }));
@@ -795,6 +836,8 @@ export default function MyRoomsPage() {
     { view: "activePain", title: "Active Pain", note: "my open pressure rooms" },
     { view: "savedDeals", title: "Saved Deals", note: "kept opportunity rooms" },
     { view: "savedPain", title: "Saved Pain", note: "kept pain rooms" },
+    { view: "assignedToMe", title: "Assigned To Me", note: "rooms assigned into my workspace" },
+    { view: "routedToMe", title: "Routed To Me", note: "rooms routed for action" },
     { view: "archived", title: "Archived", note: "not active, not deleted" },
     { view: "sold", title: "Sold Deals", note: "completed opportunity rooms" },
     { view: "resolved", title: "Resolved Pain", note: "handled problem rooms" },
@@ -832,6 +875,11 @@ export default function MyRoomsPage() {
               <div style={eyebrow}>My Pain Rooms</div>
               <h2 style={h2}>{pains.length}</h2>
               <p style={muted}>owned, created, assigned, routed, or local/demo rooms</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Assigned / Routed</div>
+              <h2 style={h2}>{[...deals, ...pains].filter(roomAssignedToCurrentMember).length + [...deals, ...pains].filter(roomRoutedToCurrentMember).length}</h2>
+              <p style={muted}>rooms sent to this member for action</p>
             </div>
             <div style={panel}>
               <div style={eyebrow}>Global Hidden</div>
