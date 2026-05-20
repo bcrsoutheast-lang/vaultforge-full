@@ -991,6 +991,7 @@ function openAssignedOrRoutedCount(deals: Room[], pains: Room[]) {
 
 
 type MemberIdentity = {
+  id: string;
   name: string;
   company: string;
   email: string;
