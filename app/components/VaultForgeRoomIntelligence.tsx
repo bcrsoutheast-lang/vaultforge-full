@@ -279,7 +279,7 @@ export function RoomFrontIntelligence({ kind, room }: { kind: RoomKind; room: An
       <div style={{ marginTop: 16 }}>
         <SnapshotGrid items={roomFieldSnapshot(kind, room)} />
         <div style={{ ...redPanel, marginTop: 14 }}>
-          <div style={eyebrow}>AI Pressure Read</div>
+          <div style={eyebrow}>VaultForge Pressure Read</div>
           <p style={sub}>{ai.root}</p>
           <Meter label="Collapse Risk" value={ai.collapseRisk} danger />
           <p style={muted}>Next move: {ai.corrective}</p>
@@ -293,7 +293,7 @@ export function RoomFrontIntelligence({ kind, room }: { kind: RoomKind; room: An
     <div style={{ marginTop: 16 }}>
       <SnapshotGrid items={roomFieldSnapshot(kind, room)} />
       <div style={{ ...goldPanel, marginTop: 14 }}>
-        <div style={eyebrow}>AI Underwriting Read</div>
+        <div style={eyebrow}>VaultForge Underwriting</div>
         <p style={sub}>{ai.primaryConstraint}</p>
         <Meter label="Close Probability" value={ai.closeProbability} />
         <p style={muted}>Spread: {money(ai.spread)} • Equity: {pct(ai.equity)}</p>
@@ -345,7 +345,7 @@ function IntelligenceSection({
         }}
       >
         <div>
-          <div style={eyebrow}>{badge || "AI SECTION"}</div>
+          <div style={eyebrow}>{badge || "VAULTFORGE SECTION"}</div>
           <div style={{ fontSize: 24, fontWeight: 900, textAlign: "left" }}>{title}</div>
         </div>
 
@@ -381,7 +381,7 @@ function DiagnosticQA({
     <div style={{ borderTop: "1px solid rgba(207,216,230,.12)", paddingTop: 12, marginTop: 12 }}>
       <div style={{ ...eyebrow, marginBottom: 6 }}>Question</div>
       <p style={muted}>{question}</p>
-      <div style={{ ...eyebrow, marginBottom: 6, marginTop: 10 }}>AI Answer</div>
+      <div style={{ ...eyebrow, marginBottom: 6, marginTop: 10 }}>VaultForge Analysis</div>
       <p style={sub}>{answer}</p>
       <div style={{ ...eyebrow, marginBottom: 6, marginTop: 10 }}>Action</div>
       <p style={muted}>{action}</p>
@@ -654,12 +654,12 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
     const ai = painAnalysis(room);
     return (
       <IntelligenceSection
-        title="AI Problem Solver Command Desk"
+        title="VaultForge Execution Command Desk"
         badge="CRITICAL PRESSURE"
         danger
       >
         <div style={{ ...redPanel, marginBottom: 18 }}>
-          <div style={eyebrow}>AI SUMMARY</div>
+          <div style={eyebrow}>VAULTFORGE STRATEGIC READ</div>
           <p style={sub}>
             {ai.root} Collapse risk is currently {pct(ai.collapseRisk)} and the room should route based on blocker severity, not broad exposure.
           </p>
@@ -679,7 +679,7 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
         </div>
 
         <div style={{ ...grid, marginTop: 16 }}>
-          <DiagnosticList title="5 Whys / AI Answers" items={painFiveWhyAnswers(room, ai)} />
+          <DiagnosticList title="5 Whys / VaultForge Analysiss" items={painFiveWhyAnswers(room, ai)} />
           <DiagnosticList title="Fishbone / Ishikawa Answers" items={painFishboneAnswers(room)} />
           <DiagnosticList title="5S / Control Plan Answers" items={painControlPlanAnswers(room, ai)} />
         </div>
@@ -694,7 +694,7 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
       badge="EXECUTION INTELLIGENCE"
     >
       <div style={{ ...goldPanel, marginBottom: 18 }}>
-        <div style={eyebrow}>AI SUMMARY</div>
+        <div style={eyebrow}>VAULTFORGE STRATEGIC READ</div>
         <p style={sub}>
           {ai.primaryConstraint} Execution probability is currently {pct(ai.closeProbability)} with liquidity pressure at {pct(ai.liquidity)}.
         </p>
@@ -720,7 +720,7 @@ export function RoomInsideIntelligence({ kind, room }: { kind: RoomKind; room: A
       </div>
 
       <div style={{ ...grid, marginTop: 16 }}>
-        <DiagnosticList title="Deal 5 Whys / AI Answers" items={dealFiveWhyAnswers(room, ai)} />
+        <DiagnosticList title="Deal 5 Whys / VaultForge Analysiss" items={dealFiveWhyAnswers(room, ai)} />
         <DiagnosticList title="Execution Failure Analysis" items={dealExecutionAnswers(room, ai)} />
         <DiagnosticList title="Exit Scenario Analysis" items={dealExitScenarioAnswers(room, ai)} />
           <div style={panel}>
