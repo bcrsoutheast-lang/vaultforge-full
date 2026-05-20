@@ -798,7 +798,7 @@ export default function ExecutionMessagesPage() {
     ));
   }
 
-  function sendSend Execution Reply() {
+  function sendReply() {
     if (!activeThread || !reply.trim()) return;
     const member = currentMember();
     const message: Message = {
@@ -953,7 +953,7 @@ export default function ExecutionMessagesPage() {
               </div>
 
               <div style={panel}>
-                <div style={eyebrow}>Send Execution Reply</div>
+                <div style={eyebrow}>Send Reply</div>
                 <textarea
                   style={textarea}
                   placeholder="Type reply..."
@@ -962,7 +962,7 @@ export default function ExecutionMessagesPage() {
                   onKeyDownCapture={(event) => event.stopPropagation()}
                 />
                 <div style={{ ...row, marginTop: 14 }}>
-                  <button type="button" style={goldBtn} onClick={sendSend Execution Reply}>Send Send Execution Reply</button>
+                  <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
                 </div>
               </div>
             </div>
