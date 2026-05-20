@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+type RoomState = "active" | "saved" | "archived" | "deleted";
+
 type DealRoom = {
   id: string;
   roomId: string;
