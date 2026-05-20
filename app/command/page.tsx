@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-
 type RoomState = "active" | "saved" | "archived" | "deleted";
 type RoomKind = "deal" | "pain";
 
@@ -25,6 +24,9 @@ type Room = {
   routingNeeds?: string[] | string;
   routeTo?: string[] | string;
   strategy?: string[] | string;
+  blockers?: string[] | string;
+  risks?: string[] | string;
+  riskTypes?: string[] | string;
   roomState?: RoomState;
   cleanupState?: RoomState;
   stateStatus?: RoomState;
@@ -44,21 +46,23 @@ type MessageThread = {
   id?: string;
   subject?: string;
   lane?: string;
+  state?: string;
+  roomState?: string;
   status?: string;
   unread?: boolean;
-  saved?: boolean;
+  isUnread?: boolean;
   updatedAt?: string;
+  createdAt?: string;
   messages?: unknown[];
+  [key: string]: unknown;
 };
 
+const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const MESSAGE_KEYS = ["vaultforge_message_threads_v2", "vaultforge_message_command_messages", "vf_message_threads"];
-const STATE_KEYS = ["vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states", "vaultforge_5s_room_states", "vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2"];
+const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
 const READ_KEY = "vaultforge_room_alert_read_v1";
-const ALERT_SEEN_KEY = "vaultforge_alert_seen_v2";
-const ALERT_DISMISSED_KEY = "vaultforge_alert_dismissed_v2";
-const ALERT_WATCHLIST_KEY = "vaultforge_alert_watchlist_v2";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -143,8 +147,7 @@ function allRooms(kind: RoomKind): Room[] {
   const seen = new Set<string>();
 
   for (const key of keysFor(kind)) {
-    const rows = arr<any>(key);
-    for (const row of rows) {
+    for (const row of arr<any>(key)) {
       const room = normalizeRoom(row, kind);
       const id = rid(room);
       if (!id || seen.has(id)) continue;
@@ -157,7 +160,6 @@ function allRooms(kind: RoomKind): Room[] {
     const key = localStorage.key(i) || "";
     const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
     if (!match) continue;
-
     const value = j<any>(localStorage.getItem(key), null);
     if (Array.isArray(value)) {
       for (const row of value) {
@@ -212,42 +214,21 @@ function getThreads() {
       if (!id || seen.has(id)) continue;
       seen.add(id);
       out.push({
+        ...row,
         id,
         subject: txt(row?.subject || row?.title || row?.lane, "Message Thread"),
         lane: txt(row?.lane || row?.type, "general"),
+        state: txt(row?.state || row?.roomState || ""),
         status: txt(row?.status, "active"),
         unread: Boolean(row?.unread || row?.isUnread),
-        saved: Boolean(row?.saved),
         updatedAt: txt(row?.updatedAt || row?.createdAt),
+        createdAt: txt(row?.createdAt || row?.updatedAt),
         messages: Array.isArray(row?.messages) ? row.messages : [],
       });
     }
   }
 
   return out.filter((thread) => thread.status !== "deleted" && thread.status !== "archived");
-}
-
-function idList(key: string) {
-  if (!ok()) return [] as string[];
-  return j<string[]>(localStorage.getItem(key), []);
-}
-
-function setIdList(key: string, ids: string[]) {
-  if (!ok()) return;
-  localStorage.setItem(key, JSON.stringify(Array.from(new Set(ids))));
-  window.dispatchEvent(new Event("vaultforge-alert-change"));
-}
-
-function alertId(kind: string, id: string) {
-  return `${kind}:${id}`;
-}
-
-function addId(key: string, id: string) {
-  setIdList(key, [...idList(key), id]);
-}
-
-function removeId(key: string, id: string) {
-  setIdList(key, idList(key).filter((item) => item !== id));
 }
 
 function firstPhoto(room: Room) {
@@ -263,7 +244,56 @@ function activePains() {
   return allRooms("pain").filter((room) => roomState(room) === "active");
 }
 
+function painScore(room: Room) {
+  let score = 20;
+  const sev = txt(room.severity);
+  if (sev === "Medium") score += 12;
+  if (sev === "High") score += 28;
+  if (sev === "Critical") score += 42;
+  if (sev === "Emergency") score += 52;
+  if (txt(room.timePressure).includes("24") || txt(room.timePressure).includes("72")) score += 20;
+  if (list(room.blockers).includes("Capital")) score += 10;
+  if (txt(room.capitalPressure) !== "Unknown" && txt(room.capitalPressure)) score += 7;
+  return Math.max(0, Math.min(100, score));
+}
 
+function dealScore(room: Room) {
+  let score = 25;
+  if (txt(room.assetClass)) score += 10;
+  if (txt(room.propertyType)) score += 8;
+  if (list(room.routeTo).length) score += 12;
+  if (list(room.strategy).length) score += 12;
+  if (txt(room.city)) score += 8;
+  return Math.max(0, Math.min(100, score));
+}
+
+function stateStats(state: string, deals: Room[], pains: Room[], threads: MessageThread[]) {
+  const stateDeals = deals.filter((room) => txt(room.state, "GA") === state);
+  const statePains = pains.filter((room) => txt(room.state, "GA") === state);
+  const unreadDeals = unreadRooms("deal", stateDeals);
+  const unreadPains = unreadRooms("pain", statePains);
+  const stateMessages = threads.filter((thread) => txt(thread.state) === state || txt(thread.subject).includes(state));
+  const unreadMessages = stateMessages.filter((thread) => thread.unread);
+  const pressure = statePains.length
+    ? Math.round(statePains.reduce((sum, room) => sum + painScore(room), 0) / statePains.length)
+    : 0;
+  const opportunity = stateDeals.length
+    ? Math.round(stateDeals.reduce((sum, room) => sum + dealScore(room), 0) / stateDeals.length)
+    : 0;
+  const hot = unreadDeals.length + unreadPains.length + unreadMessages.length;
+  return { stateDeals, statePains, unreadDeals, unreadPains, stateMessages, unreadMessages, pressure, opportunity, hot };
+}
+
+function tickerItems(deals: Room[], pains: Room[], threads: MessageThread[]) {
+  const out: string[] = [];
+  for (const state of STATES) {
+    const s = stateStats(state, deals, pains, threads);
+    if (s.pressure) out.push(`${state} PRESSURE ${s.pressure}% • ${s.statePains.length} PAIN`);
+    if (s.opportunity) out.push(`${state} OPPORTUNITY ${s.opportunity}% • ${s.stateDeals.length} DEALS`);
+    if (s.unreadMessages.length) out.push(`${state} MESSAGES • ${s.unreadMessages.length} UNREAD`);
+  }
+  return out.length ? out : ["STATE MAP LIVE • SUBMIT DEALS • SUBMIT PAIN • WATCH PRESSURE"];
+}
 
 const styleTag = `
 @keyframes vfPulseRed {
@@ -280,10 +310,6 @@ const styleTag = `
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
-@keyframes vfBannerGlow {
-  0%,100% { opacity: .82; }
-  50% { opacity: 1; }
-}
 `;
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
@@ -295,9 +321,10 @@ const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68",
 const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
 const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
 const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22, textDecoration: "none", color: "#f7f7fb", display: "block" };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
 const pulseRed: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", animation: "vfPulseRed 2.1s ease-in-out infinite" };
 const pulseGold: React.CSSProperties = { ...panel, borderColor: "rgba(255,220,104,.70)", animation: "vfPulseGold 2.3s ease-in-out infinite" };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.75)", boxShadow: "0 0 26px rgba(245,197,66,.18)" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
 const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
 const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
@@ -306,18 +333,46 @@ const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHe
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
 const tickerOuter: React.CSSProperties = { overflow: "hidden", border: "1px solid rgba(245,197,66,.28)", borderRadius: 20, background: "#090e1a", marginBottom: 18 };
-const tickerInner: React.CSSProperties = { display: "inline-flex", minWidth: "200%", whiteSpace: "nowrap", animation: "vfTicker 38s linear infinite" };
+const tickerInner: React.CSSProperties = { display: "inline-flex", minWidth: "200%", whiteSpace: "nowrap", animation: "vfTicker 42s linear infinite" };
 const tickerItem: React.CSSProperties = { padding: "14px 28px", borderRight: "1px solid rgba(245,197,66,.18)", color: "#ffd45a", fontWeight: 950, letterSpacing: 1 };
-const bannerRail: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginBottom: 18 };
-const banner: React.CSSProperties = { ...panel, padding: 18, animation: "vfBannerGlow 2.5s ease-in-out infinite" };
-const photoStyle: React.CSSProperties = { width: "100%", height: 150, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+const photoStyle: React.CSSProperties = { width: "100%", height: 140, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+}
+
+function Meter({ title, value }: { title: string; value: number }) {
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{value}%</h2>
+      <div style={{ height: 10, background: "#070a12", borderRadius: 999, overflow: "hidden" }}>
+        <div style={{ width: `${Math.max(0, Math.min(100, value))}%`, height: "100%", background: "#ffdc68" }} />
+      </div>
+    </div>
+  );
+}
+
+function RoomCard({ room, kind }: { room: Room; kind: RoomKind }) {
+  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(rid(room))}` : `/pain-rooms/${encodeURIComponent(rid(room))}`;
+  const img = firstPhoto(room);
+  return (
+    <Link href={href} style={kind === "pain" ? pulseRed : pulseGold}>
+      {img ? <img src={img} alt={roomTitle(room, kind)} style={photoStyle} /> : null}
+      <div style={eyebrow}>{kind === "deal" ? "Opportunity" : "Pain"}</div>
+      <h2 style={h2}>{roomTitle(room, kind)}</h2>
+      <p style={sub}>{loc(room)}</p>
+      <p style={muted}>{kind === "deal" ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")}` : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")}`}</p>
+    </Link>
+  );
+}
 
 function Nav() {
   return (
     <nav style={nav}>
       <div style={brand}>VAULTFORGE</div>
       <Link href="/command" style={goldBtn}>Command</Link>
+      <Link href="/state-map" style={btn}>State Map</Link>
       <Link href="/members" style={btn}>Members</Link>
       <Link href="/network" style={btn}>Network</Link>
       <Link href="/alerts" style={btn}>Alerts</Link>
@@ -330,18 +385,6 @@ function Nav() {
       <Link href="/logout" style={redBtn}>Logout</Link>
     </nav>
   );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
-}
-
-function makeTicker(deals: Room[], pains: Room[], threads: MessageThread[]) {
-  const hotPains = unreadRooms("pain", pains).slice(0, 6).map((room) => `PRESSURE ALERT • ${txt(room.state, "GA")} • ${list(room.painTypes).join("/") || "Pain"} • ${txt(room.severity, "High")}`);
-  const hotDeals = unreadRooms("deal", deals).slice(0, 6).map((room) => `NEW DEAL • ${txt(room.state, "GA")} • ${txt(room.assetClass, "Asset")} • ${roomTitle(room, "deal")}`);
-  const hotMessages = threads.filter((thread) => thread.unread).slice(0, 5).map((thread) => `MESSAGE ALERT • ${txt(thread.lane, "General")} • ${txt(thread.subject, "Unread thread")}`);
-  const base = [...hotPains, ...hotDeals, ...hotMessages];
-  return base.length ? base : ["SYSTEM LIVE • CREATE DEALS • SUBMIT PAIN • MATCH MEMBERS • WATCH ALERTS"];
 }
 
 export default function CommandPage() {
@@ -369,8 +412,11 @@ export default function CommandPage() {
   const savedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "saved"), [tick]);
   const archivedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "archived"), [tick]);
   const deletedPains = useMemo(() => allRooms("pain").filter((room) => roomState(room) === "deleted"), [tick]);
-  const ticker = useMemo(() => makeTicker(deals, pains, threads), [deals, pains, threads]);
+  const ticker = useMemo(() => tickerItems(deals, pains, threads), [deals, pains, threads]);
   const totalHot = unreadDeals.length + unreadPains.length + unreadMessages.length;
+
+  const stateTotals = STATES.map((state) => stateStats(state, deals, pains, threads));
+  const hottest = stateTotals.slice().sort((a, b) => (b.pressure + b.opportunity + b.hot * 20) - (a.pressure + a.opportunity + a.hot * 20))[0];
 
   return (
     <main style={page}>
@@ -384,41 +430,23 @@ export default function CommandPage() {
           </div>
         </div>
 
-        <div style={bannerRail}>
-          <Link href="/alerts" style={totalHot ? pulseRed : banner}>
-            <div style={eyebrow}>Live Alerts</div>
-            <h2 style={h2}>{totalHot}</h2>
-            <p style={muted}>unread deal, pain, and message signals</p>
-          </Link>
-          <Link href="/network" style={unreadDeals.length ? pulseGold : banner}>
-            <div style={eyebrow}>Opportunity Pulse</div>
-            <h2 style={h2}>{unreadDeals.length}</h2>
-            <p style={muted}>{deals.length} active deal room(s)</p>
-          </Link>
-          <Link href="/pain-rooms" style={unreadPains.length ? pulseRed : banner}>
-            <div style={eyebrow}>Pressure Pulse</div>
-            <h2 style={h2}>{unreadPains.length}</h2>
-            <p style={muted}>{pains.length} active pain room(s)</p>
-          </Link>
-          <Link href="/messages" style={unreadMessages.length ? pulseRed : banner}>
-            <div style={eyebrow}>Message Pulse</div>
-            <h2 style={h2}>{unreadMessages.length}</h2>
-            <p style={muted}>{threads.length} message thread(s)</p>
-          </Link>
-        </div>
-
         <section style={hero}>
           <div style={eyebrow}>Command Center</div>
           <h1 style={h1}>Live operating board.</h1>
-          <p style={sub}>Ticker, pulses, banners, alert lanes, room counts, and cleanup folders are tied to the rooms/messages already in browser storage.</p>
+          <p style={sub}>Ticker, pulse cards, state intelligence, alert lanes, room counts, and cleanup folders.</p>
         </section>
 
         <Section title="Primary Command Cards">
           <div style={grid}>
-            <Link href="/members" style={panel}><div style={eyebrow}>Members</div><h2 style={h2}>Open</h2><p style={muted}>member/state network</p></Link>
+            <Link href="/state-map" style={hottest?.hot ? pulseRed : pulseGold}>
+              <div style={eyebrow}>State Pressure Map</div>
+              <h2 style={h2}>{hottest ? STATES[stateTotals.indexOf(hottest)] : "Open"}</h2>
+              <p style={muted}>pressure {hottest?.pressure || 0}% • opportunity {hottest?.opportunity || 0}% • hot {hottest?.hot || 0}</p>
+            </Link>
+            <Link href="/alerts" style={totalHot ? pulseRed : panel}><div style={eyebrow}>Live Alerts</div><h2 style={h2}>{totalHot}</h2><p style={muted}>unread signals</p></Link>
             <Link href="/network" style={unreadDeals.length ? pulseGold : panel}><div style={eyebrow}>Opportunity Cards</div><h2 style={h2}>{unreadDeals.length}</h2><p style={muted}>{deals.length} active deal card(s)</p></Link>
             <Link href="/network" style={unreadPains.length ? pulseRed : panel}><div style={eyebrow}>Pain Cards</div><h2 style={h2}>{unreadPains.length}</h2><p style={muted}>{pains.length} active pain card(s)</p></Link>
-            <Link href="/messages" style={unreadMessages.length ? pulseRed : panel}><div style={eyebrow}>Unread Messages</div><h2 style={h2}>{unreadMessages.length}</h2><p style={muted}>click to open message cards</p></Link>
+            <Link href="/messages" style={unreadMessages.length ? pulseRed : panel}><div style={eyebrow}>Unread Messages</div><h2 style={h2}>{unreadMessages.length}</h2><p style={muted}>message cards</p></Link>
           </div>
         </Section>
 
@@ -433,21 +461,29 @@ export default function CommandPage() {
           </div>
         </Section>
 
+        <Section title="State Intelligence Preview">
+          <div style={grid}>
+            {STATES.map((state) => {
+              const s = stateStats(state, deals, pains, threads);
+              return (
+                <Link key={state} href={`/state-map`} style={s.hot ? (s.unreadPains.length ? pulseRed : pulseGold) : panel}>
+                  <div style={eyebrow}>{state}</div>
+                  <h2 style={h2}>{s.stateDeals.length + s.statePains.length}</h2>
+                  <p style={muted}>Deals {s.stateDeals.length} • Pain {s.statePains.length} • Hot {s.hot}</p>
+                  <p style={muted}>Pressure {s.pressure}% • Opportunity {s.opportunity}%</p>
+                </Link>
+              );
+            })}
+          </div>
+        </Section>
+
         <Section title="Latest Signals">
           <div style={grid}>
             {[...unreadPains.slice(0, 3), ...unreadDeals.slice(0, 3)].map((room) => {
               const isPain = list(room.painTypes).length > 0 || txt(room.severity);
-              const kind = isPain ? "pain" : "deal";
+              const kind: RoomKind = isPain ? "pain" : "deal";
               const href = kind === "pain" ? `/pain-rooms/${encodeURIComponent(rid(room))}` : `/deal-rooms/${encodeURIComponent(rid(room))}`;
-              return (
-                <Link key={`${kind}-${rid(room)}`} href={href} style={kind === "pain" ? pulseRed : pulseGold}>
-                  {firstPhoto(room) ? <img src={firstPhoto(room)} alt={roomTitle(room, kind)} style={photoStyle} /> : null}
-                  <div style={eyebrow}>{kind === "pain" ? "Pressure" : "Opportunity"}</div>
-                  <h2 style={h2}>{roomTitle(room, kind)}</h2>
-                  <p style={sub}>{loc(room)}</p>
-                  <p style={muted}>{kind === "pain" ? `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")}` : `${txt(room.assetClass, "Asset")} • ${list(room.routeTo).join(", ") || "Route open"}`}</p>
-                </Link>
-              );
+              return <RoomCard key={`${kind}-${rid(room)}`} room={room} kind={kind} />;
             })}
           </div>
         </Section>
