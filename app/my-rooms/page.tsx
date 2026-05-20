@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type RoomKind = "deal" | "pain";
-type RoomStatus = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
+type RoomStatus = "active" | "saved" | "archived" | "archivedDeals" | "archivedPain" | "deleted" | "deletedDeals" | "deletedPain" | "sold" | "resolved";
 type RoomStage = "New" | "Reviewing" | "Diagnosing" | "Routed" | "Under Contract" | "In Progress" | "Sold" | "Resolved";
 
 type Room = {
@@ -1052,10 +1052,18 @@ function countFor(view: ViewKey, deals: Room[], pains: Room[]) {
   if (view === "assignedToMe") return [...deals, ...pains].filter(roomAssignedToCurrentMember).length;
   if (view === "routedToMe") return [...deals, ...pains].filter(roomRoutedToCurrentMember).length;
   if (view === "following") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomIsFollowedByCurrentMember(item.kind, item.room)).length;
-  if (view === "archived") return [...deals, ...pains].filter((room) => rawStatus(room) === "archived").length;
+      if (view === "archivedDeals") return countDealStatus(deals, "archived");
+    if (view === "archivedPain") return countPainStatus(pains, "archived");
+    if (view === "deletedDeals") return countDealStatus(deals, "deleted");
+    if (view === "deletedPain") return countPainStatus(pains, "deleted");
+    if (view === "archived") return [...deals, ...pains].filter((room) => rawStatus(room) === "archived").length;
   if (view === "sold") return deals.filter((room) => rawStatus(room) === "sold").length;
   if (view === "resolved") return pains.filter((room) => rawStatus(room) === "resolved").length;
-  if (view === "deleted") return [...deals, ...pains].filter((room) => rawStatus(room) === "deleted").length;
+      if (view === "archivedDeals") return deals.filter((room) => roomStatusIs(room, "archived")).map((room) => ({ kind: "deal" as RoomKind, room }));
+    if (view === "archivedPain") return pains.filter((room) => roomStatusIs(room, "archived")).map((room) => ({ kind: "pain" as RoomKind, room }));
+    if (view === "deletedDeals") return deals.filter((room) => roomStatusIs(room, "deleted")).map((room) => ({ kind: "deal" as RoomKind, room }));
+    if (view === "deletedPain") return pains.filter((room) => roomStatusIs(room, "deleted")).map((room) => ({ kind: "pain" as RoomKind, room }));
+    if (view === "deleted") return [...deals, ...pains].filter((room) => rawStatus(room) === "deleted").length;
   return 0;
 }
 
@@ -1139,6 +1147,20 @@ function MetricButton({
       <p style={muted}>Click to open</p>
     </button>
   );
+}
+
+
+
+function roomStatusIs(room: Room, status: string) {
+  return rawStatus(room) === status || room.memberRoomStatus === status || room.roomState === status || room.cleanupState === status || room.stateStatus === status;
+}
+
+function countDealStatus(deals: Room[], status: string) {
+  return deals.filter((room) => roomStatusIs(room, status)).length;
+}
+
+function countPainStatus(pains: Room[], status: string) {
+  return pains.filter((room) => roomStatusIs(room, status)).length;
 }
 
 
@@ -1455,17 +1477,24 @@ export default function MyRoomsPage() {
 
         <Section title="Folder Cards">
           <div style={grid}>
-            {cards.map((cardItem) => (
-              <ViewCard
-                key={cardItem.view}
-                view={cardItem.view}
-                title={cardItem.title}
-                note={cardItem.note}
-                count={countFor(cardItem.view, deals, pains)}
-                active={view === cardItem.view}
-                onClick={() => setView(cardItem.view)}
-              />
-            ))}
+            <ViewCard view="activeDeals" title="Active Deals" count={countForView("activeDeals")} note="open opportunity rooms" />
+            <ViewCard view="activePain" title="Active Pain" count={countForView("activePain")} note="open pressure rooms" />
+
+            <ViewCard view="savedDeals" title="Saved Deals" count={countForView("savedDeals")} note="kept opportunity rooms" />
+            <ViewCard view="savedPain" title="Saved Pain" count={countForView("savedPain")} note="kept pressure rooms" />
+
+            <ViewCard view="archivedDeals" title="Archived Deals" count={countForView("archivedDeals")} note="inactive deal rooms" />
+            <ViewCard view="archivedPain" title="Archived Pain" count={countForView("archivedPain")} note="inactive pain rooms" />
+
+            <ViewCard view="sold" title="Sold Deals" count={countForView("sold")} note="completed opportunity rooms" />
+            <ViewCard view="resolved" title="Resolved Pain" count={countForView("resolved")} note="handled problem rooms" />
+
+            <ViewCard view="deletedDeals" title="Deleted Deals" count={countForView("deletedDeals")} note="hidden deal cleanup" />
+            <ViewCard view="deletedPain" title="Deleted Pain" count={countForView("deletedPain")} note="hidden pain cleanup" />
+
+            <ViewCard view="assignedToMe" title="Assigned To Me" count={countForView("assignedToMe")} note="rooms assigned into my workspace" />
+            <ViewCard view="routedToMe" title="Routed To Me" count={countForView("routedToMe")} note="rooms routed for action" />
+            <ViewCard view="following" title="Following" count={countForView("following")} note="rooms I am watching" />
           </div>
         </Section>
 
