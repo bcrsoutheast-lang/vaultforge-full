@@ -514,7 +514,7 @@ function Nav() {
       <Link href="/state-map" style={btn}>State Map</Link>
       <Link href="/network" style={btn}>Network</Link>
       <Link href="/alerts" style={btn}>Alerts</Link>
-      <Link href="/messages" style={goldBtn}>Execution Messages</Link>
+      <Link href="/messages" style={goldBtn}>ExecutionMessages</Link>
       <Link href="/deal-create" style={btn}>Create Deal</Link>
       <Link href="/pain-intake" style={btn}>Pain Intake</Link>
       <Link href="/profile" style={btn}>Profile</Link>
@@ -695,7 +695,7 @@ export default function ExecutionMessagesPage() {
   const [folder, setFolder] = useState<ThreadStatus | "unread">("active");
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeKey, setActiveKey] = useState("");
-  const [reply, setSend Execution Reply] = useState("");
+  const [reply, setSendReply] = useState("");
   const [newSubject, setNewSubject] = useState("");
   const [newLane, setNewLane] = useState<Lane>("general");
   const [newTo, setNewTo] = useState("");
@@ -798,7 +798,7 @@ export default function ExecutionMessagesPage() {
     ));
   }
 
-  function sendSend Execution Reply() {
+  function sendSend Reply() {
     if (!activeThread || !reply.trim()) return;
     const member = currentMember();
     const message: Message = {
@@ -819,7 +819,7 @@ export default function ExecutionMessagesPage() {
 
     persist(next);
     addRoomActivity(activeThread, "Message Sent", reply.trim().slice(0, 180));
-    setSend Execution Reply("");
+    setSendReply("");
   }
 
   function createThread() {
@@ -949,20 +949,20 @@ export default function ExecutionMessagesPage() {
               </div>
 
               <div style={{ display: "grid", gap: 12 }}>
-                {activeThread.messages.length ? activeThread.messages.map((message) => <MessageBubble key={message.id} message={message} />) : <p style={sub}>No messages yet. Send Execution Reply below to start this thread.</p>}
+                {activeThread.messages.length ? activeThread.messages.map((message) => <MessageBubble key={message.id} message={message} />) : <p style={sub}>No messages yet. Send Reply below to start this thread.</p>}
               </div>
 
               <div style={panel}>
-                <div style={eyebrow}>Send Execution Reply</div>
+                <div style={eyebrow}>Send Reply</div>
                 <textarea
                   style={textarea}
                   placeholder="Type reply..."
                   value={reply}
-                  onChange={(event) => setSend Execution Reply(event.target.value)}
+                  onChange={(event) => setSendReply(event.target.value)}
                   onKeyDownCapture={(event) => event.stopPropagation()}
                 />
                 <div style={{ ...row, marginTop: 14 }}>
-                  <button type="button" style={goldBtn} onClick={sendSend Execution Reply}>Send Send Execution Reply</button>
+                  <button type="button" style={goldBtn} onClick={sendSend Reply}>Send Send Reply</button>
                 </div>
               </div>
             </div>
