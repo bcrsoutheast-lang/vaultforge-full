@@ -488,7 +488,21 @@ function RoomCard({ room, kind, pulse = false }: { room: Room; kind: RoomKind; p
     <p style={sub}>{loc(room)}</p>
     <p style={muted}>{kind === "deal" ? `${txt(room.assetClass)} • ${txt(room.propertyType)} • Route: ${list(room.routeTo).join(", ") || "Buyer"}` : `${txt(room.assetClass)} • ${list(room.painTypes).join(", ") || "Problem"} • Needs: ${list(room.routingNeeds).join(", ") || "Solver"}`}</p>
     <p style={muted}>{kind === "deal" ? `Ask ${txt(room.askingPrice, "N/A")} • Value ${txt(room.propertyValue, "N/A")} • Repairs ${txt(room.repairs, "N/A")}` : `Severity ${txt(room.severity, "N/A")} • Time ${txt(room.timePressure, "N/A")} • Capital ${txt(room.capitalPressure, "N/A")}`}</p>
-    <div style={{ ...row, marginTop: 16 }}>
+    {kind === "deal" ? (
+        <>
+          <IntelligenceStrip items={dealFrontSnapshot(room)} />
+          <p style={muted}>AI: {dealEinstein(room).signal} • Opportunity {dealEinstein(room).score}% • Risk {dealEinstein(room).risk}%</p>
+          <p style={muted}>Next: {dealEinstein(room).next}</p>
+        </>
+      ) : (
+        <>
+          <IntelligenceStrip items={painFrontSnapshot(room)} />
+          <p style={muted}>AI: {painEinstein(room).signal} • Severity {painEinstein(room).severity}% • Collapse {painEinstein(room).collapse}%</p>
+          <p style={muted}>Next: {painEinstein(room).next}</p>
+        </>
+      )}
+
+      <div style={{ ...row, marginTop: 16 }}>
       <Link href={href} style={goldBtn}>Open Room</Link>
       <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}`} style={btn}>Messages</Link>
     </div>
