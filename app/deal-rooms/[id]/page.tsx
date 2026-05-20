@@ -687,6 +687,69 @@ function ActivityStream({ kind, id }: { kind: RoomKind; id: string }) {
 }
 
 
+
+function dealEinstein(room: Room) {
+  const ask = moneyNum(room.askingPrice || room.askPrice);
+  const arv = moneyNum(room.propertyValue || room.value);
+  const repairs = moneyNum(room.repairs);
+  const spread = arv && ask ? arv - ask - repairs : 0;
+
+  let score = 38;
+  if (spread > 25000) score += 12;
+  if (spread > 75000) score += 18;
+  if (spread > 150000) score += 15;
+  if (txt(room.controlStatus).toLowerCase().includes("controlled")) score += 10;
+  if (list(room.routeTo).length) score += 7;
+  if (!ask || !arv) score -= 8;
+  score = Math.max(0, Math.min(100, score));
+
+  const risk = Math.max(10, Math.min(100,
+    (!ask || !arv ? 22 : 0) +
+    (txt(room.condition).toLowerCase().includes("full") ? 24 : 0) +
+    (txt(room.occupancy).toLowerCase().includes("squatter") ? 28 : 0) +
+    (txt(room.controlStatus).toLowerCase().includes("no") ? 18 : 0) +
+    28
+  ));
+
+  return {
+    score,
+    risk,
+    spread,
+    signal: score >= 75 ? "Strong opportunity signal" : score >= 55 ? "Workable deal — verify proof" : "Needs stronger facts before hard routing",
+    next: !ask || !arv ? "Collect ask, ARV/value, repairs, control, photos, and access before routing hard." : "Verify control, title/access, photos, and numbers, then route to the highest-fit buyer/capital/operator.",
+    hidden: spread > 75000 ? "Margin may support buyer spread, capital stack, or JV route." : "Upside depends on cleaner numbers, control, and execution path.",
+    killer: !ask || !arv ? "Missing underwriting values." : risk > 70 ? "Risk stack may kill buyer confidence." : "No major killer detected yet.",
+  };
+}
+
+function painEinstein(room: Room) {
+  let severity = 35;
+  const sev = txt(room.severity).toLowerCase();
+  if (sev.includes("medium")) severity += 10;
+  if (sev.includes("high")) severity += 25;
+  if (sev.includes("critical")) severity += 38;
+  if (sev.includes("emergency")) severity += 48;
+
+  const pressure = txt(room.timePressure).toLowerCase();
+  if (pressure.includes("24") || pressure.includes("72")) severity += 15;
+  if (list(room.blockers).some((b) => ["capital", "title", "legal", "city"].includes(b.toLowerCase()))) severity += 10;
+
+  severity = Math.max(0, Math.min(100, severity));
+  const collapse = Math.max(10, Math.min(100, severity + list(room.riskTypes || room.risks).length * 5));
+  const solver = Math.max(35, Math.min(98, 100 - Math.round(collapse * 0.35) + list(room.needs || room.routingNeeds).length * 6));
+
+  return {
+    severity,
+    collapse,
+    solver,
+    signal: severity >= 85 ? "Immediate pressure signal" : severity >= 70 ? "High-priority execution problem" : "Active problem needing routing",
+    next: list(room.blockers).includes("Capital") ? "Confirm money needed now, collateral, payoff, and deadline, then route to private capital/lender." : list(room.blockers).includes("Title") ? "Collect title facts and route to title/legal specialist before more capital is burned." : "Identify the single blocker stopping execution and route to the highest-fit solver.",
+    consequence: txt(room.worstCase, "Delay, cost increase, failed closing, loss of control, or legal/financial escalation."),
+    fix: txt(room.desiredSolution, "Triage blocker, assign solver, message route fit, and track response until resolved."),
+  };
+}
+
+
 function EinsteinPanel({ kind, room }: { kind: RoomKind; room: Room }) {
   const deal = kind === "deal" ? dealIntel(room) : null;
   const pain = kind === "pain" ? painIntel(room) : null;
