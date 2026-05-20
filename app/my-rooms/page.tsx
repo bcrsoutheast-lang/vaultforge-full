@@ -780,7 +780,90 @@ const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+
+const logoWrap: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  margin: "8px 0 24px",
+};
+
+const logoShell: React.CSSProperties = {
+  width: "min(520px, 92vw)",
+  minHeight: 150,
+  border: "1px solid rgba(245,197,66,.32)",
+  borderRadius: 34,
+  background: "radial-gradient(circle at top, rgba(245,197,66,.18), transparent 38%), linear-gradient(180deg,#0b101d,#050816)",
+  boxShadow: "0 0 42px rgba(245,197,66,.13)",
+  padding: 22,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexDirection: "column",
+  textAlign: "center",
+};
+
+const logoImg: React.CSSProperties = {
+  maxWidth: "min(390px, 78vw)",
+  maxHeight: 140,
+  width: "auto",
+  height: "auto",
+  objectFit: "contain",
+  display: "block",
+};
+
+const logoFallback: React.CSSProperties = {
+  color: "#ffd45a",
+  fontSize: "clamp(40px,9vw,82px)",
+  fontWeight: 950,
+  letterSpacing: -4,
+  lineHeight: 0.9,
+};
+
 const imgStyle: React.CSSProperties = { width: "100%", height: 150, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
+
+
+function VaultForgeBrandLogo() {
+  const logoPaths = [
+    "/vaultforge-logo.png",
+    "/VaultForge-logo.png",
+    "/vaultforge-logo.jpg",
+    "/vaultforge-logo.webp",
+    "/logo.png",
+    "/logo.jpg",
+    "/logo.webp",
+    "/vf-logo.png",
+    "/brand/logo.png",
+  ];
+
+  const [index, setIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  const src = logoPaths[index];
+
+  return (
+    <div style={logoWrap}>
+      <div style={logoShell}>
+        {!failed && src ? (
+          <img
+            src={src}
+            alt="VaultForge"
+            style={logoImg}
+            onError={() => {
+              const next = index + 1;
+              if (next < logoPaths.length) setIndex(next);
+              else setFailed(true);
+            }}
+          />
+        ) : (
+          <div style={logoFallback}>VaultForge</div>
+        )}
+        <p style={{ ...muted, marginTop: 12 }}>Private real estate execution intelligence network</p>
+      </div>
+    </div>
+  );
+}
+
 
 function Nav() {
   return (
@@ -1068,6 +1151,7 @@ export default function MyRoomsPage() {
       <style>{styleTag}</style>
       <div style={wrap}>
         <Nav />
+        <VaultForgeBrandLogo />
 
         <section style={hero}>
           <div style={eyebrow}>My Rooms</div>
@@ -1085,30 +1169,21 @@ export default function MyRoomsPage() {
 
         <Section title="Workspace Ownership">
           <div style={grid}>
-            <ViewCard
-              view="activeDeals"
-              title="My Deal Rooms"
-              note="open active opportunity rooms only"
-              count={deals.filter(isOpenDealRoom).length}
-              active={view === "activeDeals"}
-              onClick={() => setView("activeDeals")}
-            />
-            <ViewCard
-              view="activePain"
-              title="My Pain Rooms"
-              note="open active pressure rooms only"
-              count={pains.filter(isOpenPainRoom).length}
-              active={view === "activePain"}
-              onClick={() => setView("activePain")}
-            />
-            <ViewCard
-              view="assignedToMe"
-              title="Assigned / Routed"
-              note="open rooms sent to this member for action"
-              count={openAssignedOrRoutedCount(deals, pains)}
-              active={view === "assignedToMe" || view === "routedToMe"}
-              onClick={() => setView("assignedToMe")}
-            />
+            <div style={activePanel}>
+              <div style={eyebrow}>My Deal Rooms</div>
+              <h2 style={h2}>{deals.filter(isOpenDealRoom).length}</h2>
+              <p style={muted}>open active opportunity rooms only</p>
+            </div>
+            <div style={activePanel}>
+              <div style={eyebrow}>My Pain Rooms</div>
+              <h2 style={h2}>{pains.filter(isOpenPainRoom).length}</h2>
+              <p style={muted}>open active pressure rooms only</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Assigned / Routed</div>
+              <h2 style={h2}>{openAssignedOrRoutedCount(deals, pains)}</h2>
+              <p style={muted}>open rooms sent to this member for action</p>
+            </div>
             <div style={panel}>
               <div style={eyebrow}>Global Hidden</div>
               <h2 style={h2}>{Math.max(0, allDealRooms.length + allPainRooms.length - deals.length - pains.length)}</h2>
@@ -1128,11 +1203,11 @@ export default function MyRoomsPage() {
 
         <Section title="Execution Timeline">
           <div style={grid}>
-            <div style={panel}><div style={eyebrow}>Deal New / Reviewing</div><h2 style={h2}>{deals.filter(isOpenDealRoom).filter((room) => roomStage("deal", room) === "New" || roomStage("deal", room) === "Reviewing").length}</h2><p style={muted}>deals needing review</p></div>
+            <div style={panel}><div style={eyebrow}>Deal New / Reviewing</div><h2 style={h2}>{(stages["New"] || 0) + (stages["Reviewing"] || 0)}</h2><p style={muted}>deals needing review</p></div>
             <div style={panel}><div style={eyebrow}>Deal Routed / Contract</div><h2 style={h2}>{(stages["Routed"] || 0) + (stages["Under Contract"] || 0)}</h2><p style={muted}>rooms in execution</p></div>
             <div style={activePanel}><div style={eyebrow}>Sold Deals</div><h2 style={h2}>{stages["Sold"] || 0}</h2><p style={muted}>completed opportunity rooms</p></div>
-            <div style={panel}><div style={eyebrow}>Pain Diagnosing / Routed</div><h2 style={h2}>{pains.filter(isOpenPainRoom).filter((room) => roomStage("pain", room) === "Diagnosing" || roomStage("pain", room) === "Routed").length}</h2><p style={muted}>pressure rooms moving</p></div>
-            <div style={pulseRed}><div style={eyebrow}>Pain In Progress</div><h2 style={h2}>{pains.filter(isOpenPainRoom).filter((room) => roomStage("pain", room) === "In Progress").length}</h2><p style={muted}>solver work underway</p></div>
+            <div style={panel}><div style={eyebrow}>Pain Diagnosing / Routed</div><h2 style={h2}>{(stages["Diagnosing"] || 0) + (stages["Routed"] || 0)}</h2><p style={muted}>pressure rooms moving</p></div>
+            <div style={pulseRed}><div style={eyebrow}>Pain In Progress</div><h2 style={h2}>{stages["In Progress"] || 0}</h2><p style={muted}>solver work underway</p></div>
             <div style={activePanel}><div style={eyebrow}>Resolved Pain</div><h2 style={h2}>{stages["Resolved"] || 0}</h2><p style={muted}>handled problem rooms</p></div>
           </div>
         </Section>
