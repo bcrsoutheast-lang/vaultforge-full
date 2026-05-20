@@ -53,6 +53,7 @@ const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaul
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const THREAD_KEY = "vaultforge_message_threads_v2";
 const ACTIVITY_KEY = "vaultforge_room_activity_v2";
+const ROUTE_STATUS_KEY = "vaultforge_route_status_v1";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -275,6 +276,45 @@ function scorePain(room: Room, member: Member) {
   return Math.min(99, score);
 }
 
+
+function routeKey(kind: "deal" | "pain", roomId: string, member: Member) {
+  return `${kind}:${roomId}:${member.id || member.email}`;
+}
+
+function routeStatusMap() {
+  return ok() ? j<Record<string, { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }>>(localStorage.getItem(ROUTE_STATUS_KEY), {}) : {};
+}
+
+function setRouteStatus(kind: "deal" | "pain", roomId: string, member: Member, status: "pending" | "accepted" | "passed" | "claimed") {
+  const map = routeStatusMap();
+  map[routeKey(kind, roomId, member)] = {
+    status,
+    at: new Date().toISOString(),
+    memberName: member.name,
+    memberEmail: member.email,
+    roomId,
+    kind,
+  };
+  writeJson(ROUTE_STATUS_KEY, map);
+  window.dispatchEvent(new Event("vaultforge-route-status-change"));
+}
+
+function countRouteStatuses() {
+  const map = routeStatusMap();
+  const values = Object.values(map);
+  return {
+    pending: values.filter((item) => item.status === "pending").length,
+    accepted: values.filter((item) => item.status === "accepted").length,
+    passed: values.filter((item) => item.status === "passed").length,
+    claimed: values.filter((item) => item.status === "claimed").length,
+  };
+}
+
+function memberRouteStatus(kind: "deal" | "pain", roomId: string, member: Member) {
+  return routeStatusMap()[routeKey(kind, roomId, member)]?.status || "";
+}
+
+
 function routeRoom(kind: "deal" | "pain", roomId: string, member: Member) {
   if (!ok()) return;
 
@@ -317,6 +357,7 @@ function routeRoom(kind: "deal" | "pain", roomId: string, member: Member) {
   ].slice(0, 75);
 
   writeJson(ACTIVITY_KEY, activity);
+  setRouteStatus(kind, roomId, member, "pending");
 
   window.dispatchEvent(new Event("vaultforge-room-activity-change"));
   window.dispatchEvent(new Event("vaultforge-my-rooms-change"));
@@ -421,7 +462,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
-function MemberCard({ member, score, onRoute, onMessage }: { member: Member; score: number; onRoute: () => void; onMessage: () => void }) {
+function MemberCard({ member, score, routeStatus, onRoute, onMessage }: { member: Member; score: number; routeStatus: string; onRoute: () => void; onMessage: () => void }) {
   return (
     <div style={score >= 92 ? pulseGold : activePanel}>
       <div style={eyebrow}>Match Score • {score}</div>
@@ -431,9 +472,10 @@ function MemberCard({ member, score, onRoute, onMessage }: { member: Member; sco
       <p style={muted}>States: {member.states.join(", ") || member.state}</p>
       <p style={muted}>Strategies: {member.strategies.join(", ") || "Not listed"}</p>
       <p style={muted}>Pain Focus: {member.painFocus.join(", ") || "Not listed"}</p>
+      <p style={muted}>Route Status: {routeStatus || "not routed"}</p>
 
       <div style={{ ...row, marginTop: 16 }}>
-        <button type="button" style={goldBtn} onClick={onRoute}>Route</button>
+        <button type="button" style={routeStatus ? btn : goldBtn} onClick={onRoute}>{routeStatus ? "Re-Route" : "Route"}</button>
         <button type="button" style={btn} onClick={onMessage}>Message</button>
       </div>
     </div>
@@ -449,17 +491,20 @@ export default function RoutingPage() {
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-room-activity-change", refresh);
     window.addEventListener("vaultforge-messages-change", refresh);
+    window.addEventListener("vaultforge-route-status-change", refresh);
 
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-room-activity-change", refresh);
       window.removeEventListener("vaultforge-messages-change", refresh);
+      window.removeEventListener("vaultforge-route-status-change", refresh);
     };
   }, []);
 
   const deals = useMemo(() => readRooms("deal"), [tick]);
   const pains = useMemo(() => readRooms("pain"), [tick]);
   const members = useMemo(() => readMembers(), [tick]);
+  const routeCounts = useMemo(() => countRouteStatuses(), [tick]);
 
   return (
     <main style={page}>
@@ -473,6 +518,15 @@ export default function RoutingPage() {
           <h1 style={h1}>AI member matching.</h1>
           <p style={sub}>Best fit members, operators, lenders, and buyers for each room. Route directly into their workspace.</p>
         </section>
+
+        <Section title="Route Status Board">
+          <div style={grid}>
+            <div style={pulseGold}><div style={eyebrow}>Pending</div><h2 style={h2}>{routeCounts.pending}</h2><p style={muted}>sent routes awaiting member action</p></div>
+            <div style={activePanel}><div style={eyebrow}>Accepted</div><h2 style={h2}>{routeCounts.accepted}</h2><p style={muted}>members accepted route</p></div>
+            <div style={panel}><div style={eyebrow}>Passed</div><h2 style={h2}>{routeCounts.passed}</h2><p style={muted}>members passed or rejected</p></div>
+            <div style={pulseGold}><div style={eyebrow}>Claimed</div><h2 style={h2}>{routeCounts.claimed}</h2><p style={muted}>execution claimed</p></div>
+          </div>
+        </Section>
 
         <Section title="Deal Routing Lane">
           {deals.length ? (
@@ -505,6 +559,7 @@ export default function RoutingPage() {
                           key={`${rid(room)}_${member.id}`}
                           member={member}
                           score={score}
+                          routeStatus={memberRouteStatus("deal", rid(room), member)}
                           onRoute={() => {
                             routeRoom("deal", rid(room), member);
                             setTick((value) => value + 1);
@@ -559,6 +614,7 @@ export default function RoutingPage() {
                           key={`${rid(room)}_${member.id}`}
                           member={member}
                           score={score}
+                          routeStatus={memberRouteStatus("pain", rid(room), member)}
                           onRoute={() => {
                             routeRoom("pain", rid(room), member);
                             setTick((value) => value + 1);
