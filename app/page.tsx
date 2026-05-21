@@ -280,9 +280,31 @@ function canViewAdmin(email: string) {
   return cleanEmail(email) === OWNER_EMAIL.toLowerCase();
 }
 
+
+function sanitizeLegacyMembers(list: MemberRecord[]) {
+  return list.map((member) => {
+    if (!member.baseState || member.baseState === "Not listed") {
+      const firstState =
+        clean(member.states)
+          .split("•")[0]
+          ?.trim() || "GA";
+
+      return {
+        ...member,
+        baseState: normalizeStateCode(firstState) || "GA",
+      };
+    }
+
+    return member;
+  });
+}
+
 function memberMatchesState(member: MemberRecord, state: StateFilter) {
   if (state === "all") return true;
-  return normalizeStateCode(member.baseState) === state;
+
+  const memberBase = normalizeStateCode(member.baseState);
+
+  return memberBase === state;
 }
 function updateProfileAndLoginForMember(member: MemberRecord) {
   if (!ok()) return;
