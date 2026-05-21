@@ -137,6 +137,17 @@ function getCleanup(kind: TeaserKind, item: any) {
   return rows[cleanupKey(kind, item)] || "";
 }
 
+function clearCleanup(kind: TeaserKind, item: any) {
+  const rows = readJson<Record<string, string>>(INVESTOR_CLEANUP_KEY, {});
+  delete rows[cleanupKey(kind, item)];
+  writeJson(INVESTOR_CLEANUP_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-room-cleanup-change"));
+}
+
+function countCleanup(kind: TeaserKind, action: string, items: any[]) {
+  return items.filter((item) => getCleanup(kind, item) === action).length;
+}
+
 const page: React.CSSProperties = {
   minHeight: "100vh",
   background: "#05070d",
@@ -430,6 +441,12 @@ function TeaserCard({
         <button type="button" style={btn} onClick={() => onCleanup("saved")}>Save</button>
         <button type="button" style={btn} onClick={() => onCleanup("archived")}>Archive</button>
         <button type="button" style={redBtn} onClick={() => onCleanup("deleted")}>Delete</button>
+        {cleanup === "deleted" ? (
+          <>
+            <button type="button" style={redBtn} onClick={() => clearCleanup(kind, item)}>Delete Forever</button>
+            <button type="button" style={btn} onClick={() => clearCleanup(kind, item)}>Restore</button>
+          </>
+        ) : null}
       </div>
     </div>
   );
@@ -505,6 +522,8 @@ function ActiveRoomPanel({ activeRoom, onClose }: { activeRoom: ActiveRoom; onCl
         <button type="button" style={btn} onClick={() => saveCleanup(kind, item, "saved")}>Save</button>
         <button type="button" style={btn} onClick={() => saveCleanup(kind, item, "archived")}>Archive</button>
         <button type="button" style={redBtn} onClick={() => saveCleanup(kind, item, "deleted")}>Delete</button>
+        <button type="button" style={redBtn} onClick={() => clearCleanup(kind, item)}>Delete Forever</button>
+        <button type="button" style={btn} onClick={() => clearCleanup(kind, item)}>Restore</button>
       </div>
 
       {sent ? <p style={muted}>Request sent to VaultForge admin/member workflow.</p> : null}
@@ -540,16 +559,16 @@ export default function InvestorRoomPage() {
 
   const active = investor?.paymentStatus === "paid" || investor?.accessStatus === "active" || investor?.access === "active";
 
-  const deals = useMemo(() => {
+  const rawDeals = useMemo(() => {
     return readRows([
       "vaultforge_clean_deal_rooms",
       "vaultforge_deal_rooms",
       "vaultforge_rooms_deals",
       "vf_deal_rooms",
-    ]).filter((item) => itemState(item) === state && getCleanup("Deal", item) !== "deleted");
+    ]).filter((item) => itemState(item) === state);
   }, [state, tick]);
 
-  const pains = useMemo(() => {
+  const rawPains = useMemo(() => {
     return readRows([
       "vaultforge_clean_pain_rooms",
       "vaultforge_clean_pain_rooms_v1",
@@ -557,10 +576,23 @@ export default function InvestorRoomPage() {
       "vaultforge_pain_rooms",
       "vaultforge_rooms_pain",
       "vf_pain_rooms",
-    ]).filter((item) => itemState(item) === state && getCleanup("Pain", item) !== "deleted");
+    ]).filter((item) => itemState(item) === state);
   }, [state, tick]);
 
-  const visibleItems = tab === "Deal" ? deals : pains;
+  const deals = useMemo(() => rawDeals.filter((item) => getCleanup("Deal", item) !== "deleted"), [rawDeals, tick]);
+  const pains = useMemo(() => rawPains.filter((item) => getCleanup("Pain", item) !== "deleted"), [rawPains, tick]);
+
+  const savedDeals = useMemo(() => rawDeals.filter((item) => getCleanup("Deal", item) === "saved"), [rawDeals, tick]);
+  const archivedDeals = useMemo(() => rawDeals.filter((item) => getCleanup("Deal", item) === "archived"), [rawDeals, tick]);
+  const deletedDeals = useMemo(() => rawDeals.filter((item) => getCleanup("Deal", item) === "deleted"), [rawDeals, tick]);
+  const savedPains = useMemo(() => rawPains.filter((item) => getCleanup("Pain", item) === "saved"), [rawPains, tick]);
+  const archivedPains = useMemo(() => rawPains.filter((item) => getCleanup("Pain", item) === "archived"), [rawPains, tick]);
+  const deletedPains = useMemo(() => rawPains.filter((item) => getCleanup("Pain", item) === "deleted"), [rawPains, tick]);
+
+  const visibleItems =
+    tab === "Deal"
+      ? deals
+      : pains;
 
   if (!active) {
     return (
@@ -637,10 +669,117 @@ export default function InvestorRoomPage() {
             <Metric title="Deal Signals" count={deals.length} note={`limited opportunity cards in ${state}`} active={tab === "Deal"} onClick={() => setTab("Deal")} />
             <Metric title="Pain Signals" count={pains.length} note={`limited pressure cards in ${state}`} active={tab === "Pain"} onClick={() => setTab("Pain")} />
             <Metric title="Requests" count={readJson<any[]>(INVESTOR_REQUESTS_KEY, []).length} note="requests sent through VaultForge" />
+            <Metric title="Saved Deals" count={savedDeals.length} note="saved deal cards" onClick={() => { setTab("Deal"); setActiveRoom(null); }} />
+            <Metric title="Archived Deals" count={archivedDeals.length} note="archived deal cards" onClick={() => { setTab("Deal"); setActiveRoom(null); }} />
+            <Metric title="Deleted Deals" count={deletedDeals.length} note="deleted deal cards" onClick={() => { setTab("Deal"); setActiveRoom(null); }} />
+            <Metric title="Saved Pain" count={savedPains.length} note="saved pain cards" onClick={() => { setTab("Pain"); setActiveRoom(null); }} />
+            <Metric title="Archived Pain" count={archivedPains.length} note="archived pain cards" onClick={() => { setTab("Pain"); setActiveRoom(null); }} />
+            <Metric title="Deleted Pain" count={deletedPains.length} note="deleted pain cards" onClick={() => { setTab("Pain"); setActiveRoom(null); }} />
           </div>
         </section>
 
         <ActiveRoomPanel activeRoom={activeRoom} onClose={() => setActiveRoom(null)} />
+
+        <section style={{ marginTop: 18 }}>
+          <div style={eyebrow}>Cleanup Folders • Visible Controls</div>
+          <div style={wideGrid}>
+            {tab === "Deal" && savedDeals.length ? (
+              <div style={goldPanel}>
+                <h3 style={h3}>Saved Deals</h3>
+                {savedDeals.map((item, index) => (
+                  <div key={`saved-deal-${index}`} style={{ ...panel, marginTop: 10 }}>
+                    <p style={sub}>{itemTitle(item, "Deal")}</p>
+                    <div style={{ ...row, marginTop: 10 }}>
+                      <button type="button" style={goldBtn} onClick={() => setActiveRoom({ kind: "Deal", item, title: itemTitle(item, "Deal"), state: itemState(item) })}>Open</button>
+                      <button type="button" style={btn} onClick={() => { clearCleanup("Deal", item); setTick((v) => v + 1); }}>Restore</button>
+                      <button type="button" style={redBtn} onClick={() => { saveCleanup("Deal", item, "deleted"); setTick((v) => v + 1); }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {tab === "Deal" && archivedDeals.length ? (
+              <div style={panel}>
+                <h3 style={h3}>Archived Deals</h3>
+                {archivedDeals.map((item, index) => (
+                  <div key={`archived-deal-${index}`} style={{ ...panel, marginTop: 10 }}>
+                    <p style={sub}>{itemTitle(item, "Deal")}</p>
+                    <div style={{ ...row, marginTop: 10 }}>
+                      <button type="button" style={goldBtn} onClick={() => setActiveRoom({ kind: "Deal", item, title: itemTitle(item, "Deal"), state: itemState(item) })}>Open</button>
+                      <button type="button" style={btn} onClick={() => { clearCleanup("Deal", item); setTick((v) => v + 1); }}>Restore</button>
+                      <button type="button" style={redBtn} onClick={() => { saveCleanup("Deal", item, "deleted"); setTick((v) => v + 1); }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {tab === "Deal" && deletedDeals.length ? (
+              <div style={redPanel}>
+                <h3 style={h3}>Deleted Deals</h3>
+                {deletedDeals.map((item, index) => (
+                  <div key={`deleted-deal-${index}`} style={{ ...panel, marginTop: 10 }}>
+                    <p style={sub}>{itemTitle(item, "Deal")}</p>
+                    <div style={{ ...row, marginTop: 10 }}>
+                      <button type="button" style={btn} onClick={() => { clearCleanup("Deal", item); setTick((v) => v + 1); }}>Restore</button>
+                      <button type="button" style={redBtn} onClick={() => { clearCleanup("Deal", item); setTick((v) => v + 1); }}>Delete Forever</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {tab === "Pain" && savedPains.length ? (
+              <div style={goldPanel}>
+                <h3 style={h3}>Saved Pain</h3>
+                {savedPains.map((item, index) => (
+                  <div key={`saved-pain-${index}`} style={{ ...panel, marginTop: 10 }}>
+                    <p style={sub}>{itemTitle(item, "Pain")}</p>
+                    <div style={{ ...row, marginTop: 10 }}>
+                      <button type="button" style={goldBtn} onClick={() => setActiveRoom({ kind: "Pain", item, title: itemTitle(item, "Pain"), state: itemState(item) })}>Open</button>
+                      <button type="button" style={btn} onClick={() => { clearCleanup("Pain", item); setTick((v) => v + 1); }}>Restore</button>
+                      <button type="button" style={redBtn} onClick={() => { saveCleanup("Pain", item, "deleted"); setTick((v) => v + 1); }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {tab === "Pain" && archivedPains.length ? (
+              <div style={panel}>
+                <h3 style={h3}>Archived Pain</h3>
+                {archivedPains.map((item, index) => (
+                  <div key={`archived-pain-${index}`} style={{ ...panel, marginTop: 10 }}>
+                    <p style={sub}>{itemTitle(item, "Pain")}</p>
+                    <div style={{ ...row, marginTop: 10 }}>
+                      <button type="button" style={goldBtn} onClick={() => setActiveRoom({ kind: "Pain", item, title: itemTitle(item, "Pain"), state: itemState(item) })}>Open</button>
+                      <button type="button" style={btn} onClick={() => { clearCleanup("Pain", item); setTick((v) => v + 1); }}>Restore</button>
+                      <button type="button" style={redBtn} onClick={() => { saveCleanup("Pain", item, "deleted"); setTick((v) => v + 1); }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {tab === "Pain" && deletedPains.length ? (
+              <div style={redPanel}>
+                <h3 style={h3}>Deleted Pain</h3>
+                {deletedPains.map((item, index) => (
+                  <div key={`deleted-pain-${index}`} style={{ ...panel, marginTop: 10 }}>
+                    <p style={sub}>{itemTitle(item, "Pain")}</p>
+                    <div style={{ ...row, marginTop: 10 }}>
+                      <button type="button" style={btn} onClick={() => { clearCleanup("Pain", item); setTick((v) => v + 1); }}>Restore</button>
+                      <button type="button" style={redBtn} onClick={() => { clearCleanup("Pain", item); setTick((v) => v + 1); }}>Delete Forever</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+
 
         <section style={{ marginTop: 22 }}>
           <div style={eyebrow}>
