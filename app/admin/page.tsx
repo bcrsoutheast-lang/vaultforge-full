@@ -19,6 +19,8 @@ type AdminFilter =
   | "deleted";
 type StateCode = "GA" | "TN" | "AL" | "FL" | "NC" | "SC" | "TX";
 type StateFilter = "all" | "notListed" | StateCode;
+type RoomKind = "deal" | "pain";
+type RoomView = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
 
 type MemberRecord = {
   id: string;
@@ -52,9 +54,14 @@ type AdminMessage = {
 type RoomRecord = {
   id: string;
   title: string;
-  kind: "deal" | "pain";
+  kind: RoomKind;
   state: string;
   status: string;
+  saved: boolean;
+  archived: boolean;
+  deleted: boolean;
+  sold: boolean;
+  resolved: boolean;
   source: string;
 };
 
@@ -91,6 +98,9 @@ const DEAL_ROOM_KEYS = [
   "vaultforge_rooms_deals",
   "vf_deal_rooms",
   "deal_rooms",
+  "vaultforge_saved_rooms_v1",
+  "vaultforge_archived_rooms_v1",
+  "vaultforge_deleted_rooms_v1",
 ];
 
 const PAIN_ROOM_KEYS = [
@@ -101,6 +111,9 @@ const PAIN_ROOM_KEYS = [
   "vaultforge_rooms_pain",
   "vf_pain_rooms",
   "pain_rooms",
+  "vaultforge_saved_rooms_v1",
+  "vaultforge_archived_rooms_v1",
+  "vaultforge_deleted_rooms_v1",
 ];
 
 function ok() {
@@ -109,7 +122,6 @@ function ok() {
 
 function readJson<T>(key: string, fallback: T): T {
   if (!ok()) return fallback;
-
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
@@ -134,7 +146,6 @@ function lower(value: unknown) {
 
 function stateCode(value: unknown) {
   const raw = clean(value).toUpperCase();
-
   const map: Record<string, StateCode> = {
     GEORGIA: "GA",
     TENNESSEE: "TN",
@@ -144,7 +155,6 @@ function stateCode(value: unknown) {
     "SOUTH CAROLINA": "SC",
     TEXAS: "TX",
   };
-
   if (STATE_CODES.includes(raw as StateCode)) return raw;
   return map[raw] || "";
 }
@@ -154,20 +164,11 @@ function listText(value: unknown, fallback: string) {
     const joined = value.map((item) => clean(item)).filter(Boolean).join(" • ");
     return joined || fallback;
   }
-
   return clean(value, fallback);
-}
-
-function splitStates(text: string) {
-  return text
-    .split(/[,|•;/]+/g)
-    .map((item) => stateCode(item))
-    .filter(Boolean);
 }
 
 function primaryHomeState(row: any, email: string) {
   if (email === OWNER_EMAIL.toLowerCase()) return "GA";
-
   return stateCode(
     row?.homeState ||
       row?.home_state ||
@@ -221,7 +222,6 @@ function normalizeMember(row: any, source: string): MemberRecord {
   const paidLike = pay === "paid" || pay === "comped" || pay === "trial";
   const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved);
   const baseState = primaryHomeState(row, email);
-
   const operatingStates = listText(
     row?.operatingStates ||
       row?.operating_states ||
@@ -256,31 +256,21 @@ function normalizeMember(row: any, source: string): MemberRecord {
 
 function currentEmail() {
   if (!ok()) return "";
-
   let profile: any = {};
   for (const key of PROFILE_KEYS) {
     const next = readJson<any>(key, {});
-    if (next && typeof next === "object" && !Array.isArray(next)) {
-      profile = { ...profile, ...next };
-    }
+    if (next && typeof next === "object" && !Array.isArray(next)) profile = { ...profile, ...next };
   }
-
   return lower(profile.email || profile.memberEmail || profile.member_email || localStorage.getItem("vf_email") || localStorage.getItem("member_email") || localStorage.getItem("email"));
 }
 
 function readMembers(): MemberRecord[] {
   if (!ok()) return [];
-
   const map = new Map<string, MemberRecord>();
 
   for (const key of MEMBER_SOURCE_KEYS) {
     const parsed = readJson<unknown>(key, []);
-    const rows = Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === "object"
-        ? Object.values(parsed as Record<string, unknown>)
-        : [];
-
+    const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed as Record<string, unknown>) : [];
     for (const row of rows) {
       if (!row || typeof row !== "object") continue;
       const normalized = normalizeMember(row, key);
@@ -300,7 +290,6 @@ function readMembers(): MemberRecord[] {
 
   const ownerEmail = OWNER_EMAIL.toLowerCase();
   const owner = map.get(ownerEmail);
-
   map.set(ownerEmail, {
     ...(owner || {}),
     id: "owner-admin",
@@ -320,14 +309,7 @@ function readMembers(): MemberRecord[] {
     source: "owner-admin",
   });
 
-  const order: Record<MemberStatus, number> = {
-    pending: 0,
-    approved: 1,
-    suspended: 2,
-    denied: 3,
-    deleted: 4,
-  };
-
+  const order: Record<MemberStatus, number> = { pending: 0, approved: 1, suspended: 2, denied: 3, deleted: 4 };
   return Array.from(map.values()).sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
 }
 
@@ -336,52 +318,16 @@ function readMessages(): AdminMessage[] {
   return Array.isArray(rows) ? rows : [];
 }
 
-
-function saveBroadcastMessage(recipients: MemberRecord[], subject: string, body: string) {
-  const cleanSubject = clean(subject, "Admin Command Message");
-  const cleanBody = clean(body);
-  if (!cleanBody || !recipients.length) return false;
-
-  const existing = readJson<any[]>(MEMBER_MESSAGES_KEY, []);
-  const now = new Date().toISOString();
-
-  const messageRows = recipients.map((member) => ({
-    id: `admin-broadcast-${Date.now()}-${member.id}`,
-    threadKey: `admin-${member.email}`,
-    lane: "admin",
-    subject: cleanSubject,
-    body: cleanBody,
-    from: OWNER_EMAIL,
-    to: member.email,
-    memberName: member.name,
-    memberCompany: member.company,
-    status: "unread",
-    createdAt: now,
-    source: "admin-broadcast",
-  }));
-
-  writeJson(MEMBER_MESSAGES_KEY, [...messageRows, ...(Array.isArray(existing) ? existing : [])]);
-
-  const adminExisting = readMessages();
-  const adminLog: AdminMessage = {
-    id: `admin-sent-${Date.now()}`,
-    topic: `Broadcast sent to ${recipients.length} member(s)`,
-    body: `${cleanSubject}: ${cleanBody}`,
-    email: OWNER_EMAIL,
-    status: "sent",
-    priority: "normal",
-    createdAt: now,
-  };
-
-  writeJson(ADMIN_MESSAGES_KEY, [adminLog, ...adminExisting]);
-  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
-  window.dispatchEvent(new Event("vaultforge-message-command-change"));
-  return true;
+function roomKindFrom(row: any, fallback: RoomKind): RoomKind {
+  const text = lower(row?.kind || row?.type || row?.roomType || row?.room_type || row?.category);
+  if (text.includes("pain")) return "pain";
+  if (text.includes("deal") || text.includes("opportunity") || text.includes("project")) return "deal";
+  return fallback;
 }
 
-
-function normalizeRoom(row: any, source: string, kind: "deal" | "pain", index: number): RoomRecord {
-  const id = clean(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId || `${source}-${index}`);
+function normalizeRoom(row: any, source: string, fallbackKind: RoomKind, index: number): RoomRecord {
+  const kind = roomKindFrom(row, fallbackKind);
+  const id = clean(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId || `${source}-${kind}-${index}`);
   const title = clean(row?.title || row?.name || row?.propertyName || row?.headline || row?.summary, kind === "deal" ? "Deal Room" : "Pain Room");
   const state =
     stateCode(
@@ -404,38 +350,42 @@ function normalizeRoom(row: any, source: string, kind: "deal" | "pain", index: n
         row?.state
     ) || "Not listed";
 
-  return {
-    id,
-    title,
-    kind,
-    state,
-    status: lower(row?.status || row?.roomStatus || row?.room_status || "active"),
-    source,
-  };
+  const status = lower(row?.status || row?.roomStatus || row?.room_status || row?.folder || row?.roomFolder || row?.room_folder || "active");
+  const saved = Boolean(row?.saved || row?.isSaved || row?.is_saved || status.includes("saved") || source.includes("saved"));
+  const archived = Boolean(row?.archived || row?.isArchived || row?.is_archived || status.includes("archived") || source.includes("archived"));
+  const deleted = Boolean(row?.deleted || row?.isDeleted || row?.is_deleted || status.includes("deleted") || source.includes("deleted"));
+  const sold = Boolean(row?.sold || row?.isSold || row?.is_sold || status.includes("sold"));
+  const resolved = Boolean(row?.resolved || row?.isResolved || row?.is_resolved || status.includes("resolved"));
+
+  return { id, title, kind, state, status, saved, archived, deleted, sold, resolved, source };
 }
 
-function readRooms(kind: "deal" | "pain") {
+function readRooms(kind: RoomKind) {
   if (!ok()) return [];
-
   const keys = kind === "deal" ? DEAL_ROOM_KEYS : PAIN_ROOM_KEYS;
   const map = new Map<string, RoomRecord>();
 
   for (const key of keys) {
     const parsed = readJson<unknown>(key, []);
-    const rows = Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === "object"
-        ? Object.values(parsed as Record<string, unknown>)
-        : [];
-
+    const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed as Record<string, unknown>) : [];
     rows.forEach((row: any, index) => {
       if (!row || typeof row !== "object") return;
       const room = normalizeRoom(row, key, kind, index);
+      if (room.kind !== kind) return;
       map.set(room.id, room);
     });
   }
 
   return Array.from(map.values());
+}
+
+function inRoomView(room: RoomRecord, view: RoomView) {
+  if (view === "saved") return room.saved && !room.deleted;
+  if (view === "archived") return room.archived && !room.deleted;
+  if (view === "deleted") return room.deleted;
+  if (view === "sold") return room.sold && !room.deleted;
+  if (view === "resolved") return room.resolved && !room.deleted;
+  return !room.saved && !room.archived && !room.deleted && !room.sold && !room.resolved;
 }
 
 function stateMemberCount(members: MemberRecord[], state: StateFilter) {
@@ -444,8 +394,8 @@ function stateMemberCount(members: MemberRecord[], state: StateFilter) {
   return members.filter((member) => member.status !== "deleted" && member.baseState === state).length;
 }
 
-function stateRoomCount(rooms: RoomRecord[], state: StateCode) {
-  return rooms.filter((room) => room.state === state && room.status !== "deleted").length;
+function stateRoomCount(rooms: RoomRecord[], state: StateCode, view?: RoomView) {
+  return rooms.filter((room) => room.state === state && (!view || inRoomView(room, view))).length;
 }
 
 function isNewMember(member: MemberRecord) {
@@ -462,7 +412,6 @@ function updateProfileForSelf(member: MemberRecord) {
   if (!ok()) return;
   const viewer = currentEmail();
   if (viewer !== member.email) return;
-
   const profile = readJson<any>(PROFILE_KEY, {});
   const login = readJson<any>(LOGIN_KEY, {});
   const patch = {
@@ -474,7 +423,6 @@ function updateProfileForSelf(member: MemberRecord) {
     baseState: member.baseState,
     updatedAt: new Date().toISOString(),
   };
-
   writeJson(PROFILE_KEY, { ...profile, ...patch });
   writeJson(LOGIN_KEY, { ...login, ...patch });
   window.dispatchEvent(new Event("vaultforge-access-change"));
@@ -482,11 +430,48 @@ function updateProfileForSelf(member: MemberRecord) {
 
 function recalcAccess(member: MemberRecord): MemberRecord {
   const paidLike = member.paymentStatus === "paid" || member.paymentStatus === "comped" || member.paymentStatus === "trial";
-  return {
-    ...member,
-    access: member.status === "approved" && paidLike ? "active" : "locked",
-    updatedAt: new Date().toISOString(),
+  return { ...member, access: member.status === "approved" && paidLike ? "active" : "locked", updatedAt: new Date().toISOString() };
+}
+
+function saveBroadcastMessage(recipients: MemberRecord[], subject: string, body: string) {
+  const cleanSubject = clean(subject, "Admin Command Message");
+  const cleanBody = clean(body);
+  if (!cleanBody || !recipients.length) return false;
+
+  const existing = readJson<any[]>(MEMBER_MESSAGES_KEY, []);
+  const now = new Date().toISOString();
+
+  const rows = recipients.map((member) => ({
+    id: `admin-broadcast-${Date.now()}-${member.id}`,
+    threadKey: `admin-${member.email}`,
+    lane: "admin",
+    subject: cleanSubject,
+    body: cleanBody,
+    from: OWNER_EMAIL,
+    to: member.email,
+    memberName: member.name,
+    memberCompany: member.company,
+    status: "unread",
+    createdAt: now,
+    source: "admin-broadcast",
+  }));
+
+  writeJson(MEMBER_MESSAGES_KEY, [...rows, ...(Array.isArray(existing) ? existing : [])]);
+
+  const adminLog: AdminMessage = {
+    id: `admin-sent-${Date.now()}`,
+    topic: `Broadcast sent to ${recipients.length} member(s)`,
+    body: `${cleanSubject}: ${cleanBody}`,
+    email: OWNER_EMAIL,
+    status: "sent",
+    priority: "normal",
+    createdAt: now,
   };
+
+  writeJson(ADMIN_MESSAGES_KEY, [adminLog, ...readMessages()]);
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-message-command-change"));
+  return true;
 }
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#080b10", color: "#f6f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
@@ -503,6 +488,8 @@ const card: React.CSSProperties = { background: "#0d121b", border: "1px solid rg
 const panel: React.CSSProperties = { background: "#111823", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 18 };
 const alertPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.55)", boxShadow: "0 0 28px rgba(255,70,70,.12)" };
 const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.50)", boxShadow: "0 0 28px rgba(245,197,66,.12)" };
+const modalBackdrop: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,.76)", zIndex: 80, padding: 18, overflow: "auto" };
+const modal: React.CSSProperties = { maxWidth: 820, margin: "45px auto", background: "#0d121b", border: "1px solid rgba(245,197,66,.35)", borderRadius: 26, padding: 24, boxShadow: "0 0 60px rgba(0,0,0,.5)" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 10 };
 const h1: React.CSSProperties = { fontSize: "clamp(36px,6vw,64px)", lineHeight: 0.95, letterSpacing: -3, margin: "0 0 14px", fontWeight: 950 };
 const h2: React.CSSProperties = { fontSize: "clamp(24px,4vw,38px)", lineHeight: 1, letterSpacing: -1.5, margin: "0 0 12px", fontWeight: 950 };
@@ -531,12 +518,7 @@ function AdminNav() {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={card}>
-      <div style={eyebrow}>{title}</div>
-      {children}
-    </section>
-  );
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
 function Metric({ title, count, note, active, pulse, onClick }: { title: string; count: number | string; note: string; active?: boolean; pulse?: boolean; onClick?: () => void }) {
@@ -559,21 +541,13 @@ function StateCard({ state, label, count, active, onClick }: { state: StateFilte
   );
 }
 
-function RoomStateCard({ title, dealCount, painCount }: { title: string; dealCount: number; painCount: number }) {
+function RoomCard({ title, count, active, onClick }: { title: string; count: number; active?: boolean; onClick?: () => void }) {
   return (
-    <div style={panel}>
+    <button type="button" style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
       <div style={eyebrow}>{title}</div>
-      <div style={grid}>
-        <div>
-          <h2 style={h2}>{dealCount}</h2>
-          <p style={muted}>deal room(s)</p>
-        </div>
-        <div>
-          <h2 style={h2}>{painCount}</h2>
-          <p style={muted}>pain room(s)</p>
-        </div>
-      </div>
-    </div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>room(s)</p>
+    </button>
   );
 }
 
@@ -583,25 +557,26 @@ function Pill({ text }: { text: string }) {
   if (value.includes("approved") || value.includes("active") || value.includes("paid") || value.includes("comped")) style = greenBtn;
   if (value.includes("pending") || value.includes("new") || value.includes("trial")) style = goldBtn;
   if (value.includes("denied") || value.includes("suspended") || value.includes("unpaid") || value.includes("locked") || value.includes("deleted")) style = redBtn;
-
   return <span style={{ ...style, padding: "7px 11px", fontSize: 12 }}>{text}</span>;
 }
 
-function MemberCard({ member, onPatch, onDeleteForever }: { member: MemberRecord; onPatch: (patch: Partial<MemberRecord>) => void; onDeleteForever: () => void }) {
+function MemberCard({ member, onOpen, onPatch, onDeleteForever }: { member: MemberRecord; onOpen: () => void; onPatch: (patch: Partial<MemberRecord>) => void; onDeleteForever: () => void }) {
   const owner = member.email === OWNER_EMAIL.toLowerCase();
   const pulse = isNewMember(member) || isApprovedUnpaid(member);
   const specialPanel = member.status === "deleted" || member.status === "denied" || member.status === "suspended" ? alertPanel : isApprovedUnpaid(member) || member.status === "pending" ? activePanel : panel;
 
   return (
     <div className={pulse ? "vf-pulse" : ""} style={specialPanel}>
-      <div style={eyebrow}>{isNewMember(member) ? "NEW MEMBER • " : ""}{member.status} • {member.paymentStatus} • {member.access}</div>
-      <h2 style={h2}>{member.name}</h2>
-      <p style={sub}>{member.company}</p>
-      <p style={muted}>{member.email}</p>
-      <p style={muted}>{member.phone}</p>
-      <p style={muted}>{member.memberType}</p>
-      <p style={muted}>Home/Base State: {member.baseState}</p>
-      <p style={muted}>Operating States: {member.operatingStates}</p>
+      <button type="button" onClick={onOpen} style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}>
+        <div style={eyebrow}>{isNewMember(member) ? "NEW MEMBER • " : ""}{member.status} • {member.paymentStatus} • {member.access}</div>
+        <h2 style={h2}>{member.name}</h2>
+        <p style={sub}>{member.company}</p>
+        <p style={muted}>{member.email}</p>
+        <p style={muted}>{member.phone}</p>
+        <p style={muted}>{member.memberType}</p>
+        <p style={muted}>Home/Base State: {member.baseState}</p>
+        <p style={muted}>Operating States: {member.operatingStates}</p>
+      </button>
 
       <div style={{ ...row, marginTop: 12 }}>
         <Pill text={member.status} />
@@ -626,6 +601,37 @@ function MemberCard({ member, onPatch, onDeleteForever }: { member: MemberRecord
   );
 }
 
+function MemberModal({ member, onClose }: { member: MemberRecord | null; onClose: () => void }) {
+  if (!member) return null;
+
+  return (
+    <div style={modalBackdrop}>
+      <div style={modal}>
+        <div style={row}>
+          <button type="button" style={goldBtn} onClick={onClose}>Close Window</button>
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <div style={eyebrow}>Member Profile Window</div>
+          <h1 style={h1}>{member.name}</h1>
+          <p style={sub}>{member.company}</p>
+          <div style={grid}>
+            <div style={panel}><div style={eyebrow}>Email</div><p style={sub}>{member.email}</p></div>
+            <div style={panel}><div style={eyebrow}>Phone</div><p style={sub}>{member.phone}</p></div>
+            <div style={panel}><div style={eyebrow}>Member Type</div><p style={sub}>{member.memberType}</p></div>
+            <div style={panel}><div style={eyebrow}>Home/Base State</div><p style={sub}>{member.baseState}</p></div>
+            <div style={panel}><div style={eyebrow}>Operating States</div><p style={sub}>{member.operatingStates}</p></div>
+            <div style={panel}><div style={eyebrow}>Status</div><p style={sub}>{member.status} • {member.paymentStatus} • {member.access}</p></div>
+          </div>
+          <div style={{ ...panel, marginTop: 14 }}>
+            <div style={eyebrow}>Raw Profile Data</div>
+            <pre style={{ whiteSpace: "pre-wrap", color: "#c9d0dc", fontSize: 12, overflowX: "auto" }}>{JSON.stringify(member.raw || {}, null, 2)}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
@@ -639,6 +645,7 @@ export default function AdminPage() {
   const [broadcastNotice, setBroadcastNotice] = useState("");
   const [filter, setFilter] = useState<AdminFilter>("all");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
+  const [selectedMember, setSelectedMember] = useState<MemberRecord | null>(null);
 
   useEffect(() => {
     const refresh = () => {
@@ -648,14 +655,11 @@ export default function AdminPage() {
       setDeals(readRooms("deal"));
       setPains(readRooms("pain"));
     };
-
     refresh();
-
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-admin-members-change", refresh);
     window.addEventListener("vaultforge-admin-message-change", refresh);
     window.addEventListener("vaultforge-my-rooms-change", refresh);
-
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-admin-members-change", refresh);
@@ -665,7 +669,6 @@ export default function AdminPage() {
   }, []);
 
   const allowed = email === OWNER_EMAIL.toLowerCase();
-
   const visibleMembers = useMemo(() => members.filter((member) => member.status !== "deleted"), [members]);
   const newMembers = useMemo(() => members.filter(isNewMember), [members]);
   const pending = useMemo(() => members.filter((member) => member.status === "pending"), [members]);
@@ -680,16 +683,13 @@ export default function AdminPage() {
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
-
     return members.filter((member) => {
       if (stateFilter !== "all") {
         if (stateFilter === "notListed" && member.baseState !== "Not listed") return false;
         if (stateFilter !== "notListed" && member.baseState !== stateFilter) return false;
       }
-
       const text = `${member.name} ${member.company} ${member.email} ${member.phone} ${member.memberType} ${member.baseState} ${member.operatingStates}`.toLowerCase();
       if (q && !text.includes(q)) return false;
-
       if (filter === "all") return member.status !== "deleted";
       if (filter === "new") return isNewMember(member);
       if (filter === "pending") return member.status === "pending";
@@ -700,7 +700,6 @@ export default function AdminPage() {
       if (filter === "comped") return member.paymentStatus === "comped";
       if (filter === "blocked") return member.status === "suspended" || member.status === "denied";
       if (filter === "deleted") return member.status === "deleted";
-
       return true;
     });
   }, [members, search, filter, stateFilter]);
@@ -727,19 +726,16 @@ export default function AdminPage() {
 
   function runSearch(event?: React.FormEvent) {
     if (event) event.preventDefault();
-    const next = searchDraft.trim();
-    setSearch(next);
+    setSearch(searchDraft.trim());
   }
 
   function broadcastToMembers(target: "filtered" | "all") {
     const recipients = target === "filtered" ? filteredMembers.filter((member) => member.status !== "deleted") : visibleMembers;
-    const ok = saveBroadcastMessage(recipients, broadcastSubject, broadcastBody);
-
-    if (!ok) {
+    const success = saveBroadcastMessage(recipients, broadcastSubject, broadcastBody);
+    if (!success) {
       setBroadcastNotice("Add a message and make sure there is at least one member selected.");
       return;
     }
-
     setBroadcastNotice(`Message saved for ${recipients.length} member(s).`);
     setBroadcastSubject("");
     setBroadcastBody("");
@@ -775,10 +771,10 @@ export default function AdminPage() {
           50% { box-shadow: 0 0 34px rgba(255,220,104,.28); }
           100% { box-shadow: 0 0 0 rgba(255,220,104,.00); }
         }
-        .vf-pulse {
-          animation: vfPulse 1.6s ease-in-out infinite;
-        }
+        .vf-pulse { animation: vfPulse 1.6s ease-in-out infinite; }
       `}</style>
+
+      <MemberModal member={selectedMember} onClose={() => setSelectedMember(null)} />
 
       <div style={wrap}>
         <AdminNav />
@@ -786,160 +782,94 @@ export default function AdminPage() {
         <section style={hero}>
           <div style={eyebrow}>Admin Command</div>
           <h1 style={h1}>Owner Control Desk.</h1>
-          <p style={sub}>Manage member approvals, payment unlocks, paid members, deleted members, state balance, admin messages, Deal/Pain state distribution, suspensions, and restored access.</p>
+          <p style={sub}>Search members, open profile windows, message all members, monitor pulsing alerts, and review Deal/Pain room folders.</p>
           <p style={muted}>ADMIN COMMAND MODE • Signed in as owner: {email}</p>
         </section>
 
-
         <section style={{ marginBottom: 18 }}>
           <div style={grid}>
-            <Metric title="Pulsing New Member Alert" count={newMembers.length} note="new applicants needing review" pulse={newMembers.length > 0} onClick={() => setFilter("new")} />
-            <Metric title="Approved Not Paid Alert" count={approvedUnpaid.length} note="payment button approved but payment not complete" pulse={approvedUnpaid.length > 0} onClick={() => setFilter("approvedUnpaid")} />
-            <Metric title="Admin Message Alert" count={openMessages.length} note="member/admin support messages waiting" pulse={openMessages.length > 0} onClick={() => { window.location.href = "/admin-messages"; }} />
+            <Metric title="New Members" count={newMembers.length} note="new/pending applications" pulse={newMembers.length > 0} onClick={() => setFilter("new")} />
+            <Metric title="Approved Not Paid" count={approvedUnpaid.length} note="payment button approved, not paid" pulse={approvedUnpaid.length > 0} onClick={() => setFilter("approvedUnpaid")} />
+            <Metric title="Admin Messages" count={openMessages.length} note="support and escalation" pulse={openMessages.length > 0} onClick={() => { window.location.href = "/admin-messages"; }} />
+            <Metric title="Paid" count={paid.length} note="paid members" onClick={() => setFilter("paid")} />
+            <Metric title="Deleted Members" count={deleted.length} note="cleanup folder" onClick={() => setFilter("deleted")} />
           </div>
         </section>
-
-        <section style={{ marginBottom: 18 }}>
-          <div style={grid}>
-            <Metric title="New Members" count={newMembers.length} note="new/pending member applications" pulse={newMembers.length > 0} onClick={() => setFilter("new")} />
-            <Metric title="Pending" count={pending.length} note="waiting for owner review" pulse={pending.length > 0} onClick={() => setFilter("pending")} />
-            <Metric title="Approved Not Paid" count={approvedUnpaid.length} note="payment button approved, not paid yet" pulse={approvedUnpaid.length > 0} onClick={() => setFilter("approvedUnpaid")} />
-            <Metric title="Paid" count={paid.length} note="paid active/paid members" onClick={() => setFilter("paid")} />
-            <Metric title="Active" count={active.length} note="approved and unlocked" onClick={() => setFilter("active")} />
-            <Metric title="Locked" count={locked.length} note="not yet active" onClick={() => setFilter("locked")} />
-            <Metric title="Comped" count={comped.length} note="free owner-granted access" onClick={() => setFilter("comped")} />
-            <Metric title="Blocked" count={blocked.length} note="denied or suspended" onClick={() => setFilter("blocked")} />
-            <Metric title="Deleted" count={deleted.length} note="admin cleanup folder" onClick={() => setFilter("deleted")} />
-            <Metric title="Admin Messages" count={openMessages.length} note="member support and escalation" pulse={openMessages.length > 0} onClick={() => { window.location.href = "/admin-messages"; }} />
-          </div>
-        </section>
-
-
-        <Section title="Admin Message Center">
-          <p style={muted}>Send a message to all members or only the current filtered member group. Messages are saved into the admin broadcast lane for member-side message integration.</p>
-
-          <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
-            <label>
-              <div style={eyebrow}>Subject</div>
-              <input
-                style={input}
-                value={broadcastSubject}
-                onChange={(event) => setBroadcastSubject(event.target.value)}
-                placeholder="Admin update, payment reminder, new signal notice..."
-              />
-            </label>
-
-            <label>
-              <div style={eyebrow}>Message</div>
-              <textarea
-                style={{ ...input, minHeight: 150 }}
-                value={broadcastBody}
-                onChange={(event) => setBroadcastBody(event.target.value)}
-                placeholder="Write admin message..."
-              />
-            </label>
-
-            <div style={row}>
-              <button type="button" style={goldBtn} onClick={() => broadcastToMembers("filtered")}>Message Filtered Members</button>
-              <button type="button" style={btn} onClick={() => broadcastToMembers("all")}>Message All Members</button>
-              <Link href="/admin-messages" style={btn}>Open Admin Messages</Link>
-            </div>
-
-            {broadcastNotice ? <p style={sub}>{broadcastNotice}</p> : null}
-          </div>
-        </Section>
 
         <Section title="Search / Filter Members">
           <form onSubmit={runSearch} style={{ display: "grid", gap: 14 }}>
             <label>
               <div style={eyebrow}>Search</div>
-              <input
-                style={input}
-                value={searchDraft}
-                onChange={(event) => setSearchDraft(event.target.value)}
-                placeholder="Search name, company, email, phone, type, home state, or operating state..."
-              />
+              <input style={input} value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search name, company, email, phone, type, home state..." />
             </label>
-
             <div style={row}>
               <button type="submit" style={goldBtn}>Submit Search</button>
               <button type="button" style={btn} onClick={() => { setSearchDraft(""); setSearch(""); setFilter("all"); setStateFilter("all"); }}>Reset</button>
               <Link href="/admin-messages" style={btn}>Open Admin Messages</Link>
             </div>
-
-            <p style={muted}>Current search: {search ? search : "none"} • Results: {filteredMembers.length}</p>
-
-            <div style={grid}>
-              <Metric title="All" count={visibleMembers.length} note="active admin member list" active={filter === "all"} onClick={() => setFilter("all")} />
-              <Metric title="New" count={newMembers.length} note="new applications" active={filter === "new"} pulse={newMembers.length > 0} onClick={() => setFilter("new")} />
-              <Metric title="Pending" count={pending.length} note="not reviewed" active={filter === "pending"} onClick={() => setFilter("pending")} />
-              <Metric title="Approved Not Paid" count={approvedUnpaid.length} note="needs payment" active={filter === "approvedUnpaid"} pulse={approvedUnpaid.length > 0} onClick={() => setFilter("approvedUnpaid")} />
-              <Metric title="Paid" count={paid.length} note="paid members" active={filter === "paid"} onClick={() => setFilter("paid")} />
-              <Metric title="Deleted" count={deleted.length} note="cleanup folder" active={filter === "deleted"} onClick={() => setFilter("deleted")} />
-            </div>
+            <p style={muted}>Current search: {search || "none"} • Results: {filteredMembers.length}</p>
           </form>
+          <div style={{ ...grid, marginTop: 14 }}>
+            <Metric title="All" count={visibleMembers.length} note="visible members" active={filter === "all"} onClick={() => setFilter("all")} />
+            <Metric title="Pending" count={pending.length} note="not reviewed" active={filter === "pending"} onClick={() => setFilter("pending")} />
+            <Metric title="Approved Not Paid" count={approvedUnpaid.length} note="needs payment" active={filter === "approvedUnpaid"} pulse={approvedUnpaid.length > 0} onClick={() => setFilter("approvedUnpaid")} />
+            <Metric title="Paid" count={paid.length} note="paid" active={filter === "paid"} onClick={() => setFilter("paid")} />
+            <Metric title="Comped" count={comped.length} note="free access" active={filter === "comped"} onClick={() => setFilter("comped")} />
+            <Metric title="Deleted" count={deleted.length} note="cleanup" active={filter === "deleted"} onClick={() => setFilter("deleted")} />
+          </div>
+        </Section>
+
+        <Section title="Admin Message Center">
+          <p style={muted}>Send to all members or only the currently filtered member results.</p>
+          <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
+            <label><div style={eyebrow}>Subject</div><input style={input} value={broadcastSubject} onChange={(event) => setBroadcastSubject(event.target.value)} placeholder="Admin update..." /></label>
+            <label><div style={eyebrow}>Message</div><textarea style={{ ...input, minHeight: 150 }} value={broadcastBody} onChange={(event) => setBroadcastBody(event.target.value)} placeholder="Write admin message..." /></label>
+            <div style={row}>
+              <button type="button" style={goldBtn} onClick={() => broadcastToMembers("filtered")}>Message Filtered Members</button>
+              <button type="button" style={btn} onClick={() => broadcastToMembers("all")}>Message All Members</button>
+            </div>
+            {broadcastNotice ? <p style={sub}>{broadcastNotice}</p> : null}
+          </div>
         </Section>
 
         <Section title="Member Home State Balance">
-          <p style={muted}>These counts use each member’s profile home/base state only. Operating states do not inflate these numbers.</p>
+          <p style={muted}>Counts use profile home/base state only.</p>
           <div style={{ ...grid, marginTop: 14 }}>
             <StateCard state="all" label="All" count={visibleMembers.length} active={stateFilter === "all"} onClick={() => setStateFilter("all")} />
-            {STATE_CODES.map((state) => (
-              <StateCard key={state} state={state} label={state} count={stateMemberCount(members, state)} active={stateFilter === state} onClick={() => setStateFilter(state)} />
-            ))}
+            {STATE_CODES.map((state) => <StateCard key={state} state={state} label={state} count={stateMemberCount(members, state)} active={stateFilter === state} onClick={() => setStateFilter(state)} />)}
             <StateCard state="notListed" label="Not Listed" count={stateMemberCount(members, "notListed")} active={stateFilter === "notListed"} onClick={() => setStateFilter("notListed")} />
           </div>
         </Section>
 
-        <Section title="Deal Rooms By State">
-          <div style={smallGrid}>
-            {STATE_CODES.map((state) => (
-              <div key={`deal-${state}`} style={panel}>
-                <div style={eyebrow}>{state}</div>
-                <h2 style={h2}>{stateRoomCount(deals, state)}</h2>
-                <p style={muted}>deal room(s)</p>
-              </div>
-            ))}
+        <Section title="Deal Room Folders">
+          <div style={grid}>
+            {(["active", "saved", "archived", "deleted", "sold"] as RoomView[]).map((view) => <RoomCard key={`deal-${view}`} title={`Deal ${view}`} count={deals.filter((room) => inRoomView(room, view)).length} />)}
           </div>
+        </Section>
+
+        <Section title="Pain Room Folders">
+          <div style={grid}>
+            {(["active", "saved", "archived", "deleted", "resolved"] as RoomView[]).map((view) => <RoomCard key={`pain-${view}`} title={`Pain ${view}`} count={pains.filter((room) => inRoomView(room, view)).length} />)}
+          </div>
+        </Section>
+
+        <Section title="Deal Rooms By State">
+          <div style={smallGrid}>{STATE_CODES.map((state) => <RoomCard key={`deal-state-${state}`} title={state} count={stateRoomCount(deals, state)} />)}</div>
         </Section>
 
         <Section title="Pain Rooms By State">
-          <div style={smallGrid}>
-            {STATE_CODES.map((state) => (
-              <div key={`pain-${state}`} style={panel}>
-                <div style={eyebrow}>{state}</div>
-                <h2 style={h2}>{stateRoomCount(pains, state)}</h2>
-                <p style={muted}>pain room(s)</p>
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section title="Deal / Pain State Overview">
-          <div style={grid}>
-            {STATE_CODES.map((state) => (
-              <RoomStateCard key={`overview-${state}`} title={state} dealCount={stateRoomCount(deals, state)} painCount={stateRoomCount(pains, state)} />
-            ))}
-          </div>
+          <div style={smallGrid}>{STATE_CODES.map((state) => <RoomCard key={`pain-state-${state}`} title={state} count={stateRoomCount(pains, state)} />)}</div>
         </Section>
 
         <Section title="Filtered Member Results">
           {filteredMembers.length ? (
             <div style={grid}>
               {filteredMembers.map((member) => (
-                <MemberCard
-                  key={member.id}
-                  member={member}
-                  onPatch={(patch) => patchMember(member.id, patch)}
-                  onDeleteForever={() => deleteForever(member.id)}
-                />
+                <MemberCard key={member.id} member={member} onOpen={() => setSelectedMember(member)} onPatch={(patch) => patchMember(member.id, patch)} onDeleteForever={() => deleteForever(member.id)} />
               ))}
             </div>
           ) : (
-            <div style={panel}>
-              <h2 style={h2}>No matching members.</h2>
-              <p style={sub}>Try another search, home state, or status filter.</p>
-            </div>
+            <div style={panel}><h2 style={h2}>No matching members.</h2><p style={sub}>Try another name, company, email, state, or status filter.</p></div>
           )}
         </Section>
       </div>
