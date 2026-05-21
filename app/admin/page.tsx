@@ -433,12 +433,24 @@ function readInvestors(): InvestorRecord[] {
   return Array.from(map.values()).sort((a, b) => order[a.status] - order[b.status] || a.company.localeCompare(b.company));
 }
 
-function saveInvestors(investors: InvestorRecord[]) {
+function saveInvestors(investors: InvestorRecord[], updatedInvestor?: InvestorRecord) {
   writeJson(INVESTOR_LIST_KEY, investors);
+
+  const currentSingle = readJson<any>(INVESTOR_APP_KEY, {});
+  const singleEmail = lower(currentSingle?.email || currentSingle?.investorEmail || currentSingle?.investor_email);
   const viewerEmail = currentEmail();
-  const matching = investors.find((investor) => investor.email === viewerEmail);
-  if (matching) writeJson(INVESTOR_APP_KEY, matching);
+
+  const matching =
+    updatedInvestor ||
+    investors.find((investor) => investor.email === singleEmail) ||
+    investors.find((investor) => investor.email === viewerEmail);
+
+  if (matching) {
+    writeJson(INVESTOR_APP_KEY, { ...currentSingle, ...matching });
+  }
+
   window.dispatchEvent(new Event("vaultforge-investor-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-change"));
 }
 
 function recalcInvestorAccess(investor: InvestorRecord): InvestorRecord {
@@ -768,6 +780,7 @@ function MemberCard({ member, onOpen, onPatch, onDeleteForever }: { member: Memb
         <button type="button" style={redBtn} onClick={() => onPatch({ status: "deleted", access: "locked" })} disabled={owner}>Delete Member</button>
         {member.status === "deleted" ? <button type="button" style={redBtn} onClick={onDeleteForever} disabled={owner}>Delete Forever</button> : null}
         <button type="button" style={btn} onClick={() => onPatch({ status: "approved" })}>Restore</button>
+        <Link href="/investor-payment" style={goldBtn}>Test Investor Payment</Link>
       </div>
     </div>
   );
@@ -1022,13 +1035,16 @@ export default function AdminPage() {
   }
 
   function patchInvestor(id: string, patch: Partial<InvestorRecord>) {
+    let updatedInvestor: InvestorRecord | undefined;
+
     const next = investors.map((investor) => {
       if (investor.id !== id) return investor;
-      return recalcInvestorAccess({ ...investor, ...patch, updatedAt: new Date().toISOString() });
+      updatedInvestor = recalcInvestorAccess({ ...investor, ...patch, updatedAt: new Date().toISOString() });
+      return updatedInvestor;
     });
 
     setInvestors(next);
-    saveInvestors(next);
+    saveInvestors(next, updatedInvestor);
   }
 
   function deleteInvestorForever(id: string) {
