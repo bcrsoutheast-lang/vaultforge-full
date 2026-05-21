@@ -1,543 +1,81 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
-type Access = {
-  email: string;
-  owner: boolean;
-  profile_complete: boolean;
-  payment_status: string;
-  access_status: string;
-  paid: boolean;
-  unlocked: boolean;
-  next_step: string;
-};
+const PROFILE_KEY = "vaultforge_profile";
+const LOGIN_KEY = "vaultforge_member_login_v1";
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background:
-    "radial-gradient(circle at top left, rgba(181,92,255,.24), transparent 28%), radial-gradient(circle at top right, rgba(157,243,191,.18), transparent 24%), radial-gradient(circle at bottom right, rgba(232,196,107,.16), transparent 28%), linear-gradient(180deg,#02040a 0%,#071326 45%,#030509 100%)",
-  color: "white",
-  padding: "28px 18px 90px",
-  fontFamily: "Arial, sans-serif",
-};
+type AccessState = { email: string; approvedForPayment: boolean; paymentStatus: string; accessStatus: string; };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1080,
-  margin: "0 auto",
-};
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.30)",
-  background:
-    "linear-gradient(135deg, rgba(181,92,255,.18), rgba(157,243,191,.08), rgba(255,255,255,.03))",
-  borderRadius: 34,
-  padding: 28,
-  marginBottom: 22,
-  boxShadow: "0 30px 90px rgba(0,0,0,.38)",
-};
-
-const pane: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.13)",
-  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
-  borderRadius: 28,
-  padding: 22,
-  marginBottom: 18,
-};
-
-const greenPane: React.CSSProperties = {
-  ...pane,
-  border: "1px solid rgba(157,243,191,.28)",
-  background:
-    "linear-gradient(145deg, rgba(157,243,191,.14), rgba(181,92,255,.08), rgba(255,255,255,.03))",
-};
-
-const goldPane: React.CSSProperties = {
-  ...pane,
-  border: "1px solid rgba(232,196,107,.30)",
-  background:
-    "linear-gradient(145deg, rgba(232,196,107,.14), rgba(181,92,255,.10), rgba(255,255,255,.03))",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-  gap: 16,
-  marginTop: 18,
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.12)",
-  background: "linear-gradient(145deg, rgba(0,0,0,.28), rgba(181,92,255,.08))",
-  borderRadius: 24,
-  padding: 20,
-};
-
-const btn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg,#f5d978,#9df3bf 55%,#b55cff)",
-  color: "#06100a",
-  textDecoration: "none",
-  borderRadius: 999,
-  padding: "14px 22px",
-  fontWeight: 950,
-  border: "none",
-  margin: "7px 7px 0 0",
-  cursor: "pointer",
-};
-
-const ghost: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  textDecoration: "none",
-  borderRadius: 999,
-  padding: "14px 22px",
-  fontWeight: 900,
-  border: "1px solid rgba(255,255,255,.18)",
-  background: "linear-gradient(135deg, rgba(181,92,255,.18), rgba(255,255,255,.05))",
-  margin: "7px 7px 0 0",
-  cursor: "pointer",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#e8c46b",
-  letterSpacing: 5,
-  fontWeight: 900,
-  fontSize: 12,
-  marginBottom: 12,
-  textTransform: "uppercase",
-};
-
-const greenEyebrow: React.CSSProperties = {
-  ...eyebrow,
-  color: "#9df3bf",
-};
-
-const muted: React.CSSProperties = {
-  color: "rgba(255,255,255,.70)",
-  lineHeight: 1.6,
-  fontSize: 17,
-};
-
-function getEmail() {
-  if (typeof window === "undefined") return "";
-
-  return (
-    localStorage.getItem("vf_email") ||
-    sessionStorage.getItem("vf_email") ||
-    ""
-  )
-    .trim()
-    .toLowerCase();
+function readAccess(): AccessState {
+  let profile: any = {};
+  let login: any = {};
+  try { profile = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}"); } catch { profile = {}; }
+  try { login = JSON.parse(localStorage.getItem(LOGIN_KEY) || "{}"); } catch { login = {}; }
+  return {
+    email: profile.email || login.email || localStorage.getItem("vf_email") || "",
+    approvedForPayment: Boolean(profile.approvedForPayment || login.approvedForPayment),
+    paymentStatus: profile.paymentStatus || login.paymentStatus || "unpaid",
+    accessStatus: profile.accessStatus || login.accessStatus || "profile_required",
+  };
 }
 
+function markPaid() {
+  const access = readAccess();
+  let profile: any = {};
+  let login: any = {};
+  try { profile = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}"); } catch { profile = {}; }
+  try { login = JSON.parse(localStorage.getItem(LOGIN_KEY) || "{}"); } catch { login = {}; }
+  const patch = { paymentStatus: "paid", accessStatus: "active", paidAt: new Date().toISOString(), email: access.email };
+  localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, ...patch }));
+  localStorage.setItem(LOGIN_KEY, JSON.stringify({ ...login, ...patch }));
+  window.dispatchEvent(new Event("vaultforge-access-change"));
+}
+
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 820, margin: "0 auto", paddingBottom: 80 };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 30, marginBottom: 20, background: "linear-gradient(180deg,#080d19,#050816)" };
+const locked: React.CSSProperties = { border: "1px solid rgba(255,70,70,.48)", borderRadius: 24, padding: 22, background: "#1c0e14", marginTop: 20 };
+const open: React.CSSProperties = { border: "1px solid rgba(245,197,66,.48)", borderRadius: 24, padding: 22, background: "#171406", marginTop: 20 };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 6, fontWeight: 950, fontSize: 13, marginBottom: 12 };
+const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,76px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 20, lineHeight: 1.35, margin: 0 };
+const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 18 };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+
 export default function PaymentPage() {
-  const [access, setAccess] = useState<Access | null>(null);
-  const [status, setStatus] = useState("Checking access...");
-  const [checkoutStatus, setCheckoutStatus] = useState("");
-
-  async function loadAccess() {
-    setStatus("Checking access...");
-
-    try {
-      const email = getEmail();
-
-      const res = await fetch(
-        `/api/member/access?email=${encodeURIComponent(email)}`,
-        {
-          cache: "no-store",
-          headers: {
-            "x-vf-email": email,
-          },
-        }
-      );
-
-      const data = await res.json();
-
-      setAccess(data);
-      setStatus("");
-    } catch {
-      setStatus("");
-    }
-  }
-
-  async function startCheckout() {
-    setCheckoutStatus("Starting secure checkout...");
-
-    try {
-      const email = getEmail();
-
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-vf-email": email,
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await res.json();
-
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-
-      setCheckoutStatus(
-        data?.message ||
-          "Stripe is not connected yet. Checkout architecture is prepared for the final Stripe activation step."
-      );
-    } catch (error: any) {
-      setCheckoutStatus(
-        error?.message || "Could not start checkout."
-      );
-    }
-  }
+  const [access, setAccess] = useState<AccessState>({ email: "", approvedForPayment: false, paymentStatus: "unpaid", accessStatus: "profile_required" });
 
   useEffect(() => {
-    loadAccess();
+    setAccess(readAccess());
+    const refresh = () => setAccess(readAccess());
+    window.addEventListener("storage", refresh);
+    window.addEventListener("vaultforge-access-change", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("vaultforge-access-change", refresh);
+    };
   }, []);
 
-  const owner = Boolean(access?.owner);
-  const unlocked = Boolean(access?.unlocked);
+  const paid = access.paymentStatus === "paid" || access.paymentStatus === "comped" || access.accessStatus === "active";
+  const approved = access.approvedForPayment || paid;
 
   return (
     <main style={page}>
-      <style>{`
-        a:hover,
-        button:hover {
-          transform: translateY(-1px);
-          transition: all .18s ease;
-          filter: brightness(1.06);
-        }
-
-        @media (max-width: 760px) {
-          a,
-          button {
-            box-sizing: border-box;
-          }
-        }
-      `}</style>
-      <style>{`
-        @media (max-width: 760px) {
-          .vf-payment-actions {
-            display: grid !important;
-            grid-template-columns: 1fr !important;
-            gap: 10px !important;
-          }
-
-          .vf-payment-actions > * {
-            width: 100%;
-            margin: 0 !important;
-            box-sizing: border-box;
-          }
-        }
-      `}</style>
-
       <div style={wrap}>
         <section style={hero}>
-          <div style={greenEyebrow}>MEMBER ACCESS ACTIVATION</div>
-
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginBottom: 16,
-            }}
-          >
-            <span
-              style={{
-                border: "1px solid rgba(181,92,255,.36)",
-                color: "#dcb8ff",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(181,92,255,.12)",
-              }}
-            >
-              AI Routing Access
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(157,243,191,.36)",
-                color: "#9df3bf",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(157,243,191,.10)",
-              }}
-            >
-              Founder Intelligence Network
-            </span>
-
-            <span
-              style={{
-                border: "1px solid rgba(245,217,120,.36)",
-                color: "#f5d978",
-                borderRadius: 999,
-                padding: "9px 13px",
-                fontWeight: 900,
-                background: "rgba(245,217,120,.10)",
-              }}
-            >
-              Bloomberg-Style Access Layer
-            </span>
-          </div>
-
-          <h1
-            style={{
-              fontSize: "clamp(54px, 12vw, 98px)",
-              lineHeight: 0.88,
-              margin: "0 0 18px",
-              letterSpacing: -3,
-            }}
-          >
-            Unlock the Member Command Center.
-          </h1>
-
-          <p style={{ ...muted, fontSize: 21, maxWidth: 900 }}>
-            VaultForge is being built as a private AI-powered real estate intelligence network.
-            Profile completion trains the routing engine. Member activation unlocks access to smart alerts,
-            deal rooms, network intelligence, buy buckets, messaging, and AI routing signals.
-          </p>
-
-          <div className="vf-payment-actions">
-            <Link href="/dashboard" style={ghost}>
-              Preview Dashboard
-            </Link>
-
-            <Link href="/profile" style={ghost}>
-              Edit Profile
-            </Link>
-
-            <Link href="/apply" style={ghost}>
-              Member Access
-            </Link>
-          </div>
-        </section>
-
-        {status && (
-          <section style={pane}>
-            <strong>{status}</strong>
-          </section>
-        )}
-
-        {owner && (
-          <section style={greenPane}>
-            <div style={greenEyebrow}>OWNER ACCESS</div>
-
-            <h2 style={{ fontSize: 40, margin: "0 0 12px" }}>
-              Owner bypass is active.
-            </h2>
-
-            <p style={muted}>
-              Your account is unlocked for development, testing, admin routing,
-              dashboard access, alerts, and checkout flow verification.
-            </p>
-
-            <div className="vf-payment-actions">
-              <Link href="/dashboard" style={btn}>
-                Continue To Dashboard
-              </Link>
-
-              <button
-                type="button"
-                style={ghost}
-                onClick={startCheckout}
-              >
-                Test Checkout Route
-              </button>
-            </div>
-          </section>
-        )}
-
-        {!owner && unlocked && (
-          <section style={greenPane}>
-            <div style={greenEyebrow}>ACCESS ACTIVE</div>
-
-            <h2 style={{ fontSize: 40, margin: "0 0 12px" }}>
-              Your member access is active.
-            </h2>
-
-            <p style={muted}>
-              Full Member Command Center access is unlocked.
-            </p>
-
-            <Link href="/dashboard" style={btn}>
-              Enter Command Center
-            </Link>
-          </section>
-        )}
-
-        {!owner && !unlocked && (
-          <>
-            <section style={pane}>
-              <div style={eyebrow}>CURRENT STATUS</div>
-
-              <div style={grid}>
-                <div style={card}>
-                  <div style={greenEyebrow}>EMAIL</div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>
-                    {access?.email || "Not detected"}
-                  </div>
-                </div>
-
-                <div style={card}>
-                  <div style={greenEyebrow}>PROFILE</div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>
-                    {access?.profile_complete ? "Complete" : "Incomplete"}
-                  </div>
-                </div>
-
-                <div style={card}>
-                  <div style={greenEyebrow}>PAYMENT</div>
-                  <div style={{ fontSize: 18, fontWeight: 800 }}>
-                    {access?.paid ? "Active" : "Inactive"}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {!access?.profile_complete && (
-              <section style={goldPane}>
-                <div style={eyebrow}>STEP 1 REQUIRED</div>
-
-                <h2 style={{ fontSize: 40, margin: "0 0 12px" }}>
-                  Complete your profile first.
-                </h2>
-
-                <p style={muted}>
-                  Your AI profile trains the routing engine with markets,
-                  roles, buy box, strategies, alert preferences, needs,
-                  and what you can provide.
-                </p>
-
-                <Link href="/profile" style={btn}>
-                  Complete Profile
-                </Link>
-              </section>
-            )}
-
-            {access?.profile_complete && !access?.paid && (
-              <>
-                <section style={goldPane}>
-                  <div style={eyebrow}>FOUNDING ACCESS</div>
-
-                  <h2 style={{ fontSize: 42, margin: "0 0 12px" }}>
-                    Activate access — $49 today.
-                  </h2>
-
-                  <p style={{ ...muted, fontSize: 19 }}>
-                    First 50 founders or May 15 — whichever comes first.
-                    Founding access is
-                    <strong style={{ color: "#9df3bf" }}> $49 for the first month</strong>,
-                    then
-                    <strong style={{ color: "#e8c46b" }}> $199/month</strong>
-                    unless canceled before renewal.
-                  </p>
-
-                  <p style={muted}>
-                    After the founder window closes, standard access becomes
-                    <strong style={{ color: "#e8c46b" }}> $99 to join</strong>,
-                    then
-                    <strong style={{ color: "#e8c46b" }}> $199/month</strong>.
-                  </p>
-
-                  <div className="vf-payment-actions">
-                    <button
-                      type="button"
-                      style={btn}
-                      onClick={startCheckout}
-                    >
-                      Activate Founder Access — $49
-                    </button>
-
-                    <Link href="/dashboard" style={ghost}>
-                      Preview Dashboard
-                    </Link>
-                  </div>
-                </section>
-
-                <section style={pane}>
-                  <div style={eyebrow}>WHAT UNLOCKS AFTER PAYMENT</div>
-
-                  <div style={grid}>
-                    <div style={card}>
-                      <div style={greenEyebrow}>ALERTS</div>
-                      <p style={muted}>
-                        AI smart routing alerts and opportunity signals.
-                      </p>
-                    </div>
-
-                    <div style={card}>
-                      <div style={greenEyebrow}>DEAL ROOMS</div>
-                      <p style={muted}>
-                        Create, route, manage, and track acquisition opportunities.
-                      </p>
-                    </div>
-
-                    <div style={card}>
-                      <div style={greenEyebrow}>NETWORK</div>
-                      <p style={muted}>
-                        Member directory access to buyers, lenders, operators, and partners.
-                      </p>
-                    </div>
-
-                    <div style={card}>
-                      <div style={greenEyebrow}>BUY BUCKET</div>
-                      <p style={muted}>
-                        Save and track target opportunities and demand signals.
-                      </p>
-                    </div>
-
-                    <div style={card}>
-                      <div style={greenEyebrow}>MESSAGES</div>
-                      <p style={muted}>
-                        Private communication and opportunity coordination.
-                      </p>
-                    </div>
-
-                    <div style={card}>
-                      <div style={greenEyebrow}>AI ROUTING</div>
-                      <p style={muted}>
-                        Match scoring, confidence signals, and strategy alignment.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-              </>
-            )}
-          </>
-        )}
-
-        {checkoutStatus && (
-          <section
-            style={{
-              ...pane,
-              color: checkoutStatus.toLowerCase().includes("not connected")
-                ? "#e8c46b"
-                : "#9df3bf",
-            }}
-          >
-            <strong>{checkoutStatus}</strong>
-          </section>
-        )}
-
-        <section style={pane}>
-          <div style={eyebrow}>BILLING TERMS</div>
-
-          <p style={muted}>
-            Membership may be canceled before renewal. Stripe activation,
-            subscription controls, and billing automation will be connected
-            during the final secure launch phase.
-          </p>
+          <div style={eyebrow}>VaultForge Payment Access</div>
+          <h1 style={h1}>Activation gate.</h1>
+          <p style={sub}>Profile must be approved by Admin Command before the payment button unlocks.</p>
+          {!approved ? (
+            <div style={locked}><div style={eyebrow}>Payment Locked</div><p style={sub}>Admin has not approved this profile for payment yet.</p><div style={row}><Link href="/profile" style={goldBtn}>Update Profile</Link><Link href="/contact-admin?topic=payment-approval" style={btn}>Contact Admin</Link><Link href="/command" style={btn}>Member Preview</Link></div></div>
+          ) : paid ? (
+            <div style={open}><div style={eyebrow}>Access Active</div><p style={sub}>Payment/access is active. Member area is unlocked.</p><div style={row}><Link href="/command" style={goldBtn}>Open Member Command</Link></div></div>
+          ) : (
+            <div style={open}><div style={eyebrow}>Payment Approved</div><p style={sub}>Admin approved payment access. Click below to activate. Stripe connection comes later.</p><div style={row}><button type="button" style={goldBtn} onClick={() => { markPaid(); setAccess(readAccess()); }}>Activate Paid Access</button><Link href="/command" style={btn}>Back to Preview</Link></div></div>
+          )}
         </section>
       </div>
     </main>
