@@ -630,27 +630,43 @@ function LaneSignalCard({
   count,
   note,
   danger,
+  onClick,
 }: {
   title: string;
   count: number;
   note: string;
   danger?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div style={{ ...signalCard, borderColor: danger && count ? "rgba(255,70,70,.52)" : "rgba(245,197,66,.22)" }}>
+    <button
+      type="button"
+      style={{
+        ...signalCard,
+        borderColor: danger && count ? "rgba(255,70,70,.52)" : "rgba(245,197,66,.22)",
+        width: "100%",
+        cursor: onClick ? "pointer" : "default",
+      }}
+      onClick={onClick}
+    >
       <div style={eyebrow}>{title}</div>
       <h2 style={h2}>{count}</h2>
       <p style={muted}>{note}</p>
-    </div>
+      {onClick ? <p style={muted}>Click to open</p> : null}
+    </button>
   );
 }
 
 function MessageCommandHeader({
   threads,
   activeLane,
+  setLane,
+  setFolder,
 }: {
   threads: Thread[];
   activeLane: Lane;
+  setLane: (lane: Lane | "all") => void;
+  setFolder: (folder: ThreadStatus | "unread") => void;
 }) {
   const [member, setMember] = useState(() => ({ name: "Member Workspace", company: "Company not listed", email: "Email not listed" }));
 
@@ -678,11 +694,11 @@ function MessageCommandHeader({
       </section>
 
       <section style={signalGrid}>
-        <LaneSignalCard title="Active Threads" count={active.length} note="open communication lanes" />
-        <LaneSignalCard title="Unread" count={unread} note="threads needing review" danger />
-        <LaneSignalCard title="Deal Comms" count={deal} note="opportunity room traffic" />
-        <LaneSignalCard title="Pain Comms" count={pain} note="problem-solving traffic" danger={pain > 0} />
-        <LaneSignalCard title="Routing / Intros" count={routing} note="assignment and introduction traffic" danger={routing > 0} />
+        <LaneSignalCard title="Active Threads" count={active.length} note="open communication lanes" onClick={() => { setLane("all"); setFolder("active"); }} />
+        <LaneSignalCard title="Unread" count={unread} note="threads needing review" danger onClick={() => { setLane("all"); setFolder("unread"); }} />
+        <LaneSignalCard title="Deal Comms" count={deal} note="opportunity room traffic" onClick={() => { setLane("deal"); setFolder("active"); }} />
+        <LaneSignalCard title="Pain Comms" count={pain} note="problem-solving traffic" danger={pain > 0} onClick={() => { setLane("pain"); setFolder("active"); }} />
+        <LaneSignalCard title="Routing / Intros" count={routing} note="assignment and introduction traffic" danger={routing > 0} onClick={() => { setLane("member"); setFolder("active"); }} />
       </section>
     </>
   );
@@ -867,7 +883,7 @@ export default function ExecutionMessagesPage() {
       <style>{styleTag}</style>
       <div style={wrap}>
         <Nav />
-        <MessageCommandHeader threads={threads} activeLane={lane === "all" ? "general" : lane} />
+        <MessageCommandHeader threads={threads} activeLane={lane === "all" ? "general" : lane} setLane={setLane} setFolder={setFolder} />
 
         <section style={hero}>
           <div style={eyebrow}>Execution Communications</div>
