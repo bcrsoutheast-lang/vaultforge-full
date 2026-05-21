@@ -857,7 +857,7 @@ export default function AdminPage() {
   const deleted = useMemo(() => members.filter((member) => member.status === "deleted"), [members]);
   const openMessages = useMemo(() => messages.filter((message) => message.status !== "resolved" && message.status !== "deleted"), [messages]);
   const pendingInvestors = useMemo(() => investors.filter((investor) => investor.status === "pending"), [investors]);
-  const approvedInvestors = useMemo(() => investors.filter((investor) => investor.status === "approved" && investor.status !== "deleted"), [investors]);
+  const approvedInvestors = useMemo(() => investors.filter((investor) => investor.status === "approved"), [investors]);
   const pendingInvestorPayment = useMemo(() => investors.filter((investor) => investor.status === "approved" && investor.paymentStatus !== "paid"), [investors]);
   const paidInvestors = useMemo(() => investors.filter((investor) => investor.paymentStatus === "paid" && investor.access === "active"), [investors]);
   const blockedInvestors = useMemo(() => investors.filter((investor) => investor.status === "denied" || investor.status === "suspended"), [investors]);
