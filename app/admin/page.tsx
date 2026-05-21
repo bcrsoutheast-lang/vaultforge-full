@@ -1246,68 +1246,6 @@ export default function AdminPage() {
         </Section>
 
 
-        <Section title="Investor Access Command">
-          <p style={muted}>
-            Investor Access is separate from the private member network. Investors only see teaser Deal/Pain cards and request more information through members/admin.
-          </p>
-
-          <div style={{ ...grid, marginTop: 14 }}>
-            <Metric title="New Investors" count={newInvestors.length} note="waiting approval" pulse={newInvestors.length > 0} />
-            <Metric title="Approved Investors" count={approvedInvestors.length} note="approved investor accounts" />
-            <Metric title="Pending Investor Payment" count={pendingInvestorPayment.length} note="payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} />
-            <Metric title="Paid Investors" count={paidInvestors.length} note="active investor access" />
-            <Metric title="Investor Messages" count={openInvestorRequests.length} note="investor requests and intros" pulse={openInvestorRequests.length > 0} />
-            <Metric title="Blocked Investors" count={blockedInvestors.length} note="denied or suspended investors" />
-            <Metric title="Deleted Investors" count={deletedInvestors.length} note="investor cleanup folder" />
-          </div>
-
-          <div style={{ ...panel, marginTop: 18 }}>
-            <div style={eyebrow}>Investor Access Structure</div>
-            <p style={muted}>$49 first month then $149/month.</p>
-            <p style={muted}>Separate investor login/application flow.</p>
-            <p style={muted}>Teaser Deal/Pain cards only.</p>
-            <p style={muted}>No direct member info exposed.</p>
-            <p style={muted}>Request More Info routes through members/admin.</p>
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <div style={eyebrow}>Investor Applications</div>
-            {investors.length ? (
-              <div style={grid}>
-                {investors.map((investor) => (
-                  <InvestorCard
-                    key={investor.id}
-                    investor={investor}
-                    onPatch={(patch) => patchInvestor(investor.id, patch)}
-                    onDeleteForever={() => deleteInvestorForever(investor.id)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div style={panel}>
-                <h2 style={h2}>No investor applications yet.</h2>
-                <p style={sub}>Investor applications will appear here after someone submits /investor-application.</p>
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <div style={eyebrow}>Investor Requests / Messages</div>
-            {openInvestorRequests.length ? (
-              <div style={grid}>
-                {openInvestorRequests.map((request) => (
-                  <InvestorRequestCard key={request.id} request={request} />
-                ))}
-              </div>
-            ) : (
-              <div style={panel}>
-                <h2 style={h2}>No investor requests yet.</h2>
-                <p style={sub}>Request More Info messages from /investor-room will appear here.</p>
-              </div>
-            )}
-          </div>
-        </Section>
-
         <Section title="Filtered Member Results">
           {filteredMembers.length ? (
             <div style={grid}>
