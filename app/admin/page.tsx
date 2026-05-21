@@ -21,6 +21,7 @@ type StateCode = "GA" | "TN" | "AL" | "FL" | "NC" | "SC" | "TX";
 type StateFilter = "all" | "notListed" | StateCode;
 type RoomKind = "deal" | "pain";
 type RoomView = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
+type RoomSelection = { title: string; rooms: RoomRecord[] } | null;
 
 type MemberRecord = {
   id: string;
@@ -433,6 +434,23 @@ function recalcAccess(member: MemberRecord): MemberRecord {
   return { ...member, access: member.status === "approved" && paidLike ? "active" : "locked", updatedAt: new Date().toISOString() };
 }
 
+
+function memberSearchText(member: MemberRecord) {
+  return [
+    member.name,
+    member.company,
+    member.email,
+    member.phone,
+    member.memberType,
+    member.baseState,
+    member.operatingStates,
+    JSON.stringify(member.raw || {}),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+
 function saveBroadcastMessage(recipients: MemberRecord[], subject: string, body: string) {
   const cleanSubject = clean(subject, "Admin Command Message");
   const cleanBody = clean(body);
@@ -541,9 +559,26 @@ function StateCard({ state, label, count, active, onClick }: { state: StateFilte
   );
 }
 
-function RoomCard({ title, count, active, onClick }: { title: string; count: number; active?: boolean; onClick?: () => void }) {
+function RoomCard({
+  title,
+  count,
+  active,
+  pulse,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  active?: boolean;
+  pulse?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <button type="button" style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
+    <button
+      type="button"
+      className={pulse ? "vf-pulse" : ""}
+      style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }}
+      onClick={onClick}
+    >
       <div style={eyebrow}>{title}</div>
       <h2 style={h2}>{count}</h2>
       <p style={muted}>room(s)</p>
@@ -632,6 +667,53 @@ function MemberModal({ member, onClose }: { member: MemberRecord | null; onClose
   );
 }
 
+
+function RoomModal({ selection, onClose }: { selection: RoomSelection; onClose: () => void }) {
+  if (!selection) return null;
+
+  return (
+    <div style={modalBackdrop}>
+      <div style={modal}>
+        <div style={row}>
+          <button type="button" style={goldBtn} onClick={onClose}>Close Projects Window</button>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <div style={eyebrow}>Admin Project / Room Window</div>
+          <h1 style={h1}>{selection.title}</h1>
+          <p style={sub}>{selection.rooms.length} matching room(s)</p>
+
+          {selection.rooms.length ? (
+            <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+              {selection.rooms.map((room) => (
+                <div key={`${room.kind}-${room.id}-${room.source}`} style={panel}>
+                  <div style={eyebrow}>{room.kind} • {room.state} • {room.status || "active"}</div>
+                  <h2 style={h2}>{room.title}</h2>
+                  <p style={muted}>Room ID: {room.id}</p>
+                  <p style={muted}>Source: {room.source}</p>
+                  <div style={{ ...row, marginTop: 12 }}>
+                    <Link href={room.kind === "deal" ? `/deal-rooms/${encodeURIComponent(room.id)}` : `/pain-rooms/${encodeURIComponent(room.id)}`} style={goldBtn}>
+                      Open Room
+                    </Link>
+                    <Link href="/my-rooms" style={btn}>My Rooms</Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ ...panel, marginTop: 16 }}>
+              <h2 style={h2}>No rooms found.</h2>
+              <p style={sub}>No matching projects/rooms exist in this admin browser storage yet.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
 export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
@@ -646,6 +728,8 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<AdminFilter>("all");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [selectedMember, setSelectedMember] = useState<MemberRecord | null>(null);
+  const [roomSelection, setRoomSelection] = useState<RoomSelection>(null);
+  const [activeRoomCard, setActiveRoomCard] = useState("");
 
   useEffect(() => {
     const refresh = () => {
@@ -688,7 +772,7 @@ export default function AdminPage() {
         if (stateFilter === "notListed" && member.baseState !== "Not listed") return false;
         if (stateFilter !== "notListed" && member.baseState !== stateFilter) return false;
       }
-      const text = `${member.name} ${member.company} ${member.email} ${member.phone} ${member.memberType} ${member.baseState} ${member.operatingStates}`.toLowerCase();
+      const text = memberSearchText(member);
       if (q && !text.includes(q)) return false;
       if (filter === "all") return member.status !== "deleted";
       if (filter === "new") return isNewMember(member);
@@ -726,7 +810,18 @@ export default function AdminPage() {
 
   function runSearch(event?: React.FormEvent) {
     if (event) event.preventDefault();
-    setSearch(searchDraft.trim());
+    const next = searchDraft.trim();
+    setSearch(next);
+
+    if (next) {
+      setFilter("all");
+      setStateFilter("all");
+    }
+  }
+
+  function openRoomSelection(title: string, rooms: RoomRecord[], key: string) {
+    setActiveRoomCard(key);
+    setRoomSelection({ title, rooms });
   }
 
   function broadcastToMembers(target: "filtered" | "all") {
@@ -775,6 +870,7 @@ export default function AdminPage() {
       `}</style>
 
       <MemberModal member={selectedMember} onClose={() => setSelectedMember(null)} />
+      <RoomModal selection={roomSelection} onClose={() => setRoomSelection(null)} />
 
       <div style={wrap}>
         <AdminNav />
@@ -843,22 +939,78 @@ export default function AdminPage() {
 
         <Section title="Deal Room Folders">
           <div style={grid}>
-            {(["active", "saved", "archived", "deleted", "sold"] as RoomView[]).map((view) => <RoomCard key={`deal-${view}`} title={`Deal ${view}`} count={deals.filter((room) => inRoomView(room, view)).length} />)}
+            {(["active", "saved", "archived", "deleted", "sold"] as RoomView[]).map((view) => {
+              const matching = deals.filter((room) => inRoomView(room, view));
+              const key = `deal-${view}`;
+              return (
+                <RoomCard
+                  key={key}
+                  title={`Deal ${view}`}
+                  count={matching.length}
+                  active={activeRoomCard === key}
+                  pulse={activeRoomCard === key}
+                  onClick={() => openRoomSelection(`Deal ${view}`, matching, key)}
+                />
+              );
+            })}
           </div>
         </Section>
 
         <Section title="Pain Room Folders">
           <div style={grid}>
-            {(["active", "saved", "archived", "deleted", "resolved"] as RoomView[]).map((view) => <RoomCard key={`pain-${view}`} title={`Pain ${view}`} count={pains.filter((room) => inRoomView(room, view)).length} />)}
+            {(["active", "saved", "archived", "deleted", "resolved"] as RoomView[]).map((view) => {
+              const matching = pains.filter((room) => inRoomView(room, view));
+              const key = `pain-${view}`;
+              return (
+                <RoomCard
+                  key={key}
+                  title={`Pain ${view}`}
+                  count={matching.length}
+                  active={activeRoomCard === key}
+                  pulse={activeRoomCard === key}
+                  onClick={() => openRoomSelection(`Pain ${view}`, matching, key)}
+                />
+              );
+            })}
           </div>
         </Section>
 
         <Section title="Deal Rooms By State">
-          <div style={smallGrid}>{STATE_CODES.map((state) => <RoomCard key={`deal-state-${state}`} title={state} count={stateRoomCount(deals, state)} />)}</div>
+          <div style={smallGrid}>
+            {STATE_CODES.map((state) => {
+              const matching = deals.filter((room) => room.state === state);
+              const key = `deal-state-${state}`;
+              return (
+                <RoomCard
+                  key={key}
+                  title={state}
+                  count={matching.length}
+                  active={activeRoomCard === key}
+                  pulse={activeRoomCard === key}
+                  onClick={() => openRoomSelection(`Deal Rooms • ${state}`, matching, key)}
+                />
+              );
+            })}
+          </div>
         </Section>
 
         <Section title="Pain Rooms By State">
-          <div style={smallGrid}>{STATE_CODES.map((state) => <RoomCard key={`pain-state-${state}`} title={state} count={stateRoomCount(pains, state)} />)}</div>
+          <div style={smallGrid}>
+            {STATE_CODES.map((state) => {
+              const matching = pains.filter((room) => room.state === state);
+              const key = `pain-state-${state}`;
+              return (
+                <RoomCard
+                  key={key}
+                  title={state}
+                  count={matching.length}
+                  active={activeRoomCard === key}
+                  pulse={activeRoomCard === key}
+                  onClick={() => openRoomSelection(`Pain Rooms • ${state}`, matching, key)}
+                />
+              );
+            })}
+          </div>
         </Section>
 
         <Section title="Filtered Member Results">
@@ -869,7 +1021,7 @@ export default function AdminPage() {
               ))}
             </div>
           ) : (
-            <div style={panel}><h2 style={h2}>No matching members.</h2><p style={sub}>Try another name, company, email, state, or status filter.</p></div>
+            <div style={panel}><h2 style={h2}>No matching members.</h2><p style={sub}>Try another name, company, email, phone, member type, home state, or reset filters. Search now checks raw profile data too.</p></div>
           )}
         </Section>
       </div>
