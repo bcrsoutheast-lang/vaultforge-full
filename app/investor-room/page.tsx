@@ -506,10 +506,13 @@ function ExecutionRequestModal({
   const [notes, setNotes] = useState("");
   const [sent, setSent] = useState(false);
 
-  if (!lane || !activeRoom) return null;
+  if (!lane) return null;
 
-  const { kind, item } = activeRoom;
-  const header = `${lane.title} - ${kind} - ${itemTitle(item, kind)} - ${itemState(item) || "Unknown State"}`;
+  const kind: Kind = activeRoom?.kind || "Deal";
+  const item = activeRoom?.item || { title: "General Investor Execution Request", state: "NA" };
+  const header = activeRoom
+    ? `${lane.title} - ${kind} - ${itemTitle(item, kind)} - ${itemState(item) || "Unknown State"}`
+    : `${lane.title} - General Investor Execution Request`;
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.78)", padding: 18, overflow: "auto" }}>
@@ -569,14 +572,12 @@ function ExecutionLaneCards({
   activeRoom: ActiveRoom;
   onSelect: (lane: any) => void;
 }) {
-  if (!activeRoom) return null;
-
   return (
     <section style={{ ...hero, marginTop: 18 }}>
       <div style={eyebrow}>One-Stop-Shop Execution Requests</div>
       <h2 style={h2}>Need help completing this opportunity?</h2>
       <p style={sub}>
-        Request funding, title, contractor, operator, insurance, property management, JV, or boots-on-ground support without exposing private member data.
+        Request funding, title, contractor, operator, insurance, property management, JV, or boots-on-ground support without exposing private member data. Open a Deal/Pain card first to attach the request to that room, or send a general execution request.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
