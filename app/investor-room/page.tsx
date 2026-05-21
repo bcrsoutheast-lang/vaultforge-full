@@ -22,8 +22,8 @@ const LOGO_CANDIDATES = [
 ];
 
 type TeaserKind = "Deal" | "Pain";
-type ActiveRoom = { kind: TeaserKind; item: any; title: string; state: string } | null;
 type CleanupFolder = "none" | "saved" | "archived" | "deleted";
+type ActiveRoom = { kind: TeaserKind; item: any; title: string; state: string } | null;
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -39,11 +39,7 @@ function writeJson(key: string, value: unknown) {
 }
 
 function readInvestor() {
-  try {
-    return JSON.parse(localStorage.getItem(INVESTOR_APP_KEY) || "{}");
-  } catch {
-    return {};
-  }
+  return readJson<any>(INVESTOR_APP_KEY, {});
 }
 
 function readRows(keys: string[]) {
@@ -60,23 +56,6 @@ function readRows(keys: string[]) {
   }
 
   return rows;
-}
-
-function dedupeRows(rows: any[], kind: TeaserKind) {
-  const map = new Map<string, any>();
-
-  rows.forEach((item, index) => {
-    const id = String(item?.id || item?.roomId || item?.dealId || item?.painId || item?.signalId || `${kind}-${item?.title || item?.name || item?.headline || index}`);
-    const state = itemState(item) || "NA";
-    const title = itemTitle(item, kind);
-    const key = `${kind}-${id}-${state}-${title}`.toLowerCase();
-
-    if (!map.has(key)) {
-      map.set(key, item);
-    }
-  });
-
-  return Array.from(map.values());
 }
 
 function itemState(item: any) {
@@ -98,31 +77,68 @@ function itemState(item: any) {
     .toUpperCase();
 }
 
-function itemId(item: any, kind: TeaserKind) {
-  return String(item?.id || item?.roomId || item?.dealId || item?.painId || item?.signalId || `${kind}-${item?.title || item?.name || Date.now()}`);
-}
-
 function itemTitle(item: any, kind: TeaserKind) {
   return String(item?.title || item?.name || item?.headline || item?.summary || `${kind} Teaser`);
 }
 
+function itemId(item: any, kind: TeaserKind, index = 0) {
+  return String(
+    item?.id ||
+      item?.roomId ||
+      item?.room_id ||
+      item?.dealId ||
+      item?.deal_id ||
+      item?.painId ||
+      item?.pain_id ||
+      item?.signalId ||
+      item?.signal_id ||
+      `${kind}-${itemTitle(item, kind)}-${index}`
+  );
+}
+
+function dedupeRows(rows: any[], kind: TeaserKind) {
+  const map = new Map<string, any>();
+
+  rows.forEach((item, index) => {
+    const key = `${kind}-${itemId(item, kind, index)}-${itemState(item)}-${itemTitle(item, kind)}`.toLowerCase();
+    if (!map.has(key)) map.set(key, item);
+  });
+
+  return Array.from(map.values());
+}
+
 function cleanupKey(kind: TeaserKind, item: any) {
-  return `${kind.toLowerCase()}::${itemId(item, kind)}`;
+  return `${kind.toLowerCase()}::${itemId(item, kind)}::${itemState(item)}::${itemTitle(item, kind)}`.toLowerCase();
+}
+
+function cleanupMap() {
+  return readJson<Record<string, string>>(INVESTOR_CLEANUP_KEY, {});
+}
+
+function getCleanup(kind: TeaserKind, item: any) {
+  return cleanupMap()[cleanupKey(kind, item)] || "";
+}
+
+function saveCleanup(kind: TeaserKind, item: any, action: "saved" | "archived" | "deleted") {
+  const rows = cleanupMap();
+  rows[cleanupKey(kind, item)] = action;
+  writeJson(INVESTOR_CLEANUP_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-room-cleanup-change"));
+}
+
+function clearCleanup(kind: TeaserKind, item: any) {
+  const rows = cleanupMap();
+  delete rows[cleanupKey(kind, item)];
+  writeJson(INVESTOR_CLEANUP_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-room-cleanup-change"));
 }
 
 function saveRequest(kind: TeaserKind, item: any, message: string) {
-  let rows: any[] = [];
-
-  try {
-    const parsed = JSON.parse(localStorage.getItem(INVESTOR_REQUESTS_KEY) || "[]");
-    rows = Array.isArray(parsed) ? parsed : [];
-  } catch {
-    rows = [];
-  }
-
+  const rows = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
   const investor = readInvestor();
   const title = itemTitle(item, kind);
   const state = itemState(item);
+  const roomHeader = `${kind} Request • ${title} • ${state || "Unknown State"}`;
 
   rows.unshift({
     id: `investor-request-${Date.now()}`,
@@ -130,7 +146,7 @@ function saveRequest(kind: TeaserKind, item: any, message: string) {
     itemId: itemId(item, kind),
     title,
     state,
-    roomHeader: `${kind} Request • ${title} • ${state || "Unknown State"}`,
+    roomHeader,
     investorEmail: investor?.email || "",
     investorCompany: investor?.company || "",
     investorName: investor?.contactName || "",
@@ -139,31 +155,8 @@ function saveRequest(kind: TeaserKind, item: any, message: string) {
     createdAt: new Date().toISOString(),
   });
 
-  localStorage.setItem(INVESTOR_REQUESTS_KEY, JSON.stringify(rows));
+  writeJson(INVESTOR_REQUESTS_KEY, rows);
   window.dispatchEvent(new Event("vaultforge-investor-request-change"));
-}
-
-function saveCleanup(kind: TeaserKind, item: any, action: "saved" | "archived" | "deleted") {
-  const rows = readJson<Record<string, string>>(INVESTOR_CLEANUP_KEY, {});
-  rows[cleanupKey(kind, item)] = action;
-  writeJson(INVESTOR_CLEANUP_KEY, rows);
-  window.dispatchEvent(new Event("vaultforge-investor-room-cleanup-change"));
-}
-
-function getCleanup(kind: TeaserKind, item: any) {
-  const rows = readJson<Record<string, string>>(INVESTOR_CLEANUP_KEY, {});
-  return rows[cleanupKey(kind, item)] || "";
-}
-
-function clearCleanup(kind: TeaserKind, item: any) {
-  const rows = readJson<Record<string, string>>(INVESTOR_CLEANUP_KEY, {});
-  delete rows[cleanupKey(kind, item)];
-  writeJson(INVESTOR_CLEANUP_KEY, rows);
-  window.dispatchEvent(new Event("vaultforge-investor-room-cleanup-change"));
-}
-
-function countCleanup(kind: TeaserKind, action: string, items: any[]) {
-  return items.filter((item) => getCleanup(kind, item) === action).length;
 }
 
 const page: React.CSSProperties = {
@@ -171,130 +164,32 @@ const page: React.CSSProperties = {
   background: "#05070d",
   color: "#f7f7fb",
   padding: 18,
-  fontFamily:
-    "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
 };
 
-const wrap: React.CSSProperties = {
-  maxWidth: 1320,
-  margin: "0 auto",
-  paddingBottom: 100,
-};
-
-const topbar: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: 18,
-};
-
-const brand: React.CSSProperties = {
-  color: "#ffd45a",
-  fontSize: 26,
-  fontWeight: 950,
-  letterSpacing: -1,
-};
-
-const navRight: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  alignItems: "center",
-};
-
+const wrap: React.CSSProperties = { maxWidth: 1320, margin: "0 auto", paddingBottom: 100 };
+const topbar: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: 18 };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 26, fontWeight: 950, letterSpacing: -1 };
+const navRight: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
 const hero: React.CSSProperties = {
   border: "1px solid rgba(245,197,66,.28)",
   borderRadius: 30,
   padding: 30,
   marginBottom: 20,
-  background:
-    "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 34%), linear-gradient(180deg,#080d19,#050816)",
+  background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 34%), linear-gradient(180deg,#080d19,#050816)",
 };
-
-const panel: React.CSSProperties = {
-  background: "#121724",
-  border: "1px solid rgba(207,216,230,.16)",
-  borderRadius: 24,
-  padding: 22,
-};
-
-const goldPanel: React.CSSProperties = {
-  ...panel,
-  borderColor: "rgba(245,197,66,.48)",
-  boxShadow: "0 0 26px rgba(245,197,66,.10)",
-};
-
-const redPanel: React.CSSProperties = {
-  ...panel,
-  borderColor: "rgba(255,70,70,.52)",
-  boxShadow: "0 0 26px rgba(255,70,70,.10)",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
-  gap: 16,
-};
-
-const wideGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
-  gap: 18,
-};
-
-const row: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  alignItems: "center",
-};
-
-const eyebrow: React.CSSProperties = {
-  color: "#ffd45a",
-  textTransform: "uppercase",
-  letterSpacing: 6,
-  fontWeight: 950,
-  fontSize: 13,
-  marginBottom: 12,
-};
-
-const h1: React.CSSProperties = {
-  fontSize: "clamp(42px,7vw,78px)",
-  lineHeight: 0.9,
-  letterSpacing: -4,
-  margin: "0 0 18px",
-  fontWeight: 950,
-};
-
-const h2: React.CSSProperties = {
-  fontSize: "clamp(28px,5vw,48px)",
-  lineHeight: 0.96,
-  letterSpacing: -2,
-  margin: "0 0 14px",
-  fontWeight: 950,
-};
-
-const h3: React.CSSProperties = {
-  fontSize: 26,
-  margin: "0 0 10px",
-  fontWeight: 950,
-};
-
-const sub: React.CSSProperties = {
-  color: "#c9d0dc",
-  fontSize: 20,
-  lineHeight: 1.35,
-  margin: 0,
-};
-
-const muted: React.CSSProperties = {
-  color: "#aeb7c7",
-  margin: "8px 0 0",
-  lineHeight: 1.4,
-};
-
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 24, padding: 22 };
+const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.48)", boxShadow: "0 0 26px rgba(245,197,66,.10)" };
+const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.52)", boxShadow: "0 0 26px rgba(255,70,70,.10)" };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
+const wideGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18 };
+const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 6, fontWeight: 950, fontSize: 13, marginBottom: 12 };
+const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,78px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(28px,5vw,48px)", lineHeight: 0.96, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
+const h3: React.CSSProperties = { fontSize: 26, margin: "0 0 10px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 20, lineHeight: 1.35, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.4 };
 const btn: React.CSSProperties = {
   border: "1px solid rgba(207,216,230,.18)",
   background: "#171c29",
@@ -306,21 +201,8 @@ const btn: React.CSSProperties = {
   display: "inline-block",
   cursor: "pointer",
 };
-
-const goldBtn: React.CSSProperties = {
-  ...btn,
-  border: 0,
-  background: "#ffdc68",
-  color: "#10131a",
-};
-
-const redBtn: React.CSSProperties = {
-  ...btn,
-  background: "#271016",
-  borderColor: "rgba(255,70,70,.48)",
-  color: "#ffaaaa",
-};
-
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
 const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
@@ -331,12 +213,7 @@ const input: React.CSSProperties = {
   padding: "14px 15px",
   fontSize: 16,
 };
-
-const field: React.CSSProperties = {
-  display: "grid",
-  gap: 8,
-  marginTop: 14,
-};
+const field: React.CSSProperties = { display: "grid", gap: 8, marginTop: 14 };
 
 function LogoBlock() {
   const [index, setIndex] = useState(0);
@@ -385,13 +262,21 @@ function TopNav() {
   );
 }
 
-function Metric({ title, count, note, active, onClick }: { title: string; count: number | string; note: string; active?: boolean; onClick?: () => void }) {
+function Metric({
+  title,
+  count,
+  note,
+  active,
+  onClick,
+}: {
+  title: string;
+  count: number | string;
+  note: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <button
-      type="button"
-      style={{ ...(active ? goldPanel : panel), width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }}
-      onClick={onClick}
-    >
+    <button type="button" style={{ ...(active ? goldPanel : panel), width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
       <div style={eyebrow}>{title}</div>
       <h2 style={h2}>{count}</h2>
       <p style={muted}>{note}</p>
@@ -405,12 +290,14 @@ function TeaserCard({
   active,
   onOpen,
   onCleanup,
+  onRestore,
 }: {
   kind: TeaserKind;
   item: any;
   active: boolean;
   onOpen: () => void;
   onCleanup: (action: "saved" | "archived" | "deleted") => void;
+  onRestore: () => void;
 }) {
   const title = itemTitle(item, kind);
   const state = itemState(item) || "Not listed";
@@ -429,25 +316,12 @@ function TeaserCard({
 
       <h2 style={h2}>{title}</h2>
 
-      <p style={sub}>
-        {city} • {asset}
-      </p>
+      <p style={sub}>{city} • {asset}</p>
 
       <div style={{ ...grid, marginTop: 14 }}>
-        <div>
-          <div style={eyebrow}>Asking / Need</div>
-          <p style={muted}>{String(price)}</p>
-        </div>
-
-        <div>
-          <div style={eyebrow}>Repairs</div>
-          <p style={muted}>{String(repairs)}</p>
-        </div>
-
-        <div>
-          <div style={eyebrow}>ARV / Value</div>
-          <p style={muted}>{String(arv)}</p>
-        </div>
+        <div><div style={eyebrow}>Asking / Need</div><p style={muted}>{String(price)}</p></div>
+        <div><div style={eyebrow}>Repairs</div><p style={muted}>{String(repairs)}</p></div>
+        <div><div style={eyebrow}>ARV / Value</div><p style={muted}>{String(arv)}</p></div>
       </div>
 
       <p style={{ ...muted, marginTop: 14 }}>
@@ -459,12 +333,8 @@ function TeaserCard({
         <button type="button" style={btn} onClick={() => onCleanup("saved")}>Save</button>
         <button type="button" style={btn} onClick={() => onCleanup("archived")}>Archive</button>
         <button type="button" style={redBtn} onClick={() => onCleanup("deleted")}>Delete</button>
-        {cleanup === "deleted" ? (
-          <>
-            <button type="button" style={redBtn} onClick={() => clearCleanup(kind, item)}>Delete Forever</button>
-            <button type="button" style={btn} onClick={() => clearCleanup(kind, item)}>Restore</button>
-          </>
-        ) : null}
+        {cleanup ? <button type="button" style={btn} onClick={onRestore}>Restore</button> : null}
+        {cleanup === "deleted" ? <button type="button" style={redBtn} onClick={onRestore}>Delete Forever</button> : null}
       </div>
     </div>
   );
@@ -496,7 +366,6 @@ function ActiveRoomPanel({ activeRoom, onClose }: { activeRoom: ActiveRoom; onCl
           <div style={eyebrow}>Open Investor Room Detail</div>
           <h2 style={h2}>{title}</h2>
         </div>
-
         <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
       </div>
 
@@ -504,18 +373,9 @@ function ActiveRoomPanel({ activeRoom, onClose }: { activeRoom: ActiveRoom; onCl
       <p style={muted}>{city} • {asset}</p>
 
       <div style={{ ...grid, marginTop: 16 }}>
-        <div style={panel}>
-          <div style={eyebrow}>Asking / Need</div>
-          <p style={sub}>{String(price)}</p>
-        </div>
-        <div style={panel}>
-          <div style={eyebrow}>Repairs</div>
-          <p style={sub}>{String(repairs)}</p>
-        </div>
-        <div style={panel}>
-          <div style={eyebrow}>ARV / Value</div>
-          <p style={sub}>{String(arv)}</p>
-        </div>
+        <div style={panel}><div style={eyebrow}>Asking / Need</div><p style={sub}>{String(price)}</p></div>
+        <div style={panel}><div style={eyebrow}>Repairs</div><p style={sub}>{String(repairs)}</p></div>
+        <div style={panel}><div style={eyebrow}>ARV / Value</div><p style={sub}>{String(arv)}</p></div>
       </div>
 
       <div style={{ ...panel, marginTop: 16 }}>
@@ -540,11 +400,66 @@ function ActiveRoomPanel({ activeRoom, onClose }: { activeRoom: ActiveRoom; onCl
         <button type="button" style={btn} onClick={() => saveCleanup(kind, item, "saved")}>Save</button>
         <button type="button" style={btn} onClick={() => saveCleanup(kind, item, "archived")}>Archive</button>
         <button type="button" style={redBtn} onClick={() => saveCleanup(kind, item, "deleted")}>Delete</button>
-        <button type="button" style={redBtn} onClick={() => clearCleanup(kind, item)}>Delete Forever</button>
         <button type="button" style={btn} onClick={() => clearCleanup(kind, item)}>Restore</button>
+        <button type="button" style={redBtn} onClick={() => clearCleanup(kind, item)}>Delete Forever</button>
       </div>
 
       {sent ? <p style={muted}>Request sent to VaultForge admin/member workflow.</p> : null}
+    </section>
+  );
+}
+
+function CleanupFolderPanel({
+  tab,
+  folder,
+  items,
+  onClose,
+  onOpen,
+  onRestore,
+  onDelete,
+}: {
+  tab: TeaserKind;
+  folder: CleanupFolder;
+  items: any[];
+  onClose: () => void;
+  onOpen: (item: any) => void;
+  onRestore: (item: any) => void;
+  onDelete: (item: any) => void;
+}) {
+  if (folder === "none") return null;
+
+  const title = `${folder.charAt(0).toUpperCase()}${folder.slice(1)} ${tab}`;
+
+  return (
+    <section style={{ marginTop: 18 }}>
+      <div style={{ ...row, justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={eyebrow}>Cleanup Folder • {title}</div>
+        <button type="button" style={btn} onClick={onClose}>Collapse Folder / Done</button>
+      </div>
+
+      <div style={wideGrid}>
+        <div style={folder === "deleted" ? redPanel : folder === "saved" ? goldPanel : panel}>
+          <h3 style={h3}>{title}</h3>
+          {items.length ? (
+            items.map((item, index) => (
+              <div key={`${folder}-${tab}-${index}`} style={{ ...panel, marginTop: 10 }}>
+                <p style={sub}>{itemTitle(item, tab)}</p>
+                <div style={{ ...row, marginTop: 10 }}>
+                  <button type="button" style={goldBtn} onClick={() => onOpen(item)}>Open</button>
+                  <button type="button" style={btn} onClick={() => onRestore(item)}>Restore</button>
+                  {folder !== "deleted" ? (
+                    <button type="button" style={redBtn} onClick={() => onDelete(item)}>Delete</button>
+                  ) : (
+                    <button type="button" style={redBtn} onClick={() => onRestore(item)}>Delete Forever</button>
+                  )}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p style={muted}>No cards in this folder.</p>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
@@ -580,26 +495,14 @@ export default function InvestorRoomPage() {
 
   const rawDeals = useMemo(() => {
     return dedupeRows(
-      readRows([
-        "vaultforge_clean_deal_rooms",
-        "vaultforge_deal_rooms",
-        "vaultforge_rooms_deals",
-        "vf_deal_rooms",
-      ]).filter((item) => itemState(item) === state),
+      readRows(["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"]).filter((item) => itemState(item) === state),
       "Deal"
     );
   }, [state, tick]);
 
   const rawPains = useMemo(() => {
     return dedupeRows(
-      readRows([
-        "vaultforge_clean_pain_rooms",
-        "vaultforge_clean_pain_rooms_v1",
-        "vaultforge_clean_pain_rooms_v2",
-        "vaultforge_pain_rooms",
-        "vaultforge_rooms_pain",
-        "vf_pain_rooms",
-      ]).filter((item) => itemState(item) === state),
+      readRows(["vaultforge_clean_pain_rooms", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms_v2", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"]).filter((item) => itemState(item) === state),
       "Pain"
     );
   }, [state, tick]);
@@ -614,7 +517,7 @@ export default function InvestorRoomPage() {
   const archivedPains = useMemo(() => rawPains.filter((item) => getCleanup("Pain", item) === "archived"), [rawPains, tick]);
   const deletedPains = useMemo(() => rawPains.filter((item) => getCleanup("Pain", item) === "deleted"), [rawPains, tick]);
 
-  const visibleItems =
+  const folderItems =
     tab === "Deal"
       ? folder === "saved"
         ? savedDeals
@@ -622,14 +525,30 @@ export default function InvestorRoomPage() {
           ? archivedDeals
           : folder === "deleted"
             ? deletedDeals
-            : activeDeals
+            : []
       : folder === "saved"
         ? savedPains
         : folder === "archived"
           ? archivedPains
           : folder === "deleted"
             ? deletedPains
-            : activePains;
+            : [];
+
+  const visibleItems = tab === "Deal" ? activeDeals : activePains;
+
+  function openItem(kind: TeaserKind, item: any) {
+    setActiveRoom({ kind, item, title: itemTitle(item, kind), state: itemState(item) });
+  }
+
+  function cleanupAndRefresh(kind: TeaserKind, item: any, action: "saved" | "archived" | "deleted") {
+    saveCleanup(kind, item, action);
+    setTick((value) => value + 1);
+  }
+
+  function restoreAndRefresh(kind: TeaserKind, item: any) {
+    clearCleanup(kind, item);
+    setTick((value) => value + 1);
+  }
 
   if (!active) {
     return (
@@ -661,21 +580,19 @@ export default function InvestorRoomPage() {
           <LogoBlock />
 
           <div style={eyebrow}>VaultForge Investor Visitor Room</div>
-
           <h1 style={h1}>Controlled deal and pain access.</h1>
-
           <p style={sub}>
             Browse limited state teaser cards and request more information through VaultForge. This room is separate from the private member network.
           </p>
 
           <div style={{ ...row, marginTop: 22 }}>
-            <button type="button" style={tab === "Deal" ? goldBtn : btn} onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }}>
+            <button type="button" style={tab === "Deal" && folder === "none" ? goldBtn : btn} onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }}>
               Deal Signals
             </button>
-            <button type="button" style={tab === "Pain" ? goldBtn : btn} onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }}>
+            <button type="button" style={tab === "Pain" && folder === "none" ? goldBtn : btn} onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }}>
               Pain Signals
             </button>
-            <button type="button" style={btn} onClick={() => { setActiveRoom(null); setFolder("none"); }}>
+            <button type="button" style={btn} onClick={() => { setFolder("none"); setActiveRoom(null); }}>
               Collapse / Done
             </button>
           </div>
@@ -683,7 +600,6 @@ export default function InvestorRoomPage() {
 
         <section style={goldPanel}>
           <div style={eyebrow}>State Desk</div>
-
           <div style={row}>
             {STATES.map((stateCode) => (
               <button
@@ -692,8 +608,8 @@ export default function InvestorRoomPage() {
                 style={stateCode === state ? goldBtn : btn}
                 onClick={() => {
                   setState(stateCode);
-                  setActiveRoom(null);
                   setFolder("none");
+                  setActiveRoom(null);
                 }}
               >
                 {stateCode}
@@ -704,153 +620,56 @@ export default function InvestorRoomPage() {
 
         <section style={{ marginTop: 18 }}>
           <div style={grid}>
-            <Metric title="Deal Signals" count={activeDeals.length} note={`active opportunity cards in ${state}`} active={tab === "Deal"} onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
-            <Metric title="Pain Signals" count={activePains.length} note={`active pressure cards in ${state}`} active={tab === "Pain"} onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Deal Signals" count={activeDeals.length} note={`active opportunity cards in ${state}`} active={tab === "Deal" && folder === "none"} onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Pain Signals" count={activePains.length} note={`active pressure cards in ${state}`} active={tab === "Pain" && folder === "none"} onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
             <Metric title="Requests" count={readJson<any[]>(INVESTOR_REQUESTS_KEY, []).length} note="requests sent through VaultForge" />
-            <Metric title="Saved Deals" count={savedDeals.length} note="saved deal cards" onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
-            <Metric title="Archived Deals" count={archivedDeals.length} note="archived deal cards" onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
-            <Metric title="Deleted Deals" count={deletedDeals.length} note="deleted deal cards" onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
-            <Metric title="Saved Pain" count={savedPains.length} note="saved pain cards" onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
-            <Metric title="Archived Pain" count={archivedPains.length} note="archived pain cards" onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
-            <Metric title="Deleted Pain" count={deletedPains.length} note="deleted pain cards" onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Saved Deals" count={savedDeals.length} note="saved deal cards" active={tab === "Deal" && folder === "saved"} onClick={() => { setTab("Deal"); setFolder("saved"); setActiveRoom(null); }} />
+            <Metric title="Archived Deals" count={archivedDeals.length} note="archived deal cards" active={tab === "Deal" && folder === "archived"} onClick={() => { setTab("Deal"); setFolder("archived"); setActiveRoom(null); }} />
+            <Metric title="Deleted Deals" count={deletedDeals.length} note="deleted deal cards" active={tab === "Deal" && folder === "deleted"} onClick={() => { setTab("Deal"); setFolder("deleted"); setActiveRoom(null); }} />
+            <Metric title="Saved Pain" count={savedPains.length} note="saved pain cards" active={tab === "Pain" && folder === "saved"} onClick={() => { setTab("Pain"); setFolder("saved"); setActiveRoom(null); }} />
+            <Metric title="Archived Pain" count={archivedPains.length} note="archived pain cards" active={tab === "Pain" && folder === "archived"} onClick={() => { setTab("Pain"); setFolder("archived"); setActiveRoom(null); }} />
+            <Metric title="Deleted Pain" count={deletedPains.length} note="deleted pain cards" active={tab === "Pain" && folder === "deleted"} onClick={() => { setTab("Pain"); setFolder("deleted"); setActiveRoom(null); }} />
           </div>
         </section>
 
         <ActiveRoomPanel activeRoom={activeRoom} onClose={() => setActiveRoom(null)} />
 
-        {folder !== "none" ? (
-        <section style={{ marginTop: 18 }}>
-          <div style={{ ...row, justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={eyebrow}>Cleanup Folder • {tab} • {folder}</div>
-            <button type="button" style={btn} onClick={() => { setFolder("none"); setActiveRoom(null); }}>Collapse Folder / Done</button>
-          </div>
-          <div style={wideGrid}>
-            {tab === "Deal" && savedDeals.length ? (
-              <div style={goldPanel}>
-                <h3 style={h3}>Saved Deals</h3>
-                {savedDeals.map((item, index) => (
-                  <div key={`saved-deal-${index}`} style={{ ...panel, marginTop: 10 }}>
-                    <p style={sub}>{itemTitle(item, "Deal")}</p>
-                    <div style={{ ...row, marginTop: 10 }}>
-                      <button type="button" style={goldBtn} onClick={() => setActiveRoom({ kind: "Deal", item, title: itemTitle(item, "Deal"), state: itemState(item) })}>Open</button>
-                      <button type="button" style={btn} onClick={() => { clearCleanup("Deal", item); setTick((v) => v + 1); }}>Restore</button>
-                      <button type="button" style={redBtn} onClick={() => { saveCleanup("Deal", item, "deleted"); setTick((v) => v + 1); }}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+        <CleanupFolderPanel
+          tab={tab}
+          folder={folder}
+          items={folderItems}
+          onClose={() => { setFolder("none"); setActiveRoom(null); }}
+          onOpen={(item) => openItem(tab, item)}
+          onRestore={(item) => restoreAndRefresh(tab, item)}
+          onDelete={(item) => cleanupAndRefresh(tab, item, "deleted")}
+        />
 
-            {tab === "Deal" && archivedDeals.length ? (
-              <div style={panel}>
-                <h3 style={h3}>Archived Deals</h3>
-                {archivedDeals.map((item, index) => (
-                  <div key={`archived-deal-${index}`} style={{ ...panel, marginTop: 10 }}>
-                    <p style={sub}>{itemTitle(item, "Deal")}</p>
-                    <div style={{ ...row, marginTop: 10 }}>
-                      <button type="button" style={goldBtn} onClick={() => setActiveRoom({ kind: "Deal", item, title: itemTitle(item, "Deal"), state: itemState(item) })}>Open</button>
-                      <button type="button" style={btn} onClick={() => { clearCleanup("Deal", item); setTick((v) => v + 1); }}>Restore</button>
-                      <button type="button" style={redBtn} onClick={() => { saveCleanup("Deal", item, "deleted"); setTick((v) => v + 1); }}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+        {folder === "none" ? (
+          <section style={{ marginTop: 22 }}>
+            <div style={eyebrow}>{tab} Cards • {state}</div>
 
-            {tab === "Deal" && deletedDeals.length ? (
-              <div style={redPanel}>
-                <h3 style={h3}>Deleted Deals</h3>
-                {deletedDeals.map((item, index) => (
-                  <div key={`deleted-deal-${index}`} style={{ ...panel, marginTop: 10 }}>
-                    <p style={sub}>{itemTitle(item, "Deal")}</p>
-                    <div style={{ ...row, marginTop: 10 }}>
-                      <button type="button" style={btn} onClick={() => { clearCleanup("Deal", item); setTick((v) => v + 1); }}>Restore</button>
-                      <button type="button" style={redBtn} onClick={() => { clearCleanup("Deal", item); setTick((v) => v + 1); }}>Delete Forever</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {tab === "Pain" && savedPains.length ? (
-              <div style={goldPanel}>
-                <h3 style={h3}>Saved Pain</h3>
-                {savedPains.map((item, index) => (
-                  <div key={`saved-pain-${index}`} style={{ ...panel, marginTop: 10 }}>
-                    <p style={sub}>{itemTitle(item, "Pain")}</p>
-                    <div style={{ ...row, marginTop: 10 }}>
-                      <button type="button" style={goldBtn} onClick={() => setActiveRoom({ kind: "Pain", item, title: itemTitle(item, "Pain"), state: itemState(item) })}>Open</button>
-                      <button type="button" style={btn} onClick={() => { clearCleanup("Pain", item); setTick((v) => v + 1); }}>Restore</button>
-                      <button type="button" style={redBtn} onClick={() => { saveCleanup("Pain", item, "deleted"); setTick((v) => v + 1); }}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {tab === "Pain" && archivedPains.length ? (
-              <div style={panel}>
-                <h3 style={h3}>Archived Pain</h3>
-                {archivedPains.map((item, index) => (
-                  <div key={`archived-pain-${index}`} style={{ ...panel, marginTop: 10 }}>
-                    <p style={sub}>{itemTitle(item, "Pain")}</p>
-                    <div style={{ ...row, marginTop: 10 }}>
-                      <button type="button" style={goldBtn} onClick={() => setActiveRoom({ kind: "Pain", item, title: itemTitle(item, "Pain"), state: itemState(item) })}>Open</button>
-                      <button type="button" style={btn} onClick={() => { clearCleanup("Pain", item); setTick((v) => v + 1); }}>Restore</button>
-                      <button type="button" style={redBtn} onClick={() => { saveCleanup("Pain", item, "deleted"); setTick((v) => v + 1); }}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            {tab === "Pain" && deletedPains.length ? (
-              <div style={redPanel}>
-                <h3 style={h3}>Deleted Pain</h3>
-                {deletedPains.map((item, index) => (
-                  <div key={`deleted-pain-${index}`} style={{ ...panel, marginTop: 10 }}>
-                    <p style={sub}>{itemTitle(item, "Pain")}</p>
-                    <div style={{ ...row, marginTop: 10 }}>
-                      <button type="button" style={btn} onClick={() => { clearCleanup("Pain", item); setTick((v) => v + 1); }}>Restore</button>
-                      <button type="button" style={redBtn} onClick={() => { clearCleanup("Pain", item); setTick((v) => v + 1); }}>Delete Forever</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-
-
-        <section style={{ marginTop: 22 }}>
-          <div style={eyebrow}>
-            {tab} Cards • {state}
-          </div>
-
-          <div style={wideGrid}>
-            {visibleItems.length ? (
-              visibleItems.map((item, index) => (
-                <TeaserCard
-                  key={`${tab}-${itemId(item, tab)}-${index}`}
-                  kind={tab}
-                  item={item}
-                  active={activeRoom?.kind === tab && activeRoom?.title === itemTitle(item, tab)}
-                  onOpen={() => setActiveRoom({ kind: tab, item, title: itemTitle(item, tab), state: itemState(item) })}
-                  onCleanup={(action) => {
-                    saveCleanup(tab, item, action);
-                    setTick((value) => value + 1);
-                  }}
-                />
-              ))
-            ) : (
-              <div style={panel}>
-                <h2 style={h2}>No {tab.toLowerCase()} teasers yet.</h2>
-                <p style={sub}>Approved {tab} cards for this state will appear here.</p>
-              </div>
-            )}
-          </div>
-        </section>
+            <div style={wideGrid}>
+              {visibleItems.length ? (
+                visibleItems.map((item, index) => (
+                  <TeaserCard
+                    key={`${tab}-${itemId(item, tab, index)}-${index}`}
+                    kind={tab}
+                    item={item}
+                    active={activeRoom?.kind === tab && activeRoom?.title === itemTitle(item, tab)}
+                    onOpen={() => openItem(tab, item)}
+                    onCleanup={(action) => cleanupAndRefresh(tab, item, action)}
+                    onRestore={() => restoreAndRefresh(tab, item)}
+                  />
+                ))
+              ) : (
+                <div style={panel}>
+                  <h2 style={h2}>No active {tab.toLowerCase()} teasers.</h2>
+                  <p style={sub}>Cards may be saved, archived, deleted, or not available for this state yet.</p>
+                </div>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         <section style={{ ...hero, marginTop: 24 }}>
           <div style={eyebrow}>Network Capabilities Through Members</div>
