@@ -3,666 +3,490 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type MemberStatus = "pending" | "approved" | "denied" | "suspended";
-type PaymentStatus = "unpaid" | "paid" | "comped" | "trial" | "past_due";
-type AdminFilter = "all" | "pending" | "active" | "locked" | "comped" | "blocked";
-type StateFilter = "all" | "GA" | "TN" | "AL" | "FL" | "NC" | "SC" | "TX";
-
-type MemberRecord = {
-  id: string;
-  email: string;
-  name: string;
-  company: string;
-  phone: string;
-  memberType: string;
-  states: string;
-  baseState: string;
-  status: MemberStatus;
-  paymentStatus: PaymentStatus;
-  access: "locked" | "active";
-  approvedForPayment: boolean;
-  createdAt: string;
-  updatedAt: string;
-  source: string;
-  raw?: any;
-};
-
-type AdminMessage = {
-  id: string;
-  topic: string;
-  body: string;
-  email: string;
-  status: string;
-  priority: string;
-  createdAt: string;
+type Countdown = {
+  expired: boolean;
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
 };
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-const ADMIN_MEMBERS_KEY = "vaultforge_admin_members_v1";
-const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
-const PROFILE_KEY = "vaultforge_profile";
-const LOGIN_KEY = "vaultforge_member_login_v1";
+const FOUNDER_DEADLINE = new Date("2026-05-30T23:59:59-04:00").getTime();
 
-const PROFILE_KEYS = [
-  "vaultforge_profile",
-  "vaultforge_member_profile",
-  "vf_profile",
-  "member_profile",
-  "profile",
+const founderRoles = [
+  { key: "buyers", title: "Buyers / Acquisitions", cap: 20, aliases: ["buyer", "buyers", "acquisition", "acquisitions"] },
+  { key: "lenders", title: "Lenders / Debt Capital", cap: 12, aliases: ["lender", "lenders", "debt", "private lender", "hard money"] },
+  { key: "operators", title: "Operators / Execution", cap: 15, aliases: ["operator", "operators", "asset manager", "execution"] },
+  { key: "contractors", title: "Contractors / Construction", cap: 15, aliases: ["contractor", "contractors", "construction", "builder", "rehab"] },
+  { key: "developers", title: "Developers", cap: 10, aliases: ["developer", "developers", "development"] },
+  { key: "wholesalers", title: "Wholesalers / Deal Sourcers", cap: 15, aliases: ["wholesaler", "wholesalers", "deal sourcer", "sourcer"] },
+  { key: "capital", title: "Capital Partners / Equity", cap: 8, aliases: ["capital", "equity", "partner", "lp", "private capital"] },
+  { key: "realtors", title: "Disposition / Realtors", cap: 8, aliases: ["realtor", "agent", "disposition", "brokerage"] },
+  { key: "legal", title: "Legal / Title", cap: 5, aliases: ["legal", "title", "attorney", "lawyer", "closing"] },
+  { key: "specialists", title: "Specialists / Wildcard", cap: 12, aliases: ["specialist", "insurance", "architect", "engineer", "surveyor", "permit", "property manager"] },
 ];
 
-const MEMBER_SOURCE_KEYS = [
-  "vaultforge_admin_members_v1",
-  "vaultforge_members",
-  "vaultforge_member_profiles",
-  "vaultforge_profiles",
-  "vf_profiles",
-  "members",
-  "profiles",
+const tickerItems = [
+  "PRIVATE INTELLIGENCE NETWORK",
+  "PAIN → SIGNAL → ROUTING → EXECUTION",
+  "APPROVED MEMBERS ONLY",
+  "DEALS ROUTED BY FIT",
+  "PAIN SIGNALS ROUTED BY NEED",
+  "PROFILE DEPTH IMPROVES ROUTING",
+  "MEMBER-TO-MEMBER EXECUTION",
+  "INVESTOR ACCESS IS SEPARATE",
+  "NOT A LISTINGS SITE",
+  "FOUNDING ALLOCATIONS CLOSE MAY 30",
 ];
 
-const STATE_CODES: StateFilter[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+const painExamples = [
+  "Distressed seller pressure",
+  "Capital gap",
+  "Stalled construction",
+  "Operator needed",
+  "Contractor failure",
+  "Title / legal issue",
+  "Permit or city issue",
+  "Lender exit",
+  "Emergency sale",
+  "Partnership breakdown",
+  "Vacant property pressure",
+  "Portfolio liquidation",
+];
+
+const logoCandidates = [
+  "/vaultforge-logo.png",
+  "/VaultForge-logo.png",
+  "/vaultforge-logo.jpg",
+  "/vaultforge-logo.jpeg",
+  "/logo.png",
+  "/logo.jpg",
+  "/vf-logo.png",
+  "/VF-logo.png",
+  "/vaultforge.png",
+  "/VaultForge.png",
+];
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function j<T>(raw: string | null, fallback: T): T {
+function readJson<T>(key: string, fallback: T): T {
+  if (!ok()) return fallback;
+
   try {
+    const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
   }
 }
 
-function writeJson(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    window.dispatchEvent(new Event("vaultforge-admin-members-change"));
-    return true;
-  } catch {
-    return false;
-  }
+function clean(value: unknown) {
+  return String(value || "").trim();
 }
 
-function clean(value: unknown, fallback = "") {
-  const text = String(value || "").trim();
-  return text && text !== "undefined" && text !== "null" ? text : fallback;
-}
-
-function cleanEmail(value: unknown) {
+function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function makeId(email: string, fallback: unknown) {
-  const raw = clean(fallback || email || Date.now());
-  return raw.toLowerCase().replace(/[^a-z0-9@._-]+/g, "-") || `member-${Date.now()}`;
+function allProfiles() {
+  if (!ok()) return [];
+
+  const keys = [
+    "vaultforge_profiles",
+    "vaultforge_member_profiles",
+    "vaultforge_admin_members_v1",
+    "vf_profiles",
+    "members",
+    "profiles",
+  ];
+
+  const rows: any[] = [];
+
+  for (const key of keys) {
+    const parsed = readJson<unknown>(key, []);
+    if (Array.isArray(parsed)) rows.push(...parsed.filter(Boolean));
+    else if (parsed && typeof parsed === "object") rows.push(...Object.values(parsed as Record<string, unknown>).filter(Boolean));
+  }
+
+  const single = readJson<any>("vaultforge_profile", null);
+  if (single && typeof single === "object" && !Array.isArray(single)) rows.push(single);
+
+  const seen = new Set<string>();
+  return rows.filter((profile: any, index) => {
+    const id = lower(profile?.email || profile?.memberEmail || profile?.id || `profile-${index}`);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
-function statusFrom(value: unknown): MemberStatus {
-  const s = clean(value).toLowerCase();
-  if (s === "approved" || s === "active") return "approved";
-  if (s === "denied" || s === "rejected") return "denied";
-  if (s === "suspended") return "suspended";
-  return "pending";
+function roleText(profile: any) {
+  return [
+    profile?.memberType,
+    profile?.member_type,
+    profile?.role,
+    profile?.category,
+    profile?.type,
+    profile?.businessType,
+    profile?.business_type,
+    profile?.strategy,
+    profile?.strategies,
+    profile?.services,
+    profile?.serviceType,
+    profile?.service_type,
+  ]
+    .flat()
+    .map((item) => String(item || "").toLowerCase())
+    .join(" ");
 }
 
-function paymentFrom(value: unknown): PaymentStatus {
-  const s = clean(value).toLowerCase();
-  if (s === "paid") return "paid";
-  if (s === "comped" || s === "free" || s === "free_access") return "comped";
-  if (s === "trial") return "trial";
-  if (s === "past_due" || s === "past due") return "past_due";
-  return "unpaid";
+function founderCounts() {
+  const profiles = allProfiles();
+
+  return founderRoles.map((role) => {
+    const filled = profiles.filter((profile) => {
+      const text = roleText(profile);
+      return role.aliases.some((alias) => text.includes(alias));
+    }).length;
+
+    return {
+      ...role,
+      filled,
+      remaining: Math.max(role.cap - filled, 0),
+      full: filled >= role.cap,
+    };
+  });
 }
 
+function countdown(): Countdown {
+  const diff = FOUNDER_DEADLINE - Date.now();
 
-function normalizeStateCode(value: unknown) {
-  const raw = clean(value).toUpperCase();
-  const map: Record<string, string> = {
-    GEORGIA: "GA",
-    TENNESSEE: "TN",
-    ALABAMA: "AL",
-    FLORIDA: "FL",
-    "NORTH CAROLINA": "NC",
-    "SOUTH CAROLINA": "SC",
-    TEXAS: "TX",
-  };
-
-  if (STATE_CODES.includes(raw as StateFilter)) return raw;
-  return map[raw] || "";
-}
-
-function baseStateFrom(row: any) {
-  return normalizeStateCode(
-    row?.baseState ||
-      row?.base_state ||
-      row?.homeState ||
-      row?.home_state ||
-      row?.companyState ||
-      row?.company_state ||
-      row?.primaryState ||
-      row?.primary_state ||
-      row?.headquartersState ||
-      row?.headquarters_state ||
-      row?.state ||
-      row?.addressState ||
-      row?.address_state
-  );
-}
-
-
-function arrayText(value: unknown, fallback: string) {
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean).join(" • ") || fallback;
-  return clean(value, fallback);
-}
-
-function normalizeMember(row: any, source: string): MemberRecord {
-  const email = cleanEmail(row?.email || row?.memberEmail || row?.member_email || row?.userEmail || row?.user_email);
-  const name = clean(row?.name || row?.fullName || row?.full_name || row?.memberName || row?.member_name, email ? email.split("@")[0] : "Unnamed Member");
-  const company = clean(row?.company || row?.companyName || row?.company_name || row?.businessName || row?.business_name, "Company not listed");
-  const phone = clean(row?.phone || row?.phoneNumber || row?.phone_number || row?.mobile, "Phone not listed");
-  const memberType = clean(row?.memberType || row?.member_type || row?.role || row?.investorType || row?.operatorType, "Private Member");
-  const states = arrayText(row?.states || row?.operatingStates || row?.statesOperated || row?.serviceStates || row?.markets, "Operating states not listed");
-  const baseState = baseStateFrom(row);
-  const status = statusFrom(row?.status || row?.memberStatus || row?.member_status || row?.accessStatus || row?.access_status);
-  const paymentStatus = paymentFrom(row?.paymentStatus || row?.payment_status || row?.billingStatus || row?.billing_status);
-  const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved);
-  const activePayment = paymentStatus === "paid" || paymentStatus === "comped" || paymentStatus === "trial";
+  if (diff <= 0) {
+    return { expired: true, days: 0, hours: 0, minutes: 0, seconds: 0 };
+  }
 
   return {
-    id: makeId(email, row?.id || row?.memberId || row?.member_id || row?.auth_user_id),
-    email: email || "email-not-listed",
-    name,
-    company,
-    phone,
-    memberType,
-    states,
-    baseState: baseState || "Not listed",
-    status,
-    paymentStatus,
-    approvedForPayment,
-    access: row?.access === "active" || row?.isActive || row?.is_active || (status === "approved" && activePayment) ? "active" : "locked",
-    createdAt: clean(row?.createdAt || row?.created_at, new Date().toISOString()),
-    updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
-    source,
-    raw: row,
+    expired: false,
+    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+    minutes: Math.floor((diff / (1000 * 60)) % 60),
+    seconds: Math.floor((diff / 1000) % 60),
   };
 }
 
-function getCurrentUserEmail() {
+function currentEmail() {
   if (!ok()) return "";
-  let profile: any = {};
-  for (const key of PROFILE_KEYS) {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
-    } catch {
-      // ignore
-    }
-  }
 
-  return cleanEmail(
-    profile.email ||
-      profile.memberEmail ||
-      profile.member_email ||
-      localStorage.getItem("vf_email") ||
-      localStorage.getItem("member_email") ||
-      localStorage.getItem("email")
-  );
-}
-
-function readMembers(): MemberRecord[] {
-  if (!ok()) return [];
-  const found = new Map<string, MemberRecord>();
-
-  for (const key of MEMBER_SOURCE_KEYS) {
-    const parsed = j<unknown>(localStorage.getItem(key), []);
-    const rows = Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === "object"
-        ? Object.values(parsed as Record<string, unknown>)
-        : [];
-
-    for (const row of rows) {
-      if (!row || typeof row !== "object") continue;
-      const member = normalizeMember(row, key);
-      const mapKey = member.email !== "email-not-listed" ? member.email : member.id;
-      found.set(mapKey, { ...found.get(mapKey), ...member });
-    }
-  }
-
-  for (const key of PROFILE_KEYS) {
-    const profile = j<any>(localStorage.getItem(key), null);
-    if (profile && typeof profile === "object") {
-      const member = normalizeMember(profile, key);
-      const mapKey = member.email !== "email-not-listed" ? member.email : member.id;
-      found.set(mapKey, { ...found.get(mapKey), ...member });
-    }
-  }
-
-  const ownerEmail = OWNER_EMAIL.toLowerCase();
-  found.set(ownerEmail, {
-    id: "owner-admin",
-    email: ownerEmail,
-    name: "Dmoney",
-    company: "VaultForge",
-    phone: "Owner",
-    memberType: "Owner / Admin",
-    states: "GA • TN • AL • FL • NC • SC • TX",
-    baseState: "GA",
-    status: "approved",
-    paymentStatus: "comped",
-    approvedForPayment: true,
-    access: "active",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    source: "owner-default",
-  });
-
-  return Array.from(found.values()).sort((a, b) => {
-    const order: Record<MemberStatus, number> = { pending: 0, approved: 1, suspended: 2, denied: 3 };
-    return order[a.status] - order[b.status] || a.name.localeCompare(b.name);
-  });
-}
-
-function readAdminMessages(): AdminMessage[] {
-  if (!ok()) return [];
-  const rows = j<AdminMessage[]>(localStorage.getItem(ADMIN_MESSAGES_KEY), []);
-  return Array.isArray(rows) ? rows : [];
-}
-
-function persistMembers(members: MemberRecord[]) {
-  writeJson(ADMIN_MEMBERS_KEY, members);
-}
-
-function canViewAdmin(email: string) {
-  return cleanEmail(email) === OWNER_EMAIL.toLowerCase();
-}
-
-
-function sanitizeLegacyMembers(list: MemberRecord[]) {
-  return list.map((member) => {
-    if (!member.baseState || member.baseState === "Not listed") {
-      const firstState =
-        clean(member.states)
-          .split("•")[0]
-          ?.trim() || "GA";
-
-      return {
-        ...member,
-        baseState: normalizeStateCode(firstState) || "GA",
-      };
-    }
-
-    return member;
-  });
-}
-
-function memberMatchesState(member: MemberRecord, state: StateFilter) {
-  if (state === "all") return true;
-
-  const memberBase = normalizeStateCode(member.baseState);
-
-  return memberBase === state;
-}
-function updateProfileAndLoginForMember(member: MemberRecord) {
-  if (!ok()) return;
-  const currentEmail = cleanEmail(member.email);
-  const viewerEmail = getCurrentUserEmail();
-
-  if (currentEmail && currentEmail === viewerEmail) {
-    const profile = j<any>(localStorage.getItem(PROFILE_KEY), {});
-    const login = j<any>(localStorage.getItem(LOGIN_KEY), {});
-    const patch = {
-      email: member.email,
-      approvedForPayment: member.approvedForPayment,
-      paymentStatus: member.paymentStatus,
-      accessStatus: member.access,
-      memberStatus: member.status,
-      updatedAt: new Date().toISOString(),
-    };
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, ...patch }));
-    localStorage.setItem(LOGIN_KEY, JSON.stringify({ ...login, ...patch }));
-    window.dispatchEvent(new Event("vaultforge-access-change"));
-  }
-}
-
-function updateMember(members: MemberRecord[], targetId: string, patch: Partial<MemberRecord>) {
-  const now = new Date().toISOString();
-
-  return members.map((member) => {
-    if (member.id !== targetId) return member;
-
-    const next = { ...member, ...patch, updatedAt: now };
-    const activePayment = next.paymentStatus === "paid" || next.paymentStatus === "comped" || next.paymentStatus === "trial";
-
-    if (patch.approvedForPayment === true && next.status === "pending") {
-      next.status = "approved";
-    }
-
-    next.access = next.status === "approved" && activePayment ? "active" : "locked";
-
-    updateProfileAndLoginForMember(next);
-    return next;
-  });
+  const profile = readJson<any>("vaultforge_profile", {});
+  return lower(profile?.email || localStorage.getItem("vf_email") || localStorage.getItem("member_email") || localStorage.getItem("email"));
 }
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
-  background: "#080b10",
-  color: "#f6f7fb",
-  padding: 18,
+  background: "#05070d",
+  color: "#f7f7fb",
   fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  overflowX: "hidden",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1320, margin: "0 auto", paddingBottom: 90 };
-const topbar: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", border: "1px solid rgba(255,255,255,.10)", background: "#0c1119", borderRadius: 18, padding: 14, marginBottom: 18 };
-const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 24, fontWeight: 950, letterSpacing: -1 };
-const navRight: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "11px 15px", fontWeight: 900, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const wrap: React.CSSProperties = { maxWidth: 1420, margin: "0 auto", padding: "18px 18px 100px" };
+const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: 18 };
+const navSide: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 28, fontWeight: 950, letterSpacing: -1 };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#251015", borderColor: "rgba(255,70,70,.52)", color: "#ffaaaa" };
-const greenBtn: React.CSSProperties = { ...btn, background: "#0e2518", borderColor: "rgba(80,220,130,.55)", color: "#9cffbc" };
-const hero: React.CSSProperties = { border: "1px solid rgba(255,255,255,.10)", borderRadius: 22, padding: 28, marginBottom: 18, background: "linear-gradient(180deg,#0e1420,#090d14)" };
-const card: React.CSSProperties = { background: "#0d121b", border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: 18, marginBottom: 18 };
-const panel: React.CSSProperties = { background: "#111823", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 18 };
-const alertPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.55)" };
-const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.50)" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 10 };
-const h1: React.CSSProperties = { fontSize: "clamp(36px,6vw,64px)", lineHeight: 0.95, letterSpacing: -3, margin: "0 0 14px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(24px,4vw,38px)", lineHeight: 1, letterSpacing: -1.5, margin: "0 0 12px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 18, lineHeight: 1.35, margin: 0 };
-const muted: React.CSSProperties = { color: "#aeb7c7", margin: "7px 0 0", lineHeight: 1.35 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 14 };
-const row: React.CSSProperties = { display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" };
-const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#111823", color: "#f8fafc", borderRadius: 16, padding: "14px 15px", fontSize: 16 };
+const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
 
-function AdminNav() {
+const hero: React.CSSProperties = {
+  border: "1px solid rgba(245,197,66,.28)",
+  borderRadius: 34,
+  padding: "clamp(28px,5vw,58px)",
+  marginBottom: 20,
+  background:
+    "radial-gradient(circle at top right, rgba(245,197,66,.18), transparent 34%), radial-gradient(circle at bottom left, rgba(255,45,60,.12), transparent 32%), linear-gradient(180deg,#080d19,#050816)",
+  boxShadow: "0 0 55px rgba(245,197,66,.08)",
+};
+
+const tickerWrap: React.CSSProperties = { borderTop: "1px solid rgba(245,197,66,.25)", borderBottom: "1px solid rgba(245,197,66,.25)", background: "#090d14", overflow: "hidden", marginBottom: 20 };
+const tickerTrack: React.CSSProperties = { display: "flex", gap: 40, width: "max-content", padding: "14px 0", animation: "tickerMove 38s linear infinite" };
+const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 28, marginBottom: 22 };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 24, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
+const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.55)", boxShadow: "0 0 28px rgba(245,197,66,.12)" };
+const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.56)", boxShadow: "0 0 28px rgba(255,70,70,.10)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 13, marginBottom: 12 };
+const h1: React.CSSProperties = { fontSize: "clamp(52px,11vw,128px)", lineHeight: 0.82, letterSpacing: -6, margin: "0 0 20px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(34px,6vw,70px)", lineHeight: 0.92, letterSpacing: -3, margin: "0 0 16px", fontWeight: 950 };
+const h3: React.CSSProperties = { fontSize: "clamp(25px,4vw,42px)", lineHeight: 1, letterSpacing: -1.5, margin: "0 0 12px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: "clamp(19px,2.5vw,26px)", lineHeight: 1.28, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
+const wideGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18 };
+const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const badge: React.CSSProperties = { display: "inline-flex", border: "1px solid rgba(245,197,66,.32)", borderRadius: 999, padding: "9px 13px", color: "#ffd45a", background: "rgba(245,197,66,.07)", fontWeight: 900, margin: "6px 6px 0 0" };
+
+function Nav({ owner }: { owner: boolean }) {
   return (
-    <div style={topbar}>
-      <div>
-        <div style={brand}>VAULTFORGE ADMIN COMMAND</div>
-        <div style={{ ...muted, marginTop: 2 }}>Admin Command • Owner Control Desk</div>
+    <nav style={nav}>
+      <div style={navSide}>
+        <div style={brand}>VAULTFORGE</div>
+        <span style={badge}>PRIVATE APPROVED ACCESS ONLY</span>
       </div>
-      <div style={navRight}>
-        <Link href="/admin" style={goldBtn}>Admin Command</Link>
-        <Link href="/admin-messages" style={btn}>Admin Messages</Link>
-        <Link href="/command" style={btn}>Member View</Link>
-        <Link href="/profile" style={btn}>Profile</Link>
-        <Link href="/logout" style={redBtn}>Logout</Link>
+
+      <div style={navSide}>
+        <Link href="/member-access" style={goldBtn}>Member Access</Link>
+        <Link href="/investor-access" style={btn}>Investor Access</Link>
+        <Link href="/create-login" style={btn}>Create Login</Link>
+        <Link href="/investor-login" style={btn}>Investor Login</Link>
+        <Link href="/command" style={btn}>Member Command</Link>
+        {owner ? <Link href="/admin" style={redBtn}>Admin Command</Link> : null}
+      </div>
+    </nav>
+  );
+}
+
+function LogoHero() {
+  const [index, setIndex] = useState(0);
+  const current = logoCandidates[index];
+
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: "0 0 28px" }}>
+      <div style={{ width: "min(420px, 84vw)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 18, background: "radial-gradient(circle, rgba(245,197,66,.13), transparent 68%), #070b14", boxShadow: "0 0 55px rgba(245,197,66,.16)" }}>
+        {current ? (
+          <img
+            src={current}
+            alt="VaultForge"
+            style={{ width: "100%", height: "auto", display: "block", borderRadius: 18 }}
+            onError={() => setIndex((value) => (value + 1 < logoCandidates.length ? value + 1 : logoCandidates.length))}
+          />
+        ) : (
+          <div style={{ minHeight: 170, display: "grid", placeItems: "center", color: "#ffd45a", fontSize: 56, fontWeight: 950, letterSpacing: -2 }}>VAULTFORGE</div>
+        )}
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Ticker() {
+  return (
+    <div style={tickerWrap}>
+      <div style={tickerTrack}>
+        {[...tickerItems, ...tickerItems].map((item, index) => (
+          <div key={`${item}-${index}`} style={{ whiteSpace: "nowrap", color: "#ffd45a", fontWeight: 950, letterSpacing: 3 }}>{item}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Section({ label, title, children }: { label: string; title: string; children: React.ReactNode }) {
   return (
     <section style={card}>
-      <div style={eyebrow}>{title}</div>
+      <div style={eyebrow}>{label}</div>
+      <h2 style={h2}>{title}</h2>
       {children}
     </section>
   );
 }
 
-function Metric({ title, count, note, onClick }: { title: string; count: number; note: string; onClick?: () => void }) {
+function CountdownCards({ timer }: { timer: Countdown }) {
   return (
-    <button type="button" style={{ ...panel, width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
-      <div style={eyebrow}>{title}</div>
-      <h2 style={h2}>{count}</h2>
-      <p style={muted}>{note}</p>
-      {onClick ? <p style={muted}>Click to review</p> : null}
-    </button>
-  );
-}
-
-function FilterButton({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button type="button" style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: "pointer" }} onClick={onClick}>
-      <div style={eyebrow}>{label}</div>
-      <h2 style={h2}>{count}</h2>
-      <p style={muted}>Click to filter</p>
-    </button>
-  );
-}
-
-function StateCard({ state, count, active, onClick }: { state: StateFilter; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button type="button" style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: "pointer" }} onClick={onClick}>
-      <div style={eyebrow}>{state}</div>
-      <h2 style={h2}>{count}</h2>
-      <p style={muted}>member(s) based in this state</p>
-    </button>
-  );
-}
-
-function StatusPill({ text }: { text: string }) {
-  const lower = text.toLowerCase();
-  let style = btn;
-  if (lower.includes("approved") || lower.includes("active") || lower.includes("paid") || lower.includes("comped")) style = greenBtn;
-  if (lower.includes("pending") || lower.includes("trial")) style = goldBtn;
-  if (lower.includes("denied") || lower.includes("suspended") || lower.includes("unpaid") || lower.includes("locked") || lower.includes("past")) style = redBtn;
-  return <span style={{ ...style, padding: "7px 11px", fontSize: 12 }}>{text}</span>;
-}
-
-function MemberCard({ member, onPatch }: { member: MemberRecord; onPatch: (patch: Partial<MemberRecord>) => void }) {
-  const isOwner = member.email === OWNER_EMAIL.toLowerCase();
-
-  return (
-    <div style={member.status === "pending" ? activePanel : member.status === "suspended" || member.status === "denied" ? alertPanel : panel}>
-      <div style={eyebrow}>{member.status} • {member.paymentStatus} • {member.access}</div>
-      <h2 style={h2}>{member.name}</h2>
-      <p style={sub}>{member.company}</p>
-      <p style={muted}>{member.email}</p>
-      <p style={muted}>{member.phone}</p>
-      <p style={muted}>{member.memberType}</p>
-      <p style={muted}>Base State: {member.baseState}</p>
-      <p style={muted}>Operating States: {member.states}</p>
-
-      <div style={{ ...row, marginTop: 12 }}>
-        <StatusPill text={member.status} />
-        <StatusPill text={member.paymentStatus} />
-        <StatusPill text={member.access} />
-        <StatusPill text={member.approvedForPayment ? "payment approved" : "payment locked"} />
-      </div>
-
-      <div style={{ ...row, marginTop: 15 }}>
-        <button type="button" style={greenBtn} onClick={() => onPatch({ status: "approved" })}>Approve</button>
-        <button type="button" style={goldBtn} onClick={() => onPatch({ approvedForPayment: true, status: "approved" })}>Approve Payment Button</button>
-        <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked", approvedForPayment: false })} disabled={isOwner}>Deny</button>
-        <button type="button" style={greenBtn} onClick={() => onPatch({ paymentStatus: "paid" })}>Mark Paid</button>
-        <button type="button" style={btn} onClick={() => onPatch({ paymentStatus: "unpaid", access: "locked" })} disabled={isOwner}>Mark Unpaid</button>
-        <button type="button" style={goldBtn} onClick={() => onPatch({ paymentStatus: "comped", status: "approved", approvedForPayment: true, access: "active" })}>Grant Free Access</button>
-        <button type="button" style={redBtn} onClick={() => onPatch({ status: "suspended", access: "locked" })} disabled={isOwner}>Suspend</button>
-        <button type="button" style={btn} onClick={() => onPatch({ status: "approved" })}>Restore</button>
-      </div>
+    <div style={grid}>
+      {[
+        ["Days", timer.days],
+        ["Hours", timer.hours],
+        ["Minutes", timer.minutes],
+        ["Seconds", timer.seconds],
+      ].map(([label, value]) => (
+        <div key={label} style={redPanel}>
+          <div style={eyebrow}>{label}</div>
+          <h2 style={h2}>{String(value).padStart(2, "0")}</h2>
+          <p style={muted}>until founding allocations close</p>
+        </div>
+      ))}
     </div>
   );
 }
 
-export default function AdminPage() {
-  const [currentEmail, setCurrentEmail] = useState("");
-  const [members, setMembers] = useState<MemberRecord[]>([]);
-  const [adminMessages, setAdminMessages] = useState<AdminMessage[]>([]);
-  const [searchDraft, setSearchDraft] = useState("");
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<AdminFilter>("all");
-  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
+function FounderAllocationCard({ item }: { item: any }) {
+  const percent = item.cap ? Math.min(100, Math.round((item.filled / item.cap) * 100)) : 0;
+
+  return (
+    <div style={item.full || item.remaining <= 2 ? redPanel : goldPanel}>
+      <div style={eyebrow}>{item.title}</div>
+      <h3 style={h3}>{item.filled} / {item.cap} Filled</h3>
+      <p style={sub}>{item.remaining} founder allocations remaining</p>
+      <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.08)", overflow: "hidden", marginTop: 14 }}>
+        <div style={{ height: "100%", width: `${percent}%`, background: item.full || item.remaining <= 2 ? "#ff4d5e" : "#ffdc68" }} />
+      </div>
+      <p style={muted}>{item.full ? "Founder allocation closed." : item.remaining <= 2 ? "Almost full." : "Founder allocation open."}</p>
+    </div>
+  );
+}
+
+export default function HomePage() {
+  const [tick, setTick] = useState(0);
+  const [owner, setOwner] = useState(false);
 
   useEffect(() => {
     const refresh = () => {
-      setCurrentEmail(getCurrentUserEmail());
-      setMembers(readMembers());
-      setAdminMessages(readAdminMessages());
+      setOwner(currentEmail() === OWNER_EMAIL);
+      setTick((value) => value + 1);
     };
 
     refresh();
 
+    const interval = window.setInterval(() => setTick((value) => value + 1), 1000);
+
     window.addEventListener("storage", refresh);
+    window.addEventListener("vaultforge-access-change", refresh);
     window.addEventListener("vaultforge-admin-members-change", refresh);
-    window.addEventListener("vaultforge-admin-message-change", refresh);
 
     return () => {
+      window.clearInterval(interval);
       window.removeEventListener("storage", refresh);
+      window.removeEventListener("vaultforge-access-change", refresh);
       window.removeEventListener("vaultforge-admin-members-change", refresh);
-      window.removeEventListener("vaultforge-admin-message-change", refresh);
     };
   }, []);
 
-  const allowed = canViewAdmin(currentEmail);
-
-  const pending = useMemo(() => members.filter((member) => member.status === "pending"), [members]);
-  const active = useMemo(() => members.filter((member) => member.status === "approved" && member.access === "active"), [members]);
-  const locked = useMemo(() => members.filter((member) => member.paymentStatus === "unpaid" || member.access === "locked"), [members]);
-  const comped = useMemo(() => members.filter((member) => member.paymentStatus === "comped"), [members]);
-  const blocked = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
-  const openAdminMessages = useMemo(() => adminMessages.filter((message) => message.status !== "resolved" && message.status !== "deleted"), [adminMessages]);
-
-  const stateCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const state of STATE_CODES) {
-      counts[state] = members.filter((member) => memberMatchesState(member, state)).length;
-    }
-    return counts;
-  }, [members]);
-
-  const filteredMembers = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    return members.filter((member) => {
-      const matchesSearch =
-        !q ||
-        member.name.toLowerCase().includes(q) ||
-        member.company.toLowerCase().includes(q) ||
-        member.email.toLowerCase().includes(q) ||
-        member.phone.toLowerCase().includes(q) ||
-        member.memberType.toLowerCase().includes(q) ||
-        member.states.toLowerCase().includes(q) ||
-        member.baseState.toLowerCase().includes(q);
-
-      if (!matchesSearch) return false;
-      if (!memberMatchesState(member, stateFilter)) return false;
-
-      if (filter === "all") return true;
-      if (filter === "pending") return member.status === "pending";
-      if (filter === "active") return member.status === "approved" && member.access === "active";
-      if (filter === "locked") return member.paymentStatus === "unpaid" || member.access === "locked";
-      if (filter === "comped") return member.paymentStatus === "comped";
-      if (filter === "blocked") return member.status === "suspended" || member.status === "denied";
-      return true;
-    });
-  }, [members, search, filter, stateFilter]);
-
-  function patchMember(id: string, patch: Partial<MemberRecord>) {
-    const next = updateMember(members, id, patch);
-    setMembers(next);
-    persistMembers(next);
-  }
-
-  function runSearch(event?: React.FormEvent) {
-    if (event) event.preventDefault();
-    setSearch(searchDraft);
-  }
-
-  if (!allowed) {
-    return (
-      <main style={page}>
-        <div style={wrap}>
-          <AdminNav />
-          <section style={hero}>
-            <div style={eyebrow}>Owner Only</div>
-            <h1 style={h1}>Admin Command locked.</h1>
-            <p style={sub}>Admin Command is only visible to {OWNER_EMAIL}.</p>
-            <p style={muted}>Detected email: {currentEmail || "not detected"}</p>
-            <div style={{ ...row, marginTop: 18 }}>
-              <Link href="/command" style={goldBtn}>Back to Member Area</Link>
-              <Link href="/profile" style={btn}>Profile</Link>
-              <Link href="/logout" style={redBtn}>Logout</Link>
-            </div>
-          </section>
-        </div>
-      </main>
-    );
-  }
+  const timer = useMemo(() => countdown(), [tick]);
+  const counts = useMemo(() => founderCounts(), [tick]);
+  const founderClosed = timer.expired || counts.every((item) => item.full);
+  const totalFilled = counts.reduce((sum, item) => sum + item.filled, 0);
+  const totalCap = counts.reduce((sum, item) => sum + item.cap, 0);
 
   return (
     <main style={page}>
+      <style>{`@keyframes tickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
+
       <div style={wrap}>
-        <AdminNav />
+        <Nav owner={owner} />
 
         <section style={hero}>
-          <div style={eyebrow}>Admin Command</div>
-          <h1 style={h1}>Owner Control Desk.</h1>
-          <p style={sub}>Manage member approvals, payment unlocks, comp access, state balance, admin messages, suspensions, and restored access.</p>
-          <p style={muted}>ADMIN COMMAND MODE • Signed in as owner: {currentEmail}</p>
-        </section>
+          <LogoHero />
+          <div style={eyebrow}>VaultForge Intelligence</div>
+          <h1 style={h1}>Pain becomes signal.</h1>
+          <p style={sub}>VaultForge is not a listings site. It is a private approved-member intelligence, routing, and execution network for real estate operators, buyers, lenders, partners, and problem solvers.</p>
+          <p style={{ ...sub, marginTop: 16 }}>Members submit opportunities, deals, pain, capital needs, operator requests, and execution problems. VaultForge Intelligence analyzes the signal and routes it to members best positioned to execute.</p>
 
-        <section style={{ marginBottom: 18 }}>
-          <div style={grid}>
-            <Metric title="Pending" count={pending.length} note="waiting for owner review" onClick={() => setFilter("pending")} />
-            <Metric title="Active" count={active.length} note="approved and unlocked" onClick={() => setFilter("active")} />
-            <Metric title="Unpaid / Locked" count={locked.length} note="not yet activated" onClick={() => setFilter("locked")} />
-            <Metric title="Comped" count={comped.length} note="free owner-granted access" onClick={() => setFilter("comped")} />
-            <Metric title="Denied / Suspended" count={blocked.length} note="blocked from access" onClick={() => setFilter("blocked")} />
-            <Metric title="Admin Messages" count={openAdminMessages.length} note="member support and escalation" onClick={() => { window.location.href = "/admin-messages"; }} />
+          <div style={{ ...row, marginTop: 24 }}>
+            <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
+            <Link href="/investor-access" style={btn}>Investor Access</Link>
+            <Link href="/create-login" style={btn}>Create Login</Link>
+            <Link href="/investor-login" style={btn}>Investor Login</Link>
+            <Link href="/profile" style={btn}>Build Profile</Link>
+            <Link href="/contact-admin" style={btn}>Contact Admin</Link>
+          </div>
+
+          <div style={{ marginTop: 22 }}>
+            <span style={badge}>PRIVATE NETWORK</span>
+            <span style={badge}>APPROVED MEMBERS ONLY</span>
+            <span style={badge}>PAIN → SIGNAL → ROUTING → EXECUTION</span>
           </div>
         </section>
 
-        <Section title="Search / Filter Members">
-          <form onSubmit={runSearch} style={{ display: "grid", gap: 14 }}>
-            <label>
-              <div style={eyebrow}>Search</div>
-              <input
-                style={input}
-                value={searchDraft}
-                onChange={(event) => {
-                  setSearchDraft(event.target.value);
-                  setSearch(event.target.value);
-                }}
-                placeholder="Search name, company, email, phone, type, or state..."
-              />
-            </label>
+        <Ticker />
 
-            <div style={row}>
-              <button type="submit" style={goldBtn}>Search</button>
-              <button type="button" style={btn} onClick={() => { setSearchDraft(""); setSearch(""); setFilter("all"); setStateFilter("all"); }}>Reset</button>
-              <Link href="/admin-messages" style={btn}>Open Admin Messages</Link>
-            </div>
-
-            <div style={grid}>
-              <FilterButton label="All Members" count={members.length} active={filter === "all"} onClick={() => setFilter("all")} />
-              <FilterButton label="Pending" count={pending.length} active={filter === "pending"} onClick={() => setFilter("pending")} />
-              <FilterButton label="Active" count={active.length} active={filter === "active"} onClick={() => setFilter("active")} />
-              <FilterButton label="Locked" count={locked.length} active={filter === "locked"} onClick={() => setFilter("locked")} />
-              <FilterButton label="Comped" count={comped.length} active={filter === "comped"} onClick={() => setFilter("comped")} />
-              <FilterButton label="Blocked" count={blocked.length} active={filter === "blocked"} onClick={() => setFilter("blocked")} />
-            </div>
-          </form>
-        </Section>
-
-        <Section title="State Member Balance">
+        <section style={{ marginBottom: 22 }}>
           <div style={grid}>
-            <StateCard state="all" count={members.length} active={stateFilter === "all"} onClick={() => setStateFilter("all")} />
-            {STATE_CODES.map((state) => (
-              <StateCard key={state} state={state} count={stateCounts[state] || 0} active={stateFilter === state} onClick={() => setStateFilter(state)} />
-            ))}
+            <div style={goldPanel}><div style={eyebrow}>Founder Network</div><h2 style={h2}>{totalFilled} / {totalCap}</h2><p style={muted}>real filled founder allocations</p></div>
+            <div style={goldPanel}><div style={eyebrow}>Member Founder Pricing</div><h2 style={h2}>{founderClosed ? "$99" : "$49"}</h2><p style={muted}>{founderClosed ? "$99 activation, then $299/month" : "$49 activation, $49 second month, then $299/month"}</p></div>
+            <div style={goldPanel}><div style={eyebrow}>Investor Access</div><h2 style={h2}>$49</h2><p style={muted}>first month, then $149/month</p></div>
+            <div style={redPanel}><div style={eyebrow}>Pain Signals</div><h2 style={h2}>Live</h2><p style={muted}>problem pressure routed by profile fit</p></div>
+          </div>
+        </section>
+
+        <Section label="Founder Access Countdown" title={founderClosed ? "Founding allocations closed." : "Founding allocations close May 30."}>
+          <CountdownCards timer={timer} />
+          <div style={{ ...panel, marginTop: 18 }}>
+            <p style={sub}>{founderClosed ? "Standard member access is now active: $99 activation, then $299/month." : "Member founder access: $49 activation, $49 second month, then $299/month. Founder allocations close May 30 or when strategic categories reach capacity."}</p>
           </div>
         </Section>
 
-        <Section title="Filtered Member Results">
-          {filteredMembers.length ? (
-            <div style={grid}>
-              {filteredMembers.map((member) => (
-                <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />
-              ))}
-            </div>
-          ) : (
-            <div style={panel}>
-              <h2 style={h2}>No matching members.</h2>
-              <p style={sub}>Try a different search, state, or status filter.</p>
-            </div>
-          )}
+        <Section label="Founding Network Allocations" title="Balanced network. Limited seats by role.">
+          <p style={sub}>VaultForge intentionally limits member categories so the network does not become overloaded with only buyers, only wholesalers, or only operators. The goal is a functioning execution ecosystem.</p>
+          <div style={{ ...grid, marginTop: 20 }}>
+            {counts.map((item) => <FounderAllocationCard key={item.key} item={item} />)}
+          </div>
         </Section>
+
+        <Section label="Investor Access Lane" title="Separate investor room. Limited data. Controlled messaging.">
+          <p style={sub}>Investor Access is separate from the private member network. Investors can browse limited Deal and Pain teaser cards by state and request more information through VaultForge. They do not see member contact data, private routing, full notes, seller information, or the member network.</p>
+          <div style={{ ...grid, marginTop: 20 }}>
+            <div style={goldPanel}><div style={eyebrow}>Investor Pricing</div><h3 style={h3}>$49 first month</h3><p style={muted}>Then $149/month.</p></div>
+            <div style={panel}><div style={eyebrow}>Investor Sees</div><p style={sub}>Limited Deal cards, limited Pain cards, state filters, and Request More Info messaging.</p></div>
+            <div style={panel}><div style={eyebrow}>Investor Does Not See</div><p style={sub}>Member directory, private contacts, seller info, routing intelligence, admin notes, or full member rooms.</p></div>
+          </div>
+          <div style={{ ...row, marginTop: 22 }}>
+            <Link href="/investor-access" style={goldBtn}>Investor Access</Link>
+            <Link href="/investor-login" style={btn}>Investor Login</Link>
+            <Link href="/investor-application" style={btn}>Investor Application</Link>
+          </div>
+        </Section>
+
+        <Section label="Profile Intelligence" title="More profile intelligence creates smarter routing.">
+          <p style={sub}>VaultForge Intelligence routes alerts, signals, opportunities, pain requests, operator matches, capital needs, and execution opportunities using profile intelligence.</p>
+          <p style={{ ...muted, marginTop: 12 }}>The more complete your profile becomes, the smarter VaultForge gets at routing the right signals, markets, opportunities, and member connections to you.</p>
+        </Section>
+
+        <Section label="Not Real Estate Listings" title="This is private execution infrastructure.">
+          <p style={sub}>Most platforms show finished listings after the market already sees them. VaultForge surfaces real-world pressure, routes the signal, and connects approved members before the opportunity becomes public noise.</p>
+          <div style={{ ...grid, marginTop: 20 }}>
+            <div style={panel}><div style={eyebrow}>Not A Marketplace</div><p style={sub}>VaultForge is not built for public browsing, mass posting, or open listings.</p></div>
+            <div style={panel}><div style={eyebrow}>Not Social Media</div><p style={sub}>Members connect through routed intelligence, not random feeds or public chatter.</p></div>
+            <div style={panel}><div style={eyebrow}>Not Lead Lists</div><p style={sub}>Signals are routed by fit, execution need, capital, pressure, and member capability.</p></div>
+          </div>
+        </Section>
+
+        <Section label="Pain Intelligence" title="Pain is where opportunity begins.">
+          <p style={sub}>Pain means a real-world problem requiring execution: capital gaps, stalled construction, distressed sellers, lender pressure, permit issues, tenant problems, operator needs, emergency exits, off-market opportunities, or partnership breakdowns.</p>
+          <div style={{ marginTop: 18 }}>
+            {painExamples.map((item) => <span key={item} style={badge}>{item}</span>)}
+          </div>
+        </Section>
+
+        <Section label="Core Engine" title="Pain → Signal → Routing → Execution">
+          <div style={wideGrid}>
+            <div style={panel}><div style={eyebrow}>01</div><h3 style={h3}>Pain / Opportunity</h3><p style={muted}>A member submits a deal, opportunity, pressure point, capital need, operator request, or execution problem.</p></div>
+            <div style={panel}><div style={eyebrow}>02</div><h3 style={h3}>VaultForge Signal</h3><p style={muted}>VaultForge Intelligence classifies the situation, identifies risk, urgency, service need, and execution path.</p></div>
+            <div style={panel}><div style={eyebrow}>03</div><h3 style={h3}>Private Routing</h3><p style={muted}>The signal is routed to members, buyers, lenders, contractors, operators, or partners positioned to help.</p></div>
+            <div style={panel}><div style={eyebrow}>04</div><h3 style={h3}>Execution</h3><p style={muted}>Members connect directly through rooms, messages, alerts, and route queues to move the situation forward.</p></div>
+          </div>
+        </Section>
+
+        <Section label="Access Flow" title="Private access is controlled.">
+          <div style={wideGrid}>
+            <div style={panel}><div style={eyebrow}>Create Login</div><p style={sub}>Email, password, and recovery path create the member identity.</p></div>
+            <div style={panel}><div style={eyebrow}>Complete Profile</div><p style={sub}>Profile intelligence tells VaultForge what you do, where you operate, and how you execute.</p></div>
+            <div style={panel}><div style={eyebrow}>Admin Approval</div><p style={sub}>Owner approval unlocks the payment step.</p></div>
+            <div style={panel}><div style={eyebrow}>Payment Unlock</div><p style={sub}>After payment, the full member execution network unlocks.</p></div>
+          </div>
+        </Section>
+
+        <Section label="Legal / Disclaimers" title="Private network. Independent decisions.">
+          <div style={wideGrid}>
+            <div style={panel}><div style={eyebrow}>Not Broker / Lender</div><p style={muted}>VaultForge is not a broker, lender, attorney, investment advisor, securities dealer, or fiduciary.</p></div>
+            <div style={panel}><div style={eyebrow}>No Guarantees</div><p style={muted}>VaultForge does not guarantee profits, funding, deals, introductions, closings, returns, or execution outcomes.</p></div>
+            <div style={panel}><div style={eyebrow}>Due Diligence</div><p style={muted}>Members and investors are responsible for independent underwriting, legal review, compliance, verification, negotiations, and transaction decisions.</p></div>
+            <div style={panel}><div style={eyebrow}>Cancellation Policy</div><p style={muted}>Memberships renew monthly until canceled. Cancellation stops future renewals. Activation payments and started billing cycles are not prorated or refunded.</p></div>
+            <div style={panel}><div style={eyebrow}>Founder Status</div><p style={muted}>Founder pricing is limited and promotional. Founder status may be lost if membership is canceled and later restarted.</p></div>
+            <div style={panel}><div style={eyebrow}>Approval Rights</div><p style={muted}>VaultForge may approve, deny, suspend, or remove access to protect network quality and execution balance.</p></div>
+          </div>
+        </Section>
+
+        <section style={hero}>
+          <div style={eyebrow}>VaultForge Intelligence</div>
+          <h2 style={h2}>See pressure before the market does.</h2>
+          <p style={sub}>Not every opportunity should become public. Not every problem belongs on the open market. VaultForge exists to coordinate execution before the rest of the market sees the pressure.</p>
+          <div style={{ ...row, marginTop: 22 }}>
+            <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
+            <Link href="/investor-access" style={btn}>Investor Access</Link>
+            <Link href="/contact-admin" style={btn}>Contact Admin</Link>
+          </div>
+        </section>
       </div>
     </main>
   );
