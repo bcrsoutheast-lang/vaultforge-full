@@ -290,7 +290,7 @@ function AdminNav() {
   return (
     <div style={topbar}>
       <div>
-        <div style={brand}>VAULTFORGE ADMIN COMMAND</div>
+        <div style={brand}>VAULTFORGE ADMIN COMMAND COMMAND</div>
         <div style={{ ...muted, marginTop: 2 }}>Admin Command • Admin Command</div>
       </div>
       <div style={navRight}>
@@ -303,13 +303,28 @@ function AdminNav() {
   );
 }
 
-function Metric({ title, count, note }: { title: string; count: number; note: string }) {
+function Metric({
+  title,
+  count,
+  note,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  note: string;
+  onClick?: () => void;
+}) {
   return (
-    <div style={panel}>
+    <button
+      type="button"
+      style={{ ...panel, width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }}
+      onClick={onClick}
+    >
       <div style={eyebrow}>{title}</div>
       <h2 style={h2}>{count}</h2>
       <p style={muted}>{note}</p>
-    </div>
+      {onClick ? <p style={muted}>Click to review</p> : null}
+    </button>
   );
 }
 
@@ -397,6 +412,11 @@ export default function AdminPage() {
   const comped = useMemo(() => members.filter((member) => member.paymentStatus === "comped"), [members]);
   const blocked = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
 
+  function scrollToAdminSection(id: string) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function patchMember(id: string, patch: Partial<MemberRecord>) {
     const next = updateMember(members, id, patch);
     setMembers(next);
@@ -440,45 +460,45 @@ export default function AdminPage() {
 
         <section style={{ marginBottom: 18 }}>
           <div style={grid}>
-            <Metric title="Pending" count={pending.length} note="waiting for owner review" />
-            <Metric title="Active" count={active.length} note="approved and unlocked" />
-            <Metric title="Unpaid / Locked" count={locked.length} note="not yet activated" />
-            <Metric title="Comped" count={comped.length} note="free owner-granted access" />
-            <Metric title="Denied / Suspended" count={blocked.length} note="blocked from access" />
+            <Metric title="Pending" count={pending.length} note="waiting for owner review" onClick={() => scrollToAdminSection("admin-pending")} />
+            <Metric title="Active" count={active.length} note="approved and unlocked" onClick={() => scrollToAdminSection("admin-active")} />
+            <Metric title="Unpaid / Locked" count={locked.length} note="not yet activated" onClick={() => scrollToAdminSection("admin-locked")} />
+            <Metric title="Comped" count={comped.length} note="free owner-granted access" onClick={() => scrollToAdminSection("admin-active")} />
+            <Metric title="Denied / Suspended" count={blocked.length} note="blocked from access" onClick={() => scrollToAdminSection("admin-blocked")} />
           </div>
         </section>
 
-        <Section title="Pending Members">
+        <div id="admin-pending"><Section title="Pending Members">
           {pending.length ? (
             <div style={grid}>{pending.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
           ) : (
             <div style={panel}><h2 style={h2}>No pending members.</h2><p style={sub}>New members waiting for review will appear here.</p></div>
           )}
-        </Section>
+        </Section></div>
 
-        <Section title="Active Members">
+        <div id="admin-active"><Section title="Active Members">
           {active.length ? (
             <div style={grid}>{active.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
           ) : (
             <div style={panel}><h2 style={h2}>No active members yet.</h2><p style={sub}>Approve members and mark paid or comped to activate access.</p></div>
           )}
-        </Section>
+        </Section></div>
 
-        <Section title="Unpaid / Locked">
+        <div id="admin-locked"><Section title="Unpaid / Locked">
           {locked.length ? (
             <div style={grid}>{locked.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
           ) : (
             <div style={panel}><h2 style={h2}>No unpaid or locked members.</h2><p style={sub}>All visible approved members are active or comped.</p></div>
           )}
-        </Section>
+        </Section></div>
 
-        <Section title="Denied / Suspended">
+        <div id="admin-blocked"><Section title="Denied / Suspended">
           {blocked.length ? (
             <div style={grid}>{blocked.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
           ) : (
             <div style={panel}><h2 style={h2}>No denied or suspended members.</h2><p style={sub}>Blocked members will appear here.</p></div>
           )}
-        </Section>
+        </Section></div>
       </div>
     </main>
   );
