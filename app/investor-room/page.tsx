@@ -437,6 +437,20 @@ function LogoBlock() {
   );
 }
 
+
+function logoutInvestor() {
+  try {
+    localStorage.removeItem("vaultforge_investor_session_v1");
+    localStorage.removeItem("vaultforge_investor_email");
+    localStorage.removeItem("vaultforge_investor_login_v1");
+    window.dispatchEvent(new Event("vaultforge-investor-change"));
+  } catch {
+    // ignore browser storage errors
+  }
+
+  window.location.href = "/investor-login";
+}
+
 function TopNav({ onMessageAdmin, isOwner }: { onMessageAdmin: () => void; isOwner: boolean }) {
   return (
     <div style={{ ...row, justifyContent: "space-between", marginBottom: 18 }}>
