@@ -430,13 +430,32 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
-function MetricCard({ title, count, note, danger }: { title: string; count: number; note: string; danger?: boolean }) {
+function MetricCard({
+  title,
+  count,
+  note,
+  danger,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  note: string;
+  danger?: boolean;
+  onClick?: () => void;
+}) {
+  const style = danger && count ? pulseRed : count ? pulseGold : panel;
+
   return (
-    <div style={danger && count ? pulseRed : count ? pulseGold : panel}>
+    <button
+      type="button"
+      style={{ ...style, width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }}
+      onClick={onClick}
+    >
       <div style={eyebrow}>{title}</div>
       <h2 style={h2}>{count}</h2>
       <p style={muted}>{note}</p>
-    </div>
+      {onClick ? <p style={muted}>Click to open</p> : null}
+    </button>
   );
 }
 
@@ -562,10 +581,10 @@ export default function AlertsPage() {
 
         <section style={{ marginBottom: 20 }}>
           <div style={grid}>
-            <MetricCard title="Active Signals" count={unresolved} note="open alerts needing review" danger={unresolved > 0} />
-            <MetricCard title="Urgent" count={urgent} note="high pressure signal alerts" danger />
-            <MetricCard title="Deal Alerts" count={dealAlerts} note="opportunity-side alert queue" />
-            <MetricCard title="Pain Alerts" count={painAlerts} note="problem-solving alert queue" danger={painAlerts > 0} />
+            <MetricCard title="Active Signals" count={unresolved} note="open alerts needing review" danger={unresolved > 0} onClick={() => setFilter("all")} />
+            <MetricCard title="Urgent" count={urgent} note="high pressure signal alerts" danger onClick={() => setFilter("urgent")} />
+            <MetricCard title="Deal Alerts" count={dealAlerts} note="opportunity-side alert queue" onClick={() => setFilter("deal")} />
+            <MetricCard title="Pain Alerts" count={painAlerts} note="problem-solving alert queue" danger={painAlerts > 0} onClick={() => setFilter("pain")} />
           </div>
         </section>
 
