@@ -52,6 +52,29 @@ type AdminMessage = {
   createdAt: string;
 };
 
+type InvestorStatus = "pending" | "approved" | "denied" | "suspended" | "deleted";
+type InvestorPaymentStatus = "unpaid" | "approved_to_pay" | "paid";
+
+type InvestorRecord = {
+  id: string;
+  email: string;
+  name: string;
+  company: string;
+  phone: string;
+  states: string;
+  focus: string;
+  priceRange: string;
+  status: InvestorStatus;
+  paymentStatus: InvestorPaymentStatus;
+  access: "locked" | "active";
+  createdAt: string;
+  updatedAt: string;
+  source: string;
+  raw?: any;
+};
+
+type InvestorFilter = "all" | "pending" | "approved" | "pendingPayment" | "paid" | "blocked" | "deleted";
+
 type RoomRecord = {
   id: string;
   title: string;
@@ -70,6 +93,8 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const ADMIN_MEMBERS_KEY = "vaultforge_admin_members_v1";
 const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
 const MEMBER_MESSAGES_KEY = "vaultforge_admin_member_broadcasts_v1";
+const INVESTOR_APPLICATIONS_KEY = "vaultforge_investor_applications_v1";
+const INVESTOR_MESSAGES_KEY = "vaultforge_investor_messages_v1";
 const PROFILE_KEY = "vaultforge_profile";
 const LOGIN_KEY = "vaultforge_member_login_v1";
 
@@ -324,6 +349,66 @@ function roomKindFrom(row: any, fallback: RoomKind): RoomKind {
   if (text.includes("pain")) return "pain";
   if (text.includes("deal") || text.includes("opportunity") || text.includes("project")) return "deal";
   return fallback;
+}
+
+
+function investorStatus(row: any): InvestorStatus {
+  const text = lower(row?.status || row?.investorStatus || row?.investor_status || row?.accessStatus || row?.access_status);
+  if (text === "approved" || text === "active") return "approved";
+  if (text === "denied" || text === "rejected") return "denied";
+  if (text === "suspended") return "suspended";
+  if (text === "deleted" || text === "removed") return "deleted";
+  return "pending";
+}
+
+function investorPayment(row: any): InvestorPaymentStatus {
+  const text = lower(row?.paymentStatus || row?.payment_status || row?.billingStatus || row?.billing_status);
+  if (text === "paid") return "paid";
+  if (text === "approved_to_pay" || text === "approved to pay" || text === "payment_approved") return "approved_to_pay";
+  return "unpaid";
+}
+
+function normalizeInvestor(row: any, index: number, source = INVESTOR_APPLICATIONS_KEY): InvestorRecord {
+  const email = lower(row?.email || row?.investorEmail || row?.investor_email || row?.contactEmail || row?.contact_email);
+  const pay = investorPayment(row);
+  const status = investorStatus(row);
+  return {
+    id: clean(row?.id || row?.investorId || row?.investor_id || email || `investor-${index}`).toLowerCase().replace(/[^a-z0-9@._-]+/g, "-"),
+    email: email || "email-not-listed",
+    name: clean(row?.name || row?.contactName || row?.contact_name || row?.fullName || row?.full_name, email ? email.split("@")[0] : "Unnamed Investor"),
+    company: clean(row?.company || row?.companyName || row?.company_name || row?.businessName || row?.business_name, "Company not listed"),
+    phone: clean(row?.phone || row?.phoneNumber || row?.phone_number || row?.mobile, "Phone not listed"),
+    states: listText(row?.states || row?.interestedStates || row?.interested_states || row?.markets, "States not listed"),
+    focus: listText(row?.focus || row?.investmentFocus || row?.investment_focus || row?.assetTypes || row?.asset_types, "Investor focus not listed"),
+    priceRange: clean(row?.priceRange || row?.price_range || row?.buyBox || row?.buy_box || row?.capitalRange || row?.capital_range, "Range not listed"),
+    status,
+    paymentStatus: pay,
+    access: status === "approved" && pay === "paid" ? "active" : "locked",
+    createdAt: clean(row?.createdAt || row?.created_at, new Date().toISOString()),
+    updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
+    source,
+    raw: row,
+  };
+}
+
+function readInvestors(): InvestorRecord[] {
+  const parsed = readJson<unknown>(INVESTOR_APPLICATIONS_KEY, []);
+  const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed as Record<string, unknown>) : [];
+  return rows.map((row: any, index) => normalizeInvestor(row, index));
+}
+
+function readInvestorMessages(): any[] {
+  const parsed = readJson<any[]>(INVESTOR_MESSAGES_KEY, []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function updateInvestor(list: InvestorRecord[], id: string, patch: Partial<InvestorRecord>) {
+  return list.map((investor) => {
+    if (investor.id !== id) return investor;
+    const next = { ...investor, ...patch, updatedAt: new Date().toISOString() };
+    next.access = next.status === "approved" && next.paymentStatus === "paid" ? "active" : "locked";
+    return next;
+  });
 }
 
 function normalizeRoom(row: any, source: string, fallbackKind: RoomKind, index: number): RoomRecord {
@@ -718,6 +803,9 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [investors, setInvestors] = useState<InvestorRecord[]>([]);
+  const [investorFilter, setInvestorFilter] = useState<InvestorFilter>("all");
+  const [investorMessages, setInvestorMessages] = useState<any[]>([]);
   const [deals, setDeals] = useState<RoomRecord[]>([]);
   const [pains, setPains] = useState<RoomRecord[]>([]);
   const [searchDraft, setSearchDraft] = useState("");
@@ -736,6 +824,8 @@ export default function AdminPage() {
       setEmail(currentEmail());
       setMembers(readMembers());
       setMessages(readMessages());
+      setInvestors(readInvestors());
+      setInvestorMessages(readInvestorMessages());
       setDeals(readRooms("deal"));
       setPains(readRooms("pain"));
     };
@@ -743,11 +833,13 @@ export default function AdminPage() {
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-admin-members-change", refresh);
     window.addEventListener("vaultforge-admin-message-change", refresh);
+    window.addEventListener("vaultforge-investor-change", refresh);
     window.addEventListener("vaultforge-my-rooms-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-admin-members-change", refresh);
       window.removeEventListener("vaultforge-admin-message-change", refresh);
+      window.removeEventListener("vaultforge-investor-change", refresh);
       window.removeEventListener("vaultforge-my-rooms-change", refresh);
     };
   }, []);
@@ -764,6 +856,24 @@ export default function AdminPage() {
   const blocked = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
   const deleted = useMemo(() => members.filter((member) => member.status === "deleted"), [members]);
   const openMessages = useMemo(() => messages.filter((message) => message.status !== "resolved" && message.status !== "deleted"), [messages]);
+  const pendingInvestors = useMemo(() => investors.filter((investor) => investor.status === "pending"), [investors]);
+  const approvedInvestors = useMemo(() => investors.filter((investor) => investor.status === "approved" && investor.status !== "deleted"), [investors]);
+  const pendingInvestorPayment = useMemo(() => investors.filter((investor) => investor.status === "approved" && investor.paymentStatus !== "paid"), [investors]);
+  const paidInvestors = useMemo(() => investors.filter((investor) => investor.paymentStatus === "paid" && investor.access === "active"), [investors]);
+  const blockedInvestors = useMemo(() => investors.filter((investor) => investor.status === "denied" || investor.status === "suspended"), [investors]);
+  const deletedInvestors = useMemo(() => investors.filter((investor) => investor.status === "deleted"), [investors]);
+  const filteredInvestors = useMemo(() => {
+    return investors.filter((investor) => {
+      if (investorFilter === "all") return investor.status !== "deleted";
+      if (investorFilter === "pending") return investor.status === "pending";
+      if (investorFilter === "approved") return investor.status === "approved";
+      if (investorFilter === "pendingPayment") return investor.status === "approved" && investor.paymentStatus !== "paid";
+      if (investorFilter === "paid") return investor.paymentStatus === "paid" && investor.access === "active";
+      if (investorFilter === "blocked") return investor.status === "denied" || investor.status === "suspended";
+      if (investorFilter === "deleted") return investor.status === "deleted";
+      return true;
+    });
+  }, [investors, investorFilter]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -835,6 +945,22 @@ export default function AdminPage() {
     setBroadcastSubject("");
     setBroadcastBody("");
     setMessages(readMessages());
+  }
+
+
+
+  function saveInvestors(next: InvestorRecord[]) {
+    setInvestors(next);
+    writeJson(INVESTOR_APPLICATIONS_KEY, next);
+    window.dispatchEvent(new Event("vaultforge-investor-change"));
+  }
+
+  function patchInvestor(id: string, patch: Partial<InvestorRecord>) {
+    saveInvestors(updateInvestor(investors, id, patch));
+  }
+
+  function deleteInvestorForever(id: string) {
+    saveInvestors(investors.filter((investor) => investor.id !== id));
   }
 
   if (!allowed) {
@@ -1010,6 +1136,51 @@ export default function AdminPage() {
                 />
               );
             })}
+          </div>
+        </Section>
+
+
+        <Section title="Investor Access Command">
+          <p style={muted}>Investor Access is a separate controlled lane. Investors see teaser Deal/Pain cards and can request more info. They do not see member contact info unless a member/admin approves deeper access.</p>
+          <p style={muted}>Pricing locked: $49 first month, then $149/month.</p>
+
+          <div style={{ ...grid, marginTop: 14 }}>
+            <Metric title="New Investors" count={pendingInvestors.length} note="investor applications waiting approval" pulse={pendingInvestors.length > 0} active={investorFilter === "pending"} onClick={() => setInvestorFilter("pending")} />
+            <Metric title="Approved Investors" count={approvedInvestors.length} note="approved investor accounts" active={investorFilter === "approved"} onClick={() => setInvestorFilter("approved")} />
+            <Metric title="Pending Investor Payment" count={pendingInvestorPayment.length} note="approved but unpaid" pulse={pendingInvestorPayment.length > 0} active={investorFilter === "pendingPayment"} onClick={() => setInvestorFilter("pendingPayment")} />
+            <Metric title="Paid Investors" count={paidInvestors.length} note="active investor access" active={investorFilter === "paid"} onClick={() => setInvestorFilter("paid")} />
+            <Metric title="Investor Messages" count={investorMessages.length} note="investor requests and intros" pulse={investorMessages.length > 0} />
+            <Metric title="Deleted Investors" count={deletedInvestors.length} note="investor cleanup folder" active={investorFilter === "deleted"} onClick={() => setInvestorFilter("deleted")} />
+          </div>
+
+          <div style={{ ...grid, marginTop: 16 }}>
+            {filteredInvestors.length ? filteredInvestors.map((investor) => (
+              <div key={investor.id} style={investor.status === "pending" || investor.paymentStatus === "approved_to_pay" ? activePanel : investor.status === "deleted" || investor.status === "denied" || investor.status === "suspended" ? alertPanel : panel}>
+                <div style={eyebrow}>{investor.status} • {investor.paymentStatus} • {investor.access}</div>
+                <h2 style={h2}>{investor.name}</h2>
+                <p style={sub}>{investor.company}</p>
+                <p style={muted}>{investor.email}</p>
+                <p style={muted}>{investor.phone}</p>
+                <p style={muted}>States: {investor.states}</p>
+                <p style={muted}>Focus: {investor.focus}</p>
+                <p style={muted}>Range: {investor.priceRange}</p>
+                <div style={{ ...row, marginTop: 14 }}>
+                  <button type="button" style={greenBtn} onClick={() => patchInvestor(investor.id, { status: "approved" })}>Approve</button>
+                  <button type="button" style={goldBtn} onClick={() => patchInvestor(investor.id, { status: "approved", paymentStatus: "approved_to_pay" })}>Approve Payment Button</button>
+                  <button type="button" style={greenBtn} onClick={() => patchInvestor(investor.id, { status: "approved", paymentStatus: "paid", access: "active" })}>Mark Paid</button>
+                  <button type="button" style={redBtn} onClick={() => patchInvestor(investor.id, { status: "denied", access: "locked" })}>Deny</button>
+                  <button type="button" style={redBtn} onClick={() => patchInvestor(investor.id, { status: "suspended", access: "locked" })}>Suspend</button>
+                  <button type="button" style={redBtn} onClick={() => patchInvestor(investor.id, { status: "deleted", access: "locked" })}>Delete Investor</button>
+                  {investor.status === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteInvestorForever(investor.id)}>Delete Forever</button> : null}
+                  <button type="button" style={btn} onClick={() => patchInvestor(investor.id, { status: "approved" })}>Restore</button>
+                </div>
+              </div>
+            )) : (
+              <div style={panel}>
+                <h2 style={h2}>No investor applications yet.</h2>
+                <p style={sub}>Investor applications will show here once the investor access flow is built.</p>
+              </div>
+            )}
           </div>
         </Section>
 
