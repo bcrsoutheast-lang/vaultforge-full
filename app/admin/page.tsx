@@ -875,7 +875,8 @@ export default function AdminPage() {
       const pay = patch.paymentStatus || member.paymentStatus;
       const status = patch.status || member.status;
       const paidLike = pay === "paid" || pay === "comped" || pay === "trial";
-      return { ...member, ...patch, access: status === "approved" && paidLike ? "active" : "locked", updatedAt: new Date().toISOString() };
+      const nextAccess: "active" | "locked" = status === "approved" && paidLike ? "active" : "locked";
+      return { ...member, ...patch, access: nextAccess, updatedAt: new Date().toISOString() };
     });
     saveMembers(next);
   }
