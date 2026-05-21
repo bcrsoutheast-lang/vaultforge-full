@@ -143,12 +143,58 @@ function isHidden(item: any, kind: Kind) {
   return Boolean(hiddenMap()[cleanupKey(item, kind)]);
 }
 
+function investorProfileSnapshot(investor: any) {
+  return {
+    photoUrl: investor?.photoUrl || "",
+    contactName: investor?.contactName || "",
+    company: investor?.company || "",
+    email: investor?.email || "",
+    phone: investor?.phone || "",
+    website: investor?.website || "",
+    investorTypes: investor?.investorTypes || investor?.assetTypes || [],
+    buyingStrategies: investor?.buyingStrategies || investor?.buyingStrategy || [],
+    assetTypes: investor?.assetTypes || [],
+    statesInterested: investor?.statesInterested || [],
+    countiesInterested: investor?.countiesInterested || "",
+    citiesInterested: investor?.citiesInterested || "",
+    minDeal: investor?.minDeal || "",
+    maxDeal: investor?.maxDeal || "",
+    monthlyVolume: investor?.monthlyVolume || "",
+    yearlyVolume: investor?.yearlyVolume || "",
+    closeSpeed: investor?.closeSpeed || "",
+    proofFunds: investor?.proofFunds || "",
+    directBuyer: investor?.directBuyer || "",
+    fundingNeeded: investor?.fundingNeeded || "",
+    openToJV: investor?.openToJV || "",
+    openToWholesalers: investor?.openToWholesalers || "",
+    capitalSource: investor?.capitalSource || "",
+    notes: investor?.notes || "",
+  };
+}
+
 function sendRequest(kind: Kind, item: any, body: string) {
   const rows = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
   const investor = readJson<any>(INVESTOR_APP_KEY, {});
+  const profile = investorProfileSnapshot(investor);
   const title = itemTitle(item, kind);
   const state = itemState(item);
   const header = `${kind} Request • ${title} • ${state || "Unknown State"}`;
+
+  const profileText = [
+    `Investor: ${profile.contactName || "Not listed"}`,
+    `Company: ${profile.company || "Not listed"}`,
+    `Email: ${profile.email || "Not listed"}`,
+    `Phone: ${profile.phone || "Not listed"}`,
+    `Types: ${Array.isArray(profile.investorTypes) ? profile.investorTypes.join(", ") : profile.investorTypes || "Not listed"}`,
+    `Strategy: ${Array.isArray(profile.buyingStrategies) ? profile.buyingStrategies.join(", ") : profile.buyingStrategies || "Not listed"}`,
+    `Markets: ${Array.isArray(profile.statesInterested) ? profile.statesInterested.join(", ") : profile.statesInterested || "Not listed"}`,
+    `Buy Box: ${profile.minDeal || "Not listed"} - ${profile.maxDeal || "Not listed"}`,
+    `Volume: ${profile.monthlyVolume || "Not listed"} / month, ${profile.yearlyVolume || "Not listed"} / year`,
+    `Close Speed: ${profile.closeSpeed || "Not listed"}`,
+    `Proof of Funds: ${profile.proofFunds || "Not listed"}`,
+    `Direct Buyer: ${profile.directBuyer || "Not listed"}`,
+    `Funding Needed: ${profile.fundingNeeded || "Not listed"}`,
+  ].join("\n");
 
   rows.unshift({
     id: `investor-request-${Date.now()}`,
@@ -157,10 +203,12 @@ function sendRequest(kind: Kind, item: any, body: string) {
     title,
     state,
     roomHeader: header,
-    investorEmail: investor?.email || "",
-    investorCompany: investor?.company || "",
-    investorName: investor?.contactName || "",
-    message: `${header}\n\n${body || "Investor requested more information."}`,
+    investorEmail: profile.email,
+    investorCompany: profile.company,
+    investorName: profile.contactName,
+    investorPhotoUrl: profile.photoUrl,
+    investorProfile: profile,
+    message: `${header}\n\n${body || "Investor requested more information."}\n\n--- Investor Profile Attached ---\n${profileText}`,
     status: "new",
     createdAt: new Date().toISOString(),
   });
