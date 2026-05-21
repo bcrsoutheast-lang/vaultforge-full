@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+const INVESTOR_SESSION_KEY = "vaultforge_investor_session_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
@@ -445,7 +446,7 @@ function TopNav({ onMessageAdmin, isOwner }: { onMessageAdmin: () => void; isOwn
         <Link href="/investor-access" style={btn}>Investor Access</Link>
         <Link href="/investor-payment" style={btn}>Payment</Link>
         <button type="button" style={goldBtn} onClick={onMessageAdmin}>Message Admin</button>
-        <Link href="/logout" style={btn}>Logout</Link>
+        <button type="button" style={btn} onClick={logoutInvestor}>Logout</button>
         {isOwner ? <Link href="/admin" style={redBtn}>Admin</Link> : null}
       </div>
     </div>
@@ -911,7 +912,8 @@ export default function InvestorRoomPage() {
     };
   }, []);
 
-  const access = investor?.paymentStatus === "paid" || investor?.accessStatus === "active" || investor?.access === "active";
+  const complete = profileComplete(investor);
+  const access = complete && (investor?.paymentStatus === "paid" || investor?.accessStatus === "active" || investor?.access === "active");
 
   const rawDeals = useMemo(() => {
     const rows = readRows(["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"]);
@@ -972,7 +974,7 @@ export default function InvestorRoomPage() {
             <LogoBlock />
             <div style={eyebrow}>Investor Room Locked</div>
             <h1 style={h1}>Approval and payment required.</h1>
-            <p style={sub}>Complete the investor application and payment before entering the investor visitor room.</p>
+            <p style={sub}>Complete investor login, buyer profile, admin approval, and payment before entering the investor visitor room.</p>
             <div style={{ ...row, marginTop: 18 }}>
               <Link href="/investor-application" style={goldBtn}>Investor Application</Link>
               <Link href="/investor-payment" style={btn}>Investor Payment</Link>
