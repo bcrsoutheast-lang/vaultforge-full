@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
@@ -435,7 +436,7 @@ function LogoBlock() {
   );
 }
 
-function TopNav({ onMessageAdmin }: { onMessageAdmin: () => void }) {
+function TopNav({ onMessageAdmin, isOwner }: { onMessageAdmin: () => void; isOwner: boolean }) {
   return (
     <div style={{ ...row, justifyContent: "space-between", marginBottom: 18 }}>
       <div style={{ color: "#ffd45a", fontSize: 26, fontWeight: 950 }}>VAULTFORGE</div>
@@ -445,7 +446,7 @@ function TopNav({ onMessageAdmin }: { onMessageAdmin: () => void }) {
         <Link href="/investor-payment" style={btn}>Payment</Link>
         <button type="button" style={goldBtn} onClick={onMessageAdmin}>Message Admin</button>
         <Link href="/logout" style={btn}>Logout</Link>
-        <Link href="/admin" style={redBtn}>Admin</Link>
+        {isOwner ? <Link href="/admin" style={redBtn}>Admin</Link> : null}
       </div>
     </div>
   );
@@ -822,6 +823,64 @@ function ExecutionLaneCards({
 }
 
 
+function statusCount(rows: any[], status: string) {
+  return rows.filter((row) => String(row?.status || "new").toLowerCase() === status).length;
+}
+
+function RequestMiniCard({ row, label }: { row: any; label: string }) {
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>{label} • {row?.status || "new"}</div>
+      <h3 style={h3}>{row?.requestTitle || row?.title || row?.topic || row?.subject || "Investor Request"}</h3>
+      <p style={muted}>{row?.roomHeader || row?.message || row?.body || "Request saved."}</p>
+      <p style={muted}>Created: {row?.createdAt || "not listed"}</p>
+    </div>
+  );
+}
+
+function InvestorRequestCenter() {
+  const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
+  const executionRequests = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+  const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
+  const all = [...dealPainRequests, ...executionRequests, ...adminMessages];
+
+  return (
+    <section style={{ ...hero, marginTop: 20 }}>
+      <div style={eyebrow}>My Investor Requests</div>
+      <h2 style={h2}>Request tracking desk.</h2>
+      <p style={sub}>
+        Track deal/pain requests, execution requests, and admin messages. Status updates will later connect into threaded member/admin rooms.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        <Metric title="All Requests" count={all.length} note="total investor requests" />
+        <Metric title="New" count={statusCount(all, "new")} note="waiting review" />
+        <Metric title="Routed" count={statusCount(all, "routed")} note="sent into network" />
+        <Metric title="Approved" count={statusCount(all, "approved")} note="approved for deeper access" />
+        <Metric title="Closed" count={statusCount(all, "closed")} note="completed/closed" />
+      </div>
+
+      <div style={{ ...wideGrid, marginTop: 18 }}>
+        <div style={goldPanel}>
+          <div style={eyebrow}>Deal / Pain Requests</div>
+          {dealPainRequests.length ? dealPainRequests.slice(0, 4).map((row) => <RequestMiniCard key={row.id} row={row} label="Deal/Pain" />) : <p style={muted}>No Deal/Pain requests yet.</p>}
+        </div>
+
+        <div style={panel}>
+          <div style={eyebrow}>Execution Requests</div>
+          {executionRequests.length ? executionRequests.slice(0, 4).map((row) => <RequestMiniCard key={row.id} row={row} label="Execution" />) : <p style={muted}>No execution requests yet.</p>}
+        </div>
+
+        <div style={panel}>
+          <div style={eyebrow}>Admin Messages</div>
+          {adminMessages.length ? adminMessages.slice(0, 4).map((row) => <RequestMiniCard key={row.id} row={row} label="Admin Message" />) : <p style={muted}>No admin messages yet.</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
 export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
   const [state, setState] = useState("GA");
@@ -908,7 +967,7 @@ export default function InvestorRoomPage() {
       <main style={page}>
       <style>{`@keyframes vfTickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
         <div style={wrap}>
-          <TopNav onMessageAdmin={() => setMessageAdminOpen(true)} />
+          <TopNav onMessageAdmin={() => setMessageAdminOpen(true)} isOwner={String(investor?.email || "").toLowerCase() === OWNER_EMAIL} />
           <section style={hero}>
             <LogoBlock />
             <div style={eyebrow}>Investor Room Locked</div>
@@ -928,7 +987,7 @@ export default function InvestorRoomPage() {
   return (
     <main style={page}>
       <div style={wrap}>
-        <TopNav onMessageAdmin={() => setMessageAdminOpen(true)} />
+        <TopNav onMessageAdmin={() => setMessageAdminOpen(true)} isOwner={String(investor?.email || "").toLowerCase() === OWNER_EMAIL} />
         <TickerRibbon />
         <MessageAdminModal open={messageAdminOpen} onClose={() => setMessageAdminOpen(false)} />
 
@@ -1009,6 +1068,8 @@ export default function InvestorRoomPage() {
         <section style={{ marginTop: 18 }}>
           <RequestPipeline />
         </section>
+
+        <InvestorRequestCenter />
 
         <section style={{ ...hero, marginTop: 24 }}>
           <div style={eyebrow}>Network Capabilities Through Members</div>
