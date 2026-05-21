@@ -111,7 +111,7 @@ function normalizeMember(row: any, source: string): MemberRecord {
   const states = arrayText(row?.states || row?.operatingStates || row?.statesOperated || row?.serviceStates || row?.markets, "States not listed");
   const status = statusFrom(row?.status || row?.memberStatus || row?.member_status || row?.accessStatus || row?.access_status);
   const paymentStatus = paymentFrom(row?.paymentStatus || row?.payment_status || row?.billingStatus || row?.billing_status);
-  const access = status === "approved" && (paymentStatus === "paid" || paymentStatus === "comped" || paymentStatus === "trial") ? "active" : "locked";
+  const activePayment = paymentStatus === "paid" || paymentStatus === "comped" || paymentStatus === "trial";
 
   return {
     id: makeId(email, row?.id || row?.memberId || row?.member_id || row?.auth_user_id),
@@ -123,7 +123,7 @@ function normalizeMember(row: any, source: string): MemberRecord {
     states,
     status,
     paymentStatus,
-    access: row?.access === "active" || row?.isActive || row?.is_active ? "active" : access,
+    access: row?.access === "active" || row?.isActive || row?.is_active || (status === "approved" && activePayment) ? "active" : "locked",
     createdAt: clean(row?.createdAt || row?.created_at, new Date().toISOString()),
     updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
     source,
@@ -155,12 +155,15 @@ function getCurrentUserEmail() {
 
 function readMembers(): MemberRecord[] {
   if (!ok()) return [];
-
   const found = new Map<string, MemberRecord>();
 
   for (const key of MEMBER_SOURCE_KEYS) {
     const parsed = j<unknown>(localStorage.getItem(key), []);
-    const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed as Record<string, unknown>) : [];
+    const rows = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === "object"
+        ? Object.values(parsed as Record<string, unknown>)
+        : [];
 
     for (const row of rows) {
       if (!row || typeof row !== "object") continue;
@@ -180,23 +183,21 @@ function readMembers(): MemberRecord[] {
   }
 
   const ownerEmail = OWNER_EMAIL.toLowerCase();
-  if (!found.has(ownerEmail)) {
-    found.set(ownerEmail, {
-      id: "owner-admin",
-      email: ownerEmail,
-      name: "Dmoney",
-      company: "VaultForge",
-      phone: "Phone not listed",
-      memberType: "Owner / Admin",
-      states: "Owner workspace",
-      status: "approved",
-      paymentStatus: "comped",
-      access: "active",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      source: "owner-default",
-    });
-  }
+  found.set(ownerEmail, {
+    id: "owner-admin",
+    email: ownerEmail,
+    name: "Dmoney",
+    company: "VaultForge",
+    phone: "Owner",
+    memberType: "Owner / Admin",
+    states: "Owner workspace",
+    status: "approved",
+    paymentStatus: "comped",
+    access: "active",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    source: "owner-default",
+  });
 
   return Array.from(found.values()).sort((a, b) => {
     const order: Record<MemberStatus, number> = { pending: 0, approved: 1, suspended: 2, denied: 3 };
@@ -225,43 +226,80 @@ function updateMember(members: MemberRecord[], targetId: string, patch: Partial<
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
-  background: "#05070d",
-  color: "#f7f7fb",
+  background: "#080b10",
+  color: "#f6f7fb",
   padding: 18,
   fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
 };
 
 const wrap: React.CSSProperties = { maxWidth: 1320, margin: "0 auto", paddingBottom: 90 };
-const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
-const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
-const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 30, marginBottom: 20, background: "linear-gradient(180deg,#080d19,#050816)" };
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.25)", borderRadius: 26, padding: 24, marginBottom: 20 };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 20 };
-const alertPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.55)" };
-const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.55)" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 14, marginBottom: 12 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,76px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(28px,5vw,46px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 20, lineHeight: 1.35, margin: 0 };
-const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
-const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const topbar: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "space-between",
+  border: "1px solid rgba(255,255,255,.10)",
+  background: "#0c1119",
+  borderRadius: 18,
+  padding: 14,
+  marginBottom: 18,
+};
 
-function Nav() {
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 24, fontWeight: 950, letterSpacing: -1 };
+const navRight: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "11px 15px", fontWeight: 900, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
+const redBtn: React.CSSProperties = { ...btn, background: "#251015", borderColor: "rgba(255,70,70,.52)", color: "#ffaaaa" };
+const greenBtn: React.CSSProperties = { ...btn, background: "#0e2518", borderColor: "rgba(80,220,130,.55)", color: "#9cffbc" };
+
+const hero: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.10)",
+  borderRadius: 22,
+  padding: 28,
+  marginBottom: 18,
+  background: "linear-gradient(180deg,#0e1420,#090d14)",
+};
+
+const card: React.CSSProperties = {
+  background: "#0d121b",
+  border: "1px solid rgba(255,255,255,.10)",
+  borderRadius: 20,
+  padding: 18,
+  marginBottom: 18,
+};
+
+const panel: React.CSSProperties = {
+  background: "#111823",
+  border: "1px solid rgba(207,216,230,.14)",
+  borderRadius: 18,
+  padding: 18,
+};
+
+const alertPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.55)" };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.50)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 10 };
+const h1: React.CSSProperties = { fontSize: "clamp(36px,6vw,64px)", lineHeight: 0.95, letterSpacing: -3, margin: "0 0 14px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(24px,4vw,38px)", lineHeight: 1, letterSpacing: -1.5, margin: "0 0 12px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 18, lineHeight: 1.35, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "7px 0 0", lineHeight: 1.35 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 14 };
+const row: React.CSSProperties = { display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" };
+
+function AdminNav() {
   return (
-    <nav style={nav}>
-      <div style={brand}>VAULTFORGE</div>
-      <Link href="/command" style={btn}>Command</Link>
-      <Link href="/my-rooms" style={btn}>My Rooms</Link>
-      <Link href="/alerts" style={btn}>Alerts</Link>
-      <Link href="/messages" style={btn}>Messages</Link>
-      <Link href="/routing" style={btn}>Routing</Link>
-      <Link href="/admin" style={goldBtn}>Admin</Link>
-      <Link href="/logout" style={redBtn}>Logout</Link>
-    </nav>
+    <div style={topbar}>
+      <div>
+        <div style={brand}>VAULTFORGE ADMIN</div>
+        <div style={{ ...muted, marginTop: 2 }}>Owner Control Desk • Member Access</div>
+      </div>
+      <div style={navRight}>
+        <Link href="/admin" style={goldBtn}>Admin</Link>
+        <Link href="/command" style={btn}>Member View</Link>
+        <Link href="/profile" style={btn}>Profile</Link>
+        <Link href="/logout" style={redBtn}>Logout</Link>
+      </div>
+    </div>
   );
 }
 
@@ -277,12 +315,11 @@ function Metric({ title, count, note }: { title: string; count: number; note: st
 
 function StatusPill({ text }: { text: string }) {
   const lower = text.toLowerCase();
-  const style = lower.includes("denied") || lower.includes("suspended") || lower.includes("unpaid") || lower.includes("locked") || lower.includes("past")
-    ? redBtn
-    : lower.includes("pending") || lower.includes("trial")
-    ? btn
-    : goldBtn;
-  return <span style={{ ...style, padding: "8px 12px", fontSize: 13 }}>{text}</span>;
+  let style = btn;
+  if (lower.includes("approved") || lower.includes("active") || lower.includes("paid") || lower.includes("comped")) style = greenBtn;
+  if (lower.includes("pending") || lower.includes("trial")) style = goldBtn;
+  if (lower.includes("denied") || lower.includes("suspended") || lower.includes("unpaid") || lower.includes("locked") || lower.includes("past")) style = redBtn;
+  return <span style={{ ...style, padding: "7px 11px", fontSize: 12 }}>{text}</span>;
 }
 
 function MemberCard({
@@ -303,18 +340,17 @@ function MemberCard({
       <p style={muted}>{member.phone}</p>
       <p style={muted}>{member.memberType}</p>
       <p style={muted}>{member.states}</p>
-      <p style={muted}>Source: {member.source}</p>
 
-      <div style={{ ...row, marginTop: 14 }}>
+      <div style={{ ...row, marginTop: 12 }}>
         <StatusPill text={member.status} />
         <StatusPill text={member.paymentStatus} />
         <StatusPill text={member.access} />
       </div>
 
-      <div style={{ ...row, marginTop: 16 }}>
-        <button type="button" style={goldBtn} onClick={() => onPatch({ status: "approved" })}>Approve</button>
-        <button type="button" style={btn} onClick={() => onPatch({ status: "denied", access: "locked" })} disabled={isOwner}>Deny</button>
-        <button type="button" style={btn} onClick={() => onPatch({ paymentStatus: "paid" })}>Mark Paid</button>
+      <div style={{ ...row, marginTop: 15 }}>
+        <button type="button" style={greenBtn} onClick={() => onPatch({ status: "approved" })}>Approve</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked" })} disabled={isOwner}>Deny</button>
+        <button type="button" style={greenBtn} onClick={() => onPatch({ paymentStatus: "paid" })}>Mark Paid</button>
         <button type="button" style={btn} onClick={() => onPatch({ paymentStatus: "unpaid", access: "locked" })} disabled={isOwner}>Mark Unpaid</button>
         <button type="button" style={goldBtn} onClick={() => onPatch({ paymentStatus: "comped", status: "approved", access: "active" })}>Grant Free Access</button>
         <button type="button" style={redBtn} onClick={() => onPatch({ status: "suspended", access: "locked" })} disabled={isOwner}>Suspend</button>
@@ -357,9 +393,9 @@ export default function AdminPage() {
   const allowed = canViewAdmin(currentEmail);
   const pending = useMemo(() => members.filter((member) => member.status === "pending"), [members]);
   const active = useMemo(() => members.filter((member) => member.status === "approved" && member.access === "active"), [members]);
-  const unpaid = useMemo(() => members.filter((member) => member.paymentStatus === "unpaid" || member.access === "locked"), [members]);
-  const suspended = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
+  const locked = useMemo(() => members.filter((member) => member.paymentStatus === "unpaid" || member.access === "locked"), [members]);
   const comped = useMemo(() => members.filter((member) => member.paymentStatus === "comped"), [members]);
+  const blocked = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
 
   function patchMember(id: string, patch: Partial<MemberRecord>) {
     const next = updateMember(members, id, patch);
@@ -371,14 +407,14 @@ export default function AdminPage() {
     return (
       <main style={page}>
         <div style={wrap}>
-          <Nav />
+          <AdminNav />
           <section style={hero}>
             <div style={eyebrow}>Owner Only</div>
             <h1 style={h1}>Admin locked.</h1>
-            <p style={sub}>This area is only for {OWNER_EMAIL}.</p>
-            <p style={muted}>Current detected email: {currentEmail || "not detected"}</p>
+            <p style={sub}>This control desk is only visible to {OWNER_EMAIL}.</p>
+            <p style={muted}>Detected email: {currentEmail || "not detected"}</p>
             <div style={{ ...row, marginTop: 18 }}>
-              <Link href="/command" style={goldBtn}>Back to Command</Link>
+              <Link href="/command" style={goldBtn}>Back to Member Area</Link>
               <Link href="/profile" style={btn}>Profile</Link>
               <Link href="/logout" style={redBtn}>Logout</Link>
             </div>
@@ -391,84 +427,56 @@ export default function AdminPage() {
   return (
     <main style={page}>
       <div style={wrap}>
-        <Nav />
+        <AdminNav />
 
         <section style={hero}>
-          <div style={eyebrow}>VaultForge Admin</div>
-          <h1 style={h1}>Member access desk.</h1>
+          <div style={eyebrow}>Owner Control Desk</div>
+          <h1 style={h1}>Member Access Desk.</h1>
           <p style={sub}>
-            Simple owner control for approvals, access, paid/unpaid status, free access, and suspensions.
+            Simple admin screen for member approval, paid/unpaid status, free comp access, suspensions, and restored access.
           </p>
-          <p style={muted}>Owner: {currentEmail}</p>
+          <p style={muted}>Signed in as owner: {currentEmail}</p>
         </section>
 
-        <section style={{ marginBottom: 20 }}>
+        <section style={{ marginBottom: 18 }}>
           <div style={grid}>
-            <Metric title="Pending" count={pending.length} note="members waiting for review" />
-            <Metric title="Active" count={active.length} note="approved members with access" />
-            <Metric title="Unpaid / Locked" count={unpaid.length} note="members without active paid/comp access" />
-            <Metric title="Comped" count={comped.length} note="members granted free access" />
-            <Metric title="Suspended / Denied" count={suspended.length} note="blocked members" />
+            <Metric title="Pending" count={pending.length} note="waiting for owner review" />
+            <Metric title="Active" count={active.length} note="approved and unlocked" />
+            <Metric title="Unpaid / Locked" count={locked.length} note="not yet activated" />
+            <Metric title="Comped" count={comped.length} note="free owner-granted access" />
+            <Metric title="Denied / Suspended" count={blocked.length} note="blocked from access" />
           </div>
         </section>
 
         <Section title="Pending Members">
           {pending.length ? (
-            <div style={grid}>
-              {pending.map((member) => (
-                <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />
-              ))}
-            </div>
+            <div style={grid}>{pending.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
           ) : (
-            <div style={panel}>
-              <h2 style={h2}>No pending members.</h2>
-              <p style={sub}>New applications will show here when profile/member data exists in local storage.</p>
-            </div>
+            <div style={panel}><h2 style={h2}>No pending members.</h2><p style={sub}>New members waiting for review will appear here.</p></div>
           )}
         </Section>
 
         <Section title="Active Members">
           {active.length ? (
-            <div style={grid}>
-              {active.map((member) => (
-                <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />
-              ))}
-            </div>
+            <div style={grid}>{active.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
           ) : (
-            <div style={panel}>
-              <h2 style={h2}>No active members yet.</h2>
-              <p style={sub}>Approve members and mark paid or comped to activate access.</p>
-            </div>
+            <div style={panel}><h2 style={h2}>No active members yet.</h2><p style={sub}>Approve members and mark paid or comped to activate access.</p></div>
           )}
         </Section>
 
-        <Section title="Unpaid / Locked Members">
-          {unpaid.length ? (
-            <div style={grid}>
-              {unpaid.map((member) => (
-                <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />
-              ))}
-            </div>
+        <Section title="Unpaid / Locked">
+          {locked.length ? (
+            <div style={grid}>{locked.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
           ) : (
-            <div style={panel}>
-              <h2 style={h2}>No unpaid or locked members.</h2>
-              <p style={sub}>Good. Everyone visible here has either paid, been comped, or is inactive elsewhere.</p>
-            </div>
+            <div style={panel}><h2 style={h2}>No unpaid or locked members.</h2><p style={sub}>All visible approved members are active or comped.</p></div>
           )}
         </Section>
 
-        <Section title="Suspended / Denied Members">
-          {suspended.length ? (
-            <div style={grid}>
-              {suspended.map((member) => (
-                <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />
-              ))}
-            </div>
+        <Section title="Denied / Suspended">
+          {blocked.length ? (
+            <div style={grid}>{blocked.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
           ) : (
-            <div style={panel}>
-              <h2 style={h2}>No suspended or denied members.</h2>
-              <p style={sub}>Suspended, denied, or blocked accounts will show here.</p>
-            </div>
+            <div style={panel}><h2 style={h2}>No denied or suspended members.</h2><p style={sub}>Blocked members will appear here.</p></div>
           )}
         </Section>
       </div>
