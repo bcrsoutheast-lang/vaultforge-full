@@ -290,11 +290,11 @@ function AdminNav() {
   return (
     <div style={topbar}>
       <div>
-        <div style={brand}>VAULTFORGE ADMIN</div>
-        <div style={{ ...muted, marginTop: 2 }}>Owner Control Desk • Member Access</div>
+        <div style={brand}>VAULTFORGE ADMIN COMMAND</div>
+        <div style={{ ...muted, marginTop: 2 }}>Admin Command • Admin Command</div>
       </div>
       <div style={navRight}>
-        <Link href="/admin" style={goldBtn}>Admin</Link>
+        <Link href="/admin" style={goldBtn}>Admin Command</Link>
         <Link href="/command" style={btn}>Member View</Link>
         <Link href="/profile" style={btn}>Profile</Link>
         <Link href="/logout" style={redBtn}>Logout</Link>
@@ -410,8 +410,8 @@ export default function AdminPage() {
           <AdminNav />
           <section style={hero}>
             <div style={eyebrow}>Owner Only</div>
-            <h1 style={h1}>Admin locked.</h1>
-            <p style={sub}>This control desk is only visible to {OWNER_EMAIL}.</p>
+            <h1 style={h1}>Admin Command locked.</h1>
+            <p style={sub}>Admin Command is only visible to {OWNER_EMAIL}.</p>
             <p style={muted}>Detected email: {currentEmail || "not detected"}</p>
             <div style={{ ...row, marginTop: 18 }}>
               <Link href="/command" style={goldBtn}>Back to Member Area</Link>
@@ -430,12 +430,12 @@ export default function AdminPage() {
         <AdminNav />
 
         <section style={hero}>
-          <div style={eyebrow}>Owner Control Desk</div>
-          <h1 style={h1}>Member Access Desk.</h1>
+          <div style={eyebrow}>Admin Command</div>
+          <h1 style={h1}>Admin Command.</h1>
           <p style={sub}>
-            Simple admin screen for member approval, paid/unpaid status, free comp access, suspensions, and restored access.
+            You are inside Admin Command. Manage member approvals, paid/unpaid status, free comp access, suspensions, and restored access.
           </p>
-          <p style={muted}>Signed in as owner: {currentEmail}</p>
+          <p style={muted}>ADMIN COMMAND MODE • Signed in as owner: {currentEmail}</p>
         </section>
 
         <section style={{ marginBottom: 18 }}>
