@@ -811,6 +811,13 @@ function RoomModal({ selection, onClose }: { selection: RoomSelection; onClose: 
                 <h2 style={h2}>{room.title}</h2>
                 <p style={muted}>Room ID: {room.id}</p>
                 <p style={muted}>Source: {room.source}</p>
+                <div style={{ ...row, marginTop: 12 }}>
+                  <button type="button" style={goldBtn}>Save</button>
+                  <button type="button" style={btn}>Archive</button>
+                  <button type="button" style={redBtn}>Delete</button>
+                  <button type="button" style={redBtn}>Delete Forever</button>
+                </div>
+                <p style={{ ...muted, marginTop: 8 }}>Admin Room Cleanup Controls</p>
               </div>
             )) : (
               <div style={panel}><h2 style={h2}>No rooms found.</h2><p style={sub}>No matching projects/rooms exist yet.</p></div>
