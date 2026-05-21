@@ -59,6 +59,7 @@ const MEMBER_STATE_KEY = "vaultforge_my_room_status_v1";
 const ROUTE_STATUS_KEY = "vaultforge_route_status_v1";
 const MESSAGE_KEYS = ["vaultforge_message_command_threads_v1", "vaultforge_messages_v1", "vf_messages", "vaultforge_threads"];
 const ALERT_KEYS = ["vaultforge_alerts_v1", "vaultforge_smart_alerts", "vf_alerts", "vaultforge_room_alerts"];
+const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -405,7 +406,58 @@ const logoShell: React.CSSProperties = { width: "min(520px,92vw)", border: "1px 
 const logoImg: React.CSSProperties = { maxWidth: "min(390px,78vw)", maxHeight: 140, width: "auto", height: "auto", objectFit: "contain", display: "block" };
 const logoFallback: React.CSSProperties = { color: "#ffd45a", fontSize: "clamp(40px,9vw,82px)", fontWeight: 950, letterSpacing: -4, lineHeight: 0.9 };
 
-function Nav() {
+
+function isOwnerEmail(email: unknown) {
+  return String(email || "").trim().toLowerCase() === OWNER_EMAIL.toLowerCase();
+}
+
+function currentOwnerEmail() {
+  if (!ok()) return "";
+  let profile: any = {};
+
+  for (const key of ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"]) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
+    } catch {
+      // ignore local profile errors
+    }
+  }
+
+  return String(
+    profile.email ||
+      profile.memberEmail ||
+      profile.member_email ||
+      window.localStorage.getItem("vf_email") ||
+      window.localStorage.getItem("member_email") ||
+      window.localStorage.getItem("email") ||
+      ""
+  ).trim().toLowerCase();
+}
+
+function OwnerCommandBadge({ email }: { email: string }) {
+  if (!isOwnerEmail(email)) return null;
+
+  return (
+    <section
+      style={{
+        ...goldPanel,
+        marginBottom: 20,
+        background: "linear-gradient(180deg,#1b1608,#080d19)",
+      }}
+    >
+      <div style={eyebrow}>Owner Mode</div>
+      <h2 style={h2}>Admin Command access detected.</h2>
+      <p style={sub}>You are signed in as {email}. Admin controls are available without changing the member command center.</p>
+      <div style={{ ...row, marginTop: 16 }}>
+        <Link href="/admin" style={goldBtn}>Open Admin Command</Link>
+      </div>
+    </section>
+  );
+}
+
+
+function Nav({ ownerEmail }: { ownerEmail: string }) {
   return (
     <nav style={nav}>
       <div style={brand}>VAULTFORGE</div>
@@ -420,6 +472,7 @@ function Nav() {
       <Link href="/deal-create" style={btn}>Create Deal</Link>
       <Link href="/pain-intake" style={btn}>Pain Intake</Link>
       <Link href="/profile" style={btn}>Profile</Link>
+      {isOwnerEmail(ownerEmail) ? <Link href="/admin" style={redBtn}>Admin Command</Link> : null}
       <Link href="/logout" style={redBtn}>Logout</Link>
     </nav>
   );
@@ -515,11 +568,16 @@ export default function CommandPage() {
     memberType: "Private Member",
     states: "States not listed",
   });
+  const [ownerEmail, setOwnerEmail] = useState("");
 
   useEffect(() => {
     setMember(readMemberDisplay());
+    setOwnerEmail(currentOwnerEmail());
 
-    const refresh = () => setTick((value) => value + 1);
+    const refresh = () => {
+      setOwnerEmail(currentOwnerEmail());
+      setTick((value) => value + 1);
+    };
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-room-state-change", refresh);
     window.addEventListener("vaultforge-my-rooms-change", refresh);
@@ -555,8 +613,9 @@ export default function CommandPage() {
   return (
     <main style={page}>
       <div style={wrap}>
-        <Nav />
+        <Nav ownerEmail={ownerEmail} />
         <VaultForgeBrandLogo />
+        <OwnerCommandBadge email={ownerEmail} />
 
         <section style={hero}>
           <div style={eyebrow}>VaultForge Member Command</div>
