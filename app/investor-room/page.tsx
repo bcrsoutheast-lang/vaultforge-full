@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
+const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
 const INVESTOR_HIDDEN_KEY = "vaultforge_investor_room_hidden_v1";
 
@@ -208,6 +209,48 @@ function investorProfileSnapshot(investor: any) {
   };
 }
 
+function saveInvestorAdminMessage(subject: string, body: string) {
+  const rows = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
+  const investor = readJson<any>(INVESTOR_APP_KEY, {});
+  const profile = investorProfileSnapshot(investor);
+
+  rows.unshift({
+    id: `investor-admin-message-${Date.now()}`,
+    topic: subject || "Investor message to admin",
+    subject: subject || "Investor message to admin",
+    body,
+    message: body,
+    status: "new",
+    priority: "normal",
+    lane: "investor-admin",
+    investorEmail: profile.email,
+    investorCompany: profile.company,
+    investorName: profile.contactName,
+    investorPhotoUrl: profile.photoUrl,
+    investorProfile: profile,
+    createdAt: new Date().toISOString(),
+  });
+
+  writeJson(INVESTOR_ADMIN_MESSAGES_KEY, rows);
+
+  const adminRows = readJson<any[]>("vaultforge_admin_messages_v1", []);
+  adminRows.unshift({
+    id: `investor-admin-message-${Date.now()}`,
+    topic: `Investor Message: ${subject || "No subject"}`,
+    body,
+    email: profile.email || "",
+    status: "new",
+    priority: "normal",
+    source: "investor-room",
+    investorProfile: profile,
+    createdAt: new Date().toISOString(),
+  });
+  writeJson("vaultforge_admin_messages_v1", adminRows);
+
+  window.dispatchEvent(new Event("vaultforge-investor-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+}
+
 function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
   const rows = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
   const investor = readJson<any>(INVESTOR_APP_KEY, {});
@@ -392,7 +435,7 @@ function LogoBlock() {
   );
 }
 
-function TopNav() {
+function TopNav({ onMessageAdmin }: { onMessageAdmin: () => void }) {
   return (
     <div style={{ ...row, justifyContent: "space-between", marginBottom: 18 }}>
       <div style={{ color: "#ffd45a", fontSize: 26, fontWeight: 950 }}>VAULTFORGE</div>
@@ -400,6 +443,8 @@ function TopNav() {
         <Link href="/" style={btn}>Home</Link>
         <Link href="/investor-access" style={btn}>Investor Access</Link>
         <Link href="/investor-payment" style={btn}>Payment</Link>
+        <button type="button" style={goldBtn} onClick={onMessageAdmin}>Message Admin</button>
+        <Link href="/logout" style={btn}>Logout</Link>
         <Link href="/admin" style={redBtn}>Admin</Link>
       </div>
     </div>
@@ -620,6 +665,64 @@ function RoomCard({
 
 
 
+function MessageAdminModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [sent, setSent] = useState(false);
+
+  if (!open) return null;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 110, background: "rgba(0,0,0,.78)", padding: 18, overflow: "auto" }}>
+      <div style={{ maxWidth: 820, margin: "40px auto", ...goldPanel }}>
+        <div style={{ ...row, justifyContent: "space-between" }}>
+          <div>
+            <div style={eyebrow}>Investor Message Admin</div>
+            <h2 style={h2}>Contact VaultForge Admin</h2>
+          </div>
+          <button type="button" style={btn} onClick={onClose}>Close</button>
+        </div>
+
+        <p style={sub}>Your investor profile is attached so admin can see who is asking.</p>
+
+        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
+          <span style={eyebrow}>Subject</span>
+          <input style={input} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Question about investor access, funding, a deal, or support..." />
+        </label>
+
+        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
+          <span style={eyebrow}>Message</span>
+          <textarea style={{ ...input, minHeight: 150 }} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write your message to VaultForge admin..." />
+        </label>
+
+        <div style={{ ...row, marginTop: 14 }}>
+          <button
+            type="button"
+            style={goldBtn}
+            onClick={() => {
+              saveInvestorAdminMessage(subject, body || "Investor requested admin support.");
+              setSent(true);
+              setSubject("");
+              setBody("");
+            }}
+          >
+            Send Message Admin
+          </button>
+          <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
+        </div>
+
+        {sent ? <p style={{ ...sub, marginTop: 14 }}>Message sent to VaultForge admin.</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function ExecutionRequestModal({
   lane,
   activeRoom,
@@ -726,6 +829,7 @@ export default function InvestorRoomPage() {
   const [folder, setFolder] = useState<Folder>("active");
   const [activeRoom, setActiveRoom] = useState<ActiveRoom>(null);
   const [selectedExecutionLane, setSelectedExecutionLane] = useState<any>(null);
+  const [messageAdminOpen, setMessageAdminOpen] = useState(false);
   const [tick, setTick] = useState(0);
 
   function refresh() {
@@ -804,7 +908,7 @@ export default function InvestorRoomPage() {
       <main style={page}>
       <style>{`@keyframes vfTickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
         <div style={wrap}>
-          <TopNav />
+          <TopNav onMessageAdmin={() => setMessageAdminOpen(true)} />
           <section style={hero}>
             <LogoBlock />
             <div style={eyebrow}>Investor Room Locked</div>
@@ -824,8 +928,9 @@ export default function InvestorRoomPage() {
   return (
     <main style={page}>
       <div style={wrap}>
-        <TopNav />
+        <TopNav onMessageAdmin={() => setMessageAdminOpen(true)} />
         <TickerRibbon />
+        <MessageAdminModal open={messageAdminOpen} onClose={() => setMessageAdminOpen(false)} />
 
         <section style={hero}>
           <LogoBlock />
