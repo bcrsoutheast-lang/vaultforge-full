@@ -490,7 +490,7 @@ export default function InvestorRoomPage() {
           <div style={{ ...row, marginTop: 22 }}>
             <button type="button" style={kind === "Deal" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Deal")}>Deal Signals</button>
             <button type="button" style={kind === "Pain" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Pain")}>Pain Signals</button>
-            <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>Collapse / Done</button>
+            <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>Collapse Detail / Done</button>
           </div>
         </section>
 
@@ -519,8 +519,6 @@ export default function InvestorRoomPage() {
           </div>
         </section>
 
-        <ActiveRoomPanel activeRoom={activeRoom} onClose={() => setActiveRoom(null)} onRefresh={refresh} />
-
         <section style={{ marginTop: 22 }}>
           <div style={{ ...row, justifyContent: "space-between", marginBottom: 12 }}>
             <div style={eyebrow}>{folder === "active" ? `${kind} Cards • ${state}` : `${kind} ${folder} Folder • ${state}`}</div>
@@ -548,6 +546,8 @@ export default function InvestorRoomPage() {
             )}
           </div>
         </section>
+
+        <ActiveRoomPanel activeRoom={activeRoom} onClose={() => setActiveRoom(null)} onRefresh={refresh} />
 
         <section style={{ ...hero, marginTop: 24 }}>
           <div style={eyebrow}>Network Capabilities Through Members</div>
