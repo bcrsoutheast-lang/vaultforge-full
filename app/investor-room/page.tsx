@@ -24,6 +24,27 @@ const EXECUTION_LANES = [
   { key: "equity_partner", title: "Request Equity Partner", note: "Ask for private capital or equity partnership routing." },
 ];
 
+const TICKER_ITEMS = [
+  "VAULTFORGE INVESTOR ACCESS",
+  "PRIVATE DEAL SIGNALS",
+  "PAIN PRESSURE ROUTING",
+  "FUNDING THROUGH NETWORK",
+  "EXECUTION THROUGH MEMBERS",
+  "NO PRIVATE CONTACT EXPOSED",
+  "REQUEST INFO CONTROLLED",
+  "PROFILE ATTACHED TO REQUESTS",
+  "MEMBER APPROVAL REQUIRED",
+  "ONE-STOP EXECUTION LANE",
+];
+
+const INTELLIGENCE_BLURBS = [
+  "VaultForge routes investor requests with buyer profile context attached.",
+  "Private member data stays hidden until deeper access is approved.",
+  "Deal and Pain cards are teaser intelligence, not public listings.",
+  "More complete investor profiles create stronger routing and better member confidence.",
+  "Execution requests route to the private network without exposing the directory.",
+];
+
 const LOGOS = [
   "/vaultforge-logo.png",
   "/VaultForge-logo.png",
@@ -299,6 +320,23 @@ const hero: React.CSSProperties = {
   marginBottom: 20,
   background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 34%), linear-gradient(180deg,#080d19,#050816)",
 };
+const tickerWrap: React.CSSProperties = {
+  borderTop: "1px solid rgba(245,197,66,.25)",
+  borderBottom: "1px solid rgba(245,197,66,.25)",
+  background: "#090d14",
+  overflow: "hidden",
+  margin: "0 0 20px",
+  borderRadius: 18,
+};
+
+const tickerTrack: React.CSSProperties = {
+  display: "flex",
+  gap: 40,
+  width: "max-content",
+  padding: "14px 0",
+  animation: "vfTickerMove 34s linear infinite",
+};
+
 const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 24, padding: 22 };
 const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.52)", boxShadow: "0 0 28px rgba(245,197,66,.10)" };
 const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.52)", boxShadow: "0 0 28px rgba(255,70,70,.10)" };
@@ -364,6 +402,94 @@ function TopNav() {
         <Link href="/investor-payment" style={btn}>Payment</Link>
         <Link href="/admin" style={redBtn}>Admin</Link>
       </div>
+    </div>
+  );
+}
+
+function TickerRibbon() {
+  return (
+    <div style={tickerWrap}>
+      <div style={tickerTrack}>
+        {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, index) => (
+          <div key={`${item}-${index}`} style={{ whiteSpace: "nowrap", color: "#ffd45a", fontWeight: 950, letterSpacing: 3 }}>
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function profileScore(investor: any) {
+  const fields = [
+    investor?.photoUrl,
+    investor?.contactName,
+    investor?.company,
+    investor?.email,
+    investor?.phone,
+    investor?.investorTypes?.length,
+    investor?.buyingStrategies?.length,
+    investor?.assetTypes?.length,
+    investor?.statesInterested?.length,
+    investor?.minDeal,
+    investor?.maxDeal,
+    investor?.monthlyVolume,
+    investor?.yearlyVolume,
+    investor?.closeSpeed,
+    investor?.proofFunds,
+    investor?.directBuyer,
+    investor?.fundingNeeded,
+  ];
+
+  const filled = fields.filter(Boolean).length;
+  return Math.min(100, Math.round((filled / fields.length) * 100));
+}
+
+function IntelligencePanel({ investor }: { investor: any }) {
+  const score = profileScore(investor);
+  const blurb = INTELLIGENCE_BLURBS[score % INTELLIGENCE_BLURBS.length];
+
+  return (
+    <section style={goldPanel}>
+      <div style={eyebrow}>VaultForge Intelligence</div>
+      <h2 style={h2}>{score}% Profile Signal</h2>
+      <p style={sub}>{blurb}</p>
+      <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.08)", overflow: "hidden", marginTop: 14 }}>
+        <div style={{ height: "100%", width: `${score}%`, background: "#ffdc68" }} />
+      </div>
+      <div style={{ ...row, marginTop: 14 }}>
+        <Link href="/investor-application" style={goldBtn}>Improve Investor Profile</Link>
+      </div>
+    </section>
+  );
+}
+
+function RequestPipeline() {
+  return (
+    <section style={panel}>
+      <div style={eyebrow}>Request Pipeline</div>
+      <div style={grid}>
+        <div style={panel}><div style={eyebrow}>01 Submitted</div><p style={muted}>Investor request is captured with profile attached.</p></div>
+        <div style={panel}><div style={eyebrow}>02 Routed</div><p style={muted}>VaultForge routes internally without exposing member directory.</p></div>
+        <div style={panel}><div style={eyebrow}>03 Reviewed</div><p style={muted}>Admin/member reviews investor fit and request context.</p></div>
+        <div style={panel}><div style={eyebrow}>04 Approved</div><p style={muted}>Contact or deeper access can be shared only after approval.</p></div>
+      </div>
+    </section>
+  );
+}
+
+function UrgencyBadges({ kind }: { kind: Kind }) {
+  const badges = kind === "Deal"
+    ? ["OFF MARKET", "ARV SIGNAL", "FUNDING AVAILABLE", "EXECUTION NETWORK", "REQUEST CONTROLLED"]
+    : ["DISTRESS", "CAPITAL GAP", "OPERATOR NEEDED", "URGENT SIGNAL", "PRIVATE ROUTING"];
+
+  return (
+    <div style={{ ...row, marginTop: 10 }}>
+      {badges.map((badge) => (
+        <span key={badge} style={{ border: "1px solid rgba(245,197,66,.32)", borderRadius: 999, padding: "8px 11px", color: "#ffd45a", background: "rgba(245,197,66,.07)", fontWeight: 900, fontSize: 12 }}>
+          {badge}
+        </span>
+      ))}
     </div>
   );
 }
@@ -676,6 +802,7 @@ export default function InvestorRoomPage() {
   if (!access) {
     return (
       <main style={page}>
+      <style>{`@keyframes vfTickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
         <div style={wrap}>
           <TopNav />
           <section style={hero}>
@@ -698,6 +825,7 @@ export default function InvestorRoomPage() {
     <main style={page}>
       <div style={wrap}>
         <TopNav />
+        <TickerRibbon />
 
         <section style={hero}>
           <LogoBlock />
@@ -709,6 +837,10 @@ export default function InvestorRoomPage() {
             <button type="button" style={kind === "Pain" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Pain")}>Pain Signals</button>
             <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>Collapse / Done</button>
           </div>
+        </section>
+
+        <section style={{ marginBottom: 18 }}>
+          <IntelligencePanel investor={investor} />
         </section>
 
         <section style={goldPanel}>
@@ -768,6 +900,10 @@ export default function InvestorRoomPage() {
 
         <ExecutionLaneCards activeRoom={activeRoom} onSelect={setSelectedExecutionLane} />
         <ExecutionRequestModal lane={selectedExecutionLane} activeRoom={activeRoom} onClose={() => setSelectedExecutionLane(null)} />
+
+        <section style={{ marginTop: 18 }}>
+          <RequestPipeline />
+        </section>
 
         <section style={{ ...hero, marginTop: 24 }}>
           <div style={eyebrow}>Network Capabilities Through Members</div>
