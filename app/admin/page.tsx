@@ -111,6 +111,19 @@ const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 
 const STATE_CODES: StateCode[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 
+const ADMIN_LOGO_CANDIDATES = [
+  "/vaultforge-logo.png",
+  "/VaultForge-logo.png",
+  "/vaultforge-logo.jpg",
+  "/vaultforge-logo.jpeg",
+  "/logo.png",
+  "/logo.jpg",
+  "/vf-logo.png",
+  "/VF-logo.png",
+  "/vaultforge.png",
+  "/VaultForge.png",
+];
+
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"];
 const MEMBER_SOURCE_KEYS = ["vaultforge_admin_members_v1", "vaultforge_members", "vaultforge_member_profiles", "vaultforge_profiles", "vf_profiles", "members", "profiles"];
 
@@ -567,6 +580,40 @@ const smallGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "
 const row: React.CSSProperties = { display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#111823", color: "#f8fafc", borderRadius: 16, padding: "14px 15px", fontSize: 16 };
 
+
+function AdminLogoBlock() {
+  const [index, setIndex] = useState(0);
+  const src = ADMIN_LOGO_CANDIDATES[index];
+
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: "0 0 22px" }}>
+      <div
+        style={{
+          width: "min(420px, 88vw)",
+          border: "1px solid rgba(245,197,66,.28)",
+          borderRadius: 26,
+          padding: 16,
+          background: "radial-gradient(circle, rgba(245,197,66,.13), transparent 68%), #070b14",
+          boxShadow: "0 0 50px rgba(245,197,66,.14)",
+        }}
+      >
+        {src ? (
+          <img
+            src={src}
+            alt="VaultForge"
+            style={{ width: "100%", height: "auto", display: "block", borderRadius: 16 }}
+            onError={() => setIndex((value) => (value + 1 < ADMIN_LOGO_CANDIDATES.length ? value + 1 : ADMIN_LOGO_CANDIDATES.length))}
+          />
+        ) : (
+          <div style={{ minHeight: 160, display: "grid", placeItems: "center", color: "#ffd45a", fontSize: 52, fontWeight: 950 }}>
+            VAULTFORGE
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AdminNav() {
   return (
     <div style={topbar}>
@@ -984,6 +1031,7 @@ export default function AdminPage() {
         <AdminNav />
 
         <section style={hero}>
+          <AdminLogoBlock />
           <div style={eyebrow}>VaultForge Admin Command</div>
           <h1 style={h1}>Control tower restored.</h1>
           <p style={sub}>Manage members, investor approvals, Deal/Pain rooms, investor requests, state balance, cleanup folders, and admin broadcasts.</p>
