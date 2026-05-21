@@ -289,93 +289,98 @@ function MiniValues({ item }: { item: any }) {
 function RoomCard({
   kind,
   item,
+  isOpen,
   onOpen,
+  onClose,
   onMove,
   onRestore,
   onDeleteForever,
 }: {
   kind: Kind;
   item: any;
+  isOpen: boolean;
   onOpen: () => void;
+  onClose: () => void;
   onMove: (folder: Folder) => void;
   onRestore: () => void;
   onDeleteForever: () => void;
 }) {
   const folder = getFolder(item, kind);
   const wrapper = folder === "deleted" ? redPanel : folder === "saved" ? goldPanel : panel;
+  const [message, setMessage] = useState("");
+  const [sent, setSent] = useState(false);
+  const header = `${kind} Request • ${itemTitle(item, kind)} • ${itemState(item) || "Unknown State"}`;
 
   return (
-    <div style={wrapper}>
+    <div style={isOpen ? goldPanel : wrapper}>
       <div style={eyebrow}>{kind} • {itemState(item) || "NA"} {folder !== "active" ? `• ${folder}` : ""}</div>
       <h2 style={h2}>{itemTitle(item, kind)}</h2>
       <MiniValues item={item} />
       <p style={{ ...muted, marginTop: 14 }}>
         Member information, seller information, private notes, routing notes, and contact details are hidden until deeper access is approved.
       </p>
+
       <div style={{ ...row, marginTop: 14 }}>
-        <button type="button" style={goldBtn} onClick={onOpen}>Open Details</button>
+        <button type="button" style={goldBtn} onClick={isOpen ? onClose : onOpen}>
+          {isOpen ? "Collapse / Done" : "Open Details"}
+        </button>
         <button type="button" style={btn} onClick={() => onMove("saved")}>Save</button>
         <button type="button" style={btn} onClick={() => onMove("archived")}>Archive</button>
         <button type="button" style={redBtn} onClick={() => onMove("deleted")}>Delete</button>
         {folder !== "active" ? <button type="button" style={btn} onClick={onRestore}>Restore</button> : null}
         {folder === "deleted" ? <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button> : null}
       </div>
+
+      {isOpen ? (
+        <div style={{ ...panel, marginTop: 16 }}>
+          <div style={eyebrow}>Room Detail Open</div>
+          <p style={sub}>{header}</p>
+          <p style={muted}>
+            This detail is expanded inside the same card. Collapse / Done closes it without moving the card list.
+          </p>
+
+          <div style={{ ...panel, marginTop: 14 }}>
+            <div style={eyebrow}>Private Data Hidden</div>
+            <p style={muted}>
+              This investor lane does not expose member name, member phone, member email, seller info, exact private notes, docs, routing notes, or full room intelligence.
+            </p>
+          </div>
+
+          <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
+            <span style={eyebrow}>Message With Room Header</span>
+            <textarea
+              style={{ ...input, minHeight: 120 }}
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder="I am interested. Send more information. I can close with..."
+            />
+          </label>
+
+          <div style={{ ...row, marginTop: 12 }}>
+            <button
+              type="button"
+              style={goldBtn}
+              onClick={() => {
+                sendRequest(kind, item, message);
+                setSent(true);
+              }}
+            >
+              Send Request Through VaultForge
+            </button>
+            <button type="button" style={btn} onClick={() => onMove("saved")}>Save</button>
+            <button type="button" style={btn} onClick={() => onMove("archived")}>Archive</button>
+            <button type="button" style={redBtn} onClick={() => onMove("deleted")}>Delete</button>
+            <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
+          </div>
+
+          {sent ? <p style={muted}>Request sent to VaultForge admin/member workflow.</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function ActiveRoomPanel({ activeRoom, onClose, onRefresh }: { activeRoom: ActiveRoom; onClose: () => void; onRefresh: () => void }) {
-  const [message, setMessage] = useState("");
-  const [sent, setSent] = useState(false);
 
-  if (!activeRoom) return null;
-
-  const { kind, item } = activeRoom;
-  const header = `${kind} Request • ${itemTitle(item, kind)} • ${itemState(item) || "Unknown State"}`;
-
-  return (
-    <section style={{ ...(kind === "Pain" ? redPanel : goldPanel), marginTop: 18 }}>
-      <div style={{ ...row, justifyContent: "space-between" }}>
-        <div>
-          <div style={eyebrow}>Open Investor Room Detail</div>
-          <h2 style={h2}>{itemTitle(item, kind)}</h2>
-        </div>
-        <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
-      </div>
-
-      <p style={sub}>{header}</p>
-      <MiniValues item={item} />
-
-      <div style={{ ...panel, marginTop: 16 }}>
-        <div style={eyebrow}>Private Data Hidden</div>
-        <p style={muted}>
-          This investor lane does not expose member name, member phone, member email, seller info, exact private notes, docs, routing notes, or full room intelligence.
-        </p>
-      </div>
-
-      <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
-        <span style={eyebrow}>Message With Room Header</span>
-        <textarea
-          style={{ ...input, minHeight: 120 }}
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          placeholder="I am interested. Send more information. I can close with..."
-        />
-      </label>
-
-      <div style={{ ...row, marginTop: 12 }}>
-        <button type="button" style={goldBtn} onClick={() => { sendRequest(kind, item, message); setSent(true); }}>Send Request Through VaultForge</button>
-        <button type="button" style={btn} onClick={() => { setFolderForItem(item, kind, "saved"); onRefresh(); }}>Save</button>
-        <button type="button" style={btn} onClick={() => { setFolderForItem(item, kind, "archived"); onRefresh(); }}>Archive</button>
-        <button type="button" style={redBtn} onClick={() => { setFolderForItem(item, kind, "deleted"); onRefresh(); }}>Delete</button>
-        <button type="button" style={btn} onClick={() => { setFolderForItem(item, kind, "active"); onRefresh(); }}>Restore</button>
-        <button type="button" style={redBtn} onClick={() => { hideForever(item, kind); onRefresh(); onClose(); }}>Delete Forever</button>
-      </div>
-
-      {sent ? <p style={muted}>Request sent to VaultForge admin/member workflow.</p> : null}
-    </section>
-  );
-}
 
 export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
@@ -490,7 +495,7 @@ export default function InvestorRoomPage() {
           <div style={{ ...row, marginTop: 22 }}>
             <button type="button" style={kind === "Deal" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Deal")}>Deal Signals</button>
             <button type="button" style={kind === "Pain" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Pain")}>Pain Signals</button>
-            <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>Collapse Detail / Done</button>
+            <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>Collapse / Done</button>
           </div>
         </section>
 
@@ -532,10 +537,12 @@ export default function InvestorRoomPage() {
                   key={`${kind}-${folder}-${itemKey(item, kind, index)}`}
                   kind={kind}
                   item={item}
+                  isOpen={activeRoom?.kind === kind && cleanupKey(activeRoom.item, kind) === cleanupKey(item, kind)}
                   onOpen={() => setActiveRoom({ kind, item })}
-                  onMove={(nextFolder) => { setFolderForItem(item, kind, nextFolder); refresh(); }}
-                  onRestore={() => { setFolderForItem(item, kind, "active"); refresh(); }}
-                  onDeleteForever={() => { hideForever(item, kind); refresh(); }}
+                  onClose={() => setActiveRoom(null)}
+                  onMove={(nextFolder) => { setFolderForItem(item, kind, nextFolder); setActiveRoom(null); refresh(); }}
+                  onRestore={() => { setFolderForItem(item, kind, "active"); setActiveRoom(null); refresh(); }}
+                  onDeleteForever={() => { hideForever(item, kind); setActiveRoom(null); refresh(); }}
                 />
               ))
             ) : (
@@ -546,8 +553,6 @@ export default function InvestorRoomPage() {
             )}
           </div>
         </section>
-
-        <ActiveRoomPanel activeRoom={activeRoom} onClose={() => setActiveRoom(null)} onRefresh={refresh} />
 
         <section style={{ ...hero, marginTop: 24 }}>
           <div style={eyebrow}>Network Capabilities Through Members</div>
