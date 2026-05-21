@@ -61,6 +61,7 @@ type RoomRecord = {
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const ADMIN_MEMBERS_KEY = "vaultforge_admin_members_v1";
 const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
+const MEMBER_MESSAGES_KEY = "vaultforge_admin_member_broadcasts_v1";
 const PROFILE_KEY = "vaultforge_profile";
 const LOGIN_KEY = "vaultforge_member_login_v1";
 
@@ -335,6 +336,50 @@ function readMessages(): AdminMessage[] {
   return Array.isArray(rows) ? rows : [];
 }
 
+
+function saveBroadcastMessage(recipients: MemberRecord[], subject: string, body: string) {
+  const cleanSubject = clean(subject, "Admin Command Message");
+  const cleanBody = clean(body);
+  if (!cleanBody || !recipients.length) return false;
+
+  const existing = readJson<any[]>(MEMBER_MESSAGES_KEY, []);
+  const now = new Date().toISOString();
+
+  const messageRows = recipients.map((member) => ({
+    id: `admin-broadcast-${Date.now()}-${member.id}`,
+    threadKey: `admin-${member.email}`,
+    lane: "admin",
+    subject: cleanSubject,
+    body: cleanBody,
+    from: OWNER_EMAIL,
+    to: member.email,
+    memberName: member.name,
+    memberCompany: member.company,
+    status: "unread",
+    createdAt: now,
+    source: "admin-broadcast",
+  }));
+
+  writeJson(MEMBER_MESSAGES_KEY, [...messageRows, ...(Array.isArray(existing) ? existing : [])]);
+
+  const adminExisting = readMessages();
+  const adminLog: AdminMessage = {
+    id: `admin-sent-${Date.now()}`,
+    topic: `Broadcast sent to ${recipients.length} member(s)`,
+    body: `${cleanSubject}: ${cleanBody}`,
+    email: OWNER_EMAIL,
+    status: "sent",
+    priority: "normal",
+    createdAt: now,
+  };
+
+  writeJson(ADMIN_MESSAGES_KEY, [adminLog, ...adminExisting]);
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-message-command-change"));
+  return true;
+}
+
+
 function normalizeRoom(row: any, source: string, kind: "deal" | "pain", index: number): RoomRecord {
   const id = clean(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId || `${source}-${index}`);
   const title = clean(row?.title || row?.name || row?.propertyName || row?.headline || row?.summary, kind === "deal" ? "Deal Room" : "Pain Room");
@@ -589,6 +634,9 @@ export default function AdminPage() {
   const [pains, setPains] = useState<RoomRecord[]>([]);
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
+  const [broadcastSubject, setBroadcastSubject] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [broadcastNotice, setBroadcastNotice] = useState("");
   const [filter, setFilter] = useState<AdminFilter>("all");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
 
@@ -679,7 +727,23 @@ export default function AdminPage() {
 
   function runSearch(event?: React.FormEvent) {
     if (event) event.preventDefault();
-    setSearch(searchDraft);
+    const next = searchDraft.trim();
+    setSearch(next);
+  }
+
+  function broadcastToMembers(target: "filtered" | "all") {
+    const recipients = target === "filtered" ? filteredMembers.filter((member) => member.status !== "deleted") : visibleMembers;
+    const ok = saveBroadcastMessage(recipients, broadcastSubject, broadcastBody);
+
+    if (!ok) {
+      setBroadcastNotice("Add a message and make sure there is at least one member selected.");
+      return;
+    }
+
+    setBroadcastNotice(`Message saved for ${recipients.length} member(s).`);
+    setBroadcastSubject("");
+    setBroadcastBody("");
+    setMessages(readMessages());
   }
 
   if (!allowed) {
@@ -726,6 +790,15 @@ export default function AdminPage() {
           <p style={muted}>ADMIN COMMAND MODE • Signed in as owner: {email}</p>
         </section>
 
+
+        <section style={{ marginBottom: 18 }}>
+          <div style={grid}>
+            <Metric title="Pulsing New Member Alert" count={newMembers.length} note="new applicants needing review" pulse={newMembers.length > 0} onClick={() => setFilter("new")} />
+            <Metric title="Approved Not Paid Alert" count={approvedUnpaid.length} note="payment button approved but payment not complete" pulse={approvedUnpaid.length > 0} onClick={() => setFilter("approvedUnpaid")} />
+            <Metric title="Admin Message Alert" count={openMessages.length} note="member/admin support messages waiting" pulse={openMessages.length > 0} onClick={() => { window.location.href = "/admin-messages"; }} />
+          </div>
+        </section>
+
         <section style={{ marginBottom: 18 }}>
           <div style={grid}>
             <Metric title="New Members" count={newMembers.length} note="new/pending member applications" pulse={newMembers.length > 0} onClick={() => setFilter("new")} />
@@ -740,6 +813,41 @@ export default function AdminPage() {
             <Metric title="Admin Messages" count={openMessages.length} note="member support and escalation" pulse={openMessages.length > 0} onClick={() => { window.location.href = "/admin-messages"; }} />
           </div>
         </section>
+
+
+        <Section title="Admin Message Center">
+          <p style={muted}>Send a message to all members or only the current filtered member group. Messages are saved into the admin broadcast lane for member-side message integration.</p>
+
+          <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
+            <label>
+              <div style={eyebrow}>Subject</div>
+              <input
+                style={input}
+                value={broadcastSubject}
+                onChange={(event) => setBroadcastSubject(event.target.value)}
+                placeholder="Admin update, payment reminder, new signal notice..."
+              />
+            </label>
+
+            <label>
+              <div style={eyebrow}>Message</div>
+              <textarea
+                style={{ ...input, minHeight: 150 }}
+                value={broadcastBody}
+                onChange={(event) => setBroadcastBody(event.target.value)}
+                placeholder="Write admin message..."
+              />
+            </label>
+
+            <div style={row}>
+              <button type="button" style={goldBtn} onClick={() => broadcastToMembers("filtered")}>Message Filtered Members</button>
+              <button type="button" style={btn} onClick={() => broadcastToMembers("all")}>Message All Members</button>
+              <Link href="/admin-messages" style={btn}>Open Admin Messages</Link>
+            </div>
+
+            {broadcastNotice ? <p style={sub}>{broadcastNotice}</p> : null}
+          </div>
+        </Section>
 
         <Section title="Search / Filter Members">
           <form onSubmit={runSearch} style={{ display: "grid", gap: 14 }}>
@@ -758,6 +866,8 @@ export default function AdminPage() {
               <button type="button" style={btn} onClick={() => { setSearchDraft(""); setSearch(""); setFilter("all"); setStateFilter("all"); }}>Reset</button>
               <Link href="/admin-messages" style={btn}>Open Admin Messages</Link>
             </div>
+
+            <p style={muted}>Current search: {search ? search : "none"} • Results: {filteredMembers.length}</p>
 
             <div style={grid}>
               <Metric title="All" count={visibleMembers.length} note="active admin member list" active={filter === "all"} onClick={() => setFilter("all")} />
