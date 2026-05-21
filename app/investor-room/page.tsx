@@ -5,10 +5,25 @@ import { useEffect, useMemo, useState } from "react";
 
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
+const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
 const INVESTOR_HIDDEN_KEY = "vaultforge_investor_room_hidden_v1";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+const EXECUTION_LANES = [
+  { key: "lender", title: "Request Lender", note: "Route this opportunity to private funding sources inside the member network." },
+  { key: "hard_money", title: "Request Hard Money", note: "Request fast bridge, rehab, or acquisition capital." },
+  { key: "jv_partner", title: "Request JV Partner", note: "Ask for an execution or capital partner for this opportunity." },
+  { key: "contractor", title: "Request Contractor", note: "Ask for rehab, construction, bid, or field execution help." },
+  { key: "title_closing", title: "Request Title / Closing", note: "Ask for title, closing, escrow, or transaction coordination help." },
+  { key: "insurance", title: "Request Insurance", note: "Ask for property insurance or risk coverage help." },
+  { key: "property_management", title: "Request Property Management", note: "Ask for leasing, rental, or management support." },
+  { key: "operator", title: "Request Operator", note: "Ask for an operator, asset manager, or boots-on-ground execution help." },
+  { key: "disposition", title: "Request Disposition Help", note: "Ask for resale, buyer, or exit strategy support." },
+  { key: "boots_on_ground", title: "Request Boots On Ground", note: "Ask for local eyes, site visit, photos, or field support." },
+  { key: "equity_partner", title: "Request Equity Partner", note: "Ask for private capital or equity partnership routing." },
+];
+
 const LOGOS = [
   "/vaultforge-logo.png",
   "/VaultForge-logo.png",
@@ -170,6 +185,54 @@ function investorProfileSnapshot(investor: any) {
     capitalSource: investor?.capitalSource || "",
     notes: investor?.notes || "",
   };
+}
+
+function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
+  const rows = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+  const investor = readJson<any>(INVESTOR_APP_KEY, {});
+  const profile = investorProfileSnapshot(investor);
+  const title = itemTitle(item, kind);
+  const state = itemState(item);
+  const header = `${lane.title} - ${kind} - ${title} - ${state || "Unknown State"}`;
+
+  const profileText = [
+    `Investor: ${profile.contactName || "Not listed"}`,
+    `Company: ${profile.company || "Not listed"}`,
+    `Email: ${profile.email || "Not listed"}`,
+    `Phone: ${profile.phone || "Not listed"}`,
+    `Types: ${Array.isArray(profile.investorTypes) ? profile.investorTypes.join(", ") : profile.investorTypes || "Not listed"}`,
+    `Strategy: ${Array.isArray(profile.buyingStrategies) ? profile.buyingStrategies.join(", ") : profile.buyingStrategies || "Not listed"}`,
+    `Markets: ${Array.isArray(profile.statesInterested) ? profile.statesInterested.join(", ") : profile.statesInterested || "Not listed"}`,
+    `Buy Box: ${profile.minDeal || "Not listed"} - ${profile.maxDeal || "Not listed"}`,
+    `Volume: ${profile.monthlyVolume || "Not listed"} / month, ${profile.yearlyVolume || "Not listed"} / year`,
+    `Close Speed: ${profile.closeSpeed || "Not listed"}`,
+    `Proof of Funds: ${profile.proofFunds || "Not listed"}`,
+    `Direct Buyer: ${profile.directBuyer || "Not listed"}`,
+    `Funding Needed: ${profile.fundingNeeded || "Not listed"}`,
+  ].join("\\n");
+
+  rows.unshift({
+    id: `execution-request-${Date.now()}`,
+    requestType: lane.key,
+    requestTitle: lane.title,
+    kind,
+    itemId: itemId(item, kind),
+    title,
+    state,
+    roomHeader: header,
+    investorEmail: profile.email,
+    investorCompany: profile.company,
+    investorName: profile.contactName,
+    investorPhotoUrl: profile.photoUrl,
+    investorProfile: profile,
+    notes: notes || "",
+    message: `${header}\\n\\n${notes || "Investor requested execution support."}\\n\\n--- Investor Profile Attached ---\\n${profileText}`,
+    status: "new",
+    createdAt: new Date().toISOString(),
+  });
+
+  writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-execution-request-change"));
 }
 
 function sendRequest(kind: Kind, item: any, body: string) {
@@ -430,12 +493,112 @@ function RoomCard({
 
 
 
+
+function ExecutionRequestModal({
+  lane,
+  activeRoom,
+  onClose,
+}: {
+  lane: any;
+  activeRoom: ActiveRoom;
+  onClose: () => void;
+}) {
+  const [notes, setNotes] = useState("");
+  const [sent, setSent] = useState(false);
+
+  if (!lane || !activeRoom) return null;
+
+  const { kind, item } = activeRoom;
+  const header = `${lane.title} - ${kind} - ${itemTitle(item, kind)} - ${itemState(item) || "Unknown State"}`;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.78)", padding: 18, overflow: "auto" }}>
+      <div style={{ maxWidth: 880, margin: "40px auto", ...goldPanel }}>
+        <div style={{ ...row, justifyContent: "space-between" }}>
+          <div>
+            <div style={eyebrow}>Execution Request</div>
+            <h2 style={h2}>{lane.title}</h2>
+          </div>
+          <button type="button" style={btn} onClick={onClose}>Close</button>
+        </div>
+
+        <p style={sub}>{header}</p>
+        <p style={muted}>{lane.note}</p>
+
+        <div style={{ ...panel, marginTop: 16 }}>
+          <div style={eyebrow}>Controlled Routing</div>
+          <p style={muted}>
+            This does not expose the member directory. VaultForge routes your request internally with your investor profile attached.
+          </p>
+        </div>
+
+        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
+          <span style={eyebrow}>Request Notes</span>
+          <textarea
+            style={{ ...input, minHeight: 150 }}
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Describe what you need. Example: need 80% LTC hard money, closing in 14 days, contractor bid needed, title issue help..."
+          />
+        </label>
+
+        <div style={{ ...row, marginTop: 14 }}>
+          <button
+            type="button"
+            style={goldBtn}
+            onClick={() => {
+              saveExecutionRequest(kind, item, lane, notes);
+              setSent(true);
+            }}
+          >
+            Send Execution Request
+          </button>
+          <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
+        </div>
+
+        {sent ? <p style={{ ...sub, marginTop: 14 }}>Execution request sent to VaultForge routing.</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function ExecutionLaneCards({
+  activeRoom,
+  onSelect,
+}: {
+  activeRoom: ActiveRoom;
+  onSelect: (lane: any) => void;
+}) {
+  if (!activeRoom) return null;
+
+  return (
+    <section style={{ ...hero, marginTop: 18 }}>
+      <div style={eyebrow}>One-Stop-Shop Execution Requests</div>
+      <h2 style={h2}>Need help completing this opportunity?</h2>
+      <p style={sub}>
+        Request funding, title, contractor, operator, insurance, property management, JV, or boots-on-ground support without exposing private member data.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        {EXECUTION_LANES.map((lane) => (
+          <button key={lane.key} type="button" style={panel} onClick={() => onSelect(lane)}>
+            <div style={eyebrow}>{lane.title}</div>
+            <p style={muted}>{lane.note}</p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+
 export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
   const [state, setState] = useState("GA");
   const [kind, setKind] = useState<Kind>("Deal");
   const [folder, setFolder] = useState<Folder>("active");
   const [activeRoom, setActiveRoom] = useState<ActiveRoom>(null);
+  const [selectedExecutionLane, setSelectedExecutionLane] = useState<any>(null);
   const [tick, setTick] = useState(0);
 
   function refresh() {
@@ -601,6 +764,9 @@ export default function InvestorRoomPage() {
             )}
           </div>
         </section>
+
+        <ExecutionLaneCards activeRoom={activeRoom} onSelect={setSelectedExecutionLane} />
+        <ExecutionRequestModal lane={selectedExecutionLane} activeRoom={activeRoom} onClose={() => setSelectedExecutionLane(null)} />
 
         <section style={{ ...hero, marginTop: 24 }}>
           <div style={eyebrow}>Network Capabilities Through Members</div>
