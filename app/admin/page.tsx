@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type MemberStatus = "pending" | "approved" | "denied" | "suspended";
 type PaymentStatus = "unpaid" | "paid" | "comped" | "trial" | "past_due";
+type AdminFilter = "all" | "pending" | "active" | "locked" | "comped" | "blocked";
 
 type MemberRecord = {
   id: string;
@@ -285,6 +286,7 @@ const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 18, lineHeight: 1
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "7px 0 0", lineHeight: 1.35 };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 14 };
 const row: React.CSSProperties = { display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" };
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#111823", color: "#f8fafc", borderRadius: 16, padding: "14px 15px", fontSize: 16 };
 
 function AdminNav() {
   return (
@@ -337,6 +339,32 @@ function StatusPill({ text }: { text: string }) {
   return <span style={{ ...style, padding: "7px 11px", fontSize: 12 }}>{text}</span>;
 }
 
+
+function FilterButton({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: "pointer" }}
+      onClick={onClick}
+    >
+      <div style={eyebrow}>{label}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>Click to filter</p>
+    </button>
+  );
+}
+
+
 function MemberCard({
   member,
   onPatch,
@@ -387,6 +415,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function AdminPage() {
   const [currentEmail, setCurrentEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<AdminFilter>("all");
 
   useEffect(() => {
     setCurrentEmail(getCurrentUserEmail());
@@ -410,6 +440,30 @@ export default function AdminPage() {
   const active = useMemo(() => members.filter((member) => member.status === "approved" && member.access === "active"), [members]);
   const locked = useMemo(() => members.filter((member) => member.paymentStatus === "unpaid" || member.access === "locked"), [members]);
   const comped = useMemo(() => members.filter((member) => member.paymentStatus === "comped"), [members]);
+
+  const filteredMembers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    return members.filter((member) => {
+      const matchesSearch =
+        !q ||
+        member.name.toLowerCase().includes(q) ||
+        member.company.toLowerCase().includes(q) ||
+        member.email.toLowerCase().includes(q) ||
+        member.phone.toLowerCase().includes(q) ||
+        member.memberType.toLowerCase().includes(q) ||
+        member.states.toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+      if (filter === "all") return true;
+      if (filter === "pending") return member.status === "pending";
+      if (filter === "active") return member.status === "approved" && member.access === "active";
+      if (filter === "locked") return member.paymentStatus === "unpaid" || member.access === "locked";
+      if (filter === "comped") return member.paymentStatus === "comped";
+      if (filter === "blocked") return member.status === "suspended" || member.status === "denied";
+      return true;
+    });
+  }, [members, search, filter]);
   const blocked = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
 
   function scrollToAdminSection(id: string) {
@@ -467,6 +521,45 @@ export default function AdminPage() {
             <Metric title="Denied / Suspended" count={blocked.length} note="blocked from access" onClick={() => scrollToAdminSection("admin-blocked")} />
           </div>
         </section>
+
+
+        <Section title="Search / Filter Members">
+          <div style={{ display: "grid", gap: 14 }}>
+            <label>
+              <div style={eyebrow}>Search</div>
+              <input
+                style={input}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search name, company, email, phone, type, or state..."
+              />
+            </label>
+
+            <div style={grid}>
+              <FilterButton label="All Members" count={members.length} active={filter === "all"} onClick={() => setFilter("all")} />
+              <FilterButton label="Pending" count={pending.length} active={filter === "pending"} onClick={() => setFilter("pending")} />
+              <FilterButton label="Active" count={active.length} active={filter === "active"} onClick={() => setFilter("active")} />
+              <FilterButton label="Locked" count={locked.length} active={filter === "locked"} onClick={() => setFilter("locked")} />
+              <FilterButton label="Comped" count={comped.length} active={filter === "comped"} onClick={() => setFilter("comped")} />
+              <FilterButton label="Blocked" count={blocked.length} active={filter === "blocked"} onClick={() => setFilter("blocked")} />
+            </div>
+          </div>
+        </Section>
+
+        <Section title="Filtered Member Results">
+          {filteredMembers.length ? (
+            <div style={grid}>
+              {filteredMembers.map((member) => (
+                <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />
+              ))}
+            </div>
+          ) : (
+            <div style={panel}>
+              <h2 style={h2}>No matching members.</h2>
+              <p style={sub}>Try a different search or filter.</p>
+            </div>
+          )}
+        </Section>
 
         <div id="admin-pending"><Section title="Pending Members">
           {pending.length ? (
