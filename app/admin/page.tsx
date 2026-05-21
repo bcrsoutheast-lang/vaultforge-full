@@ -93,6 +93,9 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const ADMIN_MEMBERS_KEY = "vaultforge_admin_members_v1";
 const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
 const MEMBER_MESSAGES_KEY = "vaultforge_admin_member_broadcasts_v1";
+const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
+const INVESTOR_LIST_KEY = "vaultforge_investor_applications_v1";
+const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const INVESTOR_APPLICATIONS_KEY = "vaultforge_investor_applications_v1";
 const INVESTOR_MESSAGES_KEY = "vaultforge_investor_messages_v1";
 const PROFILE_KEY = "vaultforge_profile";
@@ -799,6 +802,52 @@ function RoomModal({ selection, onClose }: { selection: RoomSelection; onClose: 
 
 
 
+
+function InvestorCard({ investor, onPatch, onDeleteForever }: { investor: InvestorRecord; onPatch: (patch: Partial<InvestorRecord>) => void; onDeleteForever: () => void }) {
+  const specialPanel = investor.status === "pending" || (investor.status === "approved" && investor.approvedForPayment && investor.paymentStatus === "unpaid") ? activePanel : investor.status === "denied" || investor.status === "suspended" || investor.status === "deleted" ? alertPanel : panel;
+
+  return (
+    <div className={investor.status === "pending" ? "vf-pulse" : ""} style={specialPanel}>
+      <div style={eyebrow}>{investor.status} • {investor.paymentStatus} • {investor.access}</div>
+      <h2 style={h2}>{investor.company}</h2>
+      <p style={sub}>{investor.contactName}</p>
+      <p style={muted}>{investor.email}</p>
+      <p style={muted}>{investor.phone}</p>
+      <p style={muted}>States: {investor.statesInterested}</p>
+      <p style={muted}>Assets: {investor.assetTypes}</p>
+      <p style={muted}>Deal Size: {investor.minDeal} - {investor.maxDeal}</p>
+      <p style={muted}>Capital Source: {investor.capitalSource}</p>
+      {investor.notes ? <p style={muted}>Notes: {investor.notes}</p> : null}
+
+      <div style={{ ...row, marginTop: 15 }}>
+        <button type="button" style={greenBtn} onClick={() => onPatch({ status: "approved" })}>Approve Investor</button>
+        <button type="button" style={goldBtn} onClick={() => onPatch({ approvedForPayment: true, status: "approved" })}>Approve Payment Button</button>
+        <button type="button" style={greenBtn} onClick={() => onPatch({ paymentStatus: "paid", status: "approved", approvedForPayment: true })}>Mark Paid</button>
+        <button type="button" style={goldBtn} onClick={() => onPatch({ paymentStatus: "comped", status: "approved", approvedForPayment: true, access: "active" })}>Grant Free Access</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "suspended", access: "locked" })}>Suspend</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked", approvedForPayment: false })}>Deny</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "deleted", access: "locked" })}>Delete Investor</button>
+        {investor.status === "deleted" ? <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button> : null}
+        <button type="button" style={btn} onClick={() => onPatch({ status: "approved" })}>Restore</button>
+      </div>
+    </div>
+  );
+}
+
+function InvestorRequestCard({ request }: { request: InvestorRequest }) {
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>{request.kind} • {request.state} • {request.status}</div>
+      <h2 style={h2}>{request.title}</h2>
+      <p style={sub}>{request.investorCompany || request.investorName || request.investorEmail}</p>
+      <p style={muted}>{request.investorEmail}</p>
+      <p style={muted}>{request.message}</p>
+      <p style={muted}>Created: {request.createdAt}</p>
+    </div>
+  );
+}
+
+
 export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
@@ -824,6 +873,8 @@ export default function AdminPage() {
       setEmail(currentEmail());
       setMembers(readMembers());
       setMessages(readMessages());
+      setInvestors(readInvestors());
+      setInvestorRequests(readInvestorRequests());
       setInvestors(readInvestors());
       setInvestorMessages(readInvestorMessages());
       setDeals(readRooms("deal"));
@@ -874,6 +925,16 @@ export default function AdminPage() {
       return true;
     });
   }, [investors, investorFilter]);
+
+
+  const visibleInvestors = useMemo(() => investors.filter((investor) => investor.status !== "deleted"), [investors]);
+  const newInvestors = useMemo(() => investors.filter((investor) => investor.status === "pending"), [investors]);
+  const approvedInvestors = useMemo(() => investors.filter((investor) => investor.status === "approved"), [investors]);
+  const pendingInvestorPayment = useMemo(() => investors.filter((investor) => investor.status === "approved" && investor.approvedForPayment && investor.paymentStatus === "unpaid"), [investors]);
+  const paidInvestors = useMemo(() => investors.filter((investor) => investor.paymentStatus === "paid" || investor.paymentStatus === "comped"), [investors]);
+  const blockedInvestors = useMemo(() => investors.filter((investor) => investor.status === "denied" || investor.status === "suspended"), [investors]);
+  const deletedInvestors = useMemo(() => investors.filter((investor) => investor.status === "deleted"), [investors]);
+  const openInvestorRequests = useMemo(() => investorRequests.filter((request) => request.status !== "resolved" && request.status !== "deleted"), [investorRequests]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1179,6 +1240,69 @@ export default function AdminPage() {
               <div style={panel}>
                 <h2 style={h2}>No investor applications yet.</h2>
                 <p style={sub}>Investor applications will show here once the investor access flow is built.</p>
+              </div>
+            )}
+          </div>
+        </Section>
+
+
+        <Section title="Investor Access Command">
+          <p style={muted}>
+            Investor Access is separate from the private member network. Investors only see teaser Deal/Pain cards and request more information through members/admin.
+          </p>
+
+          <div style={{ ...grid, marginTop: 14 }}>
+            <Metric title="New Investors" count={newInvestors.length} note="waiting approval" pulse={newInvestors.length > 0} />
+            <Metric title="Approved Investors" count={approvedInvestors.length} note="approved investor accounts" />
+            <Metric title="Pending Investor Payment" count={pendingInvestorPayment.length} note="payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} />
+            <Metric title="Paid Investors" count={paidInvestors.length} note="active investor access" />
+            <Metric title="Investor Messages" count={openInvestorRequests.length} note="investor requests and intros" pulse={openInvestorRequests.length > 0} />
+            <Metric title="Blocked Investors" count={blockedInvestors.length} note="denied or suspended investors" />
+            <Metric title="Deleted Investors" count={deletedInvestors.length} note="investor cleanup folder" />
+          </div>
+
+          <div style={{ ...panel, marginTop: 18 }}>
+            <div style={eyebrow}>Investor Access Structure</div>
+            <p style={muted}>$49 first month then $149/month.</p>
+            <p style={muted}>Separate investor login/application flow.</p>
+            <p style={muted}>Teaser Deal/Pain cards only.</p>
+            <p style={muted}>No direct member info exposed.</p>
+            <p style={muted}>Request More Info routes through members/admin.</p>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <div style={eyebrow}>Investor Applications</div>
+            {investors.length ? (
+              <div style={grid}>
+                {investors.map((investor) => (
+                  <InvestorCard
+                    key={investor.id}
+                    investor={investor}
+                    onPatch={(patch) => patchInvestor(investor.id, patch)}
+                    onDeleteForever={() => deleteInvestorForever(investor.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={panel}>
+                <h2 style={h2}>No investor applications yet.</h2>
+                <p style={sub}>Investor applications will appear here after someone submits /investor-application.</p>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <div style={eyebrow}>Investor Requests / Messages</div>
+            {openInvestorRequests.length ? (
+              <div style={grid}>
+                {openInvestorRequests.map((request) => (
+                  <InvestorRequestCard key={request.id} request={request} />
+                ))}
+              </div>
+            ) : (
+              <div style={panel}>
+                <h2 style={h2}>No investor requests yet.</h2>
+                <p style={sub}>Request More Info messages from /investor-room will appear here.</p>
               </div>
             )}
           </div>
