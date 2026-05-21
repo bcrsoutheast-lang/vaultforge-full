@@ -98,6 +98,7 @@ function saveApplication(app: any) {
 
   writeJson(INVESTOR_APP_KEY, record);
   localStorage.setItem("vaultforge_investor_email", String(record.email || "").toLowerCase());
+  writeJson("vaultforge_investor_session_v1", { email: String(record.email || "").toLowerCase(), role: "investor", loggedIn: true, updatedAt: now });
 
   const rows = readJson<any[]>(INVESTOR_LIST_KEY, []);
   const key = String(record.email || record.company || Date.now()).toLowerCase();
