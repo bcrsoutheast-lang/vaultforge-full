@@ -775,6 +775,19 @@ function RoomModal({ selection, onClose }: { selection: RoomSelection; onClose: 
   );
 }
 
+
+function CollapseBar({ label, onCollapse }: { label: string; onCollapse: () => void }) {
+  return (
+    <div style={{ ...row, justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={eyebrow}>{label}</div>
+      <button type="button" style={btn} onClick={onCollapse}>
+        Collapse / Done
+      </button>
+    </div>
+  );
+}
+
+
 export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
@@ -830,6 +843,8 @@ export default function AdminPage() {
   const paid = useMemo(() => members.filter((member) => member.paymentStatus === "paid"), [members]);
   const comped = useMemo(() => members.filter((member) => member.paymentStatus === "comped"), [members]);
   const deleted = useMemo(() => members.filter((member) => member.status === "deleted"), [members]);
+  const archivedMembers = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
+  const activeMembers = useMemo(() => members.filter((member) => member.status === "approved" && member.access === "active"), [members]);
   const openMessages = useMemo(() => messages.filter((message) => message.status !== "resolved" && message.status !== "deleted"), [messages]);
 
   const newInvestors = useMemo(() => investors.filter((investor) => investor.status === "pending"), [investors]);
@@ -1044,6 +1059,7 @@ export default function AdminPage() {
 
         {tab === "members" ? (
           <>
+            <CollapseBar label="Members Control" onCollapse={() => setTab("overview")} />
             <Section title="Search / Filter Members">
               <form onSubmit={runSearch} style={{ display: "grid", gap: 14 }}>
                 <input style={input} value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search name, company, email, phone, type, home state..." />
@@ -1068,6 +1084,19 @@ export default function AdminPage() {
                 <StateCard state="all" label="All" count={visibleMembers.length} active={stateFilter === "all"} onClick={() => setStateFilter("all")} />
                 {STATE_CODES.map((state) => <StateCard key={state} state={state} label={state} count={stateMemberCount(members, state)} active={stateFilter === state} onClick={() => setStateFilter(state)} />)}
                 <StateCard state="notListed" label="Not Listed" count={stateMemberCount(members, "notListed")} active={stateFilter === "notListed"} onClick={() => setStateFilter("notListed")} />
+              </div>
+            </Section>
+
+
+            <Section title="Member Cleanup Folders">
+              <div style={grid}>
+                <Metric title="Active Members" count={activeMembers.length} note="approved and active" />
+                <Metric title="Archived / Suspended" count={archivedMembers.length} note="suspended or denied members" />
+                <Metric title="Deleted Members" count={deleted.length} note="deleted member cleanup folder" pulse={deleted.length > 0} onClick={() => setFilter("deleted")} />
+              </div>
+              <div style={{ ...panel, marginTop: 14 }}>
+                <div style={eyebrow}>Delete / Delete Forever</div>
+                <p style={muted}>Delete Member moves the member into the deleted cleanup folder. Open Deleted filter to use Delete Forever. Owner/admin cannot be deleted.</p>
               </div>
             </Section>
 
@@ -1099,6 +1128,8 @@ export default function AdminPage() {
         ) : null}
 
         {tab === "investors" ? (
+          <>
+            <CollapseBar label="Investor Control" onCollapse={() => setTab("overview")} />
           <Section title="Investor Access Command">
             <div style={grid}>
               <Metric title="New Investors" count={newInvestors.length} note="waiting approval" pulse={newInvestors.length > 0} />
@@ -1124,22 +1155,30 @@ export default function AdminPage() {
               )}
             </div>
           </Section>
+          </>
         ) : null}
 
         {tab === "dealRequests" ? (
+          <>
+            <CollapseBar label="Deal Requests" onCollapse={() => setTab("overview")} />
           <Section title="Investor Deal Requests">
             {dealRequests.length ? <div style={grid}>{dealRequests.map((request) => <InvestorRequestCard key={request.id} request={request} />)}</div> : <div style={panel}><h2 style={h2}>No deal requests yet.</h2></div>}
           </Section>
+          </>
         ) : null}
 
         {tab === "painRequests" ? (
+          <>
+            <CollapseBar label="Pain Requests" onCollapse={() => setTab("overview")} />
           <Section title="Investor Pain Requests">
             {painRequests.length ? <div style={grid}>{painRequests.map((request) => <InvestorRequestCard key={request.id} request={request} />)}</div> : <div style={panel}><h2 style={h2}>No pain requests yet.</h2></div>}
           </Section>
+          </>
         ) : null}
 
         {tab === "rooms" ? (
           <>
+            <CollapseBar label="Deal / Pain Rooms" onCollapse={() => setTab("overview")} />
             <Section title="Deal Room Folders">
               <div style={grid}>
                 {(["active", "saved", "archived", "deleted", "sold"] as RoomView[]).map((view) => {
@@ -1177,9 +1216,24 @@ export default function AdminPage() {
           </>
         ) : null}
 
-        {tab === "saved" ? <Section title="Saved Queue"><div style={panel}><h2 style={h2}>Saved admin cleanup queue.</h2><p style={sub}>Saved investors, requests, and rooms will be wired to persistent cleanup later.</p></div></Section> : null}
-        {tab === "archived" ? <Section title="Archived Queue"><div style={panel}><h2 style={h2}>Archived admin queue.</h2><p style={sub}>Archived investors, requests, and rooms will be wired to persistent cleanup later.</p></div></Section> : null}
-        {tab === "deleted" ? <Section title="Deleted Queue"><div style={alertPanel}><h2 style={h2}>Delete forever control layer.</h2><p style={sub}>Admin-only destructive cleanup queue.</p></div></Section> : null}
+        {tab === "saved" ? (
+          <>
+            <CollapseBar label="Saved Queue" onCollapse={() => setTab("overview")} />
+            <Section title="Saved Queue"><div style={panel}><h2 style={h2}>Saved admin cleanup queue.</h2><p style={sub}>Saved investors, requests, and rooms will be wired to persistent cleanup later.</p></div></Section>
+          </>
+        ) : null}
+        {tab === "archived" ? (
+          <>
+            <CollapseBar label="Archived Queue" onCollapse={() => setTab("overview")} />
+            <Section title="Archived Queue"><div style={panel}><h2 style={h2}>Archived admin queue.</h2><p style={sub}>Archived investors, requests, and rooms will be wired to persistent cleanup later.</p></div></Section>
+          </>
+        ) : null}
+        {tab === "deleted" ? (
+          <>
+            <CollapseBar label="Deleted Queue" onCollapse={() => setTab("overview")} />
+            <Section title="Deleted Queue"><div style={alertPanel}><h2 style={h2}>Delete forever control layer.</h2><p style={sub}>Admin-only destructive cleanup queue.</p></div></Section>
+          </>
+        ) : null}
       </div>
     </main>
   );
