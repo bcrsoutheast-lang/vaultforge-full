@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 type MemberStatus = "pending" | "approved" | "denied" | "suspended";
 type PaymentStatus = "unpaid" | "paid" | "comped" | "trial" | "past_due";
 type AdminFilter = "all" | "pending" | "active" | "locked" | "comped" | "blocked";
+type StateFilter = "all" | "GA" | "TN" | "AL" | "FL" | "NC" | "SC" | "TX";
 
 type MemberRecord = {
   id: string;
@@ -18,14 +19,28 @@ type MemberRecord = {
   status: MemberStatus;
   paymentStatus: PaymentStatus;
   access: "locked" | "active";
+  approvedForPayment: boolean;
   createdAt: string;
   updatedAt: string;
   source: string;
   raw?: any;
 };
 
+type AdminMessage = {
+  id: string;
+  topic: string;
+  body: string;
+  email: string;
+  status: string;
+  priority: string;
+  createdAt: string;
+};
+
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const ADMIN_MEMBERS_KEY = "vaultforge_admin_members_v1";
+const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
+const PROFILE_KEY = "vaultforge_profile";
+const LOGIN_KEY = "vaultforge_member_login_v1";
 
 const PROFILE_KEYS = [
   "vaultforge_profile",
@@ -44,6 +59,8 @@ const MEMBER_SOURCE_KEYS = [
   "members",
   "profiles",
 ];
+
+const STATE_CODES: StateFilter[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -112,6 +129,7 @@ function normalizeMember(row: any, source: string): MemberRecord {
   const states = arrayText(row?.states || row?.operatingStates || row?.statesOperated || row?.serviceStates || row?.markets, "States not listed");
   const status = statusFrom(row?.status || row?.memberStatus || row?.member_status || row?.accessStatus || row?.access_status);
   const paymentStatus = paymentFrom(row?.paymentStatus || row?.payment_status || row?.billingStatus || row?.billing_status);
+  const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved);
   const activePayment = paymentStatus === "paid" || paymentStatus === "comped" || paymentStatus === "trial";
 
   return {
@@ -124,6 +142,7 @@ function normalizeMember(row: any, source: string): MemberRecord {
     states,
     status,
     paymentStatus,
+    approvedForPayment,
     access: row?.access === "active" || row?.isActive || row?.is_active || (status === "approved" && activePayment) ? "active" : "locked",
     createdAt: clean(row?.createdAt || row?.created_at, new Date().toISOString()),
     updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
@@ -140,7 +159,7 @@ function getCurrentUserEmail() {
       const raw = localStorage.getItem(key);
       if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
     } catch {
-      // ignore bad cache
+      // ignore
     }
   }
 
@@ -191,9 +210,10 @@ function readMembers(): MemberRecord[] {
     company: "VaultForge",
     phone: "Owner",
     memberType: "Owner / Admin",
-    states: "Owner workspace",
+    states: "GA • TN • AL • FL • NC • SC • TX",
     status: "approved",
     paymentStatus: "comped",
+    approvedForPayment: true,
     access: "active",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -206,6 +226,12 @@ function readMembers(): MemberRecord[] {
   });
 }
 
+function readAdminMessages(): AdminMessage[] {
+  if (!ok()) return [];
+  const rows = j<AdminMessage[]>(localStorage.getItem(ADMIN_MESSAGES_KEY), []);
+  return Array.isArray(rows) ? rows : [];
+}
+
 function persistMembers(members: MemberRecord[]) {
   writeJson(ADMIN_MEMBERS_KEY, members);
 }
@@ -214,13 +240,50 @@ function canViewAdmin(email: string) {
   return cleanEmail(email) === OWNER_EMAIL.toLowerCase();
 }
 
+function memberMatchesState(member: MemberRecord, state: StateFilter) {
+  if (state === "all") return true;
+  const haystack = ` ${member.states} ${JSON.stringify(member.raw || {})} `.toUpperCase();
+  return haystack.includes(` ${state} `) || haystack.includes(`"${state}"`) || haystack.includes(`• ${state}`) || haystack.includes(`${state} •`);
+}
+
+function updateProfileAndLoginForMember(member: MemberRecord) {
+  if (!ok()) return;
+  const currentEmail = cleanEmail(member.email);
+  const viewerEmail = getCurrentUserEmail();
+
+  if (currentEmail && currentEmail === viewerEmail) {
+    const profile = j<any>(localStorage.getItem(PROFILE_KEY), {});
+    const login = j<any>(localStorage.getItem(LOGIN_KEY), {});
+    const patch = {
+      email: member.email,
+      approvedForPayment: member.approvedForPayment,
+      paymentStatus: member.paymentStatus,
+      accessStatus: member.access,
+      memberStatus: member.status,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, ...patch }));
+    localStorage.setItem(LOGIN_KEY, JSON.stringify({ ...login, ...patch }));
+    window.dispatchEvent(new Event("vaultforge-access-change"));
+  }
+}
+
 function updateMember(members: MemberRecord[], targetId: string, patch: Partial<MemberRecord>) {
   const now = new Date().toISOString();
+
   return members.map((member) => {
     if (member.id !== targetId) return member;
+
     const next = { ...member, ...patch, updatedAt: now };
     const activePayment = next.paymentStatus === "paid" || next.paymentStatus === "comped" || next.paymentStatus === "trial";
+
+    if (patch.approvedForPayment === true && next.status === "pending") {
+      next.status = "approved";
+    }
+
     next.access = next.status === "approved" && activePayment ? "active" : "locked";
+
+    updateProfileAndLoginForMember(next);
     return next;
   });
 }
@@ -234,49 +297,16 @@ const page: React.CSSProperties = {
 };
 
 const wrap: React.CSSProperties = { maxWidth: 1320, margin: "0 auto", paddingBottom: 90 };
-const topbar: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  alignItems: "center",
-  justifyContent: "space-between",
-  border: "1px solid rgba(255,255,255,.10)",
-  background: "#0c1119",
-  borderRadius: 18,
-  padding: 14,
-  marginBottom: 18,
-};
-
+const topbar: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", border: "1px solid rgba(255,255,255,.10)", background: "#0c1119", borderRadius: 18, padding: 14, marginBottom: 18 };
 const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 24, fontWeight: 950, letterSpacing: -1 };
 const navRight: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
 const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "11px 15px", fontWeight: 900, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
 const redBtn: React.CSSProperties = { ...btn, background: "#251015", borderColor: "rgba(255,70,70,.52)", color: "#ffaaaa" };
 const greenBtn: React.CSSProperties = { ...btn, background: "#0e2518", borderColor: "rgba(80,220,130,.55)", color: "#9cffbc" };
-
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.10)",
-  borderRadius: 22,
-  padding: 28,
-  marginBottom: 18,
-  background: "linear-gradient(180deg,#0e1420,#090d14)",
-};
-
-const card: React.CSSProperties = {
-  background: "#0d121b",
-  border: "1px solid rgba(255,255,255,.10)",
-  borderRadius: 20,
-  padding: 18,
-  marginBottom: 18,
-};
-
-const panel: React.CSSProperties = {
-  background: "#111823",
-  border: "1px solid rgba(207,216,230,.14)",
-  borderRadius: 18,
-  padding: 18,
-};
-
+const hero: React.CSSProperties = { border: "1px solid rgba(255,255,255,.10)", borderRadius: 22, padding: 28, marginBottom: 18, background: "linear-gradient(180deg,#0e1420,#090d14)" };
+const card: React.CSSProperties = { background: "#0d121b", border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: 18, marginBottom: 18 };
+const panel: React.CSSProperties = { background: "#111823", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 18 };
 const alertPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.55)" };
 const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.50)" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 10 };
@@ -292,11 +322,12 @@ function AdminNav() {
   return (
     <div style={topbar}>
       <div>
-        <div style={brand}>VAULTFORGE ADMIN COMMAND COMMAND</div>
-        <div style={{ ...muted, marginTop: 2 }}>Admin Command • Admin Command</div>
+        <div style={brand}>VAULTFORGE ADMIN COMMAND</div>
+        <div style={{ ...muted, marginTop: 2 }}>Admin Command • Owner Control Desk</div>
       </div>
       <div style={navRight}>
         <Link href="/admin" style={goldBtn}>Admin Command</Link>
+        <Link href="/admin-messages" style={btn}>Admin Messages</Link>
         <Link href="/command" style={btn}>Member View</Link>
         <Link href="/profile" style={btn}>Profile</Link>
         <Link href="/logout" style={redBtn}>Logout</Link>
@@ -305,27 +336,42 @@ function AdminNav() {
   );
 }
 
-function Metric({
-  title,
-  count,
-  note,
-  onClick,
-}: {
-  title: string;
-  count: number;
-  note: string;
-  onClick?: () => void;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      style={{ ...panel, width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }}
-      onClick={onClick}
-    >
+    <section style={card}>
+      <div style={eyebrow}>{title}</div>
+      {children}
+    </section>
+  );
+}
+
+function Metric({ title, count, note, onClick }: { title: string; count: number; note: string; onClick?: () => void }) {
+  return (
+    <button type="button" style={{ ...panel, width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
       <div style={eyebrow}>{title}</div>
       <h2 style={h2}>{count}</h2>
       <p style={muted}>{note}</p>
       {onClick ? <p style={muted}>Click to review</p> : null}
+    </button>
+  );
+}
+
+function FilterButton({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: "pointer" }} onClick={onClick}>
+      <div style={eyebrow}>{label}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>Click to filter</p>
+    </button>
+  );
+}
+
+function StateCard({ state, count, active, onClick }: { state: StateFilter; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: "pointer" }} onClick={onClick}>
+      <div style={eyebrow}>{state}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>member(s) tied to this state</p>
     </button>
   );
 }
@@ -339,39 +385,7 @@ function StatusPill({ text }: { text: string }) {
   return <span style={{ ...style, padding: "7px 11px", fontSize: 12 }}>{text}</span>;
 }
 
-
-function FilterButton({
-  label,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: "pointer" }}
-      onClick={onClick}
-    >
-      <div style={eyebrow}>{label}</div>
-      <h2 style={h2}>{count}</h2>
-      <p style={muted}>Click to filter</p>
-    </button>
-  );
-}
-
-
-function MemberCard({
-  member,
-  onPatch,
-}: {
-  member: MemberRecord;
-  onPatch: (patch: Partial<MemberRecord>) => void;
-}) {
+function MemberCard({ member, onPatch }: { member: MemberRecord; onPatch: (patch: Partial<MemberRecord>) => void }) {
   const isOwner = member.email === OWNER_EMAIL.toLowerCase();
 
   return (
@@ -388,14 +402,16 @@ function MemberCard({
         <StatusPill text={member.status} />
         <StatusPill text={member.paymentStatus} />
         <StatusPill text={member.access} />
+        <StatusPill text={member.approvedForPayment ? "payment approved" : "payment locked"} />
       </div>
 
       <div style={{ ...row, marginTop: 15 }}>
         <button type="button" style={greenBtn} onClick={() => onPatch({ status: "approved" })}>Approve</button>
-        <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked" })} disabled={isOwner}>Deny</button>
+        <button type="button" style={goldBtn} onClick={() => onPatch({ approvedForPayment: true, status: "approved" })}>Approve Payment Button</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked", approvedForPayment: false })} disabled={isOwner}>Deny</button>
         <button type="button" style={greenBtn} onClick={() => onPatch({ paymentStatus: "paid" })}>Mark Paid</button>
         <button type="button" style={btn} onClick={() => onPatch({ paymentStatus: "unpaid", access: "locked" })} disabled={isOwner}>Mark Unpaid</button>
-        <button type="button" style={goldBtn} onClick={() => onPatch({ paymentStatus: "comped", status: "approved", access: "active" })}>Grant Free Access</button>
+        <button type="button" style={goldBtn} onClick={() => onPatch({ paymentStatus: "comped", status: "approved", approvedForPayment: true, access: "active" })}>Grant Free Access</button>
         <button type="button" style={redBtn} onClick={() => onPatch({ status: "suspended", access: "locked" })} disabled={isOwner}>Suspend</button>
         <button type="button" style={btn} onClick={() => onPatch({ status: "approved" })}>Restore</button>
       </div>
@@ -403,43 +419,51 @@ function MemberCard({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={card}>
-      <div style={eyebrow}>{title}</div>
-      {children}
-    </section>
-  );
-}
-
 export default function AdminPage() {
   const [currentEmail, setCurrentEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
+  const [adminMessages, setAdminMessages] = useState<AdminMessage[]>([]);
+  const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<AdminFilter>("all");
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
 
   useEffect(() => {
-    setCurrentEmail(getCurrentUserEmail());
-    setMembers(readMembers());
-
     const refresh = () => {
       setCurrentEmail(getCurrentUserEmail());
       setMembers(readMembers());
+      setAdminMessages(readAdminMessages());
     };
+
+    refresh();
 
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-admin-members-change", refresh);
+    window.addEventListener("vaultforge-admin-message-change", refresh);
+
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-admin-members-change", refresh);
+      window.removeEventListener("vaultforge-admin-message-change", refresh);
     };
   }, []);
 
   const allowed = canViewAdmin(currentEmail);
+
   const pending = useMemo(() => members.filter((member) => member.status === "pending"), [members]);
   const active = useMemo(() => members.filter((member) => member.status === "approved" && member.access === "active"), [members]);
   const locked = useMemo(() => members.filter((member) => member.paymentStatus === "unpaid" || member.access === "locked"), [members]);
   const comped = useMemo(() => members.filter((member) => member.paymentStatus === "comped"), [members]);
+  const blocked = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
+  const openAdminMessages = useMemo(() => adminMessages.filter((message) => message.status !== "resolved" && message.status !== "deleted"), [adminMessages]);
+
+  const stateCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const state of STATE_CODES) {
+      counts[state] = members.filter((member) => memberMatchesState(member, state)).length;
+    }
+    return counts;
+  }, [members]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -455,6 +479,8 @@ export default function AdminPage() {
         member.states.toLowerCase().includes(q);
 
       if (!matchesSearch) return false;
+      if (!memberMatchesState(member, stateFilter)) return false;
+
       if (filter === "all") return true;
       if (filter === "pending") return member.status === "pending";
       if (filter === "active") return member.status === "approved" && member.access === "active";
@@ -463,18 +489,17 @@ export default function AdminPage() {
       if (filter === "blocked") return member.status === "suspended" || member.status === "denied";
       return true;
     });
-  }, [members, search, filter]);
-  const blocked = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
-
-  function scrollToAdminSection(id: string) {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  }, [members, search, filter, stateFilter]);
 
   function patchMember(id: string, patch: Partial<MemberRecord>) {
     const next = updateMember(members, id, patch);
     setMembers(next);
     persistMembers(next);
+  }
+
+  function runSearch(event?: React.FormEvent) {
+    if (event) event.preventDefault();
+    setSearch(searchDraft);
   }
 
   if (!allowed) {
@@ -505,35 +530,42 @@ export default function AdminPage() {
 
         <section style={hero}>
           <div style={eyebrow}>Admin Command</div>
-          <h1 style={h1}>Admin Command.</h1>
-          <p style={sub}>
-            You are inside Admin Command. Manage member approvals, paid/unpaid status, free comp access, suspensions, and restored access.
-          </p>
+          <h1 style={h1}>Owner Control Desk.</h1>
+          <p style={sub}>Manage member approvals, payment unlocks, comp access, state balance, admin messages, suspensions, and restored access.</p>
           <p style={muted}>ADMIN COMMAND MODE • Signed in as owner: {currentEmail}</p>
         </section>
 
         <section style={{ marginBottom: 18 }}>
           <div style={grid}>
-            <Metric title="Pending" count={pending.length} note="waiting for owner review" onClick={() => scrollToAdminSection("admin-pending")} />
-            <Metric title="Active" count={active.length} note="approved and unlocked" onClick={() => scrollToAdminSection("admin-active")} />
-            <Metric title="Unpaid / Locked" count={locked.length} note="not yet activated" onClick={() => scrollToAdminSection("admin-locked")} />
-            <Metric title="Comped" count={comped.length} note="free owner-granted access" onClick={() => scrollToAdminSection("admin-active")} />
-            <Metric title="Denied / Suspended" count={blocked.length} note="blocked from access" onClick={() => scrollToAdminSection("admin-blocked")} />
+            <Metric title="Pending" count={pending.length} note="waiting for owner review" onClick={() => setFilter("pending")} />
+            <Metric title="Active" count={active.length} note="approved and unlocked" onClick={() => setFilter("active")} />
+            <Metric title="Unpaid / Locked" count={locked.length} note="not yet activated" onClick={() => setFilter("locked")} />
+            <Metric title="Comped" count={comped.length} note="free owner-granted access" onClick={() => setFilter("comped")} />
+            <Metric title="Denied / Suspended" count={blocked.length} note="blocked from access" onClick={() => setFilter("blocked")} />
+            <Metric title="Admin Messages" count={openAdminMessages.length} note="member support and escalation" onClick={() => { window.location.href = "/admin-messages"; }} />
           </div>
         </section>
 
-
         <Section title="Search / Filter Members">
-          <div style={{ display: "grid", gap: 14 }}>
+          <form onSubmit={runSearch} style={{ display: "grid", gap: 14 }}>
             <label>
               <div style={eyebrow}>Search</div>
               <input
                 style={input}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                value={searchDraft}
+                onChange={(event) => {
+                  setSearchDraft(event.target.value);
+                  setSearch(event.target.value);
+                }}
                 placeholder="Search name, company, email, phone, type, or state..."
               />
             </label>
+
+            <div style={row}>
+              <button type="submit" style={goldBtn}>Search</button>
+              <button type="button" style={btn} onClick={() => { setSearchDraft(""); setSearch(""); setFilter("all"); setStateFilter("all"); }}>Reset</button>
+              <Link href="/admin-messages" style={btn}>Open Admin Messages</Link>
+            </div>
 
             <div style={grid}>
               <FilterButton label="All Members" count={members.length} active={filter === "all"} onClick={() => setFilter("all")} />
@@ -543,6 +575,15 @@ export default function AdminPage() {
               <FilterButton label="Comped" count={comped.length} active={filter === "comped"} onClick={() => setFilter("comped")} />
               <FilterButton label="Blocked" count={blocked.length} active={filter === "blocked"} onClick={() => setFilter("blocked")} />
             </div>
+          </form>
+        </Section>
+
+        <Section title="State Member Balance">
+          <div style={grid}>
+            <StateCard state="all" count={members.length} active={stateFilter === "all"} onClick={() => setStateFilter("all")} />
+            {STATE_CODES.map((state) => (
+              <StateCard key={state} state={state} count={stateCounts[state] || 0} active={stateFilter === state} onClick={() => setStateFilter(state)} />
+            ))}
           </div>
         </Section>
 
@@ -556,42 +597,10 @@ export default function AdminPage() {
           ) : (
             <div style={panel}>
               <h2 style={h2}>No matching members.</h2>
-              <p style={sub}>Try a different search or filter.</p>
+              <p style={sub}>Try a different search, state, or status filter.</p>
             </div>
           )}
         </Section>
-
-        <div id="admin-pending"><Section title="Pending Members">
-          {pending.length ? (
-            <div style={grid}>{pending.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
-          ) : (
-            <div style={panel}><h2 style={h2}>No pending members.</h2><p style={sub}>New members waiting for review will appear here.</p></div>
-          )}
-        </Section></div>
-
-        <div id="admin-active"><Section title="Active Members">
-          {active.length ? (
-            <div style={grid}>{active.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
-          ) : (
-            <div style={panel}><h2 style={h2}>No active members yet.</h2><p style={sub}>Approve members and mark paid or comped to activate access.</p></div>
-          )}
-        </Section></div>
-
-        <div id="admin-locked"><Section title="Unpaid / Locked">
-          {locked.length ? (
-            <div style={grid}>{locked.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
-          ) : (
-            <div style={panel}><h2 style={h2}>No unpaid or locked members.</h2><p style={sub}>All visible approved members are active or comped.</p></div>
-          )}
-        </Section></div>
-
-        <div id="admin-blocked"><Section title="Denied / Suspended">
-          {blocked.length ? (
-            <div style={grid}>{blocked.map((member) => <MemberCard key={member.id} member={member} onPatch={(patch) => patchMember(member.id, patch)} />)}</div>
-          ) : (
-            <div style={panel}><h2 style={h2}>No denied or suspended members.</h2><p style={sub}>Blocked members will appear here.</p></div>
-          )}
-        </Section></div>
       </div>
     </main>
   );
