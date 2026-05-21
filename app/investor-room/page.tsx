@@ -23,6 +23,7 @@ const LOGO_CANDIDATES = [
 
 type TeaserKind = "Deal" | "Pain";
 type ActiveRoom = { kind: TeaserKind; item: any; title: string; state: string } | null;
+type CleanupFolder = "none" | "saved" | "archived" | "deleted";
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -59,6 +60,23 @@ function readRows(keys: string[]) {
   }
 
   return rows;
+}
+
+function dedupeRows(rows: any[], kind: TeaserKind) {
+  const map = new Map<string, any>();
+
+  rows.forEach((item, index) => {
+    const id = String(item?.id || item?.roomId || item?.dealId || item?.painId || item?.signalId || `${kind}-${item?.title || item?.name || item?.headline || index}`);
+    const state = itemState(item) || "NA";
+    const title = itemTitle(item, kind);
+    const key = `${kind}-${id}-${state}-${title}`.toLowerCase();
+
+    if (!map.has(key)) {
+      map.set(key, item);
+    }
+  });
+
+  return Array.from(map.values());
 }
 
 function itemState(item: any) {
@@ -535,6 +553,7 @@ export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
   const [state, setState] = useState("GA");
   const [tab, setTab] = useState<TeaserKind>("Deal");
+  const [folder, setFolder] = useState<CleanupFolder>("none");
   const [tick, setTick] = useState(0);
   const [activeRoom, setActiveRoom] = useState<ActiveRoom>(null);
 
@@ -560,27 +579,33 @@ export default function InvestorRoomPage() {
   const active = investor?.paymentStatus === "paid" || investor?.accessStatus === "active" || investor?.access === "active";
 
   const rawDeals = useMemo(() => {
-    return readRows([
-      "vaultforge_clean_deal_rooms",
-      "vaultforge_deal_rooms",
-      "vaultforge_rooms_deals",
-      "vf_deal_rooms",
-    ]).filter((item) => itemState(item) === state);
+    return dedupeRows(
+      readRows([
+        "vaultforge_clean_deal_rooms",
+        "vaultforge_deal_rooms",
+        "vaultforge_rooms_deals",
+        "vf_deal_rooms",
+      ]).filter((item) => itemState(item) === state),
+      "Deal"
+    );
   }, [state, tick]);
 
   const rawPains = useMemo(() => {
-    return readRows([
-      "vaultforge_clean_pain_rooms",
-      "vaultforge_clean_pain_rooms_v1",
-      "vaultforge_clean_pain_rooms_v2",
-      "vaultforge_pain_rooms",
-      "vaultforge_rooms_pain",
-      "vf_pain_rooms",
-    ]).filter((item) => itemState(item) === state);
+    return dedupeRows(
+      readRows([
+        "vaultforge_clean_pain_rooms",
+        "vaultforge_clean_pain_rooms_v1",
+        "vaultforge_clean_pain_rooms_v2",
+        "vaultforge_pain_rooms",
+        "vaultforge_rooms_pain",
+        "vf_pain_rooms",
+      ]).filter((item) => itemState(item) === state),
+      "Pain"
+    );
   }, [state, tick]);
 
-  const deals = useMemo(() => rawDeals.filter((item) => getCleanup("Deal", item) !== "deleted"), [rawDeals, tick]);
-  const pains = useMemo(() => rawPains.filter((item) => getCleanup("Pain", item) !== "deleted"), [rawPains, tick]);
+  const activeDeals = useMemo(() => rawDeals.filter((item) => !getCleanup("Deal", item)), [rawDeals, tick]);
+  const activePains = useMemo(() => rawPains.filter((item) => !getCleanup("Pain", item)), [rawPains, tick]);
 
   const savedDeals = useMemo(() => rawDeals.filter((item) => getCleanup("Deal", item) === "saved"), [rawDeals, tick]);
   const archivedDeals = useMemo(() => rawDeals.filter((item) => getCleanup("Deal", item) === "archived"), [rawDeals, tick]);
@@ -591,8 +616,20 @@ export default function InvestorRoomPage() {
 
   const visibleItems =
     tab === "Deal"
-      ? deals
-      : pains;
+      ? folder === "saved"
+        ? savedDeals
+        : folder === "archived"
+          ? archivedDeals
+          : folder === "deleted"
+            ? deletedDeals
+            : activeDeals
+      : folder === "saved"
+        ? savedPains
+        : folder === "archived"
+          ? archivedPains
+          : folder === "deleted"
+            ? deletedPains
+            : activePains;
 
   if (!active) {
     return (
@@ -632,13 +669,13 @@ export default function InvestorRoomPage() {
           </p>
 
           <div style={{ ...row, marginTop: 22 }}>
-            <button type="button" style={tab === "Deal" ? goldBtn : btn} onClick={() => { setTab("Deal"); setActiveRoom(null); }}>
+            <button type="button" style={tab === "Deal" ? goldBtn : btn} onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }}>
               Deal Signals
             </button>
-            <button type="button" style={tab === "Pain" ? goldBtn : btn} onClick={() => { setTab("Pain"); setActiveRoom(null); }}>
+            <button type="button" style={tab === "Pain" ? goldBtn : btn} onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }}>
               Pain Signals
             </button>
-            <button type="button" style={btn} onClick={() => setActiveRoom(null)}>
+            <button type="button" style={btn} onClick={() => { setActiveRoom(null); setFolder("none"); }}>
               Collapse / Done
             </button>
           </div>
@@ -656,6 +693,7 @@ export default function InvestorRoomPage() {
                 onClick={() => {
                   setState(stateCode);
                   setActiveRoom(null);
+                  setFolder("none");
                 }}
               >
                 {stateCode}
@@ -666,22 +704,26 @@ export default function InvestorRoomPage() {
 
         <section style={{ marginTop: 18 }}>
           <div style={grid}>
-            <Metric title="Deal Signals" count={deals.length} note={`limited opportunity cards in ${state}`} active={tab === "Deal"} onClick={() => setTab("Deal")} />
-            <Metric title="Pain Signals" count={pains.length} note={`limited pressure cards in ${state}`} active={tab === "Pain"} onClick={() => setTab("Pain")} />
+            <Metric title="Deal Signals" count={activeDeals.length} note={`active opportunity cards in ${state}`} active={tab === "Deal"} onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Pain Signals" count={activePains.length} note={`active pressure cards in ${state}`} active={tab === "Pain"} onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
             <Metric title="Requests" count={readJson<any[]>(INVESTOR_REQUESTS_KEY, []).length} note="requests sent through VaultForge" />
-            <Metric title="Saved Deals" count={savedDeals.length} note="saved deal cards" onClick={() => { setTab("Deal"); setActiveRoom(null); }} />
-            <Metric title="Archived Deals" count={archivedDeals.length} note="archived deal cards" onClick={() => { setTab("Deal"); setActiveRoom(null); }} />
-            <Metric title="Deleted Deals" count={deletedDeals.length} note="deleted deal cards" onClick={() => { setTab("Deal"); setActiveRoom(null); }} />
-            <Metric title="Saved Pain" count={savedPains.length} note="saved pain cards" onClick={() => { setTab("Pain"); setActiveRoom(null); }} />
-            <Metric title="Archived Pain" count={archivedPains.length} note="archived pain cards" onClick={() => { setTab("Pain"); setActiveRoom(null); }} />
-            <Metric title="Deleted Pain" count={deletedPains.length} note="deleted pain cards" onClick={() => { setTab("Pain"); setActiveRoom(null); }} />
+            <Metric title="Saved Deals" count={savedDeals.length} note="saved deal cards" onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Archived Deals" count={archivedDeals.length} note="archived deal cards" onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Deleted Deals" count={deletedDeals.length} note="deleted deal cards" onClick={() => { setTab("Deal"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Saved Pain" count={savedPains.length} note="saved pain cards" onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Archived Pain" count={archivedPains.length} note="archived pain cards" onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
+            <Metric title="Deleted Pain" count={deletedPains.length} note="deleted pain cards" onClick={() => { setTab("Pain"); setFolder("none"); setActiveRoom(null); }} />
           </div>
         </section>
 
         <ActiveRoomPanel activeRoom={activeRoom} onClose={() => setActiveRoom(null)} />
 
+        {folder !== "none" ? (
         <section style={{ marginTop: 18 }}>
-          <div style={eyebrow}>Cleanup Folders • Visible Controls</div>
+          <div style={{ ...row, justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={eyebrow}>Cleanup Folder • {tab} • {folder}</div>
+            <button type="button" style={btn} onClick={() => { setFolder("none"); setActiveRoom(null); }}>Collapse Folder / Done</button>
+          </div>
           <div style={wideGrid}>
             {tab === "Deal" && savedDeals.length ? (
               <div style={goldPanel}>
