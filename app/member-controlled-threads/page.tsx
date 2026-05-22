@@ -708,6 +708,49 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
   );
 }
 
+
+function MemberSequenceCard({
+  step,
+  title,
+  note,
+  active,
+}: {
+  step: string;
+  title: string;
+  note: string;
+  active?: boolean;
+}) {
+  return (
+    <div style={active ? goldPanel : panel}>
+      <div style={eyebrow}>{step}</div>
+      <h3 style={h3}>{title}</h3>
+      <p style={muted}>{note}</p>
+    </div>
+  );
+}
+
+function MemberOperatingGuide() {
+  return (
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
+      <div style={eyebrow}>Member Operating Sequence</div>
+      <h2 style={h2}>Work routed requests in order.</h2>
+      <p style={sub}>
+        This is the member-side execution lane. Every card should move from request review to active work, messaging, contact release, and cleanup.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        <MemberSequenceCard step="01 Inbox" title="New Requests" note="Fresh investor/admin routed requests needing a member decision." active />
+        <MemberSequenceCard step="02 Decision" title="Accept / Pass / Review" note="Accept moves the request into Active Threads. Pass removes it from active work." />
+        <MemberSequenceCard step="03 Message" title="Structured Reply" note="Use the Bloomberg ticket form so replies carry sender, recipient, header, urgency, timeline, amount, and next move." />
+        <MemberSequenceCard step="04 Contact" title="Release Contact" note="Only release contact after member/admin approval. The investor profile remains attached." />
+        <MemberSequenceCard step="05 Execution" title="Work The Request" note="Funding, title, contractor, operator, insurance, JV, or boots-on-ground work happens inside the active thread." />
+        <MemberSequenceCard step="06 Cleanup" title="Save / Archive / Delete" note="Keep the workspace clean without scattering messages or losing request context." />
+      </div>
+    </section>
+  );
+}
+
+
 export default function MemberControlledThreadsPage() {
   const [email, setEmail] = useState("");
   const [threads, setThreads] = useState<any[]>([]);
@@ -806,8 +849,8 @@ export default function MemberControlledThreadsPage() {
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>VaultForge Member Request Command</div>
-          <h1 style={h1}>Routed requests, replies, and next moves.</h1>
-          <p style={sub}>One member lane: New Request → Open Detail → Accept / Pass / Message → Active Thread → Cleanup.</p>
+          <h1 style={h1}>Member request command center.</h1>
+          <p style={sub}>One clean lane: New Request → Decision → Structured Message → Active Thread → Contact Release → Cleanup.</p>
 
           <div style={{ ...row, marginTop: 18 }}>
             <Link href="/command" style={goldBtn}>Member Command</Link>
@@ -818,6 +861,8 @@ export default function MemberControlledThreadsPage() {
 
           <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
         </section>
+
+        <MemberOperatingGuide />
 
         <Section title="Member Request Cards">
           <div style={grid}>
