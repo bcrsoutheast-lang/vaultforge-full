@@ -14,6 +14,7 @@ const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
 const INVESTOR_HIDDEN_KEY = "vaultforge_investor_room_hidden_v1";
+const INVESTOR_PHOTO_BACKUP_KEY = "vaultforge_investor_profile_photo_v1";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const EXECUTION_LANES = [
@@ -117,6 +118,34 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function rememberInvestorPhoto(value: unknown) {
+  try {
+    const photo = String(value || "").trim();
+    if (photo && (photo.startsWith("data:image/") || photo.startsWith("http") || photo.startsWith("/"))) {
+      localStorage.setItem(INVESTOR_PHOTO_BACKUP_KEY, photo);
+    }
+  } catch {
+    // ignore browser storage errors
+  }
+}
+
+function readInvestorPhotoBackup() {
+  try {
+    return String(localStorage.getItem(INVESTOR_PHOTO_BACKUP_KEY) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function stableInvestorPhoto(value: unknown) {
+  const photo = String(value || "").trim();
+  if (photo) {
+    rememberInvestorPhoto(photo);
+    return photo;
+  }
+  return readInvestorPhotoBackup();
+}
+
 function isQuotaError(error: any) {
   const name = String(error?.name || "").toLowerCase();
   const message = String(error?.message || "").toLowerCase();
@@ -134,7 +163,7 @@ function trimText(value: unknown, limit = 900) {
 
 function compactInvestorProfile(profile: any) {
   return {
-    photoUrl: trimText(profile?.photoUrl, 500),
+    photoUrl: stableInvestorPhoto(profile?.photoUrl),
     contactName: trimText(profile?.contactName || profile?.name, 120),
     company: trimText(profile?.company, 120),
     email: trimText(profile?.email, 160),
@@ -179,8 +208,6 @@ function safeStorageSize(value: unknown) {
 
 function stripHeavyInvestorProfileStorage() {
   const profileKeys = [
-    INVESTOR_APP_KEY,
-    "vaultforge_investor_applications_v1",
     "vaultforge_profile",
     "vaultforge_member_profile",
     "vaultforge_clean_profile",
@@ -211,8 +238,9 @@ function stripHeavyInvestorProfileStorage() {
         if (!row || typeof row !== "object") return row;
         const next = { ...row };
         for (const field of heavyFields) {
+          if (field === "photoUrl" && typeof next[field] === "string") rememberInvestorPhoto(next[field]);
           if (typeof next[field] === "string" && next[field].length > 1200)
-            next[field] = "";
+            next[field] = field === "photoUrl" ? stableInvestorPhoto(next[field]) : "";
           if (
             Array.isArray(next[field]) &&
             JSON.stringify(next[field]).length > 1200
@@ -538,7 +566,7 @@ function isHidden(item: any, kind: Kind) {
 
 function investorProfileSnapshot(investor: any) {
   return {
-    photoUrl: investor?.photoUrl || "",
+    photoUrl: stableInvestorPhoto(investor?.photoUrl),
     contactName: investor?.contactName || "",
     company: investor?.company || "",
     email: investor?.email || "",
@@ -768,7 +796,7 @@ function readInvestor() {
       )
     : null;
 
-  return {
+  const merged = {
     ...(matching || {}),
     ...(application || {}),
     ...(session || {}),
@@ -776,6 +804,9 @@ function readInvestor() {
       sessionEmail ||
       clean(application?.email || matching?.email || session?.email),
   };
+
+  const photoUrl = stableInvestorPhoto(merged?.photoUrl || application?.photoUrl || matching?.photoUrl || session?.photoUrl);
+  return { ...merged, photoUrl };
 }
 
 function safeInvestorSnapshot() {
@@ -788,7 +819,7 @@ function safeInvestorSnapshot() {
   }
 
   return {
-    photoUrl: investor?.photoUrl || "",
+    photoUrl: stableInvestorPhoto(investor?.photoUrl),
     contactName: investor?.contactName || "",
     company: investor?.company || "",
     email:
@@ -2143,7 +2174,6 @@ function InvestorRequestDetailModal({
 function InvestorRequestCenter() {
   const [selected, setSelected] = useState<InvestorRequestSelection>(null);
   const [refresh, setRefresh] = useState(0);
-  const [requestView, setRequestView] = useState("all");
 
   const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
   const executionRequests = readJson<any[]>(
@@ -2151,12 +2181,7 @@ function InvestorRequestCenter() {
     [],
   );
   const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
-  const allSelections: InvestorRequestSelection[] = [
-    ...dealPainRequests.map((row) => ({ row, label: "Deal/Pain", group: "dealPain" as InvestorRequestGroup })),
-    ...executionRequests.map((row) => ({ row, label: "Execution", group: "execution" as InvestorRequestGroup })),
-    ...adminMessages.map((row) => ({ row, label: "Admin Message", group: "adminMessage" as InvestorRequestGroup })),
-  ];
-  const all = allSelections.map((selection) => selection.row);
+  const all = [...dealPainRequests, ...executionRequests, ...adminMessages];
 
   function refreshTracker(nextSelected?: InvestorRequestSelection) {
     setRefresh((value) => value + 1);
@@ -2178,57 +2203,8 @@ function InvestorRequestCenter() {
     refreshTracker(null);
   }
 
-  function openRequestView(view: string) {
-    setRequestView(view);
-    setSelected(null);
-    setRefresh((value) => value + 1);
-    setTimeout(() => {
-      const node = document.getElementById("investor-request-tracker");
-      if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
-  }
-
-  useEffect(() => {
-    function handleView(event: Event) {
-      const detail = (event as CustomEvent).detail;
-      openRequestView(String(detail || "all"));
-    }
-
-    window.addEventListener("vaultforge-investor-request-view", handleView);
-    return () => window.removeEventListener("vaultforge-investor-request-view", handleView);
-  }, []);
-
-  function selectionMatches(selection: InvestorRequestSelection, view: string) {
-    const row = selection.row || {};
-    const status = requestStatus(row);
-    if (view === "all") return true;
-    if (view === "active") return !["saved", "archived", "deleted", "closed"].includes(status);
-    if (view === "saved") return status === "saved";
-    if (view === "archived") return status === "archived";
-    if (view === "deleted") return status === "deleted";
-    if (view === "closed") return status === "closed";
-    if (view === "dealPain") return selection.group === "dealPain";
-    if (view === "execution") return selection.group === "execution";
-    if (view === "adminMessage") return selection.group === "adminMessage";
-    return true;
-  }
-
-  const filteredSelections = allSelections.filter((selection) => selectionMatches(selection, requestView));
-  const viewTitle =
-    requestView === "all"
-      ? "All Requests"
-      : requestView === "active"
-        ? "Active / New Requests"
-        : requestView === "dealPain"
-          ? "Deal / Pain Requests"
-          : requestView === "execution"
-            ? "Execution Requests"
-            : requestView === "adminMessage"
-              ? "Admin Messages"
-              : `${requestView.charAt(0).toUpperCase()}${requestView.slice(1)} Requests`;
-
   return (
-    <section id="investor-request-tracker" style={{ ...hero, marginTop: 20 }} data-refresh={refresh}>
+    <section style={{ ...hero, marginTop: 20 }} data-refresh={refresh}>
       <InvestorRequestDetailModal
         selected={selected}
         onClose={() => setSelected(null)}
@@ -2249,69 +2225,92 @@ function InvestorRequestCenter() {
           title="All Requests"
           count={all.length}
           note="total investor requests, including saved/archived/deleted"
-          active={requestView === "all"}
-          onClick={() => openRequestView("all")}
         />
         <Metric
           title="Active / New"
           count={activeRequestCount(all)}
           note="open requests still needing action"
-          active={requestView === "active"}
-          onClick={() => openRequestView("active")}
         />
         <Metric
           title="Saved"
           count={savedRequestCount(all)}
           note="saved investor requests"
-          active={requestView === "saved"}
-          onClick={() => openRequestView("saved")}
         />
         <Metric
           title="Archived"
           count={archivedRequestCount(all)}
           note="archived investor requests"
-          active={requestView === "archived"}
-          onClick={() => openRequestView("archived")}
         />
         <Metric
           title="Deleted"
           count={deletedRequestCount(all)}
           note="deleted requests waiting for delete forever"
-          active={requestView === "deleted"}
-          onClick={() => openRequestView("deleted")}
         />
         <Metric
           title="Closed"
           count={closedRequestCount(all)}
           note="completed/closed"
-          active={requestView === "closed"}
-          onClick={() => openRequestView("closed")}
         />
       </div>
 
-      <div style={{ ...row, marginTop: 14 }}>
-        <button type="button" style={requestView === "dealPain" ? goldBtn : btn} onClick={() => openRequestView("dealPain")}>Deal / Pain</button>
-        <button type="button" style={requestView === "execution" ? goldBtn : btn} onClick={() => openRequestView("execution")}>Execution</button>
-        <button type="button" style={requestView === "adminMessage" ? goldBtn : btn} onClick={() => openRequestView("adminMessage")}>Admin Messages</button>
-        <button type="button" style={btn} onClick={() => { setSelected(null); openRequestView("all"); }}>Collapse / Done</button>
-      </div>
-
-      <div style={{ ...goldPanel, marginTop: 18 }}>
-        <div style={eyebrow}>{viewTitle}</div>
-        {filteredSelections.length ? (
-          <div style={{ ...wideGrid, marginTop: 14 }}>
-            {filteredSelections.map((selection) => (
+      <div style={{ ...wideGrid, marginTop: 18 }}>
+        <div style={goldPanel}>
+          <div style={eyebrow}>Deal / Pain Requests</div>
+          {dealPainRequests.length ? (
+            dealPainRequests.map((row) => (
               <RequestMiniCard
-                key={`${selection.group}-${selection.row?.id}`}
-                row={selection.row}
-                label={selection.label}
-                onOpen={() => setSelected(selection)}
+                key={row.id}
+                row={row}
+                label="Deal/Pain"
+                onOpen={() =>
+                  setSelected({ row, label: "Deal/Pain", group: "dealPain" })
+                }
               />
-            ))}
-          </div>
-        ) : (
-          <p style={muted}>No {viewTitle.toLowerCase()} yet.</p>
-        )}
+            ))
+          ) : (
+            <p style={muted}>No Deal/Pain requests yet.</p>
+          )}
+        </div>
+
+        <div style={panel}>
+          <div style={eyebrow}>Execution Requests</div>
+          {executionRequests.length ? (
+            executionRequests.map((row) => (
+              <RequestMiniCard
+                key={row.id}
+                row={row}
+                label="Execution"
+                onOpen={() =>
+                  setSelected({ row, label: "Execution", group: "execution" })
+                }
+              />
+            ))
+          ) : (
+            <p style={muted}>No execution requests yet.</p>
+          )}
+        </div>
+
+        <div style={panel}>
+          <div style={eyebrow}>Admin Messages</div>
+          {adminMessages.length ? (
+            adminMessages.map((row) => (
+              <RequestMiniCard
+                key={row.id}
+                row={row}
+                label="Admin Message"
+                onOpen={() =>
+                  setSelected({
+                    row,
+                    label: "Admin Message",
+                    group: "adminMessage",
+                  })
+                }
+              />
+            ))
+          ) : (
+            <p style={muted}>No admin messages yet.</p>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -2848,25 +2847,21 @@ export default function InvestorRoomPage() {
               title="Active Requests"
               count={activeRequestCount(readAllInvestorRequests())}
               note="open investor requests"
-              onClick={() => window.dispatchEvent(new CustomEvent("vaultforge-investor-request-view", { detail: "active" }))}
             />
             <Metric
               title="Saved Requests"
               count={savedRequestCount(readAllInvestorRequests())}
               note="saved investor requests"
-              onClick={() => window.dispatchEvent(new CustomEvent("vaultforge-investor-request-view", { detail: "saved" }))}
             />
             <Metric
               title="Archived Requests"
               count={archivedRequestCount(readAllInvestorRequests())}
               note="archived investor requests"
-              onClick={() => window.dispatchEvent(new CustomEvent("vaultforge-investor-request-view", { detail: "archived" }))}
             />
             <Metric
               title="Deleted Requests"
               count={deletedRequestCount(readAllInvestorRequests())}
               note="deleted investor requests"
-              onClick={() => window.dispatchEvent(new CustomEvent("vaultforge-investor-request-view", { detail: "deleted" }))}
             />
             <Metric
               title="Saved Deals"
