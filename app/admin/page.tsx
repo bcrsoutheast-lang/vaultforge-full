@@ -2252,10 +2252,20 @@ export default function AdminPage() {
             </Section>
 
             <Section title="Admin Message Center">
-              <p style={muted}>Send to all members or only the currently filtered member results.</p>
+              <p style={muted}>Send structured messages to all members or only the currently filtered member results.</p>
               <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
-                <input style={input} value={broadcastSubject} onChange={(event) => setBroadcastSubject(event.target.value)} placeholder="Subject..." />
-                <textarea style={{ ...input, minHeight: 130 }} value={broadcastBody} onChange={(event) => setBroadcastBody(event.target.value)} placeholder="Write admin message..." />
+                <BloombergMessageForm
+                  sender="VaultForge Admin"
+                  recipient="Filtered Members / All Members"
+                  header="Admin Member Broadcast"
+                  defaultSubject={broadcastSubject || "Admin message"}
+                  defaultType="Admin Note"
+                  submitLabel="Prepare Admin Message"
+                  onSend={(payload) => {
+                    setBroadcastSubject(payload.subject);
+                    setBroadcastBody(payload.summary);
+                  }}
+                />
                 <div style={row}>
                   <button type="button" style={goldBtn} onClick={() => broadcastToMembers("filtered")}>Message Filtered Members</button>
                   <button type="button" style={btn} onClick={() => broadcastToMembers("all")}>Message All Members</button>
