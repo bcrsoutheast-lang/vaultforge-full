@@ -10,6 +10,7 @@ const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
+const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
 const INVESTOR_HIDDEN_KEY = "vaultforge_investor_room_hidden_v1";
 
@@ -250,6 +251,23 @@ function saveInvestorAdminMessage(subject: string, body: string) {
   });
   writeJson("vaultforge_admin_messages_v1", adminRows);
 
+  pushAdminInbox({
+    id: `admin-message-to-admin-${Date.now()}`,
+    type: "message_admin",
+    requestTitle: subject || "Message Admin",
+    title: subject || "Message Admin",
+    subject: subject || "Message Admin",
+    body: body || "Investor requested admin support.",
+    message: body || "Investor requested admin support.",
+    status: "new",
+    source: "investor-room-message-admin",
+    investorProfile: profile || safeInvestorSnapshot(),
+    investorEmail: profile?.email || "",
+    investorCompany: profile?.company || "",
+    investorName: profile?.contactName || "",
+    investorPhotoUrl: profile?.photoUrl || "",
+  });
+
   window.dispatchEvent(new Event("vaultforge-investor-admin-message-change"));
   window.dispatchEvent(new Event("vaultforge-admin-message-change"));
 }
@@ -299,7 +317,91 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
   });
 
   writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, rows);
+  pushAdminInbox({
+    id: `admin-execution-request-${Date.now()}`,
+    type: "execution_request",
+    requestTitle: lane.title,
+    title,
+    subject: `${lane.title} - ${title}`,
+    body: notes || "Investor requested execution support.",
+    message: `${header}\n\n${notes || "Investor requested execution support."}`,
+    status: "new",
+    source: "investor-room-execution",
+    kind,
+    itemId: itemId(item, kind),
+    state,
+    roomHeader: header,
+    investorProfile: profile || safeInvestorSnapshot(),
+    investorEmail: profile?.email || "",
+    investorCompany: profile?.company || "",
+    investorName: profile?.contactName || "",
+    investorPhotoUrl: profile?.photoUrl || "",
+  });
+
   window.dispatchEvent(new Event("vaultforge-investor-execution-request-change"));
+}
+
+
+function safeInvestorSnapshot() {
+  const investor = readInvestor();
+  try {
+    if (typeof investorProfileSnapshot === "function") return investorProfileSnapshot(investor);
+  } catch {
+    // ignore
+  }
+
+  return {
+    photoUrl: investor?.photoUrl || "",
+    contactName: investor?.contactName || "",
+    company: investor?.company || "",
+    email: investor?.email || localStorage.getItem("vaultforge_investor_email") || "",
+    phone: investor?.phone || "",
+    website: investor?.website || "",
+    investorTypes: investor?.investorTypes || [],
+    buyingStrategies: investor?.buyingStrategies || [],
+    assetTypes: investor?.assetTypes || [],
+    statesInterested: investor?.statesInterested || [],
+    minDeal: investor?.minDeal || "",
+    maxDeal: investor?.maxDeal || "",
+    monthlyVolume: investor?.monthlyVolume || "",
+    yearlyVolume: investor?.yearlyVolume || "",
+    closeSpeed: investor?.closeSpeed || "",
+    proofFunds: investor?.proofFunds || "",
+    directBuyer: investor?.directBuyer || "",
+    fundingNeeded: investor?.fundingNeeded || "",
+    notes: investor?.notes || "",
+  };
+}
+
+function pushAdminInbox(row: any) {
+  const rows = readJson<any[]>(ADMIN_INBOX_KEY, []);
+  const profile = row.investorProfile || safeInvestorSnapshot();
+  const normalized = {
+    id: row.id || `admin-inbox-${Date.now()}`,
+    type: row.type || "investor_message",
+    requestTitle: row.requestTitle || row.title || row.subject || "Investor Message",
+    title: row.title || row.requestTitle || row.subject || "Investor Message",
+    subject: row.subject || row.requestTitle || row.title || "Investor Message",
+    body: row.body || row.message || row.notes || "",
+    message: row.message || row.body || row.notes || "",
+    status: row.status || "new",
+    priority: row.priority || "normal",
+    source: row.source || "investor-room",
+    kind: row.kind || "Investor",
+    itemId: row.itemId || "",
+    state: row.state || "",
+    roomHeader: row.roomHeader || row.header || "",
+    investorEmail: row.investorEmail || profile.email || "",
+    investorCompany: row.investorCompany || profile.company || "",
+    investorName: row.investorName || profile.contactName || "",
+    investorPhotoUrl: row.investorPhotoUrl || profile.photoUrl || "",
+    investorProfile: profile,
+    createdAt: row.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  writeJson(ADMIN_INBOX_KEY, [normalized, ...rows]);
+  window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
 }
 
 function sendRequest(kind: Kind, item: any, body: string) {
@@ -344,6 +446,27 @@ function sendRequest(kind: Kind, item: any, body: string) {
   });
 
   writeJson(INVESTOR_REQUESTS_KEY, rows);
+  pushAdminInbox({
+    id: `admin-deal-pain-request-${Date.now()}`,
+    type: "deal_pain_request",
+    requestTitle: `${kind} Request`,
+    title,
+    subject: `${kind} Request - ${title}`,
+    body: body || "Investor requested more information.",
+    message: `${header}\n\n${body || "Investor requested more information."}`,
+    status: "new",
+    source: "investor-room-request",
+    kind,
+    itemId: itemId(item, kind),
+    state,
+    roomHeader: header,
+    investorProfile: profile || safeInvestorSnapshot(),
+    investorEmail: profile?.email || "",
+    investorCompany: profile?.company || "",
+    investorName: profile?.contactName || "",
+    investorPhotoUrl: profile?.photoUrl || "",
+  });
+
   window.dispatchEvent(new Event("vaultforge-investor-request-change"));
 }
 
