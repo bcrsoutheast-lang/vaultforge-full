@@ -556,6 +556,78 @@ function UrgencyBadges({ kind }: { kind: Kind }) {
   );
 }
 
+
+function InvestorIdentityCard({
+  investor,
+  onMessageAdmin,
+}: {
+  investor: any;
+  onMessageAdmin: () => void;
+}) {
+  const score = typeof profileScore === "function" ? profileScore(investor) : 0;
+  const email = String(investor?.email || localStorage.getItem("vaultforge_investor_email") || "").toLowerCase();
+  const isOwner = email === OWNER_EMAIL;
+
+  return (
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
+      <div style={{ ...row, alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div style={{ ...row, alignItems: "flex-start" }}>
+          {investor?.photoUrl ? (
+            <img
+              src={investor.photoUrl}
+              alt="Investor profile"
+              style={{
+                width: 96,
+                height: 96,
+                objectFit: "cover",
+                borderRadius: 24,
+                border: "1px solid rgba(245,197,66,.45)",
+                boxShadow: "0 0 26px rgba(245,197,66,.12)",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: 24,
+                border: "1px solid rgba(245,197,66,.35)",
+                display: "grid",
+                placeItems: "center",
+                color: "#ffd45a",
+                fontWeight: 950,
+                background: "#080d19",
+              }}
+            >
+              VF
+            </div>
+          )}
+
+          <div>
+            <div style={eyebrow}>Logged In Investor</div>
+            <h2 style={h2}>{investor?.contactName || investor?.company || "Investor Profile"}</h2>
+            <p style={sub}>{investor?.company || "Company not listed"}</p>
+            <p style={muted}>{email || "Investor email not detected"}</p>
+            <p style={muted}>
+              Access: {investor?.accessStatus || investor?.access || "locked"} • Payment: {investor?.paymentStatus || "unpaid"} • Status: {investor?.status || "pending"}
+            </p>
+            <p style={muted}>Profile Intelligence: {score}% complete</p>
+            {isOwner ? <p style={muted}>Owner/admin identity detected.</p> : null}
+          </div>
+        </div>
+
+        <div style={row}>
+          <Link href="/investor-application" style={goldBtn}>Profile</Link>
+          <Link href="/investor-payment" style={btn}>Payment</Link>
+          <button type="button" style={btn} onClick={onMessageAdmin}>Message Admin</button>
+          <button type="button" style={btn} onClick={logoutInvestor}>Logout</button>
+          {isOwner ? <Link href="/admin" style={redBtn}>Admin</Link> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Metric({ title, count, note, active, onClick }: { title: string; count: number | string; note: string; active?: boolean; onClick?: () => void }) {
   return (
     <button type="button" style={{ ...(active ? goldPanel : panel), width: "100%", textAlign: "left" }} onClick={onClick}>
@@ -1083,6 +1155,8 @@ export default function InvestorRoomPage() {
             <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>Collapse / Done</button>
           </div>
         </section>
+
+        <InvestorIdentityCard investor={investor} onMessageAdmin={() => setMessageAdminOpen(true)} />
 
         <section style={{ marginBottom: 18 }}>
           <IntelligencePanel investor={investor} />
