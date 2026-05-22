@@ -984,6 +984,12 @@ const redPanel: React.CSSProperties = {
   borderColor: "rgba(255,70,70,.52)",
   boxShadow: "0 0 28px rgba(255,70,70,.10)",
 };
+const activePanel: React.CSSProperties = {
+  ...panel,
+  borderColor: "rgba(0,132,255,.62)",
+  boxShadow: "0 0 34px rgba(0,132,255,.16)",
+  background: "linear-gradient(180deg,#111a2a,#0b1020)",
+};
 const eyebrow: React.CSSProperties = {
   color: "#ffd45a",
   textTransform: "uppercase",
