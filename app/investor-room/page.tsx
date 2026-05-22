@@ -72,8 +72,165 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function isQuotaError(error: any) {
+  const name = String(error?.name || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return name.includes("quota") || message.includes("quota") || message.includes("exceeded");
+}
+
+function trimText(value: unknown, limit = 900) {
+  const text = String(value || "").trim();
+  return text.length > limit ? `${text.slice(0, limit)}...` : text;
+}
+
+function compactInvestorProfile(profile: any) {
+  return {
+    photoUrl: trimText(profile?.photoUrl, 500),
+    contactName: trimText(profile?.contactName || profile?.name, 120),
+    company: trimText(profile?.company, 120),
+    email: trimText(profile?.email, 160),
+    phone: trimText(profile?.phone, 80),
+    website: trimText(profile?.website, 160),
+    investorTypes: Array.isArray(profile?.investorTypes) ? profile.investorTypes.slice(0, 10) : profile?.investorTypes || [],
+    buyingStrategies: Array.isArray(profile?.buyingStrategies) ? profile.buyingStrategies.slice(0, 10) : profile?.buyingStrategies || [],
+    assetTypes: Array.isArray(profile?.assetTypes) ? profile.assetTypes.slice(0, 10) : profile?.assetTypes || [],
+    statesInterested: Array.isArray(profile?.statesInterested) ? profile.statesInterested.slice(0, 12) : profile?.statesInterested || [],
+    countiesInterested: trimText(profile?.countiesInterested, 500),
+    citiesInterested: trimText(profile?.citiesInterested, 500),
+    minDeal: trimText(profile?.minDeal, 80),
+    maxDeal: trimText(profile?.maxDeal, 80),
+    monthlyVolume: trimText(profile?.monthlyVolume, 80),
+    yearlyVolume: trimText(profile?.yearlyVolume, 80),
+    closeSpeed: trimText(profile?.closeSpeed, 80),
+    proofFunds: trimText(profile?.proofFunds, 80),
+    directBuyer: trimText(profile?.directBuyer, 80),
+    fundingNeeded: trimText(profile?.fundingNeeded, 80),
+    openToJV: trimText(profile?.openToJV, 80),
+    openToWholesalers: trimText(profile?.openToWholesalers, 80),
+    capitalSource: trimText(profile?.capitalSource, 160),
+    notes: trimText(profile?.notes, 500),
+  };
+}
+
+function compactStorageRow(row: any) {
+  const profile = compactInvestorProfile(row?.investorProfile || row || {});
+  return {
+    ...row,
+    body: trimText(row?.body, 1200),
+    message: trimText(row?.message, 1600),
+    notes: trimText(row?.notes, 900),
+    roomHeader: trimText(row?.roomHeader, 500),
+    investorProfile: compactInvestorProfile(profile),
+    investorEmail: row?.investorEmail || profile.email || "",
+    investorCompany: row?.investorCompany || profile.company || "",
+    investorName: row?.investorName || profile.contactName || "",
+    investorPhotoUrl: row?.investorPhotoUrl || profile.photoUrl || "",
+  };
+}
+
+function compactRowsForKey(key: string, value: unknown) {
+  if (!Array.isArray(value)) return value;
+
+  const maxRowsByKey: Record<string, number> = {
+    [ADMIN_INBOX_KEY]: 60,
+    [INVESTOR_EXECUTION_REQUESTS_KEY]: 60,
+    [INVESTOR_REQUESTS_KEY]: 60,
+    [INVESTOR_ADMIN_MESSAGES_KEY]: 40,
+    [CONTROLLED_THREADS_KEY]: 50,
+    "vaultforge_admin_messages_v1": 40,
+  };
+
+  const max = maxRowsByKey[key] || 80;
+  return value.slice(0, max).map((row) => (row && typeof row === "object" ? compactStorageRow(row) : row));
+}
+
+function compactVaultForgeLocalStorage() {
+  const keysToCompact = [
+    ADMIN_INBOX_KEY,
+    INVESTOR_EXECUTION_REQUESTS_KEY,
+    INVESTOR_REQUESTS_KEY,
+    INVESTOR_ADMIN_MESSAGES_KEY,
+    CONTROLLED_THREADS_KEY,
+    "vaultforge_admin_messages_v1",
+    "vaultforge_message_threads_v2",
+    "vaultforge_message_command_threads_v1",
+  ];
+
+  for (const key of keysToCompact) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      if (Array.isArray(parsed)) {
+        localStorage.setItem(key, JSON.stringify(compactRowsForKey(key, parsed)));
+      }
+    } catch {
+      // If one cache is malformed or too large to parse, leave it alone.
+    }
+  }
+}
+
+
+function emergencyFreeVaultForgeRequestStorage() {
+  const keysToShrink = [
+    ADMIN_INBOX_KEY,
+    INVESTOR_EXECUTION_REQUESTS_KEY,
+    INVESTOR_REQUESTS_KEY,
+    INVESTOR_ADMIN_MESSAGES_KEY,
+    CONTROLLED_THREADS_KEY,
+    "vaultforge_admin_messages_v1",
+    "vaultforge_message_threads_v2",
+    "vaultforge_message_command_threads_v1",
+  ];
+
+  for (const key of keysToShrink) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      if (Array.isArray(parsed)) {
+        const tiny = parsed.slice(0, 10).map((row) => (row && typeof row === "object" ? compactStorageRow(row) : row));
+        localStorage.removeItem(key);
+        localStorage.setItem(key, JSON.stringify(tiny));
+      }
+    } catch {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
 function writeJson(key: string, value: unknown) {
-  localStorage.setItem(key, JSON.stringify(value));
+  const compactValue = compactRowsForKey(key, value);
+  try {
+    localStorage.setItem(key, JSON.stringify(compactValue));
+    return true;
+  } catch (error: any) {
+    if (!isQuotaError(error)) throw error;
+
+    compactVaultForgeLocalStorage();
+
+    try {
+      localStorage.setItem(key, JSON.stringify(compactValue));
+      return true;
+    } catch (secondError: any) {
+      if (Array.isArray(compactValue)) {
+        const emergencyValue = compactValue.slice(0, 10).map((row) =>
+          row && typeof row === "object" ? compactStorageRow(row) : row
+        );
+
+        try {
+          localStorage.removeItem(key);
+          localStorage.setItem(key, JSON.stringify(emergencyValue));
+          return true;
+        } catch {
+          emergencyFreeVaultForgeRequestStorage();
+          localStorage.setItem(key, JSON.stringify(emergencyValue));
+          return true;
+        }
+      }
+      throw secondError;
+    }
+  }
 }
 
 function clean(value: unknown, fallback = "") {
@@ -231,11 +388,11 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     investorCompany: profile.company,
     investorName: profile.contactName,
     investorPhotoUrl: profile.photoUrl,
-    investorProfile: profile,
+    investorProfile: compactInvestorProfile(profile),
     createdAt: new Date().toISOString(),
   });
 
-  writeJson(INVESTOR_ADMIN_MESSAGES_KEY, rows);
+  writeJson(INVESTOR_ADMIN_MESSAGES_KEY, rows.slice(0, 40));
 
   const adminRows = readJson<any[]>("vaultforge_admin_messages_v1", []);
   adminRows.unshift({
@@ -246,10 +403,10 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     status: "new",
     priority: "normal",
     source: "investor-room",
-    investorProfile: profile,
+    investorProfile: compactInvestorProfile(profile),
     createdAt: new Date().toISOString(),
   });
-  writeJson("vaultforge_admin_messages_v1", adminRows);
+  writeJson("vaultforge_admin_messages_v1", adminRows.slice(0, 40));
 
   pushAdminInbox({
     id: `admin-message-to-admin-${Date.now()}`,
@@ -261,7 +418,7 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     message: body || "Investor requested admin support.",
     status: "new",
     source: "investor-room-message-admin",
-    investorProfile: profile || safeInvestorSnapshot(),
+    investorProfile: compactInvestorProfile(profile || safeInvestorSnapshot()),
     investorEmail: profile?.email || "",
     investorCompany: profile?.company || "",
     investorName: profile?.contactName || "",
@@ -314,15 +471,15 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
       investorCompany: profile.company,
       investorName: profile.contactName,
       investorPhotoUrl: profile.photoUrl,
-      investorProfile: profile,
+      investorProfile: compactInvestorProfile(profile),
       notes: notes || "",
-      message: `${header}\\n\\n${notes || "Investor requested execution support."}\\n\\n--- Investor Profile Attached ---\\n${profileText}`,
+      message: `${header}\\n\\n${notes || "Investor requested execution support."}`,
       status: "new",
       createdAt,
       updatedAt: createdAt,
     };
 
-    writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, [executionRow, ...rows]);
+    writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, [executionRow, ...rows].slice(0, 60));
 
     pushAdminInbox({
       id: adminInboxId,
@@ -340,7 +497,7 @@ ${notes || "Investor requested execution support."}`,
       itemId: itemId(item, kind),
       state,
       roomHeader: header,
-      investorProfile: profile || safeInvestorSnapshot(),
+      investorProfile: compactInvestorProfile(profile || safeInvestorSnapshot()),
       investorEmail: profile?.email || "",
       investorCompany: profile?.company || "",
       investorName: profile?.contactName || "",
@@ -431,7 +588,7 @@ function safeInvestorSnapshot() {
 
 function pushAdminInbox(row: any) {
   const rows = readJson<any[]>(ADMIN_INBOX_KEY, []);
-  const profile = row.investorProfile || safeInvestorSnapshot();
+  const profile = compactInvestorProfile(row.investorProfile || safeInvestorSnapshot());
   const normalized = {
     id: row.id || `admin-inbox-${Date.now()}`,
     type: row.type || "investor_message",
@@ -451,12 +608,12 @@ function pushAdminInbox(row: any) {
     investorCompany: row.investorCompany || profile.company || "",
     investorName: row.investorName || profile.contactName || "",
     investorPhotoUrl: row.investorPhotoUrl || profile.photoUrl || "",
-    investorProfile: profile,
+    investorProfile: compactInvestorProfile(profile),
     createdAt: row.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 
-  writeJson(ADMIN_INBOX_KEY, [normalized, ...rows]);
+  writeJson(ADMIN_INBOX_KEY, [normalized, ...rows].slice(0, 60));
   window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
 }
 
@@ -495,13 +652,13 @@ function sendRequest(kind: Kind, item: any, body: string) {
     investorCompany: profile.company,
     investorName: profile.contactName,
     investorPhotoUrl: profile.photoUrl,
-    investorProfile: profile,
-    message: `${header}\n\n${body || "Investor requested more information."}\n\n--- Investor Profile Attached ---\n${profileText}`,
+    investorProfile: compactInvestorProfile(profile),
+    message: `${header}\n\n${body || "Investor requested more information."}`,
     status: "new",
     createdAt: new Date().toISOString(),
   });
 
-  writeJson(INVESTOR_REQUESTS_KEY, rows);
+  writeJson(INVESTOR_REQUESTS_KEY, rows.slice(0, 60));
   pushAdminInbox({
     id: `admin-deal-pain-request-${Date.now()}`,
     type: "deal_pain_request",
@@ -516,7 +673,7 @@ function sendRequest(kind: Kind, item: any, body: string) {
     itemId: itemId(item, kind),
     state,
     roomHeader: header,
-    investorProfile: profile || safeInvestorSnapshot(),
+    investorProfile: compactInvestorProfile(profile || safeInvestorSnapshot()),
     investorEmail: profile?.email || "",
     investorCompany: profile?.company || "",
     investorName: profile?.contactName || "",
