@@ -96,6 +96,12 @@ const ALERT_KEYS = [
 ];
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
+const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
+const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
+const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
+const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
+const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
+const MEMBER_REQUEST_OVERRIDES_KEY = "vaultforge_member_request_overrides_v1";
 
 function ok() {
   return (
@@ -679,10 +685,63 @@ const logoFallback: React.CSSProperties = {
   lineHeight: 0.9,
 };
 
+function readArrayKeyForRequests(key: string) {
+  if (!ok()) return [] as any[];
+  const value = j<any>(localStorage.getItem(key), []);
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return Object.values(value);
+  return [];
+}
+
+function requestBaseInvestorProfile() {
+  if (!ok()) return {} as any;
+  const profile = j<any>(localStorage.getItem(INVESTOR_APP_KEY), {});
+  return profile && typeof profile === "object" && !Array.isArray(profile) ? profile : {};
+}
+
+function normalizeRequestThread(row: any, sourceKey: string, index: number) {
+  const profile = row?.investorProfile || requestBaseInvestorProfile();
+  const id = txt(row?.id || row?.threadId || row?.thread_id || row?.requestId || row?.request_id || `${sourceKey}-${index}`);
+  const title = txt(row?.requestTitle || row?.title || row?.subject || row?.topic || "Investor Request");
+  const body = txt(row?.roomHeader || row?.message || row?.body || row?.notes || "Routed investor request");
+  return {
+    ...row,
+    id,
+    threadId: row?.threadId || id,
+    sourceStorageKey: row?.sourceStorageKey || sourceKey,
+    title,
+    requestTitle: txt(row?.requestTitle || title, title),
+    subject: txt(row?.subject || title, title),
+    roomHeader: txt(row?.roomHeader || body, body),
+    message: txt(row?.message || body, body),
+    body: txt(row?.body || body, body),
+    status: txt(row?.status || row?.memberStatus || row?.stage || "new", "new"),
+    investorProfile: profile,
+    investorName: txt(row?.investorName || profile?.contactName || profile?.name || "Investor not listed"),
+    investorCompany: txt(row?.investorCompany || profile?.company || "Company not listed"),
+    investorEmail: txt(row?.investorEmail || profile?.email || "Not listed"),
+    createdAt: txt(row?.createdAt || row?.created_at || new Date().toISOString()),
+  };
+}
+
 function readControlledThreads() {
   if (!ok()) return [] as any[];
-  const rows = j<any[]>(localStorage.getItem(CONTROLLED_THREADS_KEY), []);
-  return Array.isArray(rows) ? rows : [];
+  const sources = [CONTROLLED_THREADS_KEY, ADMIN_INBOX_KEY, INVESTOR_REQUESTS_KEY, INVESTOR_EXECUTION_REQUESTS_KEY, INVESTOR_ADMIN_MESSAGES_KEY];
+  const overrides = j<Record<string, any>>(localStorage.getItem(MEMBER_REQUEST_OVERRIDES_KEY), {});
+  const map = new Map<string, any>();
+
+  sources.forEach((sourceKey) => {
+    readArrayKeyForRequests(sourceKey).forEach((row, index) => {
+      if (!row || typeof row !== "object") return;
+      const normalized = normalizeRequestThread(row, sourceKey, index);
+      const id = txt(normalized.id || `${sourceKey}-${index}`);
+      const patched = { ...normalized, ...(overrides[id] || {}) };
+      if (patched?.status === "__deleted_forever") return;
+      map.set(id, { ...(map.get(id) || {}), ...patched, id });
+    });
+  });
+
+  return Array.from(map.values());
 }
 
 function threadStatus(thread: any) {
@@ -1198,7 +1257,7 @@ export default function CommandPage() {
             requests.
           </p>
           <div style={{ ...row, marginTop: 18 }}>
-            <Link href="/member-controlled-threads" style={goldBtn}>
+            <Link href="/member-controlled-threads?lane=new" style={goldBtn}>
               Open Request Inbox
             </Link>
             <Link href="/controlled-threads" style={btn}>
@@ -1213,56 +1272,56 @@ export default function CommandPage() {
               title="New Requests"
               value={newRequests}
               note="routed investor requests needing review"
-              href="/member-controlled-threads"
+              href="/member-controlled-threads?lane=new"
               danger={newRequests > 0}
             />
             <MetricCard
               title="Active Threads"
               value={activeRequests}
               note="accepted/open request conversations"
-              href="/member-controlled-threads"
+              href="/member-controlled-threads?lane=active"
               danger={activeRequests > 0}
             />
             <MetricCard
               title="Admin Replies"
               value={adminReplies}
               note="admin notes attached to routed requests"
-              href="/member-controlled-threads"
+              href="/member-controlled-threads?lane=admin"
               danger={adminReplies > 0}
             />
             <MetricCard
               title="Investor Replies"
               value={investorReplies}
               note="investor messages attached to request threads"
-              href="/member-controlled-threads"
+              href="/member-controlled-threads?lane=investor"
               danger={investorReplies > 0}
             />
             <MetricCard
               title="Execution Requests"
               value={executionRequests}
               note="lender/title/contractor/operator/JV requests"
-              href="/member-controlled-threads"
+              href="/member-controlled-threads?lane=execution"
               danger={executionRequests > 0}
             />
             <MetricCard
               title="Deal Requests"
               value={dealRequests}
               note="deal opportunity requests routed to members"
-              href="/member-controlled-threads"
+              href="/member-controlled-threads?lane=deal"
               danger={dealRequests > 0}
             />
             <MetricCard
               title="Pain Requests"
               value={painRequests}
               note="problem-solving requests routed to members"
-              href="/member-controlled-threads"
+              href="/member-controlled-threads?lane=pain"
               danger={painRequests > 0}
             />
             <MetricCard
               title="Saved / Archive / Trash"
               value={savedRequests + archivedRequests + deletedRequests}
               note="member request cleanup folders"
-              href="/member-controlled-threads"
+              href="/member-controlled-threads?lane=saved"
               danger={deletedRequests > 0}
             />
           </div>
