@@ -445,7 +445,7 @@ function logoutInvestor() {
     localStorage.removeItem("vaultforge_investor_login_v1");
     window.dispatchEvent(new Event("vaultforge-investor-change"));
   } catch {
-    // ignore browser storage errors
+    // Ignore browser storage errors.
   }
 
   window.location.href = "/investor-login";
@@ -895,6 +895,26 @@ function InvestorRequestCenter() {
   );
 }
 
+
+
+function profileComplete(investor: any) {
+  return Boolean(
+    investor?.email &&
+      investor?.contactName &&
+      investor?.company &&
+      investor?.phone &&
+      (
+        (Array.isArray(investor?.investorTypes) && investor.investorTypes.length > 0) ||
+        (Array.isArray(investor?.assetTypes) && investor.assetTypes.length > 0) ||
+        investor?.assetTypes ||
+        investor?.investorTypes
+      ) &&
+      (
+        (Array.isArray(investor?.statesInterested) && investor.statesInterested.length > 0) ||
+        investor?.statesInterested
+      )
+  );
+}
 
 export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
