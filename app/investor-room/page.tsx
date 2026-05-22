@@ -1893,43 +1893,6 @@ function closedRequestCount(rows: any[]) {
   return statusCount(rows, "closed");
 }
 
-function threadAsInvestorRequest(thread: any) {
-  const profile = compactInvestorProfile(thread?.investorProfile || safeInvestorSnapshot());
-  return {
-    ...thread,
-    id: thread?.id || thread?.threadId || `controlled-thread-${Date.now()}`,
-    type: thread?.type || "controlled_thread",
-    requestTitle: thread?.requestTitle || thread?.title || "Request Message Thread",
-    title: thread?.title || thread?.requestTitle || "Request Message Thread",
-    topic: thread?.topic || thread?.title || thread?.requestTitle || "Request Message Thread",
-    subject: thread?.subject || thread?.title || thread?.requestTitle || "Request Message Thread",
-    roomHeader: thread?.roomHeader || thread?.message || "Controlled investor/member/admin conversation.",
-    message: thread?.message || thread?.roomHeader || "Controlled investor/member/admin conversation.",
-    status: thread?.status || "new",
-    source: thread?.source || "controlled-thread",
-    kind: thread?.kind || thread?.roomKind || thread?.roomType || "Request",
-    state: thread?.state || "",
-    investorProfile: profile,
-    investorEmail: thread?.investorEmail || profile.email || "",
-    investorCompany: thread?.investorCompany || profile.company || "",
-    investorName: thread?.investorName || profile.contactName || "",
-    investorPhotoUrl: thread?.investorPhotoUrl || profile.photoUrl || "",
-    createdAt: thread?.createdAt || thread?.updatedAt || new Date().toISOString(),
-    updatedAt: thread?.updatedAt || thread?.createdAt || new Date().toISOString(),
-  };
-}
-
-function readControlledThreadRequests() {
-  const rows = readControlledThreads();
-  const investorEmail = investorEmailForThreads();
-  return rows
-    .filter((thread: any) => {
-      const threadEmail = String(thread?.investorEmail || thread?.investorProfile?.email || "").toLowerCase();
-      return !investorEmail || !threadEmail || threadEmail === investorEmail;
-    })
-    .map(threadAsInvestorRequest);
-}
-
 function readAllInvestorRequests() {
   const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
   const executionRequests = readJson<any[]>(
@@ -1937,8 +1900,7 @@ function readAllInvestorRequests() {
     [],
   );
   const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
-  const controlledThreads = readControlledThreadRequests();
-  return [...dealPainRequests, ...executionRequests, ...adminMessages, ...controlledThreads];
+  return [...dealPainRequests, ...executionRequests, ...adminMessages];
 }
 
 type InvestorRequestGroup = "dealPain" | "execution" | "adminMessage";
@@ -2181,6 +2143,7 @@ function InvestorRequestDetailModal({
 function InvestorRequestCenter() {
   const [selected, setSelected] = useState<InvestorRequestSelection>(null);
   const [refresh, setRefresh] = useState(0);
+  const [requestView, setRequestView] = useState("all");
 
   const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
   const executionRequests = readJson<any[]>(
@@ -2188,8 +2151,12 @@ function InvestorRequestCenter() {
     [],
   );
   const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
-  const controlledThreads = readControlledThreadRequests();
-  const all = [...dealPainRequests, ...executionRequests, ...adminMessages, ...controlledThreads];
+  const allSelections: InvestorRequestSelection[] = [
+    ...dealPainRequests.map((row) => ({ row, label: "Deal/Pain", group: "dealPain" as InvestorRequestGroup })),
+    ...executionRequests.map((row) => ({ row, label: "Execution", group: "execution" as InvestorRequestGroup })),
+    ...adminMessages.map((row) => ({ row, label: "Admin Message", group: "adminMessage" as InvestorRequestGroup })),
+  ];
+  const all = allSelections.map((selection) => selection.row);
 
   function refreshTracker(nextSelected?: InvestorRequestSelection) {
     setRefresh((value) => value + 1);
@@ -2211,8 +2178,57 @@ function InvestorRequestCenter() {
     refreshTracker(null);
   }
 
+  function openRequestView(view: string) {
+    setRequestView(view);
+    setSelected(null);
+    setRefresh((value) => value + 1);
+    setTimeout(() => {
+      const node = document.getElementById("investor-request-tracker");
+      if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }
+
+  useEffect(() => {
+    function handleView(event: Event) {
+      const detail = (event as CustomEvent).detail;
+      openRequestView(String(detail || "all"));
+    }
+
+    window.addEventListener("vaultforge-investor-request-view", handleView);
+    return () => window.removeEventListener("vaultforge-investor-request-view", handleView);
+  }, []);
+
+  function selectionMatches(selection: InvestorRequestSelection, view: string) {
+    const row = selection.row || {};
+    const status = requestStatus(row);
+    if (view === "all") return true;
+    if (view === "active") return !["saved", "archived", "deleted", "closed"].includes(status);
+    if (view === "saved") return status === "saved";
+    if (view === "archived") return status === "archived";
+    if (view === "deleted") return status === "deleted";
+    if (view === "closed") return status === "closed";
+    if (view === "dealPain") return selection.group === "dealPain";
+    if (view === "execution") return selection.group === "execution";
+    if (view === "adminMessage") return selection.group === "adminMessage";
+    return true;
+  }
+
+  const filteredSelections = allSelections.filter((selection) => selectionMatches(selection, requestView));
+  const viewTitle =
+    requestView === "all"
+      ? "All Requests"
+      : requestView === "active"
+        ? "Active / New Requests"
+        : requestView === "dealPain"
+          ? "Deal / Pain Requests"
+          : requestView === "execution"
+            ? "Execution Requests"
+            : requestView === "adminMessage"
+              ? "Admin Messages"
+              : `${requestView.charAt(0).toUpperCase()}${requestView.slice(1)} Requests`;
+
   return (
-    <section style={{ ...hero, marginTop: 20 }} data-refresh={refresh}>
+    <section id="investor-request-tracker" style={{ ...hero, marginTop: 20 }} data-refresh={refresh}>
       <InvestorRequestDetailModal
         selected={selected}
         onClose={() => setSelected(null)}
@@ -2233,92 +2249,69 @@ function InvestorRequestCenter() {
           title="All Requests"
           count={all.length}
           note="total investor requests, including saved/archived/deleted"
+          active={requestView === "all"}
+          onClick={() => openRequestView("all")}
         />
         <Metric
           title="Active / New"
           count={activeRequestCount(all)}
           note="open requests still needing action"
+          active={requestView === "active"}
+          onClick={() => openRequestView("active")}
         />
         <Metric
           title="Saved"
           count={savedRequestCount(all)}
           note="saved investor requests"
+          active={requestView === "saved"}
+          onClick={() => openRequestView("saved")}
         />
         <Metric
           title="Archived"
           count={archivedRequestCount(all)}
           note="archived investor requests"
+          active={requestView === "archived"}
+          onClick={() => openRequestView("archived")}
         />
         <Metric
           title="Deleted"
           count={deletedRequestCount(all)}
           note="deleted requests waiting for delete forever"
+          active={requestView === "deleted"}
+          onClick={() => openRequestView("deleted")}
         />
         <Metric
           title="Closed"
           count={closedRequestCount(all)}
           note="completed/closed"
+          active={requestView === "closed"}
+          onClick={() => openRequestView("closed")}
         />
       </div>
 
-      <div style={{ ...wideGrid, marginTop: 18 }}>
-        <div style={goldPanel}>
-          <div style={eyebrow}>Deal / Pain Requests</div>
-          {dealPainRequests.length ? (
-            dealPainRequests.map((row) => (
-              <RequestMiniCard
-                key={row.id}
-                row={row}
-                label="Deal/Pain"
-                onOpen={() =>
-                  setSelected({ row, label: "Deal/Pain", group: "dealPain" })
-                }
-              />
-            ))
-          ) : (
-            <p style={muted}>No Deal/Pain requests yet.</p>
-          )}
-        </div>
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={requestView === "dealPain" ? goldBtn : btn} onClick={() => openRequestView("dealPain")}>Deal / Pain</button>
+        <button type="button" style={requestView === "execution" ? goldBtn : btn} onClick={() => openRequestView("execution")}>Execution</button>
+        <button type="button" style={requestView === "adminMessage" ? goldBtn : btn} onClick={() => openRequestView("adminMessage")}>Admin Messages</button>
+        <button type="button" style={btn} onClick={() => { setSelected(null); openRequestView("all"); }}>Collapse / Done</button>
+      </div>
 
-        <div style={panel}>
-          <div style={eyebrow}>Execution Requests</div>
-          {executionRequests.length ? (
-            executionRequests.map((row) => (
+      <div style={{ ...goldPanel, marginTop: 18 }}>
+        <div style={eyebrow}>{viewTitle}</div>
+        {filteredSelections.length ? (
+          <div style={{ ...wideGrid, marginTop: 14 }}>
+            {filteredSelections.map((selection) => (
               <RequestMiniCard
-                key={row.id}
-                row={row}
-                label="Execution"
-                onOpen={() =>
-                  setSelected({ row, label: "Execution", group: "execution" })
-                }
+                key={`${selection.group}-${selection.row?.id}`}
+                row={selection.row}
+                label={selection.label}
+                onOpen={() => setSelected(selection)}
               />
-            ))
-          ) : (
-            <p style={muted}>No execution requests yet.</p>
-          )}
-        </div>
-
-        <div style={panel}>
-          <div style={eyebrow}>Admin Messages</div>
-          {adminMessages.length ? (
-            adminMessages.map((row) => (
-              <RequestMiniCard
-                key={row.id}
-                row={row}
-                label="Admin Message"
-                onOpen={() =>
-                  setSelected({
-                    row,
-                    label: "Admin Message",
-                    group: "adminMessage",
-                  })
-                }
-              />
-            ))
-          ) : (
-            <p style={muted}>No admin messages yet.</p>
-          )}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <p style={muted}>No {viewTitle.toLowerCase()} yet.</p>
+        )}
       </div>
     </section>
   );
@@ -2537,7 +2530,7 @@ function InvestorThreadCenter() {
   const activeThreads = threads.filter((thread) => {
     const status = String(thread?.status || '').toLowerCase();
     const id = String(thread?.id || thread?.threadId || '');
-    return !['deleted', 'archived', 'saved', 'closed'].includes(status) && !collapsedThreadIds.includes(id);
+    return status !== 'deleted' && status !== 'archived' && !collapsedThreadIds.includes(id);
   });
   const adminReplyCount = activeThreads.reduce((total, thread) => total + threadMessagesByRole(thread, 'admin').length, 0);
   const memberReplyCount = activeThreads.reduce((total, thread) => total + threadMessagesByRole(thread, 'member').length, 0);
@@ -2855,21 +2848,25 @@ export default function InvestorRoomPage() {
               title="Active Requests"
               count={activeRequestCount(readAllInvestorRequests())}
               note="open investor requests"
+              onClick={() => window.dispatchEvent(new CustomEvent("vaultforge-investor-request-view", { detail: "active" }))}
             />
             <Metric
               title="Saved Requests"
               count={savedRequestCount(readAllInvestorRequests())}
               note="saved investor requests"
+              onClick={() => window.dispatchEvent(new CustomEvent("vaultforge-investor-request-view", { detail: "saved" }))}
             />
             <Metric
               title="Archived Requests"
               count={archivedRequestCount(readAllInvestorRequests())}
               note="archived investor requests"
+              onClick={() => window.dispatchEvent(new CustomEvent("vaultforge-investor-request-view", { detail: "archived" }))}
             />
             <Metric
               title="Deleted Requests"
               count={deletedRequestCount(readAllInvestorRequests())}
               note="deleted investor requests"
+              onClick={() => window.dispatchEvent(new CustomEvent("vaultforge-investor-request-view", { detail: "deleted" }))}
             />
             <Metric
               title="Saved Deals"
