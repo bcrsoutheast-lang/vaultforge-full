@@ -1012,6 +1012,8 @@ export default function AdminPage() {
   const [investorRequests, setInvestorRequests] = useState<InvestorRequest[]>([]);
   const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
   const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
+  const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
+  const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [deals, setDeals] = useState<RoomRecord[]>([]);
   const [pains, setPains] = useState<RoomRecord[]>([]);
@@ -1035,6 +1037,8 @@ export default function AdminPage() {
       setInvestorRequests(readInvestorRequests());
       setInvestorExecutionRequests(readInvestorExecutionRequests());
       setInvestorAdminMessages(readInvestorAdminMessages());
+      setInvestorExecutionRequests(readInvestorExecutionRequests());
+      setInvestorAdminMessages(readInvestorAdminMessages());
       setMessages(readMessages());
       setDeals(readRooms("deal"));
       setPains(readRooms("pain"));
@@ -1047,6 +1051,9 @@ export default function AdminPage() {
     window.addEventListener("vaultforge-investor-request-change", refresh);
     window.addEventListener("vaultforge-investor-execution-request-change", refresh);
     window.addEventListener("vaultforge-investor-admin-message-change", refresh);
+    window.addEventListener("vaultforge-controlled-thread-change", refresh);
+    window.addEventListener("vaultforge-investor-execution-request-change", refresh);
+    window.addEventListener("vaultforge-investor-admin-message-change", refresh);
     window.addEventListener("vaultforge-my-rooms-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
@@ -1054,6 +1061,9 @@ export default function AdminPage() {
       window.removeEventListener("vaultforge-admin-message-change", refresh);
       window.removeEventListener("vaultforge-investor-change", refresh);
       window.removeEventListener("vaultforge-investor-request-change", refresh);
+      window.removeEventListener("vaultforge-investor-execution-request-change", refresh);
+      window.removeEventListener("vaultforge-investor-admin-message-change", refresh);
+      window.removeEventListener("vaultforge-controlled-thread-change", refresh);
       window.removeEventListener("vaultforge-investor-execution-request-change", refresh);
       window.removeEventListener("vaultforge-investor-admin-message-change", refresh);
       window.removeEventListener("vaultforge-my-rooms-change", refresh);
@@ -1080,6 +1090,8 @@ export default function AdminPage() {
   const deletedInvestors = useMemo(() => investors.filter((investor) => investor.status === "deleted"), [investors]);
   const dealRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("deal")), [investorRequests]);
   const painRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("pain")), [investorRequests]);
+  const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter((request) => !["closed", "deleted", "archived"].includes(lower(request.status || "new"))), [investorExecutionRequests]);
+  const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter((message) => !["closed", "deleted", "archived"].includes(lower(message.status || "new"))), [investorAdminMessages]);
   const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter((request) => lower(request.status || "new") !== "closed" && lower(request.status || "new") !== "deleted"), [investorExecutionRequests]);
   const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter((message) => lower(message.status || "new") !== "closed" && lower(message.status || "new") !== "deleted"), [investorAdminMessages]);
 
@@ -1452,6 +1464,30 @@ export default function AdminPage() {
                 ) : (
                   <div style={panel}><h2 style={h2}>No investor admin messages yet.</h2></div>
                 )}
+              </Section>
+
+              <Section title="Investor Message Receive / Send">
+                <div style={grid}>
+                  {openInvestorAdminMessages.length ? openInvestorAdminMessages.map((message) => (
+                    <InvestorRequestAdminCard key={message.id} request={message} onStatus={updateInvestorAdminMessageStatus} />
+                  )) : <div style={panel}><h2 style={h2}>No investor admin messages yet.</h2></div>}
+                </div>
+              </Section>
+
+              <Section title="Investor Execution Requests">
+                <div style={grid}>
+                  {openInvestorExecutionRequests.length ? openInvestorExecutionRequests.map((request) => (
+                    <InvestorRequestAdminCard key={request.id} request={request} onStatus={updateInvestorExecutionStatus} />
+                  )) : <div style={panel}><h2 style={h2}>No investor execution requests yet.</h2></div>}
+                </div>
+              </Section>
+
+              <Section title="Controlled Thread Reply Center">
+                <div style={grid}>
+                  {readControlledThreads().length ? readControlledThreads().map((thread) => (
+                    <ControlledThreadAdminCard key={thread.id} thread={thread} />
+                  )) : <div style={panel}><h2 style={h2}>No controlled threads yet.</h2></div>}
+                </div>
               </Section>
 
               {investors.length ? (
