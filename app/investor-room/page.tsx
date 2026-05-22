@@ -1062,6 +1062,182 @@ const input: React.CSSProperties = {
   fontSize: 16,
 };
 
+
+type BloombergMessagePayload = {
+  messageType: string;
+  urgency: string;
+  subject: string;
+  body: string;
+  amount: string;
+  timeline: string;
+  conditions: string;
+  nextMove: string;
+  privateNote: string;
+  summary: string;
+  sender: string;
+  recipient: string;
+  header: string;
+};
+
+function buildBloombergSummary(payload: Omit<BloombergMessagePayload, "summary">) {
+  return [
+    `TYPE: ${payload.messageType}`,
+    `URGENCY: ${payload.urgency}`,
+    `SUBJECT: ${payload.subject || "Not listed"}`,
+    `SENDER: ${payload.sender || "Not listed"}`,
+    `RECIPIENT: ${payload.recipient || "Not listed"}`,
+    `HEADER: ${payload.header || "Not listed"}`,
+    "",
+    `MESSAGE: ${payload.body || "No message body provided."}`,
+    "",
+    `AMOUNT / BUDGET: ${payload.amount || "Not listed"}`,
+    `TIMELINE: ${payload.timeline || "Not listed"}`,
+    `CONDITIONS: ${payload.conditions || "Not listed"}`,
+    `NEXT MOVE: ${payload.nextMove || "Not listed"}`,
+    payload.privateNote ? `PRIVATE NOTE: ${payload.privateNote}` : "",
+  ].filter(Boolean).join("\\n");
+}
+
+function BloombergMessageForm({
+  sender,
+  recipient,
+  header,
+  defaultSubject,
+  submitLabel,
+  defaultType,
+  onSend,
+  onCancel,
+}: {
+  sender: string;
+  recipient: string;
+  header: string;
+  defaultSubject?: string;
+  submitLabel: string;
+  defaultType?: string;
+  onSend: (payload: BloombergMessagePayload) => void;
+  onCancel?: () => void;
+}) {
+  const [messageType, setMessageType] = useState(defaultType || "Request Update");
+  const [urgency, setUrgency] = useState("Normal");
+  const [subject, setSubject] = useState(defaultSubject || header || "");
+  const [body, setBody] = useState("");
+  const [amount, setAmount] = useState("");
+  const [timeline, setTimeline] = useState("");
+  const [conditions, setConditions] = useState("");
+  const [nextMove, setNextMove] = useState("");
+  const [privateNote, setPrivateNote] = useState("");
+
+  function submit() {
+    const base = {
+      messageType,
+      urgency,
+      subject,
+      body,
+      amount,
+      timeline,
+      conditions,
+      nextMove,
+      privateNote,
+      sender,
+      recipient,
+      header,
+    };
+    const summary = buildBloombergSummary(base);
+    onSend({ ...base, summary });
+    setBody("");
+    setAmount("");
+    setTimeline("");
+    setConditions("");
+    setNextMove("");
+    setPrivateNote("");
+  }
+
+  return (
+    <div style={{ ...panel, marginTop: 14 }}>
+      <div style={eyebrow}>Bloomberg Message Ticket</div>
+      <h3 style={h3}>{subject || "Structured Request Message"}</h3>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <div style={panel}>
+          <div style={eyebrow}>Sender</div>
+          <p style={muted}>{sender || "Auto-filled sender"}</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Recipient</div>
+          <p style={muted}>{recipient || "Auto-filled recipient"}</p>
+        </div>
+      </div>
+
+      <div style={{ ...panel, marginTop: 12 }}>
+        <div style={eyebrow}>Attached Header</div>
+        <p style={sub}>{header || "Request/deal/pain context auto-attached"}</p>
+      </div>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Message Type</span>
+          <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
+            {["Request Info", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Urgency</span>
+          <select style={input} value={urgency} onChange={(event) => setUrgency(event.target.value)}>
+            {["Normal", "Time Sensitive", "Urgent", "Closing Risk"].map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Subject</span>
+        <input style={input} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Auto-filled from request, editable..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Message / Terms / Ask</span>
+        <textarea style={{ ...input, minHeight: 120 }} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write the actual request, reply, terms, bid, question, or update..." />
+      </label>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Amount / Budget</span>
+          <input style={input} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="$ amount, LTC/LTV, bid, budget..." />
+        </label>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Timeline</span>
+          <input style={input} value={timeline} onChange={(event) => setTimeline(event.target.value)} placeholder="Close date, response deadline, work start..." />
+        </label>
+      </div>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Conditions</span>
+        <input style={input} value={conditions} onChange={(event) => setConditions(event.target.value)} placeholder="Subject to docs, walkthrough, proof, title, underwriting..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Best Next Move</span>
+        <input style={input} value={nextMove} onChange={(event) => setNextMove(event.target.value)} placeholder="Schedule call, send docs, release contact, route to member..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Private Note</span>
+        <input style={input} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} placeholder="Internal note, caution, context. Saved inside structured message." />
+      </label>
+
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={submit}>{submitLabel}</button>
+        {onCancel ? <button type="button" style={btn} onClick={onCancel}>Collapse / Done</button> : null}
+      </div>
+    </div>
+  );
+}
+
+
 function LogoBlock() {
   const [index, setIndex] = useState(0);
   const src = LOGOS[index];
@@ -1566,27 +1742,21 @@ function RoomCard({
             </p>
           </div>
 
-          <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
-            <span style={eyebrow}>Message With Room Header</span>
-            <textarea
-              style={{ ...input, minHeight: 120 }}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="I am interested. Send more information. I can close with..."
-            />
-          </label>
+          <BloombergMessageForm
+            sender={readInvestor()?.email || "Investor"}
+            recipient="VaultForge Admin / Routed Member"
+            header={header}
+            defaultSubject={`${kind} Request - ${itemTitle(item, kind)}`}
+            defaultType="Request Info"
+            submitLabel="Send Request Through VaultForge"
+            onSend={(payload) => {
+              setMessage(payload.summary);
+              sendRequest(kind, item, payload.summary);
+              setSent(true);
+            }}
+          />
 
           <div style={{ ...row, marginTop: 12 }}>
-            <button
-              type="button"
-              style={goldBtn}
-              onClick={() => {
-                sendRequest(kind, item, message);
-                setSent(true);
-              }}
-            >
-              Send Request Through VaultForge
-            </button>
             <button type="button" style={btn} onClick={() => onMove("saved")}>
               Save
             </button>
@@ -1659,46 +1829,21 @@ function MessageAdminModal({
           Your investor profile is attached so admin can see who is asking.
         </p>
 
-        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
-          <span style={eyebrow}>Subject</span>
-          <input
-            style={input}
-            value={subject}
-            onChange={(event) => setSubject(event.target.value)}
-            placeholder="Question about investor access, funding, a deal, or support..."
-          />
-        </label>
-
-        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
-          <span style={eyebrow}>Message</span>
-          <textarea
-            style={{ ...input, minHeight: 150 }}
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            placeholder="Write your message to VaultForge admin..."
-          />
-        </label>
-
-        <div style={{ ...row, marginTop: 14 }}>
-          <button
-            type="button"
-            style={goldBtn}
-            onClick={() => {
-              saveInvestorAdminMessage(
-                subject,
-                body || "Investor requested admin support.",
-              );
-              setSent(true);
-              setSubject("");
-              setBody("");
-            }}
-          >
-            Send Message Admin
-          </button>
-          <button type="button" style={btn} onClick={onClose}>
-            Collapse / Done
-          </button>
-        </div>
+        <BloombergMessageForm
+          sender={readInvestor()?.email || "Investor"}
+          recipient="VaultForge Admin"
+          header="Investor Message Admin"
+          defaultSubject={subject || "Investor message to admin"}
+          defaultType="Admin Note"
+          submitLabel="Send Message Admin"
+          onCancel={onClose}
+          onSend={(payload) => {
+            saveInvestorAdminMessage(payload.subject, payload.summary || payload.body || "Investor requested admin support.");
+            setSent(true);
+            setSubject("");
+            setBody("");
+          }}
+        />
 
         {sent ? (
           <p style={{ ...sub, marginTop: 14 }}>
@@ -1768,41 +1913,30 @@ function ExecutionRequestModal({
           </p>
         </div>
 
-        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
-          <span style={eyebrow}>Request Notes</span>
-          <textarea
-            style={{ ...input, minHeight: 150 }}
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            placeholder="Describe what you need. Example: need 80% LTC hard money, closing in 14 days, contractor bid needed, title issue help..."
-          />
-        </label>
-
-        <div style={{ ...row, marginTop: 14 }}>
-          <button
-            type="button"
-            style={goldBtn}
-            onClick={() => {
-              setSendNotice("");
-              setSendError("");
-              const result = saveExecutionRequest(kind, item, lane, notes);
-              if (result.ok) {
-                setSent(true);
-                setSendNotice(result.message);
-                window.alert(result.message);
-              } else {
-                setSent(false);
-                setSendError(result.message);
-                window.alert(result.message);
-              }
-            }}
-          >
-            Send Execution Request
-          </button>
-          <button type="button" style={btn} onClick={onClose}>
-            Collapse / Done
-          </button>
-        </div>
+        <BloombergMessageForm
+          sender={readInvestor()?.email || "Investor"}
+          recipient="VaultForge Admin / Matching Members"
+          header={header}
+          defaultSubject={lane.title}
+          defaultType="Request Info"
+          submitLabel="Send Execution Request"
+          onCancel={onClose}
+          onSend={(payload) => {
+            setSendNotice("");
+            setSendError("");
+            setNotes(payload.summary);
+            const result = saveExecutionRequest(kind, item, lane, payload.summary);
+            if (result.ok) {
+              setSent(true);
+              setSendNotice(result.message);
+              window.alert(result.message);
+            } else {
+              setSent(false);
+              setSendError(result.message);
+              window.alert(result.message);
+            }
+          }}
+        />
 
         {sendNotice ? (
           <p style={{ ...sub, marginTop: 14, color: "#9effb2" }}>
@@ -2469,19 +2603,41 @@ function InvestorThreadMessageCard({ thread, onCollapse, onChanged }: { thread: 
         <p style={muted}>Save keeps this card for follow-up. Archive hides it from active work. Delete moves it out of open request messages. Delete Forever removes the thread from local testing storage.</p>
       </div>
 
-      <div style={{ ...panel, marginTop: 14 }}>
-        <div style={eyebrow}>Investor Reply</div>
-        <textarea
-          style={{ ...input, minHeight: 110 }}
-          value={reply}
-          onChange={(event) => setReply(event.target.value)}
-          placeholder='Reply back to admin/member inside this request thread...'
-        />
-        <div style={{ ...row, marginTop: 10 }}>
-          <button type='button' style={goldBtn} onClick={sendReply}>Send Request Reply</button>
-          {notice ? <span style={muted}>{notice}</span> : null}
-        </div>
-      </div>
+      <BloombergMessageForm
+        sender={investorEmailForThreads() || "Investor"}
+        recipient="VaultForge Admin / Member"
+        header={thread?.roomHeader || thread?.subject || thread?.title || "Request Thread"}
+        defaultSubject={thread?.subject || thread?.title || "Investor Request Reply"}
+        defaultType="Investor Reply"
+        submitLabel="Send Request Reply"
+        onSend={(payload) => {
+          setReply(payload.summary);
+          const message = {
+            id: `investor-reply-${Date.now()}`,
+            from: "Investor",
+            role: "investor",
+            body: payload.summary,
+            messageType: payload.messageType,
+            urgency: payload.urgency,
+            subject: payload.subject,
+            sender: payload.sender,
+            recipient: payload.recipient,
+            header: payload.header,
+            investorProfile: thread?.investorProfile || safeInvestorSnapshot(),
+            createdAt: new Date().toISOString(),
+            read: false,
+          };
+          const rows = readControlledThreads();
+          const id = String(thread?.id || thread?.threadId || "");
+          writeControlledThreads(rows.map((item: any) =>
+            String(item?.id || item?.threadId || "") === id
+              ? { ...item, messages: [...(item.messages || []), message], investorReply: payload.summary, updatedAt: new Date().toISOString(), adminUnread: true, memberUnread: true }
+              : item
+          ));
+          setNotice("Reply sent.");
+        }}
+      />
+      {notice ? <p style={muted}>{notice}</p> : null}
     </div>
   );
 }
@@ -2729,6 +2885,48 @@ function InvestorHelpCenter() {
 }
 
 
+
+function InvestorSequenceStep({
+  step,
+  title,
+  note,
+  active,
+  onClick,
+}: {
+  step: string;
+  title: string;
+  note: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button type="button" style={{ ...(active ? goldPanel : panel), textAlign: "left", width: "100%", cursor: "pointer" }} onClick={onClick}>
+      <div style={eyebrow}>{step}</div>
+      <h3 style={h3}>{title}</h3>
+      <p style={muted}>{note}</p>
+    </button>
+  );
+}
+
+function InvestorAreaHeader({
+  eyebrowText,
+  title,
+  note,
+}: {
+  eyebrowText: string;
+  title: string;
+  note: string;
+}) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={eyebrow}>{eyebrowText}</div>
+      <h2 style={h2}>{title}</h2>
+      <p style={sub}>{note}</p>
+    </div>
+  );
+}
+
+
 export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
   const [state, setState] = useState("GA");
@@ -2891,47 +3089,75 @@ export default function InvestorRoomPage() {
           isOwner={String(investor?.email || "").toLowerCase() === OWNER_EMAIL}
         />
         <TickerRibbon />
-        
-        <InvestorHelpCenter />
-<MessageAdminModal
+
+        <MessageAdminModal
           open={messageAdminOpen}
           onClose={() => setMessageAdminOpen(false)}
         />
 
         <section style={hero}>
           <LogoBlock />
-          <div style={eyebrow}>VaultForge Investor Visitor Room</div>
-          <h1 style={h1}>Controlled deal and pain access.</h1>
+          <div style={eyebrow}>VaultForge Investor Command Room</div>
+          <h1 style={h1}>Signals → Requests → Threads → Execution.</h1>
           <p style={sub}>
-            Browse limited state teaser cards and request more information
-            through VaultForge. This room is separate from the private member
-            network.
+            Start with Deal/Pain signals, request controlled information, track replies, then request execution help from the private member network.
           </p>
           <div style={{ ...row, marginTop: 22 }}>
-            <button
-              type="button"
-              style={kind === "Deal" && folder === "active" ? goldBtn : btn}
-              onClick={() => openKind("Deal")}
-            >
-              Deal Signals
+            <button type="button" style={kind === "Deal" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Deal")}>
+              Open Deal Signals
             </button>
-            <button
-              type="button"
-              style={kind === "Pain" && folder === "active" ? goldBtn : btn}
-              onClick={() => openKind("Pain")}
-            >
-              Pain Signals
+            <button type="button" style={kind === "Pain" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Pain")}>
+              Open Pain Signals
             </button>
-            <button
-              type="button"
-              style={btn}
-              onClick={() => {
-                setFolder("active");
-                setActiveRoom(null);
-              }}
-            >
+            <button type="button" style={goldBtn} onClick={() => setMessageAdminOpen(true)}>
+              Message Admin
+            </button>
+            <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>
               Collapse / Done
             </button>
+          </div>
+        </section>
+
+        <section style={{ ...goldPanel, marginBottom: 18 }}>
+          <InvestorAreaHeader
+            eyebrowText="Operating Sequence"
+            title="Use the room in this order."
+            note="The cards below are organized by the actual investor flow so nothing is scattered."
+          />
+          <div style={grid}>
+            <InvestorSequenceStep
+              step="01 Identity"
+              title="Profile + Access"
+              note="Your investor profile is attached to every request and message."
+              active
+            />
+            <InvestorSequenceStep
+              step="02 Signals"
+              title="Deal / Pain Signals"
+              note="Open opportunity or problem cards by state."
+              active={folder === "active"}
+            />
+            <InvestorSequenceStep
+              step="03 Requests"
+              title="Request Info"
+              note="Ask for controlled Deal/Pain information without exposing private member data."
+              active={activeRequestCount(readAllInvestorRequests()) > 0}
+            />
+            <InvestorSequenceStep
+              step="04 Replies"
+              title="Message Threads"
+              note="Admin/member replies stay tied to the original request."
+            />
+            <InvestorSequenceStep
+              step="05 Execution"
+              title="Ask For Help"
+              note="Request lender, title, contractor, operator, JV, insurance, or boots-on-ground support."
+            />
+            <InvestorSequenceStep
+              step="06 Cleanup"
+              title="Save / Archive / Delete"
+              note="Keep your investor room clean without losing controlled workflow."
+            />
           </div>
         </section>
 
@@ -2944,8 +3170,15 @@ export default function InvestorRoomPage() {
           <IntelligencePanel investor={investor} />
         </section>
 
-        <section style={goldPanel}>
-          <div style={eyebrow}>State Desk</div>
+        <InvestorHelpCenter />
+
+        <section style={{ ...goldPanel, marginBottom: 18 }}>
+          <InvestorAreaHeader
+            eyebrowText="01 State + Signal Desk"
+            title="Choose market and signal type."
+            note="Deal Signals are opportunity cards. Pain Signals are problem-solving cards. Use folders only after cards are saved, archived, or deleted."
+          />
+
           <div style={row}>
             {STATES.map((stateCode) => (
               <button
@@ -2962,10 +3195,8 @@ export default function InvestorRoomPage() {
               </button>
             ))}
           </div>
-        </section>
 
-        <section style={{ marginTop: 18 }}>
-          <div style={grid}>
+          <div style={{ ...grid, marginTop: 18 }}>
             <Metric
               title="Deal Signals"
               count={activeDeals.length}
@@ -2976,10 +3207,20 @@ export default function InvestorRoomPage() {
             <Metric
               title="Pain Signals"
               count={activePains.length}
-              note={`active pressure cards in ${state}`}
+              note={`active pressure/problem cards in ${state}`}
               active={kind === "Pain" && folder === "active"}
               onClick={() => openKind("Pain")}
             />
+          </div>
+        </section>
+
+        <section style={{ ...panel, marginBottom: 18 }}>
+          <InvestorAreaHeader
+            eyebrowText="02 Request Tracking"
+            title="Track every request you sent."
+            note="These are your outgoing requests to VaultForge/admin/member routing. Use this before digging through folders."
+          />
+          <div style={grid}>
             <Metric
               title="Active Requests"
               count={activeRequestCount(readAllInvestorRequests())}
@@ -3000,6 +3241,16 @@ export default function InvestorRoomPage() {
               count={deletedRequestCount(readAllInvestorRequests())}
               note="deleted investor requests"
             />
+          </div>
+        </section>
+
+        <section style={{ ...panel, marginBottom: 18 }}>
+          <InvestorAreaHeader
+            eyebrowText="03 Signal Folders"
+            title="Deal and Pain cleanup folders."
+            note="These control the visible Deal/Pain teaser cards only. Request folders are handled in the Request Tracking Desk."
+          />
+          <div style={grid}>
             <Metric
               title="Saved Deals"
               count={savedDeals.length}
@@ -3045,19 +3296,13 @@ export default function InvestorRoomPage() {
           </div>
         </section>
 
-        <section style={{ marginTop: 22 }}>
-          <div
-            style={{
-              ...row,
-              justifyContent: "space-between",
-              marginBottom: 12,
-            }}
-          >
-            <div style={eyebrow}>
-              {folder === "active"
-                ? `${kind} Cards • ${state}`
-                : `${kind} ${folder} Folder • ${state}`}
-            </div>
+        <section style={{ ...goldPanel, marginBottom: 18 }}>
+          <div style={{ ...row, justifyContent: "space-between", marginBottom: 12 }}>
+            <InvestorAreaHeader
+              eyebrowText="04 Current Signal Cards"
+              title={folder === "active" ? `${kind} Cards • ${state}` : `${kind} ${folder} Folder • ${state}`}
+              note="Open a card to request info. The request will carry this card header and your investor profile."
+            />
             {folder !== "active" ? (
               <button
                 type="button"
@@ -3108,31 +3353,51 @@ export default function InvestorRoomPage() {
                   No {folder} {kind.toLowerCase()} cards.
                 </h2>
                 <p style={sub}>
-                  Use the dashboard cards above to switch folders or return to
-                  active cards.
+                  Use State Desk or folder cards above to switch areas.
                 </p>
               </div>
             )}
           </div>
         </section>
 
-        <ExecutionLaneCards
-          activeRoom={activeRoom}
-          onSelect={setSelectedExecutionLane}
-        />
-        <ExecutionRequestModal
-          lane={selectedExecutionLane}
-          activeRoom={activeRoom}
-          onClose={() => setSelectedExecutionLane(null)}
-        />
+        <section style={{ ...panel, marginBottom: 18 }}>
+          <InvestorAreaHeader
+            eyebrowText="05 Message Threads"
+            title="Admin/member replies tied to requests."
+            note="Replies are no longer generic. Each one carries sender, recipient, request header, type, urgency, timeline, amount, conditions, and next move."
+          />
+          <InvestorThreadCenter />
+        </section>
+
+        <section style={{ ...goldPanel, marginBottom: 18 }}>
+          <InvestorAreaHeader
+            eyebrowText="06 Execution Requests"
+            title="Ask the private network to help complete the deal."
+            note="Use this after opening a Deal/Pain card, or send a general execution request if no card is open."
+          />
+          <ExecutionLaneCards
+            activeRoom={activeRoom}
+            onSelect={setSelectedExecutionLane}
+          />
+          <ExecutionRequestModal
+            lane={selectedExecutionLane}
+            activeRoom={activeRoom}
+            onClose={() => setSelectedExecutionLane(null)}
+          />
+        </section>
+
+        <section style={{ ...panel, marginBottom: 18 }}>
+          <InvestorAreaHeader
+            eyebrowText="07 Request Desk"
+            title="Full request tracking and cleanup."
+            note="Open saved, archived, deleted, active, and closed request cards here."
+          />
+          <InvestorRequestCenter />
+        </section>
 
         <section style={{ marginTop: 18 }}>
           <RequestPipeline />
         </section>
-
-        <InvestorThreadCenter />
-
-        <InvestorRequestCenter />
 
         <section style={{ ...hero, marginTop: 24 }}>
           <div style={eyebrow}>Network Capabilities Through Members</div>
