@@ -38,6 +38,8 @@ type MemberProfile = {
 
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const DIRECTORY_KEY = "vaultforge_member_directory_v1";
+const PROFILE_PHOTO_BACKUP_KEY = "vaultforge_member_profile_photo_v1";
+const COMPANY_LOGO_BACKUP_KEY = "vaultforge_member_company_logo_v1";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const MEMBER_TYPES = ["Investor", "Cash Buyer", "Private Lender", "Hard Money Lender", "Contractor", "Developer", "Wholesaler", "Realtor", "Attorney", "Title", "Property Manager", "Operator", "Insurance", "City / Permit", "Other"];
@@ -199,11 +201,26 @@ function normalizeProfile(row: any): MemberProfile {
 
 function readProfile() {
   if (!ok()) return defaultProfile();
+
+  const backupPhoto = txt(localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY));
+  const backupLogo = txt(localStorage.getItem(COMPANY_LOGO_BACKUP_KEY));
+
   for (const key of PROFILE_KEYS) {
     const found = j<any | null>(localStorage.getItem(key), null);
-    if (found && typeof found === "object") return normalizeProfile(found);
+    if (found && typeof found === "object") {
+      return normalizeProfile({
+        ...found,
+        profilePhoto: txt(found.profilePhoto || found.photoUrl || found.avatar || backupPhoto),
+        companyLogo: txt(found.companyLogo || found.logoUrl || backupLogo),
+      });
+    }
   }
-  return defaultProfile();
+
+  return normalizeProfile({
+    ...defaultProfile(),
+    profilePhoto: backupPhoto,
+    companyLogo: backupLogo,
+  });
 }
 
 function readDirectory() {
@@ -213,21 +230,48 @@ function readDirectory() {
 
 function saveProfile(profile: MemberProfile) {
   if (!ok()) return { ok: false, message: "Browser storage unavailable." };
+
   const now = new Date().toISOString();
-  const next = normalizeProfile({ ...profile, updatedAt: now, createdAt: profile.createdAt || now });
+  const photo = txt(profile.profilePhoto || localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY));
+  const logo = txt(profile.companyLogo || localStorage.getItem(COMPANY_LOGO_BACKUP_KEY));
+
+  if (photo) writeJson(PROFILE_PHOTO_BACKUP_KEY, photo);
+  if (logo) writeJson(COMPANY_LOGO_BACKUP_KEY, logo);
+
+  const next = normalizeProfile({
+    ...profile,
+    profilePhoto: photo,
+    companyLogo: logo,
+    updatedAt: now,
+    createdAt: profile.createdAt || now,
+  });
+
+  const directory = readDirectory().filter((member) => member.id !== next.id && member.email !== next.email);
+
+  const slimDirectory = directory.map((member) => ({
+    ...member,
+    profilePhoto: "",
+    companyLogo: "",
+  }));
+
+  const slimForDirectory = {
+    ...next,
+    profilePhoto: photo ? "__vaultforge_member_profile_photo_v1__" : "",
+    companyLogo: logo ? "__vaultforge_member_company_logo_v1__" : "",
+  };
 
   let saved = true;
+
   for (const key of PROFILE_KEYS) {
     saved = writeJson(key, next) && saved;
   }
 
-  const directory = readDirectory().filter((member) => member.id !== next.id && member.email !== next.email);
-  saved = writeJson(DIRECTORY_KEY, [next, ...directory]) && saved;
+  saved = writeJson(DIRECTORY_KEY, [slimForDirectory, ...slimDirectory]) && saved;
 
   if (!saved) {
     const slim = { ...next, profilePhoto: "", companyLogo: "" };
     for (const key of PROFILE_KEYS) writeJson(key, slim);
-    writeJson(DIRECTORY_KEY, [slim, ...directory.map((member) => ({ ...member, profilePhoto: "", companyLogo: "" }))]);
+    writeJson(DIRECTORY_KEY, [slimForDirectory, ...slimDirectory]);
   }
 
   window.dispatchEvent(new Event("vaultforge-profile-change"));
@@ -236,7 +280,7 @@ function saveProfile(profile: MemberProfile) {
   return { ok: true, message: "Profile saved." };
 }
 
-async function compressImage(file: File, maxWidth = 620, quality = 0.42): Promise<string> {
+async function compressImage(file: File, maxWidth = 360, quality = 0.28): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onerror = () => resolve("");
@@ -386,8 +430,35 @@ export default function ProfilePage() {
   async function setImage(key: "profilePhoto" | "companyLogo", files: FileList | null) {
     const file = Array.from(files || [])[0];
     if (!file) return;
+
+    setError("");
+    setBanner("Compressing and saving image...");
+
     const image = await compressImage(file);
-    if (image) update(key, image);
+    if (!image) {
+      setError("Image could not be loaded. Try a smaller JPG/PNG.");
+      setBanner("");
+      return;
+    }
+
+    const backupKey = key === "profilePhoto" ? PROFILE_PHOTO_BACKUP_KEY : COMPANY_LOGO_BACKUP_KEY;
+    const backupSaved = writeJson(backupKey, image);
+
+    const next = { ...profile, [key]: image, updatedAt: new Date().toISOString() } as MemberProfile;
+    setProfile(next);
+
+    for (const storageKey of PROFILE_KEYS) {
+      const current = j<any | null>(localStorage.getItem(storageKey), null);
+      if (current && typeof current === "object") writeJson(storageKey, { ...current, [key]: image, updatedAt: next.updatedAt });
+    }
+
+    if (!backupSaved) {
+      setError("Image preview loaded, but browser storage is full. Delete old saved/archived items or clear site data before final launch.");
+      setBanner("");
+      return;
+    }
+
+    setBanner(key === "profilePhoto" ? "Profile photo saved." : "Company logo saved.");
   }
 
   function save() {
@@ -448,13 +519,15 @@ export default function ProfilePage() {
         </Section>
 
         <Section title="Photos">
+          <p style={muted}>Photos are compressed and backed up separately so they do not disappear when member directory data is cleaned or storage gets tight.</p>
+          <div style={{ height: 14 }} />
           <div style={grid}>
             <div style={panel}>
               {profile.profilePhoto ? <img src={profile.profilePhoto} alt="Profile" style={imageStyle} /> : null}
               <div style={eyebrow}>Profile Photo</div>
               <input type="file" accept="image/*" onChange={(event) => setImage("profilePhoto", event.target.files)} />
               <div style={{ ...row, marginTop: 12 }}>
-                <button type="button" style={redBtn} onClick={() => update("profilePhoto", "")}>Delete Photo</button>
+                <button type="button" style={redBtn} onClick={() => { localStorage.removeItem(PROFILE_PHOTO_BACKUP_KEY); update("profilePhoto", ""); }}>Delete Photo</button>
               </div>
             </div>
             <div style={panel}>
@@ -462,7 +535,7 @@ export default function ProfilePage() {
               <div style={eyebrow}>Company Logo</div>
               <input type="file" accept="image/*" onChange={(event) => setImage("companyLogo", event.target.files)} />
               <div style={{ ...row, marginTop: 12 }}>
-                <button type="button" style={redBtn} onClick={() => update("companyLogo", "")}>Delete Logo</button>
+                <button type="button" style={redBtn} onClick={() => { localStorage.removeItem(COMPANY_LOGO_BACKUP_KEY); update("companyLogo", ""); }}>Delete Logo</button>
               </div>
             </div>
           </div>
