@@ -447,6 +447,76 @@ function readInvestors(): InvestorRecord[] {
   return Array.from(map.values()).sort((a, b) => order[a.status] - order[b.status] || a.company.localeCompare(b.company));
 }
 
+
+function profileLooksEmpty(profile: any) {
+  if (!profile || typeof profile !== "object") return true;
+  return !clean(profile.email) && !clean(profile.contactName) && !clean(profile.company) && !clean(profile.phone);
+}
+
+function investorProfileFromStores(seed: any = {}) {
+  const profile = seed?.investorProfile && typeof seed.investorProfile === "object" ? seed.investorProfile : {};
+  const wantedEmail = lower(seed?.investorEmail || profile?.email);
+  const wantedCompany = lower(seed?.investorCompany || profile?.company);
+  const wantedName = lower(seed?.investorName || profile?.contactName || profile?.name);
+  const investors = readInvestors();
+
+  const match =
+    investors.find((investor) => wantedEmail && investor.email === wantedEmail) ||
+    investors.find((investor) => wantedCompany && lower(investor.company) === wantedCompany) ||
+    investors.find((investor) => wantedName && lower(investor.contactName) === wantedName) ||
+    (investors.length === 1 ? investors[0] : null);
+
+  const raw = match?.raw || {};
+  const merged = {
+    ...raw,
+    ...profile,
+    photoUrl: clean(profile.photoUrl || raw.photoUrl || raw.profilePhoto || raw.companyLogo),
+    contactName: clean(profile.contactName || profile.name || raw.contactName || raw.contact_name || raw.name || match?.contactName),
+    company: clean(profile.company || raw.company || raw.companyName || match?.company),
+    email: clean(profile.email || seed?.investorEmail || raw.email || raw.investorEmail || match?.email),
+    phone: clean(profile.phone || raw.phone || raw.phoneNumber || match?.phone),
+    investorTypes: profile.investorTypes || raw.investorTypes || raw.assetTypes || match?.assetTypes,
+    buyingStrategies: profile.buyingStrategies || profile.buyingStrategy || raw.buyingStrategies || raw.buyingStrategy || match?.buyingStrategy,
+    assetTypes: profile.assetTypes || raw.assetTypes || match?.assetTypes,
+    statesInterested: profile.statesInterested || raw.statesInterested || raw.states || match?.statesInterested,
+    minDeal: clean(profile.minDeal || raw.minDeal || match?.minDeal),
+    maxDeal: clean(profile.maxDeal || raw.maxDeal || match?.maxDeal),
+    monthlyVolume: clean(profile.monthlyVolume || raw.monthlyVolume || match?.monthlyVolume),
+    yearlyVolume: clean(profile.yearlyVolume || raw.yearlyVolume || match?.yearlyVolume),
+    closeSpeed: clean(profile.closeSpeed || raw.closeSpeed || match?.closeSpeed),
+    proofFunds: profile.proofFunds || raw.proofFunds || match?.proofFunds,
+    directBuyer: clean(profile.directBuyer || raw.directBuyer || match?.directBuyer),
+    fundingNeeded: clean(profile.fundingNeeded || raw.fundingNeeded || match?.fundingNeeded),
+    openToJV: clean(profile.openToJV || raw.openToJV || match?.openToJV),
+    notes: clean(profile.notes || raw.notes || match?.notes),
+  };
+
+  return profileLooksEmpty(merged) ? profile : merged;
+}
+
+function requestStatus(row: any) {
+  return lower(row?.status || row?.stage || "new");
+}
+
+function isOpenRequest(row: any) {
+  return !["closed", "deleted", "archived", "saved"].includes(requestStatus(row));
+}
+
+function isQueueStatus(row: any, status: string) {
+  return requestStatus(row) === status;
+}
+
+function deleteAdminInboxForever(id: string) {
+  writeAdminInvestorInbox(readAdminInvestorInbox().filter((item) => item.id !== id));
+  writeInvestorRequests(readInvestorRequests().filter((item) => item.id !== id));
+  writeInvestorExecutionRequests(readInvestorExecutionRequests().filter((item) => item.id !== id));
+  writeInvestorAdminMessages(readInvestorAdminMessages().filter((item) => item.id !== id));
+}
+
+function deleteControlledThreadForever(id: string) {
+  writeControlledThreads(readControlledThreads().filter((thread: any) => thread.id !== id));
+}
+
 function saveInvestors(investors: InvestorRecord[], updatedInvestor?: InvestorRecord) {
   writeJson(INVESTOR_LIST_KEY, investors);
   const currentSingle = readJson<any>(INVESTOR_APP_KEY, {});
@@ -591,8 +661,8 @@ function createThreadFromAdminInbox(item: any) {
   const existing = rows.find((thread: any) => thread.sourceRequestId === item.id);
   if (existing) return existing;
 
-  const profile = item.investorProfile || {};
-  const routedMembers = matchedMembersForRequest(item);
+  const profile = investorProfileFromStores(item);
+  const routedMembers = matchedMembersForRequest({ ...item, investorProfile: profile });
   const thread = {
     id: `controlled-thread-${Date.now()}`,
     source: item.type || "admin_inbox",
@@ -735,8 +805,8 @@ function createControlledThread(source: "deal_pain" | "execution" | "admin_messa
 
   if (existing) return existing;
 
-  const profile = request.investorProfile || {};
-  const routedMembers = matchedMembersForRequest(request);
+  const profile = investorProfileFromStores(request);
+  const routedMembers = matchedMembersForRequest({ ...request, investorProfile: profile });
   const thread = {
     id: `controlled-thread-${Date.now()}`,
     source,
@@ -1185,26 +1255,29 @@ function InvestorAdminMessageCard({
 
 function ControlledThreadAdminCard({ thread }: { thread: any }) {
   const [reply, setReply] = useState("");
+  const hydratedProfile = investorProfileFromStores(thread);
+  const routedMembers = thread?.routedMembers || thread?.assignedMembers || [];
+  const isDeleted = requestStatus(thread) === "deleted" || requestStatus({ status: thread?.stage }) === "deleted";
 
   return (
-    <div style={activePanel}>
+    <div style={isDeleted ? alertPanel : activePanel}>
       <div style={eyebrow}>{thread?.status || "approved"} • {thread?.stage || "controlled thread"}</div>
       <h2 style={h2}>{thread?.title || "Controlled Investor Thread"}</h2>
       <p style={sub}>{thread?.investorCompany || thread?.investorName || thread?.investorEmail || "Investor not listed"}</p>
       <p style={muted}>{thread?.roomHeader || "Controlled intro thread"}</p>
       <p style={muted}>Contact Released: {thread?.contactReleased ? "Yes" : "No"}</p>
-      <p style={muted}>Routed Members: {(thread?.routedMembers || thread?.assignedMembers || []).length || 0}</p>
-      {(thread?.routedMembers || thread?.assignedMembers || []).length ? (
+      <p style={muted}>Routed Members: {routedMembers.length || 0}</p>
+      {routedMembers.length ? (
         <div style={{ ...panel, marginTop: 14 }}>
           <div style={eyebrow}>Auto-Matched Members</div>
-          {(thread?.routedMembers || thread?.assignedMembers || []).map((member: any) => (
+          {routedMembers.map((member: any) => (
             <p key={member.email || member.id} style={muted}>{member.name || "Member"} • {member.company || "Company"} • {member.memberType || "Role"} • {member.email || "email hidden"}</p>
           ))}
         </div>
       ) : null}
 
       {typeof InvestorProfileSnapshotCard === "function" ? (
-        <InvestorProfileSnapshotCard profile={thread?.investorProfile} photoUrl={thread?.investorPhotoUrl} />
+        <InvestorProfileSnapshotCard profile={hydratedProfile} photoUrl={thread?.investorPhotoUrl || hydratedProfile?.photoUrl} />
       ) : null}
 
       <div style={{ ...panel, marginTop: 14 }}>
@@ -1274,6 +1347,27 @@ function ControlledThreadAdminCard({ thread }: { thread: any }) {
           >
             Delete
           </button>
+          {isDeleted ? (
+            <button
+              type="button"
+              style={goldBtn}
+              onClick={() => {
+                const rows = readControlledThreads();
+                writeControlledThreads(rows.map((item) => item.id === thread.id ? { ...item, status: "routed_to_members", stage: "member_review_pending", updatedAt: new Date().toISOString() } : item));
+              }}
+            >
+              Restore
+            </button>
+          ) : null}
+          {isDeleted ? (
+            <button
+              type="button"
+              style={redBtn}
+              onClick={() => deleteControlledThreadForever(thread.id)}
+            >
+              Delete Forever
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -1328,6 +1422,7 @@ function AdminInvestorInboxCard({
         <button type="button" style={btn} onClick={() => onStatus(item.id, "archived")}>Archive</button>
         <button type="button" style={btn} onClick={() => onStatus(item.id, "closed")}>Close</button>
         <button type="button" style={redBtn} onClick={() => onStatus(item.id, "deleted")}>Delete</button>
+        {requestStatus(item) === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteAdminInboxForever(item.id)}>Delete Forever</button> : null}
       </div>
     </div>
   );
@@ -1518,8 +1613,14 @@ export default function AdminPage() {
   const deletedInvestors = useMemo(() => investors.filter((investor) => investor.status === "deleted"), [investors]);
   const dealRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("deal")), [investorRequests]);
   const painRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("pain")), [investorRequests]);
-  const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter((request) => !["closed", "deleted", "archived"].includes(lower(request.status || "new"))), [investorExecutionRequests]);
-  const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter((message) => !["closed", "deleted", "archived"].includes(lower(message.status || "new"))), [investorAdminMessages]);
+  const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter(isOpenRequest), [investorExecutionRequests]);
+  const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter(isOpenRequest), [investorAdminMessages]);
+  const allInvestorActionItems = useMemo(() => [...adminInvestorInbox, ...investorRequests, ...investorExecutionRequests, ...investorAdminMessages], [adminInvestorInbox, investorRequests, investorExecutionRequests, investorAdminMessages]);
+  const savedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "saved")), [allInvestorActionItems]);
+  const archivedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "archived")), [allInvestorActionItems]);
+  const deletedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "deleted")), [allInvestorActionItems]);
+  const activeControlledThreads = useMemo(() => readControlledThreads().filter((thread: any) => requestStatus(thread) !== "deleted" && requestStatus({ status: thread?.stage }) !== "deleted"), [adminInvestorInbox, investorRequests, investorExecutionRequests, investorAdminMessages]);
+  const deletedControlledThreads = useMemo(() => readControlledThreads().filter((thread: any) => requestStatus(thread) === "deleted" || requestStatus({ status: thread?.stage }) === "deleted"), [adminInvestorInbox, investorRequests, investorExecutionRequests, investorAdminMessages]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1596,12 +1697,30 @@ export default function AdminPage() {
 
   function updateAdminInboxStatus(id: string, status: string) {
     const original = adminInvestorInbox.find((item) => item.id === id);
+    const stamped = new Date().toISOString();
     const next = adminInvestorInbox.map((item) =>
-      item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item
+      item.id === id ? { ...item, status, updatedAt: stamped } : item
     );
     setAdminInvestorInbox(next);
     writeAdminInvestorInbox(next);
-    if (["approved", "routed", "admin_replied"].includes(status) && original) createThreadFromAdminInbox({ ...original, status });
+
+    const syncRequest = (rows: any[]) => rows.map((item) => item.id === id ? { ...item, status, updatedAt: stamped } : item);
+    const nextRequests = syncRequest(investorRequests) as InvestorRequest[];
+    const nextExecution = syncRequest(investorExecutionRequests) as InvestorExecutionRequest[];
+    const nextMessages = syncRequest(investorAdminMessages) as InvestorAdminMessage[];
+    setInvestorRequests(nextRequests);
+    setInvestorExecutionRequests(nextExecution);
+    setInvestorAdminMessages(nextMessages);
+    writeInvestorRequests(nextRequests);
+    writeInvestorExecutionRequests(nextExecution);
+    writeInvestorAdminMessages(nextMessages);
+
+    const threadSource =
+      original ||
+      investorRequests.find((item) => item.id === id) ||
+      investorExecutionRequests.find((item) => item.id === id) ||
+      investorAdminMessages.find((item) => item.id === id);
+    if (["approved", "routed", "admin_replied"].includes(status) && threadSource) createThreadFromAdminInbox({ ...threadSource, status });
   }
 
   function updateInvestorRequestStatus(id: string, status: string) {
@@ -1702,7 +1821,7 @@ export default function AdminPage() {
             <Metric title="New Investors" count={newInvestors.length} note="pending investor approvals" pulse={newInvestors.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Investor Payments" count={pendingInvestorPayment.length} note="investor payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Controlled Threads" count={readControlledThreads().length} note="approved intro rooms" pulse={readControlledThreads().length > 0} onClick={() => setTab("investors")} />
-            <Metric title="Investor Inbox" count={adminInvestorInbox.filter((item) => !["closed", "deleted", "archived"].includes(lower(item.status || "new"))).length} note="messages/requests from investor room" pulse={adminInvestorInbox.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Investor Inbox" count={adminInvestorInbox.filter(isOpenRequest).length} note="messages/requests from investor room" pulse={adminInvestorInbox.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Deal Requests" count={dealRequests.length} note="investor deal interest" pulse={dealRequests.length > 0} onClick={() => setTab("dealRequests")} />
             <Metric title="Pain Requests" count={painRequests.length} note="investor pain interest" pulse={painRequests.length > 0} onClick={() => setTab("painRequests")} />
             <Metric title="Execution Requests" count={openInvestorExecutionRequests.length} note="lender/title/contractor/operator requests" pulse={openInvestorExecutionRequests.length > 0} onClick={() => setTab("investors")} />
@@ -1856,7 +1975,7 @@ export default function AdminPage() {
             <div style={{ marginTop: 18 }}>
               <Section title="Controlled Intro Threads">
                 <div style={grid}>
-                  {readControlledThreads().length ? readControlledThreads().map((thread) => (
+                  {activeControlledThreads.length ? activeControlledThreads.map((thread) => (
                     <div key={thread.id} style={activePanel}>
                       <div style={eyebrow}>{thread.status} • {thread.stage}</div>
                       <h2 style={h2}>{thread.title}</h2>
@@ -1871,11 +1990,11 @@ export default function AdminPage() {
 
               <Section title="Request Action Status">
                 <div style={grid}>
-                  <Metric title="Routed" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "routed").length} note="requests routed internally" />
-                  <Metric title="Approved" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "approved").length} note="approved intros/requests" />
-                  <Metric title="Saved" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "saved").length} note="saved queue" />
-                  <Metric title="Archived" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "archived").length} note="archived queue" />
-                  <Metric title="Closed" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "closed").length} note="closed requests" />
+                  <Metric title="Routed" count={allInvestorActionItems.filter((item) => requestStatus(item) === "routed").length} note="requests routed internally" />
+                  <Metric title="Approved" count={allInvestorActionItems.filter((item) => requestStatus(item) === "approved").length} note="approved intros/requests" />
+                  <Metric title="Saved" count={savedInvestorActionItems.length} note="saved queue" />
+                  <Metric title="Archived" count={archivedInvestorActionItems.length} note="archived queue" />
+                  <Metric title="Closed" count={allInvestorActionItems.filter((item) => requestStatus(item) === "closed").length} note="closed requests" />
                 </div>
               </Section>
 
@@ -1905,9 +2024,9 @@ export default function AdminPage() {
 
               <Section title="Investor Inbox — Messages / Requests">
                 <div style={grid}>
-                  {adminInvestorInbox.filter((item) => !["closed", "deleted", "archived"].includes(lower(item.status || "new"))).length ? (
+                  {adminInvestorInbox.filter(isOpenRequest).length ? (
                     adminInvestorInbox
-                      .filter((item) => !["closed", "deleted", "archived"].includes(lower(item.status || "new")))
+                      .filter(isOpenRequest)
                       .map((item) => (
                         <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />
                       ))
@@ -1938,7 +2057,7 @@ export default function AdminPage() {
 
               <Section title="Controlled Thread Reply Center">
                 <div style={grid}>
-                  {readControlledThreads().length ? readControlledThreads().map((thread) => (
+                  {activeControlledThreads.length ? activeControlledThreads.map((thread) => (
                     <ControlledThreadAdminCard key={thread.id} thread={thread} />
                   )) : <div style={panel}><h2 style={h2}>No controlled threads yet.</h2></div>}
                 </div>
@@ -2019,19 +2138,28 @@ export default function AdminPage() {
         {tab === "saved" ? (
           <>
             <CollapseBar label="Saved Queue" onCollapse={() => setTab("overview")} />
-            <Section title="Saved Queue"><div style={panel}><h2 style={h2}>Saved admin cleanup queue.</h2><p style={sub}>Saved investors, requests, and rooms will be wired to persistent cleanup later.</p></div></Section>
+            <Section title="Saved Investor Requests / Messages">
+              {savedInvestorActionItems.length ? <div style={grid}>{savedInvestorActionItems.map((item) => <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />)}</div> : <div style={panel}><h2 style={h2}>No saved investor requests.</h2></div>}
+            </Section>
           </>
         ) : null}
         {tab === "archived" ? (
           <>
             <CollapseBar label="Archived Queue" onCollapse={() => setTab("overview")} />
-            <Section title="Archived Queue"><div style={panel}><h2 style={h2}>Archived admin queue.</h2><p style={sub}>Archived investors, requests, and rooms will be wired to persistent cleanup later.</p></div></Section>
+            <Section title="Archived Investor Requests / Messages">
+              {archivedInvestorActionItems.length ? <div style={grid}>{archivedInvestorActionItems.map((item) => <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />)}</div> : <div style={panel}><h2 style={h2}>No archived investor requests.</h2></div>}
+            </Section>
           </>
         ) : null}
         {tab === "deleted" ? (
           <>
             <CollapseBar label="Deleted Queue" onCollapse={() => setTab("overview")} />
-            <Section title="Deleted Queue"><div style={alertPanel}><h2 style={h2}>Delete forever control layer.</h2><p style={sub}>Admin-only destructive cleanup queue.</p></div></Section>
+            <Section title="Deleted Investor Requests / Messages">
+              {deletedInvestorActionItems.length ? <div style={grid}>{deletedInvestorActionItems.map((item) => <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />)}</div> : <div style={alertPanel}><h2 style={h2}>No deleted investor requests.</h2></div>}
+            </Section>
+            <Section title="Deleted Controlled Threads">
+              {deletedControlledThreads.length ? <div style={grid}>{deletedControlledThreads.map((thread: any) => <ControlledThreadAdminCard key={thread.id} thread={thread} />)}</div> : <div style={panel}><h2 style={h2}>No deleted controlled threads.</h2></div>}
+            </Section>
           </>
         ) : null}
       </div>
