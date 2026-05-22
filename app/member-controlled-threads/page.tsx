@@ -11,6 +11,10 @@ const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const MEMBER_REQUEST_OVERRIDES_KEY = "vaultforge_member_request_overrides_v1";
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+const MEMBER_PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile", "vf_profile", "member_profile", "profile"];
+const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
+const PROFILE_PHOTO_BACKUP_KEY = "vaultforge_member_profile_photo_v1";
+const COMPANY_LOGO_BACKUP_KEY = "vaultforge_member_company_logo_v1";
 
 type Lane = "new" | "active" | "admin" | "investor" | "deal" | "pain" | "execution" | "saved" | "archived" | "passed" | "deleted";
 
@@ -64,6 +68,71 @@ function currentEmail() {
       localStorage.getItem("email")
   );
 }
+
+
+function readMemberProfile() {
+  if (typeof window === "undefined") return {};
+
+  const backupPhoto = clean(localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY));
+  const backupLogo = clean(localStorage.getItem(COMPANY_LOGO_BACKUP_KEY));
+
+  let merged: any = {};
+  for (const key of MEMBER_PROFILE_KEYS) {
+    const next = readJson<any>(key, {});
+    if (next && typeof next === "object" && !Array.isArray(next)) {
+      merged = { ...merged, ...next };
+    }
+  }
+
+  const directory = readJson<any[]>(MEMBER_DIRECTORY_KEY, []);
+  const email = lower(
+    merged?.email ||
+      localStorage.getItem("vf_email") ||
+      localStorage.getItem("member_email") ||
+      localStorage.getItem("email")
+  );
+  const match = Array.isArray(directory)
+    ? directory.find((item) => lower(item?.email) === email) || directory[0]
+    : null;
+
+  const profile = {
+    ...(match || {}),
+    ...merged,
+    email: clean(merged?.email || match?.email || email),
+    name: clean(merged?.name || merged?.fullName || match?.name || match?.fullName || (email ? email.split("@")[0] : "VaultForge Member")),
+    company: clean(merged?.company || merged?.companyName || match?.company || match?.companyName || "VaultForge Member"),
+    title: clean(merged?.title || merged?.roleTitle || match?.title || match?.roleTitle || ""),
+    memberType: clean(merged?.memberType || merged?.member_type || match?.memberType || match?.member_type || "Private Member"),
+    basedState: clean(merged?.basedState || merged?.state || match?.basedState || match?.state || "GA"),
+    statesOperated: Array.isArray(merged?.statesOperated) ? merged.statesOperated : Array.isArray(match?.statesOperated) ? match.statesOperated : [],
+    canProvide: Array.isArray(merged?.canProvide) ? merged.canProvide : Array.isArray(match?.canProvide) ? match.canProvide : [],
+    profilePhoto: clean(merged?.profilePhoto || merged?.photoUrl || match?.profilePhoto || match?.photoUrl || backupPhoto),
+    companyLogo: clean(merged?.companyLogo || merged?.logoUrl || match?.companyLogo || match?.logoUrl || backupLogo),
+    contactPreference: clean(merged?.contactPreference || match?.contactPreference || "VaultForge Message"),
+    responseSpeed: clean(merged?.responseSpeed || match?.responseSpeed || "24 Hours"),
+    verifiedStatus: clean(merged?.verifiedStatus || match?.verifiedStatus || "Unverified"),
+  };
+
+  return profile;
+}
+
+function publicMemberProfile(profile: any) {
+  return {
+    name: clean(profile?.name || "VaultForge Member"),
+    company: clean(profile?.company || "Member Company"),
+    title: clean(profile?.title || ""),
+    memberType: clean(profile?.memberType || "Private Member"),
+    basedState: clean(profile?.basedState || profile?.state || ""),
+    statesOperated: Array.isArray(profile?.statesOperated) ? profile.statesOperated : [],
+    canProvide: Array.isArray(profile?.canProvide) ? profile.canProvide : [],
+    companyLogo: clean(profile?.companyLogo || ""),
+    profilePhoto: clean(profile?.profilePhoto || ""),
+    verifiedStatus: clean(profile?.verifiedStatus || "VaultForge Member"),
+    contactPreference: clean(profile?.contactPreference || "VaultForge Message"),
+    responseSpeed: clean(profile?.responseSpeed || "24 Hours"),
+  };
+}
+
 
 function readArrayKey(key: string) {
   const value = readJson<any>(key, []);
@@ -615,10 +684,69 @@ function MessageBubble({ message }: { message: any }) {
   );
 }
 
+
+function MemberIdentityPanel({ profile }: { profile: any }) {
+  const logo = clean(profile?.companyLogo || profile?.profilePhoto || "");
+  const states = Array.isArray(profile?.statesOperated) && profile.statesOperated.length ? profile.statesOperated.join(" • ") : clean(profile?.basedState || "State not listed");
+  const provide = Array.isArray(profile?.canProvide) && profile.canProvide.length ? profile.canProvide.join(" • ") : "Capabilities not listed";
+
+  return (
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
+      <div style={{ ...row, alignItems: "flex-start" }}>
+        {logo ? (
+          <img
+            src={logo}
+            alt="Member company"
+            style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 24, border: "1px solid rgba(245,197,66,.45)" }}
+          />
+        ) : null}
+
+        <div>
+          <div style={eyebrow}>Member Command Identity</div>
+          <h2 style={h2}>{clean(profile?.company || profile?.name || "VaultForge Member")}</h2>
+          <p style={sub}>{clean(profile?.name || "Member")} • {clean(profile?.memberType || "Private Member")}</p>
+          <p style={muted}>{states}</p>
+          <p style={muted}>Can provide: {provide}</p>
+          <p style={muted}>Contact preference: {clean(profile?.contactPreference || "VaultForge Message")} • Response: {clean(profile?.responseSpeed || "24 Hours")}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MemberPublicProfileCard({ profile }: { profile: any }) {
+  const pub = publicMemberProfile(profile);
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>Member Profile Attached</div>
+      <div style={{ ...row, alignItems: "flex-start" }}>
+        {pub.companyLogo || pub.profilePhoto ? (
+          <img
+            src={pub.companyLogo || pub.profilePhoto}
+            alt="Member profile"
+            style={{ width: 82, height: 82, objectFit: "cover", borderRadius: 20, border: "1px solid rgba(245,197,66,.35)" }}
+          />
+        ) : null}
+
+        <div>
+          <h3 style={h3}>{pub.company}</h3>
+          <p style={muted}>{pub.memberType}{pub.title ? ` • ${pub.title}` : ""}</p>
+          <p style={muted}>States: {pub.statesOperated.length ? pub.statesOperated.join(" • ") : pub.basedState || "Not listed"}</p>
+          <p style={muted}>Capabilities: {pub.canProvide.length ? pub.canProvide.join(" • ") : "Not listed"}</p>
+          <p style={muted}>Personal email and phone stay hidden until contact release.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: any; onPatch: (patch: ThreadPatch) => void; onDeleteForever: () => void; onBack: () => void }) {
   const [reply, setReply] = useState("");
   const [infoRequest, setInfoRequest] = useState("");
   const profile = profileFrom(thread);
+  const memberProfile = readMemberProfile();
+  const memberPublic = publicMemberProfile(memberProfile);
   const released = Boolean(thread?.contactReleased);
 
   function addMessage(role: string, body: string, patch: ThreadPatch = {}) {
@@ -637,6 +765,10 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
       unread: true,
       investorUnread: true,
       adminUnread: true,
+      memberProfilePublic: memberPublic,
+      memberCompany: memberPublic.company,
+      memberLogo: memberPublic.companyLogo,
+      memberProfilePhoto: memberPublic.profilePhoto,
       updatedAt: new Date().toISOString(),
     });
   }
@@ -664,6 +796,8 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
 
       <div style={{ ...grid, marginTop: 18 }}>
         <InvestorProfileCard profile={profile} photoUrl={thread?.investorPhotoUrl || profile?.photoUrl} released={released} />
+
+        <MemberPublicProfileCard profile={memberProfile} />
 
         <div style={panel}>
           <div style={eyebrow}>Next Move</div>
@@ -699,6 +833,10 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
             messageType: payload.messageType,
             urgency: payload.urgency,
             investorProfile: profile,
+            memberProfilePublic: memberPublic,
+            memberCompany: memberPublic.company,
+            memberLogo: memberPublic.companyLogo,
+            memberProfilePhoto: memberPublic.profilePhoto,
           });
           setReply("");
           setInfoRequest("");
@@ -834,6 +972,7 @@ export default function MemberControlledThreadsPage() {
 
   const openRows = categorized[lane] || [];
   const activeThread = activeId ? visibleThreads.find((thread, index) => safeId(thread, index) === activeId) : null;
+  const memberProfile = readMemberProfile();
 
   function patchThread(id: string, patch: ThreadPatch) {
     const overrides = readMemberOverrides();
@@ -873,7 +1012,14 @@ export default function MemberControlledThreadsPage() {
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>VaultForge Member Request Command</div>
-          <h1 style={h1}>Member execution command center.</h1>
+          <div style={{ ...row, alignItems: "center" }}>
+            {memberProfile?.companyLogo ? (
+              <img src={memberProfile.companyLogo} alt="Company logo" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.45)" }} />
+            ) : memberProfile?.profilePhoto ? (
+              <img src={memberProfile.profilePhoto} alt="Profile" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.45)" }} />
+            ) : null}
+            <h1 style={h1}>{clean(memberProfile?.company || memberProfile?.name || "Member execution command center.")}</h1>
+          </div>
           <p style={sub}>New Request → Open Detail → Accept / Pass / Message → Active Thread → Contact Release → Save / Archive / Delete.</p>
 
           <div style={{ ...row, marginTop: 18 }}>
@@ -885,6 +1031,8 @@ export default function MemberControlledThreadsPage() {
 
           <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
         </section>
+
+        <MemberIdentityPanel profile={memberProfile} />
 
         <MemberOperatingGuide />
 
