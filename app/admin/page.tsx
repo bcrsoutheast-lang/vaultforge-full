@@ -70,8 +70,45 @@ type InvestorRequest = {
   investorEmail: string;
   investorCompany: string;
   investorName: string;
+  investorPhotoUrl?: string;
+  investorProfile?: any;
   message: string;
   status: string;
+  createdAt: string;
+};
+
+type InvestorExecutionRequest = {
+  id: string;
+  requestType: string;
+  requestTitle: string;
+  kind: string;
+  itemId: string;
+  title: string;
+  state: string;
+  investorEmail: string;
+  investorCompany: string;
+  investorName: string;
+  investorPhotoUrl?: string;
+  investorProfile?: any;
+  notes?: string;
+  message: string;
+  status: string;
+  createdAt: string;
+};
+
+type InvestorAdminMessage = {
+  id: string;
+  topic: string;
+  subject?: string;
+  body?: string;
+  message?: string;
+  status: string;
+  priority?: string;
+  investorEmail: string;
+  investorCompany: string;
+  investorName: string;
+  investorPhotoUrl?: string;
+  investorProfile?: any;
   createdAt: string;
 };
 
@@ -108,21 +145,10 @@ const MEMBER_MESSAGES_KEY = "vaultforge_admin_member_broadcasts_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const INVESTOR_LIST_KEY = "vaultforge_investor_applications_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
+const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
+const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 
 const STATE_CODES: StateCode[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
-
-const ADMIN_LOGO_CANDIDATES = [
-  "/vaultforge-logo.png",
-  "/VaultForge-logo.png",
-  "/vaultforge-logo.jpg",
-  "/vaultforge-logo.jpeg",
-  "/logo.png",
-  "/logo.jpg",
-  "/vf-logo.png",
-  "/VF-logo.png",
-  "/vaultforge.png",
-  "/VaultForge.png",
-];
 
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"];
 const MEMBER_SOURCE_KEYS = ["vaultforge_admin_members_v1", "vaultforge_members", "vaultforge_member_profiles", "vaultforge_profiles", "vf_profiles", "members", "profiles"];
@@ -435,6 +461,16 @@ function readInvestorRequests(): InvestorRequest[] {
   return Array.isArray(rows) ? rows : [];
 }
 
+function readInvestorExecutionRequests(): InvestorExecutionRequest[] {
+  const rows = readJson<InvestorExecutionRequest[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function readInvestorAdminMessages(): InvestorAdminMessage[] {
+  const rows = readJson<InvestorAdminMessage[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
 function readMessages(): AdminMessage[] {
   const rows = readJson<AdminMessage[]>(ADMIN_MESSAGES_KEY, []);
   return Array.isArray(rows) ? rows : [];
@@ -579,40 +615,6 @@ const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repea
 const smallGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12 };
 const row: React.CSSProperties = { display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#111823", color: "#f8fafc", borderRadius: 16, padding: "14px 15px", fontSize: 16 };
-
-
-function AdminLogoBlock() {
-  const [index, setIndex] = useState(0);
-  const src = ADMIN_LOGO_CANDIDATES[index];
-
-  return (
-    <div style={{ display: "flex", justifyContent: "center", margin: "0 0 22px" }}>
-      <div
-        style={{
-          width: "min(420px, 88vw)",
-          border: "1px solid rgba(245,197,66,.28)",
-          borderRadius: 26,
-          padding: 16,
-          background: "radial-gradient(circle, rgba(245,197,66,.13), transparent 68%), #070b14",
-          boxShadow: "0 0 50px rgba(245,197,66,.14)",
-        }}
-      >
-        {src ? (
-          <img
-            src={src}
-            alt="VaultForge"
-            style={{ width: "100%", height: "auto", display: "block", borderRadius: 16 }}
-            onError={() => setIndex((value) => (value + 1 < ADMIN_LOGO_CANDIDATES.length ? value + 1 : ADMIN_LOGO_CANDIDATES.length))}
-          />
-        ) : (
-          <div style={{ minHeight: 160, display: "grid", placeItems: "center", color: "#ffd45a", fontSize: 52, fontWeight: 950 }}>
-            VAULTFORGE
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function AdminNav() {
   return (
@@ -772,6 +774,79 @@ function InvestorRequestCard({ request }: { request: InvestorRequest }) {
   );
 }
 
+
+function InvestorProfileSnapshotCard({ profile, photoUrl }: { profile: any; photoUrl?: string }) {
+  if (!profile && !photoUrl) return null;
+
+  const investorTypes = Array.isArray(profile?.investorTypes) ? profile.investorTypes.join(" • ") : profile?.investorTypes || "Not listed";
+  const strategies = Array.isArray(profile?.buyingStrategies) ? profile.buyingStrategies.join(" • ") : profile?.buyingStrategies || "Not listed";
+  const markets = Array.isArray(profile?.statesInterested) ? profile.statesInterested.join(" • ") : profile?.statesInterested || "Not listed";
+
+  return (
+    <div style={{ ...panel, marginTop: 14 }}>
+      <div style={eyebrow}>Investor Profile Attached</div>
+      <div style={{ ...row, alignItems: "flex-start" }}>
+        {photoUrl || profile?.photoUrl ? (
+          <img
+            src={photoUrl || profile?.photoUrl}
+            alt="Investor"
+            style={{ width: 82, height: 82, borderRadius: 20, objectFit: "cover", border: "1px solid rgba(245,197,66,.35)" }}
+          />
+        ) : null}
+        <div>
+          <p style={sub}>{profile?.contactName || "Investor name not listed"}</p>
+          <p style={muted}>{profile?.company || "Company not listed"}</p>
+          <p style={muted}>{profile?.email || "Email not listed"} • {profile?.phone || "Phone not listed"}</p>
+          <p style={muted}>Type: {investorTypes}</p>
+          <p style={muted}>Strategy: {strategies}</p>
+          <p style={muted}>Markets: {markets}</p>
+          <p style={muted}>Buy Box: {profile?.minDeal || "Not listed"} - {profile?.maxDeal || "Not listed"}</p>
+          <p style={muted}>Volume: {profile?.monthlyVolume || "Not listed"} / month • {profile?.yearlyVolume || "Not listed"} / year</p>
+          <p style={muted}>Proof of Funds: {profile?.proofFunds || "Not listed"}</p>
+          <p style={muted}>Close Speed: {profile?.closeSpeed || "Not listed"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvestorExecutionRequestCard({ request }: { request: InvestorExecutionRequest }) {
+  return (
+    <div style={goldPanel}>
+      <div style={eyebrow}>Execution Request • {request.requestTitle || request.requestType || "Support"} • {request.status || "new"}</div>
+      <h2 style={h2}>{request.title || "Investor Execution Request"}</h2>
+      <p style={sub}>{request.investorCompany || request.investorName || request.investorEmail}</p>
+      <p style={muted}>{request.message || request.notes || "Investor requested execution help."}</p>
+      <InvestorProfileSnapshotCard profile={request.investorProfile} photoUrl={request.investorPhotoUrl} />
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn}>Mark Routed</button>
+        <button type="button" style={greenBtn}>Approve Intro</button>
+        <button type="button" style={btn}>Save</button>
+        <button type="button" style={btn}>Archive</button>
+        <button type="button" style={redBtn}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+function InvestorAdminMessageCard({ message }: { message: InvestorAdminMessage }) {
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>Investor Admin Message • {message.status || "new"}</div>
+      <h2 style={h2}>{message.subject || message.topic || "Message Admin"}</h2>
+      <p style={sub}>{message.investorCompany || message.investorName || message.investorEmail}</p>
+      <p style={muted}>{message.body || message.message || "Investor messaged admin."}</p>
+      <InvestorProfileSnapshotCard profile={message.investorProfile} photoUrl={message.investorPhotoUrl} />
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn}>Reply Later</button>
+        <button type="button" style={greenBtn}>Mark Routed</button>
+        <button type="button" style={btn}>Save</button>
+        <button type="button" style={redBtn}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
 function MemberModal({ member, onClose }: { member: MemberRecord | null; onClose: () => void }) {
   if (!member) return null;
   return (
@@ -811,13 +886,6 @@ function RoomModal({ selection, onClose }: { selection: RoomSelection; onClose: 
                 <h2 style={h2}>{room.title}</h2>
                 <p style={muted}>Room ID: {room.id}</p>
                 <p style={muted}>Source: {room.source}</p>
-                <div style={{ ...row, marginTop: 12 }}>
-                  <button type="button" style={goldBtn}>Save</button>
-                  <button type="button" style={btn}>Archive</button>
-                  <button type="button" style={redBtn}>Delete</button>
-                  <button type="button" style={redBtn}>Delete Forever</button>
-                </div>
-                <p style={{ ...muted, marginTop: 8 }}>Admin Room Cleanup Controls</p>
               </div>
             )) : (
               <div style={panel}><h2 style={h2}>No rooms found.</h2><p style={sub}>No matching projects/rooms exist yet.</p></div>
@@ -847,6 +915,8 @@ export default function AdminPage() {
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [investors, setInvestors] = useState<InvestorRecord[]>([]);
   const [investorRequests, setInvestorRequests] = useState<InvestorRequest[]>([]);
+  const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
+  const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [deals, setDeals] = useState<RoomRecord[]>([]);
   const [pains, setPains] = useState<RoomRecord[]>([]);
@@ -868,6 +938,8 @@ export default function AdminPage() {
       setMembers(readMembers());
       setInvestors(readInvestors());
       setInvestorRequests(readInvestorRequests());
+      setInvestorExecutionRequests(readInvestorExecutionRequests());
+      setInvestorAdminMessages(readInvestorAdminMessages());
       setMessages(readMessages());
       setDeals(readRooms("deal"));
       setPains(readRooms("pain"));
@@ -878,6 +950,8 @@ export default function AdminPage() {
     window.addEventListener("vaultforge-admin-message-change", refresh);
     window.addEventListener("vaultforge-investor-change", refresh);
     window.addEventListener("vaultforge-investor-request-change", refresh);
+    window.addEventListener("vaultforge-investor-execution-request-change", refresh);
+    window.addEventListener("vaultforge-investor-admin-message-change", refresh);
     window.addEventListener("vaultforge-my-rooms-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
@@ -885,6 +959,8 @@ export default function AdminPage() {
       window.removeEventListener("vaultforge-admin-message-change", refresh);
       window.removeEventListener("vaultforge-investor-change", refresh);
       window.removeEventListener("vaultforge-investor-request-change", refresh);
+      window.removeEventListener("vaultforge-investor-execution-request-change", refresh);
+      window.removeEventListener("vaultforge-investor-admin-message-change", refresh);
       window.removeEventListener("vaultforge-my-rooms-change", refresh);
     };
   }, []);
@@ -909,6 +985,8 @@ export default function AdminPage() {
   const deletedInvestors = useMemo(() => investors.filter((investor) => investor.status === "deleted"), [investors]);
   const dealRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("deal")), [investorRequests]);
   const painRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("pain")), [investorRequests]);
+  const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter((request) => lower(request.status || "new") !== "closed" && lower(request.status || "new") !== "deleted"), [investorExecutionRequests]);
+  const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter((message) => lower(message.status || "new") !== "closed" && lower(message.status || "new") !== "deleted"), [investorAdminMessages]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1038,7 +1116,6 @@ export default function AdminPage() {
         <AdminNav />
 
         <section style={hero}>
-          <AdminLogoBlock />
           <div style={eyebrow}>VaultForge Admin Command</div>
           <h1 style={h1}>Control tower restored.</h1>
           <p style={sub}>Manage members, investor approvals, Deal/Pain rooms, investor requests, state balance, cleanup folders, and admin broadcasts.</p>
@@ -1052,6 +1129,8 @@ export default function AdminPage() {
             <Metric title="Investor Payments" count={pendingInvestorPayment.length} note="investor payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Deal Requests" count={dealRequests.length} note="investor deal interest" pulse={dealRequests.length > 0} onClick={() => setTab("dealRequests")} />
             <Metric title="Pain Requests" count={painRequests.length} note="investor pain interest" pulse={painRequests.length > 0} onClick={() => setTab("painRequests")} />
+            <Metric title="Execution Requests" count={openInvestorExecutionRequests.length} note="lender/title/contractor/operator requests" pulse={openInvestorExecutionRequests.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Investor Admin Messages" count={openInvestorAdminMessages.length} note="messages from investor room" pulse={openInvestorAdminMessages.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Paid Members" count={paid.length} note="paid members" onClick={() => { setFilter("paid"); setTab("members"); }} />
             <Metric title="Paid Investors" count={paidInvestors.length} note="active investor access" onClick={() => setTab("investors")} />
           </div>
@@ -1084,7 +1163,7 @@ export default function AdminPage() {
                 <div style={activePanel}>
                   <div style={eyebrow}>Separate Buyer-Intelligence Network</div>
                   <h3 style={h3}>Investor Access stays separate.</h3>
-                  <p style={muted}>Investors see teaser Deal/Pain cards only. They do not see member directory, private routing, seller data, or full rooms.</p>
+                  <p style={muted}>Investors see teaser Deal/Pain cards only. They do not see member directory, private routing, seller data, or full rooms.</p><p style={muted}>Investor execution routing queue now captures lender, title, contractor, operator, insurance, JV, and boots-on-ground requests.</p>
                 </div>
                 <div style={panel}>
                   <div style={eyebrow}>Investor Profile Depth</div>
@@ -1199,6 +1278,30 @@ export default function AdminPage() {
               <p style={muted}>$49 first month then $149/month. Separate investor login/application flow. Teaser Deal/Pain cards only. No direct member info exposed.</p>
             </div>
             <div style={{ marginTop: 18 }}>
+              <Section title="Investor Execution Requests">
+                {openInvestorExecutionRequests.length ? (
+                  <div style={grid}>
+                    {openInvestorExecutionRequests.map((request) => (
+                      <InvestorExecutionRequestCard key={request.id} request={request} />
+                    ))}
+                  </div>
+                ) : (
+                  <div style={panel}><h2 style={h2}>No execution requests yet.</h2></div>
+                )}
+              </Section>
+
+              <Section title="Investor Admin Messages">
+                {openInvestorAdminMessages.length ? (
+                  <div style={grid}>
+                    {openInvestorAdminMessages.map((message) => (
+                      <InvestorAdminMessageCard key={message.id} message={message} />
+                    ))}
+                  </div>
+                ) : (
+                  <div style={panel}><h2 style={h2}>No investor admin messages yet.</h2></div>
+                )}
+              </Section>
+
               {investors.length ? (
                 <div style={grid}>
                   {investors.map((investor) => (
