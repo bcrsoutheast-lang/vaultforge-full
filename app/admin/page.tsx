@@ -147,6 +147,7 @@ const INVESTOR_LIST_KEY = "vaultforge_investor_applications_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
+const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
 
 const STATE_CODES: StateCode[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 
@@ -471,6 +472,76 @@ function readInvestorAdminMessages(): InvestorAdminMessage[] {
   return Array.isArray(rows) ? rows : [];
 }
 
+function writeInvestorRequests(rows: InvestorRequest[]) {
+  writeJson(INVESTOR_REQUESTS_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-request-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-request-change"));
+}
+
+function writeInvestorExecutionRequests(rows: InvestorExecutionRequest[]) {
+  writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-execution-request-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-request-change"));
+}
+
+
+function readControlledThreads() {
+  const rows = readJson<any[]>(CONTROLLED_THREADS_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function writeControlledThreads(rows: any[]) {
+  writeJson(CONTROLLED_THREADS_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-controlled-thread-change"));
+}
+
+function createControlledThread(source: "deal_pain" | "execution" | "admin_message", request: any) {
+  const rows = readControlledThreads();
+  const existing = rows.find((thread) => thread.sourceRequestId === request.id);
+
+  if (existing) return existing;
+
+  const profile = request.investorProfile || {};
+  const thread = {
+    id: `controlled-thread-${Date.now()}`,
+    source,
+    sourceRequestId: request.id,
+    status: "approved",
+    stage: "intro_approved_contact_hidden",
+    title: request.requestTitle || request.title || request.topic || request.subject || "Controlled Investor Thread",
+    roomHeader: request.roomHeader || request.title || request.topic || "Controlled Intro",
+    kind: request.kind || "Investor",
+    state: request.state || "",
+    investorEmail: request.investorEmail || profile.email || "",
+    investorCompany: request.investorCompany || profile.company || "",
+    investorName: request.investorName || profile.contactName || "",
+    investorPhotoUrl: request.investorPhotoUrl || profile.photoUrl || "",
+    investorProfile: profile,
+    contactReleased: false,
+    memberContactReleased: false,
+    messages: [
+      {
+        id: `thread-message-${Date.now()}`,
+        from: "VaultForge Admin",
+        role: "admin",
+        body: "Intro approved. Contact is still hidden until admin/member manually releases it.",
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  writeControlledThreads([thread, ...rows]);
+  return thread;
+}
+
+function writeInvestorAdminMessages(rows: InvestorAdminMessage[]) {
+  writeJson(INVESTOR_ADMIN_MESSAGES_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+}
+
 function readMessages(): AdminMessage[] {
   const rows = readJson<AdminMessage[]>(ADMIN_MESSAGES_KEY, []);
   return Array.isArray(rows) ? rows : [];
@@ -754,7 +825,13 @@ function InvestorCard({ investor, onPatch, onDeleteForever }: { investor: Invest
   );
 }
 
-function InvestorRequestCard({ request }: { request: InvestorRequest }) {
+function InvestorRequestCard({
+  request,
+  onStatus,
+}: {
+  request: InvestorRequest;
+  onStatus: (id: string, status: string) => void;
+}) {
   const isPain = lower(request.kind).includes("pain");
   return (
     <div style={isPain ? alertPanel : activePanel}>
@@ -765,10 +842,12 @@ function InvestorRequestCard({ request }: { request: InvestorRequest }) {
       <p style={muted}>{request.message}</p>
       <p style={muted}>Room ID: {request.itemId || "Not listed"}</p>
       <div style={{ ...row, marginTop: 14 }}>
-        <button type="button" style={goldBtn}>Approve Intro</button>
-        <button type="button" style={btn}>Save</button>
-        <button type="button" style={btn}>Archive</button>
-        <button type="button" style={redBtn}>Delete</button>
+        <button type="button" style={goldBtn} onClick={() => onStatus(request.id, "routed")}>Mark Routed</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(request.id, "approved")}>Approve Intro</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(request.id, "deleted")}>Delete</button>
       </div>
     </div>
   );
@@ -810,7 +889,13 @@ function InvestorProfileSnapshotCard({ profile, photoUrl }: { profile: any; phot
   );
 }
 
-function InvestorExecutionRequestCard({ request }: { request: InvestorExecutionRequest }) {
+function InvestorExecutionRequestCard({
+  request,
+  onStatus,
+}: {
+  request: InvestorExecutionRequest;
+  onStatus: (id: string, status: string) => void;
+}) {
   return (
     <div style={activePanel}>
       <div style={eyebrow}>Execution Request • {request.requestTitle || request.requestType || "Support"} • {request.status || "new"}</div>
@@ -819,17 +904,24 @@ function InvestorExecutionRequestCard({ request }: { request: InvestorExecutionR
       <p style={muted}>{request.message || request.notes || "Investor requested execution help."}</p>
       <InvestorProfileSnapshotCard profile={request.investorProfile} photoUrl={request.investorPhotoUrl} />
       <div style={{ ...row, marginTop: 14 }}>
-        <button type="button" style={goldBtn}>Mark Routed</button>
-        <button type="button" style={greenBtn}>Approve Intro</button>
-        <button type="button" style={btn}>Save</button>
-        <button type="button" style={btn}>Archive</button>
-        <button type="button" style={redBtn}>Delete</button>
+        <button type="button" style={goldBtn} onClick={() => onStatus(request.id, "routed")}>Mark Routed</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(request.id, "approved")}>Approve Intro</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(request.id, "deleted")}>Delete</button>
       </div>
     </div>
   );
 }
 
-function InvestorAdminMessageCard({ message }: { message: InvestorAdminMessage }) {
+function InvestorAdminMessageCard({
+  message,
+  onStatus,
+}: {
+  message: InvestorAdminMessage;
+  onStatus: (id: string, status: string) => void;
+}) {
   return (
     <div style={panel}>
       <div style={eyebrow}>Investor Admin Message • {message.status || "new"}</div>
@@ -838,10 +930,12 @@ function InvestorAdminMessageCard({ message }: { message: InvestorAdminMessage }
       <p style={muted}>{message.body || message.message || "Investor messaged admin."}</p>
       <InvestorProfileSnapshotCard profile={message.investorProfile} photoUrl={message.investorPhotoUrl} />
       <div style={{ ...row, marginTop: 14 }}>
-        <button type="button" style={goldBtn}>Reply Later</button>
-        <button type="button" style={greenBtn}>Mark Routed</button>
-        <button type="button" style={btn}>Save</button>
-        <button type="button" style={redBtn}>Delete</button>
+        <button type="button" style={goldBtn} onClick={() => onStatus(message.id, "reply_later")}>Reply Later</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(message.id, "routed")}>Mark Routed</button>
+        <button type="button" style={btn} onClick={() => onStatus(message.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(message.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(message.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(message.id, "deleted")}>Delete</button>
       </div>
     </div>
   );
@@ -1058,6 +1152,37 @@ export default function AdminPage() {
       setStateFilter("all");
       setTab("members");
     }
+  }
+
+
+  function updateInvestorRequestStatus(id: string, status: string) {
+    const original = investorRequests.find((request) => request.id === id);
+    const next = investorRequests.map((request) =>
+      request.id === id ? { ...request, status, updatedAt: new Date().toISOString() } as InvestorRequest : request
+    );
+    setInvestorRequests(next);
+    writeInvestorRequests(next);
+    if (status === "approved" && original) createControlledThread("deal_pain", original);
+  }
+
+  function updateInvestorExecutionStatus(id: string, status: string) {
+    const original = investorExecutionRequests.find((request) => request.id === id);
+    const next = investorExecutionRequests.map((request) =>
+      request.id === id ? { ...request, status, updatedAt: new Date().toISOString() } as InvestorExecutionRequest : request
+    );
+    setInvestorExecutionRequests(next);
+    writeInvestorExecutionRequests(next);
+    if (status === "approved" && original) createControlledThread("execution", original);
+  }
+
+  function updateInvestorAdminMessageStatus(id: string, status: string) {
+    const original = investorAdminMessages.find((message) => message.id === id);
+    const next = investorAdminMessages.map((message) =>
+      message.id === id ? { ...message, status, updatedAt: new Date().toISOString() } as InvestorAdminMessage : message
+    );
+    setInvestorAdminMessages(next);
+    writeInvestorAdminMessages(next);
+    if (status === "approved" && original) createControlledThread("admin_message", original);
   }
 
   function broadcastToMembers(target: "filtered" | "all") {
@@ -1278,11 +1403,36 @@ export default function AdminPage() {
               <p style={muted}>$49 first month then $149/month. Separate investor login/application flow. Teaser Deal/Pain cards only. No direct member info exposed.</p>
             </div>
             <div style={{ marginTop: 18 }}>
+              <Section title="Controlled Intro Threads">
+                <div style={grid}>
+                  {readControlledThreads().length ? readControlledThreads().map((thread) => (
+                    <div key={thread.id} style={activePanel}>
+                      <div style={eyebrow}>{thread.status} • {thread.stage}</div>
+                      <h2 style={h2}>{thread.title}</h2>
+                      <p style={sub}>{thread.investorCompany || thread.investorName || thread.investorEmail}</p>
+                      <p style={muted}>{thread.roomHeader}</p>
+                      <p style={muted}>Contact Released: {thread.contactReleased ? "Yes" : "No"}</p>
+                      <p style={muted}>Thread ID: {thread.id}</p>
+                    </div>
+                  )) : <div style={panel}><h2 style={h2}>No controlled threads yet.</h2><p style={sub}>Approve an intro/request to create one.</p></div>}
+                </div>
+              </Section>
+
+              <Section title="Request Action Status">
+                <div style={grid}>
+                  <Metric title="Routed" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "routed").length} note="requests routed internally" />
+                  <Metric title="Approved" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "approved").length} note="approved intros/requests" />
+                  <Metric title="Saved" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "saved").length} note="saved queue" />
+                  <Metric title="Archived" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "archived").length} note="archived queue" />
+                  <Metric title="Closed" count={[...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].filter((item) => lower(item.status) === "closed").length} note="closed requests" />
+                </div>
+              </Section>
+
               <Section title="Investor Execution Requests">
                 {openInvestorExecutionRequests.length ? (
                   <div style={grid}>
                     {openInvestorExecutionRequests.map((request) => (
-                      <InvestorExecutionRequestCard key={request.id} request={request} />
+                      <InvestorExecutionRequestCard key={request.id} request={request} onStatus={updateInvestorExecutionStatus} />
                     ))}
                   </div>
                 ) : (
@@ -1294,7 +1444,7 @@ export default function AdminPage() {
                 {openInvestorAdminMessages.length ? (
                   <div style={grid}>
                     {openInvestorAdminMessages.map((message) => (
-                      <InvestorAdminMessageCard key={message.id} message={message} />
+                      <InvestorAdminMessageCard key={message.id} message={message} onStatus={updateInvestorAdminMessageStatus} />
                     ))}
                   </div>
                 ) : (
@@ -1320,7 +1470,7 @@ export default function AdminPage() {
           <>
             <CollapseBar label="Deal Requests" onCollapse={() => setTab("overview")} />
           <Section title="Investor Deal Requests">
-            {dealRequests.length ? <div style={grid}>{dealRequests.map((request) => <InvestorRequestCard key={request.id} request={request} />)}</div> : <div style={panel}><h2 style={h2}>No deal requests yet.</h2></div>}
+            {dealRequests.length ? <div style={grid}>{dealRequests.map((request) => <InvestorRequestCard key={request.id} request={request} onStatus={updateInvestorRequestStatus} />)}</div> : <div style={panel}><h2 style={h2}>No deal requests yet.</h2></div>}
           </Section>
           </>
         ) : null}
@@ -1329,7 +1479,7 @@ export default function AdminPage() {
           <>
             <CollapseBar label="Pain Requests" onCollapse={() => setTab("overview")} />
           <Section title="Investor Pain Requests">
-            {painRequests.length ? <div style={grid}>{painRequests.map((request) => <InvestorRequestCard key={request.id} request={request} />)}</div> : <div style={panel}><h2 style={h2}>No pain requests yet.</h2></div>}
+            {painRequests.length ? <div style={grid}>{painRequests.map((request) => <InvestorRequestCard key={request.id} request={request} onStatus={updateInvestorRequestStatus} />)}</div> : <div style={panel}><h2 style={h2}>No pain requests yet.</h2></div>}
           </Section>
           </>
         ) : null}
