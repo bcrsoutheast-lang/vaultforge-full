@@ -342,27 +342,20 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
 }
 
 
-
 function readInvestor() {
   const session = readJson<any>(INVESTOR_SESSION_KEY, {});
   const application = readJson<any>(INVESTOR_APP_KEY, {});
-
-  const sessionEmail = clean(session?.email || localStorage.getItem("vaultforge_investor_email") || "").toLowerCase();
-  const applicationEmail = clean(application?.email || "").toLowerCase();
-  const email = sessionEmail || applicationEmail;
+  const applications = readJson<any[]>("vaultforge_investor_applications_v1", []);
+  const sessionEmail = clean(session?.email || application?.email || localStorage.getItem("vaultforge_investor_email")).toLowerCase();
+  const matching = Array.isArray(applications)
+    ? applications.find((row) => clean(row?.email || row?.investorEmail || row?.investor_email).toLowerCase() === sessionEmail)
+    : null;
 
   return {
-    ...application,
-    ...session,
-    email: email || application?.email || session?.email || "",
-    contactName: application?.contactName || session?.contactName || session?.name || application?.name || "",
-    company: application?.company || session?.company || "",
-    phone: application?.phone || session?.phone || "",
-    photoUrl: application?.photoUrl || session?.photoUrl || "",
-    access: application?.access || session?.access || application?.accessStatus || session?.accessStatus || "locked",
-    accessStatus: application?.accessStatus || session?.accessStatus || application?.access || session?.access || "locked",
-    paymentStatus: application?.paymentStatus || session?.paymentStatus || "unpaid",
-    status: application?.status || session?.status || "pending",
+    ...(matching || {}),
+    ...(application || {}),
+    ...(session || {}),
+    email: sessionEmail || clean(application?.email || matching?.email || session?.email),
   };
 }
 
@@ -1062,29 +1055,188 @@ function statusCount(rows: any[], status: string) {
   return rows.filter((row) => String(row?.status || "new").toLowerCase() === status).length;
 }
 
-function RequestMiniCard({ row, label }: { row: any; label: string }) {
+type InvestorRequestGroup = "dealPain" | "execution" | "adminMessage";
+type InvestorRequestSelection = { row: any; label: string; group: InvestorRequestGroup } | null;
+
+function requestStorageKey(group: InvestorRequestGroup) {
+  if (group === "execution") return INVESTOR_EXECUTION_REQUESTS_KEY;
+  if (group === "adminMessage") return INVESTOR_ADMIN_MESSAGES_KEY;
+  return INVESTOR_REQUESTS_KEY;
+}
+
+function requestTitle(row: any, label = "Investor Request") {
+  return clean(row?.requestTitle || row?.title || row?.topic || row?.subject, label);
+}
+
+function requestMessage(row: any) {
+  return clean(row?.roomHeader || row?.message || row?.body || row?.notes, "Request saved.");
+}
+
+function readRequestRows(group: InvestorRequestGroup) {
+  const rows = readJson<any[]>(requestStorageKey(group), []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function writeRequestRows(group: InvestorRequestGroup, rows: any[]) {
+  writeJson(requestStorageKey(group), rows);
+  window.dispatchEvent(new Event("vaultforge-investor-request-change"));
+  window.dispatchEvent(new Event("vaultforge-investor-room-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-request-change"));
+}
+
+function patchInvestorRequestRow(group: InvestorRequestGroup, id: string, patch: any) {
+  const rows = readRequestRows(group);
+  writeRequestRows(
+    group,
+    rows.map((row) =>
+      String(row?.id || "") === String(id)
+        ? { ...row, ...patch, updatedAt: new Date().toISOString() }
+        : row
+    )
+  );
+}
+
+function deleteInvestorRequestForever(group: InvestorRequestGroup, id: string) {
+  const rows = readRequestRows(group);
+  writeRequestRows(group, rows.filter((row) => String(row?.id || "") !== String(id)));
+}
+
+function RequestMiniCard({ row, label, onOpen }: { row: any; label: string; onOpen: () => void }) {
+  const status = String(row?.status || "new").toLowerCase();
+  const isDeleted = status === "deleted";
+  const isArchived = status === "archived";
+
   return (
-    <div style={panel}>
+    <button
+      type="button"
+      style={{
+        ...(isDeleted ? redPanel : isArchived ? goldPanel : panel),
+        textAlign: "left",
+        width: "100%",
+        cursor: "pointer",
+      }}
+      onClick={onOpen}
+    >
       <div style={eyebrow}>{label} • {row?.status || "new"}</div>
-      <h3 style={h3}>{row?.requestTitle || row?.title || row?.topic || row?.subject || "Investor Request"}</h3>
-      <p style={muted}>{row?.roomHeader || row?.message || row?.body || "Request saved."}</p>
+      <h3 style={h3}>{requestTitle(row, label)}</h3>
+      <p style={muted}>{requestMessage(row)}</p>
       <p style={muted}>Created: {row?.createdAt || "not listed"}</p>
+      <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open request controls.</p>
+    </button>
+  );
+}
+
+function InvestorRequestDetailModal({
+  selected,
+  onClose,
+  onStatus,
+  onDeleteForever,
+}: {
+  selected: InvestorRequestSelection;
+  onClose: () => void;
+  onStatus: (status: string) => void;
+  onDeleteForever: () => void;
+}) {
+  if (!selected) return null;
+
+  const { row: requestRow, label } = selected;
+  const profile = requestRow?.investorProfile || {};
+  const status = String(requestRow?.status || "new").toLowerCase();
+  const title = requestTitle(requestRow, label);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(0,0,0,.82)", padding: 18, overflow: "auto" }}>
+      <div style={{ maxWidth: 920, margin: "36px auto", ...goldPanel }}>
+        <div style={{ ...row, justifyContent: "space-between" }}>
+          <div>
+            <div style={eyebrow}>Request Detail</div>
+            <h2 style={h2}>{title}</h2>
+          </div>
+          <button type="button" style={btn} onClick={onClose}>Close</button>
+        </div>
+
+        <div style={{ ...grid, marginTop: 16 }}>
+          <div style={panel}>
+            <div style={eyebrow}>Request Type</div>
+            <p style={sub}>{label}</p>
+            <p style={muted}>Status: {requestRow?.status || "new"}</p>
+            <p style={muted}>State: {requestRow?.state || "Not listed"}</p>
+            <p style={muted}>Room ID: {requestRow?.itemId || requestRow?.roomId || requestRow?.sourceRequestId || "Not listed"}</p>
+            <p style={muted}>Created: {requestRow?.createdAt || "not listed"}</p>
+          </div>
+
+          <div style={panel}>
+            <div style={eyebrow}>Investor Attached</div>
+            <p style={sub}>{requestRow?.investorCompany || profile?.company || "Investor company hidden/not listed"}</p>
+            <p style={muted}>{requestRow?.investorName || profile?.contactName || "Investor name hidden/not listed"}</p>
+            <p style={muted}>{requestRow?.investorEmail || profile?.email || "Investor email hidden/not listed"}</p>
+            <p style={muted}>{profile?.phone || "Investor phone hidden/not listed"}</p>
+          </div>
+        </div>
+
+        <div style={{ ...panel, marginTop: 16 }}>
+          <div style={eyebrow}>Request Message</div>
+          <p style={sub}>{requestMessage(requestRow)}</p>
+        </div>
+
+        <div style={{ ...panel, marginTop: 16 }}>
+          <div style={eyebrow}>Controls</div>
+          <p style={muted}>These controls update your investor request tracker. Deleted requests stay in the deleted folder until Delete Forever removes them.</p>
+          <div style={{ ...row, marginTop: 14 }}>
+            <button type="button" style={goldBtn} onClick={() => onStatus("saved")}>Save</button>
+            <button type="button" style={btn} onClick={() => onStatus("archived")}>Archive</button>
+            <button type="button" style={btn} onClick={() => onStatus("new")}>Restore / Active</button>
+            <button type="button" style={btn} onClick={() => onStatus("closed")}>Close</button>
+            <button type="button" style={redBtn} onClick={() => onStatus("deleted")}>Delete</button>
+            {status === "deleted" ? (
+              <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button>
+            ) : null}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 function InvestorRequestCenter() {
+  const [selected, setSelected] = useState<InvestorRequestSelection>(null);
+  const [refresh, setRefresh] = useState(0);
+
   const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
   const executionRequests = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
   const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
   const all = [...dealPainRequests, ...executionRequests, ...adminMessages];
 
+  function refreshTracker(nextSelected?: InvestorRequestSelection) {
+    setRefresh((value) => value + 1);
+    if (nextSelected !== undefined) setSelected(nextSelected);
+  }
+
+  function updateSelectedStatus(status: string) {
+    if (!selected?.row?.id) return;
+    patchInvestorRequestRow(selected.group, selected.row.id, { status });
+    refreshTracker({ ...selected, row: { ...selected.row, status, updatedAt: new Date().toISOString() } });
+  }
+
+  function deleteSelectedForever() {
+    if (!selected?.row?.id) return;
+    deleteInvestorRequestForever(selected.group, selected.row.id);
+    refreshTracker(null);
+  }
+
   return (
-    <section style={{ ...hero, marginTop: 20 }}>
+    <section style={{ ...hero, marginTop: 20 }} data-refresh={refresh}>
+      <InvestorRequestDetailModal
+        selected={selected}
+        onClose={() => setSelected(null)}
+        onStatus={updateSelectedStatus}
+        onDeleteForever={deleteSelectedForever}
+      />
+
       <div style={eyebrow}>My Investor Requests</div>
       <h2 style={h2}>Request tracking desk.</h2>
       <p style={sub}>
-        Track deal/pain requests, execution requests, and admin messages. Status updates will later connect into threaded member/admin rooms.
+        Track deal/pain requests, execution requests, and admin messages. Tap a request card to open the detail window with Save, Archive, Delete, and Delete Forever controls.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
@@ -1098,22 +1250,56 @@ function InvestorRequestCenter() {
       <div style={{ ...wideGrid, marginTop: 18 }}>
         <div style={goldPanel}>
           <div style={eyebrow}>Deal / Pain Requests</div>
-          {dealPainRequests.length ? dealPainRequests.slice(0, 4).map((row) => <RequestMiniCard key={row.id} row={row} label="Deal/Pain" />) : <p style={muted}>No Deal/Pain requests yet.</p>}
+          {dealPainRequests.length ? (
+            dealPainRequests.map((row) => (
+              <RequestMiniCard
+                key={row.id}
+                row={row}
+                label="Deal/Pain"
+                onOpen={() => setSelected({ row, label: "Deal/Pain", group: "dealPain" })}
+              />
+            ))
+          ) : (
+            <p style={muted}>No Deal/Pain requests yet.</p>
+          )}
         </div>
 
         <div style={panel}>
           <div style={eyebrow}>Execution Requests</div>
-          {executionRequests.length ? executionRequests.slice(0, 4).map((row) => <RequestMiniCard key={row.id} row={row} label="Execution" />) : <p style={muted}>No execution requests yet.</p>}
+          {executionRequests.length ? (
+            executionRequests.map((row) => (
+              <RequestMiniCard
+                key={row.id}
+                row={row}
+                label="Execution"
+                onOpen={() => setSelected({ row, label: "Execution", group: "execution" })}
+              />
+            ))
+          ) : (
+            <p style={muted}>No execution requests yet.</p>
+          )}
         </div>
 
         <div style={panel}>
           <div style={eyebrow}>Admin Messages</div>
-          {adminMessages.length ? adminMessages.slice(0, 4).map((row) => <RequestMiniCard key={row.id} row={row} label="Admin Message" />) : <p style={muted}>No admin messages yet.</p>}
+          {adminMessages.length ? (
+            adminMessages.map((row) => (
+              <RequestMiniCard
+                key={row.id}
+                row={row}
+                label="Admin Message"
+                onOpen={() => setSelected({ row, label: "Admin Message", group: "adminMessage" })}
+              />
+            ))
+          ) : (
+            <p style={muted}>No admin messages yet.</p>
+          )}
         </div>
       </div>
     </section>
   );
 }
+
 
 
 
