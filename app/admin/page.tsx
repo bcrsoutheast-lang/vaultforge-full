@@ -1015,6 +1015,182 @@ function AdminNav() {
   );
 }
 
+
+type BloombergMessagePayload = {
+  messageType: string;
+  urgency: string;
+  subject: string;
+  body: string;
+  amount: string;
+  timeline: string;
+  conditions: string;
+  nextMove: string;
+  privateNote: string;
+  summary: string;
+  sender: string;
+  recipient: string;
+  header: string;
+};
+
+function buildBloombergSummary(payload: Omit<BloombergMessagePayload, "summary">) {
+  return [
+    `TYPE: ${payload.messageType}`,
+    `URGENCY: ${payload.urgency}`,
+    `SUBJECT: ${payload.subject || "Not listed"}`,
+    `SENDER: ${payload.sender || "Not listed"}`,
+    `RECIPIENT: ${payload.recipient || "Not listed"}`,
+    `HEADER: ${payload.header || "Not listed"}`,
+    "",
+    `MESSAGE: ${payload.body || "No message body provided."}`,
+    "",
+    `AMOUNT / BUDGET: ${payload.amount || "Not listed"}`,
+    `TIMELINE: ${payload.timeline || "Not listed"}`,
+    `CONDITIONS: ${payload.conditions || "Not listed"}`,
+    `NEXT MOVE: ${payload.nextMove || "Not listed"}`,
+    payload.privateNote ? `PRIVATE NOTE: ${payload.privateNote}` : "",
+  ].filter(Boolean).join("\\n");
+}
+
+function BloombergMessageForm({
+  sender,
+  recipient,
+  header,
+  defaultSubject,
+  submitLabel,
+  defaultType,
+  onSend,
+  onCancel,
+}: {
+  sender: string;
+  recipient: string;
+  header: string;
+  defaultSubject?: string;
+  submitLabel: string;
+  defaultType?: string;
+  onSend: (payload: BloombergMessagePayload) => void;
+  onCancel?: () => void;
+}) {
+  const [messageType, setMessageType] = useState(defaultType || "Request Update");
+  const [urgency, setUrgency] = useState("Normal");
+  const [subject, setSubject] = useState(defaultSubject || header || "");
+  const [body, setBody] = useState("");
+  const [amount, setAmount] = useState("");
+  const [timeline, setTimeline] = useState("");
+  const [conditions, setConditions] = useState("");
+  const [nextMove, setNextMove] = useState("");
+  const [privateNote, setPrivateNote] = useState("");
+
+  function submit() {
+    const base = {
+      messageType,
+      urgency,
+      subject,
+      body,
+      amount,
+      timeline,
+      conditions,
+      nextMove,
+      privateNote,
+      sender,
+      recipient,
+      header,
+    };
+    const summary = buildBloombergSummary(base);
+    onSend({ ...base, summary });
+    setBody("");
+    setAmount("");
+    setTimeline("");
+    setConditions("");
+    setNextMove("");
+    setPrivateNote("");
+  }
+
+  return (
+    <div style={{ ...panel, marginTop: 14 }}>
+      <div style={eyebrow}>Bloomberg Message Ticket</div>
+      <h3 style={h3}>{subject || "Structured Request Message"}</h3>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <div style={panel}>
+          <div style={eyebrow}>Sender</div>
+          <p style={muted}>{sender || "Auto-filled sender"}</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Recipient</div>
+          <p style={muted}>{recipient || "Auto-filled recipient"}</p>
+        </div>
+      </div>
+
+      <div style={{ ...panel, marginTop: 12 }}>
+        <div style={eyebrow}>Attached Header</div>
+        <p style={sub}>{header || "Request/deal/pain context auto-attached"}</p>
+      </div>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Message Type</span>
+          <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
+            {["Request Info", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Urgency</span>
+          <select style={input} value={urgency} onChange={(event) => setUrgency(event.target.value)}>
+            {["Normal", "Time Sensitive", "Urgent", "Closing Risk"].map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Subject</span>
+        <input style={input} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Auto-filled from request, editable..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Message / Terms / Ask</span>
+        <textarea style={{ ...input, minHeight: 120 }} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write the actual request, reply, terms, bid, question, or update..." />
+      </label>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Amount / Budget</span>
+          <input style={input} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="$ amount, LTC/LTV, bid, budget..." />
+        </label>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Timeline</span>
+          <input style={input} value={timeline} onChange={(event) => setTimeline(event.target.value)} placeholder="Close date, response deadline, work start..." />
+        </label>
+      </div>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Conditions</span>
+        <input style={input} value={conditions} onChange={(event) => setConditions(event.target.value)} placeholder="Subject to docs, walkthrough, proof, title, underwriting..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Best Next Move</span>
+        <input style={input} value={nextMove} onChange={(event) => setNextMove(event.target.value)} placeholder="Schedule call, send docs, release contact, route to member..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Private Note</span>
+        <input style={input} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} placeholder="Internal note, caution, context. Saved inside structured message." />
+      </label>
+
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={submit}>{submitLabel}</button>
+        {onCancel ? <button type="button" style={btn} onClick={onCancel}>Collapse / Done</button> : null}
+      </div>
+    </div>
+  );
+}
+
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
@@ -1296,27 +1472,21 @@ function ControlledThreadAdminCard({ thread }: { thread: any }) {
           <p style={muted}>No messages yet.</p>
         )}
 
-        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
-          <span style={eyebrow}>Admin Reply</span>
-          <textarea
-            style={{ ...input, minHeight: 120 }}
-            value={reply}
-            onChange={(event) => setReply(event.target.value)}
-            placeholder="Reply into this controlled thread..."
-          />
-        </label>
+        <BloombergMessageForm
+          sender="VaultForge Admin"
+          recipient={thread?.investorEmail || thread?.memberEmail || "Investor / Member"}
+          header={thread?.roomHeader || thread?.subject || thread?.title || "Controlled Thread"}
+          defaultSubject={thread?.subject || thread?.title || "Admin Reply"}
+          defaultType="Admin Note"
+          submitLabel="Send Admin Reply"
+          onSend={(payload) => {
+            setReply(payload.summary);
+            addAdminReplyToThread(thread.id, payload.summary);
+            setReply("");
+          }}
+        />
 
         <div style={{ ...row, marginTop: 12 }}>
-          <button
-            type="button"
-            style={goldBtn}
-            onClick={() => {
-              addAdminReplyToThread(thread.id, reply);
-              setReply("");
-            }}
-          >
-            Send Admin Reply
-          </button>
           <button
             type="button"
             style={btn}
@@ -1420,18 +1590,23 @@ function AdminInvestorInboxCard({
 
       <InvestorProfileSnapshotCard profile={profile} photoUrl={item?.investorPhotoUrl || profile?.photoUrl} />
 
-      <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
-        <span style={eyebrow}>Message Investor / Controlled Thread</span>
-        <textarea
-          style={{ ...input, minHeight: 110 }}
-          value={reply}
-          onChange={(event) => setReply(event.target.value)}
-          placeholder="Reply to investor. This creates/updates a controlled thread."
-        />
-      </label>
+      <BloombergMessageForm
+        sender="VaultForge Admin"
+        recipient={item?.investorEmail || profile?.email || "Investor"}
+        header={item?.roomHeader || item?.subject || item?.title || "Investor Opportunity Request"}
+        defaultSubject={item?.subject || item?.title || "Investor Request Reply"}
+        defaultType="Admin Note"
+        submitLabel="Send Reply"
+        onSend={(payload) => {
+          setReply(payload.summary);
+          const rows = readControlledThreads();
+          const thread = createThreadFromAdminInbox({ ...item, investorProfile: profile, status: "admin_replied" });
+          addAdminReplyToThread(thread?.id || item.id, payload.summary);
+          setReply("");
+        }}
+      />
 
       <div style={{ ...row, marginTop: 14 }}>
-        <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
         <button type="button" style={greenBtn} onClick={approveAndRoute}>Approve + Route</button>
         <button type="button" style={goldBtn} onClick={markRouted}>Route to Matching Members</button>
         <button type="button" style={btn} onClick={() => onStatus(item.id, "saved")}>Save</button>
