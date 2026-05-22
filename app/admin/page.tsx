@@ -495,6 +495,35 @@ function writeControlledThreads(rows: any[]) {
   window.dispatchEvent(new Event("vaultforge-controlled-thread-change"));
 }
 
+function addAdminReplyToThread(threadId: string, body: string) {
+  if (!body?.trim()) return;
+
+  const rows = readControlledThreads();
+
+  const updated = rows.map((thread: any) => {
+    if (thread.id !== threadId) return thread;
+
+    return {
+      ...thread,
+      updatedAt: new Date().toISOString(),
+      status: "admin_replied",
+      messages: [
+        ...(thread.messages || []),
+        {
+          id: `admin-message-${Date.now()}`,
+          from: "VaultForge Admin",
+          role: "admin",
+          body,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+  });
+
+  writeControlledThreads(updated);
+}
+
+
 function createControlledThread(source: "deal_pain" | "execution" | "admin_message", request: any) {
   const rows = readControlledThreads();
   const existing = rows.find((thread) => thread.sourceRequestId === request.id);
