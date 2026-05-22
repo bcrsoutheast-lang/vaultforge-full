@@ -1893,6 +1893,43 @@ function closedRequestCount(rows: any[]) {
   return statusCount(rows, "closed");
 }
 
+function threadAsInvestorRequest(thread: any) {
+  const profile = compactInvestorProfile(thread?.investorProfile || safeInvestorSnapshot());
+  return {
+    ...thread,
+    id: thread?.id || thread?.threadId || `controlled-thread-${Date.now()}`,
+    type: thread?.type || "controlled_thread",
+    requestTitle: thread?.requestTitle || thread?.title || "Request Message Thread",
+    title: thread?.title || thread?.requestTitle || "Request Message Thread",
+    topic: thread?.topic || thread?.title || thread?.requestTitle || "Request Message Thread",
+    subject: thread?.subject || thread?.title || thread?.requestTitle || "Request Message Thread",
+    roomHeader: thread?.roomHeader || thread?.message || "Controlled investor/member/admin conversation.",
+    message: thread?.message || thread?.roomHeader || "Controlled investor/member/admin conversation.",
+    status: thread?.status || "new",
+    source: thread?.source || "controlled-thread",
+    kind: thread?.kind || thread?.roomKind || thread?.roomType || "Request",
+    state: thread?.state || "",
+    investorProfile: profile,
+    investorEmail: thread?.investorEmail || profile.email || "",
+    investorCompany: thread?.investorCompany || profile.company || "",
+    investorName: thread?.investorName || profile.contactName || "",
+    investorPhotoUrl: thread?.investorPhotoUrl || profile.photoUrl || "",
+    createdAt: thread?.createdAt || thread?.updatedAt || new Date().toISOString(),
+    updatedAt: thread?.updatedAt || thread?.createdAt || new Date().toISOString(),
+  };
+}
+
+function readControlledThreadRequests() {
+  const rows = readControlledThreads();
+  const investorEmail = investorEmailForThreads();
+  return rows
+    .filter((thread: any) => {
+      const threadEmail = String(thread?.investorEmail || thread?.investorProfile?.email || "").toLowerCase();
+      return !investorEmail || !threadEmail || threadEmail === investorEmail;
+    })
+    .map(threadAsInvestorRequest);
+}
+
 function readAllInvestorRequests() {
   const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
   const executionRequests = readJson<any[]>(
@@ -1900,7 +1937,8 @@ function readAllInvestorRequests() {
     [],
   );
   const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
-  return [...dealPainRequests, ...executionRequests, ...adminMessages];
+  const controlledThreads = readControlledThreadRequests();
+  return [...dealPainRequests, ...executionRequests, ...adminMessages, ...controlledThreads];
 }
 
 type InvestorRequestGroup = "dealPain" | "execution" | "adminMessage";
@@ -2150,7 +2188,8 @@ function InvestorRequestCenter() {
     [],
   );
   const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
-  const all = [...dealPainRequests, ...executionRequests, ...adminMessages];
+  const controlledThreads = readControlledThreadRequests();
+  const all = [...dealPainRequests, ...executionRequests, ...adminMessages, ...controlledThreads];
 
   function refreshTracker(nextSelected?: InvestorRequestSelection) {
     setRefresh((value) => value + 1);
@@ -2498,7 +2537,7 @@ function InvestorThreadCenter() {
   const activeThreads = threads.filter((thread) => {
     const status = String(thread?.status || '').toLowerCase();
     const id = String(thread?.id || thread?.threadId || '');
-    return status !== 'deleted' && status !== 'archived' && !collapsedThreadIds.includes(id);
+    return !['deleted', 'archived', 'saved', 'closed'].includes(status) && !collapsedThreadIds.includes(id);
   });
   const adminReplyCount = activeThreads.reduce((total, thread) => total + threadMessagesByRole(thread, 'admin').length, 0);
   const memberReplyCount = activeThreads.reduce((total, thread) => total + threadMessagesByRole(thread, 'member').length, 0);
