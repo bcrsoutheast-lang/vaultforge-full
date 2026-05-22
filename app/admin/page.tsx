@@ -1192,7 +1192,9 @@ function BloombergMessageForm({
 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>
+        <AdminOperatingGuide />
+;
 }
 
 function Metric({ title, count, note, active, pulse, onClick }: { title: string; count: number | string; note: string; active?: boolean; pulse?: boolean; onClick?: () => void }) {
@@ -1720,6 +1722,49 @@ function CollapseBar({ label, onCollapse }: { label: string; onCollapse: () => v
 }
 
 
+
+function AdminSequenceCard({
+  step,
+  title,
+  note,
+  active,
+}: {
+  step: string;
+  title: string;
+  note: string;
+  active?: boolean;
+}) {
+  return (
+    <div style={active ? goldPanel : panel}>
+      <div style={eyebrow}>{step}</div>
+      <h3 style={h3}>{title}</h3>
+      <p style={muted}>{note}</p>
+    </div>
+  );
+}
+
+function AdminOperatingGuide() {
+  return (
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
+      <div style={eyebrow}>Admin Control Sequence</div>
+      <h2 style={h2}>Route requests in order.</h2>
+      <p style={sub}>
+        Admin is the control tower. Investor/member data should stay controlled while admin reviews, routes, releases contact, and closes the workflow.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        <AdminSequenceCard step="01 Review" title="Investor Inbox" note="New investor Deal/Pain/execution requests land here first." active />
+        <AdminSequenceCard step="02 Profile" title="Verify Investor Context" note="Investor profile should be attached before routing to members." />
+        <AdminSequenceCard step="03 Match" title="Route To Members" note="Send request to members who match lender, title, contractor, operator, insurance, JV, or market role." />
+        <AdminSequenceCard step="04 Thread" title="Controlled Conversation" note="Keep admin, member, and investor replies tied to one request thread." />
+        <AdminSequenceCard step="05 Release" title="Contact Release" note="Only release contact after approval. Log who released and when." />
+        <AdminSequenceCard step="06 Close" title="Save / Archive / Delete / Close" note="Clean the queue once the request is handled, passed, or dead." />
+      </div>
+    </section>
+  );
+}
+
+
 export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
@@ -2016,8 +2061,8 @@ export default function AdminPage() {
 
         <section style={hero}>
           <div style={eyebrow}>VaultForge Admin Command</div>
-          <h1 style={h1}>Control tower restored.</h1>
-          <p style={sub}>Manage members, investor approvals, Deal/Pain rooms, investor requests, state balance, cleanup folders, and admin broadcasts.</p>
+          <h1 style={h1}>Admin control tower.</h1>
+          <p style={sub}>Review investor/member activity, route requests, control contact release, and clean queues without exposing private network data.</p>
         </section>
 
         <section style={{ marginBottom: 18 }}>
