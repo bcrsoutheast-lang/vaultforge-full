@@ -37,6 +37,28 @@ function readThreads() {
   return Array.isArray(rows) ? rows : [];
 }
 
+function assignedEmails(thread: any) {
+  const out = new Set<string>();
+  const direct = [thread?.memberEmail, thread?.assignedMemberEmail, thread?.assignedToEmail];
+  direct.forEach((value) => {
+    const clean = String(value || "").trim().toLowerCase();
+    if (clean) out.add(clean);
+  });
+  const lists = [thread?.assignedMemberEmails, thread?.assignedToEmails, thread?.memberEmails];
+  lists.forEach((list) => {
+    if (Array.isArray(list)) list.forEach((value) => {
+      const clean = String(value || "").trim().toLowerCase();
+      if (clean) out.add(clean);
+    });
+  });
+  const members = [...(Array.isArray(thread?.routedMembers) ? thread.routedMembers : []), ...(Array.isArray(thread?.assignedMembers) ? thread.assignedMembers : [])];
+  members.forEach((member) => {
+    const clean = String(member?.email || "").trim().toLowerCase();
+    if (clean) out.add(clean);
+  });
+  return Array.from(out);
+}
+
 function writeThreads(rows: any[]) {
   writeJson(CONTROLLED_THREADS_KEY, rows);
   window.dispatchEvent(new Event("vaultforge-controlled-thread-change"));
@@ -198,6 +220,14 @@ function ThreadCard({
       <h2 style={h2}>{thread.title || "Controlled Investor Thread"}</h2>
       <p style={sub}>{thread.roomHeader || "Approved investor request"}</p>
       <p style={muted}>Source: {thread.source || "request"} • State: {thread.state || "not listed"}</p>
+      {(thread.routedMembers || thread.assignedMembers || []).length ? (
+        <div style={{ ...panel, marginTop: 14 }}>
+          <div style={eyebrow}>Why this reached you</div>
+          {(thread.routedMembers || thread.assignedMembers || []).map((member: any) => (
+            <p key={member.email || member.id} style={muted}>{member.name || "Member"} • {member.company || "Company"} • {member.memberType || "Role"} • Match: {member.matchReason || "network fit"}</p>
+          ))}
+        </div>
+      ) : null}
 
       <div style={{ ...grid, marginTop: 16 }}>
         <InvestorProfileCard profile={profile} photoUrl={thread.investorPhotoUrl} released={Boolean(thread.contactReleased)} />
@@ -285,8 +315,8 @@ export default function MemberControlledThreadsPage() {
     if (admin) return threads;
 
     return threads.filter((thread) => {
-      const assigned = String(thread.memberEmail || thread.assignedMemberEmail || "").toLowerCase();
-      return !assigned || assigned === email;
+      const assigned = assignedEmails(thread);
+      return !assigned.length || assigned.includes(email);
     });
   }, [threads, email]);
 
