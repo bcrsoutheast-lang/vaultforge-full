@@ -299,6 +299,7 @@ export default function MemberControlledThreadsPage() {
     const next = threads.map((thread) => (thread.id === id ? { ...thread, ...patch } : thread));
     setThreads(next);
     writeThreads(next);
+    window.dispatchEvent(new Event("vaultforge-controlled-thread-change"));
   }
 
   return (
@@ -315,7 +316,7 @@ export default function MemberControlledThreadsPage() {
             <Link href="/command" style={goldBtn}>Member Command</Link>
             <Link href="/message-command" style={btn}>Message Command</Link>
             <Link href="/investor-room" style={btn}>Investor Room</Link>
-            <Link href="/admin" style={redBtn}>Admin</Link>
+            <Link href="/admin" style={btn}>Admin</Link>
           </div>
 
           <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
