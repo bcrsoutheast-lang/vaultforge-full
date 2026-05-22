@@ -215,7 +215,7 @@ function investorProfileSnapshot(investor: any) {
 
 function saveInvestorAdminMessage(subject: string, body: string) {
   const rows = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
-  const investor = readJson<any>(INVESTOR_APP_KEY, {});
+  const investor = readInvestor();
   const profile = investorProfileSnapshot(investor);
 
   rows.unshift({
@@ -274,7 +274,7 @@ function saveInvestorAdminMessage(subject: string, body: string) {
 
 function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
   const rows = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
-  const investor = readJson<any>(INVESTOR_APP_KEY, {});
+  const investor = readInvestor();
   const profile = investorProfileSnapshot(investor);
   const title = itemTitle(item, kind);
   const state = itemState(item);
@@ -423,7 +423,7 @@ function pushAdminInbox(row: any) {
 
 function sendRequest(kind: Kind, item: any, body: string) {
   const rows = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
-  const investor = readJson<any>(INVESTOR_APP_KEY, {});
+  const investor = readInvestor();
   const profile = investorProfileSnapshot(investor);
   const title = itemTitle(item, kind);
   const state = itemState(item);
