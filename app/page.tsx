@@ -12,7 +12,7 @@ type Countdown = {
 };
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-const FOUNDER_DEADLINE = new Date("2026-05-30T23:59:59-04:00").getTime();
+const FOUNDER_DEADLINE = new Date("2026-06-01T23:59:59-04:00").getTime();
 
 const founderRoles = [
   { key: "buyers", title: "Buyers / Acquisitions", cap: 20, aliases: ["buyer", "buyers", "acquisition", "acquisitions"] },
@@ -37,7 +37,7 @@ const tickerItems = [
   "MEMBER-TO-MEMBER EXECUTION",
   "INVESTOR ACCESS IS SEPARATE",
   "NOT A LISTINGS SITE",
-  "FOUNDING ALLOCATIONS CLOSE MAY 30",
+  "FOUNDING ALLOCATIONS CLOSE JUNE 1",
 ];
 
 const painExamples = [
@@ -236,12 +236,12 @@ function Nav({ owner }: { owner: boolean }) {
       </div>
 
       <div style={navSide}>
-        <Link href="/member-access" style={goldBtn}>Member Access</Link>
-        <Link href="/investor-access" style={btn}>Investor Access</Link>
+        <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
+        <Link href="/investor-access" style={goldBtn}>Investor Room Access</Link>
         <Link href="/create-login" style={btn}>Create Login</Link>
-        <Link href="/investor-login" style={btn}>Investor Login</Link>
-        <Link href="/command" style={btn}>Member Command</Link>
-        {owner ? <Link href="/admin" style={redBtn}>Admin Command</Link> : null}
+        <Link href="/login" style={btn}>Members Login</Link>
+        <Link href="/investor-login" style={btn}>Investor Room Login</Link>
+        <Link href="/admin" style={owner ? redBtn : btn}>Admin Login</Link>
       </div>
     </nav>
   );
@@ -374,11 +374,11 @@ export default function HomePage() {
 
           <div style={{ ...row, marginTop: 24 }}>
             <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-            <Link href="/investor-access" style={btn}>Investor Access</Link>
-            <Link href="/create-login" style={btn}>Create Login</Link>
-            <Link href="/investor-login" style={btn}>Investor Login</Link>
-            <Link href="/profile" style={btn}>Build Profile</Link>
-            <Link href="/contact-admin" style={btn}>Contact Admin</Link>
+            <Link href="/investor-access" style={goldBtn}>Investor Room Access</Link>
+            <Link href="/create-login" style={btn}>Create Login + Password</Link>
+            <Link href="/login" style={btn}>Members Login</Link>
+            <Link href="/investor-login" style={btn}>Investor Room Login</Link>
+            <Link href="/admin" style={btn}>Admin Login</Link>
           </div>
 
           <div style={{ marginTop: 22 }}>
@@ -390,11 +390,68 @@ export default function HomePage() {
 
         <Ticker />
 
+        <Section label="Two Controlled Access Lanes" title="Members build the network. Investors access the signal room.">
+          <p style={sub}>VaultForge now runs two separate experiences: a private member command center for operators and an investor room for approved capital, buyers, and deal reviewers. The investor room can see controlled Deal Opportunities and Pain submissions, but it does not expose the private member directory.</p>
+
+          <div style={{ ...wideGrid, marginTop: 22 }}>
+            <div style={goldPanel}>
+              <div style={eyebrow}>Investor Room</div>
+              <h3 style={h3}>Controlled access to deal and pain signals.</h3>
+              <p style={muted}>Investors can review limited Deal Opportunity cards, Pain submissions, state signals, request more information, message through controlled threads, and request execution help.</p>
+              <p style={muted}>Investor price: $79 first month, then $149/month.</p>
+              <div style={{ ...row, marginTop: 16 }}>
+                <Link href="/investor-access" style={goldBtn}>Get Investor Room Access</Link>
+                <Link href="/investor-login" style={btn}>Investor Room Login</Link>
+              </div>
+            </div>
+
+            <div style={goldPanel}>
+              <div style={eyebrow}>Private Members Site</div>
+              <h3 style={h3}>Approved operators, capital, buyers, and problem solvers.</h3>
+              <p style={muted}>Members operate inside the private command center: routed requests, Deal/Pain rooms, messages, alerts, profile-based routing, state intelligence, and execution lanes.</p>
+              <p style={muted}>Members are not publicly browsed. The network is protected by profile review, admin approval, payment unlock, and controlled contact release.</p>
+              <div style={{ ...row, marginTop: 16 }}>
+                <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
+                <Link href="/login" style={btn}>Members Login</Link>
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        <Section label="One-Stop Real Estate Execution Shop" title="Deals, problems, people, and next moves in one private system.">
+          <p style={sub}>VaultForge is built for the messy real estate work that happens before, during, and after a deal: finding capital, locating buyers, solving title/closing problems, finding contractors, routing operators, reviewing Pain signals, requesting boots on ground, and turning pressure into execution.</p>
+
+          <div style={{ ...grid, marginTop: 20 }}>
+            <div style={panel}><div style={eyebrow}>Capital</div><p style={sub}>Private lenders, hard money, equity partners, JV capital, proof-of-funds context, and funding gap routing.</p></div>
+            <div style={panel}><div style={eyebrow}>Execution</div><p style={sub}>Contractors, operators, boots on ground, property management, disposition, insurance, and transaction support.</p></div>
+            <div style={panel}><div style={eyebrow}>Deal Intelligence</div><p style={sub}>Deal Opportunities, Pain submissions, market pressure, state filters, routed requests, and controlled message threads.</p></div>
+            <div style={panel}><div style={eyebrow}>Protection</div><p style={sub}>Profiles attached, contact hidden, member data private, admin approval, payment unlock, and release-only introductions.</p></div>
+          </div>
+        </Section>
+
+        <Section label="Access Sequence" title="Profile first. Approval next. Payment unlocks the room.">
+          <div style={wideGrid}>
+            <div style={panel}><div style={eyebrow}>01 Create Login</div><p style={sub}>Create email/password access so your profile, room, messages, and payment status can stay tied together.</p></div>
+            <div style={panel}><div style={eyebrow}>02 Submit Profile</div><p style={sub}>Investor or member profile goes to admin with your market, role, strategy, capital/execution ability, and contact preference.</p></div>
+            <div style={panel}><div style={eyebrow}>03 Locked Room Preview</div><p style={sub}>After submission, you can see the locked Investor Room or Member Room preview while admin reviews your profile.</p></div>
+            <div style={panel}><div style={eyebrow}>04 Admin Approval</div><p style={sub}>When approved, the payment button lights up. After payment, the room unlocks automatically.</p></div>
+          </div>
+        </Section>
+
+        <Section label="Why People Will Want In" title="This is where off-market pressure gets organized before it becomes public noise.">
+          <div style={wideGrid}>
+            <div style={goldPanel}><div style={eyebrow}>Signal Before Listing</div><h3 style={h3}>Problems become opportunities.</h3><p style={muted}>Capital gaps, stalled rehabs, title problems, partner issues, insurance trouble, and urgent exits can become routed execution signals.</p></div>
+            <div style={goldPanel}><div style={eyebrow}>No Public Member Exposure</div><h3 style={h3}>Private by design.</h3><p style={muted}>Investors request through VaultForge. Members decide what to accept, pass, message, or release.</p></div>
+            <div style={goldPanel}><div style={eyebrow}>Command Center Feel</div><h3 style={h3}>Not another dashboard.</h3><p style={muted}>Profiles, rooms, replies, requests, cleanup folders, and execution lanes work together instead of scattered texts and spreadsheets.</p></div>
+          </div>
+        </Section>
+
+
         <section style={{ marginBottom: 22 }}>
           <div style={grid}>
             <div style={goldPanel}><div style={eyebrow}>Founder Network</div><h2 style={h2}>{totalFilled} / {totalCap}</h2><p style={muted}>real filled founder allocations</p></div>
             <div style={goldPanel}><div style={eyebrow}>Member Founder Pricing</div><h2 style={h2}>{founderClosed ? "$99" : "$49"}</h2><p style={muted}>{founderClosed ? "$99 activation, then $299/month" : "$49 activation, $49 second month, then $299/month"}</p></div>
-            <div style={goldPanel}><div style={eyebrow}>Investor Access</div><h2 style={h2}>$49</h2><p style={muted}>first month, then $149/month</p></div>
+            <div style={goldPanel}><div style={eyebrow}>Investor Access</div><h2 style={h2}>$79</h2><p style={muted}>first month, then $149/month</p></div>
             <div style={redPanel}><div style={eyebrow}>Pain Signals</div><h2 style={h2}>Live</h2><p style={muted}>problem pressure routed by profile fit</p></div>
           </div>
         </section>
@@ -402,7 +459,7 @@ export default function HomePage() {
         <Section label="Founder Access Countdown" title={founderClosed ? "Founding allocations closed." : "Founding allocations close May 30."}>
           <CountdownCards timer={timer} />
           <div style={{ ...panel, marginTop: 18 }}>
-            <p style={sub}>{founderClosed ? "Standard member access is now active: $99 activation, then $299/month." : "Member founder access: $49 activation, $49 second month, then $299/month. Founder allocations close May 30 or when strategic categories reach capacity."}</p>
+            <p style={sub}>{founderClosed ? "Standard member access is now active: $99 activation, then $299/month." : "Member founder access: $49 activation, $49 second month, then $299/month. Founder allocations close June 1 or when strategic categories reach capacity."}</p>
           </div>
         </Section>
 
@@ -413,11 +470,11 @@ export default function HomePage() {
           </div>
         </Section>
 
-        <Section label="Investor Access Lane" title="Separate investor room. Limited data. Controlled messaging.">
-          <p style={sub}>Investor Access is separate from the private member network. Investors can browse limited Deal and Pain teaser cards by state and request more information through VaultForge. They do not see member contact data, private routing, full notes, seller information, or the member network.</p>
+        <Section label="Investor Room" title="Approved investors get a controlled signal room.">
+          <p style={sub}>Investor Room is separate from the private member site. Investors can access limited Members Deal Opportunities and Pain submissions by state, request more information, send structured messages, and ask for execution support through VaultForge. They do not see member personal contact data, private routing, full admin notes, seller information, or the member command center.</p>
           <div style={{ ...grid, marginTop: 20 }}>
-            <div style={goldPanel}><div style={eyebrow}>Investor Pricing</div><h3 style={h3}>$49 first month</h3><p style={muted}>Then $149/month.</p></div>
-            <div style={panel}><div style={eyebrow}>Investor Sees</div><p style={sub}>Limited Deal cards, limited Pain cards, state filters, and Request More Info messaging.</p></div>
+            <div style={goldPanel}><div style={eyebrow}>Investor Pricing</div><h3 style={h3}>$79 first month</h3><p style={muted}>Then $149/month.</p></div>
+            <div style={panel}><div style={eyebrow}>Investor Sees</div><p style={sub}>Limited Deal Opportunity cards, Pain submissions, state filters, request cards, structured replies, and execution request lanes.</p></div>
             <div style={panel}><div style={eyebrow}>Investor Does Not See</div><p style={sub}>Member directory, private contacts, seller info, routing intelligence, admin notes, or full member rooms.</p></div>
           </div>
           <div style={{ ...row, marginTop: 22 }}>
@@ -461,8 +518,8 @@ export default function HomePage() {
           <div style={wideGrid}>
             <div style={panel}><div style={eyebrow}>Create Login</div><p style={sub}>Email, password, and recovery path create the member identity.</p></div>
             <div style={panel}><div style={eyebrow}>Complete Profile</div><p style={sub}>Profile intelligence tells VaultForge what you do, where you operate, and how you execute.</p></div>
-            <div style={panel}><div style={eyebrow}>Admin Approval</div><p style={sub}>Owner approval unlocks the payment step.</p></div>
-            <div style={panel}><div style={eyebrow}>Payment Unlock</div><p style={sub}>After payment, the full member execution network unlocks.</p></div>
+            <div style={panel}><div style={eyebrow}>Admin Approval</div><p style={sub}>Owner approval activates the payment button for the right room.</p></div>
+            <div style={panel}><div style={eyebrow}>Payment Unlock</div><p style={sub}>After payment, Investor Room or Member Room access unlocks automatically.</p></div>
           </div>
         </Section>
 
@@ -483,7 +540,7 @@ export default function HomePage() {
           <p style={sub}>Not every opportunity should become public. Not every problem belongs on the open market. VaultForge exists to coordinate execution before the rest of the market sees the pressure.</p>
           <div style={{ ...row, marginTop: 22 }}>
             <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-            <Link href="/investor-access" style={btn}>Investor Access</Link>
+            <Link href="/investor-access" style={btn}>Investor Room Access</Link>
             <Link href="/contact-admin" style={btn}>Contact Admin</Link>
           </div>
         </section>
