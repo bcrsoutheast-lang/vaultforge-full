@@ -1154,7 +1154,7 @@ function BloombergMessageForm({
 
   return (
     <div style={{ ...panel, marginTop: 14 }}>
-      <div style={eyebrow}>Bloomberg Message Ticket</div>
+      <div style={eyebrow}>Structured Message Ticket</div>
       <h3 style={h3}>{subject || "Structured Request Message"}</h3>
 
       <div style={{ ...grid, marginTop: 12 }}>
