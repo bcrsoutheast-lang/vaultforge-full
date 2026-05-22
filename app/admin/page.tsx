@@ -698,6 +698,7 @@ function AdminNav() {
         <Link href="/" style={btn}>Home</Link>
         <Link href="/admin" style={goldBtn}>Admin Command</Link>
         <Link href="/command" style={btn}>Member View</Link>
+        <Link href="/member-controlled-threads" style={goldBtn}>Controlled Threads</Link>
         <Link href="/investor-room" style={btn}>Investor Room</Link>
         <Link href="/logout" style={redBtn}>Logout</Link>
       </div>
@@ -1252,6 +1253,7 @@ export default function AdminPage() {
             <Metric title="Approved Not Paid" count={approvedUnpaid.length} note="payment approved but unpaid" pulse={approvedUnpaid.length > 0} onClick={() => { setFilter("approvedUnpaid"); setTab("members"); }} />
             <Metric title="New Investors" count={newInvestors.length} note="pending investor approvals" pulse={newInvestors.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Investor Payments" count={pendingInvestorPayment.length} note="investor payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Controlled Threads" count={readControlledThreads().length} note="approved intro rooms" pulse={readControlledThreads().length > 0} onClick={() => setTab("investors")} />
             <Metric title="Deal Requests" count={dealRequests.length} note="investor deal interest" pulse={dealRequests.length > 0} onClick={() => setTab("dealRequests")} />
             <Metric title="Pain Requests" count={painRequests.length} note="investor pain interest" pulse={painRequests.length > 0} onClick={() => setTab("painRequests")} />
             <Metric title="Execution Requests" count={openInvestorExecutionRequests.length} note="lender/title/contractor/operator requests" pulse={openInvestorExecutionRequests.length > 0} onClick={() => setTab("investors")} />
