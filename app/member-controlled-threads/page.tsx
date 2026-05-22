@@ -474,19 +474,16 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
       <p style={muted}>Thread ID: {safeId(thread)}</p>
 
       <div style={{ ...row, marginTop: 16 }}>
-        <button type="button" style={btn} onClick={onBack}>Back to Cards</button>
+        <button type="button" style={btn} onClick={onBack}>Collapse / Done</button>
         <button type="button" style={goldBtn} onClick={() => onPatch({ status: "accepted", stage: "member_accepted", memberAccepted: true, unread: false, updatedAt: new Date().toISOString() })}>Accept / Work It</button>
         <button type="button" style={goldBtn} onClick={() => onPatch({ status: "reviewing", stage: "member_reviewing", unread: false, updatedAt: new Date().toISOString() })}>Reviewing</button>
         <button type="button" style={goldBtn} onClick={() => onPatch({ contactReleased: true, status: "contact_released", stage: "contact_released", updatedAt: new Date().toISOString() })}>Release Contact</button>
         <button type="button" style={btn} onClick={() => onPatch({ saved: true, status: "saved", stage: "saved", updatedAt: new Date().toISOString() })}>Save</button>
-        <button type="button" style={btn} onClick={() => onPatch({ status: "archived", stage: "archived", updatedAt: new Date().toISOString() })}>Archive</button>
-        <button type="button" style={redBtn} onClick={() => onPatch({ status: "passed", stage: "member_passed", updatedAt: new Date().toISOString() })}>Pass</button>
-        {isDeleted(thread) ? (
-          <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button>
-        ) : (
-          <button type="button" style={redBtn} onClick={() => onPatch({ status: "deleted", stage: "deleted", updatedAt: new Date().toISOString() })}>Delete</button>
-        )}
-        {statusOf(thread) !== "new" ? <button type="button" style={btn} onClick={() => onPatch({ status: "new", stage: "member_inbox", updatedAt: new Date().toISOString() })}>Move To Inbox</button> : null}
+        <button type="button" style={btn} onClick={() => onPatch({ saved: false, status: "archived", stage: "archived", updatedAt: new Date().toISOString() })}>Archive</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ saved: false, status: "passed", stage: "member_passed", updatedAt: new Date().toISOString() })}>Pass</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ saved: false, status: "deleted", stage: "deleted", updatedAt: new Date().toISOString() })}>Delete</button>
+        <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button>
+        {statusOf(thread) !== "new" ? <button type="button" style={btn} onClick={() => onPatch({ saved: false, status: "new", stage: "member_inbox", updatedAt: new Date().toISOString() })}>Move To Inbox</button> : null}
       </div>
 
       <div style={{ ...grid, marginTop: 18 }}>
