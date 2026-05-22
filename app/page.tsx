@@ -55,6 +55,120 @@ const painExamples = [
   "Portfolio liquidation",
 ];
 
+const OPERATING_STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+
+const sampleDealPostings = [
+  {
+    state: "GA",
+    city: "Cartersville",
+    type: "Deal Opportunity",
+    headline: "Residential value-add near strong contractor demand",
+    teaser: "Limited teaser: residential opportunity, buyer/operator fit, execution help may be needed.",
+    need: "Buyer, lender, contractor review",
+  },
+  {
+    state: "TN",
+    city: "Chattanooga",
+    type: "Deal Opportunity",
+    headline: "Small-balance opportunity with fast-close angle",
+    teaser: "Limited teaser: potential acquisition target with private details locked inside.",
+    need: "Capital partner or buyer review",
+  },
+  {
+    state: "FL",
+    city: "Jacksonville",
+    type: "Deal Opportunity",
+    headline: "Rental / flip candidate needing underwriting",
+    teaser: "Limited teaser: deal room shows strategy, market, and request lane after access.",
+    need: "Investor review and title/closing support",
+  },
+  {
+    state: "TX",
+    city: "Dallas",
+    type: "Deal Opportunity",
+    headline: "Operator-heavy opportunity needing execution team",
+    teaser: "Limited teaser: project needs people who can move fast and coordinate execution.",
+    need: "Operator, lender, contractor",
+  },
+];
+
+const samplePainPostings = [
+  {
+    state: "GA",
+    city: "Atlanta",
+    type: "Pain Signal",
+    headline: "Capital gap before closing window",
+    teaser: "Limited teaser: investor/member may solve with funding, JV, or structured terms.",
+    need: "Private capital or hard money",
+  },
+  {
+    state: "NC",
+    city: "Charlotte",
+    type: "Pain Signal",
+    headline: "Contractor stalled rehab timeline",
+    teaser: "Limited teaser: project needs execution help before pressure turns into loss.",
+    need: "Contractor / operator",
+  },
+  {
+    state: "SC",
+    city: "Greenville",
+    type: "Pain Signal",
+    headline: "Title/closing issue blocking deal movement",
+    teaser: "Limited teaser: closing problem requires the right member lane.",
+    need: "Title / attorney / closing help",
+  },
+  {
+    state: "AL",
+    city: "Birmingham",
+    type: "Pain Signal",
+    headline: "Owner needs fast disposition path",
+    teaser: "Limited teaser: problem may turn into acquisition, referral, or buyer match.",
+    need: "Buyer / disposition partner",
+  },
+];
+
+function stateCounts(rows: any[]) {
+  return OPERATING_STATES.map((state) => ({
+    state,
+    count: rows.filter((row) => row.state === state).length,
+  }));
+}
+
+function liveMemberCounts() {
+  const profiles = allProfiles();
+  return OPERATING_STATES.map((state) => {
+    const count = profiles.filter((profile: any) => {
+      const based = String(profile?.basedState || profile?.state || profile?.homeState || "").toUpperCase();
+      const states = Array.isArray(profile?.statesOperated || profile?.states_served || profile?.operatingStates)
+        ? (profile?.statesOperated || profile?.states_served || profile?.operatingStates)
+        : [];
+      return based === state || states.map((x: any) => String(x).toUpperCase()).includes(state);
+    }).length;
+
+    return { state, count };
+  });
+}
+
+function liveInvestorCounts() {
+  const rows: any[] = [];
+  const keys = ["vaultforge_investor_application_v1", "vaultforge_investor_applications_v1", "vaultforge_investors_v1", "vf_investors"];
+  for (const key of keys) {
+    const parsed = readJson<any>(key, []);
+    if (Array.isArray(parsed)) rows.push(...parsed.filter(Boolean));
+    else if (parsed && typeof parsed === "object") rows.push(parsed);
+  }
+
+  return OPERATING_STATES.map((state) => {
+    const count = rows.filter((profile: any) => {
+      const states = Array.isArray(profile?.statesInterested || profile?.states || profile?.markets)
+        ? (profile?.statesInterested || profile?.states || profile?.markets)
+        : String(profile?.state || "").split(",");
+      return states.map((x: any) => String(x).trim().toUpperCase()).includes(state);
+    }).length;
+    return { state, count };
+  });
+}
+
 const logoCandidates = [
   "/vaultforge-logo.png",
   "/VaultForge-logo.png",
@@ -217,9 +331,9 @@ const panel: React.CSSProperties = { background: "#121724", border: "1px solid r
 const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.55)", boxShadow: "0 0 28px rgba(245,197,66,.12)" };
 const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.56)", boxShadow: "0 0 28px rgba(255,70,70,.10)" };
 const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 13, marginBottom: 12 };
-const h1: React.CSSProperties = { fontSize: "clamp(52px,11vw,128px)", lineHeight: 0.82, letterSpacing: -6, margin: "0 0 20px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(34px,6vw,70px)", lineHeight: 0.92, letterSpacing: -3, margin: "0 0 16px", fontWeight: 950 };
-const h3: React.CSSProperties = { fontSize: "clamp(25px,4vw,42px)", lineHeight: 1, letterSpacing: -1.5, margin: "0 0 12px", fontWeight: 950 };
+const h1: React.CSSProperties = { fontSize: "clamp(42px,8vw,96px)", lineHeight: 0.92, letterSpacing: -3, margin: "0 0 22px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,56px)", lineHeight: 1, letterSpacing: -2, margin: "0 0 16px", fontWeight: 950 };
+const h3: React.CSSProperties = { fontSize: "clamp(23px,3.5vw,36px)", lineHeight: 1.05, letterSpacing: -1, margin: "0 0 12px", fontWeight: 950 };
 const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: "clamp(19px,2.5vw,26px)", lineHeight: 1.28, margin: 0 };
 const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
@@ -300,7 +414,7 @@ function CountdownCards({ timer }: { timer: Countdown }) {
         ["Minutes", timer.minutes],
         ["Seconds", timer.seconds],
       ].map(([label, value]) => (
-        <div key={label} style={redPanel}>
+        <div key={label} style={goldPanel}>
           <div style={eyebrow}>{label}</div>
           <h2 style={h2}>{String(value).padStart(2, "0")}</h2>
           <p style={muted}>until founding allocations close</p>
@@ -314,14 +428,43 @@ function FounderAllocationCard({ item }: { item: any }) {
   const percent = item.cap ? Math.min(100, Math.round((item.filled / item.cap) * 100)) : 0;
 
   return (
-    <div style={item.full || item.remaining <= 2 ? redPanel : goldPanel}>
+    <div style={item.full ? redPanel : goldPanel}>
       <div style={eyebrow}>{item.title}</div>
       <h3 style={h3}>{item.filled} / {item.cap} Filled</h3>
       <p style={sub}>{item.remaining} founder allocations remaining</p>
       <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.08)", overflow: "hidden", marginTop: 14 }}>
-        <div style={{ height: "100%", width: `${percent}%`, background: item.full || item.remaining <= 2 ? "#ff4d5e" : "#ffdc68" }} />
+        <div style={{ height: "100%", width: `${percent}%`, background: item.full ? "#ff4d5e" : "#ffdc68" }} />
       </div>
       <p style={muted}>{item.full ? "Founder allocation closed." : item.remaining <= 2 ? "Almost full." : "Founder allocation open."}</p>
+    </div>
+  );
+}
+
+
+function LivePostingCard({ item }: { item: any }) {
+  return (
+    <div style={goldPanel}>
+      <div style={eyebrow}>{item.type} • {item.state}</div>
+      <h3 style={h3}>{item.headline}</h3>
+      <p style={sub}>{item.city}, {item.state}</p>
+      <p style={muted}>{item.teaser}</p>
+      <p style={muted}>Need: {item.need}</p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <Link href="/investor-access" style={goldBtn}>Enter To Request Info</Link>
+        <Link href="/member-access" style={btn}>Apply As Member</Link>
+      </div>
+    </div>
+  );
+}
+
+function StateCountCard({ state, memberCount, investorCount, dealCount, painCount }: { state: string; memberCount: number; investorCount: number; dealCount: number; painCount: number }) {
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>{state}</div>
+      <h3 style={h3}>{dealCount + painCount} live signals</h3>
+      <p style={muted}>Members: {memberCount}</p>
+      <p style={muted}>Investors: {investorCount}</p>
+      <p style={muted}>Deal teasers: {dealCount} • Pain teasers: {painCount}</p>
     </div>
   );
 }
@@ -357,6 +500,10 @@ export default function HomePage() {
   const founderClosed = timer.expired || counts.every((item) => item.full);
   const totalFilled = counts.reduce((sum, item) => sum + item.filled, 0);
   const totalCap = counts.reduce((sum, item) => sum + item.cap, 0);
+  const memberStateCounts = useMemo(() => liveMemberCounts(), [tick]);
+  const investorStateCounts = useMemo(() => liveInvestorCounts(), [tick]);
+  const dealStateCounts = useMemo(() => stateCounts(sampleDealPostings), []);
+  const painStateCounts = useMemo(() => stateCounts(samplePainPostings), []);
 
   return (
     <main style={page}>
@@ -431,7 +578,7 @@ export default function HomePage() {
 
         <Section label="Access Sequence" title="Profile first. Approval next. Payment unlocks the room.">
           <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>01 Create Login</div><p style={sub}>Create email/password access so your profile, room, messages, and payment status can stay tied together.</p></div>
+            <div style={panel}><div style={eyebrow}>01 Create Login</div><p style={sub}>Members and investors both create login/password access first so the profile, locked room preview, messages, approval status, payment button, and final room unlock stay tied together.</p></div>
             <div style={panel}><div style={eyebrow}>02 Submit Profile</div><p style={sub}>Investor or member profile goes to admin with your market, role, strategy, capital/execution ability, and contact preference.</p></div>
             <div style={panel}><div style={eyebrow}>03 Locked Room Preview</div><p style={sub}>After submission, you can see the locked Investor Room or Member Room preview while admin reviews your profile.</p></div>
             <div style={panel}><div style={eyebrow}>04 Admin Approval</div><p style={sub}>When approved, the payment button lights up. After payment, the room unlocks automatically.</p></div>
@@ -456,7 +603,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <Section label="Founder Access Countdown" title={founderClosed ? "Founding allocations closed." : "Founding allocations close May 30."}>
+        <Section label="Founder Access Countdown" title={founderClosed ? "Founding allocations closed." : "Founding allocations close June 1."}>
           <CountdownCards timer={timer} />
           <div style={{ ...panel, marginTop: 18 }}>
             <p style={sub}>{founderClosed ? "Standard member access is now active: $99 activation, then $299/month." : "Member founder access: $49 activation, $49 second month, then $299/month. Founder allocations close June 1 or when strategic categories reach capacity."}</p>
@@ -470,17 +617,52 @@ export default function HomePage() {
           </div>
         </Section>
 
-        <Section label="Investor Room" title="Approved investors get a controlled signal room.">
-          <p style={sub}>Investor Room is separate from the private member site. Investors can access limited Members Deal Opportunities and Pain submissions by state, request more information, send structured messages, and ask for execution support through VaultForge. They do not see member personal contact data, private routing, full admin notes, seller information, or the member command center.</p>
+        <Section label="Investor Room" title="Investors do business inside without seeing the private directory.">
+          <p style={sub}>Investor Room is not empty access and it is not just a preview. Approved investors can work inside VaultForge through controlled Deal Opportunities, Pain submissions, request cards, structured replies, and execution lanes. They do not browse the private member directory, but they can still contact a Deal owner, Pain owner, or routed member through VaultForge when a card fits what they want.</p>
+          <p style={{ ...muted, marginTop: 12 }}>Example: an investor sees a Deal Opportunity and needs funding. They can request lender routing. They see a Pain submission that needs a contractor, operator, or capital solution. They can request contact through the controlled thread. Member personal info stays protected until approval, but business can still move.</p>
           <div style={{ ...grid, marginTop: 20 }}>
             <div style={goldPanel}><div style={eyebrow}>Investor Pricing</div><h3 style={h3}>$79 first month</h3><p style={muted}>Then $149/month.</p></div>
             <div style={panel}><div style={eyebrow}>Investor Sees</div><p style={sub}>Limited Deal Opportunity cards, Pain submissions, state filters, request cards, structured replies, and execution request lanes.</p></div>
-            <div style={panel}><div style={eyebrow}>Investor Does Not See</div><p style={sub}>Member directory, private contacts, seller info, routing intelligence, admin notes, or full member rooms.</p></div>
+            <div style={panel}><div style={eyebrow}>Investor Protection</div><p style={sub}>Investors do not see the private member directory or personal contact data, but they can request routed contact, funding, deal details, Pain solutions, and execution help through VaultForge.</p></div>
           </div>
           <div style={{ ...row, marginTop: 22 }}>
             <Link href="/investor-access" style={goldBtn}>Investor Access</Link>
             <Link href="/investor-login" style={btn}>Investor Login</Link>
             <Link href="/investor-application" style={btn}>Investor Application</Link>
+          </div>
+        </Section>
+
+
+        <Section label="Live Inside Preview" title="Deal and Pain postings from operating states.">
+          <p style={sub}>These are limited public teasers. Full details, owner contact, member routing, messages, documents, and next moves stay inside approved Investor Room or Member Room access.</p>
+
+          <div style={{ ...wideGrid, marginTop: 22 }}>
+            {sampleDealPostings.slice(0, 4).map((item) => <LivePostingCard key={`${item.state}-${item.city}-${item.headline}`} item={item} />)}
+          </div>
+
+          <div style={{ ...wideGrid, marginTop: 18 }}>
+            {samplePainPostings.slice(0, 4).map((item) => <LivePostingCard key={`${item.state}-${item.city}-${item.headline}`} item={item} />)}
+          </div>
+
+          <div style={{ ...row, marginTop: 22 }}>
+            <Link href="/investor-access" style={goldBtn}>Enter Investor Room</Link>
+            <Link href="/member-access" style={btn}>Apply For Member Access</Link>
+          </div>
+        </Section>
+
+        <Section label="State Network Snapshot" title="Where VaultForge is operating.">
+          <p style={sub}>State cards show operating lanes, available teaser signals, and live local profile counts where browser data exists. This gives investors and members a reason to get inside the room instead of guessing what is active.</p>
+          <div style={{ ...grid, marginTop: 20 }}>
+            {OPERATING_STATES.map((state) => (
+              <StateCountCard
+                key={state}
+                state={state}
+                memberCount={memberStateCounts.find((item) => item.state === state)?.count || 0}
+                investorCount={investorStateCounts.find((item) => item.state === state)?.count || 0}
+                dealCount={dealStateCounts.find((item) => item.state === state)?.count || 0}
+                painCount={painStateCounts.find((item) => item.state === state)?.count || 0}
+              />
+            ))}
           </div>
         </Section>
 
