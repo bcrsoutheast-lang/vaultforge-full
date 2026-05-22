@@ -342,6 +342,30 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
 }
 
 
+
+function readInvestor() {
+  const session = readJson<any>(INVESTOR_SESSION_KEY, {});
+  const application = readJson<any>(INVESTOR_APP_KEY, {});
+
+  const sessionEmail = clean(session?.email || localStorage.getItem("vaultforge_investor_email") || "").toLowerCase();
+  const applicationEmail = clean(application?.email || "").toLowerCase();
+  const email = sessionEmail || applicationEmail;
+
+  return {
+    ...application,
+    ...session,
+    email: email || application?.email || session?.email || "",
+    contactName: application?.contactName || session?.contactName || session?.name || application?.name || "",
+    company: application?.company || session?.company || "",
+    phone: application?.phone || session?.phone || "",
+    photoUrl: application?.photoUrl || session?.photoUrl || "",
+    access: application?.access || session?.access || application?.accessStatus || session?.accessStatus || "locked",
+    accessStatus: application?.accessStatus || session?.accessStatus || application?.access || session?.access || "locked",
+    paymentStatus: application?.paymentStatus || session?.paymentStatus || "unpaid",
+    status: application?.status || session?.status || "pending",
+  };
+}
+
 function safeInvestorSnapshot() {
   const investor = readInvestor();
   try {
