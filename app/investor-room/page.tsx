@@ -8,7 +8,8 @@ const INVESTOR_SESSION_KEY = "vaultforge_investor_session_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
-const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
+const INVESTOR_EXECUTION_REQUESTS_KEY =
+  "vaultforge_investor_execution_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
@@ -16,17 +17,61 @@ const INVESTOR_HIDDEN_KEY = "vaultforge_investor_room_hidden_v1";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const EXECUTION_LANES = [
-  { key: "lender", title: "Request Lender", note: "Route this opportunity to private funding sources inside the member network." },
-  { key: "hard_money", title: "Request Hard Money", note: "Request fast bridge, rehab, or acquisition capital." },
-  { key: "jv_partner", title: "Request JV Partner", note: "Ask for an execution or capital partner for this opportunity." },
-  { key: "contractor", title: "Request Contractor", note: "Ask for rehab, construction, bid, or field execution help." },
-  { key: "title_closing", title: "Request Title / Closing", note: "Ask for title, closing, escrow, or transaction coordination help." },
-  { key: "insurance", title: "Request Insurance", note: "Ask for property insurance or risk coverage help." },
-  { key: "property_management", title: "Request Property Management", note: "Ask for leasing, rental, or management support." },
-  { key: "operator", title: "Request Operator", note: "Ask for an operator, asset manager, or boots-on-ground execution help." },
-  { key: "disposition", title: "Request Disposition Help", note: "Ask for resale, buyer, or exit strategy support." },
-  { key: "boots_on_ground", title: "Request Boots On Ground", note: "Ask for local eyes, site visit, photos, or field support." },
-  { key: "equity_partner", title: "Request Equity Partner", note: "Ask for private capital or equity partnership routing." },
+  {
+    key: "lender",
+    title: "Request Lender",
+    note: "Route this opportunity to private funding sources inside the member network.",
+  },
+  {
+    key: "hard_money",
+    title: "Request Hard Money",
+    note: "Request fast bridge, rehab, or acquisition capital.",
+  },
+  {
+    key: "jv_partner",
+    title: "Request JV Partner",
+    note: "Ask for an execution or capital partner for this opportunity.",
+  },
+  {
+    key: "contractor",
+    title: "Request Contractor",
+    note: "Ask for rehab, construction, bid, or field execution help.",
+  },
+  {
+    key: "title_closing",
+    title: "Request Title / Closing",
+    note: "Ask for title, closing, escrow, or transaction coordination help.",
+  },
+  {
+    key: "insurance",
+    title: "Request Insurance",
+    note: "Ask for property insurance or risk coverage help.",
+  },
+  {
+    key: "property_management",
+    title: "Request Property Management",
+    note: "Ask for leasing, rental, or management support.",
+  },
+  {
+    key: "operator",
+    title: "Request Operator",
+    note: "Ask for an operator, asset manager, or boots-on-ground execution help.",
+  },
+  {
+    key: "disposition",
+    title: "Request Disposition Help",
+    note: "Ask for resale, buyer, or exit strategy support.",
+  },
+  {
+    key: "boots_on_ground",
+    title: "Request Boots On Ground",
+    note: "Ask for local eyes, site visit, photos, or field support.",
+  },
+  {
+    key: "equity_partner",
+    title: "Request Equity Partner",
+    note: "Ask for private capital or equity partnership routing.",
+  },
 ];
 
 const TICKER_ITEMS = [
@@ -75,7 +120,11 @@ function readJson<T>(key: string, fallback: T): T {
 function isQuotaError(error: any) {
   const name = String(error?.name || "").toLowerCase();
   const message = String(error?.message || "").toLowerCase();
-  return name.includes("quota") || message.includes("quota") || message.includes("exceeded");
+  return (
+    name.includes("quota") ||
+    message.includes("quota") ||
+    message.includes("exceeded")
+  );
 }
 
 function trimText(value: unknown, limit = 900) {
@@ -91,10 +140,18 @@ function compactInvestorProfile(profile: any) {
     email: trimText(profile?.email, 160),
     phone: trimText(profile?.phone, 80),
     website: trimText(profile?.website, 160),
-    investorTypes: Array.isArray(profile?.investorTypes) ? profile.investorTypes.slice(0, 10) : profile?.investorTypes || [],
-    buyingStrategies: Array.isArray(profile?.buyingStrategies) ? profile.buyingStrategies.slice(0, 10) : profile?.buyingStrategies || [],
-    assetTypes: Array.isArray(profile?.assetTypes) ? profile.assetTypes.slice(0, 10) : profile?.assetTypes || [],
-    statesInterested: Array.isArray(profile?.statesInterested) ? profile.statesInterested.slice(0, 12) : profile?.statesInterested || [],
+    investorTypes: Array.isArray(profile?.investorTypes)
+      ? profile.investorTypes.slice(0, 10)
+      : profile?.investorTypes || [],
+    buyingStrategies: Array.isArray(profile?.buyingStrategies)
+      ? profile.buyingStrategies.slice(0, 10)
+      : profile?.buyingStrategies || [],
+    assetTypes: Array.isArray(profile?.assetTypes)
+      ? profile.assetTypes.slice(0, 10)
+      : profile?.assetTypes || [],
+    statesInterested: Array.isArray(profile?.statesInterested)
+      ? profile.statesInterested.slice(0, 12)
+      : profile?.statesInterested || [],
     countiesInterested: trimText(profile?.countiesInterested, 500),
     citiesInterested: trimText(profile?.citiesInterested, 500),
     minDeal: trimText(profile?.minDeal, 80),
@@ -110,6 +167,132 @@ function compactInvestorProfile(profile: any) {
     capitalSource: trimText(profile?.capitalSource, 160),
     notes: trimText(profile?.notes, 500),
   };
+}
+
+function safeStorageSize(value: unknown) {
+  try {
+    return JSON.stringify(value).length;
+  } catch {
+    return 0;
+  }
+}
+
+function stripHeavyInvestorProfileStorage() {
+  const profileKeys = [
+    INVESTOR_APP_KEY,
+    "vaultforge_investor_applications_v1",
+    "vaultforge_profile",
+    "vaultforge_member_profile",
+    "vaultforge_clean_profile",
+    "vaultforge_member_directory_v1",
+  ];
+
+  const heavyFields = [
+    "photoUrl",
+    "profilePhoto",
+    "companyLogo",
+    "logoUrl",
+    "avatar",
+    "image",
+    "imageUrl",
+    "photos",
+    "photo_urls",
+    "photoUrls",
+    "files",
+    "attachments",
+  ];
+
+  for (const key of profileKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const stripRow = (row: any) => {
+        if (!row || typeof row !== "object") return row;
+        const next = { ...row };
+        for (const field of heavyFields) {
+          if (typeof next[field] === "string" && next[field].length > 1200)
+            next[field] = "";
+          if (
+            Array.isArray(next[field]) &&
+            JSON.stringify(next[field]).length > 1200
+          )
+            next[field] = [];
+        }
+        return next;
+      };
+      const compacted = Array.isArray(parsed)
+        ? parsed.slice(0, 25).map(stripRow)
+        : stripRow(parsed);
+      localStorage.setItem(key, JSON.stringify(compacted));
+    } catch {
+      // ignore malformed profile cache
+    }
+  }
+}
+
+function aggressiveVaultForgeQuotaPurge(protectKeys: string[] = []) {
+  const protectedSet = new Set([
+    INVESTOR_SESSION_KEY,
+    INVESTOR_APP_KEY,
+    "vaultforge_investor_email",
+    "vaultforge_investor_login_v1",
+    ...protectKeys,
+  ]);
+
+  stripHeavyInvestorProfileStorage();
+
+  const candidates: { key: string; size: number; removeScore: number }[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i) || "";
+      if (
+        !key.toLowerCase().includes("vaultforge") &&
+        !key.toLowerCase().startsWith("vf_")
+      )
+        continue;
+      if (protectedSet.has(key)) continue;
+      const raw = localStorage.getItem(key) || "";
+      const lowerKey = key.toLowerCase();
+      let removeScore = 0;
+      if (lowerKey.includes("deleted")) removeScore += 50;
+      if (lowerKey.includes("archived")) removeScore += 35;
+      if (lowerKey.includes("debug")) removeScore += 35;
+      if (lowerKey.includes("message")) removeScore += 20;
+      if (lowerKey.includes("thread")) removeScore += 20;
+      if (lowerKey.includes("request")) removeScore += 15;
+      if (raw.length > 100000) removeScore += 40;
+      if (raw.length > 250000) removeScore += 80;
+      candidates.push({ key, size: raw.length, removeScore });
+    }
+
+    candidates.sort((a, b) => b.removeScore - a.removeScore || b.size - a.size);
+
+    for (const item of candidates.slice(0, 12)) {
+      try {
+        if (item.removeScore >= 35 || item.size > 150000)
+          localStorage.removeItem(item.key);
+      } catch {
+        // keep purging other keys
+      }
+    }
+  } catch {
+    // ignore storage scan errors
+  }
+}
+
+function safeSetJsonWithPurge(key: string, value: unknown) {
+  const json = JSON.stringify(value);
+  try {
+    localStorage.setItem(key, json);
+    return true;
+  } catch (error: any) {
+    if (!isQuotaError(error)) throw error;
+    aggressiveVaultForgeQuotaPurge([key]);
+    localStorage.removeItem(key);
+    localStorage.setItem(key, json);
+    return true;
+  }
 }
 
 function compactStorageRow(row: any) {
@@ -137,11 +320,15 @@ function compactRowsForKey(key: string, value: unknown) {
     [INVESTOR_REQUESTS_KEY]: 60,
     [INVESTOR_ADMIN_MESSAGES_KEY]: 40,
     [CONTROLLED_THREADS_KEY]: 50,
-    "vaultforge_admin_messages_v1": 40,
+    vaultforge_admin_messages_v1: 40,
   };
 
   const max = maxRowsByKey[key] || 80;
-  return value.slice(0, max).map((row) => (row && typeof row === "object" ? compactStorageRow(row) : row));
+  return value
+    .slice(0, max)
+    .map((row) =>
+      row && typeof row === "object" ? compactStorageRow(row) : row,
+    );
 }
 
 function compactVaultForgeLocalStorage() {
@@ -160,14 +347,16 @@ function compactVaultForgeLocalStorage() {
     try {
       const parsed = JSON.parse(localStorage.getItem(key) || "[]");
       if (Array.isArray(parsed)) {
-        localStorage.setItem(key, JSON.stringify(compactRowsForKey(key, parsed)));
+        localStorage.setItem(
+          key,
+          JSON.stringify(compactRowsForKey(key, parsed)),
+        );
       }
     } catch {
       // If one cache is malformed or too large to parse, leave it alone.
     }
   }
 }
-
 
 function emergencyFreeVaultForgeRequestStorage() {
   const keysToShrink = [
@@ -185,7 +374,11 @@ function emergencyFreeVaultForgeRequestStorage() {
     try {
       const parsed = JSON.parse(localStorage.getItem(key) || "[]");
       if (Array.isArray(parsed)) {
-        const tiny = parsed.slice(0, 10).map((row) => (row && typeof row === "object" ? compactStorageRow(row) : row));
+        const tiny = parsed
+          .slice(0, 10)
+          .map((row) =>
+            row && typeof row === "object" ? compactStorageRow(row) : row,
+          );
         localStorage.removeItem(key);
         localStorage.setItem(key, JSON.stringify(tiny));
       }
@@ -208,25 +401,23 @@ function writeJson(key: string, value: unknown) {
     if (!isQuotaError(error)) throw error;
 
     compactVaultForgeLocalStorage();
+    stripHeavyInvestorProfileStorage();
 
     try {
-      localStorage.setItem(key, JSON.stringify(compactValue));
+      safeSetJsonWithPurge(key, compactValue);
       return true;
     } catch (secondError: any) {
       if (Array.isArray(compactValue)) {
-        const emergencyValue = compactValue.slice(0, 10).map((row) =>
-          row && typeof row === "object" ? compactStorageRow(row) : row
-        );
+        const emergencyValue = compactValue
+          .slice(0, 3)
+          .map((row) =>
+            row && typeof row === "object" ? compactStorageRow(row) : row,
+          );
 
-        try {
-          localStorage.removeItem(key);
-          localStorage.setItem(key, JSON.stringify(emergencyValue));
-          return true;
-        } catch {
-          emergencyFreeVaultForgeRequestStorage();
-          localStorage.setItem(key, JSON.stringify(emergencyValue));
-          return true;
-        }
+        emergencyFreeVaultForgeRequestStorage();
+        aggressiveVaultForgeQuotaPurge([key]);
+        safeSetJsonWithPurge(key, emergencyValue);
+        return true;
       }
       throw secondError;
     }
@@ -250,12 +441,15 @@ function itemState(item: any) {
       item?.marketState ||
       item?.market_state ||
       item?.locationState ||
-      item?.location_state
+      item?.location_state,
   ).toUpperCase();
 }
 
 function itemTitle(item: any, kind: Kind) {
-  return clean(item?.title || item?.name || item?.headline || item?.summary, `${kind} Teaser`);
+  return clean(
+    item?.title || item?.name || item?.headline || item?.summary,
+    `${kind} Teaser`,
+  );
 }
 
 function itemId(item: any, kind: Kind, index = 0) {
@@ -269,7 +463,7 @@ function itemId(item: any, kind: Kind, index = 0) {
       item?.pain_id ||
       item?.signalId ||
       item?.signal_id,
-    `${kind}-${itemTitle(item, kind)}-${itemState(item)}-${index}`
+    `${kind}-${itemTitle(item, kind)}-${itemState(item)}-${index}`,
   );
 }
 
@@ -287,7 +481,8 @@ function readRows(keys: string[]) {
     try {
       const parsed = JSON.parse(localStorage.getItem(key) || "[]");
       if (Array.isArray(parsed)) rows.push(...parsed);
-      else if (parsed && typeof parsed === "object") rows.push(...Object.values(parsed));
+      else if (parsed && typeof parsed === "object")
+        rows.push(...Object.values(parsed));
     } catch {
       // ignore malformed browser data
     }
@@ -350,7 +545,8 @@ function investorProfileSnapshot(investor: any) {
     phone: investor?.phone || "",
     website: investor?.website || "",
     investorTypes: investor?.investorTypes || investor?.assetTypes || [],
-    buyingStrategies: investor?.buyingStrategies || investor?.buyingStrategy || [],
+    buyingStrategies:
+      investor?.buyingStrategies || investor?.buyingStrategy || [],
     assetTypes: investor?.assetTypes || [],
     statesInterested: investor?.statesInterested || [],
     countiesInterested: investor?.countiesInterested || "",
@@ -431,7 +627,9 @@ function saveInvestorAdminMessage(subject: string, body: string) {
 
 function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
   try {
-    const rows = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+    compactVaultForgeLocalStorage();
+    stripHeavyInvestorProfileStorage();
+
     const investor = readInvestor();
     const profile = investorProfileSnapshot(investor);
     const title = itemTitle(item, kind);
@@ -441,24 +639,58 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
     const executionId = `execution-request-${now}`;
     const adminInboxId = `admin-execution-request-${now}`;
     const header = `${lane.title} - ${kind} - ${title} - ${state || "Unknown State"}`;
+    const compactProfile = compactInvestorProfile(
+      profile || safeInvestorSnapshot(),
+    );
 
-    const profileText = [
-      `Investor: ${profile.contactName || "Not listed"}`,
-      `Company: ${profile.company || "Not listed"}`,
-      `Email: ${profile.email || "Not listed"}`,
-      `Phone: ${profile.phone || "Not listed"}`,
-      `Types: ${Array.isArray(profile.investorTypes) ? profile.investorTypes.join(", ") : profile.investorTypes || "Not listed"}`,
-      `Strategy: ${Array.isArray(profile.buyingStrategies) ? profile.buyingStrategies.join(", ") : profile.buyingStrategies || "Not listed"}`,
-      `Markets: ${Array.isArray(profile.statesInterested) ? profile.statesInterested.join(", ") : profile.statesInterested || "Not listed"}`,
-      `Buy Box: ${profile.minDeal || "Not listed"} - ${profile.maxDeal || "Not listed"}`,
-      `Volume: ${profile.monthlyVolume || "Not listed"} / month, ${profile.yearlyVolume || "Not listed"} / year`,
-      `Close Speed: ${profile.closeSpeed || "Not listed"}`,
-      `Proof of Funds: ${profile.proofFunds || "Not listed"}`,
-      `Direct Buyer: ${profile.directBuyer || "Not listed"}`,
-      `Funding Needed: ${profile.fundingNeeded || "Not listed"}`,
-    ].join("\\n");
+    const adminInboxRow = compactStorageRow({
+      id: adminInboxId,
+      type: "execution_request",
+      requestType: lane.key,
+      requestTitle: lane.title,
+      title,
+      subject: `${lane.title} - ${title}`,
+      body: notes || "Investor requested execution support.",
+      message: `${header}\n\n${notes || "Investor requested execution support."}`,
+      status: "new",
+      source: "investor-room-execution",
+      kind,
+      itemId: itemId(item, kind),
+      state,
+      roomHeader: header,
+      investorProfile: compactProfile,
+      investorEmail: compactProfile?.email || "",
+      investorCompany: compactProfile?.company || "",
+      investorName: compactProfile?.contactName || "",
+      investorPhotoUrl: compactProfile?.photoUrl || "",
+      createdAt,
+      updatedAt: createdAt,
+    });
 
-    const executionRow = {
+    const currentInbox = readJson<any[]>(ADMIN_INBOX_KEY, []);
+    writeJson(ADMIN_INBOX_KEY, [adminInboxRow, ...currentInbox].slice(0, 25));
+
+    const savedAdminInboxRows = readJson<any[]>(ADMIN_INBOX_KEY, []);
+    const adminSaved = savedAdminInboxRows.some(
+      (row) => row?.id === adminInboxId,
+    );
+
+    if (!adminSaved) {
+      aggressiveVaultForgeQuotaPurge([ADMIN_INBOX_KEY]);
+      writeJson(ADMIN_INBOX_KEY, [adminInboxRow]);
+    }
+
+    const verifiedInboxRows = readJson<any[]>(ADMIN_INBOX_KEY, []);
+    const verifiedAdminSaved = verifiedInboxRows.some(
+      (row) => row?.id === adminInboxId,
+    );
+    if (!verifiedAdminSaved) {
+      throw new Error(
+        "Admin inbox could not save after emergency cleanup. Clear Safari site data for this domain once, then resend.",
+      );
+    }
+
+    const executionRow = compactStorageRow({
       id: executionId,
       requestType: lane.key,
       requestTitle: lane.title,
@@ -467,57 +699,35 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
       title,
       state,
       roomHeader: header,
-      investorEmail: profile.email,
-      investorCompany: profile.company,
-      investorName: profile.contactName,
-      investorPhotoUrl: profile.photoUrl,
-      investorProfile: compactInvestorProfile(profile),
+      investorEmail: compactProfile.email,
+      investorCompany: compactProfile.company,
+      investorName: compactProfile.contactName,
+      investorPhotoUrl: compactProfile.photoUrl,
+      investorProfile: compactProfile,
       notes: notes || "",
-      message: `${header}\\n\\n${notes || "Investor requested execution support."}`,
+      message: `${header}\n\n${notes || "Investor requested execution support."}`,
       status: "new",
       createdAt,
       updatedAt: createdAt,
-    };
-
-    writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, [executionRow, ...rows].slice(0, 60));
-
-    pushAdminInbox({
-      id: adminInboxId,
-      type: "execution_request",
-      requestTitle: lane.title,
-      title,
-      subject: `${lane.title} - ${title}`,
-      body: notes || "Investor requested execution support.",
-      message: `${header}
-
-${notes || "Investor requested execution support."}`,
-      status: "new",
-      source: "investor-room-execution",
-      kind,
-      itemId: itemId(item, kind),
-      state,
-      roomHeader: header,
-      investorProfile: compactInvestorProfile(profile || safeInvestorSnapshot()),
-      investorEmail: profile?.email || "",
-      investorCompany: profile?.company || "",
-      investorName: profile?.contactName || "",
-      investorPhotoUrl: profile?.photoUrl || "",
-      createdAt,
-      updatedAt: createdAt,
+      adminInboxId,
     });
 
-    const savedExecutionRows = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
-    const savedAdminInboxRows = readJson<any[]>(ADMIN_INBOX_KEY, []);
-    const executionSaved = savedExecutionRows.some((row) => row?.id === executionId);
-    const adminSaved = savedAdminInboxRows.some((row) => row?.id === adminInboxId);
-
-    if (!executionSaved || !adminSaved) {
-      throw new Error(
-        `Request did not verify after save. executionSaved=${executionSaved ? "yes" : "no"}, adminInboxSaved=${adminSaved ? "yes" : "no"}`
+    try {
+      const executionRows = readJson<any[]>(
+        INVESTOR_EXECUTION_REQUESTS_KEY,
+        [],
       );
+      writeJson(
+        INVESTOR_EXECUTION_REQUESTS_KEY,
+        [executionRow, ...executionRows].slice(0, 15),
+      );
+    } catch {
+      // Admin inbox is the source of truth. Do not fail the send just because duplicate investor tracking is full.
     }
 
-    window.dispatchEvent(new Event("vaultforge-investor-execution-request-change"));
+    window.dispatchEvent(
+      new Event("vaultforge-investor-execution-request-change"),
+    );
     window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
     window.dispatchEvent(new Event("vaultforge-admin-investor-request-change"));
 
@@ -537,28 +747,42 @@ ${notes || "Investor requested execution support."}`,
   }
 }
 
-
 function readInvestor() {
   const session = readJson<any>(INVESTOR_SESSION_KEY, {});
   const application = readJson<any>(INVESTOR_APP_KEY, {});
-  const applications = readJson<any[]>("vaultforge_investor_applications_v1", []);
-  const sessionEmail = clean(session?.email || application?.email || localStorage.getItem("vaultforge_investor_email")).toLowerCase();
+  const applications = readJson<any[]>(
+    "vaultforge_investor_applications_v1",
+    [],
+  );
+  const sessionEmail = clean(
+    session?.email ||
+      application?.email ||
+      localStorage.getItem("vaultforge_investor_email"),
+  ).toLowerCase();
   const matching = Array.isArray(applications)
-    ? applications.find((row) => clean(row?.email || row?.investorEmail || row?.investor_email).toLowerCase() === sessionEmail)
+    ? applications.find(
+        (row) =>
+          clean(
+            row?.email || row?.investorEmail || row?.investor_email,
+          ).toLowerCase() === sessionEmail,
+      )
     : null;
 
   return {
     ...(matching || {}),
     ...(application || {}),
     ...(session || {}),
-    email: sessionEmail || clean(application?.email || matching?.email || session?.email),
+    email:
+      sessionEmail ||
+      clean(application?.email || matching?.email || session?.email),
   };
 }
 
 function safeInvestorSnapshot() {
   const investor = readInvestor();
   try {
-    if (typeof investorProfileSnapshot === "function") return investorProfileSnapshot(investor);
+    if (typeof investorProfileSnapshot === "function")
+      return investorProfileSnapshot(investor);
   } catch {
     // ignore
   }
@@ -567,7 +791,10 @@ function safeInvestorSnapshot() {
     photoUrl: investor?.photoUrl || "",
     contactName: investor?.contactName || "",
     company: investor?.company || "",
-    email: investor?.email || localStorage.getItem("vaultforge_investor_email") || "",
+    email:
+      investor?.email ||
+      localStorage.getItem("vaultforge_investor_email") ||
+      "",
     phone: investor?.phone || "",
     website: investor?.website || "",
     investorTypes: investor?.investorTypes || [],
@@ -588,11 +815,14 @@ function safeInvestorSnapshot() {
 
 function pushAdminInbox(row: any) {
   const rows = readJson<any[]>(ADMIN_INBOX_KEY, []);
-  const profile = compactInvestorProfile(row.investorProfile || safeInvestorSnapshot());
+  const profile = compactInvestorProfile(
+    row.investorProfile || safeInvestorSnapshot(),
+  );
   const normalized = {
     id: row.id || `admin-inbox-${Date.now()}`,
     type: row.type || "investor_message",
-    requestTitle: row.requestTitle || row.title || row.subject || "Investor Message",
+    requestTitle:
+      row.requestTitle || row.title || row.subject || "Investor Message",
     title: row.title || row.requestTitle || row.subject || "Investor Message",
     subject: row.subject || row.requestTitle || row.title || "Investor Message",
     body: row.body || row.message || row.notes || "",
@@ -688,19 +918,38 @@ const page: React.CSSProperties = {
   background: "#05070d",
   color: "#f7f7fb",
   padding: 18,
-  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+  fontFamily:
+    "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
 };
 
-const wrap: React.CSSProperties = { maxWidth: 1320, margin: "0 auto", paddingBottom: 100 };
-const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
-const wideGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18 };
+const wrap: React.CSSProperties = {
+  maxWidth: 1320,
+  margin: "0 auto",
+  paddingBottom: 100,
+};
+const row: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
+  gap: 16,
+};
+const wideGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
+  gap: 18,
+};
 const hero: React.CSSProperties = {
   border: "1px solid rgba(245,197,66,.28)",
   borderRadius: 30,
   padding: 30,
   marginBottom: 20,
-  background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 34%), linear-gradient(180deg,#080d19,#050816)",
+  background:
+    "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 34%), linear-gradient(180deg,#080d19,#050816)",
 };
 const tickerWrap: React.CSSProperties = {
   borderTop: "1px solid rgba(245,197,66,.25)",
@@ -719,15 +968,60 @@ const tickerTrack: React.CSSProperties = {
   animation: "vfTickerMove 34s linear infinite",
 };
 
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 24, padding: 22 };
-const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.52)", boxShadow: "0 0 28px rgba(245,197,66,.10)" };
-const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.52)", boxShadow: "0 0 28px rgba(255,70,70,.10)" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 6, fontWeight: 950, fontSize: 13, marginBottom: 12 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,78px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(28px,5vw,48px)", lineHeight: 0.96, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
-const h3: React.CSSProperties = { fontSize: 26, margin: "0 0 10px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 20, lineHeight: 1.35, margin: 0 };
-const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.4 };
+const panel: React.CSSProperties = {
+  background: "#121724",
+  border: "1px solid rgba(207,216,230,.16)",
+  borderRadius: 24,
+  padding: 22,
+};
+const goldPanel: React.CSSProperties = {
+  ...panel,
+  borderColor: "rgba(245,197,66,.52)",
+  boxShadow: "0 0 28px rgba(245,197,66,.10)",
+};
+const redPanel: React.CSSProperties = {
+  ...panel,
+  borderColor: "rgba(255,70,70,.52)",
+  boxShadow: "0 0 28px rgba(255,70,70,.10)",
+};
+const eyebrow: React.CSSProperties = {
+  color: "#ffd45a",
+  textTransform: "uppercase",
+  letterSpacing: 6,
+  fontWeight: 950,
+  fontSize: 13,
+  marginBottom: 12,
+};
+const h1: React.CSSProperties = {
+  fontSize: "clamp(42px,7vw,78px)",
+  lineHeight: 0.9,
+  letterSpacing: -4,
+  margin: "0 0 18px",
+  fontWeight: 950,
+};
+const h2: React.CSSProperties = {
+  fontSize: "clamp(28px,5vw,48px)",
+  lineHeight: 0.96,
+  letterSpacing: -2,
+  margin: "0 0 14px",
+  fontWeight: 950,
+};
+const h3: React.CSSProperties = {
+  fontSize: 26,
+  margin: "0 0 10px",
+  fontWeight: 950,
+};
+const sub: React.CSSProperties = {
+  color: "#c9d0dc",
+  fontSize: 20,
+  lineHeight: 1.35,
+  margin: 0,
+};
+const muted: React.CSSProperties = {
+  color: "#aeb7c7",
+  margin: "8px 0 0",
+  lineHeight: 1.4,
+};
 const btn: React.CSSProperties = {
   border: "1px solid rgba(207,216,230,.18)",
   background: "#171c29",
@@ -739,8 +1033,18 @@ const btn: React.CSSProperties = {
   display: "inline-block",
   cursor: "pointer",
 };
-const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const goldBtn: React.CSSProperties = {
+  ...btn,
+  border: 0,
+  background: "#ffdc68",
+  color: "#10131a",
+};
+const redBtn: React.CSSProperties = {
+  ...btn,
+  background: "#271016",
+  borderColor: "rgba(255,70,70,.48)",
+  color: "#ffaaaa",
+};
 const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
@@ -757,23 +1061,47 @@ function LogoBlock() {
   const src = LOGOS[index];
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}>
-      <div style={{ width: "min(420px,88vw)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 16, background: "#070b14" }}>
+    <div
+      style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}
+    >
+      <div
+        style={{
+          width: "min(420px,88vw)",
+          border: "1px solid rgba(245,197,66,.28)",
+          borderRadius: 26,
+          padding: 16,
+          background: "#070b14",
+        }}
+      >
         {src ? (
           <img
             src={src}
             alt="VaultForge"
             style={{ width: "100%", display: "block", borderRadius: 16 }}
-            onError={() => setIndex((value) => (value + 1 < LOGOS.length ? value + 1 : LOGOS.length))}
+            onError={() =>
+              setIndex((value) =>
+                value + 1 < LOGOS.length ? value + 1 : LOGOS.length,
+              )
+            }
           />
         ) : (
-          <div style={{ minHeight: 150, display: "grid", placeItems: "center", color: "#ffd45a", fontSize: 52, fontWeight: 950 }}>VAULTFORGE</div>
+          <div
+            style={{
+              minHeight: 150,
+              display: "grid",
+              placeItems: "center",
+              color: "#ffd45a",
+              fontSize: 52,
+              fontWeight: 950,
+            }}
+          >
+            VAULTFORGE
+          </div>
         )}
       </div>
     </div>
   );
 }
-
 
 function logoutInvestor() {
   try {
@@ -788,17 +1116,39 @@ function logoutInvestor() {
   window.location.href = "/investor-login";
 }
 
-function TopNav({ onMessageAdmin, isOwner }: { onMessageAdmin: () => void; isOwner: boolean }) {
+function TopNav({
+  onMessageAdmin,
+  isOwner,
+}: {
+  onMessageAdmin: () => void;
+  isOwner: boolean;
+}) {
   return (
     <div style={{ ...row, justifyContent: "space-between", marginBottom: 18 }}>
-      <div style={{ color: "#ffd45a", fontSize: 26, fontWeight: 950 }}>VAULTFORGE</div>
+      <div style={{ color: "#ffd45a", fontSize: 26, fontWeight: 950 }}>
+        VAULTFORGE
+      </div>
       <div style={row}>
-        <Link href="/" style={btn}>Home</Link>
-        <Link href="/investor-access" style={btn}>Investor Access</Link>
-        <Link href="/investor-payment" style={btn}>Payment</Link>
-        <button type="button" style={goldBtn} onClick={onMessageAdmin}>Message Admin</button>
-        <button type="button" style={btn} onClick={logoutInvestor}>Logout</button>
-        {isOwner ? <Link href="/admin" style={redBtn}>Admin</Link> : null}
+        <Link href="/" style={btn}>
+          Home
+        </Link>
+        <Link href="/investor-access" style={btn}>
+          Investor Access
+        </Link>
+        <Link href="/investor-payment" style={btn}>
+          Payment
+        </Link>
+        <button type="button" style={goldBtn} onClick={onMessageAdmin}>
+          Message Admin
+        </button>
+        <button type="button" style={btn} onClick={logoutInvestor}>
+          Logout
+        </button>
+        {isOwner ? (
+          <Link href="/admin" style={redBtn}>
+            Admin
+          </Link>
+        ) : null}
       </div>
     </div>
   );
@@ -809,7 +1159,15 @@ function TickerRibbon() {
     <div style={tickerWrap}>
       <div style={tickerTrack}>
         {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, index) => (
-          <div key={`${item}-${index}`} style={{ whiteSpace: "nowrap", color: "#ffd45a", fontWeight: 950, letterSpacing: 3 }}>
+          <div
+            key={`${item}-${index}`}
+            style={{
+              whiteSpace: "nowrap",
+              color: "#ffd45a",
+              fontWeight: 950,
+              letterSpacing: 3,
+            }}
+          >
             {item}
           </div>
         ))}
@@ -852,11 +1210,23 @@ function IntelligencePanel({ investor }: { investor: any }) {
       <div style={eyebrow}>VaultForge Intelligence</div>
       <h2 style={h2}>{score}% Profile Signal</h2>
       <p style={sub}>{blurb}</p>
-      <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.08)", overflow: "hidden", marginTop: 14 }}>
-        <div style={{ height: "100%", width: `${score}%`, background: "#ffdc68" }} />
+      <div
+        style={{
+          height: 10,
+          borderRadius: 999,
+          background: "rgba(255,255,255,.08)",
+          overflow: "hidden",
+          marginTop: 14,
+        }}
+      >
+        <div
+          style={{ height: "100%", width: `${score}%`, background: "#ffdc68" }}
+        />
       </div>
       <div style={{ ...row, marginTop: 14 }}>
-        <Link href="/investor-application" style={goldBtn}>Improve Investor Profile</Link>
+        <Link href="/investor-application" style={goldBtn}>
+          Improve Investor Profile
+        </Link>
       </div>
     </section>
   );
@@ -867,31 +1237,74 @@ function RequestPipeline() {
     <section style={panel}>
       <div style={eyebrow}>Request Pipeline</div>
       <div style={grid}>
-        <div style={panel}><div style={eyebrow}>01 Submitted</div><p style={muted}>Investor request is captured with profile attached.</p></div>
-        <div style={panel}><div style={eyebrow}>02 Routed</div><p style={muted}>VaultForge routes internally without exposing member directory.</p></div>
-        <div style={panel}><div style={eyebrow}>03 Reviewed</div><p style={muted}>Admin/member reviews investor fit and request context.</p></div>
-        <div style={panel}><div style={eyebrow}>04 Approved</div><p style={muted}>Contact or deeper access can be shared only after approval.</p></div>
+        <div style={panel}>
+          <div style={eyebrow}>01 Submitted</div>
+          <p style={muted}>
+            Investor request is captured with profile attached.
+          </p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>02 Routed</div>
+          <p style={muted}>
+            VaultForge routes internally without exposing member directory.
+          </p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>03 Reviewed</div>
+          <p style={muted}>
+            Admin/member reviews investor fit and request context.
+          </p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>04 Approved</div>
+          <p style={muted}>
+            Contact or deeper access can be shared only after approval.
+          </p>
+        </div>
       </div>
     </section>
   );
 }
 
 function UrgencyBadges({ kind }: { kind: Kind }) {
-  const badges = kind === "Deal"
-    ? ["OFF MARKET", "ARV SIGNAL", "FUNDING AVAILABLE", "EXECUTION NETWORK", "REQUEST CONTROLLED"]
-    : ["DISTRESS", "CAPITAL GAP", "OPERATOR NEEDED", "URGENT SIGNAL", "PRIVATE ROUTING"];
+  const badges =
+    kind === "Deal"
+      ? [
+          "OFF MARKET",
+          "ARV SIGNAL",
+          "FUNDING AVAILABLE",
+          "EXECUTION NETWORK",
+          "REQUEST CONTROLLED",
+        ]
+      : [
+          "DISTRESS",
+          "CAPITAL GAP",
+          "OPERATOR NEEDED",
+          "URGENT SIGNAL",
+          "PRIVATE ROUTING",
+        ];
 
   return (
     <div style={{ ...row, marginTop: 10 }}>
       {badges.map((badge) => (
-        <span key={badge} style={{ border: "1px solid rgba(245,197,66,.32)", borderRadius: 999, padding: "8px 11px", color: "#ffd45a", background: "rgba(245,197,66,.07)", fontWeight: 900, fontSize: 12 }}>
+        <span
+          key={badge}
+          style={{
+            border: "1px solid rgba(245,197,66,.32)",
+            borderRadius: 999,
+            padding: "8px 11px",
+            color: "#ffd45a",
+            background: "rgba(245,197,66,.07)",
+            fontWeight: 900,
+            fontSize: 12,
+          }}
+        >
           {badge}
         </span>
       ))}
     </div>
   );
 }
-
 
 function InvestorIdentityCard({
   investor,
@@ -901,12 +1314,20 @@ function InvestorIdentityCard({
   onMessageAdmin: () => void;
 }) {
   const score = typeof profileScore === "function" ? profileScore(investor) : 0;
-  const email = String(investor?.email || localStorage.getItem("vaultforge_investor_email") || "").toLowerCase();
+  const email = String(
+    investor?.email || localStorage.getItem("vaultforge_investor_email") || "",
+  ).toLowerCase();
   const isOwner = email === OWNER_EMAIL;
 
   return (
     <section style={{ ...goldPanel, marginBottom: 18 }}>
-      <div style={{ ...row, alignItems: "flex-start", justifyContent: "space-between" }}>
+      <div
+        style={{
+          ...row,
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
         <div style={{ ...row, alignItems: "flex-start" }}>
           {investor?.photoUrl ? (
             <img
@@ -941,32 +1362,70 @@ function InvestorIdentityCard({
 
           <div>
             <div style={eyebrow}>Logged In Investor</div>
-            <h2 style={h2}>{investor?.contactName || investor?.company || "Investor Profile"}</h2>
+            <h2 style={h2}>
+              {investor?.contactName || investor?.company || "Investor Profile"}
+            </h2>
             <p style={sub}>{investor?.company || "Company not listed"}</p>
             <p style={muted}>{email || "Investor email not detected"}</p>
             <p style={muted}>
-              Access: {investor?.accessStatus || investor?.access || "locked"} • Payment: {investor?.paymentStatus || "unpaid"} • Status: {investor?.status || "pending"}
+              Access: {investor?.accessStatus || investor?.access || "locked"} •
+              Payment: {investor?.paymentStatus || "unpaid"} • Status:{" "}
+              {investor?.status || "pending"}
             </p>
             <p style={muted}>Profile Intelligence: {score}% complete</p>
-            {isOwner ? <p style={muted}>Owner/admin identity detected.</p> : null}
+            {isOwner ? (
+              <p style={muted}>Owner/admin identity detected.</p>
+            ) : null}
           </div>
         </div>
 
         <div style={row}>
-          <Link href="/investor-application" style={goldBtn}>Profile</Link>
-          <Link href="/investor-payment" style={btn}>Payment</Link>
-          <button type="button" style={btn} onClick={onMessageAdmin}>Message Admin</button>
-          <button type="button" style={btn} onClick={logoutInvestor}>Logout</button>
-          {isOwner ? <Link href="/admin" style={redBtn}>Admin</Link> : null}
+          <Link href="/investor-application" style={goldBtn}>
+            Profile
+          </Link>
+          <Link href="/investor-payment" style={btn}>
+            Payment
+          </Link>
+          <button type="button" style={btn} onClick={onMessageAdmin}>
+            Message Admin
+          </button>
+          <button type="button" style={btn} onClick={logoutInvestor}>
+            Logout
+          </button>
+          {isOwner ? (
+            <Link href="/admin" style={redBtn}>
+              Admin
+            </Link>
+          ) : null}
         </div>
       </div>
     </section>
   );
 }
 
-function Metric({ title, count, note, active, onClick }: { title: string; count: number | string; note: string; active?: boolean; onClick?: () => void }) {
+function Metric({
+  title,
+  count,
+  note,
+  active,
+  onClick,
+}: {
+  title: string;
+  count: number | string;
+  note: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <button type="button" style={{ ...(active ? goldPanel : panel), width: "100%", textAlign: "left" }} onClick={onClick}>
+    <button
+      type="button"
+      style={{
+        ...(active ? goldPanel : panel),
+        width: "100%",
+        textAlign: "left",
+      }}
+      onClick={onClick}
+    >
       <div style={eyebrow}>{title}</div>
       <h2 style={h2}>{count}</h2>
       <p style={muted}>{note}</p>
@@ -976,18 +1435,37 @@ function Metric({ title, count, note, active, onClick }: { title: string; count:
 
 function MiniValues({ item }: { item: any }) {
   const city = item?.city || item?.market || item?.area || "Market not listed";
-  const asset = item?.assetType || item?.asset_type || item?.type || "Asset not listed";
-  const price = item?.askingPrice || item?.asking_price || item?.price || item?.amount || "Not listed";
-  const repairs = item?.repairs || item?.repairEstimate || item?.repair_estimate || "Not listed";
-  const arv = item?.arv || item?.afterRepairValue || item?.after_repair_value || "Not listed";
+  const asset =
+    item?.assetType || item?.asset_type || item?.type || "Asset not listed";
+  const price =
+    item?.askingPrice ||
+    item?.asking_price ||
+    item?.price ||
+    item?.amount ||
+    "Not listed";
+  const repairs =
+    item?.repairs ||
+    item?.repairEstimate ||
+    item?.repair_estimate ||
+    "Not listed";
+  const arv =
+    item?.arv ||
+    item?.afterRepairValue ||
+    item?.after_repair_value ||
+    "Not listed";
 
   return (
     <>
-      <p style={sub}>{city} • {asset}</p>
+      <p style={sub}>
+        {city} • {asset}
+      </p>
       <div style={{ marginTop: 14 }}>
-        <div style={eyebrow}>Asking / Need</div><p style={muted}>{String(price)}</p>
-        <div style={eyebrow}>Repairs</div><p style={muted}>{String(repairs)}</p>
-        <div style={eyebrow}>ARV / Value</div><p style={muted}>{String(arv)}</p>
+        <div style={eyebrow}>Asking / Need</div>
+        <p style={muted}>{String(price)}</p>
+        <div style={eyebrow}>Repairs</div>
+        <p style={muted}>{String(repairs)}</p>
+        <div style={eyebrow}>ARV / Value</div>
+        <p style={muted}>{String(arv)}</p>
       </div>
     </>
   );
@@ -1013,29 +1491,52 @@ function RoomCard({
   onDeleteForever: () => void;
 }) {
   const folder = getFolder(item, kind);
-  const wrapper = folder === "deleted" ? redPanel : folder === "saved" ? goldPanel : panel;
+  const wrapper =
+    folder === "deleted" ? redPanel : folder === "saved" ? goldPanel : panel;
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
   const header = `${kind} Request • ${itemTitle(item, kind)} • ${itemState(item) || "Unknown State"}`;
 
   return (
     <div style={isOpen ? goldPanel : wrapper}>
-      <div style={eyebrow}>{kind} • {itemState(item) || "NA"} {folder !== "active" ? `• ${folder}` : ""}</div>
+      <div style={eyebrow}>
+        {kind} • {itemState(item) || "NA"}{" "}
+        {folder !== "active" ? `• ${folder}` : ""}
+      </div>
       <h2 style={h2}>{itemTitle(item, kind)}</h2>
       <MiniValues item={item} />
       <p style={{ ...muted, marginTop: 14 }}>
-        Member information, seller information, private notes, routing notes, and contact details are hidden until deeper access is approved.
+        Member information, seller information, private notes, routing notes,
+        and contact details are hidden until deeper access is approved.
       </p>
 
       <div style={{ ...row, marginTop: 14 }}>
-        <button type="button" style={goldBtn} onClick={isOpen ? onClose : onOpen}>
+        <button
+          type="button"
+          style={goldBtn}
+          onClick={isOpen ? onClose : onOpen}
+        >
           {isOpen ? "Collapse / Done" : "Open Details"}
         </button>
-        <button type="button" style={btn} onClick={() => onMove("saved")}>Save</button>
-        <button type="button" style={btn} onClick={() => onMove("archived")}>Archive</button>
-        <button type="button" style={redBtn} onClick={() => onMove("deleted")}>Delete</button>
-        {folder !== "active" ? <button type="button" style={btn} onClick={onRestore}>Restore</button> : null}
-        {folder === "deleted" ? <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button> : null}
+        <button type="button" style={btn} onClick={() => onMove("saved")}>
+          Save
+        </button>
+        <button type="button" style={btn} onClick={() => onMove("archived")}>
+          Archive
+        </button>
+        <button type="button" style={redBtn} onClick={() => onMove("deleted")}>
+          Delete
+        </button>
+        {folder !== "active" ? (
+          <button type="button" style={btn} onClick={onRestore}>
+            Restore
+          </button>
+        ) : null}
+        {folder === "deleted" ? (
+          <button type="button" style={redBtn} onClick={onDeleteForever}>
+            Delete Forever
+          </button>
+        ) : null}
       </div>
 
       {isOpen ? (
@@ -1043,13 +1544,16 @@ function RoomCard({
           <div style={eyebrow}>Room Detail Open</div>
           <p style={sub}>{header}</p>
           <p style={muted}>
-            This detail is expanded inside the same card. Collapse / Done closes it without moving the card list.
+            This detail is expanded inside the same card. Collapse / Done closes
+            it without moving the card list.
           </p>
 
           <div style={{ ...panel, marginTop: 14 }}>
             <div style={eyebrow}>Private Data Hidden</div>
             <p style={muted}>
-              This investor lane does not expose member name, member phone, member email, seller info, exact private notes, docs, routing notes, or full room intelligence.
+              This investor lane does not expose member name, member phone,
+              member email, seller info, exact private notes, docs, routing
+              notes, or full room intelligence.
             </p>
           </div>
 
@@ -1074,21 +1578,38 @@ function RoomCard({
             >
               Send Request Through VaultForge
             </button>
-            <button type="button" style={btn} onClick={() => onMove("saved")}>Save</button>
-            <button type="button" style={btn} onClick={() => onMove("archived")}>Archive</button>
-            <button type="button" style={redBtn} onClick={() => onMove("deleted")}>Delete</button>
-            <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
+            <button type="button" style={btn} onClick={() => onMove("saved")}>
+              Save
+            </button>
+            <button
+              type="button"
+              style={btn}
+              onClick={() => onMove("archived")}
+            >
+              Archive
+            </button>
+            <button
+              type="button"
+              style={redBtn}
+              onClick={() => onMove("deleted")}
+            >
+              Delete
+            </button>
+            <button type="button" style={btn} onClick={onClose}>
+              Collapse / Done
+            </button>
           </div>
 
-          {sent ? <p style={muted}>Request sent to VaultForge admin/member workflow.</p> : null}
+          {sent ? (
+            <p style={muted}>
+              Request sent to VaultForge admin/member workflow.
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
-
-
-
 
 function MessageAdminModal({
   open,
@@ -1104,26 +1625,49 @@ function MessageAdminModal({
   if (!open) return null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 110, background: "rgba(0,0,0,.78)", padding: 18, overflow: "auto" }}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 110,
+        background: "rgba(0,0,0,.78)",
+        padding: 18,
+        overflow: "auto",
+      }}
+    >
       <div style={{ maxWidth: 820, margin: "40px auto", ...goldPanel }}>
         <div style={{ ...row, justifyContent: "space-between" }}>
           <div>
             <div style={eyebrow}>Investor Message Admin</div>
             <h2 style={h2}>Contact VaultForge Admin</h2>
           </div>
-          <button type="button" style={btn} onClick={onClose}>Close</button>
+          <button type="button" style={btn} onClick={onClose}>
+            Close
+          </button>
         </div>
 
-        <p style={sub}>Your investor profile is attached so admin can see who is asking.</p>
+        <p style={sub}>
+          Your investor profile is attached so admin can see who is asking.
+        </p>
 
         <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
           <span style={eyebrow}>Subject</span>
-          <input style={input} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Question about investor access, funding, a deal, or support..." />
+          <input
+            style={input}
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+            placeholder="Question about investor access, funding, a deal, or support..."
+          />
         </label>
 
         <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
           <span style={eyebrow}>Message</span>
-          <textarea style={{ ...input, minHeight: 150 }} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write your message to VaultForge admin..." />
+          <textarea
+            style={{ ...input, minHeight: 150 }}
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            placeholder="Write your message to VaultForge admin..."
+          />
         </label>
 
         <div style={{ ...row, marginTop: 14 }}>
@@ -1131,7 +1675,10 @@ function MessageAdminModal({
             type="button"
             style={goldBtn}
             onClick={() => {
-              saveInvestorAdminMessage(subject, body || "Investor requested admin support.");
+              saveInvestorAdminMessage(
+                subject,
+                body || "Investor requested admin support.",
+              );
               setSent(true);
               setSubject("");
               setBody("");
@@ -1139,10 +1686,16 @@ function MessageAdminModal({
           >
             Send Message Admin
           </button>
-          <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
+          <button type="button" style={btn} onClick={onClose}>
+            Collapse / Done
+          </button>
         </div>
 
-        {sent ? <p style={{ ...sub, marginTop: 14 }}>Message sent to VaultForge admin.</p> : null}
+        {sent ? (
+          <p style={{ ...sub, marginTop: 14 }}>
+            Message sent to VaultForge admin.
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -1165,20 +1718,34 @@ function ExecutionRequestModal({
   if (!lane) return null;
 
   const kind: Kind = activeRoom?.kind || "Deal";
-  const item = activeRoom?.item || { title: "General Investor Execution Request", state: "NA" };
+  const item = activeRoom?.item || {
+    title: "General Investor Execution Request",
+    state: "NA",
+  };
   const header = activeRoom
     ? `${lane.title} - ${kind} - ${itemTitle(item, kind)} - ${itemState(item) || "Unknown State"}`
     : `${lane.title} - General Investor Execution Request`;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,.78)", padding: 18, overflow: "auto" }}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        background: "rgba(0,0,0,.78)",
+        padding: 18,
+        overflow: "auto",
+      }}
+    >
       <div style={{ maxWidth: 880, margin: "40px auto", ...goldPanel }}>
         <div style={{ ...row, justifyContent: "space-between" }}>
           <div>
             <div style={eyebrow}>Execution Request</div>
             <h2 style={h2}>{lane.title}</h2>
           </div>
-          <button type="button" style={btn} onClick={onClose}>Close</button>
+          <button type="button" style={btn} onClick={onClose}>
+            Close
+          </button>
         </div>
 
         <p style={sub}>{header}</p>
@@ -1187,7 +1754,8 @@ function ExecutionRequestModal({
         <div style={{ ...panel, marginTop: 16 }}>
           <div style={eyebrow}>Controlled Routing</div>
           <p style={muted}>
-            This does not expose the member directory. VaultForge routes your request internally with your investor profile attached.
+            This does not expose the member directory. VaultForge routes your
+            request internally with your investor profile attached.
           </p>
         </div>
 
@@ -1222,12 +1790,24 @@ function ExecutionRequestModal({
           >
             Send Execution Request
           </button>
-          <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
+          <button type="button" style={btn} onClick={onClose}>
+            Collapse / Done
+          </button>
         </div>
 
-        {sendNotice ? <p style={{ ...sub, marginTop: 14, color: "#9effb2" }}>{sendNotice}</p> : null}
-        {sendError ? <p style={{ ...sub, marginTop: 14, color: "#ffaaaa" }}>{sendError}</p> : null}
-        {sent && !sendNotice ? <p style={{ ...sub, marginTop: 14 }}>Execution request sent to VaultForge routing.</p> : null}
+        {sendNotice ? (
+          <p style={{ ...sub, marginTop: 14, color: "#9effb2" }}>
+            {sendNotice}
+          </p>
+        ) : null}
+        {sendError ? (
+          <p style={{ ...sub, marginTop: 14, color: "#ffaaaa" }}>{sendError}</p>
+        ) : null}
+        {sent && !sendNotice ? (
+          <p style={{ ...sub, marginTop: 14 }}>
+            Execution request sent to VaultForge routing.
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -1245,12 +1825,20 @@ function ExecutionLaneCards({
       <div style={eyebrow}>One-Stop-Shop Execution Requests</div>
       <h2 style={h2}>Need help completing this opportunity?</h2>
       <p style={sub}>
-        Request funding, title, contractor, operator, insurance, property management, JV, or boots-on-ground support without exposing private member data. Open a Deal/Pain card first to attach the request to that room, or send a general execution request.
+        Request funding, title, contractor, operator, insurance, property
+        management, JV, or boots-on-ground support without exposing private
+        member data. Open a Deal/Pain card first to attach the request to that
+        room, or send a general execution request.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
         {EXECUTION_LANES.map((lane) => (
-          <button key={lane.key} type="button" style={panel} onClick={() => onSelect(lane)}>
+          <button
+            key={lane.key}
+            type="button"
+            style={panel}
+            onClick={() => onSelect(lane)}
+          >
             <div style={eyebrow}>{lane.title}</div>
             <p style={muted}>{lane.note}</p>
           </button>
@@ -1260,9 +1848,12 @@ function ExecutionLaneCards({
   );
 }
 
-
 function requestStatus(row: any) {
-  return String(row?.status || "new").trim().toLowerCase() || "new";
+  return (
+    String(row?.status || "new")
+      .trim()
+      .toLowerCase() || "new"
+  );
 }
 
 function statusCount(rows: any[], status: string) {
@@ -1271,7 +1862,10 @@ function statusCount(rows: any[], status: string) {
 }
 
 function activeRequestCount(rows: any[]) {
-  return rows.filter((row) => !["saved", "archived", "deleted", "closed"].includes(requestStatus(row))).length;
+  return rows.filter(
+    (row) =>
+      !["saved", "archived", "deleted", "closed"].includes(requestStatus(row)),
+  ).length;
 }
 
 function savedRequestCount(rows: any[]) {
@@ -1292,13 +1886,20 @@ function closedRequestCount(rows: any[]) {
 
 function readAllInvestorRequests() {
   const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
-  const executionRequests = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+  const executionRequests = readJson<any[]>(
+    INVESTOR_EXECUTION_REQUESTS_KEY,
+    [],
+  );
   const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
   return [...dealPainRequests, ...executionRequests, ...adminMessages];
 }
 
 type InvestorRequestGroup = "dealPain" | "execution" | "adminMessage";
-type InvestorRequestSelection = { row: any; label: string; group: InvestorRequestGroup } | null;
+type InvestorRequestSelection = {
+  row: any;
+  label: string;
+  group: InvestorRequestGroup;
+} | null;
 
 function requestStorageKey(group: InvestorRequestGroup) {
   if (group === "execution") return INVESTOR_EXECUTION_REQUESTS_KEY;
@@ -1307,11 +1908,17 @@ function requestStorageKey(group: InvestorRequestGroup) {
 }
 
 function requestTitle(row: any, label = "Investor Request") {
-  return clean(row?.requestTitle || row?.title || row?.topic || row?.subject, label);
+  return clean(
+    row?.requestTitle || row?.title || row?.topic || row?.subject,
+    label,
+  );
 }
 
 function requestMessage(row: any) {
-  return clean(row?.roomHeader || row?.message || row?.body || row?.notes, "Request saved.");
+  return clean(
+    row?.roomHeader || row?.message || row?.body || row?.notes,
+    "Request saved.",
+  );
 }
 
 function readRequestRows(group: InvestorRequestGroup) {
@@ -1326,24 +1933,39 @@ function writeRequestRows(group: InvestorRequestGroup, rows: any[]) {
   window.dispatchEvent(new Event("vaultforge-admin-investor-request-change"));
 }
 
-function patchInvestorRequestRow(group: InvestorRequestGroup, id: string, patch: any) {
+function patchInvestorRequestRow(
+  group: InvestorRequestGroup,
+  id: string,
+  patch: any,
+) {
   const rows = readRequestRows(group);
   writeRequestRows(
     group,
     rows.map((row) =>
       String(row?.id || "") === String(id)
         ? { ...row, ...patch, updatedAt: new Date().toISOString() }
-        : row
-    )
+        : row,
+    ),
   );
 }
 
 function deleteInvestorRequestForever(group: InvestorRequestGroup, id: string) {
   const rows = readRequestRows(group);
-  writeRequestRows(group, rows.filter((row) => String(row?.id || "") !== String(id)));
+  writeRequestRows(
+    group,
+    rows.filter((row) => String(row?.id || "") !== String(id)),
+  );
 }
 
-function RequestMiniCard({ row, label, onOpen }: { row: any; label: string; onOpen: () => void }) {
+function RequestMiniCard({
+  row,
+  label,
+  onOpen,
+}: {
+  row: any;
+  label: string;
+  onOpen: () => void;
+}) {
   const status = String(row?.status || "new").toLowerCase();
   const isDeleted = status === "deleted";
   const isArchived = status === "archived";
@@ -1359,11 +1981,15 @@ function RequestMiniCard({ row, label, onOpen }: { row: any; label: string; onOp
       }}
       onClick={onOpen}
     >
-      <div style={eyebrow}>{label} • {row?.status || "new"}</div>
+      <div style={eyebrow}>
+        {label} • {row?.status || "new"}
+      </div>
       <h3 style={h3}>{requestTitle(row, label)}</h3>
       <p style={muted}>{requestMessage(row)}</p>
       <p style={muted}>Created: {row?.createdAt || "not listed"}</p>
-      <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open request controls.</p>
+      <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>
+        Tap to open request controls.
+      </p>
     </button>
   );
 }
@@ -1387,14 +2013,25 @@ function InvestorRequestDetailModal({
   const title = requestTitle(requestRow, label);
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(0,0,0,.82)", padding: 18, overflow: "auto" }}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 120,
+        background: "rgba(0,0,0,.82)",
+        padding: 18,
+        overflow: "auto",
+      }}
+    >
       <div style={{ maxWidth: 920, margin: "36px auto", ...goldPanel }}>
         <div style={{ ...row, justifyContent: "space-between" }}>
           <div>
             <div style={eyebrow}>Request Detail</div>
             <h2 style={h2}>{title}</h2>
           </div>
-          <button type="button" style={btn} onClick={onClose}>Close</button>
+          <button type="button" style={btn} onClick={onClose}>
+            Close
+          </button>
         </div>
 
         <div style={{ ...grid, marginTop: 16 }}>
@@ -1403,16 +2040,38 @@ function InvestorRequestDetailModal({
             <p style={sub}>{label}</p>
             <p style={muted}>Status: {requestRow?.status || "new"}</p>
             <p style={muted}>State: {requestRow?.state || "Not listed"}</p>
-            <p style={muted}>Room ID: {requestRow?.itemId || requestRow?.roomId || requestRow?.sourceRequestId || "Not listed"}</p>
-            <p style={muted}>Created: {requestRow?.createdAt || "not listed"}</p>
+            <p style={muted}>
+              Room ID:{" "}
+              {requestRow?.itemId ||
+                requestRow?.roomId ||
+                requestRow?.sourceRequestId ||
+                "Not listed"}
+            </p>
+            <p style={muted}>
+              Created: {requestRow?.createdAt || "not listed"}
+            </p>
           </div>
 
           <div style={panel}>
             <div style={eyebrow}>Investor Attached</div>
-            <p style={sub}>{requestRow?.investorCompany || profile?.company || "Investor company hidden/not listed"}</p>
-            <p style={muted}>{requestRow?.investorName || profile?.contactName || "Investor name hidden/not listed"}</p>
-            <p style={muted}>{requestRow?.investorEmail || profile?.email || "Investor email hidden/not listed"}</p>
-            <p style={muted}>{profile?.phone || "Investor phone hidden/not listed"}</p>
+            <p style={sub}>
+              {requestRow?.investorCompany ||
+                profile?.company ||
+                "Investor company hidden/not listed"}
+            </p>
+            <p style={muted}>
+              {requestRow?.investorName ||
+                profile?.contactName ||
+                "Investor name hidden/not listed"}
+            </p>
+            <p style={muted}>
+              {requestRow?.investorEmail ||
+                profile?.email ||
+                "Investor email hidden/not listed"}
+            </p>
+            <p style={muted}>
+              {profile?.phone || "Investor phone hidden/not listed"}
+            </p>
           </div>
         </div>
 
@@ -1423,15 +2082,47 @@ function InvestorRequestDetailModal({
 
         <div style={{ ...panel, marginTop: 16 }}>
           <div style={eyebrow}>Controls</div>
-          <p style={muted}>These controls update your investor request tracker. Deleted requests stay in the deleted folder until Delete Forever removes them.</p>
+          <p style={muted}>
+            These controls update your investor request tracker. Deleted
+            requests stay in the deleted folder until Delete Forever removes
+            them.
+          </p>
           <div style={{ ...row, marginTop: 14 }}>
-            <button type="button" style={goldBtn} onClick={() => onStatus("saved")}>Save</button>
-            <button type="button" style={btn} onClick={() => onStatus("archived")}>Archive</button>
-            <button type="button" style={btn} onClick={() => onStatus("new")}>Restore / Active</button>
-            <button type="button" style={btn} onClick={() => onStatus("closed")}>Close</button>
-            <button type="button" style={redBtn} onClick={() => onStatus("deleted")}>Delete</button>
+            <button
+              type="button"
+              style={goldBtn}
+              onClick={() => onStatus("saved")}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              style={btn}
+              onClick={() => onStatus("archived")}
+            >
+              Archive
+            </button>
+            <button type="button" style={btn} onClick={() => onStatus("new")}>
+              Restore / Active
+            </button>
+            <button
+              type="button"
+              style={btn}
+              onClick={() => onStatus("closed")}
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              style={redBtn}
+              onClick={() => onStatus("deleted")}
+            >
+              Delete
+            </button>
             {status === "deleted" ? (
-              <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button>
+              <button type="button" style={redBtn} onClick={onDeleteForever}>
+                Delete Forever
+              </button>
             ) : null}
           </div>
         </div>
@@ -1445,7 +2136,10 @@ function InvestorRequestCenter() {
   const [refresh, setRefresh] = useState(0);
 
   const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
-  const executionRequests = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+  const executionRequests = readJson<any[]>(
+    INVESTOR_EXECUTION_REQUESTS_KEY,
+    [],
+  );
   const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
   const all = [...dealPainRequests, ...executionRequests, ...adminMessages];
 
@@ -1457,7 +2151,10 @@ function InvestorRequestCenter() {
   function updateSelectedStatus(status: string) {
     if (!selected?.row?.id) return;
     patchInvestorRequestRow(selected.group, selected.row.id, { status });
-    refreshTracker({ ...selected, row: { ...selected.row, status, updatedAt: new Date().toISOString() } });
+    refreshTracker({
+      ...selected,
+      row: { ...selected.row, status, updatedAt: new Date().toISOString() },
+    });
   }
 
   function deleteSelectedForever() {
@@ -1478,16 +2175,42 @@ function InvestorRequestCenter() {
       <div style={eyebrow}>My Investor Requests</div>
       <h2 style={h2}>Request tracking desk.</h2>
       <p style={sub}>
-        Track deal/pain requests, execution requests, and admin messages. Tap a request card to open the detail window with Save, Archive, Delete, and Delete Forever controls.
+        Track deal/pain requests, execution requests, and admin messages. Tap a
+        request card to open the detail window with Save, Archive, Delete, and
+        Delete Forever controls.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
-        <Metric title="All Requests" count={all.length} note="total investor requests, including saved/archived/deleted" />
-        <Metric title="Active / New" count={activeRequestCount(all)} note="open requests still needing action" />
-        <Metric title="Saved" count={savedRequestCount(all)} note="saved investor requests" />
-        <Metric title="Archived" count={archivedRequestCount(all)} note="archived investor requests" />
-        <Metric title="Deleted" count={deletedRequestCount(all)} note="deleted requests waiting for delete forever" />
-        <Metric title="Closed" count={closedRequestCount(all)} note="completed/closed" />
+        <Metric
+          title="All Requests"
+          count={all.length}
+          note="total investor requests, including saved/archived/deleted"
+        />
+        <Metric
+          title="Active / New"
+          count={activeRequestCount(all)}
+          note="open requests still needing action"
+        />
+        <Metric
+          title="Saved"
+          count={savedRequestCount(all)}
+          note="saved investor requests"
+        />
+        <Metric
+          title="Archived"
+          count={archivedRequestCount(all)}
+          note="archived investor requests"
+        />
+        <Metric
+          title="Deleted"
+          count={deletedRequestCount(all)}
+          note="deleted requests waiting for delete forever"
+        />
+        <Metric
+          title="Closed"
+          count={closedRequestCount(all)}
+          note="completed/closed"
+        />
       </div>
 
       <div style={{ ...wideGrid, marginTop: 18 }}>
@@ -1499,7 +2222,9 @@ function InvestorRequestCenter() {
                 key={row.id}
                 row={row}
                 label="Deal/Pain"
-                onOpen={() => setSelected({ row, label: "Deal/Pain", group: "dealPain" })}
+                onOpen={() =>
+                  setSelected({ row, label: "Deal/Pain", group: "dealPain" })
+                }
               />
             ))
           ) : (
@@ -1515,7 +2240,9 @@ function InvestorRequestCenter() {
                 key={row.id}
                 row={row}
                 label="Execution"
-                onOpen={() => setSelected({ row, label: "Execution", group: "execution" })}
+                onOpen={() =>
+                  setSelected({ row, label: "Execution", group: "execution" })
+                }
               />
             ))
           ) : (
@@ -1531,7 +2258,13 @@ function InvestorRequestCenter() {
                 key={row.id}
                 row={row}
                 label="Admin Message"
-                onOpen={() => setSelected({ row, label: "Admin Message", group: "adminMessage" })}
+                onOpen={() =>
+                  setSelected({
+                    row,
+                    label: "Admin Message",
+                    group: "adminMessage",
+                  })
+                }
               />
             ))
           ) : (
@@ -1543,10 +2276,6 @@ function InvestorRequestCenter() {
   );
 }
 
-
-
-
-
 function readControlledThreads() {
   const rows = readJson<any[]>(CONTROLLED_THREADS_KEY, []);
   return Array.isArray(rows) ? rows : [];
@@ -1555,34 +2284,53 @@ function readControlledThreads() {
 function investorEmailForThreads() {
   const investor = readJson<any>(INVESTOR_APP_KEY, {});
   const session = readJson<any>("vaultforge_investor_session_v1", {});
-  return String(session?.email || investor?.email || localStorage.getItem("vaultforge_investor_email") || "").toLowerCase();
+  return String(
+    session?.email ||
+      investor?.email ||
+      localStorage.getItem("vaultforge_investor_email") ||
+      "",
+  ).toLowerCase();
 }
 
 function InvestorThreadCenter() {
   const investorEmail = investorEmailForThreads();
-  const threads = readControlledThreads().filter((thread) => String(thread.investorEmail || "").toLowerCase() === investorEmail || !investorEmail);
+  const threads = readControlledThreads().filter(
+    (thread) =>
+      String(thread.investorEmail || "").toLowerCase() === investorEmail ||
+      !investorEmail,
+  );
 
   return (
     <section style={{ ...hero, marginTop: 20 }}>
       <div style={eyebrow}>Controlled Intro Threads</div>
       <h2 style={h2}>Approved routing rooms.</h2>
       <p style={sub}>
-        Approved requests become controlled threads. Contact information stays hidden until VaultForge/member approval releases it.
+        Approved requests become controlled threads. Contact information stays
+        hidden until VaultForge/member approval releases it.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
-        {threads.length ? threads.map((thread) => (
-          <div key={thread.id} style={goldPanel}>
-            <div style={eyebrow}>{thread.status} • {thread.stage}</div>
-            <h3 style={h3}>{thread.title}</h3>
-            <p style={muted}>{thread.roomHeader}</p>
-            <p style={muted}>Contact Released: {thread.contactReleased ? "Yes" : "No"}</p>
-            <p style={muted}>Thread ID: {thread.id}</p>
-          </div>
-        )) : (
+        {threads.length ? (
+          threads.map((thread) => (
+            <div key={thread.id} style={goldPanel}>
+              <div style={eyebrow}>
+                {thread.status} • {thread.stage}
+              </div>
+              <h3 style={h3}>{thread.title}</h3>
+              <p style={muted}>{thread.roomHeader}</p>
+              <p style={muted}>
+                Contact Released: {thread.contactReleased ? "Yes" : "No"}
+              </p>
+              <p style={muted}>Thread ID: {thread.id}</p>
+            </div>
+          ))
+        ) : (
           <div style={panel}>
             <h3 style={h3}>No approved threads yet.</h3>
-            <p style={muted}>When admin approves a Deal/Pain or execution request, it appears here.</p>
+            <p style={muted}>
+              When admin approves a Deal/Pain or execution request, it appears
+              here.
+            </p>
           </div>
         )}
       </div>
@@ -1593,19 +2341,17 @@ function InvestorThreadCenter() {
 function profileComplete(investor: any) {
   return Boolean(
     investor?.email &&
-      investor?.contactName &&
-      investor?.company &&
-      investor?.phone &&
-      (
-        (Array.isArray(investor?.investorTypes) && investor.investorTypes.length > 0) ||
-        (Array.isArray(investor?.assetTypes) && investor.assetTypes.length > 0) ||
-        investor?.assetTypes ||
-        investor?.investorTypes
-      ) &&
-      (
-        (Array.isArray(investor?.statesInterested) && investor.statesInterested.length > 0) ||
-        investor?.statesInterested
-      )
+    investor?.contactName &&
+    investor?.company &&
+    investor?.phone &&
+    ((Array.isArray(investor?.investorTypes) &&
+      investor.investorTypes.length > 0) ||
+      (Array.isArray(investor?.assetTypes) && investor.assetTypes.length > 0) ||
+      investor?.assetTypes ||
+      investor?.investorTypes) &&
+    ((Array.isArray(investor?.statesInterested) &&
+      investor.statesInterested.length > 0) ||
+      investor?.statesInterested),
   );
 }
 
@@ -1640,27 +2386,63 @@ export default function InvestorRoomPage() {
   }, []);
 
   const complete = profileComplete(investor);
-  const access = complete && (investor?.paymentStatus === "paid" || investor?.accessStatus === "active" || investor?.access === "active");
+  const access =
+    complete &&
+    (investor?.paymentStatus === "paid" ||
+      investor?.accessStatus === "active" ||
+      investor?.access === "active");
 
   const rawDeals = useMemo(() => {
-    const rows = readRows(["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"]);
-    return dedupe(rows, "Deal").filter((item) => itemState(item) === state && !isHidden(item, "Deal"));
+    const rows = readRows([
+      "vaultforge_clean_deal_rooms",
+      "vaultforge_deal_rooms",
+      "vaultforge_rooms_deals",
+      "vf_deal_rooms",
+    ]);
+    return dedupe(rows, "Deal").filter(
+      (item) => itemState(item) === state && !isHidden(item, "Deal"),
+    );
   }, [state, tick]);
 
   const rawPains = useMemo(() => {
-    const rows = readRows(["vaultforge_clean_pain_rooms", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms_v2", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"]);
-    return dedupe(rows, "Pain").filter((item) => itemState(item) === state && !isHidden(item, "Pain"));
+    const rows = readRows([
+      "vaultforge_clean_pain_rooms",
+      "vaultforge_clean_pain_rooms_v1",
+      "vaultforge_clean_pain_rooms_v2",
+      "vaultforge_pain_rooms",
+      "vaultforge_rooms_pain",
+      "vf_pain_rooms",
+    ]);
+    return dedupe(rows, "Pain").filter(
+      (item) => itemState(item) === state && !isHidden(item, "Pain"),
+    );
   }, [state, tick]);
 
-  const activeDeals = rawDeals.filter((item) => getFolder(item, "Deal") === "active");
-  const savedDeals = rawDeals.filter((item) => getFolder(item, "Deal") === "saved");
-  const archivedDeals = rawDeals.filter((item) => getFolder(item, "Deal") === "archived");
-  const deletedDeals = rawDeals.filter((item) => getFolder(item, "Deal") === "deleted");
+  const activeDeals = rawDeals.filter(
+    (item) => getFolder(item, "Deal") === "active",
+  );
+  const savedDeals = rawDeals.filter(
+    (item) => getFolder(item, "Deal") === "saved",
+  );
+  const archivedDeals = rawDeals.filter(
+    (item) => getFolder(item, "Deal") === "archived",
+  );
+  const deletedDeals = rawDeals.filter(
+    (item) => getFolder(item, "Deal") === "deleted",
+  );
 
-  const activePains = rawPains.filter((item) => getFolder(item, "Pain") === "active");
-  const savedPains = rawPains.filter((item) => getFolder(item, "Pain") === "saved");
-  const archivedPains = rawPains.filter((item) => getFolder(item, "Pain") === "archived");
-  const deletedPains = rawPains.filter((item) => getFolder(item, "Pain") === "deleted");
+  const activePains = rawPains.filter(
+    (item) => getFolder(item, "Pain") === "active",
+  );
+  const savedPains = rawPains.filter(
+    (item) => getFolder(item, "Pain") === "saved",
+  );
+  const archivedPains = rawPains.filter(
+    (item) => getFolder(item, "Pain") === "archived",
+  );
+  const deletedPains = rawPains.filter(
+    (item) => getFolder(item, "Pain") === "deleted",
+  );
 
   const currentItems =
     kind === "Deal"
@@ -1694,18 +2476,32 @@ export default function InvestorRoomPage() {
   if (!access) {
     return (
       <main style={page}>
-      <style>{`@keyframes vfTickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
+        <style>{`@keyframes vfTickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
         <div style={wrap}>
-          <TopNav onMessageAdmin={() => setMessageAdminOpen(true)} isOwner={String(investor?.email || "").toLowerCase() === OWNER_EMAIL} />
+          <TopNav
+            onMessageAdmin={() => setMessageAdminOpen(true)}
+            isOwner={
+              String(investor?.email || "").toLowerCase() === OWNER_EMAIL
+            }
+          />
           <section style={hero}>
             <LogoBlock />
             <div style={eyebrow}>Investor Room Locked</div>
             <h1 style={h1}>Approval and payment required.</h1>
-            <p style={sub}>Complete investor login, buyer profile, admin approval, and payment before entering the investor visitor room.</p>
+            <p style={sub}>
+              Complete investor login, buyer profile, admin approval, and
+              payment before entering the investor visitor room.
+            </p>
             <div style={{ ...row, marginTop: 18 }}>
-              <Link href="/investor-application" style={goldBtn}>Investor Application</Link>
-              <Link href="/investor-payment" style={btn}>Investor Payment</Link>
-              <Link href="/investor-access" style={btn}>Investor Access</Link>
+              <Link href="/investor-application" style={goldBtn}>
+                Investor Application
+              </Link>
+              <Link href="/investor-payment" style={btn}>
+                Investor Payment
+              </Link>
+              <Link href="/investor-access" style={btn}>
+                Investor Access
+              </Link>
             </div>
           </section>
         </div>
@@ -1716,23 +2512,57 @@ export default function InvestorRoomPage() {
   return (
     <main style={page}>
       <div style={wrap}>
-        <TopNav onMessageAdmin={() => setMessageAdminOpen(true)} isOwner={String(investor?.email || "").toLowerCase() === OWNER_EMAIL} />
+        <TopNav
+          onMessageAdmin={() => setMessageAdminOpen(true)}
+          isOwner={String(investor?.email || "").toLowerCase() === OWNER_EMAIL}
+        />
         <TickerRibbon />
-        <MessageAdminModal open={messageAdminOpen} onClose={() => setMessageAdminOpen(false)} />
+        <MessageAdminModal
+          open={messageAdminOpen}
+          onClose={() => setMessageAdminOpen(false)}
+        />
 
         <section style={hero}>
           <LogoBlock />
           <div style={eyebrow}>VaultForge Investor Visitor Room</div>
           <h1 style={h1}>Controlled deal and pain access.</h1>
-          <p style={sub}>Browse limited state teaser cards and request more information through VaultForge. This room is separate from the private member network.</p>
+          <p style={sub}>
+            Browse limited state teaser cards and request more information
+            through VaultForge. This room is separate from the private member
+            network.
+          </p>
           <div style={{ ...row, marginTop: 22 }}>
-            <button type="button" style={kind === "Deal" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Deal")}>Deal Signals</button>
-            <button type="button" style={kind === "Pain" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Pain")}>Pain Signals</button>
-            <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>Collapse / Done</button>
+            <button
+              type="button"
+              style={kind === "Deal" && folder === "active" ? goldBtn : btn}
+              onClick={() => openKind("Deal")}
+            >
+              Deal Signals
+            </button>
+            <button
+              type="button"
+              style={kind === "Pain" && folder === "active" ? goldBtn : btn}
+              onClick={() => openKind("Pain")}
+            >
+              Pain Signals
+            </button>
+            <button
+              type="button"
+              style={btn}
+              onClick={() => {
+                setFolder("active");
+                setActiveRoom(null);
+              }}
+            >
+              Collapse / Done
+            </button>
           </div>
         </section>
 
-        <InvestorIdentityCard investor={investor} onMessageAdmin={() => setMessageAdminOpen(true)} />
+        <InvestorIdentityCard
+          investor={investor}
+          onMessageAdmin={() => setMessageAdminOpen(true)}
+        />
 
         <section style={{ marginBottom: 18 }}>
           <IntelligencePanel investor={investor} />
@@ -1742,7 +2572,16 @@ export default function InvestorRoomPage() {
           <div style={eyebrow}>State Desk</div>
           <div style={row}>
             {STATES.map((stateCode) => (
-              <button key={stateCode} type="button" style={stateCode === state ? goldBtn : btn} onClick={() => { setState(stateCode); setFolder("active"); setActiveRoom(null); }}>
+              <button
+                key={stateCode}
+                type="button"
+                style={stateCode === state ? goldBtn : btn}
+                onClick={() => {
+                  setState(stateCode);
+                  setFolder("active");
+                  setActiveRoom(null);
+                }}
+              >
                 {stateCode}
               </button>
             ))}
@@ -1751,25 +2590,110 @@ export default function InvestorRoomPage() {
 
         <section style={{ marginTop: 18 }}>
           <div style={grid}>
-            <Metric title="Deal Signals" count={activeDeals.length} note={`active opportunity cards in ${state}`} active={kind === "Deal" && folder === "active"} onClick={() => openKind("Deal")} />
-            <Metric title="Pain Signals" count={activePains.length} note={`active pressure cards in ${state}`} active={kind === "Pain" && folder === "active"} onClick={() => openKind("Pain")} />
-            <Metric title="Active Requests" count={activeRequestCount(readAllInvestorRequests())} note="open investor requests" />
-            <Metric title="Saved Requests" count={savedRequestCount(readAllInvestorRequests())} note="saved investor requests" />
-            <Metric title="Archived Requests" count={archivedRequestCount(readAllInvestorRequests())} note="archived investor requests" />
-            <Metric title="Deleted Requests" count={deletedRequestCount(readAllInvestorRequests())} note="deleted investor requests" />
-            <Metric title="Saved Deals" count={savedDeals.length} note="saved deal cards" active={kind === "Deal" && folder === "saved"} onClick={() => openFolder("Deal", "saved")} />
-            <Metric title="Archived Deals" count={archivedDeals.length} note="archived deal cards" active={kind === "Deal" && folder === "archived"} onClick={() => openFolder("Deal", "archived")} />
-            <Metric title="Deleted Deals" count={deletedDeals.length} note="deleted deal cards" active={kind === "Deal" && folder === "deleted"} onClick={() => openFolder("Deal", "deleted")} />
-            <Metric title="Saved Pain" count={savedPains.length} note="saved pain cards" active={kind === "Pain" && folder === "saved"} onClick={() => openFolder("Pain", "saved")} />
-            <Metric title="Archived Pain" count={archivedPains.length} note="archived pain cards" active={kind === "Pain" && folder === "archived"} onClick={() => openFolder("Pain", "archived")} />
-            <Metric title="Deleted Pain" count={deletedPains.length} note="deleted pain cards" active={kind === "Pain" && folder === "deleted"} onClick={() => openFolder("Pain", "deleted")} />
+            <Metric
+              title="Deal Signals"
+              count={activeDeals.length}
+              note={`active opportunity cards in ${state}`}
+              active={kind === "Deal" && folder === "active"}
+              onClick={() => openKind("Deal")}
+            />
+            <Metric
+              title="Pain Signals"
+              count={activePains.length}
+              note={`active pressure cards in ${state}`}
+              active={kind === "Pain" && folder === "active"}
+              onClick={() => openKind("Pain")}
+            />
+            <Metric
+              title="Active Requests"
+              count={activeRequestCount(readAllInvestorRequests())}
+              note="open investor requests"
+            />
+            <Metric
+              title="Saved Requests"
+              count={savedRequestCount(readAllInvestorRequests())}
+              note="saved investor requests"
+            />
+            <Metric
+              title="Archived Requests"
+              count={archivedRequestCount(readAllInvestorRequests())}
+              note="archived investor requests"
+            />
+            <Metric
+              title="Deleted Requests"
+              count={deletedRequestCount(readAllInvestorRequests())}
+              note="deleted investor requests"
+            />
+            <Metric
+              title="Saved Deals"
+              count={savedDeals.length}
+              note="saved deal cards"
+              active={kind === "Deal" && folder === "saved"}
+              onClick={() => openFolder("Deal", "saved")}
+            />
+            <Metric
+              title="Archived Deals"
+              count={archivedDeals.length}
+              note="archived deal cards"
+              active={kind === "Deal" && folder === "archived"}
+              onClick={() => openFolder("Deal", "archived")}
+            />
+            <Metric
+              title="Deleted Deals"
+              count={deletedDeals.length}
+              note="deleted deal cards"
+              active={kind === "Deal" && folder === "deleted"}
+              onClick={() => openFolder("Deal", "deleted")}
+            />
+            <Metric
+              title="Saved Pain"
+              count={savedPains.length}
+              note="saved pain cards"
+              active={kind === "Pain" && folder === "saved"}
+              onClick={() => openFolder("Pain", "saved")}
+            />
+            <Metric
+              title="Archived Pain"
+              count={archivedPains.length}
+              note="archived pain cards"
+              active={kind === "Pain" && folder === "archived"}
+              onClick={() => openFolder("Pain", "archived")}
+            />
+            <Metric
+              title="Deleted Pain"
+              count={deletedPains.length}
+              note="deleted pain cards"
+              active={kind === "Pain" && folder === "deleted"}
+              onClick={() => openFolder("Pain", "deleted")}
+            />
           </div>
         </section>
 
         <section style={{ marginTop: 22 }}>
-          <div style={{ ...row, justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={eyebrow}>{folder === "active" ? `${kind} Cards • ${state}` : `${kind} ${folder} Folder • ${state}`}</div>
-            {folder !== "active" ? <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>Collapse Folder / Done</button> : null}
+          <div
+            style={{
+              ...row,
+              justifyContent: "space-between",
+              marginBottom: 12,
+            }}
+          >
+            <div style={eyebrow}>
+              {folder === "active"
+                ? `${kind} Cards • ${state}`
+                : `${kind} ${folder} Folder • ${state}`}
+            </div>
+            {folder !== "active" ? (
+              <button
+                type="button"
+                style={btn}
+                onClick={() => {
+                  setFolder("active");
+                  setActiveRoom(null);
+                }}
+              >
+                Collapse Folder / Done
+              </button>
+            ) : null}
           </div>
 
           <div style={wideGrid}>
@@ -1779,25 +2703,52 @@ export default function InvestorRoomPage() {
                   key={`${kind}-${folder}-${itemKey(item, kind, index)}`}
                   kind={kind}
                   item={item}
-                  isOpen={activeRoom?.kind === kind && cleanupKey(activeRoom.item, kind) === cleanupKey(item, kind)}
+                  isOpen={
+                    activeRoom?.kind === kind &&
+                    cleanupKey(activeRoom.item, kind) === cleanupKey(item, kind)
+                  }
                   onOpen={() => setActiveRoom({ kind, item })}
                   onClose={() => setActiveRoom(null)}
-                  onMove={(nextFolder) => { setFolderForItem(item, kind, nextFolder); setActiveRoom(null); refresh(); }}
-                  onRestore={() => { setFolderForItem(item, kind, "active"); setActiveRoom(null); refresh(); }}
-                  onDeleteForever={() => { hideForever(item, kind); setActiveRoom(null); refresh(); }}
+                  onMove={(nextFolder) => {
+                    setFolderForItem(item, kind, nextFolder);
+                    setActiveRoom(null);
+                    refresh();
+                  }}
+                  onRestore={() => {
+                    setFolderForItem(item, kind, "active");
+                    setActiveRoom(null);
+                    refresh();
+                  }}
+                  onDeleteForever={() => {
+                    hideForever(item, kind);
+                    setActiveRoom(null);
+                    refresh();
+                  }}
                 />
               ))
             ) : (
               <div style={panel}>
-                <h2 style={h2}>No {folder} {kind.toLowerCase()} cards.</h2>
-                <p style={sub}>Use the dashboard cards above to switch folders or return to active cards.</p>
+                <h2 style={h2}>
+                  No {folder} {kind.toLowerCase()} cards.
+                </h2>
+                <p style={sub}>
+                  Use the dashboard cards above to switch folders or return to
+                  active cards.
+                </p>
               </div>
             )}
           </div>
         </section>
 
-        <ExecutionLaneCards activeRoom={activeRoom} onSelect={setSelectedExecutionLane} />
-        <ExecutionRequestModal lane={selectedExecutionLane} activeRoom={activeRoom} onClose={() => setSelectedExecutionLane(null)} />
+        <ExecutionLaneCards
+          activeRoom={activeRoom}
+          onSelect={setSelectedExecutionLane}
+        />
+        <ExecutionRequestModal
+          lane={selectedExecutionLane}
+          activeRoom={activeRoom}
+          onClose={() => setSelectedExecutionLane(null)}
+        />
 
         <section style={{ marginTop: 18 }}>
           <RequestPipeline />
@@ -1810,14 +2761,54 @@ export default function InvestorRoomPage() {
         <section style={{ ...hero, marginTop: 24 }}>
           <div style={eyebrow}>Network Capabilities Through Members</div>
           <h2 style={h2}>One-stop execution support.</h2>
-          <p style={sub}>Funding, title/closing, contractors, operators, insurance, and execution partners are available through the private member network after member/admin approval.</p>
+          <p style={sub}>
+            Funding, title/closing, contractors, operators, insurance, and
+            execution partners are available through the private member network
+            after member/admin approval.
+          </p>
           <div style={{ ...grid, marginTop: 18 }}>
-            <div style={panel}><div style={eyebrow}>Funding</div><p style={muted}>Private lenders, hard money, bridge, equity, and capital introductions through members.</p></div>
-            <div style={panel}><div style={eyebrow}>Title / Closing</div><p style={muted}>Closing support and transaction coordination through approved network relationships.</p></div>
-            <div style={panel}><div style={eyebrow}>Contractors</div><p style={muted}>Rehab, construction, repairs, inspections, and field execution routed through members.</p></div>
-            <div style={panel}><div style={eyebrow}>Operators</div><p style={muted}>Asset operators, acquisition/disposition support, management, and execution partners.</p></div>
-            <div style={panel}><div style={eyebrow}>Insurance</div><p style={muted}>Coverage support and property-risk routing through approved member resources.</p></div>
-            <div style={panel}><div style={eyebrow}>Admin Control</div><p style={muted}>No direct contact is exposed until the member/admin workflow approves deeper access.</p></div>
+            <div style={panel}>
+              <div style={eyebrow}>Funding</div>
+              <p style={muted}>
+                Private lenders, hard money, bridge, equity, and capital
+                introductions through members.
+              </p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Title / Closing</div>
+              <p style={muted}>
+                Closing support and transaction coordination through approved
+                network relationships.
+              </p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Contractors</div>
+              <p style={muted}>
+                Rehab, construction, repairs, inspections, and field execution
+                routed through members.
+              </p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Operators</div>
+              <p style={muted}>
+                Asset operators, acquisition/disposition support, management,
+                and execution partners.
+              </p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Insurance</div>
+              <p style={muted}>
+                Coverage support and property-risk routing through approved
+                member resources.
+              </p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Admin Control</div>
+              <p style={muted}>
+                No direct contact is exposed until the member/admin workflow
+                approves deeper access.
+              </p>
+            </div>
           </div>
         </section>
       </div>
