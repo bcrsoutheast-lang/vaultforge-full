@@ -1107,7 +1107,7 @@ function BloombergMessageForm({
 
   return (
     <div style={{ ...panel, marginTop: 14 }}>
-      <div style={eyebrow}>Bloomberg Message Ticket</div>
+      <div style={eyebrow}>Structured Message Ticket</div>
       <h3 style={h3}>{subject || "Structured Request Message"}</h3>
 
       <div style={{ ...grid, marginTop: 12 }}>
@@ -1744,19 +1744,68 @@ function AdminSequenceCard({
 function AdminOperatingGuide() {
   return (
     <section style={{ ...activePanel, marginBottom: 18 }}>
-      <div style={eyebrow}>Admin Control Sequence</div>
-      <h2 style={h2}>Route requests in order.</h2>
+      <div style={eyebrow}>Admin Area Instructions</div>
+      <h2 style={h2}>Everything has a place.</h2>
       <p style={sub}>
-        Admin is the control tower. Investor/member data should stay controlled while admin reviews, routes, releases contact, and closes the workflow.
+        Admin is the control tower. Review requests, verify investor profile context, route to matching members, manage replies, release contact only when approved, and close or clean up handled work.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
         <AdminSequenceCard step="01 Review" title="Investor Inbox" note="New investor Deal/Pain/execution requests land here first." active />
-        <AdminSequenceCard step="02 Profile" title="Verify Investor Context" note="Investor profile should be attached before routing to members." />
-        <AdminSequenceCard step="03 Match" title="Route To Members" note="Send request to members who match lender, title, contractor, operator, insurance, JV, or market role." />
-        <AdminSequenceCard step="04 Thread" title="Controlled Conversation" note="Keep admin, member, and investor replies tied to one request thread." />
+        <AdminSequenceCard step="02 Profile" title="Verify Profile Context" note="Investor profile should be attached before routing to members." />
+        <AdminSequenceCard step="03 Match" title="Route To Matching Members" note="Send request to members who match lender, title, contractor, operator, insurance, JV, or market role." />
+        <AdminSequenceCard step="04 Thread" title="Controlled Thread" note="Keep admin, member, and investor replies tied to one request thread." />
         <AdminSequenceCard step="05 Release" title="Contact Release" note="Only release contact after approval. Log who released and when." />
-        <AdminSequenceCard step="06 Close" title="Save / Archive / Delete / Close" note="Clean the queue once the request is handled, passed, or dead." />
+        <AdminSequenceCard step="06 Close" title="Close / Save / Archive / Delete" note="Clean the queue once the request is handled, passed, or dead." />
+      </div>
+    </section>
+  );
+}
+
+
+
+function AdminQueueGuide() {
+  return (
+    <section style={{ ...panel, marginBottom: 18 }}>
+      <div style={eyebrow}>Admin Queue Map</div>
+      <h2 style={h2}>What each admin area is for.</h2>
+      <p style={sub}>
+        Use these queues so members, investors, requests, rooms, replies, and cleanup stay in the right place.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        <div style={panel}>
+          <div style={eyebrow}>New Members</div>
+          <p style={muted}>Member applications waiting for review, approval, payment unlock, activation, suspension, or delete.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Investors</div>
+          <p style={muted}>Investor applications, profile depth, payment approval, access status, and blocked/deleted investor cleanup.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Investor Inbox</div>
+          <p style={muted}>Main intake for investor Deal/Pain requests, execution requests, and messages from investor room.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Deal Requests</div>
+          <p style={muted}>Investor interest tied to Deal/opportunity cards. Verify profile context before routing.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Pain Requests</div>
+          <p style={muted}>Problem-solving requests tied to capital gaps, title issues, contractor problems, operator needs, or execution help.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Execution Requests</div>
+          <p style={muted}>Specific service needs such as lender, hard money, contractor, title, insurance, operator, JV, boots on ground, or disposition.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Controlled Threads</div>
+          <p style={muted}>The shared conversation room where admin, member, and investor replies stay attached to the original request.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Saved / Archived / Deleted</div>
+          <p style={muted}>Admin cleanup folders. Save for follow-up, archive handled work, delete clutter, and delete forever only when intended.</p>
+        </div>
       </div>
     </section>
   );
@@ -2036,6 +2085,7 @@ export default function AdminPage() {
             </div>
           </section>
         <AdminOperatingGuide />
+        <AdminQueueGuide />
         </div>
       </main>
     );
@@ -2060,8 +2110,8 @@ export default function AdminPage() {
 
         <section style={hero}>
           <div style={eyebrow}>VaultForge Admin Command</div>
-          <h1 style={h1}>Admin control tower.</h1>
-          <p style={sub}>Review investor/member activity, route requests, control contact release, and clean queues without exposing private network data.</p>
+          <h1 style={h1}>Admin command center.</h1>
+          <p style={sub}>Review members and investors, route Deal/Pain/execution requests, control contact release, manage replies, and clean queues without exposing private network data.</p>
         </section>
 
         <section style={{ marginBottom: 18 }}>
