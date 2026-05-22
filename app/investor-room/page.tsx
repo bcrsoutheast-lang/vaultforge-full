@@ -2419,6 +2419,16 @@ function InvestorRequestCenter() {
   );
 }
 
+
+function writeControlledThreads(rows: any[]) {
+  writeJson(CONTROLLED_THREADS_KEY, rows);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("vaultforge-controlled-thread-change"));
+    window.dispatchEvent(new Event("vaultforge-investor-thread-change"));
+    window.dispatchEvent(new Event("vaultforge-member-thread-change"));
+  }
+}
+
 function readControlledThreads() {
   const rows = readJson<any[]>(CONTROLLED_THREADS_KEY, []);
   return Array.isArray(rows) ? rows : [];
