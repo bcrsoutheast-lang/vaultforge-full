@@ -273,72 +273,111 @@ function saveInvestorAdminMessage(subject: string, body: string) {
 }
 
 function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
-  const rows = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
-  const investor = readInvestor();
-  const profile = investorProfileSnapshot(investor);
-  const title = itemTitle(item, kind);
-  const state = itemState(item);
-  const header = `${lane.title} - ${kind} - ${title} - ${state || "Unknown State"}`;
+  try {
+    const rows = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+    const investor = readInvestor();
+    const profile = investorProfileSnapshot(investor);
+    const title = itemTitle(item, kind);
+    const state = itemState(item);
+    const now = Date.now();
+    const createdAt = new Date().toISOString();
+    const executionId = `execution-request-${now}`;
+    const adminInboxId = `admin-execution-request-${now}`;
+    const header = `${lane.title} - ${kind} - ${title} - ${state || "Unknown State"}`;
 
-  const profileText = [
-    `Investor: ${profile.contactName || "Not listed"}`,
-    `Company: ${profile.company || "Not listed"}`,
-    `Email: ${profile.email || "Not listed"}`,
-    `Phone: ${profile.phone || "Not listed"}`,
-    `Types: ${Array.isArray(profile.investorTypes) ? profile.investorTypes.join(", ") : profile.investorTypes || "Not listed"}`,
-    `Strategy: ${Array.isArray(profile.buyingStrategies) ? profile.buyingStrategies.join(", ") : profile.buyingStrategies || "Not listed"}`,
-    `Markets: ${Array.isArray(profile.statesInterested) ? profile.statesInterested.join(", ") : profile.statesInterested || "Not listed"}`,
-    `Buy Box: ${profile.minDeal || "Not listed"} - ${profile.maxDeal || "Not listed"}`,
-    `Volume: ${profile.monthlyVolume || "Not listed"} / month, ${profile.yearlyVolume || "Not listed"} / year`,
-    `Close Speed: ${profile.closeSpeed || "Not listed"}`,
-    `Proof of Funds: ${profile.proofFunds || "Not listed"}`,
-    `Direct Buyer: ${profile.directBuyer || "Not listed"}`,
-    `Funding Needed: ${profile.fundingNeeded || "Not listed"}`,
-  ].join("\\n");
+    const profileText = [
+      `Investor: ${profile.contactName || "Not listed"}`,
+      `Company: ${profile.company || "Not listed"}`,
+      `Email: ${profile.email || "Not listed"}`,
+      `Phone: ${profile.phone || "Not listed"}`,
+      `Types: ${Array.isArray(profile.investorTypes) ? profile.investorTypes.join(", ") : profile.investorTypes || "Not listed"}`,
+      `Strategy: ${Array.isArray(profile.buyingStrategies) ? profile.buyingStrategies.join(", ") : profile.buyingStrategies || "Not listed"}`,
+      `Markets: ${Array.isArray(profile.statesInterested) ? profile.statesInterested.join(", ") : profile.statesInterested || "Not listed"}`,
+      `Buy Box: ${profile.minDeal || "Not listed"} - ${profile.maxDeal || "Not listed"}`,
+      `Volume: ${profile.monthlyVolume || "Not listed"} / month, ${profile.yearlyVolume || "Not listed"} / year`,
+      `Close Speed: ${profile.closeSpeed || "Not listed"}`,
+      `Proof of Funds: ${profile.proofFunds || "Not listed"}`,
+      `Direct Buyer: ${profile.directBuyer || "Not listed"}`,
+      `Funding Needed: ${profile.fundingNeeded || "Not listed"}`,
+    ].join("\\n");
 
-  rows.unshift({
-    id: `execution-request-${Date.now()}`,
-    requestType: lane.key,
-    requestTitle: lane.title,
-    kind,
-    itemId: itemId(item, kind),
-    title,
-    state,
-    roomHeader: header,
-    investorEmail: profile.email,
-    investorCompany: profile.company,
-    investorName: profile.contactName,
-    investorPhotoUrl: profile.photoUrl,
-    investorProfile: profile,
-    notes: notes || "",
-    message: `${header}\\n\\n${notes || "Investor requested execution support."}\\n\\n--- Investor Profile Attached ---\\n${profileText}`,
-    status: "new",
-    createdAt: new Date().toISOString(),
-  });
+    const executionRow = {
+      id: executionId,
+      requestType: lane.key,
+      requestTitle: lane.title,
+      kind,
+      itemId: itemId(item, kind),
+      title,
+      state,
+      roomHeader: header,
+      investorEmail: profile.email,
+      investorCompany: profile.company,
+      investorName: profile.contactName,
+      investorPhotoUrl: profile.photoUrl,
+      investorProfile: profile,
+      notes: notes || "",
+      message: `${header}\\n\\n${notes || "Investor requested execution support."}\\n\\n--- Investor Profile Attached ---\\n${profileText}`,
+      status: "new",
+      createdAt,
+      updatedAt: createdAt,
+    };
 
-  writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, rows);
-  pushAdminInbox({
-    id: `admin-execution-request-${Date.now()}`,
-    type: "execution_request",
-    requestTitle: lane.title,
-    title,
-    subject: `${lane.title} - ${title}`,
-    body: notes || "Investor requested execution support.",
-    message: `${header}\n\n${notes || "Investor requested execution support."}`,
-    status: "new",
-    source: "investor-room-execution",
-    kind,
-    itemId: itemId(item, kind),
-    state,
-    roomHeader: header,
-    investorProfile: profile || safeInvestorSnapshot(),
-    investorEmail: profile?.email || "",
-    investorCompany: profile?.company || "",
-    investorName: profile?.contactName || "",
-    investorPhotoUrl: profile?.photoUrl || "",
-  });
+    writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, [executionRow, ...rows]);
 
-  window.dispatchEvent(new Event("vaultforge-investor-execution-request-change"));
+    pushAdminInbox({
+      id: adminInboxId,
+      type: "execution_request",
+      requestTitle: lane.title,
+      title,
+      subject: `${lane.title} - ${title}`,
+      body: notes || "Investor requested execution support.",
+      message: `${header}
+
+${notes || "Investor requested execution support."}`,
+      status: "new",
+      source: "investor-room-execution",
+      kind,
+      itemId: itemId(item, kind),
+      state,
+      roomHeader: header,
+      investorProfile: profile || safeInvestorSnapshot(),
+      investorEmail: profile?.email || "",
+      investorCompany: profile?.company || "",
+      investorName: profile?.contactName || "",
+      investorPhotoUrl: profile?.photoUrl || "",
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    const savedExecutionRows = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+    const savedAdminInboxRows = readJson<any[]>(ADMIN_INBOX_KEY, []);
+    const executionSaved = savedExecutionRows.some((row) => row?.id === executionId);
+    const adminSaved = savedAdminInboxRows.some((row) => row?.id === adminInboxId);
+
+    if (!executionSaved || !adminSaved) {
+      throw new Error(
+        `Request did not verify after save. executionSaved=${executionSaved ? "yes" : "no"}, adminInboxSaved=${adminSaved ? "yes" : "no"}`
+      );
+    }
+
+    window.dispatchEvent(new Event("vaultforge-investor-execution-request-change"));
+    window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
+    window.dispatchEvent(new Event("vaultforge-admin-investor-request-change"));
+
+    return {
+      ok: true,
+      message: `${lane.title} sent to admin inbox with investor profile attached.`,
+      executionId,
+      adminInboxId,
+    };
+  } catch (error: any) {
+    const message = error?.message || "Unknown localStorage save error.";
+    console.error("VaultForge execution request failed", error);
+    return {
+      ok: false,
+      message: `Execution request failed: ${message}`,
+    };
+  }
 }
 
 
@@ -963,6 +1002,8 @@ function ExecutionRequestModal({
 }) {
   const [notes, setNotes] = useState("");
   const [sent, setSent] = useState(false);
+  const [sendNotice, setSendNotice] = useState("");
+  const [sendError, setSendError] = useState("");
 
   if (!lane) return null;
 
@@ -1008,8 +1049,18 @@ function ExecutionRequestModal({
             type="button"
             style={goldBtn}
             onClick={() => {
-              saveExecutionRequest(kind, item, lane, notes);
-              setSent(true);
+              setSendNotice("");
+              setSendError("");
+              const result = saveExecutionRequest(kind, item, lane, notes);
+              if (result.ok) {
+                setSent(true);
+                setSendNotice(result.message);
+                window.alert(result.message);
+              } else {
+                setSent(false);
+                setSendError(result.message);
+                window.alert(result.message);
+              }
             }}
           >
             Send Execution Request
@@ -1017,7 +1068,9 @@ function ExecutionRequestModal({
           <button type="button" style={btn} onClick={onClose}>Collapse / Done</button>
         </div>
 
-        {sent ? <p style={{ ...sub, marginTop: 14 }}>Execution request sent to VaultForge routing.</p> : null}
+        {sendNotice ? <p style={{ ...sub, marginTop: 14, color: "#9effb2" }}>{sendNotice}</p> : null}
+        {sendError ? <p style={{ ...sub, marginTop: 14, color: "#ffaaaa" }}>{sendError}</p> : null}
+        {sent && !sendNotice ? <p style={{ ...sub, marginTop: 14 }}>Execution request sent to VaultForge routing.</p> : null}
       </div>
     </div>
   );
