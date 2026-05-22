@@ -1383,29 +1383,45 @@ function AdminInvestorInboxCard({
   onStatus: (id: string, status: string) => void;
 }) {
   const [reply, setReply] = useState("");
-  const title = item?.requestTitle || item?.title || item?.subject || "Investor Message / Request";
+  const status = requestStatus(item);
+  const profile = investorProfileFromStores(item);
+  const title = item?.requestTitle || item?.title || item?.subject || "Investor Opportunity Message";
+  const matchedMembers = matchedMembersForRequest({ ...item, investorProfile: profile });
+  const isNew = status === "new" || status === "pending";
+  const isDeleted = status === "deleted";
+  const requestType = clean(item?.type || item?.source || item?.kind, "investor_request").replaceAll("_", " ");
 
   function sendReply() {
     if (!reply.trim()) return;
-    const thread = createThreadFromAdminInbox(item);
+    const thread = createThreadFromAdminInbox({ ...item, investorProfile: profile });
     addAdminReplyToThread(thread.id, reply);
     onStatus(item.id, "admin_replied");
     setReply("");
   }
 
-  return (
-    <div style={activePanel}>
-      <div style={eyebrow}>{item?.type || "investor"} • {item?.status || "new"}</div>
-      <h2 style={h2}>{title}</h2>
-      <p style={sub}>{item?.investorCompany || item?.investorName || item?.investorEmail || "Investor not listed"}</p>
-      <p style={muted}>{item?.message || item?.body || "Investor request received."}</p>
+  function approveAndRoute() {
+    createThreadFromAdminInbox({ ...item, investorProfile: profile, status: "approved" });
+    onStatus(item.id, "approved");
+  }
 
-      {typeof InvestorProfileSnapshotCard === "function" ? (
-        <InvestorProfileSnapshotCard profile={item?.investorProfile} photoUrl={item?.investorPhotoUrl} />
-      ) : null}
+  function markRouted() {
+    createThreadFromAdminInbox({ ...item, investorProfile: profile, status: "routed" });
+    onStatus(item.id, "routed");
+  }
+
+  return (
+    <div className={isNew ? "vf-pulse" : ""} style={isDeleted ? alertPanel : activePanel}>
+      <div style={eyebrow}>{requestType} • {status}</div>
+      <h2 style={h2}>{title}</h2>
+      <p style={sub}>{item?.roomHeader || item?.subject || item?.title || "Investor opportunity request"}</p>
+      <p style={muted}>{item?.message || item?.body || item?.notes || "Investor request received."}</p>
+      <p style={muted}>State: {item?.state || profile?.statesInterested || "Not listed"}</p>
+      <p style={muted}>Auto-match candidates: {matchedMembers.length ? matchedMembers.map((member) => member.name || member.company || member.email).join(" • ") : "No matching members yet"}</p>
+
+      <InvestorProfileSnapshotCard profile={profile} photoUrl={item?.investorPhotoUrl || profile?.photoUrl} />
 
       <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
-        <span style={eyebrow}>Message Investor</span>
+        <span style={eyebrow}>Message Investor / Controlled Thread</span>
         <textarea
           style={{ ...input, minHeight: 110 }}
           value={reply}
@@ -1416,13 +1432,14 @@ function AdminInvestorInboxCard({
 
       <div style={{ ...row, marginTop: 14 }}>
         <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
-        <button type="button" style={greenBtn} onClick={() => onStatus(item.id, "approved")}>Approve Intro</button>
-        <button type="button" style={goldBtn} onClick={() => onStatus(item.id, "routed")}>Mark Routed</button>
+        <button type="button" style={greenBtn} onClick={approveAndRoute}>Approve + Route</button>
+        <button type="button" style={goldBtn} onClick={markRouted}>Route to Matching Members</button>
         <button type="button" style={btn} onClick={() => onStatus(item.id, "saved")}>Save</button>
         <button type="button" style={btn} onClick={() => onStatus(item.id, "archived")}>Archive</button>
         <button type="button" style={btn} onClick={() => onStatus(item.id, "closed")}>Close</button>
-        <button type="button" style={redBtn} onClick={() => onStatus(item.id, "deleted")}>Delete</button>
-        {requestStatus(item) === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteAdminInboxForever(item.id)}>Delete Forever</button> : null}
+        {!isDeleted ? <button type="button" style={redBtn} onClick={() => onStatus(item.id, "deleted")}>Delete</button> : null}
+        {isDeleted ? <button type="button" style={goldBtn} onClick={() => onStatus(item.id, "new")}>Restore</button> : null}
+        {isDeleted ? <button type="button" style={redBtn} onClick={() => deleteAdminInboxForever(item.id)}>Delete Forever</button> : null}
       </div>
     </div>
   );
@@ -1615,7 +1632,17 @@ export default function AdminPage() {
   const painRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("pain")), [investorRequests]);
   const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter(isOpenRequest), [investorExecutionRequests]);
   const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter(isOpenRequest), [investorAdminMessages]);
-  const allInvestorActionItems = useMemo(() => [...adminInvestorInbox, ...investorRequests, ...investorExecutionRequests, ...investorAdminMessages], [adminInvestorInbox, investorRequests, investorExecutionRequests, investorAdminMessages]);
+  const allInvestorActionItems = useMemo(() => {
+    const map = new Map<string, any>();
+    [...adminInvestorInbox, ...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].forEach((item: any, index) => {
+      const key = clean(item?.id || item?.sourceRequestId || `${item?.type || item?.kind || "item"}-${item?.title || item?.requestTitle || index}`);
+      if (!key) return;
+      const existing = map.get(key) || {};
+      map.set(key, { ...existing, ...item, investorProfile: investorProfileFromStores({ ...existing, ...item }) });
+    });
+    return Array.from(map.values()).sort((a, b) => clean(b?.createdAt || b?.updatedAt).localeCompare(clean(a?.createdAt || a?.updatedAt)));
+  }, [adminInvestorInbox, investorRequests, investorExecutionRequests, investorAdminMessages]);
+  const openInvestorActionItems = useMemo(() => allInvestorActionItems.filter(isOpenRequest), [allInvestorActionItems]);
   const savedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "saved")), [allInvestorActionItems]);
   const archivedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "archived")), [allInvestorActionItems]);
   const deletedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "deleted")), [allInvestorActionItems]);
@@ -1696,15 +1723,24 @@ export default function AdminPage() {
 
 
   function updateAdminInboxStatus(id: string, status: string) {
-    const original = adminInvestorInbox.find((item) => item.id === id);
     const stamped = new Date().toISOString();
-    const next = adminInvestorInbox.map((item) =>
-      item.id === id ? { ...item, status, updatedAt: stamped } : item
-    );
-    setAdminInvestorInbox(next);
-    writeAdminInvestorInbox(next);
+    const threadSource =
+      adminInvestorInbox.find((item) => item.id === id) ||
+      investorRequests.find((item) => item.id === id) ||
+      investorExecutionRequests.find((item) => item.id === id) ||
+      investorAdminMessages.find((item) => item.id === id);
 
-    const syncRequest = (rows: any[]) => rows.map((item) => item.id === id ? { ...item, status, updatedAt: stamped } : item);
+    const normalizedSource = threadSource ? { ...threadSource, investorProfile: investorProfileFromStores(threadSource), status, updatedAt: stamped } : null;
+
+    const nextInbox = adminInvestorInbox.some((item) => item.id === id)
+      ? adminInvestorInbox.map((item) => item.id === id ? { ...item, investorProfile: investorProfileFromStores(item), status, updatedAt: stamped } : item)
+      : normalizedSource
+        ? [normalizedSource, ...adminInvestorInbox]
+        : adminInvestorInbox;
+    setAdminInvestorInbox(nextInbox);
+    writeAdminInvestorInbox(nextInbox);
+
+    const syncRequest = (rows: any[]) => rows.map((item) => item.id === id ? { ...item, investorProfile: investorProfileFromStores(item), status, updatedAt: stamped } : item);
     const nextRequests = syncRequest(investorRequests) as InvestorRequest[];
     const nextExecution = syncRequest(investorExecutionRequests) as InvestorExecutionRequest[];
     const nextMessages = syncRequest(investorAdminMessages) as InvestorAdminMessage[];
@@ -1715,12 +1751,7 @@ export default function AdminPage() {
     writeInvestorExecutionRequests(nextExecution);
     writeInvestorAdminMessages(nextMessages);
 
-    const threadSource =
-      original ||
-      investorRequests.find((item) => item.id === id) ||
-      investorExecutionRequests.find((item) => item.id === id) ||
-      investorAdminMessages.find((item) => item.id === id);
-    if (["approved", "routed", "admin_replied"].includes(status) && threadSource) createThreadFromAdminInbox({ ...threadSource, status });
+    if (["approved", "routed", "admin_replied"].includes(status) && normalizedSource) createThreadFromAdminInbox(normalizedSource);
   }
 
   function updateInvestorRequestStatus(id: string, status: string) {
@@ -1821,7 +1852,7 @@ export default function AdminPage() {
             <Metric title="New Investors" count={newInvestors.length} note="pending investor approvals" pulse={newInvestors.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Investor Payments" count={pendingInvestorPayment.length} note="investor payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Controlled Threads" count={readControlledThreads().length} note="approved intro rooms" pulse={readControlledThreads().length > 0} onClick={() => setTab("investors")} />
-            <Metric title="Investor Inbox" count={adminInvestorInbox.filter(isOpenRequest).length} note="messages/requests from investor room" pulse={adminInvestorInbox.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Investor Inbox" count={openInvestorActionItems.length} note="messages/requests from investor room" pulse={openInvestorActionItems.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Deal Requests" count={dealRequests.length} note="investor deal interest" pulse={dealRequests.length > 0} onClick={() => setTab("dealRequests")} />
             <Metric title="Pain Requests" count={painRequests.length} note="investor pain interest" pulse={painRequests.length > 0} onClick={() => setTab("painRequests")} />
             <Metric title="Execution Requests" count={openInvestorExecutionRequests.length} note="lender/title/contractor/operator requests" pulse={openInvestorExecutionRequests.length > 0} onClick={() => setTab("investors")} />
@@ -1850,6 +1881,16 @@ export default function AdminPage() {
             ))}
           </div>
         </Section>
+
+        {openInvestorActionItems.length ? (
+          <Section title="Investor Opportunity Messages — Live Queue">
+            <div style={grid}>
+              {openInvestorActionItems.map((item) => (
+                <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />
+              ))}
+            </div>
+          </Section>
+        ) : null}
 
         {tab === "overview" ? (
           <>
@@ -2024,12 +2065,10 @@ export default function AdminPage() {
 
               <Section title="Investor Inbox — Messages / Requests">
                 <div style={grid}>
-                  {adminInvestorInbox.filter(isOpenRequest).length ? (
-                    adminInvestorInbox
-                      .filter(isOpenRequest)
-                      .map((item) => (
-                        <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />
-                      ))
+                  {openInvestorActionItems.length ? (
+                    openInvestorActionItems.map((item) => (
+                      <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />
+                    ))
                   ) : (
                     <div style={panel}>
                       <h2 style={h2}>No investor messages or requests yet.</h2>
