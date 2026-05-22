@@ -2292,44 +2292,173 @@ function investorEmailForThreads() {
   ).toLowerCase();
 }
 
+
+function appendInvestorReplyToThread(threadId: string, body: string) {
+  const text = clean(body);
+  if (!text) return false;
+
+  const rows = readControlledThreads();
+  const now = new Date().toISOString();
+  const investor = readInvestor();
+  const profile = compactInvestorProfile(investorProfileSnapshot(investor));
+  let changed = false;
+
+  const next = rows.map((thread: any) => {
+    if (thread?.id !== threadId) return thread;
+    changed = true;
+    return {
+      ...thread,
+      investorEmail: thread?.investorEmail || profile.email || '',
+      investorCompany: thread?.investorCompany || profile.company || '',
+      investorName: thread?.investorName || profile.contactName || '',
+      investorProfile: thread?.investorProfile || profile,
+      status: thread?.status === 'deleted' ? 'active' : thread?.status || 'investor_replied',
+      stage: thread?.stage === 'deleted' ? 'investor_replied' : thread?.stage || 'investor_replied',
+      messages: [
+        ...(Array.isArray(thread?.messages) ? thread.messages : []),
+        {
+          id: `investor-thread-message-${Date.now()}`,
+          from: profile.contactName || 'Investor',
+          role: 'investor',
+          body: text,
+          createdAt: now,
+        },
+      ],
+      updatedAt: now,
+    };
+  });
+
+  if (!changed) return false;
+  writeJson(CONTROLLED_THREADS_KEY, next.slice(0, 80));
+  window.dispatchEvent(new Event('vaultforge-controlled-thread-change'));
+  window.dispatchEvent(new Event('vaultforge-investor-thread-change'));
+  return true;
+}
+
+function threadMessagesByRole(thread: any, role: 'admin' | 'member') {
+  const rows = Array.isArray(thread?.messages) ? thread.messages : [];
+  return rows.filter((message: any) => {
+    const who = `${message?.role || ''} ${message?.from || ''}`.toLowerCase();
+    if (role === 'admin') return who.includes('admin') || who.includes('vaultforge');
+    return who.includes('member') || who.includes('lender') || who.includes('contractor') || who.includes('attorney') || who.includes('title') || who.includes('operator');
+  });
+}
+
+function InvestorThreadMessageCard({ thread }: { thread: any }) {
+  const [reply, setReply] = useState('');
+  const [notice, setNotice] = useState('');
+  const profile = thread?.investorProfile || safeInvestorSnapshot();
+  const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+  const adminMessages = threadMessagesByRole(thread, 'admin');
+  const memberMessages = threadMessagesByRole(thread, 'member');
+  const hasFreshReply = messages.some((message: any) => {
+    const who = `${message?.role || ''} ${message?.from || ''}`.toLowerCase();
+    return who.includes('admin') || who.includes('member') || who.includes('lender') || who.includes('contractor') || who.includes('attorney') || who.includes('title') || who.includes('operator');
+  });
+
+  function sendReply() {
+    const ok = appendInvestorReplyToThread(thread.id, reply);
+    if (ok) {
+      setReply('');
+      setNotice('Reply sent into this request thread.');
+    } else {
+      setNotice('Reply failed. Close and reopen, then try again.');
+    }
+  }
+
+  return (
+    <div className={hasFreshReply ? 'vf-pulse' : ''} style={hasFreshReply ? activePanel : goldPanel}>
+      <div style={eyebrow}>Request Message Thread • {thread?.status || 'open'}</div>
+      <h3 style={h3}>{thread?.title || 'Investor Request Thread'}</h3>
+      <p style={sub}>{thread?.roomHeader || 'Controlled investor/member/admin conversation.'}</p>
+      <p style={muted}>Contact Released: {thread?.contactReleased ? 'Yes' : 'No'}</p>
+
+      <div style={{ ...grid, marginTop: 14 }}>
+        <div style={panel}>
+          <div style={eyebrow}>Admin Replies</div>
+          {adminMessages.length ? adminMessages.slice(-4).map((message: any) => (
+            <div key={message.id || `${message.createdAt}-${message.body}`} style={{ ...panel, marginTop: 8 }}>
+              <p style={muted}>{message.from || 'VaultForge Admin'} • {message.createdAt || ''}</p>
+              <p style={sub}>{message.body || message.message || ''}</p>
+            </div>
+          )) : <p style={muted}>No admin replies yet.</p>}
+        </div>
+
+        <div style={panel}>
+          <div style={eyebrow}>Member Replies</div>
+          {memberMessages.length ? memberMessages.slice(-4).map((message: any) => (
+            <div key={message.id || `${message.createdAt}-${message.body}`} style={{ ...panel, marginTop: 8 }}>
+              <p style={muted}>{message.from || 'Member'} • {message.createdAt || ''}</p>
+              <p style={sub}>{message.body || message.message || ''}</p>
+            </div>
+          )) : <p style={muted}>No member replies yet.</p>}
+        </div>
+      </div>
+
+      <div style={{ ...panel, marginTop: 14 }}>
+        <div style={eyebrow}>Investor Reply</div>
+        <textarea
+          style={{ ...input, minHeight: 110 }}
+          value={reply}
+          onChange={(event) => setReply(event.target.value)}
+          placeholder='Reply back to admin/member inside this request thread...'
+        />
+        <div style={{ ...row, marginTop: 10 }}>
+          <button type='button' style={goldBtn} onClick={sendReply}>Send Request Reply</button>
+          {notice ? <span style={muted}>{notice}</span> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InvestorThreadCenter() {
+  const [refresh, setRefresh] = useState(0);
   const investorEmail = investorEmailForThreads();
   const threads = readControlledThreads().filter(
     (thread) =>
-      String(thread.investorEmail || "").toLowerCase() === investorEmail ||
+      String(thread.investorEmail || '').toLowerCase() === investorEmail ||
       !investorEmail,
   );
+  const activeThreads = threads.filter((thread) => String(thread?.status || '').toLowerCase() !== 'deleted');
+  const adminReplyCount = activeThreads.reduce((total, thread) => total + threadMessagesByRole(thread, 'admin').length, 0);
+  const memberReplyCount = activeThreads.reduce((total, thread) => total + threadMessagesByRole(thread, 'member').length, 0);
+
+  useEffect(() => {
+    const refreshThreads = () => setRefresh((value) => value + 1);
+    window.addEventListener('storage', refreshThreads);
+    window.addEventListener('vaultforge-controlled-thread-change', refreshThreads);
+    window.addEventListener('vaultforge-investor-thread-change', refreshThreads);
+    return () => {
+      window.removeEventListener('storage', refreshThreads);
+      window.removeEventListener('vaultforge-controlled-thread-change', refreshThreads);
+      window.removeEventListener('vaultforge-investor-thread-change', refreshThreads);
+    };
+  }, []);
 
   return (
-    <section style={{ ...hero, marginTop: 20 }}>
-      <div style={eyebrow}>Controlled Intro Threads</div>
-      <h2 style={h2}>Approved routing rooms.</h2>
+    <section style={{ ...hero, marginTop: 20 }} data-refresh={refresh}>
+      <div style={eyebrow}>Request Messages</div>
+      <h2 style={h2}>Admin and member replies.</h2>
       <p style={sub}>
-        Approved requests become controlled threads. Contact information stays
-        hidden until VaultForge/member approval releases it.
+        Every approved Deal, Pain, or execution request becomes a message card here.
+        Admin replies and member replies stay tied to the original request.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
-        {threads.length ? (
-          threads.map((thread) => (
-            <div key={thread.id} style={goldPanel}>
-              <div style={eyebrow}>
-                {thread.status} • {thread.stage}
-              </div>
-              <h3 style={h3}>{thread.title}</h3>
-              <p style={muted}>{thread.roomHeader}</p>
-              <p style={muted}>
-                Contact Released: {thread.contactReleased ? "Yes" : "No"}
-              </p>
-              <p style={muted}>Thread ID: {thread.id}</p>
-            </div>
-          ))
+        <Metric title='Admin Reply Cards' count={adminReplyCount} note='admin replies tied to requests' pulse={adminReplyCount > 0} />
+        <Metric title='Member Reply Cards' count={memberReplyCount} note='member/operator replies tied to requests' pulse={memberReplyCount > 0} />
+        <Metric title='Open Request Threads' count={activeThreads.length} note='controlled request conversations' pulse={activeThreads.length > 0} />
+      </div>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        {activeThreads.length ? (
+          activeThreads.map((thread) => <InvestorThreadMessageCard key={thread.id} thread={thread} />)
         ) : (
           <div style={panel}>
-            <h3 style={h3}>No approved threads yet.</h3>
+            <h3 style={h3}>No request message cards yet.</h3>
             <p style={muted}>
-              When admin approves a Deal/Pain or execution request, it appears
-              here.
+              Send a Deal/Pain or execution request. Once admin replies or routes it to a member, the message card appears here.
             </p>
           </div>
         )}
