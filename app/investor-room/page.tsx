@@ -1414,19 +1414,22 @@ function Metric({
   count,
   note,
   active,
+  pulse,
   onClick,
 }: {
   title: string;
   count: number | string;
   note: string;
   active?: boolean;
+  pulse?: boolean;
   onClick?: () => void;
 }) {
   return (
     <button
       type="button"
+      className={pulse ? 'vf-pulse' : ''}
       style={{
-        ...(active ? goldPanel : panel),
+        ...(active || pulse ? goldPanel : panel),
         width: "100%",
         textAlign: "left",
       }}
