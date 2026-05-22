@@ -436,7 +436,7 @@ function BloombergMessageForm({
 
   return (
     <div style={{ ...panel, marginTop: 14 }}>
-      <div style={eyebrow}>Bloomberg Message Ticket</div>
+      <div style={eyebrow}>Structured Message Ticket</div>
       <h3 style={h3}>{subject || "Structured Request Message"}</h3>
 
       <div style={{ ...grid, marginTop: 12 }}>
@@ -732,19 +732,43 @@ function MemberSequenceCard({
 function MemberOperatingGuide() {
   return (
     <section style={{ ...goldPanel, marginBottom: 18 }}>
-      <div style={eyebrow}>Member Operating Sequence</div>
-      <h2 style={h2}>Work routed requests in order.</h2>
+      <div style={eyebrow}>Member Area Instructions</div>
+      <h2 style={h2}>Everything has a place.</h2>
       <p style={sub}>
-        This is the member-side execution lane. Every card should move from request review to active work, messaging, contact release, and cleanup.
+        This member area is organized as one operating lane. Start with new routed requests, open the card, decide, message, work the active thread, then clean it up.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
-        <MemberSequenceCard step="01 Inbox" title="New Requests" note="Fresh investor/admin routed requests needing a member decision." active />
-        <MemberSequenceCard step="02 Decision" title="Accept / Pass / Review" note="Accept moves the request into Active Threads. Pass removes it from active work." />
-        <MemberSequenceCard step="03 Message" title="Structured Reply" note="Use the Bloomberg ticket form so replies carry sender, recipient, header, urgency, timeline, amount, and next move." />
-        <MemberSequenceCard step="04 Contact" title="Release Contact" note="Only release contact after member/admin approval. The investor profile remains attached." />
-        <MemberSequenceCard step="05 Execution" title="Work The Request" note="Funding, title, contractor, operator, insurance, JV, or boots-on-ground work happens inside the active thread." />
-        <MemberSequenceCard step="06 Cleanup" title="Save / Archive / Delete" note="Keep the workspace clean without scattering messages or losing request context." />
+        <MemberSequenceCard step="01 New Requests" title="Review Routed Work" note="Fresh investor/admin routed requests land here first. Open the card before taking action." active />
+        <MemberSequenceCard step="02 Decision" title="Accept / Review / Pass" note="Accept moves it into Active Threads. Pass removes it from active work. Review keeps it visible while you evaluate." />
+        <MemberSequenceCard step="03 Request Detail" title="Investor Profile Attached" note="Every detail card should show the request type, Deal/Pain/execution context, investor profile, and what the investor needs." />
+        <MemberSequenceCard step="04 Structured Message" title="Reply With Context" note="Messages include sender, recipient, request header, urgency, amount, timeline, conditions, next move, and private note." />
+        <MemberSequenceCard step="05 Contact Release" title="Protect The Network" note="Contact stays locked until admin/member approval. Release contact only when the request is ready." />
+        <MemberSequenceCard step="06 Active Work" title="Execution Thread" note="Funding, title, contractor, operator, insurance, JV, or boots-on-ground work stays inside the same active thread." />
+        <MemberSequenceCard step="07 Cleanup" title="Save / Archive / Delete" note="Save for follow-up, archive completed or inactive work, delete clutter, and delete forever only when it should be removed." />
+      </div>
+    </section>
+  );
+}
+
+
+
+function MemberLaneGuide() {
+  return (
+    <section style={{ ...panel, marginBottom: 18 }}>
+      <div style={eyebrow}>Member Card Map</div>
+      <h2 style={h2}>What each card area is for.</h2>
+      <p style={sub}>Use these lanes so requests, replies, and cleanup do not scatter.</p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        <div style={panel}><div style={eyebrow}>New Requests</div><p style={muted}>Fresh routed requests waiting for your first decision.</p></div>
+        <div style={panel}><div style={eyebrow}>Active Threads</div><p style={muted}>Accepted requests you are currently working.</p></div>
+        <div style={panel}><div style={eyebrow}>Admin Replies</div><p style={muted}>Admin messages tied to a request, not loose chat.</p></div>
+        <div style={panel}><div style={eyebrow}>Investor Replies</div><p style={muted}>Investor responses inside the same controlled thread.</p></div>
+        <div style={panel}><div style={eyebrow}>Deal Opportunities</div><p style={muted}>Deal/opportunity routed cards with profile and request context attached.</p></div>
+        <div style={panel}><div style={eyebrow}>Pain Requests</div><p style={muted}>Problem-solving requests where the member may provide capital, operator help, title, contractor, or execution support.</p></div>
+        <div style={panel}><div style={eyebrow}>Execution Requests</div><p style={muted}>Specific service lanes such as lender, hard money, contractor, title, insurance, operator, JV, boots on ground, or disposition.</p></div>
+        <div style={panel}><div style={eyebrow}>Saved / Archived / Passed / Deleted</div><p style={muted}>Workspace cleanup lanes. Nothing should disappear from active work unless a status button moves it there.</p></div>
       </div>
     </section>
   );
@@ -849,8 +873,8 @@ export default function MemberControlledThreadsPage() {
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>VaultForge Member Request Command</div>
-          <h1 style={h1}>Member request command center.</h1>
-          <p style={sub}>One clean lane: New Request → Decision → Structured Message → Active Thread → Contact Release → Cleanup.</p>
+          <h1 style={h1}>Member execution command center.</h1>
+          <p style={sub}>New Request → Open Detail → Accept / Pass / Message → Active Thread → Contact Release → Save / Archive / Delete.</p>
 
           <div style={{ ...row, marginTop: 18 }}>
             <Link href="/command" style={goldBtn}>Member Command</Link>
@@ -863,6 +887,8 @@ export default function MemberControlledThreadsPage() {
         </section>
 
         <MemberOperatingGuide />
+
+        <MemberLaneGuide />
 
         <Section title="Member Request Cards">
           <div style={grid}>
@@ -899,7 +925,7 @@ export default function MemberControlledThreadsPage() {
             ) : (
               <div style={panel}>
                 <h2 style={h2}>No cards in this lane.</h2>
-                <p style={sub}>When admin routes/approves investor requests, they appear as visible member cards here.</p>
+                <p style={sub}>This lane is empty right now. When admin routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
               </div>
             )}
           </Section>
