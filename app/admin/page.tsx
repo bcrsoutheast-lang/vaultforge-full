@@ -942,6 +942,44 @@ function InvestorAdminMessageCard({
   );
 }
 
+
+function InvestorRequestAdminCard({
+  request,
+  onStatus,
+}: {
+  request: any;
+  onStatus: (id: string, status: string) => void;
+}) {
+  const title =
+    request?.requestTitle ||
+    request?.title ||
+    request?.topic ||
+    request?.subject ||
+    "Investor Request";
+
+  return (
+    <div style={activePanel}>
+      <div style={eyebrow}>Investor Request • {request?.status || "new"}</div>
+      <h2 style={h2}>{title}</h2>
+      <p style={sub}>{request?.investorCompany || request?.investorName || request?.investorEmail || "Investor not listed"}</p>
+      <p style={muted}>{request?.message || request?.body || request?.notes || "Investor request received."}</p>
+
+      {typeof InvestorProfileSnapshotCard === "function" ? (
+        <InvestorProfileSnapshotCard profile={request?.investorProfile} photoUrl={request?.investorPhotoUrl} />
+      ) : null}
+
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={() => onStatus(request.id, "routed")}>Mark Routed</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(request.id, "approved")}>Approve Intro</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(request.id, "deleted")}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
 function MemberModal({ member, onClose }: { member: MemberRecord | null; onClose: () => void }) {
   if (!member) return null;
   return (
