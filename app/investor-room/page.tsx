@@ -2353,7 +2353,47 @@ function threadMessagesByRole(thread: any, role: 'admin' | 'member') {
   });
 }
 
-function InvestorThreadMessageCard({ thread }: { thread: any }) {
+
+function patchInvestorRequestThread(threadId: string, patch: Record<string, any>) {
+  const id = clean(threadId);
+  if (!id) return false;
+
+  const rows = readControlledThreads();
+  const now = new Date().toISOString();
+  let changed = false;
+
+  const next = rows.map((thread: any) => {
+    if (thread?.id !== id && thread?.threadId !== id) return thread;
+    changed = true;
+    return {
+      ...thread,
+      ...patch,
+      id: thread?.id || id,
+      threadId: thread?.threadId || id,
+      updatedAt: now,
+    };
+  });
+
+  if (!changed) return false;
+  writeJson(CONTROLLED_THREADS_KEY, next.slice(0, 80));
+  window.dispatchEvent(new Event('vaultforge-controlled-thread-change'));
+  window.dispatchEvent(new Event('vaultforge-investor-thread-change'));
+  return true;
+}
+
+function deleteInvestorRequestThreadForever(threadId: string) {
+  const id = clean(threadId);
+  if (!id) return false;
+
+  const rows = readControlledThreads();
+  const next = rows.filter((thread: any) => thread?.id !== id && thread?.threadId !== id);
+  writeJson(CONTROLLED_THREADS_KEY, next.slice(0, 80));
+  window.dispatchEvent(new Event('vaultforge-controlled-thread-change'));
+  window.dispatchEvent(new Event('vaultforge-investor-thread-change'));
+  return true;
+}
+
+function InvestorThreadMessageCard({ thread, onCollapse, onChanged }: { thread: any; onCollapse?: () => void; onChanged?: () => void }) {
   const [reply, setReply] = useState('');
   const [notice, setNotice] = useState('');
   const profile = thread?.investorProfile || safeInvestorSnapshot();
@@ -2370,9 +2410,22 @@ function InvestorThreadMessageCard({ thread }: { thread: any }) {
     if (ok) {
       setReply('');
       setNotice('Reply sent into this request thread.');
+      if (onChanged) onChanged();
     } else {
       setNotice('Reply failed. Close and reopen, then try again.');
     }
+  }
+
+  function applyThreadAction(label: string, patch: Record<string, any>) {
+    const ok = patchInvestorRequestThread(thread.id || thread.threadId, patch);
+    setNotice(ok ? `${label} saved.` : `${label} failed. Try refreshing and sending again.`);
+    if (ok && onChanged) onChanged();
+  }
+
+  function removeThreadForever() {
+    const ok = deleteInvestorRequestThreadForever(thread.id || thread.threadId);
+    setNotice(ok ? 'Thread deleted forever.' : 'Delete forever failed. Try refreshing.');
+    if (ok && onChanged) onChanged();
   }
 
   return (
@@ -2405,6 +2458,18 @@ function InvestorThreadMessageCard({ thread }: { thread: any }) {
       </div>
 
       <div style={{ ...panel, marginTop: 14 }}>
+        <div style={eyebrow}>Request Cleanup</div>
+        <div style={row}>
+          <button type='button' style={goldBtn} onClick={() => applyThreadAction('Saved', { saved: true, status: 'saved', stage: 'investor_saved' })}>Save</button>
+          <button type='button' style={btn} onClick={() => applyThreadAction('Archived', { status: 'archived', stage: 'investor_archived' })}>Archive</button>
+          <button type='button' style={redBtn} onClick={() => applyThreadAction('Deleted', { status: 'deleted', stage: 'investor_deleted' })}>Delete</button>
+          <button type='button' style={redBtn} onClick={removeThreadForever}>Delete Forever</button>
+          <button type='button' style={btn} onClick={onCollapse}>Collapse / Done</button>
+        </div>
+        <p style={muted}>Save keeps this card for follow-up. Archive hides it from active work. Delete moves it out of open request messages. Delete Forever removes the thread from local testing storage.</p>
+      </div>
+
+      <div style={{ ...panel, marginTop: 14 }}>
         <div style={eyebrow}>Investor Reply</div>
         <textarea
           style={{ ...input, minHeight: 110 }}
@@ -2423,13 +2488,18 @@ function InvestorThreadMessageCard({ thread }: { thread: any }) {
 
 function InvestorThreadCenter() {
   const [refresh, setRefresh] = useState(0);
+  const [collapsedThreadIds, setCollapsedThreadIds] = useState<string[]>([]);
   const investorEmail = investorEmailForThreads();
   const threads = readControlledThreads().filter(
     (thread) =>
       String(thread.investorEmail || '').toLowerCase() === investorEmail ||
       !investorEmail,
   );
-  const activeThreads = threads.filter((thread) => String(thread?.status || '').toLowerCase() !== 'deleted');
+  const activeThreads = threads.filter((thread) => {
+    const status = String(thread?.status || '').toLowerCase();
+    const id = String(thread?.id || thread?.threadId || '');
+    return status !== 'deleted' && status !== 'archived' && !collapsedThreadIds.includes(id);
+  });
   const adminReplyCount = activeThreads.reduce((total, thread) => total + threadMessagesByRole(thread, 'admin').length, 0);
   const memberReplyCount = activeThreads.reduce((total, thread) => total + threadMessagesByRole(thread, 'member').length, 0);
 
@@ -2462,7 +2532,7 @@ function InvestorThreadCenter() {
 
       <div style={{ ...grid, marginTop: 18 }}>
         {activeThreads.length ? (
-          activeThreads.map((thread) => <InvestorThreadMessageCard key={thread.id} thread={thread} />)
+          activeThreads.map((thread) => <InvestorThreadMessageCard key={thread.id || thread.threadId} thread={thread} onCollapse={() => setCollapsedThreadIds((ids) => [...ids, String(thread.id || thread.threadId || '')])} onChanged={() => setRefresh((value) => value + 1)} />)
         ) : (
           <div style={panel}>
             <h3 style={h3}>No request message cards yet.</h3>
