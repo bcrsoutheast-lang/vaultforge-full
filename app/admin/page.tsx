@@ -153,7 +153,7 @@ const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
 const STATE_CODES: StateCode[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"];
-const MEMBER_SOURCE_KEYS = ["vaultforge_admin_members_v1", "vaultforge_members", "vaultforge_member_profiles", "vaultforge_profiles", "vf_profiles", "members", "profiles"];
+const MEMBER_SOURCE_KEYS = ["vaultforge_admin_members_v1", "vaultforge_member_directory_v1", "vaultforge_members", "vaultforge_member_profiles", "vaultforge_profiles", "vf_profiles", "members", "profiles"];
 
 const DEAL_ROOM_KEYS = [
   "vaultforge_clean_deal_rooms",
