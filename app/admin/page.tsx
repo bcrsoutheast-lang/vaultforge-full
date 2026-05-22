@@ -153,7 +153,16 @@ const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
 const STATE_CODES: StateCode[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"];
-const MEMBER_SOURCE_KEYS = ["vaultforge_admin_members_v1", "vaultforge_member_directory_v1", "vaultforge_members", "vaultforge_member_profiles", "vaultforge_profiles", "vf_profiles", "members", "profiles"];
+const MEMBER_SOURCE_KEYS = [
+  "vaultforge_admin_members_v1",
+  "vaultforge_member_directory_v1",
+  "vaultforge_members",
+  "vaultforge_member_profiles",
+  "vaultforge_profiles",
+  "vf_profiles",
+  "members",
+  "profiles",
+];
 
 const DEAL_ROOM_KEYS = [
   "vaultforge_clean_deal_rooms",
@@ -458,6 +467,114 @@ function recalcInvestorAccess(investor: InvestorRecord): InvestorRecord {
   };
 }
 
+function textFromUnknown(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean).join(" ");
+  if (value && typeof value === "object") return Object.values(value as Record<string, unknown>).map((item) => textFromUnknown(item)).join(" ");
+  return clean(value);
+}
+
+function requestKeywords(request: any) {
+  const text = [
+    request?.requestType,
+    request?.requestTitle,
+    request?.title,
+    request?.subject,
+    request?.kind,
+    request?.body,
+    request?.message,
+    request?.notes,
+  ].map((item) => textFromUnknown(item)).join(" ").toLowerCase();
+
+  const keywords = new Set<string>();
+  const add = (...items: string[]) => items.forEach((item) => keywords.add(item));
+
+  if (/lender|fund|capital|hard money|private money|bridge|loan/.test(text)) add("lender", "capital", "funding", "private lender", "hard money");
+  if (/attorney|legal|lawyer|title|closing|escrow/.test(text)) add("attorney", "legal", "title", "closing", "escrow");
+  if (/contractor|rehab|construction|build|repair|gc/.test(text)) add("contractor", "construction", "rehab", "repair");
+  if (/insurance|risk|coverage/.test(text)) add("insurance");
+  if (/property management|manager|leasing|tenant/.test(text)) add("property manager", "property management", "leasing");
+  if (/operator|boots|ground|site visit|field/.test(text)) add("operator", "boots", "field", "site visit");
+  if (/disposition|buyer|exit|sell/.test(text)) add("buyer", "disposition", "cash buyer");
+  if (/jv|joint venture|equity|partner/.test(text)) add("jv", "joint venture", "equity", "partner");
+  if (!keywords.size) add("investor", "operator", "member");
+
+  return Array.from(keywords);
+}
+
+function memberRouteText(member: MemberRecord) {
+  return [
+    member.memberType,
+    member.company,
+    member.operatingStates,
+    member.baseState,
+    textFromUnknown(member.raw?.canProvide),
+    textFromUnknown(member.raw?.provides),
+    textFromUnknown(member.raw?.specialties),
+    textFromUnknown(member.raw?.needs),
+    textFromUnknown(member.raw?.strategies),
+    textFromUnknown(member.raw?.assetClasses || member.raw?.asset_classes),
+    textFromUnknown(member.raw?.title),
+    textFromUnknown(member.raw?.role),
+  ].join(" ").toLowerCase();
+}
+
+function memberMatchesRequest(member: MemberRecord, request: any) {
+  if (!member || member.status === "deleted" || member.status === "denied" || member.status === "suspended") return false;
+  const requestState = stateCode(request?.state || request?.propertyState || request?.marketState);
+  const stateText = `${member.baseState} ${member.operatingStates}`.toUpperCase();
+  const stateMatch = !requestState || stateText.includes(requestState) || member.email === OWNER_EMAIL.toLowerCase();
+  const memberText = memberRouteText(member);
+  const keywordMatch = requestKeywords(request).some((keyword) => memberText.includes(keyword));
+  return stateMatch && (keywordMatch || member.email === OWNER_EMAIL.toLowerCase());
+}
+
+function matchedMembersForRequest(request: any) {
+  const members = readMembers();
+  const matches = members.filter((member) => memberMatchesRequest(member, request));
+  const fallback = members.find((member) => member.email === OWNER_EMAIL.toLowerCase());
+  const chosen = matches.length ? matches : fallback ? [fallback] : [];
+
+  return chosen.slice(0, 12).map((member) => ({
+    id: member.id,
+    email: member.email,
+    name: member.name,
+    company: member.company,
+    phone: member.phone,
+    memberType: member.memberType,
+    baseState: member.baseState,
+    operatingStates: member.operatingStates,
+    matchReason: requestKeywords(request).join(" • "),
+  }));
+}
+
+function normalizeInboxAsInvestorRequest(item: any): InvestorRequest {
+  const profile = item?.investorProfile || {};
+  return {
+    id: clean(item?.sourceRequestId || item?.id || `request-${Date.now()}`),
+    kind: clean(item?.kind || item?.type || "Investor Request"),
+    itemId: clean(item?.itemId || item?.roomId || item?.sourceRequestId),
+    title: clean(item?.title || item?.requestTitle || item?.subject, "Investor Request"),
+    state: clean(item?.state || profile?.state || ""),
+    investorEmail: clean(item?.investorEmail || profile?.email),
+    investorCompany: clean(item?.investorCompany || profile?.company),
+    investorName: clean(item?.investorName || profile?.contactName),
+    investorPhotoUrl: clean(item?.investorPhotoUrl || profile?.photoUrl),
+    investorProfile: profile,
+    message: clean(item?.message || item?.body || item?.notes, "Investor request received."),
+    status: clean(item?.status, "new"),
+    createdAt: clean(item?.createdAt || item?.created_at, new Date().toISOString()),
+  };
+}
+
+function mergeById<T extends { id: string }>(rows: T[]) {
+  const map = new Map<string, T>();
+  rows.forEach((row) => {
+    if (!row?.id) return;
+    map.set(row.id, { ...map.get(row.id), ...row });
+  });
+  return Array.from(map.values());
+}
+
 
 function readAdminInvestorInbox() {
   const rows = readJson<any[]>(ADMIN_INBOX_KEY, []);
@@ -475,12 +592,13 @@ function createThreadFromAdminInbox(item: any) {
   if (existing) return existing;
 
   const profile = item.investorProfile || {};
+  const routedMembers = matchedMembersForRequest(item);
   const thread = {
     id: `controlled-thread-${Date.now()}`,
     source: item.type || "admin_inbox",
     sourceRequestId: item.id,
-    status: "approved",
-    stage: "intro_approved_contact_hidden",
+    status: "routed_to_members",
+    stage: "member_review_pending",
     title: item.requestTitle || item.title || item.subject || "Controlled Investor Thread",
     roomHeader: item.roomHeader || item.message || item.body || "Controlled intro",
     kind: item.kind || "Investor",
@@ -490,6 +608,10 @@ function createThreadFromAdminInbox(item: any) {
     investorName: item.investorName || profile.contactName || "",
     investorPhotoUrl: item.investorPhotoUrl || profile.photoUrl || "",
     investorProfile: profile,
+    routedMembers,
+    assignedMembers: routedMembers,
+    assignedMemberEmails: routedMembers.map((member) => member.email).filter(Boolean),
+    memberEmail: routedMembers[0]?.email || "",
     contactReleased: false,
     memberContactReleased: false,
     messages: [
@@ -497,7 +619,7 @@ function createThreadFromAdminInbox(item: any) {
         id: `thread-message-${Date.now()}`,
         from: "VaultForge Admin",
         role: "admin",
-        body: "Request approved. Contact is hidden until release is approved.",
+        body: `Request routed to ${routedMembers.length || 0} matching member(s). Contact is hidden until release is approved.`,
         createdAt: new Date().toISOString(),
       },
     ],
@@ -511,17 +633,48 @@ function createThreadFromAdminInbox(item: any) {
 
 function readInvestorRequests(): InvestorRequest[] {
   const rows = readJson<InvestorRequest[]>(INVESTOR_REQUESTS_KEY, []);
-  return Array.isArray(rows) ? rows : [];
+  const inboxRows = readAdminInvestorInbox()
+    .filter((item) => lower(item?.type || item?.source || item?.kind).includes("deal_pain") || lower(item?.source).includes("investor-room-request"))
+    .map(normalizeInboxAsInvestorRequest);
+  return mergeById([...(Array.isArray(rows) ? rows : []), ...inboxRows]);
 }
 
 function readInvestorExecutionRequests(): InvestorExecutionRequest[] {
   const rows = readJson<InvestorExecutionRequest[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
-  return Array.isArray(rows) ? rows : [];
+  const inboxRows = readAdminInvestorInbox()
+    .filter((item) => lower(item?.type || item?.source || item?.requestTitle).includes("execution") || lower(item?.source).includes("investor-room-execution"))
+    .map((item) => ({
+      ...normalizeInboxAsInvestorRequest(item),
+      requestType: clean(item?.requestType || item?.type || "execution_request"),
+      requestTitle: clean(item?.requestTitle || item?.title || "Execution Request"),
+      notes: clean(item?.notes || item?.body),
+    } as InvestorExecutionRequest));
+  return mergeById([...(Array.isArray(rows) ? rows : []), ...inboxRows]);
 }
 
 function readInvestorAdminMessages(): InvestorAdminMessage[] {
   const rows = readJson<InvestorAdminMessage[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
-  return Array.isArray(rows) ? rows : [];
+  const inboxRows = readAdminInvestorInbox()
+    .filter((item) => lower(item?.type || item?.source).includes("message_admin") || lower(item?.source).includes("message-admin"))
+    .map((item) => {
+      const profile = item?.investorProfile || {};
+      return {
+        id: clean(item?.id || `investor-message-${Date.now()}`),
+        topic: clean(item?.topic || item?.requestTitle || item?.subject, "Message Admin"),
+        subject: clean(item?.subject || item?.title || item?.requestTitle, "Message Admin"),
+        body: clean(item?.body || item?.message),
+        message: clean(item?.message || item?.body),
+        status: clean(item?.status, "new"),
+        priority: clean(item?.priority, "normal"),
+        investorEmail: clean(item?.investorEmail || profile?.email),
+        investorCompany: clean(item?.investorCompany || profile?.company),
+        investorName: clean(item?.investorName || profile?.contactName),
+        investorPhotoUrl: clean(item?.investorPhotoUrl || profile?.photoUrl),
+        investorProfile: profile,
+        createdAt: clean(item?.createdAt, new Date().toISOString()),
+      } as InvestorAdminMessage;
+    });
+  return mergeById([...(Array.isArray(rows) ? rows : []), ...inboxRows]);
 }
 
 function writeInvestorRequests(rows: InvestorRequest[]) {
@@ -583,12 +736,13 @@ function createControlledThread(source: "deal_pain" | "execution" | "admin_messa
   if (existing) return existing;
 
   const profile = request.investorProfile || {};
+  const routedMembers = matchedMembersForRequest(request);
   const thread = {
     id: `controlled-thread-${Date.now()}`,
     source,
     sourceRequestId: request.id,
-    status: "approved",
-    stage: "intro_approved_contact_hidden",
+    status: "routed_to_members",
+    stage: "member_review_pending",
     title: request.requestTitle || request.title || request.topic || request.subject || "Controlled Investor Thread",
     roomHeader: request.roomHeader || request.title || request.topic || "Controlled Intro",
     kind: request.kind || "Investor",
@@ -598,6 +752,10 @@ function createControlledThread(source: "deal_pain" | "execution" | "admin_messa
     investorName: request.investorName || profile.contactName || "",
     investorPhotoUrl: request.investorPhotoUrl || profile.photoUrl || "",
     investorProfile: profile,
+    routedMembers,
+    assignedMembers: routedMembers,
+    assignedMemberEmails: routedMembers.map((member) => member.email).filter(Boolean),
+    memberEmail: routedMembers[0]?.email || "",
     contactReleased: false,
     memberContactReleased: false,
     messages: [
@@ -605,7 +763,7 @@ function createControlledThread(source: "deal_pain" | "execution" | "admin_messa
         id: `thread-message-${Date.now()}`,
         from: "VaultForge Admin",
         role: "admin",
-        body: "Intro approved. Contact is still hidden until admin/member manually releases it.",
+        body: `Request routed to ${routedMembers.length || 0} matching member(s). Contact is still hidden until admin/member manually releases it.`,
         createdAt: new Date().toISOString(),
       },
     ],
@@ -1035,6 +1193,15 @@ function ControlledThreadAdminCard({ thread }: { thread: any }) {
       <p style={sub}>{thread?.investorCompany || thread?.investorName || thread?.investorEmail || "Investor not listed"}</p>
       <p style={muted}>{thread?.roomHeader || "Controlled intro thread"}</p>
       <p style={muted}>Contact Released: {thread?.contactReleased ? "Yes" : "No"}</p>
+      <p style={muted}>Routed Members: {(thread?.routedMembers || thread?.assignedMembers || []).length || 0}</p>
+      {(thread?.routedMembers || thread?.assignedMembers || []).length ? (
+        <div style={{ ...panel, marginTop: 14 }}>
+          <div style={eyebrow}>Auto-Matched Members</div>
+          {(thread?.routedMembers || thread?.assignedMembers || []).map((member: any) => (
+            <p key={member.email || member.id} style={muted}>{member.name || "Member"} • {member.company || "Company"} • {member.memberType || "Role"} • {member.email || "email hidden"}</p>
+          ))}
+        </div>
+      ) : null}
 
       {typeof InvestorProfileSnapshotCard === "function" ? (
         <InvestorProfileSnapshotCard profile={thread?.investorProfile} photoUrl={thread?.investorPhotoUrl} />
@@ -1434,7 +1601,7 @@ export default function AdminPage() {
     );
     setAdminInvestorInbox(next);
     writeAdminInvestorInbox(next);
-    if (status === "approved" && original) createThreadFromAdminInbox(original);
+    if (["approved", "routed", "admin_replied"].includes(status) && original) createThreadFromAdminInbox({ ...original, status });
   }
 
   function updateInvestorRequestStatus(id: string, status: string) {
@@ -1444,7 +1611,7 @@ export default function AdminPage() {
     );
     setInvestorRequests(next);
     writeInvestorRequests(next);
-    if (status === "approved" && original) createControlledThread("deal_pain", original);
+    if (["approved", "routed"].includes(status) && original) createControlledThread("deal_pain", { ...original, status });
   }
 
   function updateInvestorExecutionStatus(id: string, status: string) {
@@ -1454,7 +1621,7 @@ export default function AdminPage() {
     );
     setInvestorExecutionRequests(next);
     writeInvestorExecutionRequests(next);
-    if (status === "approved" && original) createControlledThread("execution", original);
+    if (["approved", "routed"].includes(status) && original) createControlledThread("execution", { ...original, status });
   }
 
   function updateInvestorAdminMessageStatus(id: string, status: string) {
@@ -1464,7 +1631,7 @@ export default function AdminPage() {
     );
     setInvestorAdminMessages(next);
     writeInvestorAdminMessages(next);
-    if (status === "approved" && original) createControlledThread("admin_message", original);
+    if (["approved", "routed"].includes(status) && original) createControlledThread("admin_message", { ...original, status });
   }
 
   function broadcastToMembers(target: "filtered" | "all") {
