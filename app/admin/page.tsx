@@ -1012,8 +1012,6 @@ export default function AdminPage() {
   const [investorRequests, setInvestorRequests] = useState<InvestorRequest[]>([]);
   const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
   const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
-  const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
-  const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
   const [deals, setDeals] = useState<RoomRecord[]>([]);
   const [pains, setPains] = useState<RoomRecord[]>([]);
@@ -1092,8 +1090,6 @@ export default function AdminPage() {
   const painRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("pain")), [investorRequests]);
   const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter((request) => !["closed", "deleted", "archived"].includes(lower(request.status || "new"))), [investorExecutionRequests]);
   const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter((message) => !["closed", "deleted", "archived"].includes(lower(message.status || "new"))), [investorAdminMessages]);
-  const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter((request) => lower(request.status || "new") !== "closed" && lower(request.status || "new") !== "deleted"), [investorExecutionRequests]);
-  const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter((message) => lower(message.status || "new") !== "closed" && lower(message.status || "new") !== "deleted"), [investorAdminMessages]);
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
