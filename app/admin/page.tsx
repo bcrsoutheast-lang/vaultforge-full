@@ -812,7 +812,7 @@ function InvestorProfileSnapshotCard({ profile, photoUrl }: { profile: any; phot
 
 function InvestorExecutionRequestCard({ request }: { request: InvestorExecutionRequest }) {
   return (
-    <div style={goldPanel}>
+    <div style={activePanel}>
       <div style={eyebrow}>Execution Request • {request.requestTitle || request.requestType || "Support"} • {request.status || "new"}</div>
       <h2 style={h2}>{request.title || "Investor Execution Request"}</h2>
       <p style={sub}>{request.investorCompany || request.investorName || request.investorEmail}</p>
