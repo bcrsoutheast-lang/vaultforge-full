@@ -1733,7 +1733,7 @@ function AdminSequenceCard({
   active?: boolean;
 }) {
   return (
-    <div style={active ? goldPanel : panel}>
+    <div style={active ? activePanel : panel}>
       <div style={eyebrow}>{step}</div>
       <h3 style={h3}>{title}</h3>
       <p style={muted}>{note}</p>
@@ -1743,7 +1743,7 @@ function AdminSequenceCard({
 
 function AdminOperatingGuide() {
   return (
-    <section style={{ ...goldPanel, marginBottom: 18 }}>
+    <section style={{ ...activePanel, marginBottom: 18 }}>
       <div style={eyebrow}>Admin Control Sequence</div>
       <h2 style={h2}>Route requests in order.</h2>
       <p style={sub}>
