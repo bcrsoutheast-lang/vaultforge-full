@@ -14,7 +14,6 @@ const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
 const INVESTOR_HIDDEN_KEY = "vaultforge_investor_room_hidden_v1";
-const INVESTOR_PHOTO_BACKUP_KEY = "vaultforge_investor_profile_photo_v1";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const EXECUTION_LANES = [
@@ -118,34 +117,6 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function rememberInvestorPhoto(value: unknown) {
-  try {
-    const photo = String(value || "").trim();
-    if (photo && (photo.startsWith("data:image/") || photo.startsWith("http") || photo.startsWith("/"))) {
-      localStorage.setItem(INVESTOR_PHOTO_BACKUP_KEY, photo);
-    }
-  } catch {
-    // ignore browser storage errors
-  }
-}
-
-function readInvestorPhotoBackup() {
-  try {
-    return String(localStorage.getItem(INVESTOR_PHOTO_BACKUP_KEY) || "").trim();
-  } catch {
-    return "";
-  }
-}
-
-function stableInvestorPhoto(value: unknown) {
-  const photo = String(value || "").trim();
-  if (photo) {
-    rememberInvestorPhoto(photo);
-    return photo;
-  }
-  return readInvestorPhotoBackup();
-}
-
 function isQuotaError(error: any) {
   const name = String(error?.name || "").toLowerCase();
   const message = String(error?.message || "").toLowerCase();
@@ -163,7 +134,7 @@ function trimText(value: unknown, limit = 900) {
 
 function compactInvestorProfile(profile: any) {
   return {
-    photoUrl: stableInvestorPhoto(profile?.photoUrl),
+    photoUrl: trimText(profile?.photoUrl, 500),
     contactName: trimText(profile?.contactName || profile?.name, 120),
     company: trimText(profile?.company, 120),
     email: trimText(profile?.email, 160),
@@ -208,6 +179,8 @@ function safeStorageSize(value: unknown) {
 
 function stripHeavyInvestorProfileStorage() {
   const profileKeys = [
+    INVESTOR_APP_KEY,
+    "vaultforge_investor_applications_v1",
     "vaultforge_profile",
     "vaultforge_member_profile",
     "vaultforge_clean_profile",
@@ -238,9 +211,8 @@ function stripHeavyInvestorProfileStorage() {
         if (!row || typeof row !== "object") return row;
         const next = { ...row };
         for (const field of heavyFields) {
-          if (field === "photoUrl" && typeof next[field] === "string") rememberInvestorPhoto(next[field]);
           if (typeof next[field] === "string" && next[field].length > 1200)
-            next[field] = field === "photoUrl" ? stableInvestorPhoto(next[field]) : "";
+            next[field] = "";
           if (
             Array.isArray(next[field]) &&
             JSON.stringify(next[field]).length > 1200
@@ -566,7 +538,7 @@ function isHidden(item: any, kind: Kind) {
 
 function investorProfileSnapshot(investor: any) {
   return {
-    photoUrl: stableInvestorPhoto(investor?.photoUrl),
+    photoUrl: investor?.photoUrl || "",
     contactName: investor?.contactName || "",
     company: investor?.company || "",
     email: investor?.email || "",
@@ -796,7 +768,7 @@ function readInvestor() {
       )
     : null;
 
-  const merged = {
+  return {
     ...(matching || {}),
     ...(application || {}),
     ...(session || {}),
@@ -804,9 +776,6 @@ function readInvestor() {
       sessionEmail ||
       clean(application?.email || matching?.email || session?.email),
   };
-
-  const photoUrl = stableInvestorPhoto(merged?.photoUrl || application?.photoUrl || matching?.photoUrl || session?.photoUrl);
-  return { ...merged, photoUrl };
 }
 
 function safeInvestorSnapshot() {
@@ -819,7 +788,7 @@ function safeInvestorSnapshot() {
   }
 
   return {
-    photoUrl: stableInvestorPhoto(investor?.photoUrl),
+    photoUrl: investor?.photoUrl || "",
     contactName: investor?.contactName || "",
     company: investor?.company || "",
     email:
@@ -2594,6 +2563,172 @@ function profileComplete(investor: any) {
   );
 }
 
+
+type InvestorHelpTopic =
+  | "overview"
+  | "deal"
+  | "pain"
+  | "requests"
+  | "execution"
+  | "admin"
+  | "messages"
+  | "cleanup"
+  | "contact";
+
+const INVESTOR_HELP_TOPICS: { key: InvestorHelpTopic; title: string; short: string; bullets: string[] }[] = [
+  {
+    key: "overview",
+    title: "How Investor Room Works",
+    short: "This is your controlled investor access room.",
+    bullets: [
+      "You see teaser Deal and Pain cards, not the private member directory.",
+      "Every request you send attaches your investor profile so admin/members know who is asking.",
+      "VaultForge routes requests internally so member contact info stays protected until approved.",
+      "Use Deal/Pain cards for a specific opportunity. Use Execution Requests when you need help like funding, title, contractor, operator, or boots on ground.",
+    ],
+  },
+  {
+    key: "deal",
+    title: "Deal Signals",
+    short: "Deal cards are opportunity teasers.",
+    bullets: [
+      "Deal cards show limited market and opportunity information.",
+      "Open a Deal card to review the teaser and request more information.",
+      "Private address, seller/member contact, full notes, and deeper intelligence stay hidden until routed/approved.",
+      "Use Save, Archive, or Delete to keep your room clean.",
+    ],
+  },
+  {
+    key: "pain",
+    title: "Pain Signals",
+    short: "Pain cards are problem-solving opportunities.",
+    bullets: [
+      "Pain cards represent a problem that may need capital, contractors, title help, legal help, operators, or execution support.",
+      "Open a Pain card when you can help solve the issue or want deeper information.",
+      "Pain is not just a listing. It is a routed problem that can turn into a deal, introduction, or execution room.",
+      "Requests stay controlled through VaultForge until the right member/admin approval happens.",
+    ],
+  },
+  {
+    key: "requests",
+    title: "Investor Requests",
+    short: "Track what you asked VaultForge to review.",
+    bullets: [
+      "Active Requests are open requests still waiting or being worked.",
+      "Saved Requests are items you want to keep for later.",
+      "Archived Requests are inactive or handled requests you do not want in the active view.",
+      "Deleted Requests are a cleanup folder. Delete Forever permanently removes the request from this browser storage.",
+    ],
+  },
+  {
+    key: "execution",
+    title: "Execution Requests",
+    short: "Ask the member network for help completing a deal or problem.",
+    bullets: [
+      "Use Request Lender, Hard Money, JV, Contractor, Title/Closing, Insurance, Operator, Disposition, Boots on Ground, or Equity Partner.",
+      "If a Deal/Pain card is open, the execution request attaches to that room.",
+      "If no card is open, it sends a general execution request.",
+      "Admin receives it and can route it to matching members based on what they do.",
+    ],
+  },
+  {
+    key: "admin",
+    title: "Message Admin",
+    short: "Contact VaultForge admin directly.",
+    bullets: [
+      "Use Message Admin for account, routing, payment, access, or deal-room questions.",
+      "Your investor profile is attached so admin can see who is contacting them.",
+      "This is separate from a Deal/Pain request unless you reference the deal or pain in your message.",
+      "Admin replies should appear in your request/message thread cards.",
+    ],
+  },
+  {
+    key: "messages",
+    title: "Request Message Threads",
+    short: "Replies stay tied to the original request.",
+    bullets: [
+      "Admin replies, member replies, and your replies are kept inside the request thread.",
+      "Use the request message cards to reply back without creating scattered messages.",
+      "A member can reply, ask for more info, accept, or release contact when approved.",
+      "Keep threads clean with Save, Archive, Delete, Delete Forever, and Collapse/Done.",
+    ],
+  },
+  {
+    key: "cleanup",
+    title: "Save / Archive / Delete",
+    short: "These buttons organize your investor room.",
+    bullets: [
+      "Save means keep this request or card for later.",
+      "Archive means hide it from active view but keep history.",
+      "Delete means move it to a deleted folder.",
+      "Delete Forever removes it from the browser-based testing storage.",
+    ],
+  },
+  {
+    key: "contact",
+    title: "Contact Rules",
+    short: "Private contact is controlled.",
+    bullets: [
+      "Investors do not get direct member directory access.",
+      "Members do not automatically expose email or phone.",
+      "Contact release should happen only after admin/member approval.",
+      "This protects the network and keeps introductions controlled.",
+    ],
+  },
+];
+
+function InvestorHelpCenter() {
+  const [openTopic, setOpenTopic] = useState<InvestorHelpTopic | null>(null);
+  const topic = INVESTOR_HELP_TOPICS.find((item) => item.key === openTopic);
+
+  return (
+    <section style={{ ...goldPanel, marginTop: 20, marginBottom: 20 }}>
+      <div style={eyebrow}>Investor Room Guide</div>
+      <h2 style={h2}>Tap a card to learn what each area does.</h2>
+      <p style={sub}>
+        Quick instructions for contacting admin, opening Deal/Pain cards, sending requests, execution help, and cleanup controls.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        {INVESTOR_HELP_TOPICS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            style={openTopic === item.key ? activePanel : panel}
+            onClick={() => setOpenTopic(openTopic === item.key ? null : item.key)}
+          >
+            <div style={eyebrow}>{item.title}</div>
+            <p style={muted}>{item.short}</p>
+            <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>
+              {openTopic === item.key ? "Collapse / Done" : "Open Instructions"}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      {topic ? (
+        <div style={{ ...panel, marginTop: 18 }}>
+          <div style={eyebrow}>{topic.title}</div>
+          <h3 style={h3}>{topic.short}</h3>
+          <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+            {topic.bullets.map((bullet, index) => (
+              <div key={`${topic.key}-${index}`} style={panel}>
+                <p style={muted}>{index + 1}. {bullet}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ ...row, marginTop: 14 }}>
+            <button type="button" style={goldBtn} onClick={() => setOpenTopic(null)}>
+              Collapse / Done
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+
 export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
   const [state, setState] = useState("GA");
@@ -2756,7 +2891,9 @@ export default function InvestorRoomPage() {
           isOwner={String(investor?.email || "").toLowerCase() === OWNER_EMAIL}
         />
         <TickerRibbon />
-        <MessageAdminModal
+        
+        <InvestorHelpCenter />
+<MessageAdminModal
           open={messageAdminOpen}
           onClose={() => setMessageAdminOpen(false)}
         />
