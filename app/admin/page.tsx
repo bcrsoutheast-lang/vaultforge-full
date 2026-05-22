@@ -1192,9 +1192,7 @@ function BloombergMessageForm({
 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>
-        <AdminOperatingGuide />
-;
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
 }
 
 function Metric({ title, count, note, active, pulse, onClick }: { title: string; count: number | string; note: string; active?: boolean; pulse?: boolean; onClick?: () => void }) {
@@ -2037,6 +2035,7 @@ export default function AdminPage() {
               <Link href="/profile" style={btn}>Profile</Link>
             </div>
           </section>
+        <AdminOperatingGuide />
         </div>
       </main>
     );
