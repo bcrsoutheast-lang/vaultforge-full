@@ -60,7 +60,7 @@ type Room = {
 };
 
 const THREAD_KEY = "vaultforge_message_threads_v2";
-const LEGACY_KEYS = ["vaultforge_message_command_messages", "vf_message_threads"];
+const LEGACY_KEYS = ["vaultforge_message_command_threads_v1", "vaultforge_message_command_messages", "vf_message_threads"];
 const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const ACTIVITY_KEY = "vaultforge_room_activity_v2";
