@@ -943,6 +943,95 @@ function InvestorAdminMessageCard({
 }
 
 
+
+function ControlledThreadAdminCard({ thread }: { thread: any }) {
+  const [reply, setReply] = useState("");
+
+  return (
+    <div style={activePanel}>
+      <div style={eyebrow}>{thread?.status || "approved"} • {thread?.stage || "controlled thread"}</div>
+      <h2 style={h2}>{thread?.title || "Controlled Investor Thread"}</h2>
+      <p style={sub}>{thread?.investorCompany || thread?.investorName || thread?.investorEmail || "Investor not listed"}</p>
+      <p style={muted}>{thread?.roomHeader || "Controlled intro thread"}</p>
+      <p style={muted}>Contact Released: {thread?.contactReleased ? "Yes" : "No"}</p>
+
+      {typeof InvestorProfileSnapshotCard === "function" ? (
+        <InvestorProfileSnapshotCard profile={thread?.investorProfile} photoUrl={thread?.investorPhotoUrl} />
+      ) : null}
+
+      <div style={{ ...panel, marginTop: 14 }}>
+        <div style={eyebrow}>Thread Messages</div>
+
+        {(thread?.messages || []).length ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            {(thread?.messages || []).map((message: any) => (
+              <div key={message.id || `${message.createdAt}-${message.body}`} style={panel}>
+                <p style={muted}>{message.from || message.role || "System"} • {message.createdAt || ""}</p>
+                <p style={sub}>{message.body || message.message || ""}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={muted}>No messages yet.</p>
+        )}
+
+        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
+          <span style={eyebrow}>Admin Reply</span>
+          <textarea
+            style={{ ...input, minHeight: 120 }}
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+            placeholder="Reply into this controlled thread..."
+          />
+        </label>
+
+        <div style={{ ...row, marginTop: 12 }}>
+          <button
+            type="button"
+            style={goldBtn}
+            onClick={() => {
+              addAdminReplyToThread(thread.id, reply);
+              setReply("");
+            }}
+          >
+            Send Admin Reply
+          </button>
+          <button
+            type="button"
+            style={btn}
+            onClick={() => {
+              const rows = readControlledThreads();
+              writeControlledThreads(rows.map((item) => item.id === thread.id ? { ...item, status: "saved", stage: "saved", updatedAt: new Date().toISOString() } : item));
+            }}
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            style={btn}
+            onClick={() => {
+              const rows = readControlledThreads();
+              writeControlledThreads(rows.map((item) => item.id === thread.id ? { ...item, status: "archived", stage: "archived", updatedAt: new Date().toISOString() } : item));
+            }}
+          >
+            Archive
+          </button>
+          <button
+            type="button"
+            style={redBtn}
+            onClick={() => {
+              const rows = readControlledThreads();
+              writeControlledThreads(rows.map((item) => item.id === thread.id ? { ...item, status: "deleted", stage: "deleted", updatedAt: new Date().toISOString() } : item));
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InvestorRequestAdminCard({
   request,
   onStatus,
