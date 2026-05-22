@@ -7,6 +7,7 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const INVESTOR_SESSION_KEY = "vaultforge_investor_session_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
+const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
@@ -897,6 +898,50 @@ function InvestorRequestCenter() {
 
 
 
+
+function readControlledThreads() {
+  const rows = readJson<any[]>(CONTROLLED_THREADS_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function investorEmailForThreads() {
+  const investor = readJson<any>(INVESTOR_APP_KEY, {});
+  const session = readJson<any>("vaultforge_investor_session_v1", {});
+  return String(session?.email || investor?.email || localStorage.getItem("vaultforge_investor_email") || "").toLowerCase();
+}
+
+function InvestorThreadCenter() {
+  const investorEmail = investorEmailForThreads();
+  const threads = readControlledThreads().filter((thread) => String(thread.investorEmail || "").toLowerCase() === investorEmail || !investorEmail);
+
+  return (
+    <section style={{ ...hero, marginTop: 20 }}>
+      <div style={eyebrow}>Controlled Intro Threads</div>
+      <h2 style={h2}>Approved routing rooms.</h2>
+      <p style={sub}>
+        Approved requests become controlled threads. Contact information stays hidden until VaultForge/member approval releases it.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        {threads.length ? threads.map((thread) => (
+          <div key={thread.id} style={goldPanel}>
+            <div style={eyebrow}>{thread.status} • {thread.stage}</div>
+            <h3 style={h3}>{thread.title}</h3>
+            <p style={muted}>{thread.roomHeader}</p>
+            <p style={muted}>Contact Released: {thread.contactReleased ? "Yes" : "No"}</p>
+            <p style={muted}>Thread ID: {thread.id}</p>
+          </div>
+        )) : (
+          <div style={panel}>
+            <h3 style={h3}>No approved threads yet.</h3>
+            <p style={muted}>When admin approves a Deal/Pain or execution request, it appears here.</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function profileComplete(investor: any) {
   return Boolean(
     investor?.email &&
@@ -1104,6 +1149,8 @@ export default function InvestorRoomPage() {
         <section style={{ marginTop: 18 }}>
           <RequestPipeline />
         </section>
+
+        <InvestorThreadCenter />
 
         <InvestorRequestCenter />
 
