@@ -589,6 +589,128 @@ function BloombergMessageForm({
 }
 
 
+
+const MOCK_MEMBER_PAYMENT_KEY = "vaultforge_mock_member_payment_v1";
+const MOCK_INVESTOR_PAYMENT_KEY = "vaultforge_mock_investor_payment_v1";
+const MOCK_APPROVALS_KEY = "vaultforge_mock_access_approvals_v1";
+
+function mockAccessRecord(email: string, kind: "member" | "investor") {
+  const approvals = readJson<Record<string, any>>(MOCK_APPROVALS_KEY, {});
+  const key = `${kind}:${String(email || "").toLowerCase()}`;
+  return approvals[key] || {};
+}
+
+function setMockAccessRecord(email: string, kind: "member" | "investor", patch: any) {
+  const approvals = readJson<Record<string, any>>(MOCK_APPROVALS_KEY, {});
+  const key = `${kind}:${String(email || "").toLowerCase()}`;
+  approvals[key] = { ...(approvals[key] || {}), ...patch, updatedAt: new Date().toISOString() };
+  writeJson(MOCK_APPROVALS_KEY, approvals);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("vaultforge-mock-access-change"));
+    window.dispatchEvent(new Event("vaultforge-access-change"));
+  }
+}
+
+function paymentStatusFor(email: string, kind: "member" | "investor") {
+  const record = mockAccessRecord(email, kind);
+  const paymentKey = kind === "member" ? MOCK_MEMBER_PAYMENT_KEY : MOCK_INVESTOR_PAYMENT_KEY;
+  const direct = readJson<any>(paymentKey, {});
+  return {
+    approved: Boolean(record.approved || record.adminApproved || direct.approved),
+    paid: Boolean(record.paid || record.paymentStatus === "paid" || direct.paid || direct.paymentStatus === "paid"),
+    unlocked: Boolean(record.unlocked || record.accessStatus === "active" || direct.unlocked || direct.accessStatus === "active"),
+  };
+}
+
+function MockPaymentButton({
+  kind,
+  email,
+  label,
+  price,
+}: {
+  kind: "member" | "investor";
+  email: string;
+  label: string;
+  price: string;
+}) {
+  const [tick, setTick] = useState(0);
+  const status = paymentStatusFor(email, kind);
+  const canPay = status.approved || email.toLowerCase() === OWNER_EMAIL.toLowerCase();
+  const unlocked = status.paid || status.unlocked;
+
+  useEffect(() => {
+    const refresh = () => setTick((value) => value + 1);
+    window.addEventListener("storage", refresh);
+    window.addEventListener("vaultforge-mock-access-change", refresh);
+    window.addEventListener("vaultforge-access-change", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("vaultforge-mock-access-change", refresh);
+      window.removeEventListener("vaultforge-access-change", refresh);
+    };
+  }, []);
+
+  return (
+    <section className={canPay && !unlocked ? "vf-pulse" : ""} style={canPay && !unlocked ? goldPanel : panel}>
+      <div style={eyebrow}>{label}</div>
+      <h2 style={h2}>{unlocked ? "Room Unlocked" : canPay ? "Payment Ready" : "Waiting On Admin Approval"}</h2>
+      <p style={sub}>
+        {unlocked
+          ? "Mock payment is complete. This room is unlocked for testing."
+          : canPay
+            ? `${price} mock payment is ready. Click to unlock this room for testing.`
+            : "Submit profile and wait for admin approval. Then this payment button lights up."}
+      </p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <button
+          type="button"
+          style={canPay ? goldBtn : btn}
+          disabled={!canPay || unlocked}
+          onClick={() => {
+            setMockAccessRecord(email, kind, {
+              approved: true,
+              paid: true,
+              unlocked: true,
+              paymentStatus: "paid",
+              accessStatus: "active",
+            });
+            const paymentKey = kind === "member" ? MOCK_MEMBER_PAYMENT_KEY : MOCK_INVESTOR_PAYMENT_KEY;
+            writeJson(paymentKey, {
+              email,
+              paid: true,
+              unlocked: true,
+              paymentStatus: "paid",
+              accessStatus: "active",
+              paidAt: new Date().toISOString(),
+            });
+            setTick((value) => value + 1);
+          }}
+        >
+          {unlocked ? "Paid / Unlocked" : canPay ? `Mock Pay ${price}` : "Locked Until Approved"}
+        </button>
+
+        <button
+          type="button"
+          style={btn}
+          onClick={() => {
+            setMockAccessRecord(email, kind, {
+              approved: true,
+              adminApproved: true,
+              paymentStatus: "ready",
+              accessStatus: "payment_ready",
+            });
+            setTick((value) => value + 1);
+          }}
+        >
+          Test Approve
+        </button>
+      </div>
+      <p style={muted}>Test mode only. This does not touch Stripe, auth, middleware, or billing.</p>
+    </section>
+  );
+}
+
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section style={{ ...panel, marginBottom: 18 }}>
@@ -1009,6 +1131,12 @@ export default function MemberControlledThreadsPage() {
 
   return (
     <main style={pageStyle}>
+      
+<style>{`
+@keyframes vfPulsePay { 0% { box-shadow: 0 0 0 rgba(245,197,66,.0); } 50% { box-shadow: 0 0 38px rgba(245,197,66,.34); } 100% { box-shadow: 0 0 0 rgba(245,197,66,.0); } }
+.vf-pulse { animation: vfPulsePay 1.15s ease-in-out infinite; }
+`}</style>
+
       <div style={wrap}>
         <section style={hero}>
           <div style={eyebrow}>VaultForge Member Request Command</div>
@@ -1031,6 +1159,13 @@ export default function MemberControlledThreadsPage() {
 
           <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
         </section>
+
+        <MockPaymentButton
+          kind="member"
+          email={email || currentEmail()}
+          label="Member Payment Unlock"
+          price="$49"
+        />
 
         <MemberIdentityPanel profile={memberProfile} />
 
