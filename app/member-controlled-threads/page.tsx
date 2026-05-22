@@ -685,7 +685,7 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
       </div>
 
       <BloombergMessageForm
-        sender={email || "Member"}
+        sender={currentEmail() || "Member"}
         recipient="Investor / VaultForge Admin"
         header={roomHeaderFor(thread)}
         defaultSubject={titleFor(thread)}
