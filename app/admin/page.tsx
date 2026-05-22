@@ -145,6 +145,7 @@ const MEMBER_MESSAGES_KEY = "vaultforge_admin_member_broadcasts_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const INVESTOR_LIST_KEY = "vaultforge_investor_applications_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
+const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
@@ -455,6 +456,57 @@ function recalcInvestorAccess(investor: InvestorRecord): InvestorRecord {
     access: investor.status === "approved" && paidLike ? "active" : "locked",
     updatedAt: new Date().toISOString(),
   };
+}
+
+
+function readAdminInvestorInbox() {
+  const rows = readJson<any[]>(ADMIN_INBOX_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function writeAdminInvestorInbox(rows: any[]) {
+  writeJson(ADMIN_INBOX_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
+}
+
+function createThreadFromAdminInbox(item: any) {
+  const rows = readControlledThreads();
+  const existing = rows.find((thread: any) => thread.sourceRequestId === item.id);
+  if (existing) return existing;
+
+  const profile = item.investorProfile || {};
+  const thread = {
+    id: `controlled-thread-${Date.now()}`,
+    source: item.type || "admin_inbox",
+    sourceRequestId: item.id,
+    status: "approved",
+    stage: "intro_approved_contact_hidden",
+    title: item.requestTitle || item.title || item.subject || "Controlled Investor Thread",
+    roomHeader: item.roomHeader || item.message || item.body || "Controlled intro",
+    kind: item.kind || "Investor",
+    state: item.state || "",
+    investorEmail: item.investorEmail || profile.email || "",
+    investorCompany: item.investorCompany || profile.company || "",
+    investorName: item.investorName || profile.contactName || "",
+    investorPhotoUrl: item.investorPhotoUrl || profile.photoUrl || "",
+    investorProfile: profile,
+    contactReleased: false,
+    memberContactReleased: false,
+    messages: [
+      {
+        id: `thread-message-${Date.now()}`,
+        from: "VaultForge Admin",
+        role: "admin",
+        body: "Request approved. Contact is hidden until release is approved.",
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  writeControlledThreads([thread, ...rows]);
+  return thread;
 }
 
 function readInvestorRequests(): InvestorRequest[] {
@@ -1061,6 +1113,59 @@ function ControlledThreadAdminCard({ thread }: { thread: any }) {
   );
 }
 
+
+function AdminInvestorInboxCard({
+  item,
+  onStatus,
+}: {
+  item: any;
+  onStatus: (id: string, status: string) => void;
+}) {
+  const [reply, setReply] = useState("");
+  const title = item?.requestTitle || item?.title || item?.subject || "Investor Message / Request";
+
+  function sendReply() {
+    if (!reply.trim()) return;
+    const thread = createThreadFromAdminInbox(item);
+    addAdminReplyToThread(thread.id, reply);
+    onStatus(item.id, "admin_replied");
+    setReply("");
+  }
+
+  return (
+    <div style={activePanel}>
+      <div style={eyebrow}>{item?.type || "investor"} • {item?.status || "new"}</div>
+      <h2 style={h2}>{title}</h2>
+      <p style={sub}>{item?.investorCompany || item?.investorName || item?.investorEmail || "Investor not listed"}</p>
+      <p style={muted}>{item?.message || item?.body || "Investor request received."}</p>
+
+      {typeof InvestorProfileSnapshotCard === "function" ? (
+        <InvestorProfileSnapshotCard profile={item?.investorProfile} photoUrl={item?.investorPhotoUrl} />
+      ) : null}
+
+      <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
+        <span style={eyebrow}>Message Investor</span>
+        <textarea
+          style={{ ...input, minHeight: 110 }}
+          value={reply}
+          onChange={(event) => setReply(event.target.value)}
+          placeholder="Reply to investor. This creates/updates a controlled thread."
+        />
+      </label>
+
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(item.id, "approved")}>Approve Intro</button>
+        <button type="button" style={goldBtn} onClick={() => onStatus(item.id, "routed")}>Mark Routed</button>
+        <button type="button" style={btn} onClick={() => onStatus(item.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(item.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(item.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(item.id, "deleted")}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
 function InvestorRequestAdminCard({
   request,
   onStatus,
@@ -1165,6 +1270,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [investors, setInvestors] = useState<InvestorRecord[]>([]);
+  const [adminInvestorInbox, setAdminInvestorInbox] = useState<any[]>([]);
   const [investorRequests, setInvestorRequests] = useState<InvestorRequest[]>([]);
   const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
   const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
@@ -1188,6 +1294,7 @@ export default function AdminPage() {
       setEmail(currentEmail());
       setMembers(readMembers());
       setInvestors(readInvestors());
+      setAdminInvestorInbox(readAdminInvestorInbox());
       setInvestorRequests(readInvestorRequests());
       setInvestorExecutionRequests(readInvestorExecutionRequests());
       setInvestorAdminMessages(readInvestorAdminMessages());
@@ -1320,6 +1427,16 @@ export default function AdminPage() {
   }
 
 
+  function updateAdminInboxStatus(id: string, status: string) {
+    const original = adminInvestorInbox.find((item) => item.id === id);
+    const next = adminInvestorInbox.map((item) =>
+      item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item
+    );
+    setAdminInvestorInbox(next);
+    writeAdminInvestorInbox(next);
+    if (status === "approved" && original) createThreadFromAdminInbox(original);
+  }
+
   function updateInvestorRequestStatus(id: string, status: string) {
     const original = investorRequests.find((request) => request.id === id);
     const next = investorRequests.map((request) =>
@@ -1418,6 +1535,7 @@ export default function AdminPage() {
             <Metric title="New Investors" count={newInvestors.length} note="pending investor approvals" pulse={newInvestors.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Investor Payments" count={pendingInvestorPayment.length} note="investor payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Controlled Threads" count={readControlledThreads().length} note="approved intro rooms" pulse={readControlledThreads().length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Investor Inbox" count={adminInvestorInbox.filter((item) => !["closed", "deleted", "archived"].includes(lower(item.status || "new"))).length} note="messages/requests from investor room" pulse={adminInvestorInbox.length > 0} onClick={() => setTab("investors")} />
             <Metric title="Deal Requests" count={dealRequests.length} note="investor deal interest" pulse={dealRequests.length > 0} onClick={() => setTab("dealRequests")} />
             <Metric title="Pain Requests" count={painRequests.length} note="investor pain interest" pulse={painRequests.length > 0} onClick={() => setTab("painRequests")} />
             <Metric title="Execution Requests" count={openInvestorExecutionRequests.length} note="lender/title/contractor/operator requests" pulse={openInvestorExecutionRequests.length > 0} onClick={() => setTab("investors")} />
@@ -1616,6 +1734,23 @@ export default function AdminPage() {
                 ) : (
                   <div style={panel}><h2 style={h2}>No investor admin messages yet.</h2></div>
                 )}
+              </Section>
+
+              <Section title="Investor Inbox — Messages / Requests">
+                <div style={grid}>
+                  {adminInvestorInbox.filter((item) => !["closed", "deleted", "archived"].includes(lower(item.status || "new"))).length ? (
+                    adminInvestorInbox
+                      .filter((item) => !["closed", "deleted", "archived"].includes(lower(item.status || "new")))
+                      .map((item) => (
+                        <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />
+                      ))
+                  ) : (
+                    <div style={panel}>
+                      <h2 style={h2}>No investor messages or requests yet.</h2>
+                      <p style={sub}>Investor room Deal/Pain requests, execution requests, lender requests, and Message Admin messages will appear here.</p>
+                    </div>
+                  )}
+                </div>
               </Section>
 
               <Section title="Investor Message Receive / Send">
