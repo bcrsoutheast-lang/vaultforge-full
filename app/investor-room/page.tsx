@@ -1051,8 +1051,40 @@ function ExecutionLaneCards({
 }
 
 
+function requestStatus(row: any) {
+  return String(row?.status || "new").trim().toLowerCase() || "new";
+}
+
 function statusCount(rows: any[], status: string) {
-  return rows.filter((row) => String(row?.status || "new").toLowerCase() === status).length;
+  const wanted = String(status || "").toLowerCase();
+  return rows.filter((row) => requestStatus(row) === wanted).length;
+}
+
+function activeRequestCount(rows: any[]) {
+  return rows.filter((row) => !["saved", "archived", "deleted", "closed"].includes(requestStatus(row))).length;
+}
+
+function savedRequestCount(rows: any[]) {
+  return statusCount(rows, "saved");
+}
+
+function archivedRequestCount(rows: any[]) {
+  return statusCount(rows, "archived");
+}
+
+function deletedRequestCount(rows: any[]) {
+  return statusCount(rows, "deleted");
+}
+
+function closedRequestCount(rows: any[]) {
+  return statusCount(rows, "closed");
+}
+
+function readAllInvestorRequests() {
+  const dealPainRequests = readJson<any[]>(INVESTOR_REQUESTS_KEY, []);
+  const executionRequests = readJson<any[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+  const adminMessages = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
+  return [...dealPainRequests, ...executionRequests, ...adminMessages];
 }
 
 type InvestorRequestGroup = "dealPain" | "execution" | "adminMessage";
@@ -1240,11 +1272,12 @@ function InvestorRequestCenter() {
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
-        <Metric title="All Requests" count={all.length} note="total investor requests" />
-        <Metric title="New" count={statusCount(all, "new")} note="waiting review" />
-        <Metric title="Routed" count={statusCount(all, "routed")} note="sent into network" />
-        <Metric title="Approved" count={statusCount(all, "approved")} note="approved for deeper access" />
-        <Metric title="Closed" count={statusCount(all, "closed")} note="completed/closed" />
+        <Metric title="All Requests" count={all.length} note="total investor requests, including saved/archived/deleted" />
+        <Metric title="Active / New" count={activeRequestCount(all)} note="open requests still needing action" />
+        <Metric title="Saved" count={savedRequestCount(all)} note="saved investor requests" />
+        <Metric title="Archived" count={archivedRequestCount(all)} note="archived investor requests" />
+        <Metric title="Deleted" count={deletedRequestCount(all)} note="deleted requests waiting for delete forever" />
+        <Metric title="Closed" count={closedRequestCount(all)} note="completed/closed" />
       </div>
 
       <div style={{ ...wideGrid, marginTop: 18 }}>
@@ -1510,7 +1543,10 @@ export default function InvestorRoomPage() {
           <div style={grid}>
             <Metric title="Deal Signals" count={activeDeals.length} note={`active opportunity cards in ${state}`} active={kind === "Deal" && folder === "active"} onClick={() => openKind("Deal")} />
             <Metric title="Pain Signals" count={activePains.length} note={`active pressure cards in ${state}`} active={kind === "Pain" && folder === "active"} onClick={() => openKind("Pain")} />
-            <Metric title="Requests" count={readJson<any[]>(INVESTOR_REQUESTS_KEY, []).length} note="requests sent through VaultForge" />
+            <Metric title="Active Requests" count={activeRequestCount(readAllInvestorRequests())} note="open investor requests" />
+            <Metric title="Saved Requests" count={savedRequestCount(readAllInvestorRequests())} note="saved investor requests" />
+            <Metric title="Archived Requests" count={archivedRequestCount(readAllInvestorRequests())} note="archived investor requests" />
+            <Metric title="Deleted Requests" count={deletedRequestCount(readAllInvestorRequests())} note="deleted investor requests" />
             <Metric title="Saved Deals" count={savedDeals.length} note="saved deal cards" active={kind === "Deal" && folder === "saved"} onClick={() => openFolder("Deal", "saved")} />
             <Metric title="Archived Deals" count={archivedDeals.length} note="archived deal cards" active={kind === "Deal" && folder === "archived"} onClick={() => openFolder("Deal", "archived")} />
             <Metric title="Deleted Deals" count={deletedDeals.length} note="deleted deal cards" active={kind === "Deal" && folder === "deleted"} onClick={() => openFolder("Deal", "deleted")} />
