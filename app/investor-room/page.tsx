@@ -549,6 +549,25 @@ function isHidden(item: any, kind: Kind) {
   return Boolean(hiddenMap()[cleanupKey(item, kind)]);
 }
 
+
+function investorProfilePhoto(investor: any) {
+  return (
+    investor?.profilePhoto ||
+    investor?.photoUrl ||
+    investor?.avatar ||
+    ""
+  );
+}
+
+function investorCompanyLogo(investor: any) {
+  return (
+    investor?.companyLogo ||
+    investor?.logoUrl ||
+    investor?.company_logo ||
+    ""
+  );
+}
+
 function investorProfileSnapshot(investor: any) {
   return {
     photoUrl: investor?.photoUrl || "",
@@ -596,7 +615,8 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     investorEmail: profile.email,
     investorCompany: profile.company,
     investorName: profile.contactName,
-    investorPhotoUrl: profile.photoUrl,
+    investorPhotoUrl: investorProfilePhoto(profile) || profile.photoUrl,
+    investorCompanyLogo: investorCompanyLogo(profile),
     investorProfile: compactInvestorProfile(profile),
     createdAt: new Date().toISOString(),
   });
@@ -631,7 +651,8 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     investorEmail: profile?.email || "",
     investorCompany: profile?.company || "",
     investorName: profile?.contactName || "",
-    investorPhotoUrl: profile?.photoUrl || "",
+    investorPhotoUrl: investorProfilePhoto(profile) || profile?.photoUrl || "",
+    investorCompanyLogo: investorCompanyLogo(profile),
   });
 
   window.dispatchEvent(new Event("vaultforge-investor-admin-message-change"));
@@ -894,7 +915,8 @@ function sendRequest(kind: Kind, item: any, body: string) {
     investorEmail: profile.email,
     investorCompany: profile.company,
     investorName: profile.contactName,
-    investorPhotoUrl: profile.photoUrl,
+    investorPhotoUrl: investorProfilePhoto(profile) || profile.photoUrl,
+    investorCompanyLogo: investorCompanyLogo(profile),
     investorProfile: compactInvestorProfile(profile),
     message: `${header}\n\n${body || "Investor requested more information."}`,
     status: "new",
@@ -920,7 +942,8 @@ function sendRequest(kind: Kind, item: any, body: string) {
     investorEmail: profile?.email || "",
     investorCompany: profile?.company || "",
     investorName: profile?.contactName || "",
-    investorPhotoUrl: profile?.photoUrl || "",
+    investorPhotoUrl: investorProfilePhoto(profile) || profile?.photoUrl || "",
+    investorCompanyLogo: investorCompanyLogo(profile),
   });
 
   window.dispatchEvent(new Event("vaultforge-investor-request-change"));
@@ -1659,9 +1682,9 @@ function InvestorIdentityCard({
         }}
       >
         <div style={{ ...row, alignItems: "flex-start" }}>
-          {investor?.photoUrl ? (
+          {investorProfilePhoto(investor) ? (
             <img
-              src={investor.photoUrl}
+              src={investorProfilePhoto(investor)}
               alt="Investor profile"
               style={{
                 width: 96,
@@ -1702,7 +1725,35 @@ function InvestorIdentityCard({
               Payment: {investor?.paymentStatus || "unpaid"} • Status:{" "}
               {investor?.status || "pending"}
             </p>
+
             <p style={muted}>Profile Intelligence: {score}% complete</p>
+
+            {investorCompanyLogo(investor) ? (
+              <div
+                style={{
+                  marginTop: 14,
+                  background: "#0a0f1c",
+                  border: "1px solid rgba(245,197,66,.28)",
+                  borderRadius: 18,
+                  padding: 12,
+                  width: 180,
+                }}
+              >
+                <div style={eyebrow}>Company Logo</div>
+
+                <img
+                  src={investorCompanyLogo(investor)}
+                  alt="Company Logo"
+                  style={{
+                    width: "100%",
+                    maxHeight: 90,
+                    objectFit: "contain",
+                    borderRadius: 12,
+                    background: "#05070d",
+                  }}
+                />
+              </div>
+            ) : null}
             {isOwner ? (
               <p style={muted}>Owner/admin identity detected.</p>
             ) : null}
