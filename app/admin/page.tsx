@@ -2249,11 +2249,12 @@ export default function AdminPage() {
     <main style={page}>
       <style>{`
         @keyframes vfPulse {
-          0% { box-shadow: 0 0 0 rgba(255,220,104,.00); transform: scale(1); }
-          50% { box-shadow: 0 0 34px rgba(255,220,104,.24); transform: scale(1.005); }
-          100% { box-shadow: 0 0 0 rgba(255,220,104,.00); transform: scale(1); }
+          0% { box-shadow: 0 0 0 0 rgba(255,220,104,.00), 0 0 0 rgba(255,220,104,.00); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
+          35% { box-shadow: 0 0 0 8px rgba(255,220,104,.25), 0 0 44px rgba(255,220,104,.55); transform: scale(1.018); outline: 3px solid rgba(245,197,66,.85); }
+          70% { box-shadow: 0 0 0 3px rgba(255,220,104,.10), 0 0 24px rgba(255,220,104,.28); transform: scale(1.006); outline: 2px solid rgba(245,197,66,.62); }
+          100% { box-shadow: 0 0 0 0 rgba(255,220,104,.00), 0 0 0 rgba(255,220,104,.00); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
         }
-        .vf-pulse { animation: vfPulse 1.7s ease-in-out infinite; }
+        .vf-pulse { animation: vfPulse .95s ease-in-out infinite; border-color: rgba(255,220,104,.95) !important; }
       `}</style>
 
       <MemberModal member={selectedMember} onClose={() => setSelectedMember(null)} />
