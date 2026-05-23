@@ -2033,7 +2033,7 @@ export default function AdminPage() {
 
   function patchMember(id: string, patch: Partial<MemberRecord>) {
     const target = members.find((member) => member.id === id);
-    if (target && (patch.status === "approved" || patch.approvedForPayment || patch.paymentStatus === "ready" || patch.paymentStatus === "unpaid")) {
+    if (target && (patch.status === "approved" || patch.approvedForPayment || Boolean(patch.paymentStatus))) {
       writeMockAccess(target.email, "member", {
         approved: true,
         adminApproved: true,
@@ -2059,7 +2059,7 @@ export default function AdminPage() {
 
   function patchInvestor(id: string, patch: Partial<InvestorRecord>) {
     const target = investors.find((investor) => investor.id === id);
-    if (target && (patch.status === "approved" || patch.approvedForPayment || patch.paymentStatus === "ready" || patch.paymentStatus === "unpaid")) {
+    if (target && (patch.status === "approved" || patch.approvedForPayment || Boolean(patch.paymentStatus))) {
       writeMockAccess(target.email, "investor", {
         approved: true,
         adminApproved: true,
