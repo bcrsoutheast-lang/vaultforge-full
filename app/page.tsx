@@ -183,6 +183,206 @@ const samplePainPostings = [
   },
 ];
 
+
+const publicDealWindows = [
+  {
+    state: "GA",
+    assetType: "Residential",
+    city: "Cartersville",
+    photo: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=80",
+    title: "Residential value-add near job growth corridor",
+    beds: "3",
+    baths: "2",
+    price: "$184,000",
+    fixAmount: "$38,000",
+    arv: "$285,000",
+    teaser: "Limited outside view. Full address, owner/member contact, photos, documents, and route thread unlock inside.",
+  },
+  {
+    state: "GA",
+    assetType: "Commercial",
+    city: "Atlanta",
+    photo: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80",
+    title: "Small commercial reposition with tenant upside",
+    beds: "N/A",
+    baths: "2 restrooms",
+    price: "$610,000",
+    fixAmount: "$95,000",
+    arv: "$850,000",
+    teaser: "Limited outside view. Full rent roll, owner route, member notes, and execution lane unlock inside.",
+  },
+  {
+    state: "TN",
+    assetType: "Residential",
+    city: "Chattanooga",
+    photo: "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=900&q=80",
+    title: "Fast-close residential opportunity",
+    beds: "4",
+    baths: "2",
+    price: "$215,000",
+    fixAmount: "$42,000",
+    arv: "$335,000",
+    teaser: "Buyer/lender lane available inside after approved access.",
+  },
+  {
+    state: "FL",
+    assetType: "Land",
+    city: "Jacksonville",
+    photo: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=900&q=80",
+    title: "Infill land opportunity needing entitlement review",
+    beds: "Land",
+    baths: "N/A",
+    price: "$129,000",
+    fixAmount: "Entitlement",
+    arv: "$235,000",
+    teaser: "Zoning, member notes, and route thread hidden outside.",
+  },
+  {
+    state: "NC",
+    assetType: "Residential",
+    city: "Charlotte",
+    photo: "https://images.unsplash.com/photo-1598228723793-52759bba239c?auto=format&fit=crop&w=900&q=80",
+    title: "Rental conversion with operator need",
+    beds: "3",
+    baths: "1.5",
+    price: "$198,000",
+    fixAmount: "$31,000",
+    arv: "$292,000",
+    teaser: "Full underwriting and owner/member contact available inside.",
+  },
+  {
+    state: "SC",
+    assetType: "Commercial",
+    city: "Greenville",
+    photo: "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=80",
+    title: "Mixed-use small bay with local operator angle",
+    beds: "N/A",
+    baths: "2 restrooms",
+    price: "$475,000",
+    fixAmount: "$70,000",
+    arv: "$675,000",
+    teaser: "Inside room shows execution lane, owner request, and route options.",
+  },
+  {
+    state: "TX",
+    assetType: "Land",
+    city: "Dallas",
+    photo: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80",
+    title: "Development pad needing capital partner",
+    beds: "Land",
+    baths: "N/A",
+    price: "$325,000",
+    fixAmount: "Site work",
+    arv: "$540,000",
+    teaser: "Capital/JV route hidden until approved access.",
+  },
+  {
+    state: "AL",
+    assetType: "Residential",
+    city: "Birmingham",
+    photo: "https://images.unsplash.com/photo-1576941089067-2de3c901e126?auto=format&fit=crop&w=900&q=80",
+    title: "Light rehab with disposition lane",
+    beds: "3",
+    baths: "2",
+    price: "$122,000",
+    fixAmount: "$24,000",
+    arv: "$195,000",
+    teaser: "Buyer, contractor, and title lane available inside.",
+  },
+];
+
+const publicPainWindows = [
+  {
+    state: "GA",
+    city: "Atlanta",
+    photo: "https://images.unsplash.com/photo-1582407947304-fd86f028f716?auto=format&fit=crop&w=900&q=80",
+    title: "Capital gap before closing window",
+    category: "Funding Gap",
+    urgency: "Closing Risk",
+    assetType: "Residential",
+    summary: "Borrower needs a fast capital lane before contract pressure turns into a lost opportunity.",
+    need: "Private lender / hard money / JV capital",
+  },
+  {
+    state: "GA",
+    city: "Marietta",
+    photo: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80",
+    title: "Contractor stalled rehab schedule",
+    category: "Execution Problem",
+    urgency: "Time Sensitive",
+    assetType: "Residential",
+    summary: "Project is behind schedule and needs a reliable contractor/operator lane.",
+    need: "Contractor / boots on ground / project operator",
+  },
+  {
+    state: "TN",
+    city: "Nashville",
+    photo: "https://images.unsplash.com/photo-1605146769289-440113cc3d00?auto=format&fit=crop&w=900&q=80",
+    title: "Seller deadline creating fast-close pressure",
+    category: "Distressed Seller",
+    urgency: "Urgent",
+    assetType: "Residential",
+    summary: "Owner needs a fast close or creative structure before the window closes.",
+    need: "Cash buyer / lender / disposition partner",
+  },
+  {
+    state: "FL",
+    city: "Orlando",
+    photo: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=900&q=80",
+    title: "Insurance issue delaying project exit",
+    category: "Insurance / Closing",
+    urgency: "Time Sensitive",
+    assetType: "Commercial",
+    summary: "Insurance issue is blocking the exit path and needs a member solution.",
+    need: "Insurance / title / closing support",
+  },
+  {
+    state: "NC",
+    city: "Charlotte",
+    photo: "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=900&q=80",
+    title: "Operator needed for rental conversion",
+    category: "Operator Needed",
+    urgency: "Normal",
+    assetType: "Residential",
+    summary: "Deal has potential but needs local execution and management fit.",
+    need: "Operator / property manager",
+  },
+  {
+    state: "SC",
+    city: "Charleston",
+    photo: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=900&q=80",
+    title: "Title issue blocking closing movement",
+    category: "Title / Legal",
+    urgency: "Closing Risk",
+    assetType: "Land",
+    summary: "Closing cannot move until title issue is reviewed by the right lane.",
+    need: "Attorney / title / closing help",
+  },
+  {
+    state: "TX",
+    city: "Austin",
+    photo: "https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=900&q=80",
+    title: "Development project needs capital partner",
+    category: "Capital Gap",
+    urgency: "Time Sensitive",
+    assetType: "Land",
+    summary: "Site has potential but needs capital and execution structure.",
+    need: "Equity / JV / private lender",
+  },
+  {
+    state: "AL",
+    city: "Birmingham",
+    photo: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=80",
+    title: "Owner needs fast disposition path",
+    category: "Emergency Exit",
+    urgency: "Urgent",
+    assetType: "Residential",
+    summary: "Owner pressure may turn into a buyer match, wholesale lane, or referral route.",
+    need: "Buyer / disposition partner",
+  },
+];
+
+
 function stateCounts(rows: any[]) {
   return OPERATING_STATES.map((state) => ({
     state,
@@ -515,6 +715,53 @@ function LivePostingCard({ item }: { item: any }) {
   );
 }
 
+
+function PublicDealWindowCard({ item }: { item: any }) {
+  return (
+    <div style={goldPanel}>
+      <img src={item.photo} alt={item.title} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(245,197,66,.25)", marginBottom: 14 }} />
+      <div style={eyebrow}>{item.assetType} Deal • {item.city}, {item.state}</div>
+      <h3 style={h3}>{item.title}</h3>
+      <div style={{ ...grid, marginTop: 12 }}>
+        <div style={panel}><div style={eyebrow}>Beds</div><p style={muted}>{item.beds}</p></div>
+        <div style={panel}><div style={eyebrow}>Bath</div><p style={muted}>{item.baths}</p></div>
+        <div style={panel}><div style={eyebrow}>Price</div><p style={muted}>{item.price}</p></div>
+        <div style={panel}><div style={eyebrow}>Fix</div><p style={muted}>{item.fixAmount}</p></div>
+        <div style={panel}><div style={eyebrow}>ARV</div><p style={muted}>{item.arv}</p></div>
+        <div style={panel}><div style={eyebrow}>State</div><p style={muted}>{item.state}</p></div>
+      </div>
+      <p style={{ ...muted, marginTop: 12 }}>{item.teaser}</p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <Link href="/investor-access" style={goldBtn}>Enter To See Deal</Link>
+        <Link href="/member-access" style={btn}>Apply To Work Deals</Link>
+      </div>
+    </div>
+  );
+}
+
+function PublicPainWindowCard({ item }: { item: any }) {
+  return (
+    <div style={redPanel}>
+      <img src={item.photo} alt={item.title} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(255,70,70,.25)", marginBottom: 14 }} />
+      <div style={eyebrow}>{item.category} • {item.city}, {item.state}</div>
+      <h3 style={h3}>{item.title}</h3>
+      <p style={sub}>{item.summary}</p>
+      <div style={{ ...grid, marginTop: 12 }}>
+        <div style={panel}><div style={eyebrow}>Urgency</div><p style={muted}>{item.urgency}</p></div>
+        <div style={panel}><div style={eyebrow}>Asset</div><p style={muted}>{item.assetType}</p></div>
+        <div style={panel}><div style={eyebrow}>Need</div><p style={muted}>{item.need}</p></div>
+        <div style={panel}><div style={eyebrow}>State</div><p style={muted}>{item.state}</p></div>
+      </div>
+      <p style={{ ...muted, marginTop: 12 }}>No member personal info shown outside. Inside access unlocks request thread, routing, and controlled contact workflow.</p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <Link href="/investor-access" style={goldBtn}>Enter To See Pain Signal</Link>
+        <Link href="/member-access" style={btn}>Apply To Solve Pain</Link>
+      </div>
+    </div>
+  );
+}
+
+
 function StateCountCard({ state, memberCount, investorCount, dealCount, painCount }: { state: string; memberCount: number; investorCount: number; dealCount: number; painCount: number }) {
   return (
     <div style={panel}>
@@ -530,6 +777,7 @@ function StateCountCard({ state, memberCount, investorCount, dealCount, painCoun
 export default function HomePage() {
   const [tick, setTick] = useState(0);
   const [owner, setOwner] = useState(false);
+  const [selectedPublicState, setSelectedPublicState] = useState("GA");
 
   useEffect(() => {
     const refresh = () => {
@@ -562,6 +810,8 @@ export default function HomePage() {
   const investorStateCounts = useMemo(() => liveInvestorCounts(), [tick]);
   const dealStateCounts = useMemo(() => stateCounts(sampleDealPostings), []);
   const painStateCounts = useMemo(() => stateCounts(samplePainPostings), []);
+  const selectedDealWindows = useMemo(() => publicDealWindows.filter((item) => item.state === selectedPublicState).slice(0, 2), [selectedPublicState]);
+  const selectedPainWindows = useMemo(() => publicPainWindows.filter((item) => item.state === selectedPublicState).slice(0, 2), [selectedPublicState]);
 
   return (
     <main style={page}>
@@ -594,60 +844,49 @@ export default function HomePage() {
         </section>
 
 
-        <Section label="Live VaultForge Market Preview" title="See why people need inside.">
-          <p style={sub}>Limited public preview only. Full Deal/Pain details, owner contact, member routing, documents, messages, funding requests, and execution rooms unlock only after approved access.</p>
+        <Section label="Live VaultForge Market Preview" title="Click a state. See Deals and Pain split.">
+          <p style={sub}>This is the outside window into VaultForge. Public visitors see limited teaser information only. Approved Investor Room or Member Room access unlocks the full request thread, owner contact workflow, routing, documents, messages, and execution lanes.</p>
 
-          <div style={{ ...grid, marginTop: 20 }}>
+          <div style={{ ...row, marginTop: 22 }}>
+            {OPERATING_STATES.map((state) => (
+              <button
+                key={state}
+                type="button"
+                style={state === selectedPublicState ? goldBtn : btn}
+                onClick={() => setSelectedPublicState(state)}
+              >
+                {state}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ ...grid, marginTop: 22 }}>
             {OPERATING_STATES.map((state) => (
               <StateCountCard
                 key={`top-${state}`}
                 state={state}
                 memberCount={memberStateCounts.find((item) => item.state === state)?.count || 0}
                 investorCount={investorStateCounts.find((item) => item.state === state)?.count || 0}
-                dealCount={dealStateCounts.find((item) => item.state === state)?.count || 0}
-                painCount={painStateCounts.find((item) => item.state === state)?.count || 0}
+                dealCount={publicDealWindows.filter((item) => item.state === state).length}
+                painCount={publicPainWindows.filter((item) => item.state === state).length}
               />
             ))}
           </div>
         </Section>
 
-
-        <Section label="How Investors Do Business" title="Private directory hidden. Business still moves.">
-          <p style={sub}>Investors do not browse the member directory, but they are not locked out of doing business. They can open controlled Deal Opportunity and Pain Signal cards, request more information, ask for funding, request a contractor/operator/title/lender lane, and message through VaultForge-controlled threads.</p>
-
-          <div style={{ ...grid, marginTop: 20 }}>
-            <div style={goldPanel}>
-              <div style={eyebrow}>See A Deal</div>
-              <h3 style={h3}>Request info or owner contact.</h3>
-              <p style={muted}>The investor can ask for full deal details, request the owner contact, or ask VaultForge to route the deal to the right member lane.</p>
-            </div>
-            <div style={goldPanel}>
-              <div style={eyebrow}>Need Funding</div>
-              <h3 style={h3}>Request lender or capital routing.</h3>
-              <p style={muted}>If a deal needs funding, the investor can request private lender, hard money, JV, equity, or capital partner routing inside the system.</p>
-            </div>
-            <div style={goldPanel}>
-              <div style={eyebrow}>See A Pain Signal</div>
-              <h3 style={h3}>Turn problems into opportunities.</h3>
-              <p style={muted}>Pain can mean funding gap, title issue, contractor failure, stalled rehab, owner pressure, or closing risk. Investors and members can request to solve it.</p>
-            </div>
-            <div style={goldPanel}>
-              <div style={eyebrow}>Controlled Contact</div>
-              <h3 style={h3}>No public directory leak.</h3>
-              <p style={muted}>Members stay protected. Contact is requested, reviewed, and released through VaultForge instead of exposing the private network.</p>
-            </div>
-          </div>
-        </Section>
-
-        <Section label="Live Deal + Pain Teasers" title="Live Deal and Pain windows.">
-          <p style={sub}>Investors can request info, ask for funding help, contact Deal/Pain owners through controlled threads, or request member execution. Members can apply to receive routed work and solve these problems.</p>
-
+        <Section label={`${selectedPublicState} Deal Opportunities`} title="Two live deal windows. Limited outside info.">
+          <p style={sub}>Residential shows beds, baths, price, fix amount, ARV, and state. Commercial and Land show matching fields where appropriate. Full location, owner/member contact, documents, and thread are inside.</p>
           <div style={{ ...wideGrid, marginTop: 22 }}>
-            {sampleDealPostings.slice(0, 4).map((item) => <LivePostingCard key={`top-deal-${item.state}-${item.city}`} item={item} />)}
-            {samplePainPostings.slice(0, 4).map((item) => <LivePostingCard key={`top-pain-${item.state}-${item.city}`} item={item} />)}
+            {selectedDealWindows.map((item) => <PublicDealWindowCard key={`deal-window-${item.state}-${item.city}-${item.title}`} item={item} />)}
           </div>
         </Section>
 
+        <Section label={`${selectedPublicState} Pain Signals`} title="Two live pain windows. No member info outside.">
+          <p style={sub}>Pain cards show the problem type, urgency, asset, state, and what help is needed. They do not reveal member identity or personal contact outside the room.</p>
+          <div style={{ ...wideGrid, marginTop: 22 }}>
+            {selectedPainWindows.map((item) => <PublicPainWindowCard key={`pain-window-${item.state}-${item.city}-${item.title}`} item={item} />)}
+          </div>
+        </Section>
 
         <Ticker />
 
@@ -746,39 +985,6 @@ export default function HomePage() {
           </div>
         </Section>
 
-
-        <Section label="Live Inside Preview" title="Deal and Pain postings from operating states.">
-          <p style={sub}>These are limited public teasers. Full details, owner contact, member routing, messages, documents, and next moves stay inside approved Investor Room or Member Room access.</p>
-
-          <div style={{ ...wideGrid, marginTop: 22 }}>
-            {sampleDealPostings.slice(0, 4).map((item) => <LivePostingCard key={`${item.state}-${item.city}-${item.headline}`} item={item} />)}
-          </div>
-
-          <div style={{ ...wideGrid, marginTop: 18 }}>
-            {samplePainPostings.slice(0, 4).map((item) => <LivePostingCard key={`${item.state}-${item.city}-${item.headline}`} item={item} />)}
-          </div>
-
-          <div style={{ ...row, marginTop: 22 }}>
-            <Link href="/investor-access" style={goldBtn}>Enter Investor Room</Link>
-            <Link href="/member-access" style={btn}>Apply For Member Access</Link>
-          </div>
-        </Section>
-
-        <Section label="State Network Snapshot" title="Where VaultForge is operating.">
-          <p style={sub}>State cards show operating lanes, available teaser signals, and live local profile counts where browser data exists. This gives investors and members a reason to get inside the room instead of guessing what is active.</p>
-          <div style={{ ...grid, marginTop: 20 }}>
-            {OPERATING_STATES.map((state) => (
-              <StateCountCard
-                key={state}
-                state={state}
-                memberCount={memberStateCounts.find((item) => item.state === state)?.count || 0}
-                investorCount={investorStateCounts.find((item) => item.state === state)?.count || 0}
-                dealCount={dealStateCounts.find((item) => item.state === state)?.count || 0}
-                painCount={painStateCounts.find((item) => item.state === state)?.count || 0}
-              />
-            ))}
-          </div>
-        </Section>
 
         <Section label="Profile Intelligence" title="More profile intelligence creates smarter routing.">
           <p style={sub}>VaultForge Intelligence routes alerts, signals, opportunities, pain requests, operator matches, capital needs, and execution opportunities using profile intelligence.</p>
