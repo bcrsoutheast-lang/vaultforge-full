@@ -879,7 +879,7 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
   const [reply, setReply] = useState("");
   const [infoRequest, setInfoRequest] = useState("");
   const profile = profileFrom(thread);
-  const memberProfile = mounted ? readMemberProfile() : {};
+  const memberProfile = typeof window === "undefined" ? {} : readMemberProfile();
   const memberPublic = publicMemberProfile(memberProfile);
   const released = Boolean(thread?.contactReleased);
 
