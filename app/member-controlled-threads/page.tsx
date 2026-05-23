@@ -55,6 +55,13 @@ function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
+
+function isOwnerAccount(value?: unknown) {
+  const email = lower(value || browserValue("vf_email") || browserValue("member_email") || browserValue("email") || browserValue("vaultforge_investor_email"));
+  return email === OWNER_EMAIL.toLowerCase();
+}
+
+
 function list(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean);
   if (typeof value === "string" && value.trim()) return value.split(",").map((item) => clean(item)).filter(Boolean);
@@ -628,7 +635,17 @@ function paymentStatusFor(email: string, kind: "member" | "investor") {
   const paymentKey = kind === "member" ? MOCK_MEMBER_PAYMENT_KEY : MOCK_INVESTOR_PAYMENT_KEY;
   const direct = readJson<any>(paymentKey, {});
   return {
-    approved: Boolean(record.approved || record.adminApproved || direct.approved),
+    approved: Boolean(
+      record.approved ||
+      record.adminApproved ||
+      record.approvedForPayment ||
+      record.paymentStatus === "ready" ||
+      record.accessStatus === "payment_ready" ||
+      direct.approved ||
+      direct.approvedForPayment ||
+      direct.paymentStatus === "ready" ||
+      direct.accessStatus === "payment_ready"
+    ),
     paid: Boolean(record.paid || record.paymentStatus === "paid" || direct.paid || direct.paymentStatus === "paid"),
     unlocked: Boolean(record.unlocked || record.accessStatus === "active" || direct.unlocked || direct.accessStatus === "active"),
   };
@@ -647,7 +664,8 @@ function MockPaymentButton({
 }) {
   const [tick, setTick] = useState(0);
   const status = paymentStatusFor(email, kind);
-  const canPay = status.approved || email.toLowerCase() === OWNER_EMAIL.toLowerCase();
+  const ownerBypass = email.toLowerCase() === OWNER_EMAIL.toLowerCase();
+  const canPay = status.approved || ownerBypass;
   const unlocked = status.paid || status.unlocked;
 
   useEffect(() => {
@@ -665,13 +683,17 @@ function MockPaymentButton({
   return (
     <section className={canPay && !unlocked ? "vf-pulse" : ""} style={canPay && !unlocked ? goldPanel : panel}>
       <div style={eyebrow}>{label}</div>
-      <h2 style={h2}>{unlocked ? "Room Unlocked" : canPay ? "Payment Ready" : "Waiting On Admin Approval"}</h2>
-      <p style={sub}>
+      <h2 style={h2}>{unlocked ? "Room Unlocked" : canPay ? "PAYMENT READY — CLICK MOCK PAY" : "LOCKED — Waiting On Admin Approval"}</h2>
+      <div style={{ ...panel, marginTop: 10, borderColor: canPay && !unlocked ? "rgba(255,220,104,.92)" : "rgba(255,70,70,.42)" }}>
+        <div style={eyebrow}>{unlocked ? "Access Active" : canPay ? ownerBypass ? "Owner/Test Bypass — Payment Available" : "Admin Approved — Payment Available" : "Locked Preview"}</div>
+        <p style={muted}>{unlocked ? "This room is unlocked." : canPay ? "This card should be visibly pulsing. Click Mock Pay to unlock for testing." : "Regular users should see this locked until admin approval."}</p>
+      </div>
+      <p style={{ ...sub, marginTop: 12 }}>
         {unlocked
           ? "Mock payment is complete. This room is unlocked for testing."
           : canPay
             ? `${price} mock payment is ready. Click to unlock this room for testing.`
-            : "Submit profile and wait for admin approval. Then this payment button lights up."}
+            : "Submit profile and wait for admin approval. This room remains locked until approval and payment."}
       </p>
       <div style={{ ...row, marginTop: 14 }}>
         <button
@@ -1080,6 +1102,7 @@ export default function MemberControlledThreadsPage() {
     if (requestedLane && allowed.includes(requestedLane)) setLane(requestedLane);
   }, []);
 
+  const isOwner = isOwnerAccount(email);
   const visibleThreads = useMemo(() => {
     return threads.filter((thread, index) => {
       const id = safeId(thread, index);
@@ -1160,10 +1183,25 @@ export default function MemberControlledThreadsPage() {
   return (
     <main style={pageStyle}>
       
+
 <style>{`
-@keyframes vfPulsePay { 0% { box-shadow: 0 0 0 rgba(245,197,66,.0); } 50% { box-shadow: 0 0 38px rgba(245,197,66,.34); } 100% { box-shadow: 0 0 0 rgba(245,197,66,.0); } }
-.vf-pulse { animation: vfPulsePay 1.15s ease-in-out infinite; }
+@keyframes vfPulsePay {
+  0% { box-shadow: 0 0 0 0 rgba(255,220,104,.0), 0 0 0 rgba(255,220,104,.0); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
+  35% { box-shadow: 0 0 0 8px rgba(255,220,104,.26), 0 0 42px rgba(255,220,104,.55); transform: scale(1.018); outline: 3px solid rgba(245,197,66,.85); }
+  70% { box-shadow: 0 0 0 3px rgba(255,220,104,.10), 0 0 24px rgba(255,220,104,.28); transform: scale(1.006); outline: 2px solid rgba(245,197,66,.62); }
+  100% { box-shadow: 0 0 0 0 rgba(255,220,104,.0), 0 0 0 rgba(255,220,104,.0); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
+}
+@keyframes vfAlertFlash {
+  0% { filter: brightness(1); }
+  50% { filter: brightness(1.35); }
+  100% { filter: brightness(1); }
+}
+.vf-pulse {
+  animation: vfPulsePay .95s ease-in-out infinite, vfAlertFlash .95s ease-in-out infinite;
+  border-color: rgba(255,220,104,.95) !important;
+}
 `}</style>
+
 
       <div style={wrap}>
         <section style={hero}>
@@ -1181,8 +1219,8 @@ export default function MemberControlledThreadsPage() {
           <div style={{ ...row, marginTop: 18 }}>
             <Link href="/command" style={goldBtn}>Member Command</Link>
             <Link href="/message-command" style={btn}>Message Command</Link>
-            <Link href="/investor-room" style={btn}>Investor Room</Link>
-            <Link href="/admin" style={btn}>Admin</Link>
+            {isOwner ? <Link href="/investor-room" style={btn}>Investor Room</Link> : null}
+            {isOwner ? <Link href="/admin" style={btn}>Admin</Link> : null}
           </div>
 
           <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
