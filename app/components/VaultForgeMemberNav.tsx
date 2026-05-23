@@ -1,263 +1,190 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { getBrowserEmail, isOwnerBrowser } from "../lib/vf-owner";
 
-type Props = {
+type VaultForgeMemberNavProps = {
+  active?: string;
   title?: string;
   subtitle?: string;
-  active?: string;
+  eyebrow?: string;
+  children?: React.ReactNode;
 };
 
-function workspaceFromPath(pathname: string) {
-  if (pathname === "/" || pathname.includes("dashboard")) return "Command Center";
-  if (pathname.includes("opportunity-rooms")) return "Opportunity Rooms";
-  if (pathname.includes("pressure-rooms")) return "Pressure Rooms";
-  if (pathname.includes("saved-rooms")) return "Saved Rooms";
-  if (pathname.includes("archived-rooms")) return "Archived Rooms";
-  if (pathname.includes("deleted-rooms")) return "Deleted Rooms";
-  if (pathname.includes("opportunity-room")) return "Opportunity Room";
-  if (pathname.includes("pressure-room")) return "Pressure Room";
-  if (pathname.includes("workstations") || pathname.includes("projects")) return "Workstations";
-  if (pathname.includes("submit")) return "Submit Opportunity";
-  if (pathname.includes("pain")) return "Submit Pressure";
-  if (pathname.includes("intelligence") || pathname.includes("smart-ai")) return "Intelligence";
-  if (pathname.includes("messages")) return "Messages";
-  if (pathname.includes("profile-dashboard") || pathname === "/profile") return "Profile";
-  if (pathname.includes("members") || pathname.includes("network")) return "Network";
-  return "Command Center";
-}
-
-function isActive(pathname: string, href: string, key: string, active = "") {
-  const current = active.toLowerCase();
-  const cleanHref = href.split("?")[0];
-
-  if (current && (current === key.toLowerCase() || current === cleanHref.toLowerCase())) return true;
-  if (cleanHref === "/dashboard") return pathname === "/dashboard" || pathname === "/";
-  if (cleanHref === "/opportunity-rooms") return pathname.startsWith("/opportunity-rooms") || pathname.startsWith("/opportunity-room");
-  if (cleanHref === "/pressure-rooms") return pathname.startsWith("/pressure-rooms") || pathname.startsWith("/pressure-room");
-  if (cleanHref === "/workstations") return pathname.startsWith("/workstations") || pathname.startsWith("/projects");
-  if (cleanHref === "/intelligence") return pathname.startsWith("/intelligence") || pathname.startsWith("/smart-ai");
-  if (cleanHref === "/profile-dashboard") return pathname.startsWith("/profile-dashboard") || pathname === "/profile";
-  if (cleanHref === "/members") return pathname.startsWith("/members") || pathname.startsWith("/network");
-  return pathname.startsWith(cleanHref);
-}
-
-const memberLinks = [
-  { label: "Command", href: "/dashboard", key: "dashboard", tag: "HOME" },
-  { label: "Opportunity Rooms", href: "/opportunity-rooms", key: "opportunity", tag: "UPSIDE" },
-  { label: "Pressure Rooms", href: "/pressure-rooms", key: "pressure", tag: "FIX" },
-  { label: "Workstations", href: "/workstations", key: "workstations", tag: "5S" },
-  { label: "Intelligence", href: "/intelligence", key: "intelligence", tag: "AI" },
-  { label: "Messages", href: "/messages", key: "messages", tag: "COMMS" },
-  { label: "Network", href: "/members", key: "members", tag: "OPS" },
-  { label: "Profile", href: "/profile-dashboard", key: "profile", tag: "ME" },
+const links = [
+  { key: "command", label: "Command", href: "/command" },
+  { key: "members", label: "Members", href: "/members" },
+  { key: "deals", label: "Deal Rooms", href: "/deal-rooms" },
+  { key: "pain", label: "Pain Button", href: "/pain-intake" },
+  { key: "pain-rooms", label: "Pain Rooms", href: "/pain-rooms" },
+  { key: "messages", label: "Messages", href: "/messages" },
+  { key: "profile", label: "Profile", href: "/profile" },
+  { key: "saved", label: "Saved", href: "/saved-rooms" },
+  { key: "archived", label: "Archived", href: "/archived-rooms" },
+  { key: "deleted", label: "Deleted", href: "/deleted-rooms" },
+  { key: "admin", label: "Admin", href: "/admin" },
 ];
 
-const shell: React.CSSProperties = {
-  border: "1px solid rgba(232,196,107,.30)",
-  borderRadius: 34,
-  padding: 18,
-  background:
-    "linear-gradient(145deg,rgba(255,255,255,.092),rgba(255,255,255,.030)), radial-gradient(circle at top left,rgba(232,196,107,.16),transparent 34%), radial-gradient(circle at bottom right,rgba(157,243,191,.09),transparent 32%)",
-  boxShadow: "0 28px 96px rgba(0,0,0,.36)",
-  color: "white",
-  marginBottom: 20,
-  backdropFilter: "blur(14px)",
-};
-
-const top: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(220px,.9fr) minmax(260px,1.25fr) minmax(180px,.75fr)",
-  alignItems: "center",
-  gap: 14,
-  marginBottom: 16,
-};
-
-const logoWrap: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 14,
-  textDecoration: "none",
-  color: "white",
-  minWidth: 0,
-};
-
-const logoBox: React.CSSProperties = {
-  width: 120,
-  height: 76,
-  borderRadius: 18,
-  border: "1px solid rgba(232,196,107,.32)",
-  background: "rgba(0,0,0,.38)",
-  boxShadow: "0 18px 54px rgba(0,0,0,.38)",
-  overflow: "hidden",
-  flex: "0 0 auto",
-  display: "grid",
-  placeItems: "center",
-};
-
-const center: React.CSSProperties = {
-  textAlign: "center",
-  border: "1px solid rgba(232,196,107,.24)",
-  borderRadius: 24,
-  padding: "13px 14px",
-  background: "linear-gradient(135deg,rgba(0,0,0,.30),rgba(255,255,255,.035))",
-  minWidth: 0,
-};
-
-const pill: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  border: "1px solid rgba(157,243,191,.25)",
-  borderRadius: 999,
-  color: "#9df3bf",
-  background: "rgba(157,243,191,.075)",
-  padding: "8px 11px",
-  fontSize: 12,
-  fontWeight: 900,
-  maxWidth: "100%",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-  textDecoration: "none",
-};
-
-const grid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(8,minmax(0,1fr))",
-  gap: 9,
-};
-
-export default function VaultForgeMemberNav({ title, subtitle, active = "" }: Props) {
-  const [email, setEmail] = useState("");
-  const [pathname, setPathname] = useState("/");
-  const [owner, setOwner] = useState(false);
-
-  useEffect(() => {
-    setEmail(getBrowserEmail());
-    setOwner(isOwnerBrowser());
-    if (typeof window !== "undefined") setPathname(window.location.pathname || "/");
-  }, []);
-
-  const workspace = useMemo(() => title || workspaceFromPath(pathname), [title, pathname]);
-
+export default function VaultForgeMemberNav({
+  active = "",
+  title,
+  subtitle,
+  eyebrow = "VAULTFORGE MEMBER AREA",
+  children,
+}: VaultForgeMemberNavProps) {
   return (
-    <header style={shell}>
+    <main className="vf-member-page">
       <style>{`
-        .vf-command-link:hover,
-        .vf-logo-link:hover,
-        .vf-command-pill:hover {
-          transform: translateY(-1px);
-          filter: brightness(1.08);
-          transition: all .18s ease;
+        .vf-member-page {
+          min-height: 100vh;
+          background:
+            radial-gradient(circle at top left, rgba(245, 200, 76, .14), transparent 30%),
+            radial-gradient(circle at top right, rgba(59, 130, 246, .10), transparent 28%),
+            linear-gradient(180deg, #02040a, #071018 52%, #02040a);
+          color: #fff;
+          padding: 18px;
+          font-family: Inter, Arial, system-ui, sans-serif;
         }
 
-        .vf-command-link { transition: all .18s ease; }
-
-        @media (max-width: 1120px) {
-          .vf-command-grid { grid-template-columns: repeat(4,minmax(0,1fr)) !important; }
+        .vf-member-wrap {
+          max-width: 1180px;
+          margin: 0 auto;
+          display: grid;
+          gap: 18px;
         }
 
-        @media (max-width: 920px) {
-          .vf-command-top { grid-template-columns: 1fr !important; text-align: center !important; }
-          .vf-logo-link { justify-content: center !important; }
-          .vf-command-right { justify-content: center !important; }
-          .vf-command-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+        .vf-member-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          flex-wrap: wrap;
+          border: 1px solid rgba(245, 200, 76, .20);
+          background: rgba(2, 6, 23, .86);
+          border-radius: 24px;
+          padding: 16px;
+          backdrop-filter: blur(14px);
         }
 
-        @media (max-width: 520px) {
-          .vf-command-grid { grid-template-columns: 1fr !important; }
-          .vf-command-link { min-height: 58px !important; }
-          .vf-logo-mark { width: 104px !important; height: 66px !important; }
+        .vf-member-logo {
+          color: #f5c84c;
+          font-weight: 950;
+          font-size: 30px;
+          letter-spacing: -.05em;
+          text-decoration: none;
+        }
+
+        .vf-member-nav {
+          display: flex;
+          gap: 9px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+
+        .vf-member-nav a {
+          color: #e5e7eb;
+          text-decoration: none;
+          border: 1px solid rgba(148, 163, 184, .20);
+          background: rgba(15, 23, 42, .72);
+          border-radius: 999px;
+          padding: 10px 12px;
+          font-weight: 900;
+          font-size: 13px;
+          white-space: nowrap;
+        }
+
+        .vf-member-nav a.active {
+          color: #111827;
+          border-color: transparent;
+          background: linear-gradient(135deg, #fde68a, #e8c46b);
+        }
+
+        .vf-member-nav a.admin {
+          color: #111827;
+          border-color: transparent;
+          background: linear-gradient(135deg, #fde68a, #e8c46b);
+          box-shadow: 0 0 22px rgba(245, 200, 76, .25);
+        }
+
+        .vf-member-nav a.exit {
+          color: #fecaca;
+          border-color: rgba(239, 68, 68, .30);
+          background: rgba(127, 29, 29, .22);
+        }
+
+        .vf-member-hero,
+        .vf-card {
+          border: 1px solid rgba(245, 200, 76, .24);
+          background: linear-gradient(145deg, rgba(16, 24, 36, .94), rgba(2, 6, 23, .98));
+          border-radius: 28px;
+          padding: 24px;
+          box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+        }
+
+        .vf-eyebrow {
+          color: #f5c84c;
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: .22em;
+          text-transform: uppercase;
+          margin-bottom: 10px;
+        }
+
+        .vf-title {
+          font-size: clamp(42px, 8vw, 84px);
+          line-height: .88;
+          letter-spacing: -.08em;
+          margin: 0;
+        }
+
+        .vf-subtitle {
+          color: #cbd5e1;
+          font-size: 20px;
+          line-height: 1.45;
+          max-width: 960px;
+          margin: 16px 0 0;
+        }
+
+        @media (max-width: 700px) {
+          .vf-member-page { padding: 12px; }
+          .vf-member-logo { font-size: 25px; }
+          .vf-member-nav { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; width: 100%; }
+          .vf-member-hero, .vf-card { padding: 20px; border-radius: 24px; }
         }
       `}</style>
 
-      <section className="vf-command-top" style={top}>
-        <Link href="/dashboard" className="vf-logo-link" style={logoWrap}>
-          <div className="vf-logo-mark" style={logoBox}>
-            <img
-              src="/vaultforge-logo.png"
-              alt="VaultForge"
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          </div>
+      <div className="vf-member-wrap">
+        <header className="vf-member-top">
+          <Link href="/command" className="vf-member-logo">
+            VAULTFORGE
+          </Link>
 
-          <div style={{ minWidth: 0 }}>
-            <div style={{ color: "#f8e7b0", fontWeight: 950, letterSpacing: ".16em", fontSize: 14 }}>
-              VAULTFORGE
-            </div>
-            <div style={{ color: "#cbd5e1", fontSize: 13, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              Member Operating System
-            </div>
-          </div>
-        </Link>
+          <nav className="vf-member-nav">
+            {links.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`${active === item.key ? "active" : ""} ${item.key === "admin" ? "admin" : ""}`.trim()}
+              >
+                {item.label}
+              </Link>
+            ))}
 
-        <div style={center}>
-          <div style={{ color: "#e8c46b", fontWeight: 950, letterSpacing: ".18em", fontSize: 12, textTransform: "uppercase" }}>
-            Member Command
-          </div>
-
-          <div style={{ fontSize: "clamp(25px,5vw,44px)", lineHeight: 1, fontWeight: 950, marginTop: 6, letterSpacing: "-.045em" }}>
-            {workspace}
-          </div>
-
-          <div style={{ color: "#94a3b8", lineHeight: 1.35, marginTop: 8, fontSize: 14 }}>
-            {subtitle || "Rooms, workstations, intelligence, messages, network, and profile."}
-          </div>
-        </div>
-
-        <div className="vf-command-right" style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-          <span style={pill}>{email || "Signed in"}</span>
-
-          {owner ? (
-            <span
-              className="vf-command-pill"
-              style={{ ...pill, color: "#fecaca", borderColor: "rgba(248,113,113,.34)", background: "rgba(248,113,113,.08)" }}
-            >
-              Owner Mode
-            </span>
-          ) : null}
-
-          <Link href="/logout" className="vf-command-pill" style={{ ...pill, color: "#ffd0d0", borderColor: "rgba(255,120,120,.28)", background: "rgba(255,120,120,.065)" }}>Logout</Link>
-        </div>
-      </section>
-
-      <nav className="vf-command-grid" style={grid}>
-        {memberLinks.map((item) => {
-          const activeLink = isActive(pathname, item.href, item.key, active);
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="vf-command-link"
-              style={{
-                minHeight: 72,
-                borderRadius: 20,
-                padding: 12,
-                textDecoration: "none",
-                color: activeLink ? "#06100a" : "white",
-                border: activeLink ? "1px solid rgba(232,196,107,.95)" : "1px solid rgba(255,255,255,.13)",
-                background: activeLink
-                  ? "linear-gradient(135deg,#f8e7b0,#e8c46b)"
-                  : "linear-gradient(145deg,rgba(255,255,255,.060),rgba(255,255,255,.020))",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-                gap: 7,
-                boxShadow: activeLink ? "0 14px 34px rgba(232,196,107,.16)" : "none",
-              }}
-            >
-              <span style={{ fontSize: 10, fontWeight: 950, letterSpacing: ".16em", opacity: activeLink ? 0.84 : 0.62 }}>
-                {item.tag}
-              </span>
-              <span style={{ fontWeight: 950, lineHeight: 1.05 }}>{item.label}</span>
+            <Link href="/" className="exit">
+              Exit
             </Link>
-          );
-        })}
-      </nav>
-    </header>
+          </nav>
+        </header>
+
+        {title ? (
+          <section className="vf-member-hero">
+            <div className="vf-eyebrow">{eyebrow}</div>
+            <h1 className="vf-title">{title}</h1>
+            {subtitle ? <p className="vf-subtitle">{subtitle}</p> : null}
+          </section>
+        ) : null}
+
+        {children}
+      </div>
+    </main>
   );
 }
