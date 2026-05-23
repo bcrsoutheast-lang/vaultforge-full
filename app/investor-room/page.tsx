@@ -1297,6 +1297,7 @@ function MockPaymentButton({
 }) {
   const [tick, setTick] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const status = paymentStatusFor(email, kind);
   const canPay = status.approved || email.toLowerCase() === OWNER_EMAIL.toLowerCase();
   const unlocked = status.paid || status.unlocked;
