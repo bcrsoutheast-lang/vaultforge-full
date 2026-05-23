@@ -92,11 +92,29 @@ export default function InvestorApplicationPage() {
     proofFunds: existing.proofFunds || "",
     closeSpeed: existing.closeSpeed || "",
     notes: existing.notes || "",
+    profilePhoto: existing.profilePhoto || "",
+    companyLogo: existing.companyLogo || "",
   });
   const [banner, setBanner] = useState("");
 
   function update(key: string, value: string) {
     setForm((current: any) => ({ ...current, [key]: value }));
+  }
+
+
+  function uploadFile(key: string, file?: File | null) {
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      setForm((current: any) => ({
+        ...current,
+        [key]: String(reader.result || ""),
+      }));
+    };
+
+    reader.readAsDataURL(file);
   }
 
   function submit(event: React.FormEvent) {
@@ -156,7 +174,7 @@ export default function InvestorApplicationPage() {
     window.dispatchEvent(new Event("vaultforge-investor-change"));
     window.dispatchEvent(new Event("vaultforge-mock-access-change"));
 
-    const message = "Investor profile saved and routed to admin for approval. After approval, the payment button will light up.";
+    const message = "Investor profile saved into the VaultForge investor intelligence network and admin review queue.";
     setBanner(message);
     window.alert(message);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -179,7 +197,7 @@ export default function InvestorApplicationPage() {
         <section style={hero}>
           <div style={eyebrow}>Investor Room Application</div>
           <h1 style={h1}>Submit investor profile.</h1>
-          <p style={sub}>This saves your investor profile, routes it to admin for approval, then the payment button lights up after approval.</p>
+          <p style={sub}>Build a real investor profile with strategies, capital, markets, proof of funds, profile photo, branding, and execution details. This routes into the VaultForge intelligence network and admin review queue.</p>
         </section>
 
         <form onSubmit={submit}>
@@ -196,7 +214,75 @@ export default function InvestorApplicationPage() {
               <Field label="Max Deal" value={form.maxDeal} onChange={(value) => update("maxDeal", value)} />
               <Field label="Proof / Capital" value={form.proofFunds} onChange={(value) => update("proofFunds", value)} />
               <Field label="Close Speed" value={form.closeSpeed} onChange={(value) => update("closeSpeed", value)} />
+
+
+              <Field label="Preferred Asset Types" value={form.assetTypes || ""} onChange={(value) => update("assetTypes", value)} placeholder="SFR, multifamily, land, industrial..." />
+              <Field label="Target Counties / Markets" value={form.targetCounties || ""} onChange={(value) => update("targetCounties", value)} placeholder="Fulton, Cobb, Gwinnett..." />
+              <Field label="Funding Type" value={form.fundingType || ""} onChange={(value) => update("fundingType", value)} placeholder="Cash, hard money, JV, debt..." />
+              <Field label="Monthly Deal Volume Goal" value={form.volumeGoal || ""} onChange={(value) => update("volumeGoal", value)} placeholder="2 deals/month..." />
             </div>
+
+
+            <div style={{ marginTop: 22 }}>
+              <div style={grid}>
+                <label style={{ display: "grid", gap: 8 }}>
+                  <span style={eyebrow}>Profile Photo</span>
+
+                  {form.profilePhoto ? (
+                    <img
+                      src={form.profilePhoto}
+                      alt="Profile"
+                      style={{
+                        width: 120,
+                        height: 120,
+                        objectFit: "cover",
+                        borderRadius: 18,
+                        border: "1px solid rgba(245,197,66,.35)",
+                      }}
+                    />
+                  ) : null}
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={input}
+                    onChange={(event) =>
+                      uploadFile("profilePhoto", event.target.files?.[0])
+                    }
+                  />
+                </label>
+
+                <label style={{ display: "grid", gap: 8 }}>
+                  <span style={eyebrow}>Company Logo</span>
+
+                  {form.companyLogo ? (
+                    <img
+                      src={form.companyLogo}
+                      alt="Logo"
+                      style={{
+                        width: 160,
+                        height: 120,
+                        objectFit: "contain",
+                        background: "#0b1020",
+                        borderRadius: 18,
+                        border: "1px solid rgba(245,197,66,.35)",
+                        padding: 12,
+                      }}
+                    />
+                  ) : null}
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={input}
+                    onChange={(event) =>
+                      uploadFile("companyLogo", event.target.files?.[0])
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
 
             <div style={{ marginTop: 16 }}>
               <TextArea label="Investor Notes" value={form.notes} onChange={(value) => update("notes", value)} placeholder="What do you want access to? What are you looking for? How do you move?" />
