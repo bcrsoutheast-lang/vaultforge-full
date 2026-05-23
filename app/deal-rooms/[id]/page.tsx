@@ -196,61 +196,94 @@ function stateMap() {
   return map;
 }
 
-function allRooms(kind: RoomKind): Room[] {
-  if (!ok()) return [];
+function canonicalKey(kind: RoomKind) {
+  return kind === "deal" ? "vaultforge_canonical_deal_rooms_v1" : "vaultforge_canonical_pain_rooms_v1";
+}
+
+function directKeys(kind: RoomKind, id: string) {
+  return kind === "deal"
+    ? [`vaultforge_deal_room_${id}`, `vaultforge_clean_deal_room_${id}`, `vf_deal_room_${id}`]
+    : [`vaultforge_pain_room_${id}`, `vaultforge_clean_pain_room_${id}`, `vf_pain_room_${id}`];
+}
+
+function readCanonicalRooms(kind: RoomKind) {
+  return arr<Room>(canonicalKey(kind)).map((row) => normalizeRoom(row, kind)).filter((room) => Boolean(rid(room)));
+}
+
+function legacyRooms(kind: RoomKind) {
+  if (!ok()) return [] as Room[];
   const out: Room[] = [];
   const seen = new Set<string>();
 
+  const add = (row: any) => {
+    if (!row || typeof row !== "object") return;
+    const room = normalizeRoom(row, kind);
+    const id = rid(room);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    out.push(room);
+  };
+
   for (const key of keysFor(kind)) {
-    for (const row of arr<any>(key)) {
-      const room = normalizeRoom(row, kind);
-      const id = rid(room);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push(room);
-    }
+    arr<any>(key).forEach(add);
   }
 
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i) || "";
-    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
+    if (key === canonicalKey(kind)) continue;
+    const match = kind === "deal"
+      ? key.includes("deal_room") || key.includes("deal_rooms")
+      : key.includes("pain_room") || key.includes("pain_rooms");
     if (!match) continue;
+
     const value = j<any>(localStorage.getItem(key), null);
-    if (Array.isArray(value)) {
-      for (const row of value) {
-        const room = normalizeRoom(row, kind);
-        const id = rid(room);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        out.push(room);
-      }
-    } else if (value && typeof value === "object") {
-      const room = normalizeRoom(value, kind);
-      const id = rid(room);
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        out.push(room);
-      }
-    }
+    if (Array.isArray(value)) value.forEach(add);
+    else add(value);
   }
 
+  return out;
+}
+
+function mergedRooms(kind: RoomKind) {
   const states = stateMap();
-  return out.map((room) => {
+  const map = new Map<string, Room>();
+
+  legacyRooms(kind).forEach((room) => {
     const id = rid(room);
+    if (!id) return;
     const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-    return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+    map.set(id, { ...room, roomState: state, cleanupState: state, stateStatus: state });
   });
+
+  readCanonicalRooms(kind).forEach((room) => {
+    const id = rid(room);
+    if (!id) return;
+    const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+    map.set(id, { ...(map.get(id) || {}), ...room, roomState: state, cleanupState: state, stateStatus: state });
+  });
+
+  return Array.from(map.values()).sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+}
+
+function allRooms(kind: RoomKind): Room[] {
+  if (!ok()) return [];
+  const rooms = mergedRooms(kind);
+  writeJson(canonicalKey(kind), rooms);
+  return rooms;
 }
 
 function getRoom(kind: RoomKind, id: string) {
   if (!ok()) return null as Room | null;
-  const directKeys = kind === "deal"
-    ? [`vaultforge_deal_room_${id}`, `vaultforge_clean_deal_room_${id}`, `vf_deal_room_${id}`]
-    : [`vaultforge_pain_room_${id}`, `vaultforge_clean_pain_room_${id}`, `vf_pain_room_${id}`];
 
-  for (const key of directKeys) {
+  const states = stateMap();
+
+  for (const key of directKeys(kind, id)) {
     const found = j<any | null>(localStorage.getItem(key), null);
-    if (found) return normalizeRoom(found, kind);
+    if (found) {
+      const room = normalizeRoom(found, kind);
+      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+    }
   }
 
   return allRooms(kind).find((room) => rid(room) === id) || null;
@@ -266,27 +299,52 @@ function writeJson(key: string, value: unknown) {
   }
 }
 
+function purgeRoomCopies(kind: RoomKind, id: string, next?: Room) {
+  if (!ok() || !id) return;
+
+  for (const key of keysFor(kind)) {
+    const rows = arr<Room>(key).filter((row) => rid(row) !== id);
+    if (next) writeJson(key, [next, ...rows]);
+    else writeJson(key, rows);
+  }
+
+  for (const key of directKeys(kind, id)) {
+    if (next) writeJson(key, next);
+    else localStorage.removeItem(key);
+  }
+}
+
 function saveRoom(kind: RoomKind, room: Room) {
   if (!ok()) return;
   const id = rid(room);
   if (!id) return;
-  const next = { ...room, id, roomId: id, updatedAt: new Date().toISOString() };
-  const directKey = kind === "deal" ? `vaultforge_deal_room_${id}` : `vaultforge_pain_room_${id}`;
-  writeJson(directKey, next);
-  for (const key of keysFor(kind)) {
-    const rows = allRooms(kind).filter((item) => rid(item) !== id);
-    writeJson(key, [next, ...rows]);
-  }
+
+  const next = normalizeRoom({ ...room, id, roomId: id, updatedAt: new Date().toISOString() }, kind);
+  const current = allRooms(kind).filter((item) => rid(item) !== id);
+  const canonical = [next, ...current];
+
+  writeJson(canonicalKey(kind), canonical);
+  purgeRoomCopies(kind, id, next);
+
   window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
 }
 
 function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
-  const next = { ...room, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
-  const id = rid(next);
+  if (!ok()) return;
+  const id = rid(room);
+  if (!id) return;
+
+  const next = normalizeRoom(
+    { ...room, id, roomId: id, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() },
+    kind
+  );
+
   const states = stateMap();
   states[id] = state;
   states[`${kind}:${id}`] = state;
   for (const key of STATE_KEYS) writeJson(key, states);
+
   saveRoom(kind, next);
   addActivity(kind, id, `${state.toUpperCase()} room`);
   addPersistentActivity(kind, id, "Status Change", `Room moved to ${state}.`);
