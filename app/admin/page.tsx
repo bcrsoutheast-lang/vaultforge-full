@@ -140,6 +140,8 @@ type RoomSelection = { title: string; rooms: RoomRecord[] } | null;
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const ADMIN_MEMBERS_KEY = "vaultforge_admin_members_v1";
+const ADMIN_DELETED_MEMBER_IDS_KEY = "vaultforge_admin_deleted_member_ids_v1";
+const ADMIN_DELETED_INVESTOR_IDS_KEY = "vaultforge_admin_deleted_investor_ids_v1";
 const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
 const MEMBER_MESSAGES_KEY = "vaultforge_admin_member_broadcasts_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
@@ -321,6 +323,32 @@ function listText(value: unknown, fallback: string) {
   return clean(value, fallback);
 }
 
+
+function readStringSet(key: string) {
+  return new Set(readJson<string[]>(key, []));
+}
+
+function writeStringSet(key: string, values: Set<string>) {
+  writeJson(key, Array.from(values));
+}
+
+function markDeletedId(key: string, id: string) {
+  const set = readStringSet(key);
+  set.add(id);
+  writeStringSet(key, set);
+}
+
+function unmarkDeletedId(key: string, id: string) {
+  const set = readStringSet(key);
+  set.delete(id);
+  writeStringSet(key, set);
+}
+
+function isHardDeleted(key: string, id: string) {
+  return readStringSet(key).has(id);
+}
+
+
 function currentEmail() {
   if (!ok()) return "";
   let profile: any = {};
@@ -448,7 +476,9 @@ function readMembers(): MemberRecord[] {
   });
 
   const order: Record<MemberStatus, number> = { pending: 0, approved: 1, suspended: 2, denied: 3, deleted: 4 };
-  return Array.from(map.values()).sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
+  return Array.from(map.values())
+    .filter((member) => !isHardDeleted(ADMIN_DELETED_MEMBER_IDS_KEY, member.id))
+    .sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
 }
 
 function investorStatus(row: any): InvestorStatus {
@@ -526,7 +556,9 @@ function readInvestors(): InvestorRecord[] {
   }
 
   const order: Record<InvestorStatus, number> = { pending: 0, approved: 1, suspended: 2, denied: 3, deleted: 4 };
-  return Array.from(map.values()).sort((a, b) => order[a.status] - order[b.status] || a.company.localeCompare(b.company));
+  return Array.from(map.values())
+    .filter((investor) => !isHardDeleted(ADMIN_DELETED_INVESTOR_IDS_KEY, investor.id))
+    .sort((a, b) => order[a.status] - order[b.status] || a.company.localeCompare(b.company));
 }
 
 
@@ -600,14 +632,18 @@ function deleteControlledThreadForever(id: string) {
 }
 
 function saveInvestors(investors: InvestorRecord[], updatedInvestor?: InvestorRecord) {
-  writeJson(INVESTOR_LIST_KEY, investors);
+  const filtered = investors.filter((investor) => !isHardDeleted(ADMIN_DELETED_INVESTOR_IDS_KEY, investor.id));
+  setInvestors(filtered);
+  writeJson(INVESTOR_LIST_KEY, filtered);
+  setAdminActionTick((value) => value + 1);
   const currentSingle = readJson<any>(INVESTOR_APP_KEY, {});
   const singleEmail = lower(currentSingle?.email || currentSingle?.investorEmail || currentSingle?.investor_email);
   const viewerEmail = currentEmail();
-  const matching = updatedInvestor || investors.find((investor) => investor.email === singleEmail) || investors.find((investor) => investor.email === viewerEmail);
+  const matching = updatedInvestor || filtered.find((investor) => investor.email === singleEmail) || filtered.find((investor) => investor.email === viewerEmail);
   if (matching) writeJson(INVESTOR_APP_KEY, { ...currentSingle, ...matching });
   window.dispatchEvent(new Event("vaultforge-investor-change"));
   window.dispatchEvent(new Event("vaultforge-admin-investor-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-action-change"));
 }
 
 function recalcInvestorAccess(investor: InvestorRecord): InvestorRecord {
@@ -1348,7 +1384,7 @@ function MemberCard({ member, onOpen, onPatch, onDeleteForever }: { member: Memb
         <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked", approvedForPayment: false })} disabled={owner}>Deny</button>
         <button type="button" style={redBtn} onClick={() => onPatch({ status: "deleted", access: "locked" })} disabled={owner}>Delete Member</button>
         {member.status === "deleted" ? <button type="button" style={redBtn} onClick={onDeleteForever} disabled={owner}>Delete Forever</button> : null}
-        <button type="button" style={btn} onClick={() => onPatch({ status: "approved" })}>Restore</button>
+        <button type="button" style={btn} onClick={() => onPatch({ status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" })}>Restore</button>
       </div>
     </div>
   );
@@ -1386,7 +1422,7 @@ function InvestorCard({ investor, onPatch, onDeleteForever }: { investor: Invest
         <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked", approvedForPayment: false })}>Deny</button>
         <button type="button" style={redBtn} onClick={() => onPatch({ status: "deleted", access: "locked" })}>Delete Investor</button>
         {investor.status === "deleted" ? <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button> : null}
-        <button type="button" style={btn} onClick={() => onPatch({ status: "approved" })}>Restore</button>
+        <button type="button" style={btn} onClick={() => onPatch({ status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" })}>Restore</button>
         <Link href="/investor-payment" style={goldBtn}>Investor Payment</Link>
       </div>
     </div>
@@ -1903,6 +1939,7 @@ export default function AdminPage() {
   const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
   const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [adminActionTick, setAdminActionTick] = useState(0);
   const [profileQueueTick, setProfileQueueTick] = useState(0);
   const [deals, setDeals] = useState<RoomRecord[]>([]);
   const [pains, setPains] = useState<RoomRecord[]>([]);
@@ -1939,6 +1976,7 @@ export default function AdminPage() {
     window.addEventListener("vaultforge-admin-profile-queue-change", () => setProfileQueueTick((value) => value + 1));
     window.addEventListener("vaultforge-admin-message-change", refresh);
     window.addEventListener("vaultforge-investor-change", refresh);
+    window.addEventListener("vaultforge-admin-action-change", refresh);
     window.addEventListener("vaultforge-investor-request-change", refresh);
     window.addEventListener("vaultforge-investor-execution-request-change", refresh);
     window.addEventListener("vaultforge-investor-admin-message-change", refresh);
@@ -1951,6 +1989,7 @@ export default function AdminPage() {
       window.removeEventListener("vaultforge-admin-members-change", refresh);
       window.removeEventListener("vaultforge-admin-message-change", refresh);
       window.removeEventListener("vaultforge-investor-change", refresh);
+      window.removeEventListener("vaultforge-admin-action-change", refresh);
       window.removeEventListener("vaultforge-investor-request-change", refresh);
       window.removeEventListener("vaultforge-investor-execution-request-change", refresh);
       window.removeEventListener("vaultforge-investor-admin-message-change", refresh);
@@ -2023,12 +2062,15 @@ export default function AdminPage() {
       if (filter === "deleted") return member.status === "deleted";
       return true;
     });
-  }, [members, search, filter, stateFilter]);
+  }, [members, search, filter, stateFilter, adminActionTick]);
 
   function saveMembers(next: MemberRecord[]) {
-    setMembers(next);
-    writeJson(ADMIN_MEMBERS_KEY, next);
+    const filtered = next.filter((member) => !isHardDeleted(ADMIN_DELETED_MEMBER_IDS_KEY, member.id));
+    setMembers(filtered);
+    writeJson(ADMIN_MEMBERS_KEY, filtered);
+    setAdminActionTick((value) => value + 1);
     window.dispatchEvent(new Event("vaultforge-admin-members-change"));
+    window.dispatchEvent(new Event("vaultforge-admin-action-change"));
   }
 
   function patchMember(id: string, patch: Partial<MemberRecord>) {
@@ -2044,17 +2086,23 @@ export default function AdminPage() {
     }
     const next = members.map((member) => {
       if (member.id !== id) return member;
-      const pay = patch.paymentStatus || member.paymentStatus;
-      const status = patch.status || member.status;
+      const merged = { ...member, ...patch };
+      const pay = merged.paymentStatus;
+      const status = merged.status;
       const paidLike = pay === "paid" || pay === "comped" || pay === "trial";
-      const nextAccess: "active" | "locked" = status === "approved" && paidLike ? "active" : "locked";
-      return { ...member, ...patch, access: nextAccess, updatedAt: new Date().toISOString() };
+      const nextAccess: "active" | "locked" = patch.access || (status === "approved" && paidLike ? "active" : "locked");
+      return { ...merged, access: nextAccess, updatedAt: new Date().toISOString() };
     });
     saveMembers(next);
+    const updated = next.find((member) => member.id === id) || null;
+    setSelectedMember(updated);
+    if (patch.status === "deleted") setFilter("deleted");
   }
 
   function deleteMemberForever(id: string) {
+    markDeletedId(ADMIN_DELETED_MEMBER_IDS_KEY, id);
     saveMembers(members.filter((member) => member.id !== id));
+    setSelectedMember(null);
   }
 
   function patchInvestor(id: string, patch: Partial<InvestorRecord>) {
@@ -2079,8 +2127,8 @@ export default function AdminPage() {
   }
 
   function deleteInvestorForever(id: string) {
+    markDeletedId(ADMIN_DELETED_INVESTOR_IDS_KEY, id);
     const next = investors.filter((investor) => investor.id !== id);
-    setInvestors(next);
     saveInvestors(next);
   }
 
@@ -2393,6 +2441,17 @@ export default function AdminPage() {
               <div style={{ ...panel, marginTop: 14 }}>
                 <div style={eyebrow}>Delete / Delete Forever</div>
                 <p style={muted}>Delete Member moves the member into the deleted cleanup folder. Open Deleted filter to use Delete Forever. Owner/admin cannot be deleted.</p>
+                <div style={{ ...row, marginTop: 12 }}>
+                  <button type="button" style={btn} onClick={() => setFilter("deleted")}>Open Deleted Members</button>
+                  <button type="button" style={redBtn} onClick={() => {
+                    const ids = new Set(members.filter((member) => member.status === "deleted").map((member) => member.id));
+                    ids.forEach((id) => markDeletedId(ADMIN_DELETED_MEMBER_IDS_KEY, id));
+                    saveMembers(members.filter((member) => member.status !== "deleted"));
+                  }}>Clear Deleted Members</button>
+                  <button type="button" style={btn} onClick={() => {
+                    saveMembers(members.map((member) => member.status === "deleted" ? { ...member, status: "pending", access: "locked", updatedAt: new Date().toISOString() } : member));
+                  }}>Restore Deleted Members</button>
+                </div>
               </div>
             </Section>
 
@@ -2437,7 +2496,17 @@ export default function AdminPage() {
             </div>
             <div style={{ ...panel, marginTop: 18 }}>
               <div style={eyebrow}>Investor Access Structure</div>
-              <p style={muted}>$49 first month then $149/month. Separate investor login/application flow. Teaser Deal/Pain cards only. No direct member info exposed.</p>
+              <p style={muted}>$79 first month then $149/month. Separate investor login/application flow. Teaser Deal/Pain cards only. No direct member info exposed.</p>
+              <div style={{ ...row, marginTop: 12 }}>
+                <button type="button" style={redBtn} onClick={() => {
+                  const ids = new Set(investors.filter((investor) => investor.status === "deleted").map((investor) => investor.id));
+                  ids.forEach((id) => markDeletedId(ADMIN_DELETED_INVESTOR_IDS_KEY, id));
+                  saveInvestors(investors.filter((investor) => investor.status !== "deleted"));
+                }}>Clear Deleted Investors</button>
+                <button type="button" style={btn} onClick={() => {
+                  saveInvestors(investors.map((investor) => investor.status === "deleted" ? recalcInvestorAccess({ ...investor, status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked", updatedAt: new Date().toISOString() }) : investor));
+                }}>Restore Deleted Investors</button>
+              </div>
             </div>
             <div style={{ marginTop: 18 }}>
               <Section title="Controlled Intro Threads">
