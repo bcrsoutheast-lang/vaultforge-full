@@ -1220,7 +1220,7 @@ export default function MemberControlledThreadsPage() {
             <Link href="/command" style={goldBtn}>Member Command</Link>
             <Link href="/message-command" style={btn}>Message Command</Link>
             {isOwner ? <Link href="/investor-room" style={btn}>Investor Room</Link> : null}
-            {isOwner ? <Link href="/admin" style={btn}>Admin</Link> : null}
+            <Link href="/admin" style={btn}>Admin</Link>
           </div>
 
           <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
