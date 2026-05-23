@@ -2203,7 +2203,7 @@ export default function AdminPage() {
               const emailValue = lower(item?.email || profile?.email || profile?.investorEmail);
               const status = clean(item?.status || "pending_admin_approval");
               return (
-                <div key={`${kind}-${emailValue || index}`} className={status === "pending_admin_approval" ? "vf-pulse" : ""} style={status === "approved_payment_ready" ? goldPanel : panel}>
+                <div key={`${kind}-${emailValue || index}`} className={status === "pending_admin_approval" ? "vf-pulse" : ""} style={status === "approved_payment_ready" ? panel : panel}>
                   <div style={eyebrow}>{kind === "investor" ? "Investor Profile" : "Member Profile"} • {status}</div>
                   <h3 style={h3}>{clean(item?.name || profile?.name || profile?.contactName || "Profile")}</h3>
                   <p style={muted}>Company: {clean(item?.company || profile?.company || "Not listed")}</p>
