@@ -248,6 +248,8 @@ export default function VaultForgeCleanShell({
               </Link>
             ))}
 
+            <Link href="/admin" className="vf-btn dark">Admin</Link>
+
             <Link href="/" className="exit">Exit</Link>
           </nav>
         </header>
