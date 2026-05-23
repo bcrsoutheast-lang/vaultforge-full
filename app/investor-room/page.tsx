@@ -1296,7 +1296,6 @@ function MockPaymentButton({
   price: string;
 }) {
   const [tick, setTick] = useState(0);
-  const [mounted, setMounted] = useState(false);
   const status = paymentStatusFor(email, kind);
   const canPay = status.approved || email.toLowerCase() === OWNER_EMAIL.toLowerCase();
   const unlocked = status.paid || status.unlocked;
@@ -3082,6 +3081,7 @@ export default function InvestorRoomPage() {
   const [selectedExecutionLane, setSelectedExecutionLane] = useState<any>(null);
   const [messageAdminOpen, setMessageAdminOpen] = useState(false);
   const [tick, setTick] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
   function refresh() {
     setTick((value) => value + 1);
