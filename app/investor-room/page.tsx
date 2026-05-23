@@ -3252,7 +3252,7 @@ export default function InvestorRoomPage() {
         <div style={wrap}>
           <TopNav
             onMessageAdmin={() => setMessageAdminOpen(true)}
-            isOwner={isOwnerAccount(investor?.email)}
+            isOwner={String(investor?.email || browserValue("vf_email") || browserValue("vaultforge_investor_email") || "").toLowerCase() === OWNER_EMAIL.toLowerCase()}
           />
           <section style={hero}>
             <LogoBlock />
@@ -3293,7 +3293,7 @@ export default function InvestorRoomPage() {
       <div style={wrap}>
         <TopNav
           onMessageAdmin={() => setMessageAdminOpen(true)}
-          isOwner={isOwnerAccount(investor?.email)}
+          isOwner={String(investor?.email || browserValue("vf_email") || browserValue("vaultforge_investor_email") || "").toLowerCase() === OWNER_EMAIL.toLowerCase()}
         />
         <TickerRibbon />
 
