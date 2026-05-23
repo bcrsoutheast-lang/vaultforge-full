@@ -597,7 +597,8 @@ export default function AdminPage() {
           <div style={eyebrow}>VaultForge Admin</div>
           <div style={{ ...row, marginTop: 12 }}>
             <Link href="/" style={btn}>Home</Link>
-            <Link href="/member-controlled-threads" style={btn}>Members</Link>
+            <Link href="/member-controlled-threads" style={goldBtn}>Members Area</Link>
+            <Link href="/command" style={btn}>Member Command</Link>
             <Link href="/investor-room" style={btn}>Investor Room</Link>
             <button type="button" style={goldBtn} onClick={refresh}>Refresh</button>
             <Link href="/logout" style={redBtn}>Logout</Link>
@@ -608,6 +609,12 @@ export default function AdminPage() {
           <div style={eyebrow}>Owner Control Center</div>
           <h1 style={h1}>Simple admin.</h1>
           <p style={sub}>Approve profile sends the user to Payment / Access. When payment is made, admin gets a payment alert and the card moves to Active Users.</p>
+
+          <div style={{ ...row, marginTop: 18 }}>
+            <Link href="/member-controlled-threads" style={goldBtn}>Open Members Area</Link>
+            <Link href="/command" style={btn}>Open Member Command</Link>
+            <Link href="/investor-room" style={btn}>Open Investor Room</Link>
+          </div>
         </section>
 
         {notice ? (
