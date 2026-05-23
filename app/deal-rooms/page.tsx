@@ -228,80 +228,116 @@ function stateMap() {
   return map;
 }
 
-function allRooms(kind: RoomKind): Room[] {
-  if (!ok()) return [];
+function canonicalKey(kind: RoomKind) {
+  return kind === "deal" ? "vaultforge_canonical_deal_rooms_v1" : "vaultforge_canonical_pain_rooms_v1";
+}
+
+function directKeys(kind: RoomKind, id: string) {
+  return kind === "deal"
+    ? [`vaultforge_deal_room_${id}`, `vaultforge_clean_deal_room_${id}`, `vf_deal_room_${id}`]
+    : [`vaultforge_pain_room_${id}`, `vaultforge_clean_pain_room_${id}`, `vf_pain_room_${id}`];
+}
+
+function readCanonicalRooms(kind: RoomKind) {
+  return arr<Room>(canonicalKey(kind)).map((row) => ({ ...row, id: rid(row), roomId: rid(row) })).filter((room) => Boolean(rid(room)));
+}
+
+function legacyRooms(kind: RoomKind) {
+  if (!ok()) return [] as Room[];
   const out: Room[] = [];
   const seen = new Set<string>();
 
-  for (const key of keysFor(kind)) {
-    for (const row of arr<Room>(key)) {
-      const id = rid(row);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push({ ...row, id, roomId: id });
-    }
-  }
+  const add = (row: any) => {
+    if (!row || typeof row !== "object") return;
+    const id = rid(row);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    out.push({ ...row, id, roomId: id });
+  };
+
+  for (const key of keysFor(kind)) arr<Room>(key).forEach(add);
 
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i) || "";
+    if (key === canonicalKey(kind)) continue;
     const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
     if (!match) continue;
     const value = j<any>(localStorage.getItem(key), null);
-
-    if (Array.isArray(value)) {
-      for (const row of value) {
-        const id = rid(row);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        out.push({ ...row, id, roomId: id });
-      }
-    } else if (value && typeof value === "object") {
-      const id = rid(value);
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        out.push({ ...value, id, roomId: id });
-      }
-    }
+    if (Array.isArray(value)) value.forEach(add);
+    else add(value);
   }
 
+  return out;
+}
+
+function allRooms(kind: RoomKind): Room[] {
+  if (!ok()) return [];
   const states = stateMap();
-  return out
-    .map((room) => {
-      const id = rid(room);
-      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
-    })
-    .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+  const map = new Map<string, Room>();
+
+  legacyRooms(kind).forEach((room) => {
+    const id = rid(room);
+    const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+    map.set(id, { ...room, roomState: state, cleanupState: state, stateStatus: state });
+  });
+
+  readCanonicalRooms(kind).forEach((room) => {
+    const id = rid(room);
+    const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+    map.set(id, { ...(map.get(id) || {}), ...room, roomState: state, cleanupState: state, stateStatus: state });
+  });
+
+  const rooms = Array.from(map.values()).sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+  saveSafe(canonicalKey(kind), rooms);
+  return rooms;
 }
 
 function getRoom(kind: RoomKind, id: string) {
+  const states = stateMap();
+
+  for (const key of directKeys(kind, id)) {
+    const found = j<any | null>(localStorage.getItem(key), null);
+    if (found) {
+      const state = states[id] || states[`${kind}:${id}`] || roomState(found);
+      return { ...found, id, roomId: id, roomState: state, cleanupState: state, stateStatus: state };
+    }
+  }
+
   return allRooms(kind).find((room) => rid(room) === id) || null;
 }
 
-function readMap() {
-  return ok() ? j<Record<string, string>>(localStorage.getItem(READ_KEY), {}) : {};
+function purgeRoomCopies(kind: RoomKind, id: string, next?: Room) {
+  if (!ok() || !id) return;
+
+  for (const key of keysFor(kind)) {
+    const rows = arr<Room>(key).filter((row) => rid(row) !== id);
+    if (next) saveSafe(key, [next, ...rows]);
+    else saveSafe(key, rows);
+  }
+
+  for (const key of directKeys(kind, id)) {
+    if (next) saveSafe(key, next);
+    else localStorage.removeItem(key);
+  }
 }
 
-function unreadRooms(kind: RoomKind, rooms: Room[]) {
-  const reads = readMap();
-  return rooms.filter((room) => {
-    const id = rid(room);
-    if (roomState(room) !== "active") return false;
-    return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
-  });
-}
-
-function markRead(kind: RoomKind, room: Room) {
+function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
   if (!ok()) return;
   const id = rid(room);
   if (!id) return;
-  const reads = readMap();
-  reads[id] = new Date().toISOString();
-  reads[`${kind}:${id}`] = new Date().toISOString();
-  localStorage.setItem(READ_KEY, JSON.stringify(reads));
-  const next = { ...room, alertRead: true, viewedAt: new Date().toISOString() };
-  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
-  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
+
+  const next: Room = { ...room, id, roomId: id, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
+  const states = stateMap();
+  states[id] = state;
+  states[`${kind}:${id}`] = state;
+  STATE_KEYS.forEach((key) => saveSafe(key, states));
+
+  const current = allRooms(kind).filter((item) => rid(item) !== id);
+  saveSafe(canonicalKey(kind), [next, ...current]);
+  purgeRoomCopies(kind, id, next);
+
+  window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
 }
 
 function firstPhoto(room: Room) {
@@ -637,6 +673,9 @@ function RoomCard({ room, kind, pulse = false }: { room: Room; kind: RoomKind; p
       <div style={{ ...row, marginTop: 16 }}>
       <Link href={href} style={goldBtn}>Open Room</Link>
       <Link href={`/messages?type=${kind}&room=${encodeURIComponent(rid(room))}`} style={btn}>Messages</Link>
+      <button type="button" style={btn} onClick={() => setRoomState(kind, room, "saved")}>Save</button>
+      <button type="button" style={btn} onClick={() => setRoomState(kind, room, "archived")}>Archive</button>
+      <button type="button" style={redBtn} onClick={() => setRoomState(kind, room, "deleted")}>Delete</button>
     </div>
   </div>;
 }
