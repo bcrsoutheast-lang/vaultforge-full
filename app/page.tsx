@@ -3,441 +3,193 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type Countdown = {
-  expired: boolean;
-  days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
+type MemberStatus = "pending" | "approved" | "denied" | "suspended" | "deleted";
+type PaymentStatus = "unpaid" | "paid" | "comped" | "trial" | "past_due";
+type AdminFilter = "all" | "new" | "pending" | "approvedUnpaid" | "paid" | "active" | "locked" | "comped" | "blocked" | "deleted";
+type StateCode = "GA" | "TN" | "AL" | "FL" | "NC" | "SC" | "TX";
+type StateFilter = "all" | "notListed" | StateCode;
+type RoomKind = "deal" | "pain";
+type RoomView = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
+type QueueTab = "overview" | "members" | "investors" | "dealRequests" | "painRequests" | "rooms" | "saved" | "archived" | "deleted";
+
+type MemberRecord = {
+  id: string;
+  email: string;
+  name: string;
+  company: string;
+  phone: string;
+  memberType: string;
+  baseState: string;
+  operatingStates: string;
+  status: MemberStatus;
+  paymentStatus: PaymentStatus;
+  access: "locked" | "active";
+  approvedForPayment: boolean;
+  createdAt: string;
+  updatedAt: string;
+  raw?: any;
 };
 
+type InvestorStatus = "pending" | "approved" | "denied" | "suspended" | "deleted";
+type InvestorPaymentStatus = "unpaid" | "paid" | "comped" | "trial" | "past_due";
+
+type InvestorRecord = {
+  id: string;
+  email: string;
+  contactName: string;
+  company: string;
+  phone: string;
+  statesInterested: string;
+  assetTypes: string;
+  minDeal: string;
+  maxDeal: string;
+  yearlyVolume: string;
+  monthlyVolume: string;
+  buyingStrategy: string;
+  closeSpeed: string;
+  proofFunds: boolean;
+  directBuyer: string;
+  fundingNeeded: string;
+  openToJV: string;
+  notes: string;
+  status: InvestorStatus;
+  paymentStatus: InvestorPaymentStatus;
+  approvedForPayment: boolean;
+  access: "locked" | "active";
+  createdAt: string;
+  updatedAt: string;
+  raw?: any;
+};
+
+type InvestorRequest = {
+  id: string;
+  kind: string;
+  itemId: string;
+  title: string;
+  state: string;
+  investorEmail: string;
+  investorCompany: string;
+  investorName: string;
+  investorPhotoUrl?: string;
+  investorProfile?: any;
+  message: string;
+  status: string;
+  createdAt: string;
+};
+
+type InvestorExecutionRequest = {
+  id: string;
+  requestType: string;
+  requestTitle: string;
+  kind: string;
+  itemId: string;
+  title: string;
+  state: string;
+  investorEmail: string;
+  investorCompany: string;
+  investorName: string;
+  investorPhotoUrl?: string;
+  investorProfile?: any;
+  notes?: string;
+  message: string;
+  status: string;
+  createdAt: string;
+};
+
+type InvestorAdminMessage = {
+  id: string;
+  topic: string;
+  subject?: string;
+  body?: string;
+  message?: string;
+  status: string;
+  priority?: string;
+  investorEmail: string;
+  investorCompany: string;
+  investorName: string;
+  investorPhotoUrl?: string;
+  investorProfile?: any;
+  createdAt: string;
+};
+
+type RoomRecord = {
+  id: string;
+  title: string;
+  kind: RoomKind;
+  state: string;
+  status: string;
+  saved: boolean;
+  archived: boolean;
+  deleted: boolean;
+  sold: boolean;
+  resolved: boolean;
+  source: string;
+};
+
+type AdminMessage = {
+  id: string;
+  topic: string;
+  body: string;
+  email: string;
+  status: string;
+  priority: string;
+  createdAt: string;
+};
+
+type RoomSelection = { title: string; rooms: RoomRecord[] } | null;
+
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-const FOUNDER_DEADLINE = new Date("2026-06-01T23:59:59-04:00").getTime();
+const ADMIN_MEMBERS_KEY = "vaultforge_admin_members_v1";
+const ADMIN_DELETED_MEMBER_IDS_KEY = "vaultforge_admin_deleted_member_ids_v1";
+const ADMIN_DELETED_INVESTOR_IDS_KEY = "vaultforge_admin_deleted_investor_ids_v1";
+const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
+const MEMBER_MESSAGES_KEY = "vaultforge_admin_member_broadcasts_v1";
+const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
+const INVESTOR_LIST_KEY = "vaultforge_investor_applications_v1";
+const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
+const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
+const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
+const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
+const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
+const ADMIN_PROFILE_QUEUE_KEY = "vaultforge_admin_profile_approval_queue_v1";
+const MOCK_APPROVALS_KEY = "vaultforge_mock_access_approvals_v1";
 
-const founderRoles = [
-  { key: "buyers", title: "Buyers / Acquisitions", cap: 20, aliases: ["buyer", "buyers", "acquisition", "acquisitions"] },
-  { key: "lenders", title: "Lenders / Debt Capital", cap: 12, aliases: ["lender", "lenders", "debt", "private lender", "hard money"] },
-  { key: "operators", title: "Operators / Execution", cap: 15, aliases: ["operator", "operators", "asset manager", "execution"] },
-  { key: "contractors", title: "Contractors / Construction", cap: 15, aliases: ["contractor", "contractors", "construction", "builder", "rehab"] },
-  { key: "developers", title: "Developers", cap: 10, aliases: ["developer", "developers", "development"] },
-  { key: "wholesalers", title: "Wholesalers / Deal Sourcers", cap: 15, aliases: ["wholesaler", "wholesalers", "deal sourcer", "sourcer"] },
-  { key: "capital", title: "Capital Partners / Equity", cap: 8, aliases: ["capital", "equity", "partner", "lp", "private capital"] },
-  { key: "realtors", title: "Disposition / Realtors", cap: 8, aliases: ["realtor", "agent", "disposition", "brokerage"] },
-  { key: "legal", title: "Legal / Title", cap: 5, aliases: ["legal", "title", "attorney", "lawyer", "closing"] },
-  { key: "specialists", title: "Specialists / Wildcard", cap: 12, aliases: ["specialist", "insurance", "architect", "engineer", "surveyor", "permit", "property manager"] },
+const STATE_CODES: StateCode[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
+
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"];
+const MEMBER_SOURCE_KEYS = [
+  "vaultforge_admin_members_v1",
+  "vaultforge_member_directory_v1",
+  "vaultforge_members",
+  "vaultforge_member_profiles",
+  "vaultforge_profiles",
+  "vf_profiles",
+  "members",
+  "profiles",
 ];
 
-const tickerItems = [
-  "PRIVATE INTELLIGENCE NETWORK",
-  "PAIN → SIGNAL → ROUTING → EXECUTION",
-  "APPROVED MEMBERS ONLY",
-  "DEALS ROUTED BY FIT",
-  "PAIN SIGNALS ROUTED BY NEED",
-  "PROFILE DEPTH IMPROVES ROUTING",
-  "MEMBER-TO-MEMBER EXECUTION",
-  "INVESTOR ACCESS IS SEPARATE",
-  "NOT A LISTINGS SITE",
-  "FOUNDING ALLOCATIONS CLOSE JUNE 1",
+const DEAL_ROOM_KEYS = [
+  "vaultforge_clean_deal_rooms",
+  "vaultforge_deal_rooms",
+  "vaultforge_rooms_deals",
+  "vf_deal_rooms",
+  "deal_rooms",
+  "vaultforge_saved_rooms_v1",
+  "vaultforge_archived_rooms_v1",
+  "vaultforge_deleted_rooms_v1",
 ];
 
-const painExamples = [
-  "Distressed seller pressure",
-  "Capital gap",
-  "Stalled construction",
-  "Operator needed",
-  "Contractor failure",
-  "Title / legal issue",
-  "Permit or city issue",
-  "Lender exit",
-  "Emergency sale",
-  "Partnership breakdown",
-  "Vacant property pressure",
-  "Portfolio liquidation",
-];
-
-const OPERATING_STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
-
-const sampleDealPostings = [
-  {
-    state: "GA",
-    city: "Cartersville",
-    type: "Deal Opportunity",
-    headline: "Residential value-add near strong contractor demand",
-    teaser: "Limited teaser: residential opportunity, buyer/operator fit, execution help may be needed.",
-    need: "Buyer, lender, contractor review",
-  },
-  {
-    state: "GA",
-    city: "Atlanta",
-    type: "Deal Opportunity",
-    headline: "Infill opportunity with capital partner angle",
-    teaser: "Limited teaser: opportunity needs buyer review and possible JV structure.",
-    need: "Buyer, lender, JV partner",
-  },
-  {
-    state: "TN",
-    city: "Chattanooga",
-    type: "Deal Opportunity",
-    headline: "Small-balance opportunity with fast-close angle",
-    teaser: "Limited teaser: potential acquisition target with private details locked inside.",
-    need: "Capital partner or buyer review",
-  },
-  {
-    state: "FL",
-    city: "Jacksonville",
-    type: "Deal Opportunity",
-    headline: "Rental / flip candidate needing underwriting",
-    teaser: "Limited teaser: deal room shows strategy, market, and request lane after access.",
-    need: "Investor review and title/closing support",
-  },
-  {
-    state: "TX",
-    city: "Dallas",
-    type: "Deal Opportunity",
-    headline: "Operator-heavy opportunity needing execution team",
-    teaser: "Limited teaser: project needs people who can move fast and coordinate execution.",
-    need: "Operator, lender, contractor",
-  },
-  {
-    state: "AL",
-    city: "Birmingham",
-    type: "Deal Opportunity",
-    headline: "Light rehab with disposition lane",
-    teaser: "Limited teaser: clean execution path depends on buyer and contractor fit.",
-    need: "Buyer, contractor, disposition",
-  },
-  {
-    state: "NC",
-    city: "Raleigh",
-    type: "Deal Opportunity",
-    headline: "Rental acquisition needing underwriting",
-    teaser: "Limited teaser: investor can request numbers and owner contact through VaultForge.",
-    need: "Investor review, lender",
-  },
-  {
-    state: "SC",
-    city: "Charleston",
-    type: "Deal Opportunity",
-    headline: "Small multifamily review lane",
-    teaser: "Limited teaser: deal needs underwriting, capital, and operator look.",
-    need: "Capital, operator",
-  },
-];
-
-const samplePainPostings = [
-  {
-    state: "GA",
-    city: "Atlanta",
-    type: "Pain Signal",
-    headline: "Capital gap before closing window",
-    teaser: "Limited teaser: investor/member may solve with funding, JV, or structured terms.",
-    need: "Private capital or hard money",
-  },
-  {
-    state: "NC",
-    city: "Charlotte",
-    type: "Pain Signal",
-    headline: "Contractor stalled rehab timeline",
-    teaser: "Limited teaser: project needs execution help before pressure turns into loss.",
-    need: "Contractor / operator",
-  },
-  {
-    state: "SC",
-    city: "Greenville",
-    type: "Pain Signal",
-    headline: "Title/closing issue blocking deal movement",
-    teaser: "Limited teaser: closing problem requires the right member lane.",
-    need: "Title / attorney / closing help",
-  },
-  {
-    state: "AL",
-    city: "Birmingham",
-    type: "Pain Signal",
-    headline: "Owner needs fast disposition path",
-    teaser: "Limited teaser: problem may turn into acquisition, referral, or buyer match.",
-    need: "Buyer / disposition partner",
-  },
-  {
-    state: "TN",
-    city: "Nashville",
-    type: "Pain Signal",
-    headline: "Seller deadline creating fast-close pressure",
-    teaser: "Limited teaser: right buyer/capital route can solve the pressure.",
-    need: "Cash buyer or private lender",
-  },
-  {
-    state: "FL",
-    city: "Orlando",
-    type: "Pain Signal",
-    headline: "Insurance issue delaying project exit",
-    teaser: "Limited teaser: needs insurance/risk help before closing path clears.",
-    need: "Insurance, title, operator",
-  },
-  {
-    state: "TX",
-    city: "Austin",
-    type: "Pain Signal",
-    headline: "Operator needed for stalled project",
-    teaser: "Limited teaser: project needs local execution and progress control.",
-    need: "Operator, boots on ground",
-  },
-];
-
-
-const publicDealWindows = [
-  {
-    state: "GA",
-    assetType: "Residential",
-    city: "Cartersville",
-    photo: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=80",
-    title: "Residential value-add near job growth corridor",
-    beds: "3",
-    baths: "2",
-    price: "$184,000",
-    fixAmount: "$38,000",
-    arv: "$285,000",
-    teaser: "Limited outside view. Full address, owner/member contact, photos, documents, and route thread unlock inside.",
-  },
-  {
-    state: "GA",
-    assetType: "Commercial",
-    city: "Atlanta",
-    photo: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80",
-    title: "Small commercial reposition with tenant upside",
-    beds: "N/A",
-    baths: "2 restrooms",
-    price: "$610,000",
-    fixAmount: "$95,000",
-    arv: "$850,000",
-    teaser: "Limited outside view. Full rent roll, owner route, member notes, and execution lane unlock inside.",
-  },
-  {
-    state: "TN",
-    assetType: "Residential",
-    city: "Chattanooga",
-    photo: "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=900&q=80",
-    title: "Fast-close residential opportunity",
-    beds: "4",
-    baths: "2",
-    price: "$215,000",
-    fixAmount: "$42,000",
-    arv: "$335,000",
-    teaser: "Buyer/lender lane available inside after approved access.",
-  },
-  {
-    state: "FL",
-    assetType: "Land",
-    city: "Jacksonville",
-    photo: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=900&q=80",
-    title: "Infill land opportunity needing entitlement review",
-    beds: "Land",
-    baths: "N/A",
-    price: "$129,000",
-    fixAmount: "Entitlement",
-    arv: "$235,000",
-    teaser: "Zoning, member notes, and route thread hidden outside.",
-  },
-  {
-    state: "NC",
-    assetType: "Residential",
-    city: "Charlotte",
-    photo: "https://images.unsplash.com/photo-1598228723793-52759bba239c?auto=format&fit=crop&w=900&q=80",
-    title: "Rental conversion with operator need",
-    beds: "3",
-    baths: "1.5",
-    price: "$198,000",
-    fixAmount: "$31,000",
-    arv: "$292,000",
-    teaser: "Full underwriting and owner/member contact available inside.",
-  },
-  {
-    state: "SC",
-    assetType: "Commercial",
-    city: "Greenville",
-    photo: "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=80",
-    title: "Mixed-use small bay with local operator angle",
-    beds: "N/A",
-    baths: "2 restrooms",
-    price: "$475,000",
-    fixAmount: "$70,000",
-    arv: "$675,000",
-    teaser: "Inside room shows execution lane, owner request, and route options.",
-  },
-  {
-    state: "TX",
-    assetType: "Land",
-    city: "Dallas",
-    photo: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80",
-    title: "Development pad needing capital partner",
-    beds: "Land",
-    baths: "N/A",
-    price: "$325,000",
-    fixAmount: "Site work",
-    arv: "$540,000",
-    teaser: "Capital/JV route hidden until approved access.",
-  },
-  {
-    state: "AL",
-    assetType: "Residential",
-    city: "Birmingham",
-    photo: "https://images.unsplash.com/photo-1576941089067-2de3c901e126?auto=format&fit=crop&w=900&q=80",
-    title: "Light rehab with disposition lane",
-    beds: "3",
-    baths: "2",
-    price: "$122,000",
-    fixAmount: "$24,000",
-    arv: "$195,000",
-    teaser: "Buyer, contractor, and title lane available inside.",
-  },
-];
-
-const publicPainWindows = [
-  {
-    state: "GA",
-    city: "Atlanta",
-    photo: "https://images.unsplash.com/photo-1582407947304-fd86f028f716?auto=format&fit=crop&w=900&q=80",
-    title: "Capital gap before closing window",
-    category: "Funding Gap",
-    urgency: "Closing Risk",
-    assetType: "Residential",
-    summary: "Borrower needs a fast capital lane before contract pressure turns into a lost opportunity.",
-    need: "Private lender / hard money / JV capital",
-  },
-  {
-    state: "GA",
-    city: "Marietta",
-    photo: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80",
-    title: "Contractor stalled rehab schedule",
-    category: "Execution Problem",
-    urgency: "Time Sensitive",
-    assetType: "Residential",
-    summary: "Project is behind schedule and needs a reliable contractor/operator lane.",
-    need: "Contractor / boots on ground / project operator",
-  },
-  {
-    state: "TN",
-    city: "Nashville",
-    photo: "https://images.unsplash.com/photo-1605146769289-440113cc3d00?auto=format&fit=crop&w=900&q=80",
-    title: "Seller deadline creating fast-close pressure",
-    category: "Distressed Seller",
-    urgency: "Urgent",
-    assetType: "Residential",
-    summary: "Owner needs a fast close or creative structure before the window closes.",
-    need: "Cash buyer / lender / disposition partner",
-  },
-  {
-    state: "FL",
-    city: "Orlando",
-    photo: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=900&q=80",
-    title: "Insurance issue delaying project exit",
-    category: "Insurance / Closing",
-    urgency: "Time Sensitive",
-    assetType: "Commercial",
-    summary: "Insurance issue is blocking the exit path and needs a member solution.",
-    need: "Insurance / title / closing support",
-  },
-  {
-    state: "NC",
-    city: "Charlotte",
-    photo: "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=900&q=80",
-    title: "Operator needed for rental conversion",
-    category: "Operator Needed",
-    urgency: "Normal",
-    assetType: "Residential",
-    summary: "Deal has potential but needs local execution and management fit.",
-    need: "Operator / property manager",
-  },
-  {
-    state: "SC",
-    city: "Charleston",
-    photo: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=900&q=80",
-    title: "Title issue blocking closing movement",
-    category: "Title / Legal",
-    urgency: "Closing Risk",
-    assetType: "Land",
-    summary: "Closing cannot move until title issue is reviewed by the right lane.",
-    need: "Attorney / title / closing help",
-  },
-  {
-    state: "TX",
-    city: "Austin",
-    photo: "https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=900&q=80",
-    title: "Development project needs capital partner",
-    category: "Capital Gap",
-    urgency: "Time Sensitive",
-    assetType: "Land",
-    summary: "Site has potential but needs capital and execution structure.",
-    need: "Equity / JV / private lender",
-  },
-  {
-    state: "AL",
-    city: "Birmingham",
-    photo: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=80",
-    title: "Owner needs fast disposition path",
-    category: "Emergency Exit",
-    urgency: "Urgent",
-    assetType: "Residential",
-    summary: "Owner pressure may turn into a buyer match, wholesale lane, or referral route.",
-    need: "Buyer / disposition partner",
-  },
-];
-
-
-function stateCounts(rows: any[]) {
-  return OPERATING_STATES.map((state) => ({
-    state,
-    count: rows.filter((row) => row.state === state).length,
-  }));
-}
-
-function liveMemberCounts() {
-  const profiles = allProfiles();
-  return OPERATING_STATES.map((state) => {
-    const realCount = profiles.filter((profile: any) => {
-      const based = String(profile?.basedState || profile?.state || profile?.homeState || "").toUpperCase();
-      const states = Array.isArray(profile?.statesOperated || profile?.states_served || profile?.operatingStates)
-        ? (profile?.statesOperated || profile?.states_served || profile?.operatingStates)
-        : [];
-      return based === state || states.map((x: any) => String(x).toUpperCase()).includes(state);
-    }).length;
-
-    const preview: Record<string, number> = { GA: 6, TN: 3, AL: 2, FL: 4, NC: 3, SC: 2, TX: 4 };
-    return { state, count: Math.max(realCount, preview[state] || 0) };
-  });
-}
-
-function liveInvestorCounts() {
-  const rows: any[] = [];
-  const keys = ["vaultforge_investor_application_v1", "vaultforge_investor_applications_v1", "vaultforge_investors_v1", "vf_investors"];
-  for (const key of keys) {
-    const parsed = readJson<any>(key, []);
-    if (Array.isArray(parsed)) rows.push(...parsed.filter(Boolean));
-    else if (parsed && typeof parsed === "object") rows.push(parsed);
-  }
-
-  return OPERATING_STATES.map((state) => {
-    const realCount = rows.filter((profile: any) => {
-      const states = Array.isArray(profile?.statesInterested || profile?.states || profile?.markets)
-        ? (profile?.statesInterested || profile?.states || profile?.markets)
-        : String(profile?.state || "").split(",");
-      return states.map((x: any) => String(x).trim().toUpperCase()).includes(state);
-    }).length;
-    const preview: Record<string, number> = { GA: 4, TN: 2, AL: 1, FL: 3, NC: 2, SC: 1, TX: 3 };
-    return { state, count: Math.max(realCount, preview[state] || 0) };
-  });
-}
-
-const logoCandidates = [
-  "/vaultforge-logo.png",
-  "/VaultForge-logo.png",
-  "/vaultforge-logo.jpg",
-  "/vaultforge-logo.jpeg",
-  "/logo.png",
-  "/logo.jpg",
-  "/vf-logo.png",
-  "/VF-logo.png",
-  "/vaultforge.png",
-  "/VaultForge.png",
+const PAIN_ROOM_KEYS = [
+  "vaultforge_clean_pain_rooms_v2",
+  "vaultforge_clean_pain_rooms_v1",
+  "vaultforge_clean_pain_rooms",
+  "vaultforge_pain_rooms",
+  "vaultforge_rooms_pain",
+  "vf_pain_rooms",
+  "pain_rooms",
+  "vaultforge_saved_rooms_v1",
+  "vaultforge_archived_rooms_v1",
+  "vaultforge_deleted_rooms_v1",
 ];
 
 function ok() {
@@ -446,7 +198,6 @@ function ok() {
 
 function readJson<T>(key: string, fallback: T): T {
   if (!ok()) return fallback;
-
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
@@ -455,597 +206,2502 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
+
+function readProfileApprovalQueue() {
+  return readJson<any[]>(ADMIN_PROFILE_QUEUE_KEY, []);
+}
+
+function writeProfileApprovalQueue(rows: any[]) {
+  writeJson(ADMIN_PROFILE_QUEUE_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-admin-profile-queue-change"));
+}
+
+function writeMockAccess(email: string, kind: "member" | "investor", patch: any) {
+  const cleanEmail = lower(email);
+  const approvals = readJson<Record<string, any>>(MOCK_APPROVALS_KEY, {});
+  const key = `${kind}:${cleanEmail}`;
+  approvals[key] = {
+    ...(approvals[key] || {}),
+    email: cleanEmail,
+    kind,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  writeJson(MOCK_APPROVALS_KEY, approvals);
+  window.dispatchEvent(new Event("vaultforge-mock-access-change"));
+  window.dispatchEvent(new Event("vaultforge-access-change"));
+}
+
+function approveProfileForPayment(row: any) {
+  const email = lower(row?.email || row?.profile?.email || row?.profile?.investorEmail);
+  const kind = lower(row?.type) === "investor" ? "investor" : "member";
+  if (!email) {
+    window.alert("No email found on this profile.");
+    return;
+  }
+
+  const updatedAt = new Date().toISOString();
+  const queue = readProfileApprovalQueue().map((item) => {
+    const itemEmail = lower(item?.email || item?.profile?.email || item?.profile?.investorEmail);
+    if (itemEmail !== email || lower(item?.type) !== kind) return item;
+    return {
+      ...item,
+      status: "approved_payment_ready",
+      approved: true,
+      adminApproved: true,
+      approvedForPayment: true,
+      paymentStatus: "ready",
+      accessStatus: "payment_ready",
+      updatedAt,
+    };
+  });
+  writeProfileApprovalQueue(queue);
+
+  writeMockAccess(email, kind, {
+    approved: true,
+    adminApproved: true,
+    approvedForPayment: true,
+    paid: false,
+    unlocked: false,
+    paymentStatus: "ready",
+    accessStatus: "payment_ready",
+  });
+
+  if (kind === "investor") {
+    const current = readJson<any>(INVESTOR_APP_KEY, {});
+    if (lower(current?.email || current?.investorEmail) === email) {
+      writeJson(INVESTOR_APP_KEY, {
+        ...current,
+        approved: true,
+        adminApproved: true,
+        approvedForPayment: true,
+        paymentStatus: "ready",
+        accessStatus: "payment_ready",
+        updatedAt,
+      });
+    }
+  }
+
+  window.alert(`${kind === "investor" ? "Investor" : "Member"} approved. Payment button is now ready and should pulse.`);
+}
+
+
+function writeJson(key: string, value: unknown) {
+  if (!ok()) return;
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function clean(value: unknown, fallback = "") {
+  const text = String(value || "").trim();
+  return text && text !== "undefined" && text !== "null" ? text : fallback;
 }
 
 function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function allProfiles() {
-  if (!ok()) return [];
-
-  const keys = [
-    "vaultforge_profiles",
-    "vaultforge_member_profiles",
-    "vaultforge_admin_members_v1",
-    "vf_profiles",
-    "members",
-    "profiles",
-  ];
-
-  const rows: any[] = [];
-
-  for (const key of keys) {
-    const parsed = readJson<unknown>(key, []);
-    if (Array.isArray(parsed)) rows.push(...parsed.filter(Boolean));
-    else if (parsed && typeof parsed === "object") rows.push(...Object.values(parsed as Record<string, unknown>).filter(Boolean));
-  }
-
-  const single = readJson<any>("vaultforge_profile", null);
-  if (single && typeof single === "object" && !Array.isArray(single)) rows.push(single);
-
-  const seen = new Set<string>();
-  return rows.filter((profile: any, index) => {
-    const id = lower(profile?.email || profile?.memberEmail || profile?.id || `profile-${index}`);
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-}
-
-function roleText(profile: any) {
-  return [
-    profile?.memberType,
-    profile?.member_type,
-    profile?.role,
-    profile?.category,
-    profile?.type,
-    profile?.businessType,
-    profile?.business_type,
-    profile?.strategy,
-    profile?.strategies,
-    profile?.services,
-    profile?.serviceType,
-    profile?.service_type,
-  ]
-    .flat()
-    .map((item) => String(item || "").toLowerCase())
-    .join(" ");
-}
-
-function founderCounts() {
-  const profiles = allProfiles();
-
-  return founderRoles.map((role) => {
-    const filled = profiles.filter((profile) => {
-      const text = roleText(profile);
-      return role.aliases.some((alias) => text.includes(alias));
-    }).length;
-
-    return {
-      ...role,
-      filled,
-      remaining: Math.max(role.cap - filled, 0),
-      full: filled >= role.cap,
-    };
-  });
-}
-
-function countdown(): Countdown {
-  const diff = FOUNDER_DEADLINE - Date.now();
-
-  if (diff <= 0) {
-    return { expired: true, days: 0, hours: 0, minutes: 0, seconds: 0 };
-  }
-
-  return {
-    expired: false,
-    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-    minutes: Math.floor((diff / (1000 * 60)) % 60),
-    seconds: Math.floor((diff / 1000) % 60),
+function stateCode(value: unknown) {
+  const raw = clean(value).toUpperCase();
+  const map: Record<string, StateCode> = {
+    GEORGIA: "GA",
+    TENNESSEE: "TN",
+    ALABAMA: "AL",
+    FLORIDA: "FL",
+    "NORTH CAROLINA": "NC",
+    "SOUTH CAROLINA": "SC",
+    TEXAS: "TX",
   };
+  if (STATE_CODES.includes(raw as StateCode)) return raw;
+  return map[raw] || "";
 }
+
+function listText(value: unknown, fallback: string) {
+  if (Array.isArray(value)) {
+    const joined = value.map((item) => clean(item)).filter(Boolean).join(" • ");
+    return joined || fallback;
+  }
+  return clean(value, fallback);
+}
+
+
+function readStringSet(key: string) {
+  return new Set(readJson<string[]>(key, []));
+}
+
+function writeStringSet(key: string, values: Set<string>) {
+  writeJson(key, Array.from(values));
+}
+
+function markDeletedId(key: string, id: string) {
+  const set = readStringSet(key);
+  set.add(id);
+  writeStringSet(key, set);
+}
+
+function unmarkDeletedId(key: string, id: string) {
+  const set = readStringSet(key);
+  set.delete(id);
+  writeStringSet(key, set);
+}
+
+function isHardDeleted(key: string, id: string) {
+  return readStringSet(key).has(id);
+}
+
 
 function currentEmail() {
   if (!ok()) return "";
-
-  const profile = readJson<any>("vaultforge_profile", {});
-  return lower(profile?.email || localStorage.getItem("vf_email") || localStorage.getItem("member_email") || localStorage.getItem("email"));
+  let profile: any = {};
+  for (const key of PROFILE_KEYS) {
+    const next = readJson<any>(key, {});
+    if (next && typeof next === "object" && !Array.isArray(next)) profile = { ...profile, ...next };
+  }
+  return lower(profile.email || profile.memberEmail || profile.member_email || localStorage.getItem("vf_email") || localStorage.getItem("member_email") || localStorage.getItem("email"));
 }
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background: "#05070d",
-  color: "#f7f7fb",
-  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-  overflowX: "hidden",
-};
+function primaryHomeState(row: any, email: string) {
+  if (email === OWNER_EMAIL.toLowerCase()) return "GA";
+  return stateCode(
+    row?.homeState ||
+      row?.home_state ||
+      row?.baseState ||
+      row?.base_state ||
+      row?.memberHomeState ||
+      row?.member_home_state ||
+      row?.profileHomeState ||
+      row?.profile_home_state ||
+      row?.companyState ||
+      row?.company_state ||
+      row?.primaryState ||
+      row?.primary_state ||
+      row?.stateFrom ||
+      row?.state_from ||
+      row?.locationState ||
+      row?.location_state ||
+      row?.addressState ||
+      row?.address_state ||
+      row?.state
+  );
+}
 
-const wrap: React.CSSProperties = { maxWidth: 1420, margin: "0 auto", padding: "18px 18px 100px" };
-const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: 18 };
-const navSide: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 28, fontWeight: 950, letterSpacing: -1 };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+function memberStatus(row: any): MemberStatus {
+  const text = lower(row?.status || row?.memberStatus || row?.member_status || row?.accessStatus || row?.access_status);
+  if (text === "approved" || text === "active") return "approved";
+  if (text === "denied" || text === "rejected") return "denied";
+  if (text === "suspended") return "suspended";
+  if (text === "deleted" || text === "removed") return "deleted";
+  return "pending";
+}
+
+function paymentStatus(row: any): PaymentStatus {
+  const text = lower(row?.paymentStatus || row?.payment_status || row?.billingStatus || row?.billing_status);
+  if (text === "paid") return "paid";
+  if (text === "comped" || text === "free" || text === "free_access") return "comped";
+  if (text === "trial") return "trial";
+  if (text === "past_due" || text === "past due") return "past_due";
+  return "unpaid";
+}
+
+function normalizeMember(row: any): MemberRecord {
+  const email = lower(row?.email || row?.memberEmail || row?.member_email || row?.userEmail || row?.user_email);
+  const status = memberStatus(row);
+  const pay = paymentStatus(row);
+  const paidLike = pay === "paid" || pay === "comped" || pay === "trial";
+  const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved);
+  const baseState = primaryHomeState(row, email);
+  const operatingStates = listText(row?.operatingStates || row?.operating_states || row?.statesOperated || row?.states_operated || row?.serviceStates || row?.service_states || row?.states || row?.markets, "Operating states not listed");
+
+  return {
+    id: clean(row?.id || row?.memberId || row?.member_id || row?.auth_user_id || email || Date.now()).toLowerCase().replace(/[^a-z0-9@._-]+/g, "-"),
+    email: email || "email-not-listed",
+    name: clean(row?.name || row?.fullName || row?.full_name || row?.memberName || row?.member_name, email ? email.split("@")[0] : "Unnamed Member"),
+    company: clean(row?.company || row?.companyName || row?.company_name || row?.businessName || row?.business_name, "Company not listed"),
+    phone: clean(row?.phone || row?.phoneNumber || row?.phone_number || row?.mobile, "Phone not listed"),
+    memberType: clean(row?.memberType || row?.member_type || row?.role || row?.investorType || row?.operatorType, "Private Member"),
+    baseState: baseState || "Not listed",
+    operatingStates,
+    status,
+    paymentStatus: pay,
+    approvedForPayment,
+    access: row?.access === "active" || row?.isActive || row?.is_active || (status === "approved" && paidLike) ? "active" : "locked",
+    createdAt: clean(row?.createdAt || row?.created_at, new Date().toISOString()),
+    updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
+    raw: row,
+  };
+}
+
+function readMembers(): MemberRecord[] {
+  if (!ok()) return [];
+  const map = new Map<string, MemberRecord>();
+
+  for (const key of MEMBER_SOURCE_KEYS) {
+    const parsed = readJson<unknown>(key, []);
+    const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed as Record<string, unknown>) : [];
+    rows.forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      const member = normalizeMember(row);
+      const id = member.email !== "email-not-listed" ? member.email : member.id;
+      map.set(id, { ...map.get(id), ...member });
+    });
+  }
+
+  for (const key of PROFILE_KEYS) {
+    const row = readJson<any>(key, null);
+    if (row && typeof row === "object" && !Array.isArray(row)) {
+      const member = normalizeMember(row);
+      const id = member.email !== "email-not-listed" ? member.email : member.id;
+      map.set(id, { ...map.get(id), ...member });
+    }
+  }
+
+  const ownerEmail = OWNER_EMAIL.toLowerCase();
+  const owner = map.get(ownerEmail);
+  map.set(ownerEmail, {
+    ...(owner || {}),
+    id: "owner-admin",
+    email: ownerEmail,
+    name: owner?.name || "Dmoney",
+    company: owner?.company || "VaultForge",
+    phone: owner?.phone || "Owner",
+    memberType: owner?.memberType || "Owner / Admin",
+    baseState: "GA",
+    operatingStates: owner?.operatingStates || "GA • TN • AL • FL • NC • SC • TX",
+    status: "approved",
+    paymentStatus: "comped",
+    approvedForPayment: true,
+    access: "active",
+    createdAt: owner?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    raw: owner?.raw || {},
+  });
+
+  const order: Record<MemberStatus, number> = { pending: 0, approved: 1, suspended: 2, denied: 3, deleted: 4 };
+  return Array.from(map.values())
+    .filter((member) => !isHardDeleted(ADMIN_DELETED_MEMBER_IDS_KEY, member.id))
+    .sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
+}
+
+function investorStatus(row: any): InvestorStatus {
+  const value = lower(row?.status || row?.investorStatus || row?.investor_status);
+  if (value === "approved" || value === "active") return "approved";
+  if (value === "denied" || value === "rejected") return "denied";
+  if (value === "suspended") return "suspended";
+  if (value === "deleted" || value === "removed") return "deleted";
+  return "pending";
+}
+
+function investorPaymentStatus(row: any): InvestorPaymentStatus {
+  const value = lower(row?.paymentStatus || row?.payment_status || row?.billingStatus || row?.billing_status);
+  if (value === "paid") return "paid";
+  if (value === "comped" || value === "free" || value === "free_access") return "comped";
+  if (value === "trial") return "trial";
+  if (value === "past_due" || value === "past due") return "past_due";
+  return "unpaid";
+}
+
+function normalizeInvestor(row: any): InvestorRecord {
+  const email = lower(row?.email || row?.investorEmail || row?.investor_email);
+  const status = investorStatus(row);
+  const pay = investorPaymentStatus(row);
+  const paidLike = pay === "paid" || pay === "comped" || pay === "trial";
+  const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved);
+
+  return {
+    id: clean(row?.id || row?.investorId || row?.investor_id || email || `investor-${Date.now()}`).toLowerCase().replace(/[^a-z0-9@._-]+/g, "-"),
+    email: email || "email-not-listed",
+    contactName: clean(row?.contactName || row?.contact_name || row?.name || row?.fullName || row?.full_name, email ? email.split("@")[0] : "Unnamed Investor"),
+    company: clean(row?.company || row?.companyName || row?.company_name || row?.businessName || row?.business_name, "Company not listed"),
+    phone: clean(row?.phone || row?.phoneNumber || row?.phone_number || row?.mobile, "Phone not listed"),
+    statesInterested: listText(row?.statesInterested || row?.states_interested || row?.states || row?.markets, "States not listed"),
+    assetTypes: listText(row?.assetTypes || row?.asset_types || row?.assetClass || row?.asset_class, "Asset types not listed"),
+    minDeal: clean(row?.minDeal || row?.min_deal || row?.minimumDeal || row?.minimum_deal, "Not listed"),
+    maxDeal: clean(row?.maxDeal || row?.max_deal || row?.maximumDeal || row?.maximum_deal, "Not listed"),
+    yearlyVolume: clean(row?.yearlyVolume || row?.yearly_volume || row?.dealsPerYear || row?.deals_per_year, "Not listed"),
+    monthlyVolume: clean(row?.monthlyVolume || row?.monthly_volume, "Not listed"),
+    buyingStrategy: listText(row?.buyingStrategy || row?.buying_strategy || row?.strategy || row?.strategies, "Not listed"),
+    closeSpeed: clean(row?.closeSpeed || row?.close_speed || row?.averageCloseTime || row?.average_close_time, "Not listed"),
+    proofFunds: Boolean(row?.proofFunds || row?.proof_funds || row?.proofOfFunds || row?.proof_of_funds),
+    directBuyer: clean(row?.directBuyer || row?.direct_buyer || row?.buyerStatus || row?.buyer_status, "Not listed"),
+    fundingNeeded: clean(row?.fundingNeeded || row?.funding_needed, "Not listed"),
+    openToJV: clean(row?.openToJV || row?.open_to_jv || row?.jointVenture || row?.joint_venture, "Not listed"),
+    notes: clean(row?.notes || row?.message || row?.description, ""),
+    status,
+    paymentStatus: pay,
+    approvedForPayment,
+    access: row?.access === "active" || row?.accessStatus === "active" || row?.access_status === "active" || (status === "approved" && paidLike) ? "active" : "locked",
+    createdAt: clean(row?.createdAt || row?.created_at, new Date().toISOString()),
+    updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
+    raw: row,
+  };
+}
+
+function readInvestors(): InvestorRecord[] {
+  if (!ok()) return [];
+  const map = new Map<string, InvestorRecord>();
+  const rows = readJson<any[]>(INVESTOR_LIST_KEY, []);
+
+  if (Array.isArray(rows)) {
+    rows.forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      const investor = normalizeInvestor(row);
+      map.set(investor.email !== "email-not-listed" ? investor.email : investor.id, investor);
+    });
+  }
+
+  const single = readJson<any>(INVESTOR_APP_KEY, null);
+  if (single && typeof single === "object" && !Array.isArray(single)) {
+    const investor = normalizeInvestor(single);
+    const key = investor.email !== "email-not-listed" ? investor.email : investor.id;
+    map.set(key, { ...map.get(key), ...investor });
+  }
+
+  const order: Record<InvestorStatus, number> = { pending: 0, approved: 1, suspended: 2, denied: 3, deleted: 4 };
+  return Array.from(map.values())
+    .filter((investor) => !isHardDeleted(ADMIN_DELETED_INVESTOR_IDS_KEY, investor.id))
+    .sort((a, b) => order[a.status] - order[b.status] || a.company.localeCompare(b.company));
+}
+
+
+function profileLooksEmpty(profile: any) {
+  if (!profile || typeof profile !== "object") return true;
+  return !clean(profile.email) && !clean(profile.contactName) && !clean(profile.company) && !clean(profile.phone);
+}
+
+function investorProfileFromStores(seed: any = {}) {
+  const profile = seed?.investorProfile && typeof seed.investorProfile === "object" ? seed.investorProfile : {};
+  const wantedEmail = lower(seed?.investorEmail || profile?.email);
+  const wantedCompany = lower(seed?.investorCompany || profile?.company);
+  const wantedName = lower(seed?.investorName || profile?.contactName || profile?.name);
+  const investors = readInvestors();
+
+  const match =
+    investors.find((investor) => wantedEmail && investor.email === wantedEmail) ||
+    investors.find((investor) => wantedCompany && lower(investor.company) === wantedCompany) ||
+    investors.find((investor) => wantedName && lower(investor.contactName) === wantedName) ||
+    (investors.length === 1 ? investors[0] : null);
+
+  const raw = match?.raw || {};
+  const merged = {
+    ...raw,
+    ...profile,
+    photoUrl: clean(profile.photoUrl || raw.photoUrl || raw.profilePhoto || raw.companyLogo),
+    contactName: clean(profile.contactName || profile.name || raw.contactName || raw.contact_name || raw.name || match?.contactName),
+    company: clean(profile.company || raw.company || raw.companyName || match?.company),
+    email: clean(profile.email || seed?.investorEmail || raw.email || raw.investorEmail || match?.email),
+    phone: clean(profile.phone || raw.phone || raw.phoneNumber || match?.phone),
+    investorTypes: profile.investorTypes || raw.investorTypes || raw.assetTypes || match?.assetTypes,
+    buyingStrategies: profile.buyingStrategies || profile.buyingStrategy || raw.buyingStrategies || raw.buyingStrategy || match?.buyingStrategy,
+    assetTypes: profile.assetTypes || raw.assetTypes || match?.assetTypes,
+    statesInterested: profile.statesInterested || raw.statesInterested || raw.states || match?.statesInterested,
+    minDeal: clean(profile.minDeal || raw.minDeal || match?.minDeal),
+    maxDeal: clean(profile.maxDeal || raw.maxDeal || match?.maxDeal),
+    monthlyVolume: clean(profile.monthlyVolume || raw.monthlyVolume || match?.monthlyVolume),
+    yearlyVolume: clean(profile.yearlyVolume || raw.yearlyVolume || match?.yearlyVolume),
+    closeSpeed: clean(profile.closeSpeed || raw.closeSpeed || match?.closeSpeed),
+    proofFunds: profile.proofFunds || raw.proofFunds || match?.proofFunds,
+    directBuyer: clean(profile.directBuyer || raw.directBuyer || match?.directBuyer),
+    fundingNeeded: clean(profile.fundingNeeded || raw.fundingNeeded || match?.fundingNeeded),
+    openToJV: clean(profile.openToJV || raw.openToJV || match?.openToJV),
+    notes: clean(profile.notes || raw.notes || match?.notes),
+  };
+
+  return profileLooksEmpty(merged) ? profile : merged;
+}
+
+function requestStatus(row: any) {
+  return lower(row?.status || row?.stage || "new");
+}
+
+function isOpenRequest(row: any) {
+  return !["closed", "deleted", "archived", "saved"].includes(requestStatus(row));
+}
+
+function isQueueStatus(row: any, status: string) {
+  return requestStatus(row) === status;
+}
+
+function deleteAdminInboxForever(id: string) {
+  writeAdminInvestorInbox(readAdminInvestorInbox().filter((item) => item.id !== id));
+  writeInvestorRequests(readInvestorRequests().filter((item) => item.id !== id));
+  writeInvestorExecutionRequests(readInvestorExecutionRequests().filter((item) => item.id !== id));
+  writeInvestorAdminMessages(readInvestorAdminMessages().filter((item) => item.id !== id));
+}
+
+function deleteControlledThreadForever(id: string) {
+  writeControlledThreads(readControlledThreads().filter((thread: any) => thread.id !== id));
+}
+
+function saveInvestors(investors: InvestorRecord[], updatedInvestor?: InvestorRecord) {
+  const filtered = investors.filter((investor) => !isHardDeleted(ADMIN_DELETED_INVESTOR_IDS_KEY, investor.id));
+  writeJson(INVESTOR_LIST_KEY, filtered);
+  const currentSingle = readJson<any>(INVESTOR_APP_KEY, {});
+  const singleEmail = lower(currentSingle?.email || currentSingle?.investorEmail || currentSingle?.investor_email);
+  const viewerEmail = currentEmail();
+  const matching = updatedInvestor || filtered.find((investor) => investor.email === singleEmail) || filtered.find((investor) => investor.email === viewerEmail);
+  if (matching) writeJson(INVESTOR_APP_KEY, { ...currentSingle, ...matching });
+  window.dispatchEvent(new Event("vaultforge-investor-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-action-change"));
+}
+
+function recalcInvestorAccess(investor: InvestorRecord): InvestorRecord {
+  const paidLike = investor.paymentStatus === "paid" || investor.paymentStatus === "comped" || investor.paymentStatus === "trial";
+  return {
+    ...investor,
+    access: investor.status === "approved" && paidLike ? "active" : "locked",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function textFromUnknown(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean).join(" ");
+  if (value && typeof value === "object") return Object.values(value as Record<string, unknown>).map((item) => textFromUnknown(item)).join(" ");
+  return clean(value);
+}
+
+function requestKeywords(request: any) {
+  const text = [
+    request?.requestType,
+    request?.requestTitle,
+    request?.title,
+    request?.subject,
+    request?.kind,
+    request?.body,
+    request?.message,
+    request?.notes,
+  ].map((item) => textFromUnknown(item)).join(" ").toLowerCase();
+
+  const keywords = new Set<string>();
+  const add = (...items: string[]) => items.forEach((item) => keywords.add(item));
+
+  if (/lender|fund|capital|hard money|private money|bridge|loan/.test(text)) add("lender", "capital", "funding", "private lender", "hard money");
+  if (/attorney|legal|lawyer|title|closing|escrow/.test(text)) add("attorney", "legal", "title", "closing", "escrow");
+  if (/contractor|rehab|construction|build|repair|gc/.test(text)) add("contractor", "construction", "rehab", "repair");
+  if (/insurance|risk|coverage/.test(text)) add("insurance");
+  if (/property management|manager|leasing|tenant/.test(text)) add("property manager", "property management", "leasing");
+  if (/operator|boots|ground|site visit|field/.test(text)) add("operator", "boots", "field", "site visit");
+  if (/disposition|buyer|exit|sell/.test(text)) add("buyer", "disposition", "cash buyer");
+  if (/jv|joint venture|equity|partner/.test(text)) add("jv", "joint venture", "equity", "partner");
+  if (!keywords.size) add("investor", "operator", "member");
+
+  return Array.from(keywords);
+}
+
+function memberRouteText(member: MemberRecord) {
+  return [
+    member.memberType,
+    member.company,
+    member.operatingStates,
+    member.baseState,
+    textFromUnknown(member.raw?.canProvide),
+    textFromUnknown(member.raw?.provides),
+    textFromUnknown(member.raw?.specialties),
+    textFromUnknown(member.raw?.needs),
+    textFromUnknown(member.raw?.strategies),
+    textFromUnknown(member.raw?.assetClasses || member.raw?.asset_classes),
+    textFromUnknown(member.raw?.title),
+    textFromUnknown(member.raw?.role),
+  ].join(" ").toLowerCase();
+}
+
+function memberMatchesRequest(member: MemberRecord, request: any) {
+  if (!member || member.status === "deleted" || member.status === "denied" || member.status === "suspended") return false;
+  const requestState = stateCode(request?.state || request?.propertyState || request?.marketState);
+  const stateText = `${member.baseState} ${member.operatingStates}`.toUpperCase();
+  const stateMatch = !requestState || stateText.includes(requestState) || member.email === OWNER_EMAIL.toLowerCase();
+  const memberText = memberRouteText(member);
+  const keywordMatch = requestKeywords(request).some((keyword) => memberText.includes(keyword));
+  return stateMatch && (keywordMatch || member.email === OWNER_EMAIL.toLowerCase());
+}
+
+function matchedMembersForRequest(request: any) {
+  const members = readMembers();
+  const matches = members.filter((member) => memberMatchesRequest(member, request));
+  const fallback = members.find((member) => member.email === OWNER_EMAIL.toLowerCase());
+  const chosen = matches.length ? matches : fallback ? [fallback] : [];
+
+  return chosen.slice(0, 12).map((member) => ({
+    id: member.id,
+    email: member.email,
+    name: member.name,
+    company: member.company,
+    phone: member.phone,
+    memberType: member.memberType,
+    baseState: member.baseState,
+    operatingStates: member.operatingStates,
+    matchReason: requestKeywords(request).join(" • "),
+  }));
+}
+
+function normalizeInboxAsInvestorRequest(item: any): InvestorRequest {
+  const profile = item?.investorProfile || {};
+  return {
+    id: clean(item?.sourceRequestId || item?.id || `request-${Date.now()}`),
+    kind: clean(item?.kind || item?.type || "Investor Request"),
+    itemId: clean(item?.itemId || item?.roomId || item?.sourceRequestId),
+    title: clean(item?.title || item?.requestTitle || item?.subject, "Investor Request"),
+    state: clean(item?.state || profile?.state || ""),
+    investorEmail: clean(item?.investorEmail || profile?.email),
+    investorCompany: clean(item?.investorCompany || profile?.company),
+    investorName: clean(item?.investorName || profile?.contactName),
+    investorPhotoUrl: clean(item?.investorPhotoUrl || profile?.photoUrl),
+    investorProfile: profile,
+    message: clean(item?.message || item?.body || item?.notes, "Investor request received."),
+    status: clean(item?.status, "new"),
+    createdAt: clean(item?.createdAt || item?.created_at, new Date().toISOString()),
+  };
+}
+
+function mergeById<T extends { id: string }>(rows: T[]) {
+  const map = new Map<string, T>();
+  rows.forEach((row) => {
+    if (!row?.id) return;
+    map.set(row.id, { ...map.get(row.id), ...row });
+  });
+  return Array.from(map.values());
+}
+
+
+function readAdminInvestorInbox() {
+  const rows = readJson<any[]>(ADMIN_INBOX_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function writeAdminInvestorInbox(rows: any[]) {
+  writeJson(ADMIN_INBOX_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
+}
+
+function createThreadFromAdminInbox(item: any) {
+  const rows = readControlledThreads();
+  const existing = rows.find((thread: any) => thread.sourceRequestId === item.id);
+  if (existing) return existing;
+
+  const profile = investorProfileFromStores(item);
+  const routedMembers = matchedMembersForRequest({ ...item, investorProfile: profile });
+  const thread = {
+    id: `controlled-thread-${Date.now()}`,
+    source: item.type || "admin_inbox",
+    sourceRequestId: item.id,
+    status: "routed_to_members",
+    stage: "member_review_pending",
+    title: item.requestTitle || item.title || item.subject || "Controlled Investor Thread",
+    roomHeader: item.roomHeader || item.message || item.body || "Controlled intro",
+    kind: item.kind || "Investor",
+    state: item.state || "",
+    investorEmail: item.investorEmail || profile.email || "",
+    investorCompany: item.investorCompany || profile.company || "",
+    investorName: item.investorName || profile.contactName || "",
+    investorPhotoUrl: item.investorPhotoUrl || profile.photoUrl || "",
+    investorProfile: profile,
+    routedMembers,
+    assignedMembers: routedMembers,
+    assignedMemberEmails: routedMembers.map((member) => member.email).filter(Boolean),
+    memberEmail: routedMembers[0]?.email || "",
+    contactReleased: false,
+    memberContactReleased: false,
+    messages: [
+      {
+        id: `thread-message-${Date.now()}`,
+        from: "VaultForge Admin",
+        role: "admin",
+        body: `Request routed to ${routedMembers.length || 0} matching member(s). Contact is hidden until release is approved.`,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  writeControlledThreads([thread, ...rows]);
+  return thread;
+}
+
+function readInvestorRequests(): InvestorRequest[] {
+  const rows = readJson<InvestorRequest[]>(INVESTOR_REQUESTS_KEY, []);
+  const inboxRows = readAdminInvestorInbox()
+    .filter((item) => lower(item?.type || item?.source || item?.kind).includes("deal_pain") || lower(item?.source).includes("investor-room-request"))
+    .map(normalizeInboxAsInvestorRequest);
+  return mergeById([...(Array.isArray(rows) ? rows : []), ...inboxRows]);
+}
+
+function readInvestorExecutionRequests(): InvestorExecutionRequest[] {
+  const rows = readJson<InvestorExecutionRequest[]>(INVESTOR_EXECUTION_REQUESTS_KEY, []);
+  const inboxRows = readAdminInvestorInbox()
+    .filter((item) => lower(item?.type || item?.source || item?.requestTitle).includes("execution") || lower(item?.source).includes("investor-room-execution"))
+    .map((item) => ({
+      ...normalizeInboxAsInvestorRequest(item),
+      requestType: clean(item?.requestType || item?.type || "execution_request"),
+      requestTitle: clean(item?.requestTitle || item?.title || "Execution Request"),
+      notes: clean(item?.notes || item?.body),
+    } as InvestorExecutionRequest));
+  return mergeById([...(Array.isArray(rows) ? rows : []), ...inboxRows]);
+}
+
+function readInvestorAdminMessages(): InvestorAdminMessage[] {
+  const rows = readJson<InvestorAdminMessage[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
+  const inboxRows = readAdminInvestorInbox()
+    .filter((item) => lower(item?.type || item?.source).includes("message_admin") || lower(item?.source).includes("message-admin"))
+    .map((item) => {
+      const profile = item?.investorProfile || {};
+      return {
+        id: clean(item?.id || `investor-message-${Date.now()}`),
+        topic: clean(item?.topic || item?.requestTitle || item?.subject, "Message Admin"),
+        subject: clean(item?.subject || item?.title || item?.requestTitle, "Message Admin"),
+        body: clean(item?.body || item?.message),
+        message: clean(item?.message || item?.body),
+        status: clean(item?.status, "new"),
+        priority: clean(item?.priority, "normal"),
+        investorEmail: clean(item?.investorEmail || profile?.email),
+        investorCompany: clean(item?.investorCompany || profile?.company),
+        investorName: clean(item?.investorName || profile?.contactName),
+        investorPhotoUrl: clean(item?.investorPhotoUrl || profile?.photoUrl),
+        investorProfile: profile,
+        createdAt: clean(item?.createdAt, new Date().toISOString()),
+      } as InvestorAdminMessage;
+    });
+  return mergeById([...(Array.isArray(rows) ? rows : []), ...inboxRows]);
+}
+
+function writeInvestorRequests(rows: InvestorRequest[]) {
+  writeJson(INVESTOR_REQUESTS_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-request-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-request-change"));
+}
+
+function writeInvestorExecutionRequests(rows: InvestorExecutionRequest[]) {
+  writeJson(INVESTOR_EXECUTION_REQUESTS_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-execution-request-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-request-change"));
+}
+
+
+function readControlledThreads() {
+  const rows = readJson<any[]>(CONTROLLED_THREADS_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function writeControlledThreads(rows: any[]) {
+  writeJson(CONTROLLED_THREADS_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-controlled-thread-change"));
+}
+
+function addAdminReplyToThread(threadId: string, body: string) {
+  if (!body?.trim()) return;
+
+  const rows = readControlledThreads();
+
+  const updated = rows.map((thread: any) => {
+    if (thread.id !== threadId) return thread;
+
+    return {
+      ...thread,
+      updatedAt: new Date().toISOString(),
+      status: "admin_replied",
+      messages: [
+        ...(thread.messages || []),
+        {
+          id: `admin-message-${Date.now()}`,
+          from: "VaultForge Admin",
+          role: "admin",
+          body,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+  });
+
+  writeControlledThreads(updated);
+}
+
+
+function createControlledThread(source: "deal_pain" | "execution" | "admin_message", request: any) {
+  const rows = readControlledThreads();
+  const existing = rows.find((thread) => thread.sourceRequestId === request.id);
+
+  if (existing) return existing;
+
+  const profile = investorProfileFromStores(request);
+  const routedMembers = matchedMembersForRequest({ ...request, investorProfile: profile });
+  const thread = {
+    id: `controlled-thread-${Date.now()}`,
+    source,
+    sourceRequestId: request.id,
+    status: "routed_to_members",
+    stage: "member_review_pending",
+    title: request.requestTitle || request.title || request.topic || request.subject || "Controlled Investor Thread",
+    roomHeader: request.roomHeader || request.title || request.topic || "Controlled Intro",
+    kind: request.kind || "Investor",
+    state: request.state || "",
+    investorEmail: request.investorEmail || profile.email || "",
+    investorCompany: request.investorCompany || profile.company || "",
+    investorName: request.investorName || profile.contactName || "",
+    investorPhotoUrl: request.investorPhotoUrl || profile.photoUrl || "",
+    investorProfile: profile,
+    routedMembers,
+    assignedMembers: routedMembers,
+    assignedMemberEmails: routedMembers.map((member) => member.email).filter(Boolean),
+    memberEmail: routedMembers[0]?.email || "",
+    contactReleased: false,
+    memberContactReleased: false,
+    messages: [
+      {
+        id: `thread-message-${Date.now()}`,
+        from: "VaultForge Admin",
+        role: "admin",
+        body: `Request routed to ${routedMembers.length || 0} matching member(s). Contact is still hidden until admin/member manually releases it.`,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  writeControlledThreads([thread, ...rows]);
+  return thread;
+}
+
+function writeInvestorAdminMessages(rows: InvestorAdminMessage[]) {
+  writeJson(INVESTOR_ADMIN_MESSAGES_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-investor-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+}
+
+function readMessages(): AdminMessage[] {
+  const rows = readJson<AdminMessage[]>(ADMIN_MESSAGES_KEY, []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function roomKindFrom(row: any, fallback: RoomKind): RoomKind {
+  const text = lower(row?.kind || row?.type || row?.roomType || row?.room_type || row?.category);
+  if (text.includes("pain")) return "pain";
+  if (text.includes("deal") || text.includes("opportunity") || text.includes("project")) return "deal";
+  return fallback;
+}
+
+function normalizeRoom(row: any, source: string, fallbackKind: RoomKind, index: number): RoomRecord {
+  const kind = roomKindFrom(row, fallbackKind);
+  const id = clean(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId || `${source}-${kind}-${index}`);
+  const title = clean(row?.title || row?.name || row?.propertyName || row?.headline || row?.summary, kind === "deal" ? "Deal Room" : "Pain Room");
+  const state = stateCode(row?.propertyState || row?.property_state || row?.dealState || row?.deal_state || row?.painState || row?.pain_state || row?.homeState || row?.home_state || row?.baseState || row?.base_state || row?.marketState || row?.market_state || row?.locationState || row?.location_state || row?.addressState || row?.address_state || row?.state) || "Not listed";
+  const status = lower(row?.status || row?.roomStatus || row?.room_status || row?.folder || row?.roomFolder || row?.room_folder || "active");
+  const saved = Boolean(row?.saved || row?.isSaved || row?.is_saved || status.includes("saved") || source.includes("saved"));
+  const archived = Boolean(row?.archived || row?.isArchived || row?.is_archived || status.includes("archived") || source.includes("archived"));
+  const deleted = Boolean(row?.deleted || row?.isDeleted || row?.is_deleted || status.includes("deleted") || source.includes("deleted"));
+  const sold = Boolean(row?.sold || row?.isSold || row?.is_sold || status.includes("sold"));
+  const resolved = Boolean(row?.resolved || row?.isResolved || row?.is_resolved || status.includes("resolved"));
+
+  return { id, title, kind, state, status, saved, archived, deleted, sold, resolved, source };
+}
+
+function readRooms(kind: RoomKind) {
+  if (!ok()) return [];
+  const keys = kind === "deal" ? DEAL_ROOM_KEYS : PAIN_ROOM_KEYS;
+  const map = new Map<string, RoomRecord>();
+
+  for (const key of keys) {
+    const parsed = readJson<unknown>(key, []);
+    const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed as Record<string, unknown>) : [];
+    rows.forEach((row: any, index) => {
+      if (!row || typeof row !== "object") return;
+      const room = normalizeRoom(row, key, kind, index);
+      if (room.kind !== kind) return;
+      map.set(room.id, room);
+    });
+  }
+
+  return Array.from(map.values());
+}
+
+function inRoomView(room: RoomRecord, view: RoomView) {
+  if (view === "saved") return room.saved && !room.deleted;
+  if (view === "archived") return room.archived && !room.deleted;
+  if (view === "deleted") return room.deleted;
+  if (view === "sold") return room.sold && !room.deleted;
+  if (view === "resolved") return room.resolved && !room.deleted;
+  return !room.saved && !room.archived && !room.deleted && !room.sold && !room.resolved;
+}
+
+function stateMemberCount(members: MemberRecord[], state: StateFilter) {
+  if (state === "all") return members.filter((member) => member.status !== "deleted").length;
+  if (state === "notListed") return members.filter((member) => member.status !== "deleted" && member.baseState === "Not listed").length;
+  return members.filter((member) => member.status !== "deleted" && member.baseState === state).length;
+}
+
+function stateRoomCount(rooms: RoomRecord[], state: StateCode) {
+  return rooms.filter((room) => room.state === state && !room.deleted).length;
+}
+
+function isNewMember(member: MemberRecord) {
+  if (member.status !== "pending") return false;
+  const age = Date.now() - new Date(member.createdAt).getTime();
+  return Number.isFinite(age) ? age < 1000 * 60 * 60 * 24 * 7 : true;
+}
+
+function isApprovedUnpaid(member: MemberRecord) {
+  return member.status === "approved" && member.approvedForPayment && member.paymentStatus === "unpaid";
+}
+
+function memberSearchText(member: MemberRecord) {
+  return [member.name, member.company, member.email, member.phone, member.memberType, member.baseState, member.operatingStates, JSON.stringify(member.raw || {})].join(" ").toLowerCase();
+}
+
+function saveBroadcastMessage(recipients: MemberRecord[], subject: string, body: string) {
+  const cleanSubject = clean(subject, "Admin Command Message");
+  const cleanBody = clean(body);
+  if (!cleanBody || !recipients.length) return false;
+
+  const existing = readJson<any[]>(MEMBER_MESSAGES_KEY, []);
+  const now = new Date().toISOString();
+  const rows = recipients.map((member) => ({
+    id: `admin-broadcast-${Date.now()}-${member.id}`,
+    threadKey: `admin-${member.email}`,
+    lane: "admin",
+    subject: cleanSubject,
+    body: cleanBody,
+    from: OWNER_EMAIL,
+    to: member.email,
+    memberName: member.name,
+    memberCompany: member.company,
+    status: "unread",
+    createdAt: now,
+    source: "admin-broadcast",
+  }));
+
+  writeJson(MEMBER_MESSAGES_KEY, [...rows, ...(Array.isArray(existing) ? existing : [])]);
+
+  const adminLog: AdminMessage = {
+    id: `admin-sent-${Date.now()}`,
+    topic: `Broadcast sent to ${recipients.length} member(s)`,
+    body: `${cleanSubject}: ${cleanBody}`,
+    email: OWNER_EMAIL,
+    status: "sent",
+    priority: "normal",
+    createdAt: now,
+  };
+  writeJson(ADMIN_MESSAGES_KEY, [adminLog, ...readMessages()]);
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-message-command-change"));
+  return true;
+}
+
+const page: React.CSSProperties = { minHeight: "100vh", background: "#080b10", color: "#f6f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 1500, margin: "0 auto", paddingBottom: 110 };
+const topbar: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", border: "1px solid rgba(255,255,255,.10)", background: "#0c1119", borderRadius: 18, padding: 14, marginBottom: 18 };
+const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 24, fontWeight: 950, letterSpacing: -1 };
+const navRight: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "11px 15px", fontWeight: 900, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+const redBtn: React.CSSProperties = { ...btn, background: "#251015", borderColor: "rgba(255,70,70,.52)", color: "#ffaaaa" };
+const greenBtn: React.CSSProperties = { ...btn, background: "#0e2518", borderColor: "rgba(80,220,130,.55)", color: "#9cffbc" };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 30, marginBottom: 18, background: "radial-gradient(circle at top right, rgba(245,197,66,.14), transparent 30%), linear-gradient(180deg,#0e1420,#090d14)" };
+const card: React.CSSProperties = { background: "#0d121b", border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: 18, marginBottom: 18 };
+const panel: React.CSSProperties = { background: "#111823", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 18 };
+const alertPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.55)", boxShadow: "0 0 28px rgba(255,70,70,.12)" };
+const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.50)", boxShadow: "0 0 28px rgba(245,197,66,.12)" };
+const modalBackdrop: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,.76)", zIndex: 80, padding: 18, overflow: "auto" };
+const modal: React.CSSProperties = { maxWidth: 900, margin: "45px auto", background: "#0d121b", border: "1px solid rgba(245,197,66,.35)", borderRadius: 26, padding: 24, boxShadow: "0 0 60px rgba(0,0,0,.5)" };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 10 };
+const h1: React.CSSProperties = { fontSize: "clamp(38px,7vw,76px)", lineHeight: 0.9, letterSpacing: -3.5, margin: "0 0 14px", fontWeight: 950 };
+const h2: React.CSSProperties = { fontSize: "clamp(24px,4vw,38px)", lineHeight: 1, letterSpacing: -1.5, margin: "0 0 12px", fontWeight: 950 };
+const h3: React.CSSProperties = { fontSize: 24, margin: "0 0 10px", fontWeight: 950 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 18, lineHeight: 1.35, margin: 0 };
+const muted: React.CSSProperties = { color: "#aeb7c7", margin: "7px 0 0", lineHeight: 1.35 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 14 };
+const smallGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12 };
+const row: React.CSSProperties = { display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" };
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#111823", color: "#f8fafc", borderRadius: 16, padding: "14px 15px", fontSize: 16 };
 
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(245,197,66,.28)",
-  borderRadius: 34,
-  padding: "clamp(28px,5vw,58px)",
-  marginBottom: 20,
-  background:
-    "radial-gradient(circle at top right, rgba(245,197,66,.18), transparent 34%), radial-gradient(circle at bottom left, rgba(255,45,60,.12), transparent 32%), linear-gradient(180deg,#080d19,#050816)",
-  boxShadow: "0 0 55px rgba(245,197,66,.08)",
+function AdminNav() {
+  return (
+    <div style={topbar}>
+      <div>
+        <div style={brand}>VAULTFORGE ADMIN COMMAND</div>
+        <div style={{ ...muted, marginTop: 2 }}>Owner control • members • investors • Deal/Pain intelligence</div>
+      </div>
+      <div style={navRight}>
+        <Link href="/" style={btn}>Home</Link>
+        <Link href="/admin" style={goldBtn}>Admin Command</Link>
+        <Link href="/command" style={btn}>Member View</Link>
+        <Link href="/member-controlled-threads" style={goldBtn}>Controlled Threads</Link>
+        <Link href="/investor-room" style={btn}>Investor Room</Link>
+        <Link href="/logout" style={redBtn}>Logout</Link>
+      </div>
+    </div>
+  );
+}
+
+
+type BloombergMessagePayload = {
+  messageType: string;
+  urgency: string;
+  subject: string;
+  body: string;
+  amount: string;
+  timeline: string;
+  conditions: string;
+  nextMove: string;
+  privateNote: string;
+  summary: string;
+  sender: string;
+  recipient: string;
+  header: string;
 };
 
-const tickerWrap: React.CSSProperties = { borderTop: "1px solid rgba(245,197,66,.25)", borderBottom: "1px solid rgba(245,197,66,.25)", background: "#090d14", overflow: "hidden", marginBottom: 20 };
-const tickerTrack: React.CSSProperties = { display: "flex", gap: 40, width: "max-content", padding: "14px 0", animation: "tickerMove 38s linear infinite" };
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 28, marginBottom: 22 };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 24, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
-const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.55)", boxShadow: "0 0 28px rgba(245,197,66,.12)" };
-const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.56)", boxShadow: "0 0 28px rgba(255,70,70,.10)" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 13, marginBottom: 12 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,8vw,96px)", lineHeight: 0.92, letterSpacing: -3, margin: "0 0 22px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,56px)", lineHeight: 1, letterSpacing: -2, margin: "0 0 16px", fontWeight: 950 };
-const h3: React.CSSProperties = { fontSize: "clamp(23px,3.5vw,36px)", lineHeight: 1.05, letterSpacing: -1, margin: "0 0 12px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: "clamp(19px,2.5vw,26px)", lineHeight: 1.28, margin: 0 };
-const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
-const wideGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18 };
-const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const badge: React.CSSProperties = { display: "inline-flex", border: "1px solid rgba(245,197,66,.32)", borderRadius: 999, padding: "9px 13px", color: "#ffd45a", background: "rgba(245,197,66,.07)", fontWeight: 900, margin: "6px 6px 0 0" };
-
-function Nav({ owner }: { owner: boolean }) {
-  return (
-    <nav style={nav}>
-      <div style={navSide}>
-        <div style={brand}>VAULTFORGE</div>
-        <span style={badge}>PRIVATE APPROVED ACCESS ONLY</span>
-      </div>
-
-      <div style={navSide}>
-        <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-        <Link href="/investor-access" style={goldBtn}>Investor Room Access</Link>
-        <Link href="/create-login" style={btn}>Create Login</Link>
-        <Link href="/login" style={btn}>Members Login</Link>
-        <Link href="/investor-login" style={btn}>Investor Room Login</Link>
-        <Link href="/admin" style={owner ? redBtn : btn}>Admin Login</Link>
-      </div>
-    </nav>
-  );
+function buildBloombergSummary(payload: Omit<BloombergMessagePayload, "summary">) {
+  return [
+    `TYPE: ${payload.messageType}`,
+    `URGENCY: ${payload.urgency}`,
+    `SUBJECT: ${payload.subject || "Not listed"}`,
+    `SENDER: ${payload.sender || "Not listed"}`,
+    `RECIPIENT: ${payload.recipient || "Not listed"}`,
+    `HEADER: ${payload.header || "Not listed"}`,
+    "",
+    `MESSAGE: ${payload.body || "No message body provided."}`,
+    "",
+    `AMOUNT / BUDGET: ${payload.amount || "Not listed"}`,
+    `TIMELINE: ${payload.timeline || "Not listed"}`,
+    `CONDITIONS: ${payload.conditions || "Not listed"}`,
+    `NEXT MOVE: ${payload.nextMove || "Not listed"}`,
+    payload.privateNote ? `PRIVATE NOTE: ${payload.privateNote}` : "",
+  ].filter(Boolean).join("\\n");
 }
 
-function LogoHero() {
-  const [index, setIndex] = useState(0);
-  const current = logoCandidates[index];
+function BloombergMessageForm({
+  sender,
+  recipient,
+  header,
+  defaultSubject,
+  submitLabel,
+  defaultType,
+  onSend,
+  onCancel,
+}: {
+  sender: string;
+  recipient: string;
+  header: string;
+  defaultSubject?: string;
+  submitLabel: string;
+  defaultType?: string;
+  onSend: (payload: BloombergMessagePayload) => void;
+  onCancel?: () => void;
+}) {
+  const [messageType, setMessageType] = useState(defaultType || "Request Update");
+  const [urgency, setUrgency] = useState("Normal");
+  const [subject, setSubject] = useState(defaultSubject || header || "");
+  const [body, setBody] = useState("");
+  const [amount, setAmount] = useState("");
+  const [timeline, setTimeline] = useState("");
+  const [conditions, setConditions] = useState("");
+  const [nextMove, setNextMove] = useState("");
+  const [privateNote, setPrivateNote] = useState("");
+
+  function submit() {
+    const base = {
+      messageType,
+      urgency,
+      subject,
+      body,
+      amount,
+      timeline,
+      conditions,
+      nextMove,
+      privateNote,
+      sender,
+      recipient,
+      header,
+    };
+    const summary = buildBloombergSummary(base);
+    onSend({ ...base, summary });
+    setBody("");
+    setAmount("");
+    setTimeline("");
+    setConditions("");
+    setNextMove("");
+    setPrivateNote("");
+  }
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", margin: "0 0 28px" }}>
-      <div style={{ width: "min(420px, 84vw)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 18, background: "radial-gradient(circle, rgba(245,197,66,.13), transparent 68%), #070b14", boxShadow: "0 0 55px rgba(245,197,66,.16)" }}>
-        {current ? (
-          <img
-            src={current}
-            alt="VaultForge"
-            style={{ width: "100%", height: "auto", display: "block", borderRadius: 18 }}
-            onError={() => setIndex((value) => (value + 1 < logoCandidates.length ? value + 1 : logoCandidates.length))}
-          />
-        ) : (
-          <div style={{ minHeight: 170, display: "grid", placeItems: "center", color: "#ffd45a", fontSize: 56, fontWeight: 950, letterSpacing: -2 }}>VAULTFORGE</div>
-        )}
+    <div style={{ ...panel, marginTop: 14 }}>
+      <div style={eyebrow}>Structured Message Ticket</div>
+      <h3 style={h3}>{subject || "Structured Request Message"}</h3>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <div style={panel}>
+          <div style={eyebrow}>Sender</div>
+          <p style={muted}>{sender || "Auto-filled sender"}</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Recipient</div>
+          <p style={muted}>{recipient || "Auto-filled recipient"}</p>
+        </div>
+      </div>
+
+      <div style={{ ...panel, marginTop: 12 }}>
+        <div style={eyebrow}>Attached Header</div>
+        <p style={sub}>{header || "Request/deal/pain context auto-attached"}</p>
+      </div>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Message Type</span>
+          <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
+            {["Request Info", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Urgency</span>
+          <select style={input} value={urgency} onChange={(event) => setUrgency(event.target.value)}>
+            {["Normal", "Time Sensitive", "Urgent", "Closing Risk"].map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Subject</span>
+        <input style={input} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Auto-filled from request, editable..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Message / Terms / Ask</span>
+        <textarea style={{ ...input, minHeight: 120 }} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write the actual request, reply, terms, bid, question, or update..." />
+      </label>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Amount / Budget</span>
+          <input style={input} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="$ amount, LTC/LTV, bid, budget..." />
+        </label>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Timeline</span>
+          <input style={input} value={timeline} onChange={(event) => setTimeline(event.target.value)} placeholder="Close date, response deadline, work start..." />
+        </label>
+      </div>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Conditions</span>
+        <input style={input} value={conditions} onChange={(event) => setConditions(event.target.value)} placeholder="Subject to docs, walkthrough, proof, title, underwriting..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Best Next Move</span>
+        <input style={input} value={nextMove} onChange={(event) => setNextMove(event.target.value)} placeholder="Schedule call, send docs, release contact, route to member..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Private Note</span>
+        <input style={input} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} placeholder="Internal note, caution, context. Saved inside structured message." />
+      </label>
+
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={submit}>{submitLabel}</button>
+        {onCancel ? <button type="button" style={btn} onClick={onCancel}>Collapse / Done</button> : null}
       </div>
     </div>
   );
 }
 
-function Ticker() {
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
+}
+
+function Metric({ title, count, note, active, pulse, onClick }: { title: string; count: number | string; note: string; active?: boolean; pulse?: boolean; onClick?: () => void }) {
   return (
-    <div style={tickerWrap}>
-      <div style={tickerTrack}>
-        {[...tickerItems, ...tickerItems].map((item, index) => (
-          <div key={`${item}-${index}`} style={{ whiteSpace: "nowrap", color: "#ffd45a", fontWeight: 950, letterSpacing: 3 }}>{item}</div>
-        ))}
-      </div>
-    </div>
+    <button type="button" className={pulse ? "vf-pulse" : ""} style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>{note}</p>
+    </button>
   );
 }
 
-function Section({ label, title, children }: { label: string; title: string; children: React.ReactNode }) {
+function Pill({ text }: { text: string }) {
+  const value = text.toLowerCase();
+  let style = btn;
+  if (value.includes("approved") || value.includes("active") || value.includes("paid") || value.includes("comped")) style = greenBtn;
+  if (value.includes("pending") || value.includes("new") || value.includes("trial")) style = goldBtn;
+  if (value.includes("denied") || value.includes("suspended") || value.includes("unpaid") || value.includes("locked") || value.includes("deleted")) style = redBtn;
+  return <span style={{ ...style, padding: "7px 11px", fontSize: 12 }}>{text}</span>;
+}
+
+function StateCard({ state, label, count, active, onClick }: { state: StateFilter; label: string; count: number; active: boolean; onClick: () => void }) {
   return (
-    <section style={card}>
+    <button type="button" style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: "pointer" }} onClick={onClick}>
       <div style={eyebrow}>{label}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>member(s) based here</p>
+    </button>
+  );
+}
+
+function RoomCard({ title, count, active, pulse, onClick }: { title: string; count: number; active?: boolean; pulse?: boolean; onClick?: () => void }) {
+  return (
+    <button type="button" className={pulse ? "vf-pulse" : ""} style={{ ...(active ? activePanel : panel), width: "100%", textAlign: "left", cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={h2}>{count}</h2>
+      <p style={muted}>room(s)</p>
+    </button>
+  );
+}
+
+function MemberCard({ member, onOpen, onPatch, onDeleteForever }: { member: MemberRecord; onOpen: () => void; onPatch: (patch: Partial<MemberRecord>) => void; onDeleteForever: () => void }) {
+  const owner = member.email === OWNER_EMAIL.toLowerCase();
+  const pulse = isNewMember(member) || isApprovedUnpaid(member);
+  const specialPanel = member.status === "deleted" || member.status === "denied" || member.status === "suspended" ? alertPanel : isApprovedUnpaid(member) || member.status === "pending" ? activePanel : panel;
+
+  return (
+    <div className={pulse ? "vf-pulse" : ""} style={specialPanel}>
+      <button type="button" onClick={onOpen} style={{ all: "unset", cursor: "pointer", display: "block", width: "100%" }}>
+        <div style={eyebrow}>{isNewMember(member) ? "NEW MEMBER • " : ""}{member.status} • {member.paymentStatus} • {member.access}</div>
+        <h2 style={h2}>{member.name}</h2>
+        <p style={sub}>{member.company}</p>
+        <p style={muted}>{member.email}</p>
+        <p style={muted}>{member.phone}</p>
+        <p style={muted}>{member.memberType}</p>
+        <p style={muted}>Home/Base State: {member.baseState}</p>
+        <p style={muted}>Operating States: {member.operatingStates}</p>
+      </button>
+
+      <div style={{ ...row, marginTop: 12 }}>
+        <Pill text={member.status} /><Pill text={member.paymentStatus} /><Pill text={member.access} /><Pill text={member.approvedForPayment ? "payment approved" : "payment locked"} />
+      </div>
+
+      <div style={{ ...row, marginTop: 15 }}>
+        <button type="button" style={greenBtn} onClick={() => onPatch({ status: "approved" })}>Approve</button>
+        <button type="button" style={goldBtn} onClick={() => onPatch({ approvedForPayment: true, status: "approved" })}>Approve Payment Button</button>
+        <button type="button" style={greenBtn} onClick={() => onPatch({ paymentStatus: "paid", status: "approved", approvedForPayment: true })}>Mark Paid</button>
+        <button type="button" style={btn} onClick={() => onPatch({ paymentStatus: "unpaid" })} disabled={owner}>Mark Unpaid</button>
+        <button type="button" style={goldBtn} onClick={() => onPatch({ paymentStatus: "comped", status: "approved", approvedForPayment: true, access: "active" })}>Grant Free Access</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "suspended", access: "locked" })} disabled={owner}>Suspend</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked", approvedForPayment: false })} disabled={owner}>Deny</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "deleted", access: "locked" })} disabled={owner}>Delete Member</button>
+        {member.status === "deleted" ? <button type="button" style={redBtn} onClick={onDeleteForever} disabled={owner}>Delete Forever</button> : null}
+        <button type="button" style={btn} onClick={() => onPatch({ status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" })}>Restore</button>
+      </div>
+    </div>
+  );
+}
+
+function InvestorCard({ investor, onPatch, onDeleteForever }: { investor: InvestorRecord; onPatch: (patch: Partial<InvestorRecord>) => void; onDeleteForever: () => void }) {
+  const needsPayment = investor.status === "approved" && investor.approvedForPayment && investor.paymentStatus === "unpaid";
+  const specialPanel = investor.status === "pending" || needsPayment ? activePanel : investor.status === "denied" || investor.status === "suspended" || investor.status === "deleted" ? alertPanel : panel;
+
+  return (
+    <div className={investor.status === "pending" || needsPayment ? "vf-pulse" : ""} style={specialPanel}>
+      <div style={eyebrow}>{investor.status} • {investor.paymentStatus} • {investor.access}</div>
+      <h2 style={h2}>{investor.company}</h2>
+      <p style={sub}>{investor.contactName}</p>
+      <p style={muted}>{investor.email}</p>
+      <p style={muted}>{investor.phone}</p>
+      <p style={muted}>Markets: {investor.statesInterested}</p>
+      <p style={muted}>Investor Type / Assets: {investor.assetTypes}</p>
+      <p style={muted}>Buy Box: {investor.minDeal} - {investor.maxDeal}</p>
+      <p style={muted}>Yearly Volume: {investor.yearlyVolume}</p>
+      <p style={muted}>Buying Strategy: {investor.buyingStrategy}</p>
+      <p style={muted}>Close Speed: {investor.closeSpeed}</p>
+      <p style={muted}>Proof of Funds: {investor.proofFunds ? "Yes" : "Not listed"}</p>
+      <p style={muted}>Direct Buyer: {investor.directBuyer}</p>
+      <p style={muted}>Funding Needed: {investor.fundingNeeded}</p>
+      <p style={muted}>Open To JV: {investor.openToJV}</p>
+      {investor.notes ? <p style={muted}>Notes: {investor.notes}</p> : null}
+
+      <div style={{ ...row, marginTop: 15 }}>
+        <button type="button" style={greenBtn} onClick={() => onPatch({ status: "approved" })}>Approve Investor</button>
+        <button type="button" style={goldBtn} onClick={() => onPatch({ approvedForPayment: true, status: "approved" })}>Approve Payment Button</button>
+        <button type="button" style={greenBtn} onClick={() => onPatch({ paymentStatus: "paid", status: "approved", approvedForPayment: true })}>Mark Paid</button>
+        <button type="button" style={goldBtn} onClick={() => onPatch({ paymentStatus: "comped", status: "approved", approvedForPayment: true, access: "active" })}>Grant Free Access</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "suspended", access: "locked" })}>Suspend</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "denied", access: "locked", approvedForPayment: false })}>Deny</button>
+        <button type="button" style={redBtn} onClick={() => onPatch({ status: "deleted", access: "locked" })}>Delete Investor</button>
+        {investor.status === "deleted" ? <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button> : null}
+        <button type="button" style={btn} onClick={() => onPatch({ status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" })}>Restore</button>
+        <Link href="/investor-payment" style={goldBtn}>Investor Payment</Link>
+      </div>
+    </div>
+  );
+}
+
+function InvestorRequestCard({
+  request,
+  onStatus,
+}: {
+  request: InvestorRequest;
+  onStatus: (id: string, status: string) => void;
+}) {
+  const isPain = lower(request.kind).includes("pain");
+  return (
+    <div style={isPain ? alertPanel : activePanel}>
+      <div style={eyebrow}>{request.kind || "Request"} • {request.state || "Unknown State"} • {request.status}</div>
+      <h2 style={h2}>{request.title}</h2>
+      <p style={sub}>{request.investorCompany || request.investorName || request.investorEmail}</p>
+      <p style={muted}>{request.investorEmail}</p>
+      <p style={muted}>{request.message}</p>
+      <p style={muted}>Room ID: {request.itemId || "Not listed"}</p>
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={() => onStatus(request.id, "routed")}>Mark Routed</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(request.id, "approved")}>Approve Intro</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(request.id, "deleted")}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+
+function InvestorProfileSnapshotCard({ profile, photoUrl }: { profile: any; photoUrl?: string }) {
+  if (!profile && !photoUrl) return null;
+
+  const investorTypes = Array.isArray(profile?.investorTypes) ? profile.investorTypes.join(" • ") : profile?.investorTypes || "Not listed";
+  const strategies = Array.isArray(profile?.buyingStrategies) ? profile.buyingStrategies.join(" • ") : profile?.buyingStrategies || "Not listed";
+  const markets = Array.isArray(profile?.statesInterested) ? profile.statesInterested.join(" • ") : profile?.statesInterested || "Not listed";
+
+  return (
+    <div style={{ ...panel, marginTop: 14 }}>
+      <div style={eyebrow}>Investor Profile Attached</div>
+      <div style={{ ...row, alignItems: "flex-start" }}>
+        {photoUrl || profile?.photoUrl ? (
+          <img
+            src={photoUrl || profile?.photoUrl}
+            alt="Investor"
+            style={{ width: 82, height: 82, borderRadius: 20, objectFit: "cover", border: "1px solid rgba(245,197,66,.35)" }}
+          />
+        ) : null}
+        <div>
+          <p style={sub}>{profile?.contactName || "Investor name not listed"}</p>
+          <p style={muted}>{profile?.company || "Company not listed"}</p>
+          <p style={muted}>{profile?.email || "Email not listed"} • {profile?.phone || "Phone not listed"}</p>
+          <p style={muted}>Type: {investorTypes}</p>
+          <p style={muted}>Strategy: {strategies}</p>
+          <p style={muted}>Markets: {markets}</p>
+          <p style={muted}>Buy Box: {profile?.minDeal || "Not listed"} - {profile?.maxDeal || "Not listed"}</p>
+          <p style={muted}>Volume: {profile?.monthlyVolume || "Not listed"} / month • {profile?.yearlyVolume || "Not listed"} / year</p>
+          <p style={muted}>Proof of Funds: {profile?.proofFunds || "Not listed"}</p>
+          <p style={muted}>Close Speed: {profile?.closeSpeed || "Not listed"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvestorExecutionRequestCard({
+  request,
+  onStatus,
+}: {
+  request: InvestorExecutionRequest;
+  onStatus: (id: string, status: string) => void;
+}) {
+  return (
+    <div style={activePanel}>
+      <div style={eyebrow}>Execution Request • {request.requestTitle || request.requestType || "Support"} • {request.status || "new"}</div>
+      <h2 style={h2}>{request.title || "Investor Execution Request"}</h2>
+      <p style={sub}>{request.investorCompany || request.investorName || request.investorEmail}</p>
+      <p style={muted}>{request.message || request.notes || "Investor requested execution help."}</p>
+      <InvestorProfileSnapshotCard profile={request.investorProfile} photoUrl={request.investorPhotoUrl} />
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={() => onStatus(request.id, "routed")}>Mark Routed</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(request.id, "approved")}>Approve Intro</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(request.id, "deleted")}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+function InvestorAdminMessageCard({
+  message,
+  onStatus,
+}: {
+  message: InvestorAdminMessage;
+  onStatus: (id: string, status: string) => void;
+}) {
+  return (
+    <div style={panel}>
+      <div style={eyebrow}>Investor Admin Message • {message.status || "new"}</div>
+      <h2 style={h2}>{message.subject || message.topic || "Message Admin"}</h2>
+      <p style={sub}>{message.investorCompany || message.investorName || message.investorEmail}</p>
+      <p style={muted}>{message.body || message.message || "Investor messaged admin."}</p>
+      <InvestorProfileSnapshotCard profile={message.investorProfile} photoUrl={message.investorPhotoUrl} />
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={() => onStatus(message.id, "reply_later")}>Reply Later</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(message.id, "routed")}>Mark Routed</button>
+        <button type="button" style={btn} onClick={() => onStatus(message.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(message.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(message.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(message.id, "deleted")}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+
+
+function ControlledThreadAdminCard({ thread }: { thread: any }) {
+  const [reply, setReply] = useState("");
+  const hydratedProfile = investorProfileFromStores(thread);
+  const routedMembers = thread?.routedMembers || thread?.assignedMembers || [];
+  const isDeleted = requestStatus(thread) === "deleted" || requestStatus({ status: thread?.stage }) === "deleted";
+
+  return (
+    <div style={isDeleted ? alertPanel : activePanel}>
+      <div style={eyebrow}>{thread?.status || "approved"} • {thread?.stage || "controlled thread"}</div>
+      <h2 style={h2}>{thread?.title || "Controlled Investor Thread"}</h2>
+      <p style={sub}>{thread?.investorCompany || thread?.investorName || thread?.investorEmail || "Investor not listed"}</p>
+      <p style={muted}>{thread?.roomHeader || "Controlled intro thread"}</p>
+      <p style={muted}>Contact Released: {thread?.contactReleased ? "Yes" : "No"}</p>
+      <p style={muted}>Routed Members: {routedMembers.length || 0}</p>
+      {routedMembers.length ? (
+        <div style={{ ...panel, marginTop: 14 }}>
+          <div style={eyebrow}>Auto-Matched Members</div>
+          {routedMembers.map((member: any) => (
+            <p key={member.email || member.id} style={muted}>{member.name || "Member"} • {member.company || "Company"} • {member.memberType || "Role"} • {member.email || "email hidden"}</p>
+          ))}
+        </div>
+      ) : null}
+
+      {typeof InvestorProfileSnapshotCard === "function" ? (
+        <InvestorProfileSnapshotCard profile={hydratedProfile} photoUrl={thread?.investorPhotoUrl || hydratedProfile?.photoUrl} />
+      ) : null}
+
+      <div style={{ ...panel, marginTop: 14 }}>
+        <div style={eyebrow}>Thread Messages</div>
+
+        {(thread?.messages || []).length ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            {(thread?.messages || []).map((message: any) => (
+              <div key={message.id || `${message.createdAt}-${message.body}`} style={panel}>
+                <p style={muted}>{message.from || message.role || "System"} • {message.createdAt || ""}</p>
+                <p style={sub}>{message.body || message.message || ""}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={muted}>No messages yet.</p>
+        )}
+
+        <BloombergMessageForm
+          sender="VaultForge Admin"
+          recipient={thread?.investorEmail || thread?.memberEmail || "Investor / Member"}
+          header={thread?.roomHeader || thread?.subject || thread?.title || "Controlled Thread"}
+          defaultSubject={thread?.subject || thread?.title || "Admin Reply"}
+          defaultType="Admin Note"
+          submitLabel="Send Admin Reply"
+          onSend={(payload) => {
+            setReply(payload.summary);
+            addAdminReplyToThread(thread.id, payload.summary);
+            setReply("");
+          }}
+        />
+
+        <div style={{ ...row, marginTop: 12 }}>
+          <button
+            type="button"
+            style={btn}
+            onClick={() => {
+              const rows = readControlledThreads();
+              writeControlledThreads(rows.map((item) => item.id === thread.id ? { ...item, status: "saved", stage: "saved", updatedAt: new Date().toISOString() } : item));
+            }}
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            style={btn}
+            onClick={() => {
+              const rows = readControlledThreads();
+              writeControlledThreads(rows.map((item) => item.id === thread.id ? { ...item, status: "archived", stage: "archived", updatedAt: new Date().toISOString() } : item));
+            }}
+          >
+            Archive
+          </button>
+          <button
+            type="button"
+            style={redBtn}
+            onClick={() => {
+              const rows = readControlledThreads();
+              writeControlledThreads(rows.map((item) => item.id === thread.id ? { ...item, status: "deleted", stage: "deleted", updatedAt: new Date().toISOString() } : item));
+            }}
+          >
+            Delete
+          </button>
+          {isDeleted ? (
+            <button
+              type="button"
+              style={goldBtn}
+              onClick={() => {
+                const rows = readControlledThreads();
+                writeControlledThreads(rows.map((item) => item.id === thread.id ? { ...item, status: "routed_to_members", stage: "member_review_pending", updatedAt: new Date().toISOString() } : item));
+              }}
+            >
+              Restore
+            </button>
+          ) : null}
+          {isDeleted ? (
+            <button
+              type="button"
+              style={redBtn}
+              onClick={() => deleteControlledThreadForever(thread.id)}
+            >
+              Delete Forever
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function AdminInvestorInboxCard({
+  item,
+  onStatus,
+}: {
+  item: any;
+  onStatus: (id: string, status: string) => void;
+}) {
+  const [reply, setReply] = useState("");
+  const status = requestStatus(item);
+  const profile = investorProfileFromStores(item);
+  const title = item?.requestTitle || item?.title || item?.subject || "Investor Opportunity Message";
+  const matchedMembers = matchedMembersForRequest({ ...item, investorProfile: profile });
+  const isNew = status === "new" || status === "pending";
+  const isDeleted = status === "deleted";
+  const requestType = clean(item?.type || item?.source || item?.kind, "investor_request").replaceAll("_", " ");
+
+  function sendReply() {
+    if (!reply.trim()) return;
+    const thread = createThreadFromAdminInbox({ ...item, investorProfile: profile });
+    addAdminReplyToThread(thread.id, reply);
+    onStatus(item.id, "admin_replied");
+    setReply("");
+  }
+
+  function approveAndRoute() {
+    createThreadFromAdminInbox({ ...item, investorProfile: profile, status: "approved" });
+    onStatus(item.id, "approved");
+  }
+
+  function markRouted() {
+    createThreadFromAdminInbox({ ...item, investorProfile: profile, status: "routed" });
+    onStatus(item.id, "routed");
+  }
+
+  return (
+    <div className={isNew ? "vf-pulse" : ""} style={isDeleted ? alertPanel : activePanel}>
+      <div style={eyebrow}>{requestType} • {status}</div>
       <h2 style={h2}>{title}</h2>
-      {children}
+      <p style={sub}>{item?.roomHeader || item?.subject || item?.title || "Investor opportunity request"}</p>
+      <p style={muted}>{item?.message || item?.body || item?.notes || "Investor request received."}</p>
+      <p style={muted}>State: {item?.state || profile?.statesInterested || "Not listed"}</p>
+      <p style={muted}>Auto-match candidates: {matchedMembers.length ? matchedMembers.map((member) => member.name || member.company || member.email).join(" • ") : "No matching members yet"}</p>
+
+      <InvestorProfileSnapshotCard profile={profile} photoUrl={item?.investorPhotoUrl || profile?.photoUrl} />
+
+      <BloombergMessageForm
+        sender="VaultForge Admin"
+        recipient={item?.investorEmail || profile?.email || "Investor"}
+        header={item?.roomHeader || item?.subject || item?.title || "Investor Opportunity Request"}
+        defaultSubject={item?.subject || item?.title || "Investor Request Reply"}
+        defaultType="Admin Note"
+        submitLabel="Send Reply"
+        onSend={(payload) => {
+          setReply(payload.summary);
+          const rows = readControlledThreads();
+          const thread = createThreadFromAdminInbox({ ...item, investorProfile: profile, status: "admin_replied" });
+          addAdminReplyToThread(thread?.id || item.id, payload.summary);
+          setReply("");
+        }}
+      />
+
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={greenBtn} onClick={approveAndRoute}>Approve + Route</button>
+        <button type="button" style={goldBtn} onClick={markRouted}>Route to Matching Members</button>
+        <button type="button" style={btn} onClick={() => onStatus(item.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(item.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(item.id, "closed")}>Close</button>
+        {!isDeleted ? <button type="button" style={redBtn} onClick={() => onStatus(item.id, "deleted")}>Delete</button> : null}
+        {isDeleted ? <button type="button" style={goldBtn} onClick={() => onStatus(item.id, "new")}>Restore</button> : null}
+        {isDeleted ? <button type="button" style={redBtn} onClick={() => deleteAdminInboxForever(item.id)}>Delete Forever</button> : null}
+      </div>
+    </div>
+  );
+}
+
+function InvestorRequestAdminCard({
+  request,
+  onStatus,
+}: {
+  request: any;
+  onStatus: (id: string, status: string) => void;
+}) {
+  const title =
+    request?.requestTitle ||
+    request?.title ||
+    request?.topic ||
+    request?.subject ||
+    "Investor Request";
+
+  return (
+    <div style={activePanel}>
+      <div style={eyebrow}>Investor Request • {request?.status || "new"}</div>
+      <h2 style={h2}>{title}</h2>
+      <p style={sub}>{request?.investorCompany || request?.investorName || request?.investorEmail || "Investor not listed"}</p>
+      <p style={muted}>{request?.message || request?.body || request?.notes || "Investor request received."}</p>
+
+      {typeof InvestorProfileSnapshotCard === "function" ? (
+        <InvestorProfileSnapshotCard profile={request?.investorProfile} photoUrl={request?.investorPhotoUrl} />
+      ) : null}
+
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={() => onStatus(request.id, "routed")}>Mark Routed</button>
+        <button type="button" style={greenBtn} onClick={() => onStatus(request.id, "approved")}>Approve Intro</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "saved")}>Save</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "archived")}>Archive</button>
+        <button type="button" style={btn} onClick={() => onStatus(request.id, "closed")}>Close</button>
+        <button type="button" style={redBtn} onClick={() => onStatus(request.id, "deleted")}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+function MemberModal({ member, onClose }: { member: MemberRecord | null; onClose: () => void }) {
+  if (!member) return null;
+  return (
+    <div style={modalBackdrop}>
+      <div style={modal}>
+        <button type="button" style={goldBtn} onClick={onClose}>Close Window</button>
+        <div style={{ marginTop: 18 }}>
+          <div style={eyebrow}>Member Profile Window</div>
+          <h1 style={h1}>{member.name}</h1>
+          <p style={sub}>{member.company}</p>
+          <div style={grid}>
+            <div style={panel}><div style={eyebrow}>Email</div><p style={sub}>{member.email}</p></div>
+            <div style={panel}><div style={eyebrow}>Phone</div><p style={sub}>{member.phone}</p></div>
+            <div style={panel}><div style={eyebrow}>Type</div><p style={sub}>{member.memberType}</p></div>
+            <div style={panel}><div style={eyebrow}>Home State</div><p style={sub}>{member.baseState}</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoomModal({ selection, onClose }: { selection: RoomSelection; onClose: () => void }) {
+  if (!selection) return null;
+  return (
+    <div style={modalBackdrop}>
+      <div style={modal}>
+        <button type="button" style={goldBtn} onClick={onClose}>Close Projects Window</button>
+        <div style={{ marginTop: 18 }}>
+          <div style={eyebrow}>Admin Project / Room Window</div>
+          <h1 style={h1}>{selection.title}</h1>
+          <p style={sub}>{selection.rooms.length} matching room(s)</p>
+          <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+            {selection.rooms.length ? selection.rooms.map((room) => (
+              <div key={`${room.kind}-${room.id}-${room.source}`} style={panel}>
+                <div style={eyebrow}>{room.kind} • {room.state} • {room.status || "active"}</div>
+                <h2 style={h2}>{room.title}</h2>
+                <p style={muted}>Room ID: {room.id}</p>
+                <p style={muted}>Source: {room.source}</p>
+              </div>
+            )) : (
+              <div style={panel}><h2 style={h2}>No rooms found.</h2><p style={sub}>No matching projects/rooms exist yet.</p></div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function CollapseBar({ label, onCollapse }: { label: string; onCollapse: () => void }) {
+  return (
+    <div style={{ ...row, justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={eyebrow}>{label}</div>
+      <button type="button" style={btn} onClick={onCollapse}>
+        Collapse / Done
+      </button>
+    </div>
+  );
+}
+
+
+
+function AdminSequenceCard({
+  step,
+  title,
+  note,
+  active,
+}: {
+  step: string;
+  title: string;
+  note: string;
+  active?: boolean;
+}) {
+  return (
+    <div style={active ? activePanel : panel}>
+      <div style={eyebrow}>{step}</div>
+      <h3 style={h3}>{title}</h3>
+      <p style={muted}>{note}</p>
+    </div>
+  );
+}
+
+function AdminOperatingGuide() {
+  return (
+    <section style={{ ...activePanel, marginBottom: 18 }}>
+      <div style={eyebrow}>Admin Area Instructions</div>
+      <h2 style={h2}>Everything has a place.</h2>
+      <p style={sub}>
+        Admin is the control tower. Review requests, verify investor profile context, route to matching members, manage replies, release contact only when approved, and close or clean up handled work.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        <AdminSequenceCard step="01 Review" title="Investor Inbox" note="New investor Deal/Pain/execution requests land here first." active />
+        <AdminSequenceCard step="02 Profile" title="Verify Profile Context" note="Investor profile should be attached before routing to members." />
+        <AdminSequenceCard step="03 Match" title="Route To Matching Members" note="Send request to members who match lender, title, contractor, operator, insurance, JV, or market role." />
+        <AdminSequenceCard step="04 Thread" title="Controlled Thread" note="Keep admin, member, and investor replies tied to one request thread." />
+        <AdminSequenceCard step="05 Release" title="Contact Release" note="Only release contact after approval. Log who released and when." />
+        <AdminSequenceCard step="06 Close" title="Close / Save / Archive / Delete" note="Clean the queue once the request is handled, passed, or dead." />
+      </div>
     </section>
   );
 }
 
-function CountdownCards({ timer }: { timer: Countdown }) {
+
+
+function AdminQueueGuide() {
   return (
-    <div style={grid}>
-      {[
-        ["Days", timer.days],
-        ["Hours", timer.hours],
-        ["Minutes", timer.minutes],
-        ["Seconds", timer.seconds],
-      ].map(([label, value]) => (
-        <div key={label} style={goldPanel}>
-          <div style={eyebrow}>{label}</div>
-          <h2 style={h2}>{String(value).padStart(2, "0")}</h2>
-          <p style={muted}>until founding allocations close</p>
+    <section style={{ ...panel, marginBottom: 18 }}>
+      <div style={eyebrow}>Admin Queue Map</div>
+      <h2 style={h2}>What each admin area is for.</h2>
+      <p style={sub}>
+        Use these queues so members, investors, requests, rooms, replies, and cleanup stay in the right place.
+      </p>
+
+      <div style={{ ...grid, marginTop: 18 }}>
+        <div style={panel}>
+          <div style={eyebrow}>New Members</div>
+          <p style={muted}>Member applications waiting for review, approval, payment unlock, activation, suspension, or delete.</p>
         </div>
-      ))}
-    </div>
-  );
-}
-
-function FounderAllocationCard({ item }: { item: any }) {
-  const percent = item.cap ? Math.min(100, Math.round((item.filled / item.cap) * 100)) : 0;
-
-  return (
-    <div style={item.full ? redPanel : goldPanel}>
-      <div style={eyebrow}>{item.title}</div>
-      <h3 style={h3}>{item.filled} / {item.cap} Filled</h3>
-      <p style={sub}>{item.remaining} founder allocations remaining</p>
-      <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.08)", overflow: "hidden", marginTop: 14 }}>
-        <div style={{ height: "100%", width: `${percent}%`, background: item.full ? "#ff4d5e" : "#ffdc68" }} />
+        <div style={panel}>
+          <div style={eyebrow}>Investors</div>
+          <p style={muted}>Investor applications, profile depth, payment approval, access status, and blocked/deleted investor cleanup.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Investor Inbox</div>
+          <p style={muted}>Main intake for investor Deal/Pain requests, execution requests, and messages from investor room.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Deal Requests</div>
+          <p style={muted}>Investor interest tied to Deal/opportunity cards. Verify profile context before routing.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Pain Requests</div>
+          <p style={muted}>Problem-solving requests tied to capital gaps, title issues, contractor problems, operator needs, or execution help.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Execution Requests</div>
+          <p style={muted}>Specific service needs such as lender, hard money, contractor, title, insurance, operator, JV, boots on ground, or disposition.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Controlled Threads</div>
+          <p style={muted}>The shared conversation room where admin, member, and investor replies stay attached to the original request.</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Saved / Archived / Deleted</div>
+          <p style={muted}>Admin cleanup folders. Save for follow-up, archive handled work, delete clutter, and delete forever only when intended.</p>
+        </div>
       </div>
-      <p style={muted}>{item.full ? "Founder allocation closed." : item.remaining <= 2 ? "Almost full." : "Founder allocation open."}</p>
-    </div>
-  );
-}
-
-
-function LivePostingCard({ item }: { item: any }) {
-  return (
-    <div style={goldPanel}>
-      <div style={eyebrow}>{item.type} • {item.state}</div>
-      <h3 style={h3}>{item.headline}</h3>
-      <p style={sub}>{item.city}, {item.state}</p>
-      <p style={muted}>{item.teaser}</p>
-      <p style={muted}>Need: {item.need}</p>
-      <div style={{ ...row, marginTop: 14 }}>
-        <Link href="/investor-access" style={goldBtn}>Enter To See Inside</Link>
-        <Link href="/member-access" style={btn}>Apply To Work Deals</Link>
-      </div>
-    </div>
+    </section>
   );
 }
 
 
-function PublicDealWindowCard({ item }: { item: any }) {
-  return (
-    <div style={goldPanel}>
-      <img src={item.photo} alt={item.title} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(245,197,66,.25)", marginBottom: 14 }} />
-      <div style={eyebrow}>{item.assetType} Deal • {item.city}, {item.state}</div>
-      <h3 style={h3}>{item.title}</h3>
-      <div style={{ ...grid, marginTop: 12 }}>
-        <div style={panel}><div style={eyebrow}>Beds</div><p style={muted}>{item.beds}</p></div>
-        <div style={panel}><div style={eyebrow}>Bath</div><p style={muted}>{item.baths}</p></div>
-        <div style={panel}><div style={eyebrow}>Price</div><p style={muted}>{item.price}</p></div>
-        <div style={panel}><div style={eyebrow}>Fix</div><p style={muted}>{item.fixAmount}</p></div>
-        <div style={panel}><div style={eyebrow}>ARV</div><p style={muted}>{item.arv}</p></div>
-        <div style={panel}><div style={eyebrow}>State</div><p style={muted}>{item.state}</p></div>
-      </div>
-      <p style={{ ...muted, marginTop: 12 }}>{item.teaser}</p>
-      <div style={{ ...row, marginTop: 14 }}>
-        <Link href="/investor-access" style={goldBtn}>Enter To See Deal</Link>
-        <Link href="/member-access" style={btn}>Apply To Work Deals</Link>
-      </div>
-    </div>
-  );
-}
-
-function PublicPainWindowCard({ item }: { item: any }) {
-  return (
-    <div style={redPanel}>
-      <img src={item.photo} alt={item.title} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(255,70,70,.25)", marginBottom: 14 }} />
-      <div style={eyebrow}>{item.category} • {item.city}, {item.state}</div>
-      <h3 style={h3}>{item.title}</h3>
-      <p style={sub}>{item.summary}</p>
-      <div style={{ ...grid, marginTop: 12 }}>
-        <div style={panel}><div style={eyebrow}>Urgency</div><p style={muted}>{item.urgency}</p></div>
-        <div style={panel}><div style={eyebrow}>Asset</div><p style={muted}>{item.assetType}</p></div>
-        <div style={panel}><div style={eyebrow}>Need</div><p style={muted}>{item.need}</p></div>
-        <div style={panel}><div style={eyebrow}>State</div><p style={muted}>{item.state}</p></div>
-      </div>
-      <p style={{ ...muted, marginTop: 12 }}>No member personal info shown outside. Inside access unlocks request thread, routing, and controlled contact workflow.</p>
-      <div style={{ ...row, marginTop: 14 }}>
-        <Link href="/investor-access" style={goldBtn}>Enter To See Pain Signal</Link>
-        <Link href="/member-access" style={btn}>Apply To Solve Pain</Link>
-      </div>
-    </div>
-  );
-}
-
-
-function StateCountCard({ state, memberCount, investorCount, dealCount, painCount }: { state: string; memberCount: number; investorCount: number; dealCount: number; painCount: number }) {
-  return (
-    <div style={panel}>
-      <div style={eyebrow}>{state}</div>
-      <h3 style={h3}>{dealCount + painCount} live signals</h3>
-      <p style={muted}>Members: {memberCount}</p>
-      <p style={muted}>Investors: {investorCount}</p>
-      <p style={muted}>Deal teasers: {dealCount} • Pain teasers: {painCount}</p>
-    </div>
-  );
-}
-
-export default function HomePage() {
-  const [tick, setTick] = useState(0);
-  const [owner, setOwner] = useState(false);
-  const [selectedPublicState, setSelectedPublicState] = useState("GA");
+export default function AdminPage() {
+  const [email, setEmail] = useState("");
+  const [members, setMembers] = useState<MemberRecord[]>([]);
+  const [investors, setInvestors] = useState<InvestorRecord[]>([]);
+  const [adminInvestorInbox, setAdminInvestorInbox] = useState<any[]>([]);
+  const [investorRequests, setInvestorRequests] = useState<InvestorRequest[]>([]);
+  const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
+  const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
+  const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [adminActionTick, setAdminActionTick] = useState(0);
+  const [profileQueueTick, setProfileQueueTick] = useState(0);
+  const [deals, setDeals] = useState<RoomRecord[]>([]);
+  const [pains, setPains] = useState<RoomRecord[]>([]);
+  const [searchDraft, setSearchDraft] = useState("");
+  const [search, setSearch] = useState("");
+  const [broadcastSubject, setBroadcastSubject] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [broadcastNotice, setBroadcastNotice] = useState("");
+  const [filter, setFilter] = useState<AdminFilter>("all");
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
+  const [tab, setTab] = useState<QueueTab>("overview");
+  const [selectedMember, setSelectedMember] = useState<MemberRecord | null>(null);
+  const [roomSelection, setRoomSelection] = useState<RoomSelection>(null);
+  const [activeRoomCard, setActiveRoomCard] = useState("");
 
   useEffect(() => {
     const refresh = () => {
-      setOwner(currentEmail() === OWNER_EMAIL);
-      setTick((value) => value + 1);
+      setEmail(currentEmail());
+      setMembers(readMembers());
+      setInvestors(readInvestors());
+      setAdminInvestorInbox(readAdminInvestorInbox());
+      setInvestorRequests(readInvestorRequests());
+      setInvestorExecutionRequests(readInvestorExecutionRequests());
+      setInvestorAdminMessages(readInvestorAdminMessages());
+      setInvestorExecutionRequests(readInvestorExecutionRequests());
+      setInvestorAdminMessages(readInvestorAdminMessages());
+      setMessages(readMessages());
+      setDeals(readRooms("deal"));
+      setPains(readRooms("pain"));
     };
-
     refresh();
-
-    const interval = window.setInterval(() => setTick((value) => value + 1), 1000);
-
     window.addEventListener("storage", refresh);
-    window.addEventListener("vaultforge-access-change", refresh);
     window.addEventListener("vaultforge-admin-members-change", refresh);
-
+    window.addEventListener("vaultforge-admin-profile-queue-change", () => setProfileQueueTick((value) => value + 1));
+    window.addEventListener("vaultforge-admin-message-change", refresh);
+    window.addEventListener("vaultforge-investor-change", refresh);
+    window.addEventListener("vaultforge-admin-action-change", refresh);
+    window.addEventListener("vaultforge-investor-request-change", refresh);
+    window.addEventListener("vaultforge-investor-execution-request-change", refresh);
+    window.addEventListener("vaultforge-investor-admin-message-change", refresh);
+    window.addEventListener("vaultforge-controlled-thread-change", refresh);
+    window.addEventListener("vaultforge-investor-execution-request-change", refresh);
+    window.addEventListener("vaultforge-investor-admin-message-change", refresh);
+    window.addEventListener("vaultforge-my-rooms-change", refresh);
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener("storage", refresh);
-      window.removeEventListener("vaultforge-access-change", refresh);
       window.removeEventListener("vaultforge-admin-members-change", refresh);
+      window.removeEventListener("vaultforge-admin-message-change", refresh);
+      window.removeEventListener("vaultforge-investor-change", refresh);
+      window.removeEventListener("vaultforge-admin-action-change", refresh);
+      window.removeEventListener("vaultforge-investor-request-change", refresh);
+      window.removeEventListener("vaultforge-investor-execution-request-change", refresh);
+      window.removeEventListener("vaultforge-investor-admin-message-change", refresh);
+      window.removeEventListener("vaultforge-controlled-thread-change", refresh);
+      window.removeEventListener("vaultforge-investor-execution-request-change", refresh);
+      window.removeEventListener("vaultforge-investor-admin-message-change", refresh);
+      window.removeEventListener("vaultforge-my-rooms-change", refresh);
     };
   }, []);
 
-  const timer = useMemo(() => countdown(), [tick]);
-  const counts = useMemo(() => founderCounts(), [tick]);
-  const founderClosed = timer.expired || counts.every((item) => item.full);
-  const totalFilled = counts.reduce((sum, item) => sum + item.filled, 0);
-  const totalCap = counts.reduce((sum, item) => sum + item.cap, 0);
-  const memberStateCounts = useMemo(() => liveMemberCounts(), [tick]);
-  const investorStateCounts = useMemo(() => liveInvestorCounts(), [tick]);
-  const dealStateCounts = useMemo(() => stateCounts(sampleDealPostings), []);
-  const painStateCounts = useMemo(() => stateCounts(samplePainPostings), []);
-  const selectedDealWindows = useMemo(() => publicDealWindows.filter((item) => item.state === selectedPublicState).slice(0, 2), [selectedPublicState]);
-  const selectedPainWindows = useMemo(() => publicPainWindows.filter((item) => item.state === selectedPublicState).slice(0, 2), [selectedPublicState]);
+  const allowed = true; // EMERGENCY OWNER UNLOCK: temporary mock-build access so admin cannot lock out during testing.
+  const profileApprovalQueue = useMemo(() => readProfileApprovalQueue(), [profileQueueTick, members, investors]);
+  const pendingProfileApprovals = useMemo(() => profileApprovalQueue.filter((item) => !["approved_payment_ready", "paid", "deleted", "denied"].includes(lower(item?.status))), [profileApprovalQueue]);
+  const paymentReadyProfiles = useMemo(() => profileApprovalQueue.filter((item) => lower(item?.status) === "approved_payment_ready"), [profileApprovalQueue]);
+  const visibleMembers = useMemo(() => members.filter((member) => member.status !== "deleted"), [members]);
+  const newMembers = useMemo(() => members.filter(isNewMember), [members]);
+  const pending = useMemo(() => members.filter((member) => member.status === "pending"), [members]);
+  const approvedUnpaid = useMemo(() => members.filter(isApprovedUnpaid), [members]);
+  const paid = useMemo(() => members.filter((member) => member.paymentStatus === "paid"), [members]);
+  const comped = useMemo(() => members.filter((member) => member.paymentStatus === "comped"), [members]);
+  const deleted = useMemo(() => members.filter((member) => member.status === "deleted"), [members]);
+  const archivedMembers = useMemo(() => members.filter((member) => member.status === "suspended" || member.status === "denied"), [members]);
+  const activeMembers = useMemo(() => members.filter((member) => member.status === "approved" && member.access === "active"), [members]);
+  const openMessages = useMemo(() => messages.filter((message) => message.status !== "resolved" && message.status !== "deleted"), [messages]);
+
+  const newInvestors = useMemo(() => investors.filter((investor) => investor.status === "pending"), [investors]);
+  const approvedInvestors = useMemo(() => investors.filter((investor) => investor.status === "approved"), [investors]);
+  const pendingInvestorPayment = useMemo(() => investors.filter((investor) => investor.status === "approved" && investor.approvedForPayment && investor.paymentStatus === "unpaid"), [investors]);
+  const paidInvestors = useMemo(() => investors.filter((investor) => investor.paymentStatus === "paid" || investor.paymentStatus === "comped"), [investors]);
+  const blockedInvestors = useMemo(() => investors.filter((investor) => investor.status === "denied" || investor.status === "suspended"), [investors]);
+  const deletedInvestors = useMemo(() => investors.filter((investor) => investor.status === "deleted"), [investors]);
+  const dealRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("deal")), [investorRequests]);
+  const painRequests = useMemo(() => investorRequests.filter((request) => lower(request.kind).includes("pain")), [investorRequests]);
+  const openInvestorExecutionRequests = useMemo(() => investorExecutionRequests.filter(isOpenRequest), [investorExecutionRequests]);
+  const openInvestorAdminMessages = useMemo(() => investorAdminMessages.filter(isOpenRequest), [investorAdminMessages]);
+  const allInvestorActionItems = useMemo(() => {
+    const map = new Map<string, any>();
+    [...adminInvestorInbox, ...investorRequests, ...investorExecutionRequests, ...investorAdminMessages].forEach((item: any, index) => {
+      const key = clean(item?.id || item?.sourceRequestId || `${item?.type || item?.kind || "item"}-${item?.title || item?.requestTitle || index}`);
+      if (!key) return;
+      const existing = map.get(key) || {};
+      map.set(key, { ...existing, ...item, investorProfile: investorProfileFromStores({ ...existing, ...item }) });
+    });
+    return Array.from(map.values()).sort((a, b) => clean(b?.createdAt || b?.updatedAt).localeCompare(clean(a?.createdAt || a?.updatedAt)));
+  }, [adminInvestorInbox, investorRequests, investorExecutionRequests, investorAdminMessages]);
+  const openInvestorActionItems = useMemo(() => allInvestorActionItems.filter(isOpenRequest), [allInvestorActionItems]);
+  const savedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "saved")), [allInvestorActionItems]);
+  const archivedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "archived")), [allInvestorActionItems]);
+  const deletedInvestorActionItems = useMemo(() => allInvestorActionItems.filter((item) => isQueueStatus(item, "deleted")), [allInvestorActionItems]);
+  const activeControlledThreads = useMemo(() => readControlledThreads().filter((thread: any) => requestStatus(thread) !== "deleted" && requestStatus({ status: thread?.stage }) !== "deleted"), [adminInvestorInbox, investorRequests, investorExecutionRequests, investorAdminMessages]);
+  const deletedControlledThreads = useMemo(() => readControlledThreads().filter((thread: any) => requestStatus(thread) === "deleted" || requestStatus({ status: thread?.stage }) === "deleted"), [adminInvestorInbox, investorRequests, investorExecutionRequests, investorAdminMessages]);
+
+  const filteredMembers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return members.filter((member) => {
+      if (stateFilter !== "all") {
+        if (stateFilter === "notListed" && member.baseState !== "Not listed") return false;
+        if (stateFilter !== "notListed" && member.baseState !== stateFilter) return false;
+      }
+      if (q && !memberSearchText(member).includes(q)) return false;
+      if (filter === "all") return member.status !== "deleted";
+      if (filter === "new") return isNewMember(member);
+      if (filter === "pending") return member.status === "pending";
+      if (filter === "approvedUnpaid") return isApprovedUnpaid(member);
+      if (filter === "paid") return member.paymentStatus === "paid";
+      if (filter === "active") return member.status === "approved" && member.access === "active";
+      if (filter === "locked") return member.status !== "deleted" && (member.paymentStatus === "unpaid" || member.access === "locked");
+      if (filter === "comped") return member.paymentStatus === "comped";
+      if (filter === "blocked") return member.status === "suspended" || member.status === "denied";
+      if (filter === "deleted") return member.status === "deleted";
+      return true;
+    });
+  }, [members, search, filter, stateFilter, adminActionTick]);
+
+  function saveMembers(next: MemberRecord[]) {
+    const filtered = next.filter((member) => !isHardDeleted(ADMIN_DELETED_MEMBER_IDS_KEY, member.id));
+    setMembers(filtered);
+    writeJson(ADMIN_MEMBERS_KEY, filtered);
+      window.dispatchEvent(new Event("vaultforge-admin-members-change"));
+    window.dispatchEvent(new Event("vaultforge-admin-action-change"));
+  }
+
+  function patchMember(id: string, patch: Partial<MemberRecord>) {
+    const target = members.find((member) => member.id === id);
+    if (target && (patch.status === "approved" || patch.approvedForPayment || Boolean(patch.paymentStatus))) {
+      writeMockAccess(target.email, "member", {
+        approved: true,
+        adminApproved: true,
+        approvedForPayment: true,
+        paymentStatus: patch.paymentStatus || "ready",
+        accessStatus: "payment_ready",
+      });
+    }
+    const next = members.map((member) => {
+      if (member.id !== id) return member;
+      const merged = { ...member, ...patch };
+      const pay = merged.paymentStatus;
+      const status = merged.status;
+      const paidLike = pay === "paid" || pay === "comped" || pay === "trial";
+      const nextAccess: "active" | "locked" = patch.access || (status === "approved" && paidLike ? "active" : "locked");
+      return { ...merged, access: nextAccess, updatedAt: new Date().toISOString() };
+    });
+    saveMembers(next);
+    const updated = next.find((member) => member.id === id) || null;
+    setSelectedMember(updated);
+    if (patch.status === "deleted") setFilter("deleted");
+  }
+
+  function deleteMemberForever(id: string) {
+    markDeletedId(ADMIN_DELETED_MEMBER_IDS_KEY, id);
+    saveMembers(members.filter((member) => member.id !== id));
+    setSelectedMember(null);
+  }
+
+  function patchInvestor(id: string, patch: Partial<InvestorRecord>) {
+    const target = investors.find((investor) => investor.id === id);
+    if (target && (patch.status === "approved" || patch.approvedForPayment || Boolean(patch.paymentStatus))) {
+      writeMockAccess(target.email, "investor", {
+        approved: true,
+        adminApproved: true,
+        approvedForPayment: true,
+        paymentStatus: patch.paymentStatus || "ready",
+        accessStatus: "payment_ready",
+      });
+    }
+    let updatedInvestor: InvestorRecord | undefined;
+    const next = investors.map((investor) => {
+      if (investor.id !== id) return investor;
+      updatedInvestor = recalcInvestorAccess({ ...investor, ...patch, updatedAt: new Date().toISOString() });
+      return updatedInvestor;
+    });
+    setInvestors(next);
+    saveInvestors(next, updatedInvestor);
+    setAdminActionTick((value) => value + 1);
+  }
+
+  function deleteInvestorForever(id: string) {
+    markDeletedId(ADMIN_DELETED_INVESTOR_IDS_KEY, id);
+    const next = investors.filter((investor) => investor.id !== id);
+    setInvestors(next);
+    saveInvestors(next);
+    setAdminActionTick((value) => value + 1);
+  }
+
+  function runSearch(event?: React.FormEvent) {
+    if (event) event.preventDefault();
+    const next = searchDraft.trim();
+    setSearch(next);
+    if (next) {
+      setFilter("all");
+      setStateFilter("all");
+      setTab("members");
+    }
+  }
+
+
+  function updateAdminInboxStatus(id: string, status: string) {
+    const stamped = new Date().toISOString();
+    const threadSource =
+      adminInvestorInbox.find((item) => item.id === id) ||
+      investorRequests.find((item) => item.id === id) ||
+      investorExecutionRequests.find((item) => item.id === id) ||
+      investorAdminMessages.find((item) => item.id === id);
+
+    const normalizedSource = threadSource ? { ...threadSource, investorProfile: investorProfileFromStores(threadSource), status, updatedAt: stamped } : null;
+
+    const nextInbox = adminInvestorInbox.some((item) => item.id === id)
+      ? adminInvestorInbox.map((item) => item.id === id ? { ...item, investorProfile: investorProfileFromStores(item), status, updatedAt: stamped } : item)
+      : normalizedSource
+        ? [normalizedSource, ...adminInvestorInbox]
+        : adminInvestorInbox;
+    setAdminInvestorInbox(nextInbox);
+    writeAdminInvestorInbox(nextInbox);
+
+    const syncRequest = (rows: any[]) => rows.map((item) => item.id === id ? { ...item, investorProfile: investorProfileFromStores(item), status, updatedAt: stamped } : item);
+    const nextRequests = syncRequest(investorRequests) as InvestorRequest[];
+    const nextExecution = syncRequest(investorExecutionRequests) as InvestorExecutionRequest[];
+    const nextMessages = syncRequest(investorAdminMessages) as InvestorAdminMessage[];
+    setInvestorRequests(nextRequests);
+    setInvestorExecutionRequests(nextExecution);
+    setInvestorAdminMessages(nextMessages);
+    writeInvestorRequests(nextRequests);
+    writeInvestorExecutionRequests(nextExecution);
+    writeInvestorAdminMessages(nextMessages);
+
+    if (["approved", "routed", "admin_replied"].includes(status) && normalizedSource) createThreadFromAdminInbox(normalizedSource);
+  }
+
+  function updateInvestorRequestStatus(id: string, status: string) {
+    const original = investorRequests.find((request) => request.id === id);
+    const next = investorRequests.map((request) =>
+      request.id === id ? { ...request, status, updatedAt: new Date().toISOString() } as InvestorRequest : request
+    );
+    setInvestorRequests(next);
+    writeInvestorRequests(next);
+    if (["approved", "routed"].includes(status) && original) createControlledThread("deal_pain", { ...original, status });
+  }
+
+  function updateInvestorExecutionStatus(id: string, status: string) {
+    const original = investorExecutionRequests.find((request) => request.id === id);
+    const next = investorExecutionRequests.map((request) =>
+      request.id === id ? { ...request, status, updatedAt: new Date().toISOString() } as InvestorExecutionRequest : request
+    );
+    setInvestorExecutionRequests(next);
+    writeInvestorExecutionRequests(next);
+    if (["approved", "routed"].includes(status) && original) createControlledThread("execution", { ...original, status });
+  }
+
+  function updateInvestorAdminMessageStatus(id: string, status: string) {
+    const original = investorAdminMessages.find((message) => message.id === id);
+    const next = investorAdminMessages.map((message) =>
+      message.id === id ? { ...message, status, updatedAt: new Date().toISOString() } as InvestorAdminMessage : message
+    );
+    setInvestorAdminMessages(next);
+    writeInvestorAdminMessages(next);
+    if (["approved", "routed"].includes(status) && original) createControlledThread("admin_message", { ...original, status });
+  }
+
+  function broadcastToMembers(target: "filtered" | "all") {
+    const recipients = target === "filtered" ? filteredMembers.filter((member) => member.status !== "deleted") : visibleMembers;
+    const success = saveBroadcastMessage(recipients, broadcastSubject, broadcastBody);
+    if (!success) {
+      setBroadcastNotice("Add a message and make sure there is at least one member selected.");
+      return;
+    }
+    setBroadcastNotice(`Message saved for ${recipients.length} member(s).`);
+    setBroadcastSubject("");
+    setBroadcastBody("");
+    setMessages(readMessages());
+  }
+
+  function openRoomSelection(title: string, rooms: RoomRecord[], key: string) {
+    setActiveRoomCard(key);
+    setRoomSelection({ title, rooms });
+  }
+
+  if (!allowed) {
+    return (
+      <main style={page}>
+        <div style={wrap}>
+          <AdminNav />
+          <section style={hero}>
+            <div style={eyebrow}>Owner Only</div>
+            <h1 style={h1}>Admin Command locked.</h1>
+            <p style={sub}>Admin Command is only visible to {OWNER_EMAIL}.</p>
+            <p style={muted}>Detected email: {email || OWNER_EMAIL.toLowerCase()}</p>
+            <div style={{ ...row, marginTop: 18 }}>
+              <Link href="/command" style={goldBtn}>Back to Member Area</Link>
+              <Link href="/profile" style={btn}>Profile</Link>
+            </div>
+          </section>
+        <AdminOperatingGuide />
+        <AdminQueueGuide />
+
+        <Section title="Profile Approval Queue">
+          <p style={muted}>Profiles submitted from Member Profile or Investor Application show here. Click Approve / Light Payment to make their room payment button pulse.</p>
+          <div style={{ ...grid, marginTop: 16 }}>
+            {profileApprovalQueue.length ? profileApprovalQueue.map((item: any, index: number) => {
+              const kind = lower(item?.type) === "investor" ? "investor" : "member";
+              const profile = item?.profile || {};
+              const emailValue = lower(item?.email || profile?.email || profile?.investorEmail);
+              const status = clean(item?.status || "pending_admin_approval");
+              return (
+                <div key={`${kind}-${emailValue || index}`} className={status === "pending_admin_approval" ? "vf-pulse" : ""} style={status === "approved_payment_ready" ? panel : panel}>
+                  <div style={eyebrow}>{kind === "investor" ? "Investor Profile" : "Member Profile"} • {status}</div>
+                  <h3 style={h3}>{clean(item?.name || profile?.name || profile?.contactName || "Profile")}</h3>
+                  <p style={muted}>Company: {clean(item?.company || profile?.company || "Not listed")}</p>
+                  <p style={muted}>Email: {emailValue || "Not listed"}</p>
+                  <p style={muted}>Type: {clean(profile?.memberType || profile?.investorTypes || kind)}</p>
+                  <div style={{ ...row, marginTop: 12 }}>
+                    <button type="button" style={goldBtn} onClick={() => { approveProfileForPayment(item); setProfileQueueTick((value) => value + 1); }}>
+                      Approve / Light Payment
+                    </button>
+                    <button type="button" style={btn} onClick={() => {
+                      const queue = readProfileApprovalQueue().map((row) => row === item ? { ...row, status: "reviewing", updatedAt: new Date().toISOString() } : row);
+                      writeProfileApprovalQueue(queue);
+                      setProfileQueueTick((value) => value + 1);
+                    }}>
+                      Mark Reviewing
+                    </button>
+                    <button type="button" style={redBtn} onClick={() => {
+                      const queue = readProfileApprovalQueue().map((row) => row === item ? { ...row, status: "denied", updatedAt: new Date().toISOString() } : row);
+                      writeProfileApprovalQueue(queue);
+                      setProfileQueueTick((value) => value + 1);
+                    }}>
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              );
+            }) : (
+              <div style={panel}>
+                <h3 style={h3}>No submitted profiles yet.</h3>
+                <p style={muted}>Submit a Member Profile or Investor Application to test the approval/payment pulse flow.</p>
+              </div>
+            )}
+          </div>
+        </Section>
+
+
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main style={page}>
-      <style>{`@keyframes tickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
+      <style>{`
+        @keyframes vfPulse {
+          0% { box-shadow: 0 0 0 0 rgba(255,220,104,.00), 0 0 0 rgba(255,220,104,.00); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
+          35% { box-shadow: 0 0 0 8px rgba(255,220,104,.25), 0 0 44px rgba(255,220,104,.55); transform: scale(1.018); outline: 3px solid rgba(245,197,66,.85); }
+          70% { box-shadow: 0 0 0 3px rgba(255,220,104,.10), 0 0 24px rgba(255,220,104,.28); transform: scale(1.006); outline: 2px solid rgba(245,197,66,.62); }
+          100% { box-shadow: 0 0 0 0 rgba(255,220,104,.00), 0 0 0 rgba(255,220,104,.00); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
+        }
+        .vf-pulse { animation: vfPulse .95s ease-in-out infinite; border-color: rgba(255,220,104,.95) !important; }
+      `}</style>
+
+      <MemberModal member={selectedMember} onClose={() => setSelectedMember(null)} />
+      <RoomModal selection={roomSelection} onClose={() => setRoomSelection(null)} />
 
       <div style={wrap}>
-        <Nav owner={owner} />
+        <AdminNav />
 
         <section style={hero}>
-          <LogoHero />
-          <div style={eyebrow}>VaultForge Intelligence</div>
-          <h1 style={h1}>Private real estate intelligence.</h1>
-          <p style={sub}>VaultForge is a private real estate execution network where approved members post Deal Opportunities and Pain Signals, and approved investors can request information, funding help, owner contact, or routed execution without seeing the private member directory.</p>
-          <p style={{ ...sub, marginTop: 16 }}>Deals, capital, contractors, title/closing, operators, insurance, buyers, and problem solvers in one controlled system.</p>
+          <div style={eyebrow}>VaultForge Admin Command</div>
+          <h1 style={h1}>Admin command center.</h1>
+          <p style={sub}>Review members and investors, route Deal/Pain/execution requests, control contact release, manage replies, and clean queues without exposing private network data.</p>
+        </section>
 
-          <div style={{ ...row, marginTop: 24 }}>
-            <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-            <Link href="/investor-access" style={goldBtn}>Investor Room Access</Link>
-            <Link href="/create-login" style={btn}>Create Login + Password</Link>
-            <Link href="/login" style={btn}>Members Login</Link>
-            <Link href="/investor-login" style={btn}>Investor Room Login</Link>
-            <Link href="/admin" style={btn}>Admin Login</Link>
-          </div>
-
-          <div style={{ marginTop: 22 }}>
-            <span style={badge}>PRIVATE NETWORK</span>
-            <span style={badge}>APPROVED MEMBERS ONLY</span>
-            <span style={badge}>PAIN → SIGNAL → ROUTING → EXECUTION</span>
+        <section style={{ marginBottom: 18 }}>
+          <div style={grid}>
+            <Metric title="Profile Approvals" count={pendingProfileApprovals.length} note="submitted profiles waiting on approval" pulse={pendingProfileApprovals.length > 0} onClick={() => setTab("overview")} />
+            <Metric title="Payment Ready" count={paymentReadyProfiles.length} note="profiles approved, payment button should pulse" pulse={paymentReadyProfiles.length > 0} onClick={() => setTab("overview")} />
+            <Metric title="New Members" count={newMembers.length} note="new/pending applications" pulse={newMembers.length > 0} onClick={() => { setFilter("new"); setTab("members"); }} />
+            <Metric title="Approved Not Paid" count={approvedUnpaid.length} note="payment approved but unpaid" pulse={approvedUnpaid.length > 0} onClick={() => { setFilter("approvedUnpaid"); setTab("members"); }} />
+            <Metric title="New Investors" count={newInvestors.length} note="pending investor approvals" pulse={newInvestors.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Investor Payments" count={pendingInvestorPayment.length} note="investor payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Controlled Threads" count={readControlledThreads().length} note="approved intro rooms" pulse={readControlledThreads().length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Investor Inbox" count={openInvestorActionItems.length} note="messages/requests from investor room" pulse={openInvestorActionItems.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Deal Requests" count={dealRequests.length} note="investor deal interest" pulse={dealRequests.length > 0} onClick={() => setTab("dealRequests")} />
+            <Metric title="Pain Requests" count={painRequests.length} note="investor pain interest" pulse={painRequests.length > 0} onClick={() => setTab("painRequests")} />
+            <Metric title="Execution Requests" count={openInvestorExecutionRequests.length} note="lender/title/contractor/operator requests" pulse={openInvestorExecutionRequests.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Investor Admin Messages" count={openInvestorAdminMessages.length} note="messages from investor room" pulse={openInvestorAdminMessages.length > 0} onClick={() => setTab("investors")} />
+            <Metric title="Paid Members" count={paid.length} note="paid members" onClick={() => { setFilter("paid"); setTab("members"); }} />
+            <Metric title="Paid Investors" count={paidInvestors.length} note="active investor access" onClick={() => setTab("investors")} />
           </div>
         </section>
 
-
-        <Section label="Live VaultForge Market Preview" title="Click a state. See Deals and Pain split.">
-          <p style={sub}>This is the outside window into VaultForge. Public visitors see limited teaser information only. Approved Investor Room or Member Room access unlocks the full request thread, owner contact workflow, routing, documents, messages, and execution lanes.</p>
-
-          <div style={{ ...row, marginTop: 22 }}>
-            {OPERATING_STATES.map((state) => (
-              <button
-                key={state}
-                type="button"
-                style={state === selectedPublicState ? goldBtn : btn}
-                onClick={() => setSelectedPublicState(state)}
-              >
-                {state}
+        <Section title="Admin Queues">
+          <div style={row}>
+            {[
+              ["overview", "Overview"],
+              ["members", "Members"],
+              ["investors", "Investors"],
+              ["dealRequests", "Deal Requests"],
+              ["painRequests", "Pain Requests"],
+              ["rooms", "Rooms"],
+              ["saved", "Saved"],
+              ["archived", "Archived"],
+              ["deleted", "Deleted"],
+            ].map(([key, label]) => (
+              <button key={key} type="button" style={tab === key ? goldBtn : btn} onClick={() => setTab(key as QueueTab)}>
+                {label}
               </button>
             ))}
           </div>
-
-          <div style={{ ...grid, marginTop: 22 }}>
-            {OPERATING_STATES.map((state) => (
-              <StateCountCard
-                key={`top-${state}`}
-                state={state}
-                memberCount={memberStateCounts.find((item) => item.state === state)?.count || 0}
-                investorCount={investorStateCounts.find((item) => item.state === state)?.count || 0}
-                dealCount={publicDealWindows.filter((item) => item.state === state).length}
-                painCount={publicPainWindows.filter((item) => item.state === state).length}
-              />
-            ))}
-          </div>
         </Section>
 
-        <Section label={`${selectedPublicState} Deal Opportunities`} title="Two live deal windows. Limited outside info.">
-          <p style={sub}>Residential shows beds, baths, price, fix amount, ARV, and state. Commercial and Land show matching fields where appropriate. Full location, owner/member contact, documents, and thread are inside.</p>
-          <div style={{ ...wideGrid, marginTop: 22 }}>
-            {selectedDealWindows.map((item) => <PublicDealWindowCard key={`deal-window-${item.state}-${item.city}-${item.title}`} item={item} />)}
-          </div>
-        </Section>
+        {openInvestorActionItems.length ? (
+          <Section title="Investor Opportunity Messages — Live Queue">
+            <div style={grid}>
+              {openInvestorActionItems.map((item) => (
+                <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />
+              ))}
+            </div>
+          </Section>
+        ) : null}
 
-        <Section label={`${selectedPublicState} Pain Signals`} title="Two live pain windows. No member info outside.">
-          <p style={sub}>Pain cards show the problem type, urgency, asset, state, and what help is needed. They do not reveal member identity or personal contact outside the room.</p>
-          <div style={{ ...wideGrid, marginTop: 22 }}>
-            {selectedPainWindows.map((item) => <PublicPainWindowCard key={`pain-window-${item.state}-${item.city}-${item.title}`} item={item} />)}
-          </div>
-        </Section>
+        {tab === "overview" ? (
+          <>
+            <Section title="Investor Intelligence Lane">
+              <div style={grid}>
+                <div style={activePanel}>
+                  <div style={eyebrow}>Separate Buyer-Intelligence Network</div>
+                  <h3 style={h3}>Investor Access stays separate.</h3>
+                  <p style={muted}>Investors see teaser Deal/Pain cards only. They do not see member directory, private routing, seller data, or full rooms.</p><p style={muted}>Investor execution routing queue now captures lender, title, contractor, operator, insurance, JV, and boots-on-ground requests.</p>
+                </div>
+                <div style={panel}>
+                  <div style={eyebrow}>Investor Profile Depth</div>
+                  <h3 style={h3}>Better profiles create better routing.</h3>
+                  <p style={muted}>Buy box, markets, volume, strategy, close speed, proof of funds, and asset class drive investor matching.</p>
+                </div>
+                <div style={panel}>
+                  <div style={eyebrow}>One Stop Shop</div>
+                  <h3 style={h3}>Funding and execution stay inside members.</h3>
+                  <p style={muted}>Investors request info. Members/admin approve deeper access and can connect them to lenders, title, contractors, and operators through the private network.</p>
+                </div>
+              </div>
+            </Section>
 
-        <Ticker />
+            <Section title="Room Snapshot">
+              <div style={grid}>
+                {(["active", "saved", "archived", "deleted", "sold"] as RoomView[]).map((view) => (
+                  <RoomCard key={`deal-${view}`} title={`Deal ${view}`} count={deals.filter((room) => inRoomView(room, view)).length} onClick={() => openRoomSelection(`Deal ${view}`, deals.filter((room) => inRoomView(room, view)), `deal-${view}`)} />
+                ))}
+                {(["active", "saved", "archived", "deleted", "resolved"] as RoomView[]).map((view) => (
+                  <RoomCard key={`pain-${view}`} title={`Pain ${view}`} count={pains.filter((room) => inRoomView(room, view)).length} onClick={() => openRoomSelection(`Pain ${view}`, pains.filter((room) => inRoomView(room, view)), `pain-${view}`)} />
+                ))}
+              </div>
+            </Section>
+          </>
+        ) : null}
 
-        <Section label="Two Controlled Access Lanes" title="Members build the network. Investors access the signal room.">
-          <p style={sub}>VaultForge now runs two separate experiences: a private member command center for operators and an investor room for approved capital, buyers, and deal reviewers. The investor room can see controlled Deal Opportunities and Pain submissions, but it does not expose the private member directory.</p>
+        {tab === "members" ? (
+          <>
+            <CollapseBar label="Members Control" onCollapse={() => setTab("overview")} />
+            <Section title="Search / Filter Members">
+              <form onSubmit={runSearch} style={{ display: "grid", gap: 14 }}>
+                <input style={input} value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Search name, company, email, phone, type, home state..." />
+                <div style={row}>
+                  <button type="submit" style={goldBtn}>Submit Search</button>
+                  <button type="button" style={btn} onClick={() => { setSearchDraft(""); setSearch(""); setFilter("all"); setStateFilter("all"); }}>Reset</button>
+                </div>
+                <p style={muted}>Current search: {search || "none"} • Results: {filteredMembers.length}</p>
+              </form>
+              <div style={{ ...grid, marginTop: 14 }}>
+                <Metric title="All" count={visibleMembers.length} note="visible members" active={filter === "all"} onClick={() => setFilter("all")} />
+                <Metric title="Pending" count={pending.length} note="not reviewed" active={filter === "pending"} onClick={() => setFilter("pending")} />
+                <Metric title="Approved Not Paid" count={approvedUnpaid.length} note="needs payment" active={filter === "approvedUnpaid"} pulse={approvedUnpaid.length > 0} onClick={() => setFilter("approvedUnpaid")} />
+                <Metric title="Paid" count={paid.length} note="paid" active={filter === "paid"} onClick={() => setFilter("paid")} />
+                <Metric title="Comped" count={comped.length} note="free access" active={filter === "comped"} onClick={() => setFilter("comped")} />
+                <Metric title="Deleted" count={deleted.length} note="cleanup" active={filter === "deleted"} onClick={() => setFilter("deleted")} />
+              </div>
+            </Section>
 
-          <div style={{ ...wideGrid, marginTop: 22 }}>
-            <div style={goldPanel}>
-              <div style={eyebrow}>Investor Room</div>
-              <h3 style={h3}>Controlled access to deal and pain signals.</h3>
-              <p style={muted}>Investors can review limited Deal Opportunity cards, Pain submissions, state signals, request more information, message through controlled threads, and request execution help.</p>
-              <p style={muted}>Investor price: $79 first month, then $149/month.</p>
-              <div style={{ ...row, marginTop: 16 }}>
-                <Link href="/investor-access" style={goldBtn}>Get Investor Room Access</Link>
-                <Link href="/investor-login" style={btn}>Investor Room Login</Link>
+            <Section title="Member Home State Balance">
+              <div style={grid}>
+                <StateCard state="all" label="All" count={visibleMembers.length} active={stateFilter === "all"} onClick={() => setStateFilter("all")} />
+                {STATE_CODES.map((state) => <StateCard key={state} state={state} label={state} count={stateMemberCount(members, state)} active={stateFilter === state} onClick={() => setStateFilter(state)} />)}
+                <StateCard state="notListed" label="Not Listed" count={stateMemberCount(members, "notListed")} active={stateFilter === "notListed"} onClick={() => setStateFilter("notListed")} />
+              </div>
+            </Section>
+
+
+            <Section title="Member Cleanup Folders">
+              <div style={grid}>
+                <Metric title="Active Members" count={activeMembers.length} note="approved and active" />
+                <Metric title="Archived / Suspended" count={archivedMembers.length} note="suspended or denied members" />
+                <Metric title="Deleted Members" count={deleted.length} note="deleted member cleanup folder" pulse={deleted.length > 0} onClick={() => setFilter("deleted")} />
+              </div>
+              <div style={{ ...panel, marginTop: 14 }}>
+                <div style={eyebrow}>Delete / Delete Forever</div>
+                <p style={muted}>Delete Member moves the member into the deleted cleanup folder. Open Deleted filter to use Delete Forever. Owner/admin cannot be deleted.</p>
+                <div style={{ ...row, marginTop: 12 }}>
+                  <button type="button" style={btn} onClick={() => setFilter("deleted")}>Open Deleted Members</button>
+                  <button type="button" style={redBtn} onClick={() => {
+                    const ids = new Set(members.filter((member) => member.status === "deleted").map((member) => member.id));
+                    ids.forEach((id) => markDeletedId(ADMIN_DELETED_MEMBER_IDS_KEY, id));
+                    saveMembers(members.filter((member) => member.status !== "deleted"));
+                  }}>Clear Deleted Members</button>
+                  <button type="button" style={btn} onClick={() => {
+                    saveMembers(members.map((member) => member.status === "deleted" ? { ...member, status: "pending", access: "locked", updatedAt: new Date().toISOString() } : member));
+                  }}>Restore Deleted Members</button>
+                </div>
+              </div>
+            </Section>
+
+            <Section title="Filtered Member Results">
+              {filteredMembers.length ? (
+                <div style={grid}>
+                  {filteredMembers.map((member) => (
+                    <MemberCard key={member.id} member={member} onOpen={() => setSelectedMember(member)} onPatch={(patch) => patchMember(member.id, patch)} onDeleteForever={() => deleteMemberForever(member.id)} />
+                  ))}
+                </div>
+              ) : (
+                <div style={panel}><h2 style={h2}>No matching members.</h2><p style={sub}>Try another name, company, email, phone, member type, home state, or reset filters.</p></div>
+              )}
+            </Section>
+
+            <Section title="Admin Message Center">
+              <p style={muted}>Send to all members or only the currently filtered member results.</p>
+              <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
+                <input style={input} value={broadcastSubject} onChange={(event) => setBroadcastSubject(event.target.value)} placeholder="Subject..." />
+                <textarea style={{ ...input, minHeight: 130 }} value={broadcastBody} onChange={(event) => setBroadcastBody(event.target.value)} placeholder="Write admin message..." />
+                <div style={row}>
+                  <button type="button" style={goldBtn} onClick={() => broadcastToMembers("filtered")}>Message Filtered Members</button>
+                  <button type="button" style={btn} onClick={() => broadcastToMembers("all")}>Message All Members</button>
+                </div>
+                {broadcastNotice ? <p style={sub}>{broadcastNotice}</p> : null}
+              </div>
+            </Section>
+          </>
+        ) : null}
+
+        {tab === "investors" ? (
+          <>
+            <CollapseBar label="Investor Control" onCollapse={() => setTab("overview")} />
+          <Section title="Investor Access Command">
+            <div style={grid}>
+              <Metric title="New Investors" count={newInvestors.length} note="waiting approval" pulse={newInvestors.length > 0} />
+              <Metric title="Approved Investors" count={approvedInvestors.length} note="approved investor accounts" />
+              <Metric title="Pending Investor Payment" count={pendingInvestorPayment.length} note="payment unlocked but unpaid" pulse={pendingInvestorPayment.length > 0} />
+              <Metric title="Paid Investors" count={paidInvestors.length} note="active investor access" />
+              <Metric title="Blocked Investors" count={blockedInvestors.length} note="denied/suspended" />
+              <Metric title="Deleted Investors" count={deletedInvestors.length} note="cleanup folder" />
+            </div>
+            <div style={{ ...panel, marginTop: 18 }}>
+              <div style={eyebrow}>Investor Access Structure</div>
+              <p style={muted}>$79 first month then $149/month. Separate investor login/application flow. Teaser Deal/Pain cards only. No direct member info exposed.</p>
+              <div style={{ ...row, marginTop: 12 }}>
+                <button type="button" style={redBtn} onClick={() => {
+                  const ids = new Set(investors.filter((investor) => investor.status === "deleted").map((investor) => investor.id));
+                  ids.forEach((id) => markDeletedId(ADMIN_DELETED_INVESTOR_IDS_KEY, id));
+                  const next = investors.filter((investor) => investor.status !== "deleted");
+                  setInvestors(next);
+                  saveInvestors(next);
+                  setAdminActionTick((value) => value + 1);
+                }}>Clear Deleted Investors</button>
+                <button type="button" style={btn} onClick={() => {
+                  const next = investors.map((investor) => investor.status === "deleted" ? recalcInvestorAccess({ ...investor, status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked", updatedAt: new Date().toISOString() }) : investor);
+                  setInvestors(next);
+                  saveInvestors(next);
+                  setAdminActionTick((value) => value + 1);
+                }}>Restore Deleted Investors</button>
               </div>
             </div>
+            <div style={{ marginTop: 18 }}>
+              <Section title="Controlled Intro Threads">
+                <div style={grid}>
+                  {activeControlledThreads.length ? activeControlledThreads.map((thread) => (
+                    <div key={thread.id} style={activePanel}>
+                      <div style={eyebrow}>{thread.status} • {thread.stage}</div>
+                      <h2 style={h2}>{thread.title}</h2>
+                      <p style={sub}>{thread.investorCompany || thread.investorName || thread.investorEmail}</p>
+                      <p style={muted}>{thread.roomHeader}</p>
+                      <p style={muted}>Contact Released: {thread.contactReleased ? "Yes" : "No"}</p>
+                      <p style={muted}>Thread ID: {thread.id}</p>
+                    </div>
+                  )) : <div style={panel}><h2 style={h2}>No controlled threads yet.</h2><p style={sub}>Approve an intro/request to create one.</p></div>}
+                </div>
+              </Section>
 
-            <div style={goldPanel}>
-              <div style={eyebrow}>Private Members Site</div>
-              <h3 style={h3}>Approved operators, capital, buyers, and problem solvers.</h3>
-              <p style={muted}>Members operate inside the private command center: routed requests, Deal/Pain rooms, messages, alerts, profile-based routing, state intelligence, and execution lanes.</p>
-              <p style={muted}>Members are not publicly browsed. The network is protected by profile review, admin approval, payment unlock, and controlled contact release.</p>
-              <div style={{ ...row, marginTop: 16 }}>
-                <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-                <Link href="/login" style={btn}>Members Login</Link>
-              </div>
+              <Section title="Request Action Status">
+                <div style={grid}>
+                  <Metric title="Routed" count={allInvestorActionItems.filter((item) => requestStatus(item) === "routed").length} note="requests routed internally" />
+                  <Metric title="Approved" count={allInvestorActionItems.filter((item) => requestStatus(item) === "approved").length} note="approved intros/requests" />
+                  <Metric title="Saved" count={savedInvestorActionItems.length} note="saved queue" />
+                  <Metric title="Archived" count={archivedInvestorActionItems.length} note="archived queue" />
+                  <Metric title="Closed" count={allInvestorActionItems.filter((item) => requestStatus(item) === "closed").length} note="closed requests" />
+                </div>
+              </Section>
+
+              <Section title="Investor Execution Requests">
+                {openInvestorExecutionRequests.length ? (
+                  <div style={grid}>
+                    {openInvestorExecutionRequests.map((request) => (
+                      <InvestorExecutionRequestCard key={request.id} request={request} onStatus={updateInvestorExecutionStatus} />
+                    ))}
+                  </div>
+                ) : (
+                  <div style={panel}><h2 style={h2}>No execution requests yet.</h2></div>
+                )}
+              </Section>
+
+              <Section title="Investor Admin Messages">
+                {openInvestorAdminMessages.length ? (
+                  <div style={grid}>
+                    {openInvestorAdminMessages.map((message) => (
+                      <InvestorAdminMessageCard key={message.id} message={message} onStatus={updateInvestorAdminMessageStatus} />
+                    ))}
+                  </div>
+                ) : (
+                  <div style={panel}><h2 style={h2}>No investor admin messages yet.</h2></div>
+                )}
+              </Section>
+
+              <Section title="Investor Inbox — Messages / Requests">
+                <div style={grid}>
+                  {openInvestorActionItems.length ? (
+                    openInvestorActionItems.map((item) => (
+                      <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />
+                    ))
+                  ) : (
+                    <div style={panel}>
+                      <h2 style={h2}>No investor messages or requests yet.</h2>
+                      <p style={sub}>Investor room Deal/Pain requests, execution requests, lender requests, and Message Admin messages will appear here.</p>
+                    </div>
+                  )}
+                </div>
+              </Section>
+
+              <Section title="Investor Message Receive / Send">
+                <div style={grid}>
+                  {openInvestorAdminMessages.length ? openInvestorAdminMessages.map((message) => (
+                    <InvestorRequestAdminCard key={message.id} request={message} onStatus={updateInvestorAdminMessageStatus} />
+                  )) : <div style={panel}><h2 style={h2}>No investor admin messages yet.</h2></div>}
+                </div>
+              </Section>
+
+              <Section title="Investor Execution Requests">
+                <div style={grid}>
+                  {openInvestorExecutionRequests.length ? openInvestorExecutionRequests.map((request) => (
+                    <InvestorRequestAdminCard key={request.id} request={request} onStatus={updateInvestorExecutionStatus} />
+                  )) : <div style={panel}><h2 style={h2}>No investor execution requests yet.</h2></div>}
+                </div>
+              </Section>
+
+              <Section title="Controlled Thread Reply Center">
+                <div style={grid}>
+                  {activeControlledThreads.length ? activeControlledThreads.map((thread) => (
+                    <ControlledThreadAdminCard key={thread.id} thread={thread} />
+                  )) : <div style={panel}><h2 style={h2}>No controlled threads yet.</h2></div>}
+                </div>
+              </Section>
+
+              {investors.length ? (
+                <div style={grid}>
+                  {investors.map((investor) => (
+                    <InvestorCard key={investor.id} investor={investor} onPatch={(patch) => patchInvestor(investor.id, patch)} onDeleteForever={() => deleteInvestorForever(investor.id)} />
+                  ))}
+                </div>
+              ) : (
+                <div style={panel}><h2 style={h2}>No investor applications yet.</h2><p style={sub}>Investor applications appear after /investor-application.</p></div>
+              )}
             </div>
-          </div>
-        </Section>
+          </Section>
+          </>
+        ) : null}
 
-        <Section label="One-Stop Real Estate Execution Shop" title="Deals, problems, people, and next moves in one private system.">
-          <p style={sub}>VaultForge is built for the messy real estate work that happens before, during, and after a deal: finding capital, locating buyers, solving title/closing problems, finding contractors, routing operators, reviewing Pain signals, requesting boots on ground, and turning pressure into execution.</p>
+        {tab === "dealRequests" ? (
+          <>
+            <CollapseBar label="Deal Requests" onCollapse={() => setTab("overview")} />
+          <Section title="Investor Deal Requests">
+            {dealRequests.length ? <div style={grid}>{dealRequests.map((request) => <InvestorRequestCard key={request.id} request={request} onStatus={updateInvestorRequestStatus} />)}</div> : <div style={panel}><h2 style={h2}>No deal requests yet.</h2></div>}
+          </Section>
+          </>
+        ) : null}
 
-          <div style={{ ...grid, marginTop: 20 }}>
-            <div style={panel}><div style={eyebrow}>Capital</div><p style={sub}>Private lenders, hard money, equity partners, JV capital, proof-of-funds context, and funding gap routing.</p></div>
-            <div style={panel}><div style={eyebrow}>Execution</div><p style={sub}>Contractors, operators, boots on ground, property management, disposition, insurance, and transaction support.</p></div>
-            <div style={panel}><div style={eyebrow}>Deal Intelligence</div><p style={sub}>Deal Opportunities, Pain submissions, market pressure, state filters, routed requests, and controlled message threads.</p></div>
-            <div style={panel}><div style={eyebrow}>Protection</div><p style={sub}>Profiles attached, contact hidden, member data private, admin approval, payment unlock, and release-only introductions.</p></div>
-          </div>
-        </Section>
+        {tab === "painRequests" ? (
+          <>
+            <CollapseBar label="Pain Requests" onCollapse={() => setTab("overview")} />
+          <Section title="Investor Pain Requests">
+            {painRequests.length ? <div style={grid}>{painRequests.map((request) => <InvestorRequestCard key={request.id} request={request} onStatus={updateInvestorRequestStatus} />)}</div> : <div style={panel}><h2 style={h2}>No pain requests yet.</h2></div>}
+          </Section>
+          </>
+        ) : null}
 
-        <Section label="Access Sequence" title="Profile first. Approval next. Payment unlocks the room.">
-          <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>01 Create Login</div><p style={sub}>Members and investors both create login/password access first so the profile, locked room preview, messages, approval status, payment button, and final room unlock stay tied together.</p></div>
-            <div style={panel}><div style={eyebrow}>02 Submit Profile</div><p style={sub}>Investor or member profile goes to admin with your market, role, strategy, capital/execution ability, and contact preference.</p></div>
-            <div style={panel}><div style={eyebrow}>03 Locked Room Preview</div><p style={sub}>After submission, you can see the locked Investor Room or Member Room preview while admin reviews your profile.</p></div>
-            <div style={panel}><div style={eyebrow}>04 Admin Approval</div><p style={sub}>When approved, the payment button lights up. After payment, the room unlocks automatically.</p></div>
-          </div>
-        </Section>
+        {tab === "rooms" ? (
+          <>
+            <CollapseBar label="Deal / Pain Rooms" onCollapse={() => setTab("overview")} />
+            <Section title="Deal Room Folders">
+              <div style={grid}>
+                {(["active", "saved", "archived", "deleted", "sold"] as RoomView[]).map((view) => {
+                  const matching = deals.filter((room) => inRoomView(room, view));
+                  const key = `deal-${view}`;
+                  return <RoomCard key={key} title={`Deal ${view}`} count={matching.length} active={activeRoomCard === key} pulse={activeRoomCard === key} onClick={() => openRoomSelection(`Deal ${view}`, matching, key)} />;
+                })}
+              </div>
+            </Section>
+            <Section title="Pain Room Folders">
+              <div style={grid}>
+                {(["active", "saved", "archived", "deleted", "resolved"] as RoomView[]).map((view) => {
+                  const matching = pains.filter((room) => inRoomView(room, view));
+                  const key = `pain-${view}`;
+                  return <RoomCard key={key} title={`Pain ${view}`} count={matching.length} active={activeRoomCard === key} pulse={activeRoomCard === key} onClick={() => openRoomSelection(`Pain ${view}`, matching, key)} />;
+                })}
+              </div>
+            </Section>
+            <Section title="Deal Rooms By State">
+              <div style={smallGrid}>
+                {STATE_CODES.map((state) => {
+                  const matching = deals.filter((room) => room.state === state);
+                  return <RoomCard key={`deal-state-${state}`} title={state} count={stateRoomCount(deals, state)} onClick={() => openRoomSelection(`Deal Rooms • ${state}`, matching, `deal-state-${state}`)} />;
+                })}
+              </div>
+            </Section>
+            <Section title="Pain Rooms By State">
+              <div style={smallGrid}>
+                {STATE_CODES.map((state) => {
+                  const matching = pains.filter((room) => room.state === state);
+                  return <RoomCard key={`pain-state-${state}`} title={state} count={stateRoomCount(pains, state)} onClick={() => openRoomSelection(`Pain Rooms • ${state}`, matching, `pain-state-${state}`)} />;
+                })}
+              </div>
+            </Section>
+          </>
+        ) : null}
 
-        <Section label="Why People Will Want In" title="This is where off-market pressure gets organized before it becomes public noise.">
-          <div style={wideGrid}>
-            <div style={goldPanel}><div style={eyebrow}>Signal Before Listing</div><h3 style={h3}>Problems become opportunities.</h3><p style={muted}>Capital gaps, stalled rehabs, title problems, partner issues, insurance trouble, and urgent exits can become routed execution signals.</p></div>
-            <div style={goldPanel}><div style={eyebrow}>No Public Member Exposure</div><h3 style={h3}>Private by design.</h3><p style={muted}>Investors request through VaultForge. Members decide what to accept, pass, message, or release.</p></div>
-            <div style={goldPanel}><div style={eyebrow}>Command Center Feel</div><h3 style={h3}>Not another dashboard.</h3><p style={muted}>Profiles, rooms, replies, requests, cleanup folders, and execution lanes work together instead of scattered texts and spreadsheets.</p></div>
-          </div>
-        </Section>
-
-
-        <section style={{ marginBottom: 22 }}>
-          <div style={grid}>
-            <div style={goldPanel}><div style={eyebrow}>Founder Network</div><h2 style={h2}>{totalFilled} / {totalCap}</h2><p style={muted}>real filled founder allocations</p></div>
-            <div style={goldPanel}><div style={eyebrow}>Member Founder Pricing</div><h2 style={h2}>{founderClosed ? "$99" : "$49"}</h2><p style={muted}>{founderClosed ? "$99 activation, then $299/month" : "$49 activation, $49 second month, then $299/month"}</p></div>
-            <div style={goldPanel}><div style={eyebrow}>Investor Access</div><h2 style={h2}>$79</h2><p style={muted}>first month, then $149/month</p></div>
-            <div style={redPanel}><div style={eyebrow}>Pain Signals</div><h2 style={h2}>Live</h2><p style={muted}>problem pressure routed by profile fit</p></div>
-          </div>
-        </section>
-
-        <Section label="Founder Access Countdown" title={founderClosed ? "Founding allocations closed." : "Founding allocations close June 1."}>
-          <CountdownCards timer={timer} />
-          <div style={{ ...panel, marginTop: 18 }}>
-            <p style={sub}>{founderClosed ? "Standard member access is now active: $99 activation, then $299/month." : "Member founder access: $49 activation, $49 second month, then $299/month. Founder allocations close June 1 or when strategic categories reach capacity."}</p>
-          </div>
-        </Section>
-
-        <Section label="Founding Network Allocations" title="Balanced network. Limited seats by role.">
-          <p style={sub}>VaultForge intentionally limits member categories so the network does not become overloaded with only buyers, only wholesalers, or only operators. The goal is a functioning execution ecosystem.</p>
-          <div style={{ ...grid, marginTop: 20 }}>
-            {counts.map((item) => <FounderAllocationCard key={item.key} item={item} />)}
-          </div>
-        </Section>
-
-        <Section label="Investor Room" title="Investors can do business inside without seeing the private directory.">
-          <p style={sub}>Investor Room is not empty access and it is not just a preview. Approved investors can work inside VaultForge through controlled Deal Opportunities, Pain submissions, request cards, structured replies, and execution lanes. They do not browse the private member directory, but they can still contact a Deal owner, Pain owner, or routed member through VaultForge when a card fits what they want.</p>
-          <p style={{ ...muted, marginTop: 12 }}>Example: an investor sees a Deal Opportunity and needs funding. They can request lender routing. They see a Pain submission that needs a contractor, operator, or capital solution. They can request contact through the controlled thread. Member personal info stays protected until approval, but business can still move.</p>
-          <div style={{ ...grid, marginTop: 20 }}>
-            <div style={goldPanel}><div style={eyebrow}>Investor Pricing</div><h3 style={h3}>$79 first month</h3><p style={muted}>Then $149/month.</p></div>
-            <div style={panel}><div style={eyebrow}>Investor Sees</div><p style={sub}>Limited Deal Opportunity cards, Pain submissions, state filters, request cards, structured replies, and execution request lanes.</p></div>
-            <div style={panel}><div style={eyebrow}>Investor Protection</div><p style={sub}>Investors do not see the private member directory or personal contact data, but they can request routed contact, funding, deal details, Pain solutions, and execution help through VaultForge.</p></div>
-          </div>
-          <div style={{ ...row, marginTop: 22 }}>
-            <Link href="/investor-access" style={goldBtn}>Investor Access</Link>
-            <Link href="/investor-login" style={btn}>Investor Login</Link>
-            <Link href="/investor-application" style={btn}>Investor Application</Link>
-          </div>
-        </Section>
-
-
-        <Section label="Profile Intelligence" title="More profile intelligence creates smarter routing.">
-          <p style={sub}>VaultForge Intelligence routes alerts, signals, opportunities, pain requests, operator matches, capital needs, and execution opportunities using profile intelligence.</p>
-          <p style={{ ...muted, marginTop: 12 }}>The more complete your profile becomes, the smarter VaultForge gets at routing the right signals, markets, opportunities, and member connections to you.</p>
-        </Section>
-
-        <Section label="Not Real Estate Listings" title="This is private execution infrastructure.">
-          <p style={sub}>Most platforms show finished listings after the market already sees them. VaultForge surfaces real-world pressure, routes the signal, and connects approved members before the opportunity becomes public noise.</p>
-          <div style={{ ...grid, marginTop: 20 }}>
-            <div style={panel}><div style={eyebrow}>Not A Marketplace</div><p style={sub}>VaultForge is not built for public browsing, mass posting, or open listings.</p></div>
-            <div style={panel}><div style={eyebrow}>Not Social Media</div><p style={sub}>Members connect through routed intelligence, not random feeds or public chatter.</p></div>
-            <div style={panel}><div style={eyebrow}>Not Lead Lists</div><p style={sub}>Signals are routed by fit, execution need, capital, pressure, and member capability.</p></div>
-          </div>
-        </Section>
-
-        <Section label="Pain Intelligence" title="Pain is where opportunity begins.">
-          <p style={sub}>Pain means a real-world problem requiring execution: capital gaps, stalled construction, distressed sellers, lender pressure, permit issues, tenant problems, operator needs, emergency exits, off-market opportunities, or partnership breakdowns.</p>
-          <div style={{ marginTop: 18 }}>
-            {painExamples.map((item) => <span key={item} style={badge}>{item}</span>)}
-          </div>
-        </Section>
-
-        <Section label="Core Engine" title="Pain → Signal → Routing → Execution">
-          <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>01</div><h3 style={h3}>Pain / Opportunity</h3><p style={muted}>A member submits a deal, opportunity, pressure point, capital need, operator request, or execution problem.</p></div>
-            <div style={panel}><div style={eyebrow}>02</div><h3 style={h3}>VaultForge Signal</h3><p style={muted}>VaultForge Intelligence classifies the situation, identifies risk, urgency, service need, and execution path.</p></div>
-            <div style={panel}><div style={eyebrow}>03</div><h3 style={h3}>Private Routing</h3><p style={muted}>The signal is routed to members, buyers, lenders, contractors, operators, or partners positioned to help.</p></div>
-            <div style={panel}><div style={eyebrow}>04</div><h3 style={h3}>Execution</h3><p style={muted}>Members connect directly through rooms, messages, alerts, and route queues to move the situation forward.</p></div>
-          </div>
-        </Section>
-
-        <Section label="Access Flow" title="Private access is controlled.">
-          <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>Create Login</div><p style={sub}>Email, password, and recovery path create the member identity.</p></div>
-            <div style={panel}><div style={eyebrow}>Complete Profile</div><p style={sub}>Profile intelligence tells VaultForge what you do, where you operate, and how you execute.</p></div>
-            <div style={panel}><div style={eyebrow}>Admin Approval</div><p style={sub}>Owner approval activates the payment button for the right room.</p></div>
-            <div style={panel}><div style={eyebrow}>Payment Unlock</div><p style={sub}>After payment, Investor Room or Member Room access unlocks automatically.</p></div>
-          </div>
-        </Section>
-
-        <Section label="Legal / Disclaimers" title="Private network. Independent decisions.">
-          <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>Not Broker / Lender</div><p style={muted}>VaultForge is not a broker, lender, attorney, investment advisor, securities dealer, or fiduciary.</p></div>
-            <div style={panel}><div style={eyebrow}>No Guarantees</div><p style={muted}>VaultForge does not guarantee profits, funding, deals, introductions, closings, returns, or execution outcomes.</p></div>
-            <div style={panel}><div style={eyebrow}>Due Diligence</div><p style={muted}>Members and investors are responsible for independent underwriting, legal review, compliance, verification, negotiations, and transaction decisions.</p></div>
-            <div style={panel}><div style={eyebrow}>Cancellation Policy</div><p style={muted}>Memberships renew monthly until canceled. Cancellation stops future renewals. Activation payments and started billing cycles are not prorated or refunded.</p></div>
-            <div style={panel}><div style={eyebrow}>Founder Status</div><p style={muted}>Founder pricing is limited and promotional. Founder status may be lost if membership is canceled and later restarted.</p></div>
-            <div style={panel}><div style={eyebrow}>Approval Rights</div><p style={muted}>VaultForge may approve, deny, suspend, or remove access to protect network quality and execution balance.</p></div>
-          </div>
-        </Section>
-
-        <section style={hero}>
-          <div style={eyebrow}>VaultForge Intelligence</div>
-          <h2 style={h2}>See pressure before the market does.</h2>
-          <p style={sub}>Not every opportunity should become public. Not every problem belongs on the open market. VaultForge exists to coordinate execution before the rest of the market sees the pressure.</p>
-          <div style={{ ...row, marginTop: 22 }}>
-            <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-            <Link href="/investor-access" style={btn}>Investor Room Access</Link>
-            <Link href="/contact-admin" style={btn}>Contact Admin</Link>
-          </div>
-        </section>
+        {tab === "saved" ? (
+          <>
+            <CollapseBar label="Saved Queue" onCollapse={() => setTab("overview")} />
+            <Section title="Saved Investor Requests / Messages">
+              {savedInvestorActionItems.length ? <div style={grid}>{savedInvestorActionItems.map((item) => <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />)}</div> : <div style={panel}><h2 style={h2}>No saved investor requests.</h2></div>}
+            </Section>
+          </>
+        ) : null}
+        {tab === "archived" ? (
+          <>
+            <CollapseBar label="Archived Queue" onCollapse={() => setTab("overview")} />
+            <Section title="Archived Investor Requests / Messages">
+              {archivedInvestorActionItems.length ? <div style={grid}>{archivedInvestorActionItems.map((item) => <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />)}</div> : <div style={panel}><h2 style={h2}>No archived investor requests.</h2></div>}
+            </Section>
+          </>
+        ) : null}
+        {tab === "deleted" ? (
+          <>
+            <CollapseBar label="Deleted Queue" onCollapse={() => setTab("overview")} />
+            <Section title="Deleted Investor Requests / Messages">
+              {deletedInvestorActionItems.length ? <div style={grid}>{deletedInvestorActionItems.map((item) => <AdminInvestorInboxCard key={item.id} item={item} onStatus={updateAdminInboxStatus} />)}</div> : <div style={alertPanel}><h2 style={h2}>No deleted investor requests.</h2></div>}
+            </Section>
+            <Section title="Deleted Controlled Threads">
+              {deletedControlledThreads.length ? <div style={grid}>{deletedControlledThreads.map((thread: any) => <ControlledThreadAdminCard key={thread.id} thread={thread} />)}</div> : <div style={panel}><h2 style={h2}>No deleted controlled threads.</h2></div>}
+            </Section>
+          </>
+        ) : null}
       </div>
     </main>
   );
