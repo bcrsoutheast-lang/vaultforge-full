@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -881,7 +879,7 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
   const [reply, setReply] = useState("");
   const [infoRequest, setInfoRequest] = useState("");
   const profile = profileFrom(thread);
-  const memberProfile = readMemberProfile();
+  const memberProfile = mounted ? readMemberProfile() : {};
   const memberPublic = publicMemberProfile(memberProfile);
   const released = Boolean(thread?.contactReleased);
 
@@ -1054,6 +1052,7 @@ export default function MemberControlledThreadsPage() {
   const [threads, setThreads] = useState<any[]>([]);
   const [lane, setLane] = useState<Lane>("new");
   const [activeId, setActiveId] = useState("");
+  const [mounted, setMounted] = useState(false);
 
   function refresh() {
     setEmail(currentEmail());
@@ -1061,6 +1060,7 @@ export default function MemberControlledThreadsPage() {
   }
 
   useEffect(() => {
+    setMounted(true);
     refresh();
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-controlled-thread-change", refresh);
@@ -1141,6 +1141,20 @@ export default function MemberControlledThreadsPage() {
     writeThreads(next);
     setThreads(readThreads());
     setActiveId("");
+  }
+
+  if (!mounted) {
+    return (
+      <main style={pageStyle}>
+        <div style={wrap}>
+          <section style={hero}>
+            <div style={eyebrow}>VaultForge Member Request Command</div>
+            <h1 style={h1}>Preparing member room.</h1>
+            <p style={sub}>Loading browser workspace safely.</p>
+          </section>
+        </div>
+      </main>
+    );
   }
 
   return (
