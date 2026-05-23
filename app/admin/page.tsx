@@ -536,6 +536,7 @@ export default function AdminPage() {
   }
 
   function MemberCardView({ member }: { member: MemberCard }) {
+    const owner = member.email === OWNER_EMAIL.toLowerCase();
     const pulse = member.status === "pending" || (member.status === "approved" && member.approvedForPayment && member.access !== "active");
     return (
       <div className={pulse ? "vf-pulse" : ""} style={member.status === "deleted" ? redPanel : pulse ? goldPanel : panel}>
@@ -631,7 +632,7 @@ export default function AdminPage() {
         <section style={hero}>
           <div style={eyebrow}>VaultForge Admin Command</div>
           <h1 style={h1}>Admin command center.</h1>
-          <p style={sub}>Buttons are direct controls. No card click layer. No nested button conflict.</p>
+          <p style={sub}>Live owner controls for members, investors, payment readiness, access, cleanup, restore, and delete forever.</p>
         </section>
 
         {notice ? (
@@ -653,6 +654,54 @@ export default function AdminPage() {
               <Metric title="Investor Payment Ready" count={paymentReadyInvestors.length} note="approved payment button but not paid/comped" active={paymentReadyInvestors.length > 0} onClick={() => { setTab("investors"); setInvestorFilter("approved"); }} />
               <Metric title="Paid Investors" count={paidInvestors.length} note="active investor access" onClick={() => { setTab("investors"); setInvestorFilter("approved"); }} />
               <Metric title="Deleted Investors" count={deletedInvestors.length} note="investor cleanup folder" active={deletedInvestors.length > 0} onClick={() => { setTab("investors"); setInvestorFilter("deleted"); }} />
+            </div>
+          </section>
+        ) : null}
+
+        {tab === "overview" ? (
+          <section style={shell}>
+            <div style={eyebrow}>Live Admin Work Queue</div>
+            <h2 style={h2}>Profiles needing action.</h2>
+            <p style={sub}>
+              These are the real control cards. Approve, payment ready, mark paid, comp, suspend, deny, delete, restore, or delete forever from here.
+            </p>
+
+            <div style={{ ...row, marginTop: 16, marginBottom: 18 }}>
+              <button type="button" style={goldBtn} onClick={() => { setTab("members"); setMemberFilter("pending"); }}>
+                Open Member Control
+              </button>
+              <button type="button" style={goldBtn} onClick={() => { setTab("investors"); setInvestorFilter("pending"); }}>
+                Open Investor Control
+              </button>
+              <button type="button" style={btn} onClick={refresh}>
+                Refresh Admin Data
+              </button>
+            </div>
+
+            <div style={{ ...grid, marginTop: 18 }}>
+              {[...pendingMembers, ...paymentReadyMembers].length ? (
+                [...pendingMembers, ...paymentReadyMembers].map((member) => (
+                  <MemberCardView key={`overview-member-${member.id}`} member={member} />
+                ))
+              ) : (
+                <div style={panel}>
+                  <div style={eyebrow}>Members</div>
+                  <h3 style={h3}>No member cards need action.</h3>
+                  <p style={muted}>Pending and payment-ready member cards will appear here.</p>
+                </div>
+              )}
+
+              {[...pendingInvestors, ...paymentReadyInvestors].length ? (
+                [...pendingInvestors, ...paymentReadyInvestors].map((investor) => (
+                  <InvestorCardView key={`overview-investor-${investor.id}`} investor={investor} />
+                ))
+              ) : (
+                <div style={panel}>
+                  <div style={eyebrow}>Investors</div>
+                  <h3 style={h3}>No investor cards need action.</h3>
+                  <p style={muted}>Pending and payment-ready investor cards will appear here.</p>
+                </div>
+              )}
             </div>
           </section>
         ) : null}
