@@ -26,8 +26,69 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function purgeHeavyVaultForgeStorage(keepKey = "") {
+  if (typeof window === "undefined") return;
+
+  const heavyKeys = [
+    "vaultforge_member_profile_photo_v1",
+    "vaultforge_member_company_logo_v1",
+    "vaultforge_debug_photos_v1",
+    "vaultforge_temp_uploads_v1",
+  ];
+
+  for (const key of heavyKeys) {
+    if (key !== keepKey) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  try {
+    const app = JSON.parse(localStorage.getItem(INVESTOR_APP_KEY) || "{}");
+    if (app && typeof app === "object") {
+      const cleaned = { ...app };
+      if (String(cleaned.profilePhoto || "").length > 350000) cleaned.profilePhoto = "";
+      if (String(cleaned.companyLogo || "").length > 350000) cleaned.companyLogo = "";
+      if (String(cleaned.photoUrl || "").length > 350000) cleaned.photoUrl = "";
+      localStorage.setItem(INVESTOR_APP_KEY, JSON.stringify(cleaned));
+    }
+  } catch {
+    // ignore bad cache
+  }
+}
+
 function writeJson(key: string, value: unknown) {
-  localStorage.setItem(key, JSON.stringify(value));
+  if (typeof window === "undefined") return;
+
+  const json = JSON.stringify(value);
+
+  try {
+    localStorage.setItem(key, json);
+  } catch (error: any) {
+    purgeHeavyVaultForgeStorage(key);
+
+    try {
+      localStorage.setItem(key, json);
+    } catch {
+      const compact = JSON.parse(json || "{}");
+
+      if (compact && typeof compact === "object") {
+        if (String(compact.profilePhoto || "").length > 220000) compact.profilePhoto = "";
+        if (String(compact.companyLogo || "").length > 220000) compact.companyLogo = "";
+        if (String(compact.photoUrl || "").length > 220000) compact.photoUrl = "";
+        if (compact.profile) {
+          if (String(compact.profile.profilePhoto || "").length > 220000) compact.profile.profilePhoto = "";
+          if (String(compact.profile.companyLogo || "").length > 220000) compact.profile.companyLogo = "";
+          if (String(compact.profile.photoUrl || "").length > 220000) compact.profile.photoUrl = "";
+        }
+      }
+
+      localStorage.setItem(key, JSON.stringify(compact));
+    }
+  }
 }
 
 const page: React.CSSProperties = {
@@ -114,10 +175,49 @@ export default function InvestorApplicationPage() {
     const reader = new FileReader();
 
     reader.onload = () => {
-      setForm((current: any) => ({
-        ...current,
-        [key]: String(reader.result || ""),
-      }));
+      const img = new Image();
+
+      img.onload = () => {
+        const maxSide = key === "companyLogo" ? 520 : 420;
+        const ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * ratio));
+        const height = Math.max(1, Math.round(img.height * ratio));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          setPopup({
+            open: true,
+            type: "error",
+            title: "Image Error",
+            message: "Image could not be processed. Try a smaller image.",
+          });
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL("image/jpeg", 0.68);
+
+        setForm((current: any) => ({
+          ...current,
+          [key]: compressed,
+        }));
+      };
+
+      img.onerror = () => {
+        setPopup({
+          open: true,
+          type: "error",
+          title: "Image Error",
+          message: "Image could not be read. Try a different image.",
+        });
+      };
+
+      img.src = String(reader.result || "");
     };
 
     reader.readAsDataURL(file);
@@ -196,7 +296,7 @@ export default function InvestorApplicationPage() {
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error: any) {
-      const message = error?.message || "Investor profile could not be saved. Check required fields and try again.";
+      const message = error?.message || "Investor profile could not be saved. Photos were compressed, but Safari storage may still be full. Close this popup, remove one photo, or clear old site data and try again.";
       setPopup({
         open: true,
         type: "error",
