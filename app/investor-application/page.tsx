@@ -96,6 +96,12 @@ export default function InvestorApplicationPage() {
     companyLogo: existing.companyLogo || "",
   });
   const [banner, setBanner] = useState("");
+  const [popup, setPopup] = useState<{ open: boolean; type: "success" | "error"; title: string; message: string }>({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
 
   function update(key: string, value: string) {
     setForm((current: any) => ({ ...current, [key]: value }));
@@ -120,9 +126,15 @@ export default function InvestorApplicationPage() {
   function submit(event: React.FormEvent) {
     event.preventDefault();
 
-    const email = lower(form.email);
-    const now = new Date().toISOString();
-    const profile = {
+    try {
+      const email = lower(form.email);
+
+      if (!email) {
+        throw new Error("Email is required before saving investor profile.");
+      }
+
+      const now = new Date().toISOString();
+      const profile = {
       ...form,
       email,
       investorEmail: email,
@@ -174,15 +186,83 @@ export default function InvestorApplicationPage() {
     window.dispatchEvent(new Event("vaultforge-investor-change"));
     window.dispatchEvent(new Event("vaultforge-mock-access-change"));
 
-    const message = "Investor profile saved into the VaultForge investor intelligence network and admin review queue.";
-    setBanner(message);
-    window.alert(message);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+      const message = "Investor profile saved into the VaultForge investor intelligence network and admin review queue.";
+      setBanner(message);
+      setPopup({
+        open: true,
+        type: "success",
+        title: "Investor Profile Saved",
+        message,
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error: any) {
+      const message = error?.message || "Investor profile could not be saved. Check required fields and try again.";
+      setPopup({
+        open: true,
+        type: "error",
+        title: "Save Failed",
+        message,
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   return (
     <main style={page}>
       <div style={wrap}>
+
+        {popup.open ? (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 9999,
+              background: "rgba(0,0,0,.72)",
+              display: "grid",
+              placeItems: "center",
+              padding: 18,
+            }}
+          >
+            <div
+              style={{
+                ...(popup.type === "success" ? goldPanel : panel),
+                maxWidth: 620,
+                width: "100%",
+                borderColor: popup.type === "success" ? "rgba(245,197,66,.75)" : "rgba(255,70,70,.65)",
+                boxShadow: popup.type === "success" ? "0 0 40px rgba(245,197,66,.22)" : "0 0 40px rgba(255,70,70,.18)",
+              }}
+            >
+              <div style={eyebrow}>{popup.type === "success" ? "Saved" : "Error"}</div>
+              <h2 style={h2}>{popup.title}</h2>
+              <p style={sub}>{popup.message}</p>
+
+              <div style={row}>
+                {popup.type === "success" ? (
+                  <Link href="/investor-room" style={goldBtn}>
+                    Open Investor Room
+                  </Link>
+                ) : null}
+
+                <button
+                  type="button"
+                  style={btn}
+                  onClick={() =>
+                    setPopup({
+                      open: false,
+                      type: "success",
+                      title: "",
+                      message: "",
+                    })
+                  }
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+
         {banner ? (
           <section style={goldPanel}>
             <div style={eyebrow}>Saved</div>
@@ -289,7 +369,7 @@ export default function InvestorApplicationPage() {
             </div>
 
             <div style={row}>
-              <button type="submit" style={goldBtn}>Submit Investor Profile For Approval</button>
+              <button type="submit" style={goldBtn}>Save Investor Profile</button>
               <Link href="/investor-room" style={btn}>Preview Investor Room</Link>
               <Link href="/" style={btn}>Home</Link>
             </div>
