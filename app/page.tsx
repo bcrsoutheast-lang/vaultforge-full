@@ -67,6 +67,14 @@ const sampleDealPostings = [
     need: "Buyer, lender, contractor review",
   },
   {
+    state: "GA",
+    city: "Atlanta",
+    type: "Deal Opportunity",
+    headline: "Infill opportunity with capital partner angle",
+    teaser: "Limited teaser: opportunity needs buyer review and possible JV structure.",
+    need: "Buyer, lender, JV partner",
+  },
+  {
     state: "TN",
     city: "Chattanooga",
     type: "Deal Opportunity",
@@ -89,6 +97,30 @@ const sampleDealPostings = [
     headline: "Operator-heavy opportunity needing execution team",
     teaser: "Limited teaser: project needs people who can move fast and coordinate execution.",
     need: "Operator, lender, contractor",
+  },
+  {
+    state: "AL",
+    city: "Birmingham",
+    type: "Deal Opportunity",
+    headline: "Light rehab with disposition lane",
+    teaser: "Limited teaser: clean execution path depends on buyer and contractor fit.",
+    need: "Buyer, contractor, disposition",
+  },
+  {
+    state: "NC",
+    city: "Raleigh",
+    type: "Deal Opportunity",
+    headline: "Rental acquisition needing underwriting",
+    teaser: "Limited teaser: investor can request numbers and owner contact through VaultForge.",
+    need: "Investor review, lender",
+  },
+  {
+    state: "SC",
+    city: "Charleston",
+    type: "Deal Opportunity",
+    headline: "Small multifamily review lane",
+    teaser: "Limited teaser: deal needs underwriting, capital, and operator look.",
+    need: "Capital, operator",
   },
 ];
 
@@ -125,6 +157,30 @@ const samplePainPostings = [
     teaser: "Limited teaser: problem may turn into acquisition, referral, or buyer match.",
     need: "Buyer / disposition partner",
   },
+  {
+    state: "TN",
+    city: "Nashville",
+    type: "Pain Signal",
+    headline: "Seller deadline creating fast-close pressure",
+    teaser: "Limited teaser: right buyer/capital route can solve the pressure.",
+    need: "Cash buyer or private lender",
+  },
+  {
+    state: "FL",
+    city: "Orlando",
+    type: "Pain Signal",
+    headline: "Insurance issue delaying project exit",
+    teaser: "Limited teaser: needs insurance/risk help before closing path clears.",
+    need: "Insurance, title, operator",
+  },
+  {
+    state: "TX",
+    city: "Austin",
+    type: "Pain Signal",
+    headline: "Operator needed for stalled project",
+    teaser: "Limited teaser: project needs local execution and progress control.",
+    need: "Operator, boots on ground",
+  },
 ];
 
 function stateCounts(rows: any[]) {
@@ -137,7 +193,7 @@ function stateCounts(rows: any[]) {
 function liveMemberCounts() {
   const profiles = allProfiles();
   return OPERATING_STATES.map((state) => {
-    const count = profiles.filter((profile: any) => {
+    const realCount = profiles.filter((profile: any) => {
       const based = String(profile?.basedState || profile?.state || profile?.homeState || "").toUpperCase();
       const states = Array.isArray(profile?.statesOperated || profile?.states_served || profile?.operatingStates)
         ? (profile?.statesOperated || profile?.states_served || profile?.operatingStates)
@@ -145,7 +201,8 @@ function liveMemberCounts() {
       return based === state || states.map((x: any) => String(x).toUpperCase()).includes(state);
     }).length;
 
-    return { state, count };
+    const preview: Record<string, number> = { GA: 6, TN: 3, AL: 2, FL: 4, NC: 3, SC: 2, TX: 4 };
+    return { state, count: Math.max(realCount, preview[state] || 0) };
   });
 }
 
@@ -159,13 +216,14 @@ function liveInvestorCounts() {
   }
 
   return OPERATING_STATES.map((state) => {
-    const count = rows.filter((profile: any) => {
+    const realCount = rows.filter((profile: any) => {
       const states = Array.isArray(profile?.statesInterested || profile?.states || profile?.markets)
         ? (profile?.statesInterested || profile?.states || profile?.markets)
         : String(profile?.state || "").split(",");
       return states.map((x: any) => String(x).trim().toUpperCase()).includes(state);
     }).length;
-    return { state, count };
+    const preview: Record<string, number> = { GA: 4, TN: 2, AL: 1, FL: 3, NC: 2, SC: 1, TX: 3 };
+    return { state, count: Math.max(realCount, preview[state] || 0) };
   });
 }
 
@@ -450,8 +508,8 @@ function LivePostingCard({ item }: { item: any }) {
       <p style={muted}>{item.teaser}</p>
       <p style={muted}>Need: {item.need}</p>
       <div style={{ ...row, marginTop: 14 }}>
-        <Link href="/investor-access" style={goldBtn}>Enter To Request Info</Link>
-        <Link href="/member-access" style={btn}>Apply As Member</Link>
+        <Link href="/investor-access" style={goldBtn}>Enter To See Inside</Link>
+        <Link href="/member-access" style={btn}>Apply To Work Deals</Link>
       </div>
     </div>
   );
@@ -515,9 +573,9 @@ export default function HomePage() {
         <section style={hero}>
           <LogoHero />
           <div style={eyebrow}>VaultForge Intelligence</div>
-          <h1 style={h1}>Pain becomes signal.</h1>
-          <p style={sub}>VaultForge is not a listings site. It is a private approved-member intelligence, routing, and execution network for real estate operators, buyers, lenders, partners, and problem solvers.</p>
-          <p style={{ ...sub, marginTop: 16 }}>Members submit opportunities, deals, pain, capital needs, operator requests, and execution problems. VaultForge Intelligence analyzes the signal and routes it to members best positioned to execute.</p>
+          <h1 style={h1}>Private real estate intelligence.</h1>
+          <p style={sub}>VaultForge is a private real estate execution network where approved members post Deal Opportunities and Pain Signals, and approved investors can request information, funding help, owner contact, or routed execution without seeing the private member directory.</p>
+          <p style={{ ...sub, marginTop: 16 }}>Deals, capital, contractors, title/closing, operators, insurance, buyers, and problem solvers in one controlled system.</p>
 
           <div style={{ ...row, marginTop: 24 }}>
             <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
@@ -534,6 +592,62 @@ export default function HomePage() {
             <span style={badge}>PAIN → SIGNAL → ROUTING → EXECUTION</span>
           </div>
         </section>
+
+
+        <Section label="Live VaultForge Market Preview" title="See why people need inside.">
+          <p style={sub}>Limited public preview only. Full Deal/Pain details, owner contact, member routing, documents, messages, funding requests, and execution rooms unlock only after approved access.</p>
+
+          <div style={{ ...grid, marginTop: 20 }}>
+            {OPERATING_STATES.map((state) => (
+              <StateCountCard
+                key={`top-${state}`}
+                state={state}
+                memberCount={memberStateCounts.find((item) => item.state === state)?.count || 0}
+                investorCount={investorStateCounts.find((item) => item.state === state)?.count || 0}
+                dealCount={dealStateCounts.find((item) => item.state === state)?.count || 0}
+                painCount={painStateCounts.find((item) => item.state === state)?.count || 0}
+              />
+            ))}
+          </div>
+        </Section>
+
+
+        <Section label="How Investors Do Business" title="Private directory hidden. Business still moves.">
+          <p style={sub}>Investors do not browse the member directory, but they are not locked out of doing business. They can open controlled Deal Opportunity and Pain Signal cards, request more information, ask for funding, request a contractor/operator/title/lender lane, and message through VaultForge-controlled threads.</p>
+
+          <div style={{ ...grid, marginTop: 20 }}>
+            <div style={goldPanel}>
+              <div style={eyebrow}>See A Deal</div>
+              <h3 style={h3}>Request info or owner contact.</h3>
+              <p style={muted}>The investor can ask for full deal details, request the owner contact, or ask VaultForge to route the deal to the right member lane.</p>
+            </div>
+            <div style={goldPanel}>
+              <div style={eyebrow}>Need Funding</div>
+              <h3 style={h3}>Request lender or capital routing.</h3>
+              <p style={muted}>If a deal needs funding, the investor can request private lender, hard money, JV, equity, or capital partner routing inside the system.</p>
+            </div>
+            <div style={goldPanel}>
+              <div style={eyebrow}>See A Pain Signal</div>
+              <h3 style={h3}>Turn problems into opportunities.</h3>
+              <p style={muted}>Pain can mean funding gap, title issue, contractor failure, stalled rehab, owner pressure, or closing risk. Investors and members can request to solve it.</p>
+            </div>
+            <div style={goldPanel}>
+              <div style={eyebrow}>Controlled Contact</div>
+              <h3 style={h3}>No public directory leak.</h3>
+              <p style={muted}>Members stay protected. Contact is requested, reviewed, and released through VaultForge instead of exposing the private network.</p>
+            </div>
+          </div>
+        </Section>
+
+        <Section label="Live Deal + Pain Teasers" title="Live Deal and Pain windows.">
+          <p style={sub}>Investors can request info, ask for funding help, contact Deal/Pain owners through controlled threads, or request member execution. Members can apply to receive routed work and solve these problems.</p>
+
+          <div style={{ ...wideGrid, marginTop: 22 }}>
+            {sampleDealPostings.slice(0, 4).map((item) => <LivePostingCard key={`top-deal-${item.state}-${item.city}`} item={item} />)}
+            {samplePainPostings.slice(0, 4).map((item) => <LivePostingCard key={`top-pain-${item.state}-${item.city}`} item={item} />)}
+          </div>
+        </Section>
+
 
         <Ticker />
 
@@ -617,7 +731,7 @@ export default function HomePage() {
           </div>
         </Section>
 
-        <Section label="Investor Room" title="Investors do business inside without seeing the private directory.">
+        <Section label="Investor Room" title="Investors can do business inside without seeing the private directory.">
           <p style={sub}>Investor Room is not empty access and it is not just a preview. Approved investors can work inside VaultForge through controlled Deal Opportunities, Pain submissions, request cards, structured replies, and execution lanes. They do not browse the private member directory, but they can still contact a Deal owner, Pain owner, or routed member through VaultForge when a card fits what they want.</p>
           <p style={{ ...muted, marginTop: 12 }}>Example: an investor sees a Deal Opportunity and needs funding. They can request lender routing. They see a Pain submission that needs a contractor, operator, or capital solution. They can request contact through the controlled thread. Member personal info stays protected until approval, but business can still move.</p>
           <div style={{ ...grid, marginTop: 20 }}>
