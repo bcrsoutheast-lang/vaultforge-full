@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -490,6 +488,7 @@ function cleanupKey(item: any, kind: Kind) {
 }
 
 function readRows(keys: string[]) {
+  if (typeof window === "undefined") return [];
   const rows: any[] = [];
   keys.forEach((key) => {
     try {
@@ -1297,6 +1296,7 @@ function MockPaymentButton({
   price: string;
 }) {
   const [tick, setTick] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const status = paymentStatusFor(email, kind);
   const canPay = status.approved || email.toLowerCase() === OWNER_EMAIL.toLowerCase();
   const unlocked = status.paid || status.unlocked;
@@ -3088,6 +3088,7 @@ export default function InvestorRoomPage() {
   }
 
   useEffect(() => {
+    setMounted(true);
     const update = () => {
       setInvestor(readJson<any>(INVESTOR_APP_KEY, {}));
       refresh();
@@ -3192,6 +3193,20 @@ export default function InvestorRoomPage() {
     setKind(nextKind);
     setFolder(nextFolder);
     setActiveRoom(null);
+  }
+
+  if (!mounted) {
+    return (
+      <main style={page}>
+        <div style={wrap}>
+          <section style={hero}>
+            <div style={eyebrow}>VaultForge Investor Room</div>
+            <h1 style={h1}>Preparing investor room.</h1>
+            <p style={sub}>Loading browser workspace safely.</p>
+          </section>
+        </div>
+      </main>
+    );
   }
 
   if (!access) {
