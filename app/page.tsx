@@ -633,8 +633,8 @@ function deleteControlledThreadForever(id: string) {
 
 function saveInvestors(investors: InvestorRecord[], updatedInvestor?: InvestorRecord) {
   const filtered = investors.filter((investor) => !isHardDeleted(ADMIN_DELETED_INVESTOR_IDS_KEY, investor.id));
-  writeJson(INVESTOR_LIST_KEY, filtered);
-  const currentSingle = readJson<any>(INVESTOR_APP_KEY, {});
+writeJson(INVESTOR_LIST_KEY, filtered);
+const currentSingle = readJson<any>(INVESTOR_APP_KEY, {});
   const singleEmail = lower(currentSingle?.email || currentSingle?.investorEmail || currentSingle?.investor_email);
   const viewerEmail = currentEmail();
   const matching = updatedInvestor || filtered.find((investor) => investor.email === singleEmail) || filtered.find((investor) => investor.email === viewerEmail);
@@ -2066,7 +2066,8 @@ export default function AdminPage() {
     const filtered = next.filter((member) => !isHardDeleted(ADMIN_DELETED_MEMBER_IDS_KEY, member.id));
     setMembers(filtered);
     writeJson(ADMIN_MEMBERS_KEY, filtered);
-      window.dispatchEvent(new Event("vaultforge-admin-members-change"));
+    setAdminActionTick((value) => value + 1);
+    window.dispatchEvent(new Event("vaultforge-admin-members-change"));
     window.dispatchEvent(new Event("vaultforge-admin-action-change"));
   }
 
@@ -2121,15 +2122,12 @@ export default function AdminPage() {
     });
     setInvestors(next);
     saveInvestors(next, updatedInvestor);
-    setAdminActionTick((value) => value + 1);
   }
 
   function deleteInvestorForever(id: string) {
     markDeletedId(ADMIN_DELETED_INVESTOR_IDS_KEY, id);
     const next = investors.filter((investor) => investor.id !== id);
-    setInvestors(next);
     saveInvestors(next);
-    setAdminActionTick((value) => value + 1);
   }
 
   function runSearch(event?: React.FormEvent) {
@@ -2501,16 +2499,10 @@ export default function AdminPage() {
                 <button type="button" style={redBtn} onClick={() => {
                   const ids = new Set(investors.filter((investor) => investor.status === "deleted").map((investor) => investor.id));
                   ids.forEach((id) => markDeletedId(ADMIN_DELETED_INVESTOR_IDS_KEY, id));
-                  const next = investors.filter((investor) => investor.status !== "deleted");
-                  setInvestors(next);
-                  saveInvestors(next);
-                  setAdminActionTick((value) => value + 1);
+                  saveInvestors(investors.filter((investor) => investor.status !== "deleted"));
                 }}>Clear Deleted Investors</button>
                 <button type="button" style={btn} onClick={() => {
-                  const next = investors.map((investor) => investor.status === "deleted" ? recalcInvestorAccess({ ...investor, status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked", updatedAt: new Date().toISOString() }) : investor);
-                  setInvestors(next);
-                  saveInvestors(next);
-                  setAdminActionTick((value) => value + 1);
+                  saveInvestors(investors.map((investor) => investor.status === "deleted" ? recalcInvestorAccess({ ...investor, status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked", updatedAt: new Date().toISOString() }) : investor));
                 }}>Restore Deleted Investors</button>
               </div>
             </div>
