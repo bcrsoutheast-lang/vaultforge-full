@@ -132,12 +132,48 @@ function paymentFrom(row: any): PaymentStatus {
   return "unpaid";
 }
 
+
+function accessOverrideFor(kind: PersonKind, email: string) {
+  const cleanEmail = lower(email);
+  if (!cleanEmail || cleanEmail === "email-not-listed") return null;
+
+  const approvals = readJson<Record<string, any>>(MOCK_ACCESS_KEY, {});
+  const key = `${kind}:${cleanEmail}`;
+  const record = approvals[key] || {};
+
+  const paymentKey = kind === "member" ? "vaultforge_mock_member_payment_v1" : "vaultforge_mock_investor_payment_v1";
+  const direct = readJson<any>(paymentKey, {});
+  const directEmail = lower(direct?.email || "");
+
+  const combined = {
+    ...record,
+    ...(directEmail === cleanEmail || !directEmail ? direct : {}),
+  };
+
+  if (!Object.keys(combined).length) return null;
+
+  const paid = Boolean(combined.paid || combined.unlocked || combined.paymentStatus === "paid" || combined.accessStatus === "active");
+  const ready = Boolean(combined.approved || combined.adminApproved || combined.approvedForPayment || combined.paymentStatus === "ready" || combined.accessStatus === "payment_ready");
+
+  return {
+    paid,
+    ready,
+    paymentStatus: paid ? "paid" as PaymentStatus : ready ? "ready" as PaymentStatus : undefined,
+    access: paid ? "active" as AccessStatus : "locked" as AccessStatus,
+    approvedForPayment: ready || paid,
+    updatedAt: clean(combined.updatedAt || combined.paidAt || ""),
+  };
+}
+
+
+
 function normalizeMember(row: any): AdminPerson {
   const email = lower(row?.email || row?.memberEmail || row?.member_email);
   const status = statusFrom(row);
   const pay = paymentFrom(row);
   const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved || pay === "ready");
   const paidLike = pay === "paid" || pay === "comped";
+  const override = accessOverrideFor("member", email);
   return {
     id: safeId(row?.id || row?.auth_user_id || email, `member-${Date.now()}`),
     kind: "member",
@@ -148,10 +184,10 @@ function normalizeMember(row: any): AdminPerson {
     role: clean(row?.memberType || row?.member_type || row?.type, "Member"),
     markets: listText(row?.operatingStates || row?.statesOperated || row?.states_served || row?.states || row?.state || "Not listed"),
     status,
-    paymentStatus: pay,
-    approvedForPayment,
-    access: row?.access === "active" || row?.accessStatus === "active" || (status === "approved" && paidLike) ? "active" : "locked",
-    updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
+    paymentStatus: override?.paymentStatus || pay,
+    approvedForPayment: override?.approvedForPayment || approvedForPayment,
+    access: override?.access || (row?.access === "active" || row?.accessStatus === "active" || (status === "approved" && paidLike) ? "active" : "locked"),
+    updatedAt: clean(override?.updatedAt || row?.updatedAt || row?.updated_at, new Date().toISOString()),
     raw: row,
   };
 }
@@ -162,6 +198,7 @@ function normalizeInvestor(row: any): AdminPerson {
   const pay = paymentFrom(row);
   const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved || pay === "ready");
   const paidLike = pay === "paid" || pay === "comped";
+  const override = accessOverrideFor("investor", email);
   return {
     id: safeId(row?.id || row?.investorId || row?.investor_id || email, `investor-${Date.now()}`),
     kind: "investor",
@@ -172,10 +209,10 @@ function normalizeInvestor(row: any): AdminPerson {
     role: listText(row?.investorTypes || row?.assetTypes || row?.asset_types || row?.assetClass || "Investor"),
     markets: listText(row?.statesInterested || row?.states_interested || row?.states || row?.markets, "Not listed"),
     status,
-    paymentStatus: pay,
-    approvedForPayment,
-    access: row?.access === "active" || row?.accessStatus === "active" || (status === "approved" && paidLike) ? "active" : "locked",
-    updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
+    paymentStatus: override?.paymentStatus || pay,
+    approvedForPayment: override?.approvedForPayment || approvedForPayment,
+    access: override?.access || (row?.access === "active" || row?.accessStatus === "active" || (status === "approved" && paidLike) ? "active" : "locked"),
+    updatedAt: clean(override?.updatedAt || row?.updatedAt || row?.updated_at, new Date().toISOString()),
     raw: row,
   };
 }
@@ -387,7 +424,7 @@ export default function AdminPage() {
   const buckets = useMemo(() => {
     const newProfiles = people.filter((p) => p.status === "pending");
     const payment = people.filter((p) => p.status === "approved" && (p.approvedForPayment || p.paymentStatus === "ready") && p.access !== "active");
-    const active = people.filter((p) => p.status === "approved" && p.access === "active");
+    const active = people.filter((p) => p.status === "approved" && (p.access === "active" || p.paymentStatus === "paid" || p.paymentStatus === "comped"));
     const cleanup = people.filter((p) => ["deleted", "denied", "suspended"].includes(p.status));
     return { newProfiles, payment, active, cleanup };
   }, [people]);
@@ -417,6 +454,16 @@ export default function AdminPage() {
     if (next.status !== "approved") next.access = "locked";
     setOne(next);
     setNotice(message);
+
+    if (next.status === "approved" && next.access === "active") {
+      setSection("active");
+    } else if (next.status === "approved" && next.access !== "active") {
+      setSection("payment");
+    } else if (["deleted", "denied", "suspended"].includes(next.status)) {
+      setSection("cleanup");
+    } else {
+      setSection("new");
+    }
   }
 
   function deleteForever(item: AdminPerson) {
@@ -439,6 +486,41 @@ export default function AdminPage() {
     return (
       <div style={tone}>
         <div style={eyebrow}>{item.kind} • {item.status} • {item.paymentStatus} • {item.access}</div>
+
+        {(item.raw?.profilePhoto || item.raw?.photoUrl || item.raw?.companyLogo || item.raw?.logoUrl) ? (
+          <div style={{ ...row, alignItems: "center", marginBottom: 12 }}>
+            {item.raw?.profilePhoto || item.raw?.photoUrl ? (
+              <img
+                src={item.raw?.profilePhoto || item.raw?.photoUrl}
+                alt="Profile"
+                style={{
+                  width: 70,
+                  height: 70,
+                  objectFit: "cover",
+                  borderRadius: 18,
+                  border: "1px solid rgba(245,197,66,.35)",
+                }}
+              />
+            ) : null}
+
+            {item.raw?.companyLogo || item.raw?.logoUrl ? (
+              <img
+                src={item.raw?.companyLogo || item.raw?.logoUrl}
+                alt="Company"
+                style={{
+                  width: 110,
+                  height: 70,
+                  objectFit: "contain",
+                  borderRadius: 18,
+                  border: "1px solid rgba(245,197,66,.35)",
+                  background: "#080d19",
+                  padding: 8,
+                }}
+              />
+            ) : null}
+          </div>
+        ) : null}
+
         <h3 style={h3}>{item.company}</h3>
         <p style={sub}>{item.name}</p>
         <p style={muted}>{item.email}</p>
@@ -451,16 +533,33 @@ export default function AdminPage() {
           <Pill text={item.status} />
           <Pill text={item.paymentStatus} />
           <Pill text={item.access} />
+          {item.paymentStatus === "paid" ? <Pill text="PAYMENT ALERT" /> : null}
         </div>
 
         <div style={{ ...row, marginTop: 15 }}>
-          <button type="button" style={greenBtn} onClick={() => patch(item, { status: "approved" }, "Approved.")}>Approve</button>
+          <button
+            type="button"
+            style={greenBtn}
+            onClick={() =>
+              patch(
+                item,
+                { status: "approved", approvedForPayment: true, paymentStatus: "ready", access: "locked" },
+                `${item.kind === "investor" ? "Investor" : "Member"} approved. Waiting on payment.`
+              )
+            }
+          >
+            Approve Profile
+          </button>
           <button type="button" style={redBtn} onClick={() => patch(item, { status: "denied", access: "locked", approvedForPayment: false }, "Denied.")}>Deny</button>
-          <button type="button" style={goldBtn} onClick={() => patch(item, { status: "approved", approvedForPayment: true, paymentStatus: "ready", access: "locked" }, "Payment marked ready.")}>Payment Ready</button>
-          <button type="button" style={greenBtn} onClick={() => patch(item, { status: "approved", approvedForPayment: true, paymentStatus: "paid", access: "active" }, "Marked paid and active.")}>Mark Paid</button>
+          {item.kind === "member" ? (
+            <button type="button" style={goldBtn} onClick={() => patch(item, { status: "approved", approvedForPayment: true, paymentStatus: "ready", access: "locked" }, "Member payment marked ready.")}>
+              Payment Ready
+            </button>
+          ) : null}
+          <button type="button" style={greenBtn} onClick={() => patch(item, { status: "approved", approvedForPayment: true, paymentStatus: "paid", access: "active" }, "Marked paid and active.")}>Verify Payment / Activate</button>
           <button type="button" style={goldBtn} onClick={() => patch(item, { status: "approved", approvedForPayment: true, paymentStatus: "comped", access: "active" }, "Free access granted.")}>Free Access</button>
           <button type="button" style={redBtn} onClick={() => patch(item, { status: "suspended", access: "locked" }, "Suspended.")}>Suspend</button>
-          <button type="button" style={redBtn} onClick={() => patch(item, { status: "deleted", access: "locked" }, "Moved to cleanup.")}>Delete</button>
+          <button type="button" style={redBtn} onClick={() => patch(item, { status: "deleted", access: "locked" }, "Moved to cleanup. Open Cleanup to restore or delete forever.")}>Delete</button>
           {item.status !== "pending" ? <button type="button" style={btn} onClick={() => patch(item, { status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" }, "Restored to new profiles.")}>Restore</button> : null}
           {item.status === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteForever(item)}>Delete Forever</button> : null}
         </div>
@@ -508,7 +607,7 @@ export default function AdminPage() {
         <section style={hero}>
           <div style={eyebrow}>Owner Control Center</div>
           <h1 style={h1}>Simple admin.</h1>
-          <p style={sub}>New profiles, payment/access, active users, cleanup, and requests/messages. No extra clutter.</p>
+          <p style={sub}>Approve profile sends the user to Payment / Access. When payment is made, admin gets a payment alert and the card moves to Active Users.</p>
         </section>
 
         {notice ? (
@@ -529,6 +628,14 @@ export default function AdminPage() {
         </section>
 
         <section style={shell}>
+          <div style={{ ...row, marginBottom: 16 }}>
+            <button type="button" style={section === "new" ? goldBtn : btn} onClick={() => setSection("new")}>New Profiles</button>
+            <button type="button" style={section === "payment" ? goldBtn : btn} onClick={() => setSection("payment")}>Payment / Access</button>
+            <button type="button" style={section === "active" ? goldBtn : btn} onClick={() => setSection("active")}>Active Users</button>
+            <button type="button" style={section === "cleanup" ? goldBtn : btn} onClick={() => setSection("cleanup")}>Cleanup</button>
+            <button type="button" style={section === "requests" ? goldBtn : btn} onClick={() => setSection("requests")}>Requests / Messages</button>
+          </div>
+
           <div style={eyebrow}>
             {section === "new" ? "New Profiles" :
              section === "payment" ? "Payment / Access" :
@@ -539,7 +646,17 @@ export default function AdminPage() {
 
           {section !== "requests" ? (
             <>
-              <h2 style={h2}>{currentRows.length ? "Control cards." : "Nothing in this section."}</h2>
+              <h2 style={h2}>
+                {currentRows.length
+                  ? section === "active"
+                    ? "Active user cards."
+                    : section === "payment"
+                      ? "Payment/access cards."
+                      : section === "cleanup"
+                        ? "Cleanup cards."
+                        : "New profile cards."
+                  : "Nothing in this section."}
+              </h2>
               <div style={grid}>
                 {currentRows.length ? currentRows.map((item) => <PersonCard key={`${item.kind}-${item.id}`} item={item} />) : (
                   <div style={panel}><p style={sub}>This lane is empty.</p></div>
