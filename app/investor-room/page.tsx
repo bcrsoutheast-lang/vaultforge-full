@@ -3119,9 +3119,9 @@ export default function InvestorRoomPage() {
 
   const complete = profileComplete(investor);
   const mockInvestorPayment = paymentStatusFor(String(investor?.email || browserValue("vaultforge_investor_email") || ""), "investor");
-  // TEST MODE UNLOCK:
-  // Keep Stripe/auth/middleware untouched. This only removes the local browser preview gate
-  // so the investor command room can be tested end-to-end.
+  // OPEN INVESTOR ROOM:
+  // Investor Room is intentionally open. No payment gate, no mock payment gate,
+  // no local approval requirement, and no locked preview.
   const access = true;
 
   const rawDeals = useMemo(() => {
@@ -3218,71 +3218,6 @@ export default function InvestorRoomPage() {
       </main>
     );
   }
-
-  if (!access) {
-    return (
-      <main style={page}>
-        
-
-<style>{`
-@keyframes vfPulsePay {
-  0% { box-shadow: 0 0 0 0 rgba(255,220,104,.0), 0 0 0 rgba(255,220,104,.0); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
-  35% { box-shadow: 0 0 0 8px rgba(255,220,104,.26), 0 0 42px rgba(255,220,104,.55); transform: scale(1.018); outline: 3px solid rgba(245,197,66,.85); }
-  70% { box-shadow: 0 0 0 3px rgba(255,220,104,.10), 0 0 24px rgba(255,220,104,.28); transform: scale(1.006); outline: 2px solid rgba(245,197,66,.62); }
-  100% { box-shadow: 0 0 0 0 rgba(255,220,104,.0), 0 0 0 rgba(255,220,104,.0); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
-}
-@keyframes vfAlertFlash {
-  0% { filter: brightness(1); }
-  50% { filter: brightness(1.35); }
-  100% { filter: brightness(1); }
-}
-.vf-pulse {
-  animation: vfPulsePay .95s ease-in-out infinite, vfAlertFlash .95s ease-in-out infinite;
-  border-color: rgba(255,220,104,.95) !important;
-}
-`}</style>
-
-
-        <style>{`@keyframes vfTickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
-        <div style={wrap}>
-          <TopNav
-            onMessageAdmin={() => setMessageAdminOpen(true)}
-            isOwner={String(investor?.email || browserValue("vf_email") || browserValue("vaultforge_investor_email") || "").toLowerCase() === OWNER_EMAIL.toLowerCase()}
-          />
-          <section style={hero}>
-            <LogoBlock />
-            <div style={eyebrow}>Investor Room Locked</div>
-            <h1 style={h1}>Approval and payment required.</h1>
-            <p style={sub}>
-              Complete investor login, buyer profile, admin approval, and
-              payment before entering the investor visitor room.
-            </p>
-            <div style={{ ...row, marginTop: 18 }}>
-              <Link href="/investor-application" style={goldBtn}>
-                Investor Application
-              </Link>
-              <Link href="/investor-payment" style={btn}>
-                Investor Payment
-              </Link>
-              <Link href="/investor-access" style={btn}>
-                Investor Access
-              </Link>
-            </div>
-
-            <div style={{ marginTop: 18 }}>
-              <MockPaymentButton
-                kind="investor"
-                email={String(investor?.email || browserValue("vaultforge_investor_email") || "")}
-                label="Investor Room Payment Unlock"
-                price="$79"
-              />
-            </div>
-          </section>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main style={page}>
       <div style={wrap}>
@@ -3366,13 +3301,6 @@ export default function InvestorRoomPage() {
         <InvestorIdentityCard
           investor={investor}
           onMessageAdmin={() => setMessageAdminOpen(true)}
-        />
-
-        <MockPaymentButton
-          kind="investor"
-          email={String(investor?.email || browserValue("vaultforge_investor_email") || "")}
-          label="Investor Room Payment Status"
-          price="$79"
         />
 
         <section style={{ marginBottom: 18 }}>
