@@ -239,11 +239,14 @@ function directKeys(kind: RoomKind, id: string) {
 }
 
 function readCanonicalRooms(kind: RoomKind) {
-  return arr<Room>(canonicalKey(kind)).map((row) => ({ ...row, id: rid(row), roomId: rid(row) })).filter((room) => Boolean(rid(room)));
+  return arr<Room>(canonicalKey(kind))
+    .map((row) => ({ ...row, id: rid(row), roomId: rid(row) }))
+    .filter((room) => Boolean(rid(room)));
 }
 
 function legacyRooms(kind: RoomKind) {
   if (!ok()) return [] as Room[];
+
   const out: Room[] = [];
   const seen = new Set<string>();
 
@@ -255,13 +258,21 @@ function legacyRooms(kind: RoomKind) {
     out.push({ ...row, id, roomId: id });
   };
 
-  for (const key of keysFor(kind)) arr<Room>(key).forEach(add);
+  for (const key of keysFor(kind)) {
+    arr<Room>(key).forEach(add);
+  }
 
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i) || "";
     if (key === canonicalKey(kind)) continue;
-    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
+
+    const match =
+      kind === "deal"
+        ? key.includes("deal_room") || key.includes("deal_rooms")
+        : key.includes("pain_room") || key.includes("pain_rooms");
+
     if (!match) continue;
+
     const value = j<any>(localStorage.getItem(key), null);
     if (Array.isArray(value)) value.forEach(add);
     else add(value);
@@ -272,27 +283,43 @@ function legacyRooms(kind: RoomKind) {
 
 function allRooms(kind: RoomKind): Room[] {
   if (!ok()) return [];
+
   const states = stateMap();
   const map = new Map<string, Room>();
 
   legacyRooms(kind).forEach((room) => {
     const id = rid(room);
+    if (!id) return;
     const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-    map.set(id, { ...room, roomState: state, cleanupState: state, stateStatus: state });
+    map.set(id, { ...room, id, roomId: id, roomState: state, cleanupState: state, stateStatus: state });
   });
 
   readCanonicalRooms(kind).forEach((room) => {
     const id = rid(room);
+    if (!id) return;
     const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-    map.set(id, { ...(map.get(id) || {}), ...room, roomState: state, cleanupState: state, stateStatus: state });
+    map.set(id, {
+      ...(map.get(id) || {}),
+      ...room,
+      id,
+      roomId: id,
+      roomState: state,
+      cleanupState: state,
+      stateStatus: state,
+    });
   });
 
-  const rooms = Array.from(map.values()).sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
+  const rooms = Array.from(map.values()).sort((a, b) =>
+    String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || ""))
+  );
+
   saveSafe(canonicalKey(kind), rooms);
   return rooms;
 }
 
 function getRoom(kind: RoomKind, id: string) {
+  if (!ok()) return null as Room | null;
+
   const states = stateMap();
 
   for (const key of directKeys(kind, id)) {
@@ -311,33 +338,13 @@ function purgeRoomCopies(kind: RoomKind, id: string, next?: Room) {
 
   for (const key of keysFor(kind)) {
     const rows = arr<Room>(key).filter((row) => rid(row) !== id);
-    if (next) saveSafe(key, [next, ...rows]);
-    else saveSafe(key, rows);
+    saveSafe(key, next ? [next, ...rows] : rows);
   }
 
   for (const key of directKeys(kind, id)) {
     if (next) saveSafe(key, next);
     else localStorage.removeItem(key);
   }
-}
-
-function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
-  if (!ok()) return;
-  const id = rid(room);
-  if (!id) return;
-
-  const next: Room = { ...room, id, roomId: id, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
-  const states = stateMap();
-  states[id] = state;
-  states[`${kind}:${id}`] = state;
-  STATE_KEYS.forEach((key) => saveSafe(key, states));
-
-  const current = allRooms(kind).filter((item) => rid(item) !== id);
-  saveSafe(canonicalKey(kind), [next, ...current]);
-  purgeRoomCopies(kind, id, next);
-
-  window.dispatchEvent(new Event("vaultforge-room-state-change"));
-  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
 }
 
 function firstPhoto(room: Room) {
@@ -402,38 +409,40 @@ async function onePhoto(files: FileList | null) {
 
 function saveRoom(kind: RoomKind, room: Room) {
   if (!ok()) return "";
-  const id = `${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const existing = rid(room);
+  const id = existing || `${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now = new Date().toISOString();
   const next: Room = {
     ...room,
     id,
     roomId: id,
-    roomState: "active",
-    cleanupState: "active",
-    stateStatus: "active",
-    createdAt: now,
+    roomState: roomState(room) || "active",
+    cleanupState: roomState(room) || "active",
+    stateStatus: roomState(room) || "active",
+    createdAt: txt(room.createdAt) || now,
     updatedAt: now,
-    alertRead: false,
-    viewedAt: "",
+    alertRead: Boolean(room.alertRead),
+    viewedAt: txt(room.viewedAt),
   };
 
-  for (const key of singleKeys(kind, id)) {
-    const worked = saveSafe(key, next);
-    if (!worked) saveSafe(key, { ...next, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" });
-  }
-
   const cover = txt(next.coverPhoto || next.photoUrl || next.imageUrl);
-  const slim: Room = { ...next, photos: cover ? [cover] : [], photoUrls: cover ? [cover] : [], coverPhoto: cover, photoUrl: cover, imageUrl: cover };
+  const slim: Room = {
+    ...next,
+    photos: cover ? [cover] : [],
+    photoUrls: cover ? [cover] : [],
+    coverPhoto: cover,
+    photoUrl: cover,
+    imageUrl: cover,
+  };
 
-  for (const key of keysFor(kind)) {
-    const existing = arr<Room>(key).filter((row) => rid(row) !== id);
-    const worked = saveSafe(key, [slim, ...existing]);
-    if (!worked) saveSafe(key, [{ ...slim, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }, ...existing]);
-  }
+  const current = allRooms(kind).filter((item) => rid(item) !== id);
+  saveSafe(canonicalKey(kind), [slim, ...current]);
+  purgeRoomCopies(kind, id, slim);
 
   const map = stateMap();
-  map[id] = "active";
-  map[`${kind}:${id}`] = "active";
+  map[id] = slim.roomState || "active";
+  map[`${kind}:${id}`] = slim.roomState || "active";
   STATE_KEYS.forEach((key) => saveSafe(key, map));
 
   window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
@@ -444,15 +453,31 @@ function saveRoom(kind: RoomKind, room: Room) {
 
 function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
   if (!ok()) return;
+
   const id = rid(room);
-  const next: Room = { ...room, roomState: state, cleanupState: state, stateStatus: state, updatedAt: new Date().toISOString() };
-  singleKeys(kind, id).forEach((key) => saveSafe(key, next));
-  keysFor(kind).forEach((key) => saveSafe(key, [next, ...arr<Room>(key).filter((row) => rid(row) !== id)]));
-  const map = stateMap();
-  map[id] = state;
-  map[`${kind}:${id}`] = state;
-  STATE_KEYS.forEach((key) => saveSafe(key, map));
+  if (!id) return;
+
+  const next: Room = {
+    ...room,
+    id,
+    roomId: id,
+    roomState: state,
+    cleanupState: state,
+    stateStatus: state,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const states = stateMap();
+  states[id] = state;
+  states[`${kind}:${id}`] = state;
+  STATE_KEYS.forEach((key) => saveSafe(key, states));
+
+  const current = allRooms(kind).filter((item) => rid(item) !== id);
+  saveSafe(canonicalKey(kind), [next, ...current]);
+  purgeRoomCopies(kind, id, next);
+
   window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
 }
 
 function saveProfile(profile: Profile) {
