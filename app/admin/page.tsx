@@ -633,9 +633,7 @@ function deleteControlledThreadForever(id: string) {
 
 function saveInvestors(investors: InvestorRecord[], updatedInvestor?: InvestorRecord) {
   const filtered = investors.filter((investor) => !isHardDeleted(ADMIN_DELETED_INVESTOR_IDS_KEY, investor.id));
-  setInvestors(filtered);
   writeJson(INVESTOR_LIST_KEY, filtered);
-  setAdminActionTick((value) => value + 1);
   const currentSingle = readJson<any>(INVESTOR_APP_KEY, {});
   const singleEmail = lower(currentSingle?.email || currentSingle?.investorEmail || currentSingle?.investor_email);
   const viewerEmail = currentEmail();
@@ -2124,12 +2122,15 @@ export default function AdminPage() {
     });
     setInvestors(next);
     saveInvestors(next, updatedInvestor);
+    setAdminActionTick((value) => value + 1);
   }
 
   function deleteInvestorForever(id: string) {
     markDeletedId(ADMIN_DELETED_INVESTOR_IDS_KEY, id);
     const next = investors.filter((investor) => investor.id !== id);
+    setInvestors(next);
     saveInvestors(next);
+    setAdminActionTick((value) => value + 1);
   }
 
   function runSearch(event?: React.FormEvent) {
