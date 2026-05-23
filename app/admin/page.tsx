@@ -149,6 +149,8 @@ const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
+const ADMIN_PROFILE_QUEUE_KEY = "vaultforge_admin_profile_approval_queue_v1";
+const MOCK_APPROVALS_KEY = "vaultforge_mock_access_approvals_v1";
 
 const STATE_CODES: StateCode[] = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 
@@ -201,6 +203,86 @@ function readJson<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
+
+
+function readProfileApprovalQueue() {
+  return readJson<any[]>(ADMIN_PROFILE_QUEUE_KEY, []);
+}
+
+function writeProfileApprovalQueue(rows: any[]) {
+  writeJson(ADMIN_PROFILE_QUEUE_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-admin-profile-queue-change"));
+}
+
+function writeMockAccess(email: string, kind: "member" | "investor", patch: any) {
+  const cleanEmail = lower(email);
+  const approvals = readJson<Record<string, any>>(MOCK_APPROVALS_KEY, {});
+  const key = `${kind}:${cleanEmail}`;
+  approvals[key] = {
+    ...(approvals[key] || {}),
+    email: cleanEmail,
+    kind,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  writeJson(MOCK_APPROVALS_KEY, approvals);
+  window.dispatchEvent(new Event("vaultforge-mock-access-change"));
+  window.dispatchEvent(new Event("vaultforge-access-change"));
+}
+
+function approveProfileForPayment(row: any) {
+  const email = lower(row?.email || row?.profile?.email || row?.profile?.investorEmail);
+  const kind = lower(row?.type) === "investor" ? "investor" : "member";
+  if (!email) {
+    window.alert("No email found on this profile.");
+    return;
+  }
+
+  const updatedAt = new Date().toISOString();
+  const queue = readProfileApprovalQueue().map((item) => {
+    const itemEmail = lower(item?.email || item?.profile?.email || item?.profile?.investorEmail);
+    if (itemEmail !== email || lower(item?.type) !== kind) return item;
+    return {
+      ...item,
+      status: "approved_payment_ready",
+      approved: true,
+      adminApproved: true,
+      approvedForPayment: true,
+      paymentStatus: "ready",
+      accessStatus: "payment_ready",
+      updatedAt,
+    };
+  });
+  writeProfileApprovalQueue(queue);
+
+  writeMockAccess(email, kind, {
+    approved: true,
+    adminApproved: true,
+    approvedForPayment: true,
+    paid: false,
+    unlocked: false,
+    paymentStatus: "ready",
+    accessStatus: "payment_ready",
+  });
+
+  if (kind === "investor") {
+    const current = readJson<any>(INVESTOR_APP_KEY, {});
+    if (lower(current?.email || current?.investorEmail) === email) {
+      writeJson(INVESTOR_APP_KEY, {
+        ...current,
+        approved: true,
+        adminApproved: true,
+        approvedForPayment: true,
+        paymentStatus: "ready",
+        accessStatus: "payment_ready",
+        updatedAt,
+      });
+    }
+  }
+
+  window.alert(`${kind === "investor" ? "Investor" : "Member"} approved. Payment button is now ready and should pulse.`);
+}
+
 
 function writeJson(key: string, value: unknown) {
   if (!ok()) return;
@@ -1821,6 +1903,7 @@ export default function AdminPage() {
   const [investorExecutionRequests, setInvestorExecutionRequests] = useState<InvestorExecutionRequest[]>([]);
   const [investorAdminMessages, setInvestorAdminMessages] = useState<InvestorAdminMessage[]>([]);
   const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [profileQueueTick, setProfileQueueTick] = useState(0);
   const [deals, setDeals] = useState<RoomRecord[]>([]);
   const [pains, setPains] = useState<RoomRecord[]>([]);
   const [searchDraft, setSearchDraft] = useState("");
@@ -1853,6 +1936,7 @@ export default function AdminPage() {
     refresh();
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-admin-members-change", refresh);
+    window.addEventListener("vaultforge-admin-profile-queue-change", () => setProfileQueueTick((value) => value + 1));
     window.addEventListener("vaultforge-admin-message-change", refresh);
     window.addEventListener("vaultforge-investor-change", refresh);
     window.addEventListener("vaultforge-investor-request-change", refresh);
@@ -1878,6 +1962,9 @@ export default function AdminPage() {
   }, []);
 
   const allowed = email === OWNER_EMAIL.toLowerCase();
+  const profileApprovalQueue = useMemo(() => readProfileApprovalQueue(), [profileQueueTick, members, investors]);
+  const pendingProfileApprovals = useMemo(() => profileApprovalQueue.filter((item) => !["approved_payment_ready", "paid", "deleted", "denied"].includes(lower(item?.status))), [profileApprovalQueue]);
+  const paymentReadyProfiles = useMemo(() => profileApprovalQueue.filter((item) => lower(item?.status) === "approved_payment_ready"), [profileApprovalQueue]);
   const visibleMembers = useMemo(() => members.filter((member) => member.status !== "deleted"), [members]);
   const newMembers = useMemo(() => members.filter(isNewMember), [members]);
   const pending = useMemo(() => members.filter((member) => member.status === "pending"), [members]);
@@ -1945,6 +2032,16 @@ export default function AdminPage() {
   }
 
   function patchMember(id: string, patch: Partial<MemberRecord>) {
+    const target = members.find((member) => member.id === id);
+    if (target && (patch.status === "approved" || patch.approvedForPayment || patch.paymentStatus === "ready" || patch.paymentStatus === "unpaid")) {
+      writeMockAccess(target.email, "member", {
+        approved: true,
+        adminApproved: true,
+        approvedForPayment: true,
+        paymentStatus: patch.paymentStatus || "ready",
+        accessStatus: "payment_ready",
+      });
+    }
     const next = members.map((member) => {
       if (member.id !== id) return member;
       const pay = patch.paymentStatus || member.paymentStatus;
@@ -1961,6 +2058,16 @@ export default function AdminPage() {
   }
 
   function patchInvestor(id: string, patch: Partial<InvestorRecord>) {
+    const target = investors.find((investor) => investor.id === id);
+    if (target && (patch.status === "approved" || patch.approvedForPayment || patch.paymentStatus === "ready" || patch.paymentStatus === "unpaid")) {
+      writeMockAccess(target.email, "investor", {
+        approved: true,
+        adminApproved: true,
+        approvedForPayment: true,
+        paymentStatus: patch.paymentStatus || "ready",
+        accessStatus: "payment_ready",
+      });
+    }
     let updatedInvestor: InvestorRecord | undefined;
     const next = investors.map((investor) => {
       if (investor.id !== id) return investor;
@@ -2086,6 +2193,53 @@ export default function AdminPage() {
           </section>
         <AdminOperatingGuide />
         <AdminQueueGuide />
+
+        <Section title="Profile Approval Queue">
+          <p style={muted}>Profiles submitted from Member Profile or Investor Application show here. Click Approve / Light Payment to make their room payment button pulse.</p>
+          <div style={{ ...grid, marginTop: 16 }}>
+            {profileApprovalQueue.length ? profileApprovalQueue.map((item: any, index: number) => {
+              const kind = lower(item?.type) === "investor" ? "investor" : "member";
+              const profile = item?.profile || {};
+              const emailValue = lower(item?.email || profile?.email || profile?.investorEmail);
+              const status = clean(item?.status || "pending_admin_approval");
+              return (
+                <div key={`${kind}-${emailValue || index}`} className={status === "pending_admin_approval" ? "vf-pulse" : ""} style={status === "approved_payment_ready" ? goldPanel : panel}>
+                  <div style={eyebrow}>{kind === "investor" ? "Investor Profile" : "Member Profile"} • {status}</div>
+                  <h3 style={h3}>{clean(item?.name || profile?.name || profile?.contactName || "Profile")}</h3>
+                  <p style={muted}>Company: {clean(item?.company || profile?.company || "Not listed")}</p>
+                  <p style={muted}>Email: {emailValue || "Not listed"}</p>
+                  <p style={muted}>Type: {clean(profile?.memberType || profile?.investorTypes || kind)}</p>
+                  <div style={{ ...row, marginTop: 12 }}>
+                    <button type="button" style={goldBtn} onClick={() => { approveProfileForPayment(item); setProfileQueueTick((value) => value + 1); }}>
+                      Approve / Light Payment
+                    </button>
+                    <button type="button" style={btn} onClick={() => {
+                      const queue = readProfileApprovalQueue().map((row) => row === item ? { ...row, status: "reviewing", updatedAt: new Date().toISOString() } : row);
+                      writeProfileApprovalQueue(queue);
+                      setProfileQueueTick((value) => value + 1);
+                    }}>
+                      Mark Reviewing
+                    </button>
+                    <button type="button" style={redBtn} onClick={() => {
+                      const queue = readProfileApprovalQueue().map((row) => row === item ? { ...row, status: "denied", updatedAt: new Date().toISOString() } : row);
+                      writeProfileApprovalQueue(queue);
+                      setProfileQueueTick((value) => value + 1);
+                    }}>
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              );
+            }) : (
+              <div style={panel}>
+                <h3 style={h3}>No submitted profiles yet.</h3>
+                <p style={muted}>Submit a Member Profile or Investor Application to test the approval/payment pulse flow.</p>
+              </div>
+            )}
+          </div>
+        </Section>
+
+
         </div>
       </main>
     );
@@ -2116,6 +2270,8 @@ export default function AdminPage() {
 
         <section style={{ marginBottom: 18 }}>
           <div style={grid}>
+            <Metric title="Profile Approvals" count={pendingProfileApprovals.length} note="submitted profiles waiting on approval" pulse={pendingProfileApprovals.length > 0} onClick={() => setTab("overview")} />
+            <Metric title="Payment Ready" count={paymentReadyProfiles.length} note="profiles approved, payment button should pulse" pulse={paymentReadyProfiles.length > 0} onClick={() => setTab("overview")} />
             <Metric title="New Members" count={newMembers.length} note="new/pending applications" pulse={newMembers.length > 0} onClick={() => { setFilter("new"); setTab("members"); }} />
             <Metric title="Approved Not Paid" count={approvedUnpaid.length} note="payment approved but unpaid" pulse={approvedUnpaid.length > 0} onClick={() => { setFilter("approvedUnpaid"); setTab("members"); }} />
             <Metric title="New Investors" count={newInvestors.length} note="pending investor approvals" pulse={newInvestors.length > 0} onClick={() => setTab("investors")} />
@@ -2252,20 +2408,10 @@ export default function AdminPage() {
             </Section>
 
             <Section title="Admin Message Center">
-              <p style={muted}>Send structured messages to all members or only the currently filtered member results.</p>
+              <p style={muted}>Send to all members or only the currently filtered member results.</p>
               <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
-                <BloombergMessageForm
-                  sender="VaultForge Admin"
-                  recipient="Filtered Members / All Members"
-                  header="Admin Member Broadcast"
-                  defaultSubject={broadcastSubject || "Admin message"}
-                  defaultType="Admin Note"
-                  submitLabel="Prepare Admin Message"
-                  onSend={(payload) => {
-                    setBroadcastSubject(payload.subject);
-                    setBroadcastBody(payload.summary);
-                  }}
-                />
+                <input style={input} value={broadcastSubject} onChange={(event) => setBroadcastSubject(event.target.value)} placeholder="Subject..." />
+                <textarea style={{ ...input, minHeight: 130 }} value={broadcastBody} onChange={(event) => setBroadcastBody(event.target.value)} placeholder="Write admin message..." />
                 <div style={row}>
                   <button type="button" style={goldBtn} onClick={() => broadcastToMembers("filtered")}>Message Filtered Members</button>
                   <button type="button" style={btn} onClick={() => broadcastToMembers("all")}>Message All Members</button>
