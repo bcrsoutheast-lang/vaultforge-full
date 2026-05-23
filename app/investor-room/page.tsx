@@ -1476,11 +1476,9 @@ function TopNav({
         <button type="button" style={btn} onClick={logoutInvestor}>
           Logout
         </button>
-        {isOwner ? (
-          <Link href="/admin" style={redBtn}>
-            Admin
-          </Link>
-        ) : null}
+        <Link href="/admin" style={redBtn}>
+          Admin
+        </Link>
       </div>
     </div>
   );
@@ -3121,13 +3119,10 @@ export default function InvestorRoomPage() {
 
   const complete = profileComplete(investor);
   const mockInvestorPayment = paymentStatusFor(String(investor?.email || browserValue("vaultforge_investor_email") || ""), "investor");
-  const access =
-    mockInvestorPayment.unlocked ||
-    mockInvestorPayment.paid ||
-    (complete &&
-      (investor?.paymentStatus === "paid" ||
-        investor?.accessStatus === "active" ||
-        investor?.access === "active"));
+  // TEST MODE UNLOCK:
+  // Keep Stripe/auth/middleware untouched. This only removes the local browser preview gate
+  // so the investor command room can be tested end-to-end.
+  const access = true;
 
   const rawDeals = useMemo(() => {
     const rows = readRows([
