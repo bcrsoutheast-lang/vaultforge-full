@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -19,6 +22,16 @@ const COMPANY_LOGO_BACKUP_KEY = "vaultforge_member_company_logo_v1";
 type Lane = "new" | "active" | "admin" | "investor" | "deal" | "pain" | "execution" | "saved" | "archived" | "passed" | "deleted";
 
 type ThreadPatch = Record<string, any>;
+
+
+function browserValue(key: string, fallback = "") {
+  if (typeof window === "undefined") return fallback;
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -51,6 +64,7 @@ function list(value: unknown): string[] {
 }
 
 function currentEmail() {
+  if (typeof window === "undefined") return "";
   const profileKeys = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile", "vf_profile", "member_profile", "profile"];
   let profile: any = {};
 
@@ -63,9 +77,9 @@ function currentEmail() {
     profile?.email ||
       profile?.memberEmail ||
       profile?.member_email ||
-      localStorage.getItem("vf_email") ||
-      localStorage.getItem("member_email") ||
-      localStorage.getItem("email")
+      browserValue("vf_email") ||
+      browserValue("member_email") ||
+      browserValue("email")
   );
 }
 
@@ -73,8 +87,8 @@ function currentEmail() {
 function readMemberProfile() {
   if (typeof window === "undefined") return {};
 
-  const backupPhoto = clean(localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY));
-  const backupLogo = clean(localStorage.getItem(COMPANY_LOGO_BACKUP_KEY));
+  const backupPhoto = clean(browserValue(PROFILE_PHOTO_BACKUP_KEY));
+  const backupLogo = clean(browserValue(COMPANY_LOGO_BACKUP_KEY));
 
   let merged: any = {};
   for (const key of MEMBER_PROFILE_KEYS) {
@@ -87,9 +101,9 @@ function readMemberProfile() {
   const directory = readJson<any[]>(MEMBER_DIRECTORY_KEY, []);
   const email = lower(
     merged?.email ||
-      localStorage.getItem("vf_email") ||
-      localStorage.getItem("member_email") ||
-      localStorage.getItem("email")
+      browserValue("vf_email") ||
+      browserValue("member_email") ||
+      browserValue("email")
   );
   const match = Array.isArray(directory)
     ? directory.find((item) => lower(item?.email) === email) || directory[0]
