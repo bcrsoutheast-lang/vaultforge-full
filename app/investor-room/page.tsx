@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -108,7 +111,18 @@ type Kind = "Deal" | "Pain";
 type Folder = "active" | "saved" | "archived" | "deleted";
 type ActiveRoom = { kind: Kind; item: any } | null;
 
+
+function browserValue(key: string, fallback = "") {
+  if (typeof window === "undefined") return fallback;
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function readJson<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
@@ -757,7 +771,7 @@ function readInvestor() {
   const sessionEmail = clean(
     session?.email ||
       application?.email ||
-      localStorage.getItem("vaultforge_investor_email"),
+      browserValue("vaultforge_investor_email"),
   ).toLowerCase();
   const matching = Array.isArray(applications)
     ? applications.find(
@@ -793,7 +807,7 @@ function safeInvestorSnapshot() {
     company: investor?.company || "",
     email:
       investor?.email ||
-      localStorage.getItem("vaultforge_investor_email") ||
+      browserValue("vaultforge_investor_email") ||
       "",
     phone: investor?.phone || "",
     website: investor?.website || "",
@@ -1619,7 +1633,7 @@ function InvestorIdentityCard({
 }) {
   const score = typeof profileScore === "function" ? profileScore(investor) : 0;
   const email = String(
-    investor?.email || localStorage.getItem("vaultforge_investor_email") || "",
+    investor?.email || browserValue("vaultforge_investor_email") || "",
   ).toLowerCase();
   const isOwner = email === OWNER_EMAIL;
 
@@ -2562,7 +2576,7 @@ function investorEmailForThreads() {
   return String(
     session?.email ||
       investor?.email ||
-      localStorage.getItem("vaultforge_investor_email") ||
+      browserValue("vaultforge_investor_email") ||
       "",
   ).toLowerCase();
 }
@@ -3090,7 +3104,7 @@ export default function InvestorRoomPage() {
   }, []);
 
   const complete = profileComplete(investor);
-  const mockInvestorPayment = paymentStatusFor(String(investor?.email || localStorage.getItem("vaultforge_investor_email") || ""), "investor");
+  const mockInvestorPayment = paymentStatusFor(String(investor?.email || browserValue("vaultforge_investor_email") || ""), "investor");
   const access =
     mockInvestorPayment.unlocked ||
     mockInvestorPayment.paid ||
@@ -3220,7 +3234,7 @@ export default function InvestorRoomPage() {
             <div style={{ marginTop: 18 }}>
               <MockPaymentButton
                 kind="investor"
-                email={String(investor?.email || localStorage.getItem("vaultforge_investor_email") || "")}
+                email={String(investor?.email || browserValue("vaultforge_investor_email") || "")}
                 label="Investor Room Payment Unlock"
                 price="$79"
               />
@@ -3318,7 +3332,7 @@ export default function InvestorRoomPage() {
 
         <MockPaymentButton
           kind="investor"
-          email={String(investor?.email || localStorage.getItem("vaultforge_investor_email") || "")}
+          email={String(investor?.email || browserValue("vaultforge_investor_email") || "")}
           label="Investor Room Payment Status"
           price="$79"
         />
