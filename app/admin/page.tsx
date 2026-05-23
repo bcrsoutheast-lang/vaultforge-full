@@ -536,7 +536,6 @@ export default function AdminPage() {
   }
 
   function MemberCardView({ member }: { member: MemberCard }) {
-    const owner = member.email === OWNER_EMAIL.toLowerCase();
     const pulse = member.status === "pending" || (member.status === "approved" && member.approvedForPayment && member.access !== "active");
     return (
       <div className={pulse ? "vf-pulse" : ""} style={member.status === "deleted" ? redPanel : pulse ? goldPanel : panel}>
