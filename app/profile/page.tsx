@@ -40,6 +40,8 @@ const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultf
 const DIRECTORY_KEY = "vaultforge_member_directory_v1";
 const PROFILE_PHOTO_BACKUP_KEY = "vaultforge_member_profile_photo_v1";
 const COMPANY_LOGO_BACKUP_KEY = "vaultforge_member_company_logo_v1";
+const MOCK_APPROVALS_KEY = "vaultforge_mock_access_approvals_v1";
+const ADMIN_PROFILE_QUEUE_KEY = "vaultforge_admin_profile_approval_queue_v1";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const MEMBER_TYPES = ["Investor", "Cash Buyer", "Private Lender", "Hard Money Lender", "Contractor", "Developer", "Wholesaler", "Realtor", "Attorney", "Title", "Property Manager", "Operator", "Insurance", "City / Permit", "Other"];
@@ -227,6 +229,48 @@ function readDirectory() {
   if (!ok()) return [] as MemberProfile[];
   return j<any[]>(localStorage.getItem(DIRECTORY_KEY), []).map(normalizeProfile);
 }
+
+
+function routeProfileToAdmin(profile: MemberProfile) {
+  if (!ok()) return;
+
+  const queue = j<any[]>(localStorage.getItem(ADMIN_PROFILE_QUEUE_KEY), []);
+  const email = txt(profile.email).toLowerCase();
+  const row = {
+    id: `member-profile-${email || profile.id || Date.now()}`,
+    type: "member",
+    status: "pending_admin_approval",
+    title: `${profile.name || "Member"} Profile Approval`,
+    email,
+    name: profile.name,
+    company: profile.company,
+    memberType: profile.memberType,
+    profile,
+    createdAt: profile.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const next = [row, ...queue.filter((item) => String(item?.id || "") !== row.id && String(item?.email || "").toLowerCase() !== email)];
+  writeJson(ADMIN_PROFILE_QUEUE_KEY, next);
+
+  const approvals = j<Record<string, any>>(localStorage.getItem(MOCK_APPROVALS_KEY), {});
+  approvals[`member:${email}`] = {
+    ...(approvals[`member:${email}`] || {}),
+    email,
+    kind: "member",
+    submitted: true,
+    approved: Boolean(approvals[`member:${email}`]?.approved),
+    adminApproved: Boolean(approvals[`member:${email}`]?.adminApproved),
+    paymentStatus: approvals[`member:${email}`]?.paymentStatus || "unpaid",
+    accessStatus: approvals[`member:${email}`]?.accessStatus || "pending_admin_approval",
+    updatedAt: new Date().toISOString(),
+  };
+  writeJson(MOCK_APPROVALS_KEY, approvals);
+
+  window.dispatchEvent(new Event("vaultforge-admin-profile-queue-change"));
+  window.dispatchEvent(new Event("vaultforge-mock-access-change"));
+}
+
 
 function saveProfile(profile: MemberProfile) {
   if (!ok()) return { ok: false, message: "Browser storage unavailable." };
@@ -476,7 +520,10 @@ export default function ProfilePage() {
       return;
     }
 
-    setBanner("Profile saved. Member matching, Network, and Room intelligence can now use this profile.");
+    routeProfileToAdmin(profile);
+    const message = "Profile saved and routed to admin for approval. After approval, the payment button will light up.";
+    setBanner(message);
+    window.alert(message);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -487,7 +534,7 @@ export default function ProfilePage() {
 
         <section style={sticky}>
           <div style={row}>
-            <button type="button" style={goldBtn} onClick={save}>Save Profile</button>
+            <button type="button" style={goldBtn} onClick={save}>Submit Profile for Approval</button>
             <Link href="/members" style={btn}>Open Members</Link>
             <Link href="/network" style={btn}>Open Network</Link>
             <span style={muted}>{txt(profile.name, "No name yet")} • Based {profile.basedCity || "City not set"}, {profile.basedState} • Serves {profile.statesOperated.join(", ")}</span>
@@ -599,7 +646,7 @@ export default function ProfilePage() {
         </Section>
 
         <Section title="Save">
-          <button type="button" style={goldBtn} onClick={save}>Save Profile</button>
+          <button type="button" style={goldBtn} onClick={save}>Submit Profile for Approval</button>
         </Section>
       </div>
     </main>
