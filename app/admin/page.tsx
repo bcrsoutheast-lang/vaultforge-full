@@ -197,12 +197,7 @@ function readMembers(): MemberCard[] {
   const hardDeleted = readDeletedSet(HARD_DELETED_MEMBERS_KEY);
   const map = new Map<string, MemberCard>();
 
-  const stored = readJson<any[]>(ADMIN_MEMBERS_KEY, []);
-  if (Array.isArray(stored)) stored.forEach((row) => {
-    const member = normalizeMember(row);
-    map.set(member.email !== "email-not-listed" ? member.email : member.id, member);
-  });
-
+  // Profile/login are raw submissions. Saved admin list is read LAST so admin actions win.
   for (const key of PROFILE_KEYS) {
     const row = readJson<any>(key, null);
     if (row && typeof row === "object" && !Array.isArray(row)) {
@@ -220,6 +215,14 @@ function readMembers(): MemberCard[] {
     const existing = map.get(mapKey);
     map.set(mapKey, { ...(existing || member), ...member, id: existing?.id || member.id });
   }
+
+  const stored = readJson<any[]>(ADMIN_MEMBERS_KEY, []);
+  if (Array.isArray(stored)) stored.forEach((row) => {
+    const member = normalizeMember(row);
+    const mapKey = member.email !== "email-not-listed" ? member.email : member.id;
+    const existing = map.get(mapKey);
+    map.set(mapKey, { ...(existing || member), ...member, id: existing?.id || member.id });
+  });
 
   const owner = normalizeMember({
     id: "owner-admin",
@@ -249,12 +252,7 @@ function readInvestors(): InvestorCard[] {
   const hardDeleted = readDeletedSet(HARD_DELETED_INVESTORS_KEY);
   const map = new Map<string, InvestorCard>();
 
-  const stored = readJson<any[]>(INVESTOR_LIST_KEY, []);
-  if (Array.isArray(stored)) stored.forEach((row) => {
-    const investor = normalizeInvestor(row);
-    map.set(investor.email !== "email-not-listed" ? investor.email : investor.id, investor);
-  });
-
+  // Raw investor submission first. Saved admin list is read LAST so admin actions win.
   const single = readJson<any>(INVESTOR_APP_KEY, null);
   if (single && typeof single === "object" && !Array.isArray(single) && (single.email || single.company || single.contactName || single.name)) {
     const investor = normalizeInvestor(single);
@@ -272,6 +270,14 @@ function readInvestors(): InvestorCard[] {
       map.set(mapKey, { ...(existing || investor), ...investor, id: existing?.id || investor.id });
     });
   }
+
+  const stored = readJson<any[]>(INVESTOR_LIST_KEY, []);
+  if (Array.isArray(stored)) stored.forEach((row) => {
+    const investor = normalizeInvestor(row);
+    const mapKey = investor.email !== "email-not-listed" ? investor.email : investor.id;
+    const existing = map.get(mapKey);
+    map.set(mapKey, { ...(existing || investor), ...investor, id: existing?.id || investor.id });
+  });
 
   return Array.from(map.values())
     .filter((investor) => !hardDeleted.has(investor.id))
@@ -306,6 +312,58 @@ function writeMockAccess(email: string, kind: "member" | "investor", patch: any)
   current[key] = { ...(current[key] || {}), email: cleanEmail, kind, ...patch, updatedAt: new Date().toISOString() };
   writeJson(MOCK_ACCESS_KEY, current);
   window.dispatchEvent(new Event("vaultforge-mock-access-change"));
+}
+
+function syncMemberToProfileKeys(member: MemberCard) {
+  const statusPatch = {
+    status: member.status,
+    memberStatus: member.status,
+    accessStatus: member.access,
+    paymentStatus: member.paymentStatus,
+    approvedForPayment: member.approvedForPayment,
+    paymentApproved: member.approvedForPayment,
+    updatedAt: member.updatedAt,
+  };
+
+  for (const key of PROFILE_KEYS) {
+    const current = readJson<any>(key, null);
+    if (current && typeof current === "object" && !Array.isArray(current)) {
+      const currentEmail = lower(current?.email || current?.memberEmail || current?.member_email);
+      if (!currentEmail || currentEmail === member.email) {
+        writeJson(key, { ...current, ...statusPatch });
+      }
+    }
+  }
+
+  const login = readJson<any>(MEMBER_LOGIN_KEY, null);
+  if (login && typeof login === "object" && !Array.isArray(login)) {
+    const loginEmail = lower(login?.email || login?.memberEmail || login?.member_email);
+    if (!loginEmail || loginEmail === member.email) {
+      writeJson(MEMBER_LOGIN_KEY, { ...login, ...statusPatch });
+    }
+  }
+}
+
+function syncInvestorToApplication(investor: InvestorCard) {
+  const current = readJson<any>(INVESTOR_APP_KEY, {});
+  const currentEmail = lower(current?.email || current?.investorEmail || current?.investor_email);
+
+  if (!currentEmail || currentEmail === investor.email) {
+    writeJson(INVESTOR_APP_KEY, {
+      ...current,
+      ...investor,
+      name: investor.contactName,
+      contactName: investor.contactName,
+      company: investor.company,
+      email: investor.email,
+      status: investor.status,
+      accessStatus: investor.access,
+      paymentStatus: investor.paymentStatus,
+      approvedForPayment: investor.approvedForPayment,
+      paymentApproved: investor.approvedForPayment,
+      updatedAt: investor.updatedAt,
+    });
+  }
 }
 
 function Metric({ title, count, note, active, onClick }: { title: string; count: number; note: string; active?: boolean; onClick?: () => void }) {
@@ -386,6 +444,7 @@ export default function AdminPage() {
 
     const updated = next.find((member) => member.id === id);
     if (updated) {
+      syncMemberToProfileKeys(updated);
       writeMockAccess(updated.email, "member", {
         approved: updated.status === "approved",
         adminApproved: updated.status === "approved",
@@ -420,6 +479,7 @@ export default function AdminPage() {
 
     const updated = next.find((investor) => investor.id === id);
     if (updated) {
+      syncInvestorToApplication(updated);
       writeMockAccess(updated.email, "investor", {
         approved: updated.status === "approved",
         adminApproved: updated.status === "approved",
@@ -499,11 +559,11 @@ export default function AdminPage() {
           <button type="button" style={goldBtn} onClick={() => patchMember(member.id, { status: "approved", approvedForPayment: true, paymentStatus: "ready" })}>Approve Payment Button</button>
           <button type="button" style={greenBtn} onClick={() => patchMember(member.id, { status: "approved", approvedForPayment: true, paymentStatus: "paid", access: "active" })}>Mark Paid</button>
           <button type="button" style={goldBtn} onClick={() => patchMember(member.id, { status: "approved", approvedForPayment: true, paymentStatus: "comped", access: "active" })}>Grant Free Access</button>
-          <button type="button" style={btn} onClick={() => patchMember(member.id, { paymentStatus: "unpaid", access: "locked" })} disabled={owner}>Mark Unpaid</button>
-          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "suspended", access: "locked" })} disabled={owner}>Suspend</button>
-          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "denied", approvedForPayment: false, access: "locked" })} disabled={owner}>Deny</button>
-          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "deleted", access: "locked" })} disabled={owner}>Delete Member</button>
-          {member.status === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteMemberForever(member.id)} disabled={owner}>Delete Forever</button> : null}
+          <button type="button" style={btn} onClick={() => patchMember(member.id, { paymentStatus: "unpaid", access: "locked" })}>Mark Unpaid</button>
+          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "suspended", access: "locked" })}>Suspend</button>
+          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "denied", approvedForPayment: false, access: "locked" })}>Deny</button>
+          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "deleted", access: "locked" })}>Delete Member</button>
+          {member.status === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteMemberForever(member.id)}>Delete Forever</button> : null}
           {member.status !== "pending" ? <button type="button" style={btn} onClick={() => patchMember(member.id, { status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" })}>Restore</button> : null}
         </div>
       </div>
