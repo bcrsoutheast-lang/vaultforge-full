@@ -1,25 +1,62 @@
 "use client";
 
 import Link from "next/link";
-import VaultForgeAlertCenter from "../components/VaultForgeAlertCenter";
 import { useEffect, useMemo, useState } from "react";
+
+
+const adminInlineButton: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "rgba(18,24,38,.92)",
+  color: "#f7f8ff",
+  borderRadius: 999,
+  padding: "12px 18px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const adminInlineGoldButton: React.CSSProperties = {
+  ...adminInlineButton,
+  background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
+  color: "#080a10",
+};
+
+const adminInlineRedButton: React.CSSProperties = {
+  ...adminInlineButton,
+  background: "rgba(90,10,18,.72)",
+  color: "#ffb2b2",
+  border: "1px solid rgba(255,65,65,.65)",
+};
+
 
 type Status = "pending" | "approved" | "suspended" | "denied" | "deleted";
 type PaymentStatus = "unpaid" | "ready" | "paid" | "comped";
 type AccessStatus = "locked" | "active";
-type RequestFolder = "active" | "saved" | "archived" | "closed" | "deleted";
 
-type PersonKind = "member" | "investor";
-
-type AdminPerson = {
+type MemberCard = {
   id: string;
-  kind: PersonKind;
   name: string;
   company: string;
   email: string;
   phone: string;
-  role: string;
-  markets: string;
+  memberType: string;
+  baseState: string;
+  operatingStates: string;
+  status: Status;
+  paymentStatus: PaymentStatus;
+  approvedForPayment: boolean;
+  access: AccessStatus;
+  updatedAt: string;
+  raw?: any;
+};
+
+type InvestorCard = {
+  id: string;
+  contactName: string;
+  company: string;
+  email: string;
+  phone: string;
+  statesInterested: string;
+  assetTypes: string;
   status: Status;
   paymentStatus: PaymentStatus;
   approvedForPayment: boolean;
@@ -33,48 +70,33 @@ const OWNER_EMAIL = "bcrsoutheast@gmail.com";
 const ADMIN_MEMBERS_KEY = "vaultforge_admin_members_v1";
 const INVESTOR_LIST_KEY = "vaultforge_investor_admin_list_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
-const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile", "vf_profile", "member_profile", "profile"];
+const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const MEMBER_LOGIN_KEY = "vaultforge_member_login_v1";
 const MOCK_ACCESS_KEY = "vaultforge_mock_access_approvals_v1";
 const ADMIN_QUEUE_KEY = "vaultforge_admin_profile_approval_queue_v1";
 const HARD_DELETED_MEMBERS_KEY = "vaultforge_admin_deleted_member_ids_v1";
 const HARD_DELETED_INVESTORS_KEY = "vaultforge_admin_deleted_investor_ids_v1";
-const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
-const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
-const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
-const DESIGNATED_ROUTE_MESSAGES_KEY = "vaultforge_designated_route_messages_v1";
-const OWNER_DIRECT_MESSAGES_KEY = "vaultforge_owner_direct_messages_v1";
-const OWNER_REPLIES_KEY = "vaultforge_owner_replies_v1";
-const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
-const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
-const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background: "#05070d",
-  color: "#f7f7fb",
-  padding: 18,
-  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-};
-
-const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 110 };
+const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
+const wrap: React.CSSProperties = { maxWidth: 1320, margin: "0 auto", paddingBottom: 100 };
 const shell: React.CSSProperties = { border: "1px solid rgba(207,216,230,.16)", borderRadius: 24, padding: 20, background: "#0b101b", marginBottom: 18 };
-const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.30)", borderRadius: 28, padding: 26, marginBottom: 18, background: "radial-gradient(circle at top right, rgba(245,197,66,.14), transparent 35%), linear-gradient(180deg,#10131a,#070b14)" };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 18 };
-const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,220,104,.75)", boxShadow: "0 0 30px rgba(255,220,104,.15)" };
+const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.30)", borderRadius: 28, padding: 28, marginBottom: 18, background: "radial-gradient(circle at top right, rgba(245,197,66,.15), transparent 35%), linear-gradient(180deg,#10131a,#070b14)" };
+const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 20 };
+const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,220,104,.85)", boxShadow: "0 0 32px rgba(255,220,104,.25)" };
 const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.55)", boxShadow: "0 0 22px rgba(255,70,70,.12)" };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(275px,1fr))", gap: 14 };
+const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 };
 const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontSize: 12, fontWeight: 950, marginBottom: 10 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,74px)", lineHeight: .9, letterSpacing: -4, margin: "0 0 14px", fontWeight: 950 };
+const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 6, fontSize: 13, fontWeight: 950, marginBottom: 10 };
+const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,78px)", lineHeight: .9, letterSpacing: -4, margin: "0 0 16px", fontWeight: 950 };
 const h2: React.CSSProperties = { fontSize: "clamp(28px,5vw,48px)", lineHeight: .95, letterSpacing: -2, margin: "0 0 10px", fontWeight: 950 };
 const h3: React.CSSProperties = { fontSize: 24, margin: "0 0 8px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 19, lineHeight: 1.35, margin: 0 };
+const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 20, lineHeight: 1.35, margin: 0 };
 const muted: React.CSSProperties = { color: "#aeb7c7", lineHeight: 1.35, margin: "7px 0 0" };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "11px 14px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
+const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "12px 16px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
 const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
 const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.55)", color: "#ffb3b3" };
 const greenBtn: React.CSSProperties = { ...btn, background: "#062716", borderColor: "rgba(48,255,135,.46)", color: "#9fffc1" };
+const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#111823", color: "#f8fafc", borderRadius: 16, padding: "13px 14px", fontSize: 16 };
 
 function ok() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -109,125 +131,6 @@ function writeJson(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-
-function pretty(value: unknown, fallback = "") {
-  return clean(value, fallback)
-    .replace(/\\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/TYPE:/g, "Type:")
-    .replace(/URGENCY:/g, "Urgency:")
-    .replace(/SUBJECT:/g, "Subject:")
-    .replace(/SENDER:/g, "Sender:")
-    .replace(/RECIPIENT:/g, "Recipient:")
-    .replace(/HEADER:/g, "Header:")
-    .replace(/MESSAGE:/g, "Message:")
-    .replace(/AMOUNT \/ BUDGET:/g, "Amount / Budget:")
-    .replace(/TIMELINE:/g, "Timeline:")
-    .replace(/CONDITIONS:/g, "Conditions:")
-    .replace(/NEXT MOVE:/g, "Next Move:");
-}
-
-function requestFolderOf(row: any): RequestFolder {
-  const value = lower(row?.folder || row?.status);
-  if (value.includes("saved")) return "saved";
-  if (value.includes("archived")) return "archived";
-  if (value.includes("closed") || value.includes("done") || value.includes("complete")) return "closed";
-  if (value.includes("deleted") || value.includes("trash")) return "deleted";
-  return "active";
-}
-
-function requestId(row: any, fallback = "") {
-  return clean(row?.id || row?.requestId || row?.roomId || row?.dealId || row?.painId || row?.signalId || row?.email || fallback);
-}
-
-function requestStorageKeys() {
-  return [
-    DESIGNATED_ROUTE_MESSAGES_KEY,
-    OWNER_DIRECT_MESSAGES_KEY,
-    SIMPLE_REQUESTS_KEY,
-    ADMIN_MESSAGES_KEY,
-    ADMIN_INBOX_KEY,
-    INVESTOR_ADMIN_MESSAGES_KEY,
-    INVESTOR_REQUESTS_KEY,
-    CONTROLLED_THREADS_KEY,
-    OWNER_REPLIES_KEY,
-  ];
-}
-
-function updateRequestEverywhere(item: any, nextFolder: RequestFolder) {
-  const targetId = requestId(item, item?.rowId || "");
-  const sourceKey = clean(item?.sourceKey);
-
-  requestStorageKeys().forEach((key) => {
-    const value = readJson<any>(key, []);
-
-    if (Array.isArray(value)) {
-      const nextRows = value.map((row, index) => {
-        const candidateId = requestId(row, `${key}-${index}`);
-        const matches = candidateId === targetId || (sourceKey === key && candidateId === item?.rowId);
-        return matches
-          ? {
-              ...row,
-              status: nextFolder,
-              folder: nextFolder,
-              updatedAt: new Date().toISOString(),
-            }
-          : row;
-      });
-      writeJson(key, nextRows);
-      return;
-    }
-
-    if (value && typeof value === "object") {
-      const candidateId = requestId(value, key);
-      if (candidateId === targetId || sourceKey === key) {
-        writeJson(key, {
-          ...value,
-          status: nextFolder,
-          folder: nextFolder,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-    }
-  });
-
-  window.dispatchEvent(new Event("vaultforge-request-change"));
-  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
-  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
-}
-
-function deleteRequestEverywhere(item: any) {
-  const targetId = requestId(item, item?.rowId || "");
-  const sourceKey = clean(item?.sourceKey);
-
-  requestStorageKeys().forEach((key) => {
-    const value = readJson<any>(key, []);
-
-    if (Array.isArray(value)) {
-      writeJson(
-        key,
-        value.filter((row, index) => {
-          const candidateId = requestId(row, `${key}-${index}`);
-          return !(candidateId === targetId || (sourceKey === key && candidateId === item?.rowId));
-        }),
-      );
-      return;
-    }
-
-    if (value && typeof value === "object") {
-      const candidateId = requestId(value, key);
-      if (candidateId === targetId || sourceKey === key) {
-        localStorage.removeItem(key);
-      }
-    }
-  });
-
-  window.dispatchEvent(new Event("vaultforge-request-change"));
-  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
-  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
-}
-
-
 function readDeletedSet(key: string) {
   return new Set(readJson<string[]>(key, []));
 }
@@ -236,8 +139,15 @@ function writeDeletedSet(key: string, set: Set<string>) {
   writeJson(key, Array.from(set));
 }
 
-function safeId(value: string, fallback: string) {
-  return clean(value || fallback).toLowerCase().replace(/[^a-z0-9@._-]+/g, "-");
+function markHardDeleted(key: string, id: string) {
+  const set = readDeletedSet(key);
+  set.add(id);
+  writeDeletedSet(key, set);
+}
+
+function currentEmail() {
+  if (!ok()) return "";
+  return lower(localStorage.getItem("vf_email") || localStorage.getItem("member_email") || localStorage.getItem("email") || localStorage.getItem("vaultforge_investor_email"));
 }
 
 function statusFrom(row: any): Status {
@@ -257,116 +167,87 @@ function paymentFrom(row: any): PaymentStatus {
   return "unpaid";
 }
 
-
-function accessOverrideFor(kind: PersonKind, email: string) {
-  const cleanEmail = lower(email);
-  if (!cleanEmail || cleanEmail === "email-not-listed") return null;
-
-  const approvals = readJson<Record<string, any>>(MOCK_ACCESS_KEY, {});
-  const key = `${kind}:${cleanEmail}`;
-  const record = approvals[key] || {};
-
-  const paymentKey = kind === "member" ? "vaultforge_mock_member_payment_v1" : "vaultforge_mock_investor_payment_v1";
-  const direct = readJson<any>(paymentKey, {});
-  const directEmail = lower(direct?.email || "");
-
-  const combined = {
-    ...record,
-    ...(directEmail === cleanEmail || !directEmail ? direct : {}),
-  };
-
-  if (!Object.keys(combined).length) return null;
-
-  const paid = Boolean(combined.paid || combined.unlocked || combined.paymentStatus === "paid" || combined.accessStatus === "active");
-  const ready = Boolean(combined.approved || combined.adminApproved || combined.approvedForPayment || combined.paymentStatus === "ready" || combined.accessStatus === "payment_ready");
-
-  return {
-    paid,
-    ready,
-    paymentStatus: paid ? "paid" as PaymentStatus : ready ? "ready" as PaymentStatus : undefined,
-    access: paid ? "active" as AccessStatus : "locked" as AccessStatus,
-    approvedForPayment: ready || paid,
-    updatedAt: clean(combined.updatedAt || combined.paidAt || ""),
-  };
+function safeId(value: string, fallback: string) {
+  return clean(value || fallback).toLowerCase().replace(/[^a-z0-9@._-]+/g, "-");
 }
 
-
-
-function normalizeMember(row: any): AdminPerson {
+function normalizeMember(row: any): MemberCard {
   const email = lower(row?.email || row?.memberEmail || row?.member_email);
   const status = statusFrom(row);
   const pay = paymentFrom(row);
   const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved || pay === "ready");
   const paidLike = pay === "paid" || pay === "comped";
-  const override = accessOverrideFor("member", email);
   return {
     id: safeId(row?.id || row?.auth_user_id || email, `member-${Date.now()}`),
-    kind: "member",
     name: clean(row?.name || row?.fullName || row?.full_name || row?.contactName, email ? email.split("@")[0] : "Member"),
     company: clean(row?.company || row?.companyName || row?.company_name, "Company not listed"),
     email: email || "email-not-listed",
     phone: clean(row?.phone || row?.phoneNumber || row?.phone_number, "Phone not listed"),
-    role: clean(row?.memberType || row?.member_type || row?.type, "Member"),
-    markets: listText(row?.operatingStates || row?.statesOperated || row?.states_served || row?.states || row?.state || "Not listed"),
+    memberType: clean(row?.memberType || row?.member_type || row?.type, "Investor"),
+    baseState: clean(row?.baseState || row?.basedState || row?.state || row?.homeState, "Not listed"),
+    operatingStates: listText(row?.operatingStates || row?.statesOperated || row?.states_served || row?.states || ["GA"]),
     status,
-    paymentStatus: override?.paymentStatus || pay,
-    approvedForPayment: override?.approvedForPayment || approvedForPayment,
-    access: override?.access || (row?.access === "active" || row?.accessStatus === "active" || (status === "approved" && paidLike) ? "active" : "locked"),
-    updatedAt: clean(override?.updatedAt || row?.updatedAt || row?.updated_at, new Date().toISOString()),
+    paymentStatus: pay,
+    approvedForPayment,
+    access: row?.access === "active" || row?.accessStatus === "active" || (status === "approved" && paidLike) ? "active" : "locked",
+    updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
     raw: row,
   };
 }
 
-function normalizeInvestor(row: any): AdminPerson {
+function normalizeInvestor(row: any): InvestorCard {
   const email = lower(row?.email || row?.investorEmail || row?.investor_email);
   const status = statusFrom(row);
   const pay = paymentFrom(row);
   const approvedForPayment = Boolean(row?.approvedForPayment || row?.approved_for_payment || row?.paymentApproved || row?.payment_approved || pay === "ready");
   const paidLike = pay === "paid" || pay === "comped";
-  const override = accessOverrideFor("investor", email);
   return {
     id: safeId(row?.id || row?.investorId || row?.investor_id || email, `investor-${Date.now()}`),
-    kind: "investor",
-    name: clean(row?.contactName || row?.contact_name || row?.name || row?.fullName, email ? email.split("@")[0] : "Investor"),
+    contactName: clean(row?.contactName || row?.contact_name || row?.name || row?.fullName, email ? email.split("@")[0] : "Investor"),
     company: clean(row?.company || row?.companyName || row?.businessName, "Company not listed"),
     email: email || "email-not-listed",
     phone: clean(row?.phone || row?.phoneNumber || row?.mobile, "Phone not listed"),
-    role: listText(row?.investorTypes || row?.assetTypes || row?.asset_types || row?.assetClass || "Investor"),
-    markets: listText(row?.statesInterested || row?.states_interested || row?.states || row?.markets, "Not listed"),
+    statesInterested: listText(row?.statesInterested || row?.states_interested || row?.states || row?.markets, "GA"),
+    assetTypes: listText(row?.assetTypes || row?.asset_types || row?.assetClass || row?.investorTypes, "Asset types not listed"),
     status,
-    paymentStatus: override?.paymentStatus || pay,
-    approvedForPayment: override?.approvedForPayment || approvedForPayment,
-    access: override?.access || (row?.access === "active" || row?.accessStatus === "active" || (status === "approved" && paidLike) ? "active" : "locked"),
-    updatedAt: clean(override?.updatedAt || row?.updatedAt || row?.updated_at, new Date().toISOString()),
+    paymentStatus: pay,
+    approvedForPayment,
+    access: row?.access === "active" || row?.accessStatus === "active" || (status === "approved" && paidLike) ? "active" : "locked",
+    updatedAt: clean(row?.updatedAt || row?.updated_at, new Date().toISOString()),
     raw: row,
   };
 }
 
-function readMembers(): AdminPerson[] {
+function readMembers(): MemberCard[] {
   const hardDeleted = readDeletedSet(HARD_DELETED_MEMBERS_KEY);
-  const map = new Map<string, AdminPerson>();
+  const map = new Map<string, MemberCard>();
 
+  // Profile/login are raw submissions. Saved admin list is read LAST so admin actions win.
   for (const key of PROFILE_KEYS) {
     const row = readJson<any>(key, null);
     if (row && typeof row === "object" && !Array.isArray(row)) {
-      const item = normalizeMember(row);
-      map.set(item.email !== "email-not-listed" ? item.email : item.id, item);
+      const member = normalizeMember(row);
+      const mapKey = member.email !== "email-not-listed" ? member.email : member.id;
+      const existing = map.get(mapKey);
+      map.set(mapKey, { ...(existing || member), ...member, id: existing?.id || member.id });
     }
   }
 
   const login = readJson<any>(MEMBER_LOGIN_KEY, null);
   if (login && typeof login === "object" && !Array.isArray(login)) {
-    const item = normalizeMember(login);
-    map.set(item.email !== "email-not-listed" ? item.email : item.id, { ...(map.get(item.email) || item), ...item });
+    const member = normalizeMember(login);
+    const mapKey = member.email !== "email-not-listed" ? member.email : member.id;
+    const existing = map.get(mapKey);
+    map.set(mapKey, { ...(existing || member), ...member, id: existing?.id || member.id });
   }
 
   const stored = readJson<any[]>(ADMIN_MEMBERS_KEY, []);
-  if (Array.isArray(stored)) {
-    stored.forEach((row) => {
-      const item = normalizeMember(row);
-      map.set(item.email !== "email-not-listed" ? item.email : item.id, { ...(map.get(item.email) || item), ...item });
-    });
-  }
+  if (Array.isArray(stored)) stored.forEach((row) => {
+    const member = normalizeMember(row);
+    const mapKey = member.email !== "email-not-listed" ? member.email : member.id;
+    const existing = map.get(mapKey);
+    map.set(mapKey, { ...(existing || member), ...member, id: existing?.id || member.id });
+  });
 
   const owner = normalizeMember({
     id: "owner-admin",
@@ -382,702 +263,441 @@ function readMembers(): AdminPerson[] {
     approvedForPayment: true,
     accessStatus: "active",
   });
-  map.set(OWNER_EMAIL, owner);
+  map.set(OWNER_EMAIL, { ...map.get(OWNER_EMAIL), ...owner });
 
-  return Array.from(map.values()).filter((item) => !hardDeleted.has(item.id));
+  return Array.from(map.values())
+    .filter((member) => !hardDeleted.has(member.id))
+    .sort((a, b) => {
+      const order: Record<Status, number> = { pending: 0, approved: 1, suspended: 2, denied: 3, deleted: 4 };
+      return order[a.status] - order[b.status] || a.name.localeCompare(b.name);
+    });
 }
 
-function readInvestors(): AdminPerson[] {
+function readInvestors(): InvestorCard[] {
   const hardDeleted = readDeletedSet(HARD_DELETED_INVESTORS_KEY);
-  const map = new Map<string, AdminPerson>();
+  const map = new Map<string, InvestorCard>();
 
+  // Raw investor submission first. Saved admin list is read LAST so admin actions win.
   const single = readJson<any>(INVESTOR_APP_KEY, null);
   if (single && typeof single === "object" && !Array.isArray(single) && (single.email || single.company || single.contactName || single.name)) {
-    const item = normalizeInvestor(single);
-    map.set(item.email !== "email-not-listed" ? item.email : item.id, item);
+    const investor = normalizeInvestor(single);
+    const mapKey = investor.email !== "email-not-listed" ? investor.email : investor.id;
+    const existing = map.get(mapKey);
+    map.set(mapKey, { ...(existing || investor), ...investor, id: existing?.id || investor.id });
   }
 
   const queue = readJson<any[]>(ADMIN_QUEUE_KEY, []);
   if (Array.isArray(queue)) {
     queue.filter((item) => lower(item?.type) === "investor").forEach((item) => {
       const investor = normalizeInvestor({ ...(item?.profile || {}), ...item });
-      map.set(investor.email !== "email-not-listed" ? investor.email : investor.id, { ...(map.get(investor.email) || investor), ...investor });
+      const mapKey = investor.email !== "email-not-listed" ? investor.email : investor.id;
+      const existing = map.get(mapKey);
+      map.set(mapKey, { ...(existing || investor), ...investor, id: existing?.id || investor.id });
     });
   }
 
   const stored = readJson<any[]>(INVESTOR_LIST_KEY, []);
-  if (Array.isArray(stored)) {
-    stored.forEach((row) => {
-      const item = normalizeInvestor(row);
-      map.set(item.email !== "email-not-listed" ? item.email : item.id, { ...(map.get(item.email) || item), ...item });
-    });
-  }
-
-  return Array.from(map.values()).filter((item) => !hardDeleted.has(item.id));
-}
-
-function readRequests() {
-  const keys = [
-    DESIGNATED_ROUTE_MESSAGES_KEY,
-    OWNER_DIRECT_MESSAGES_KEY,
-    SIMPLE_REQUESTS_KEY,
-    ADMIN_MESSAGES_KEY,
-    ADMIN_INBOX_KEY,
-    INVESTOR_ADMIN_MESSAGES_KEY,
-    INVESTOR_REQUESTS_KEY,
-    CONTROLLED_THREADS_KEY,
-  ];
-  const rows: any[] = [];
-
-  keys.forEach((key) => {
-    const value = readJson<any>(key, []);
-    if (Array.isArray(value)) {
-      value.forEach((row, index) => rows.push({ ...row, sourceKey: key, rowId: requestId(row, `${key}-${index}`) }));
-    } else if (value && typeof value === "object") {
-      Object.values(value).forEach((row: any, index) => rows.push({ ...row, sourceKey: key, rowId: requestId(row, `${key}-${index}`) }));
-    }
+  if (Array.isArray(stored)) stored.forEach((row) => {
+    const investor = normalizeInvestor(row);
+    const mapKey = investor.email !== "email-not-listed" ? investor.email : investor.id;
+    const existing = map.get(mapKey);
+    map.set(mapKey, { ...(existing || investor), ...investor, id: existing?.id || investor.id });
   });
 
-  const seen = new Set<string>();
-  return rows
-    .filter((row) => row && typeof row === "object")
-    .filter((row) => {
-      const key = `${requestId(row, row?.rowId)}|${row?.sourceKey || ""}`.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => String(b?.createdAt || b?.updatedAt || "").localeCompare(String(a?.createdAt || a?.updatedAt || "")))
-    .slice(0, 120);
+  return Array.from(map.values())
+    .filter((investor) => !hardDeleted.has(investor.id))
+    .sort((a, b) => {
+      const order: Record<Status, number> = { pending: 0, approved: 1, suspended: 2, denied: 3, deleted: 4 };
+      return order[a.status] - order[b.status] || a.company.localeCompare(b.company);
+    });
 }
 
-function savePeople(members: AdminPerson[], investors: AdminPerson[]) {
-  writeJson(ADMIN_MEMBERS_KEY, members);
-  writeJson(INVESTOR_LIST_KEY, investors);
+function saveMembers(rows: MemberCard[]) {
+  writeJson(ADMIN_MEMBERS_KEY, rows);
+  window.dispatchEvent(new Event("vaultforge-admin-members-change"));
   window.dispatchEvent(new Event("vaultforge-admin-action-change"));
-  window.dispatchEvent(new Event("vaultforge-mock-access-change"));
-  window.dispatchEvent(new Event("vaultforge-investor-change"));
 }
 
-function syncAccess(item: AdminPerson) {
-  if (!item.email || item.email === "email-not-listed") return;
-  const key = `${item.kind}:${item.email}`;
+function saveInvestors(rows: InvestorCard[]) {
+  writeJson(INVESTOR_LIST_KEY, rows);
+  const email = currentEmail();
+  const current = readJson<any>(INVESTOR_APP_KEY, {});
+  const match = rows.find((investor) => investor.email === lower(current?.email || current?.investorEmail)) || rows.find((investor) => investor.email === email);
+  if (match) writeJson(INVESTOR_APP_KEY, { ...current, ...match });
+  window.dispatchEvent(new Event("vaultforge-investor-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-action-change"));
+}
+
+function writeMockAccess(email: string, kind: "member" | "investor", patch: any) {
+  const cleanEmail = lower(email);
+  if (!cleanEmail || cleanEmail === "email-not-listed") return;
+  const key = `${kind}:${cleanEmail}`;
   const current = readJson<Record<string, any>>(MOCK_ACCESS_KEY, {});
-  current[key] = {
-    ...(current[key] || {}),
-    email: item.email,
-    kind: item.kind,
-    approved: item.status === "approved",
-    adminApproved: item.status === "approved",
-    approvedForPayment: item.approvedForPayment,
-    paymentStatus: item.paymentStatus === "unpaid" && item.approvedForPayment ? "ready" : item.paymentStatus,
-    accessStatus: item.access,
-    paid: item.paymentStatus === "paid" || item.paymentStatus === "comped",
-    unlocked: item.access === "active",
-    updatedAt: new Date().toISOString(),
-  };
+  current[key] = { ...(current[key] || {}), email: cleanEmail, kind, ...patch, updatedAt: new Date().toISOString() };
   writeJson(MOCK_ACCESS_KEY, current);
+  window.dispatchEvent(new Event("vaultforge-mock-access-change"));
+}
 
-  if (item.kind === "investor") {
-    const app = readJson<any>(INVESTOR_APP_KEY, {});
-    const appEmail = lower(app?.email || app?.investorEmail);
-    if (!appEmail || appEmail === item.email) {
-      writeJson(INVESTOR_APP_KEY, {
-        ...app,
-        contactName: item.name,
-        name: item.name,
-        company: item.company,
-        email: item.email,
-        investorEmail: item.email,
-        phone: item.phone,
-        status: item.status,
-        paymentStatus: item.paymentStatus,
-        approvedForPayment: item.approvedForPayment,
-        accessStatus: item.access,
-        updatedAt: item.updatedAt,
-      });
-    }
-  }
+function syncMemberToProfileKeys(member: MemberCard) {
+  const statusPatch = {
+    status: member.status,
+    memberStatus: member.status,
+    accessStatus: member.access,
+    paymentStatus: member.paymentStatus,
+    approvedForPayment: member.approvedForPayment,
+    paymentApproved: member.approvedForPayment,
+    updatedAt: member.updatedAt,
+  };
 
-  if (item.kind === "member") {
-    for (const keyName of PROFILE_KEYS) {
-      const profile = readJson<any>(keyName, null);
-      if (profile && typeof profile === "object" && !Array.isArray(profile)) {
-        const email = lower(profile?.email || profile?.memberEmail || profile?.member_email);
-        if (!email || email === item.email) {
-          writeJson(keyName, {
-            ...profile,
-            status: item.status,
-            memberStatus: item.status,
-            paymentStatus: item.paymentStatus,
-            approvedForPayment: item.approvedForPayment,
-            accessStatus: item.access,
-            updatedAt: item.updatedAt,
-          });
-        }
+  for (const key of PROFILE_KEYS) {
+    const current = readJson<any>(key, null);
+    if (current && typeof current === "object" && !Array.isArray(current)) {
+      const currentEmail = lower(current?.email || current?.memberEmail || current?.member_email);
+      if (!currentEmail || currentEmail === member.email) {
+        writeJson(key, { ...current, ...statusPatch });
       }
     }
   }
+
+  const login = readJson<any>(MEMBER_LOGIN_KEY, null);
+  if (login && typeof login === "object" && !Array.isArray(login)) {
+    const loginEmail = lower(login?.email || login?.memberEmail || login?.member_email);
+    if (!loginEmail || loginEmail === member.email) {
+      writeJson(MEMBER_LOGIN_KEY, { ...login, ...statusPatch });
+    }
+  }
+}
+
+function syncInvestorToApplication(investor: InvestorCard) {
+  const current = readJson<any>(INVESTOR_APP_KEY, {});
+  const currentEmail = lower(current?.email || current?.investorEmail || current?.investor_email);
+
+  if (!currentEmail || currentEmail === investor.email) {
+    writeJson(INVESTOR_APP_KEY, {
+      ...current,
+      ...investor,
+      name: investor.contactName,
+      contactName: investor.contactName,
+      company: investor.company,
+      email: investor.email,
+      status: investor.status,
+      accessStatus: investor.access,
+      paymentStatus: investor.paymentStatus,
+      approvedForPayment: investor.approvedForPayment,
+      paymentApproved: investor.approvedForPayment,
+      updatedAt: investor.updatedAt,
+    });
+  }
+}
+
+function Metric({ title, count, note, active, onClick }: { title: string; count: number; note: string; active?: boolean; onClick?: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{ ...(active ? goldPanel : panel), textAlign: "left", cursor: "pointer", width: "100%" }}>
+      <div style={eyebrow}>{title}</div>
+      <h2 style={{ ...h2, color: "#1688ff" }}>{count}</h2>
+      <p style={muted}>{note}</p>
+    </button>
+  );
 }
 
 function Pill({ text }: { text: string }) {
   return <span style={{ border: "1px solid rgba(245,197,66,.28)", borderRadius: 999, padding: "7px 10px", color: "#ffd45a", fontWeight: 950, fontSize: 12 }}>{text}</span>;
 }
 
-function Metric({ title, count, active, onClick }: { title: string; count: number; active?: boolean; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} style={{ ...(active ? goldPanel : panel), width: "100%", textAlign: "left", cursor: "pointer" }}>
-      <div style={eyebrow}>{title}</div>
-      <h2 style={{ ...h2, color: active ? "#10131a" : "#1688ff" }}>{count}</h2>
-    </button>
-  );
-}
-
 export default function AdminPage() {
-  const [requestFolder, setRequestFolder] = useState<RequestFolder>("active");
-  const [members, setMembers] = useState<AdminPerson[]>([]);
-  const [investors, setInvestors] = useState<AdminPerson[]>([]);
-  const [requests, setRequests] = useState<any[]>([]);
-  const [section, setSection] = useState<"new" | "payment" | "active" | "cleanup" | "requests">("new");
+  const [members, setMembers] = useState<MemberCard[]>([]);
+
+  const [selectedAdminAlert, setSelectedAdminAlert] = useState<any | null>(null);
+  const [adminAlertFolder, setAdminAlertFolder] = useState<"active" | "saved" | "archived" | "closed" | "deleted">("active");
+  const [adminAlertNotice, setAdminAlertNotice] = useState("");
+
+  function adminAlertId(item: any, index = 0) {
+    return String(item?.id || item?.email || item?.title || item?.name || `admin-alert-${index}`);
+  }
+
+  function adminAlertStatus(item: any) {
+    return String(item?.adminAlertStatus || item?.folder || item?.status || "active").toLowerCase();
+  }
+
+  function setAdminAlertStatus(target: any, status: "active" | "saved" | "archived" | "closed" | "deleted") {
+    try {
+      const raw = window.localStorage.getItem("vaultforge_admin_alert_overrides_v1");
+      const overrides = raw ? JSON.parse(raw) : {};
+      overrides[adminAlertId(target)] = status;
+      window.localStorage.setItem("vaultforge_admin_alert_overrides_v1", JSON.stringify(overrides));
+      setAdminAlertNotice(status === "deleted" ? "Moved to deleted folder." : `Moved to ${status}.`);
+      setSelectedAdminAlert({ ...target, adminAlertStatus: status });
+    } catch {
+      setAdminAlertNotice("Saved locally.");
+      setSelectedAdminAlert({ ...target, adminAlertStatus: status });
+    }
+  }
+
+  function deleteAdminAlertForever(target: any) {
+    try {
+      const raw = window.localStorage.getItem("vaultforge_admin_alert_deleted_forever_v1");
+      const deleted = raw ? JSON.parse(raw) : [];
+      const nextDeleted = Array.from(new Set([...(Array.isArray(deleted) ? deleted : []), adminAlertId(target)]));
+      window.localStorage.setItem("vaultforge_admin_alert_deleted_forever_v1", JSON.stringify(nextDeleted));
+      setAdminAlertNotice("Deleted forever.");
+      setSelectedAdminAlert(null);
+    } catch {
+      setAdminAlertNotice("Deleted forever.");
+      setSelectedAdminAlert(null);
+    }
+  }
+
+  const [investors, setInvestors] = useState<InvestorCard[]>([]);
+  const [tab, setTab] = useState<"overview" | "members" | "investors">("overview");
+  const [memberFilter, setMemberFilter] = useState<"all" | "pending" | "approved" | "deleted">("all");
+  const [investorFilter, setInvestorFilter] = useState<"all" | "pending" | "approved" | "deleted">("all");
   const [notice, setNotice] = useState("");
 
   function refresh() {
     setMembers(readMembers());
     setInvestors(readInvestors());
-    setRequests(readRequests());
   }
 
   useEffect(() => {
     refresh();
     window.addEventListener("storage", refresh);
     window.addEventListener("vaultforge-admin-action-change", refresh);
-    window.addEventListener("vaultforge-mock-access-change", refresh);
-    window.addEventListener("vaultforge-investor-change", refresh);
-    window.addEventListener("vaultforge-request-change", refresh);
-    window.addEventListener("vaultforge-owner-message-change", refresh);
+    window.addEventListener("vaultforge-admin-members-change", refresh);
+    window.addEventListener("vaultforge-admin-investor-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-admin-action-change", refresh);
-      window.removeEventListener("vaultforge-mock-access-change", refresh);
-      window.removeEventListener("vaultforge-investor-change", refresh);
-      window.removeEventListener("vaultforge-request-change", refresh);
-      window.removeEventListener("vaultforge-owner-message-change", refresh);
+      window.removeEventListener("vaultforge-admin-members-change", refresh);
+      window.removeEventListener("vaultforge-admin-investor-change", refresh);
     };
   }, []);
 
-  const people = [...members, ...investors];
+  const visibleMembers = members.filter((item) => item.status !== "deleted");
+  const visibleInvestors = investors.filter((item) => item.status !== "deleted");
+  const pendingMembers = members.filter((item) => item.status === "pending");
+  const activeMembers = members.filter((item) => item.status === "approved" && item.access === "active");
+  const deletedMembers = members.filter((item) => item.status === "deleted");
+  const paymentReadyMembers = members.filter((item) => item.status === "approved" && item.approvedForPayment && item.paymentStatus !== "paid" && item.paymentStatus !== "comped");
 
-  const buckets = useMemo(() => {
-    const newProfiles = people.filter((p) => p.status === "pending");
-    const payment = people.filter((p) => p.status === "approved" && (p.approvedForPayment || p.paymentStatus === "ready") && p.access !== "active");
-    const active = people.filter((p) => p.status === "approved" && (p.access === "active" || p.paymentStatus === "paid" || p.paymentStatus === "comped"));
-    const cleanup = people.filter((p) => ["deleted", "denied", "suspended"].includes(p.status));
-    return { newProfiles, payment, active, cleanup };
-  }, [people]);
+  const pendingInvestors = investors.filter((item) => item.status === "pending");
+  const paidInvestors = investors.filter((item) => item.status === "approved" && item.access === "active");
+  const deletedInvestors = investors.filter((item) => item.status === "deleted");
+  const paymentReadyInvestors = investors.filter((item) => item.status === "approved" && item.approvedForPayment && item.paymentStatus !== "paid" && item.paymentStatus !== "comped");
 
-  function setOne(nextItem: AdminPerson) {
-    const updated = {
-      ...nextItem,
-      updatedAt: new Date().toISOString(),
-    };
+  const filteredMembers = useMemo(() => {
+    if (memberFilter === "all") return visibleMembers;
+    return members.filter((member) => member.status === memberFilter);
+  }, [members, memberFilter]);
 
-    const paidLike = updated.paymentStatus === "paid" || updated.paymentStatus === "comped";
-    updated.access = updated.status === "approved" && paidLike ? "active" : updated.access;
+  const filteredInvestors = useMemo(() => {
+    if (investorFilter === "all") return visibleInvestors;
+    return investors.filter((investor) => investor.status === investorFilter);
+  }, [investors, investorFilter]);
 
-    const nextMembers = members.map((m) => m.id === updated.id && m.kind === updated.kind ? updated : m);
-    const nextInvestors = investors.map((i) => i.id === updated.id && i.kind === updated.kind ? updated : i);
+  function patchMember(id: string, patch: Partial<MemberCard>) {
+    const now = new Date().toISOString();
+    const next = members.map((member) => {
+      if (member.id !== id) return member;
+      const merged = { ...member, ...patch, updatedAt: now };
+      const paidLike = merged.paymentStatus === "paid" || merged.paymentStatus === "comped";
+      merged.access = merged.status === "approved" && paidLike ? "active" : "locked";
+      if (patch.access) merged.access = patch.access;
+      return merged;
+    });
+    setMembers(next);
+    saveMembers(next);
 
-    setMembers(nextMembers);
-    setInvestors(nextInvestors);
-    savePeople(nextMembers, nextInvestors);
-    syncAccess(updated);
-  }
-
-  function patch(item: AdminPerson, updates: Partial<AdminPerson>, message: string) {
-    const next = { ...item, ...updates, updatedAt: new Date().toISOString() };
-    const paidLike = next.paymentStatus === "paid" || next.paymentStatus === "comped";
-    if (next.status === "approved" && paidLike) next.access = "active";
-    if (next.status !== "approved") next.access = "locked";
-    setOne(next);
-    setNotice(message);
-
-    if (next.status === "approved" && next.access === "active") {
-      setSection("active");
-    } else if (next.status === "approved" && next.access !== "active") {
-      setSection("payment");
-    } else if (["deleted", "denied", "suspended"].includes(next.status)) {
-      setSection("cleanup");
-    } else {
-      setSection("new");
-    }
-  }
-
-  function deleteForever(item: AdminPerson) {
-    const key = item.kind === "member" ? HARD_DELETED_MEMBERS_KEY : HARD_DELETED_INVESTORS_KEY;
-    const set = readDeletedSet(key);
-    set.add(item.id);
-    writeDeletedSet(key, set);
-
-    const nextMembers = members.filter((m) => !(m.id === item.id && m.kind === item.kind));
-    const nextInvestors = investors.filter((i) => !(i.id === item.id && i.kind === item.kind));
-    setMembers(nextMembers);
-    setInvestors(nextInvestors);
-    savePeople(nextMembers, nextInvestors);
-    setNotice(`${item.kind === "member" ? "Member" : "Investor"} deleted forever.`);
-  }
-
-  function PersonCard({ item }: { item: AdminPerson }) {
-    const tone = item.status === "deleted" || item.status === "denied" || item.status === "suspended" ? redPanel : item.status === "pending" || item.paymentStatus === "ready" ? goldPanel : panel;
-
-    return (
-      <div style={tone}>
-        <div style={eyebrow}>{item.kind} • {item.status} • {item.paymentStatus} • {item.access}</div>
-
-        {(item.raw?.profilePhoto || item.raw?.photoUrl || item.raw?.companyLogo || item.raw?.logoUrl) ? (
-          <div style={{ ...row, alignItems: "center", marginBottom: 12 }}>
-            {item.raw?.profilePhoto || item.raw?.photoUrl ? (
-              <img
-                src={item.raw?.profilePhoto || item.raw?.photoUrl}
-                alt="Profile"
-                style={{
-                  width: 70,
-                  height: 70,
-                  objectFit: "cover",
-                  borderRadius: 18,
-                  border: "1px solid rgba(245,197,66,.35)",
-                }}
-              />
-            ) : null}
-
-            {item.raw?.companyLogo || item.raw?.logoUrl ? (
-              <img
-                src={item.raw?.companyLogo || item.raw?.logoUrl}
-                alt="Company"
-                style={{
-                  width: 110,
-                  height: 70,
-                  objectFit: "contain",
-                  borderRadius: 18,
-                  border: "1px solid rgba(245,197,66,.35)",
-                  background: "#080d19",
-                  padding: 8,
-                }}
-              />
-            ) : null}
-          </div>
-        ) : null}
-
-        <h3 style={h3}>{item.company}</h3>
-        <p style={sub}>{item.name}</p>
-        <p style={muted}>{item.email}</p>
-        <p style={muted}>{item.phone}</p>
-        <p style={muted}>Role: {item.role}</p>
-        <p style={muted}>Markets: {item.markets}</p>
-
-        <div style={{ ...row, marginTop: 12 }}>
-          <Pill text={item.kind} />
-          <Pill text={item.status} />
-          <Pill text={item.paymentStatus} />
-          <Pill text={item.access} />
-          {item.paymentStatus === "paid" ? <Pill text="PAYMENT ALERT" /> : null}
-        </div>
-
-        <div style={{ ...row, marginTop: 15 }}>
-          <button
-            type="button"
-            style={greenBtn}
-            onClick={() =>
-              patch(
-                item,
-                { status: "approved", approvedForPayment: true, paymentStatus: "ready", access: "locked" },
-                `${item.kind === "investor" ? "Investor" : "Member"} approved. Waiting on payment.`
-              )
-            }
-          >
-            Approve Profile
-          </button>
-          <button type="button" style={redBtn} onClick={() => patch(item, { status: "denied", access: "locked", approvedForPayment: false }, "Denied.")}>Deny</button>
-          {item.kind === "member" ? (
-            <button type="button" style={goldBtn} onClick={() => patch(item, { status: "approved", approvedForPayment: true, paymentStatus: "ready", access: "locked" }, "Member payment marked ready.")}>
-              Payment Ready
-            </button>
-          ) : null}
-          <button type="button" style={greenBtn} onClick={() => patch(item, { status: "approved", approvedForPayment: true, paymentStatus: "paid", access: "active" }, "Marked paid and active.")}>Verify Payment / Activate</button>
-          <button type="button" style={goldBtn} onClick={() => patch(item, { status: "approved", approvedForPayment: true, paymentStatus: "comped", access: "active" }, "Free access granted.")}>Free Access</button>
-          <button type="button" style={redBtn} onClick={() => patch(item, { status: "suspended", access: "locked" }, "Suspended.")}>Suspend</button>
-          <button type="button" style={redBtn} onClick={() => patch(item, { status: "deleted", access: "locked" }, "Moved to cleanup. Open Cleanup to restore or delete forever.")}>Delete</button>
-          {item.status !== "pending" ? <button type="button" style={btn} onClick={() => patch(item, { status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" }, "Restored to new profiles.")}>Restore</button> : null}
-          {item.status === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteForever(item)}>Delete Forever</button> : null}
-        </div>
-      </div>
-    );
-  }
-
-
-  function saveOwnerReply(item: any, replyText: string) {
-    const replies = readJson<any[]>(OWNER_REPLIES_KEY, []);
-    const reply = {
-      id: `owner-reply-${Date.now()}`,
-      requestId: item?.id || "",
-      originalTitle: item?.title || item?.requestTitle || item?.subject || "Owner message",
-      toEmail: item?.investorEmail || item?.email || item?.investorProfile?.email || "",
-      toName: item?.investorName || item?.name || item?.investorProfile?.contactName || "",
-      from: "Owner",
-      body: replyText,
-      message: replyText,
-      status: "active",
-      folder: "active",
-      createdAt: new Date().toISOString(),
-    };
-    writeJson(OWNER_REPLIES_KEY, [reply, ...replies].slice(0, 120));
-    setNotice("Owner reply saved to the request thread.");
-    window.dispatchEvent(new Event("vaultforge-owner-reply-change"));
-  }
-
-  
-function vfAdminPretty(value: unknown, fallback = "") {
-  return clean(value, fallback)
-    .replace(/\\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/TYPE:/g, "Type:")
-    .replace(/URGENCY:/g, "Urgency:")
-    .replace(/SUBJECT:/g, "Subject:")
-    .replace(/SENDER:/g, "Sender:")
-    .replace(/RECIPIENT:/g, "Recipient:")
-    .replace(/HEADER:/g, "Header:")
-    .replace(/MESSAGE:/g, "Message:")
-    .replace(/AMOUNT \/ BUDGET:/g, "Amount / Budget:")
-    .replace(/TIMELINE:/g, "Timeline:")
-    .replace(/CONDITIONS:/g, "Conditions:")
-    .replace(/NEXT MOVE:/g, "Next Move:");
-}
-
-function vfAdminHumanLabel(key: string) {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-    .replace("Arv", "ARV")
-    .replace("Jv", "JV")
-    .replace("Ltv", "LTV")
-    .replace("Ltc", "LTC");
-}
-
-function vfAdminParsedFields(message: string) {
-  const pretty = vfAdminPretty(message);
-  const out: Record<string, string> = {};
-  const pairs: [string, RegExp][] = [
-    ["Type", /Type:\s*([^\n]+)/i],
-    ["Urgency", /Urgency:\s*([^\n]+)/i],
-    ["Subject", /Subject:\s*([^\n]+)/i],
-    ["Sender", /Sender:\s*([^\n]+)/i],
-    ["Recipient", /Recipient:\s*([^\n]+)/i],
-    ["Header", /Header:\s*([^\n]+)/i],
-    ["Message", /Message:\s*([^\n]+)/i],
-    ["Amount / Budget", /Amount \/ Budget:\s*([^\n]+)/i],
-    ["Timeline", /Timeline:\s*([^\n]+)/i],
-    ["Conditions", /Conditions:\s*([^\n]+)/i],
-    ["Next Move", /Next Move:\s*([^\n]+)/i],
-  ];
-
-  pairs.forEach(([label, regex]) => {
-    const match = pretty.match(regex);
-    if (match?.[1]) out[label] = clean(match[1]);
-  });
-
-  return out;
-}
-
-function vfAdminStructuredNeeds(row: any) {
-  const details = row?.details && typeof row.details === "object" ? row.details : {};
-  const parsed = vfAdminParsedFields(row?.body || row?.message || row?.notes || row?.roomHeader || "");
-  const rows: { label: string; value: string }[] = [];
-
-  Object.entries(details).forEach(([key, value]) => {
-    const text = clean(value);
-    if (text && !["Not listed", "NA", "N/A"].includes(text)) rows.push({ label: vfAdminHumanLabel(key), value: text });
-  });
-
-  Object.entries(parsed).forEach(([label, value]) => {
-    const text = clean(value);
-    if (text && !["Not listed", "NA", "N/A"].includes(text) && !rows.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
-      rows.push({ label, value: text });
-    }
-  });
-
-  return rows.slice(0, 14);
-}
-
-function vfAdminNeedAI(row: any) {
-  const text = `${row?.requestTitle || ""} ${row?.title || ""} ${row?.body || ""} ${row?.message || ""} ${JSON.stringify(row?.details || {})}`.toLowerCase();
-
-  if (text.includes("lender") || text.includes("hard money") || text.includes("capital") || text.includes("funding")) {
-    return {
-      lane: "Private lender / capital partner",
-      warning: "Check capital amount, purchase price, ARV, repairs, close deadline, collateral, docs, and exit strategy.",
-      next: "Route to lender/capital member only after numbers and timeline are clear.",
-      urgency: text.includes("urgent") || text.includes("closing") || text.includes("deadline") ? "High" : "Medium",
-    };
-  }
-
-  if (text.includes("contractor") || text.includes("rehab") || text.includes("scope")) {
-    return {
-      lane: "Contractor / operator",
-      warning: "Check trade, scope, access, photos, bid deadline, start date, permit status, and budget.",
-      next: "Route to contractor/operator who matches market and trade need.",
-      urgency: text.includes("urgent") || text.includes("stalled") ? "High" : "Medium",
-    };
-  }
-
-  if (text.includes("title") || text.includes("closing") || text.includes("escrow")) {
-    return {
-      lane: "Title / closing specialist",
-      warning: "Check issue type, closing date, contract, title report, payoff, party status, and escrow contact.",
-      next: "Route to title/closing specialist before contact release.",
-      urgency: "High",
-    };
-  }
-
-  if (text.includes("operator") || text.includes("boots") || text.includes("ground")) {
-    return {
-      lane: "Operator / boots-on-ground",
-      warning: "Check task, exact location, deadline, access details, proof required, and compensation.",
-      next: "Route to local operator or field member.",
-      urgency: text.includes("same day") || text.includes("urgent") ? "High" : "Medium",
-    };
-  }
-
-  if (text.includes("jv") || text.includes("partner")) {
-    return {
-      lane: "JV / partner match",
-      warning: "Check role needed, contribution, deal stage, proposed split, timeline, and proof.",
-      next: "Route only after partner role is clear.",
-      urgency: "Medium",
-    };
-  }
-
-  return {
-    lane: "Owner review / designated member lane",
-    warning: "Request is missing a clean category or enough execution detail.",
-    next: "Ask investor for exact need, market, urgency, amount, conditions, and next move.",
-    urgency: "Normal",
-  };
-}
-
-function AdminStructuredNeedsBlock({ item }: { item: any }) {
-  const needs = vfAdminStructuredNeeds(item);
-  const ai = vfAdminNeedAI(item);
-
-  return (
-    <div style={{ ...panel, marginTop: 12, borderColor: "rgba(48,255,135,.35)" }}>
-      <div style={eyebrow}>Investor Needs / AI Routing</div>
-
-      <div style={grid}>
-        <div style={panel}>
-          <div style={eyebrow}>Recommended Lane</div>
-          <p style={muted}>{ai.lane}</p>
-        </div>
-        <div style={panel}>
-          <div style={eyebrow}>Urgency</div>
-          <p style={muted}>{ai.urgency}</p>
-        </div>
-      </div>
-
-      <div style={{ ...panel, marginTop: 10 }}>
-        <div style={eyebrow}>AI Warning</div>
-        <p style={muted}>{ai.warning}</p>
-      </div>
-
-      <div style={{ ...panel, marginTop: 10, borderColor: "rgba(245,197,66,.45)" }}>
-        <div style={eyebrow}>Best Next Move</div>
-        <p style={muted}>{ai.next}</p>
-      </div>
-
-      <div style={{ ...grid, marginTop: 10 }}>
-        {needs.length ? needs.map((need) => (
-          <div key={`${need.label}-${need.value}`} style={panel}>
-            <div style={eyebrow}>{need.label}</div>
-            <p style={muted}>{need.value}</p>
-          </div>
-        )) : (
-          <div style={panel}>
-            <div style={eyebrow}>Missing Info</div>
-            <p style={muted}>No structured investor needs found. Ask for amount, timeline, market, conditions, and desired next move.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RequestCard({ item, index }: { item: any; index: number }) {
-    const [replyText, setReplyText] = useState("");
-    const title = clean(item?.requestTitle || item?.title || item?.subject || item?.topic, "Request / Message");
-    const body = pretty(item?.body || item?.message || item?.notes || item?.roomHeader, "No message body listed.");
-    const email = clean(item?.email || item?.investorEmail || item?.memberEmail || item?.investorProfile?.email, "No email listed");
-    const source = clean(item?.routedTo || item?.source || item?.type || item?.sourceKey || item?.kind, "owner message");
-    const action = clean(item?.action || item?.buttonClicked || item?.requestType, "Owner Message");
-    const state = clean(item?.state, "NA");
-    const city = clean(item?.city, "Market");
-    const photo = clean(item?.investorPhotoUrl || item?.investorProfile?.photoUrl);
-    const company = clean(item?.investorCompany || item?.investorProfile?.company || item?.company, "Company not listed");
-    const name = clean(item?.investorName || item?.investorProfile?.contactName || item?.name, "Name not listed");
-    const folder = requestFolderOf(item);
-
-    function move(next: RequestFolder, label: string) {
-      updateRequestEverywhere(item, next);
-      setRequests(readRequests());
-      setNotice(`${label}: ${title}`);
-    }
-
-    function releaseContact() {
-      updateRequestEverywhere({ ...item, releasedContact: true }, "active");
-      const updated = {
-        ...item,
-        releasedContact: true,
-        contactReleased: true,
-        status: "active",
-        folder: "active",
-        updatedAt: new Date().toISOString(),
-      };
-      requestStorageKeys().forEach((key) => {
-        const value = readJson<any>(key, []);
-        if (Array.isArray(value)) {
-          writeJson(
-            key,
-            value.map((row, rowIndex) => {
-              const matches = requestId(row, `${key}-${rowIndex}`) === requestId(item, item?.rowId || "");
-              return matches ? updated : row;
-            }),
-          );
-        }
+    const updated = next.find((member) => member.id === id);
+    if (updated) {
+      syncMemberToProfileKeys(updated);
+      writeMockAccess(updated.email, "member", {
+        approved: updated.status === "approved",
+        adminApproved: updated.status === "approved",
+        approvedForPayment: updated.approvedForPayment,
+        paymentStatus: updated.paymentStatus === "unpaid" && updated.approvedForPayment ? "ready" : updated.paymentStatus,
+        accessStatus: updated.access,
+        paid: updated.paymentStatus === "paid" || updated.paymentStatus === "comped",
+        unlocked: updated.access === "active",
       });
-      setRequests(readRequests());
-      setNotice(`Contact release approved: ${title}`);
     }
 
+    if (patch.status === "deleted") {
+      setMemberFilter("deleted");
+      setNotice("Member moved to Deleted Members. Use Delete Forever there.");
+    } else {
+      setNotice("Member updated.");
+    }
+  }
+
+  function patchInvestor(id: string, patch: Partial<InvestorCard>) {
+    const now = new Date().toISOString();
+    const next = investors.map((investor) => {
+      if (investor.id !== id) return investor;
+      const merged = { ...investor, ...patch, updatedAt: now };
+      const paidLike = merged.paymentStatus === "paid" || merged.paymentStatus === "comped";
+      merged.access = merged.status === "approved" && paidLike ? "active" : "locked";
+      if (patch.access) merged.access = patch.access;
+      return merged;
+    });
+    setInvestors(next);
+    saveInvestors(next);
+
+    const updated = next.find((investor) => investor.id === id);
+    if (updated) {
+      syncInvestorToApplication(updated);
+      writeMockAccess(updated.email, "investor", {
+        approved: updated.status === "approved",
+        adminApproved: updated.status === "approved",
+        approvedForPayment: updated.approvedForPayment,
+        paymentStatus: updated.paymentStatus === "unpaid" && updated.approvedForPayment ? "ready" : updated.paymentStatus,
+        accessStatus: updated.access,
+        paid: updated.paymentStatus === "paid" || updated.paymentStatus === "comped",
+        unlocked: updated.access === "active",
+      });
+    }
+
+    if (patch.status === "deleted") {
+      setInvestorFilter("deleted");
+      setNotice("Investor moved to Deleted Investors. Use Delete Forever there.");
+    } else {
+      setNotice("Investor updated.");
+    }
+  }
+
+  function deleteMemberForever(id: string) {
+    markHardDeleted(HARD_DELETED_MEMBERS_KEY, id);
+    const next = members.filter((member) => member.id !== id);
+    setMembers(next);
+    saveMembers(next);
+    setNotice("Member deleted forever.");
+  }
+
+  function deleteInvestorForever(id: string) {
+    markHardDeleted(HARD_DELETED_INVESTORS_KEY, id);
+    const next = investors.filter((investor) => investor.id !== id);
+    setInvestors(next);
+    saveInvestors(next);
+    setNotice("Investor deleted forever.");
+  }
+
+  function clearDeletedMembers() {
+    const set = readDeletedSet(HARD_DELETED_MEMBERS_KEY);
+    members.filter((member) => member.status === "deleted").forEach((member) => set.add(member.id));
+    writeDeletedSet(HARD_DELETED_MEMBERS_KEY, set);
+    const next = members.filter((member) => member.status !== "deleted");
+    setMembers(next);
+    saveMembers(next);
+    setNotice("Deleted members cleared.");
+  }
+
+  function clearDeletedInvestors() {
+    const set = readDeletedSet(HARD_DELETED_INVESTORS_KEY);
+    investors.filter((investor) => investor.status === "deleted").forEach((investor) => set.add(investor.id));
+    writeDeletedSet(HARD_DELETED_INVESTORS_KEY, set);
+    const next = investors.filter((investor) => investor.status !== "deleted");
+    setInvestors(next);
+    saveInvestors(next);
+    setNotice("Deleted investors cleared.");
+  }
+
+  function MemberCardView({ member }: { member: MemberCard }) {
+    const pulse = member.status === "pending" || (member.status === "approved" && member.approvedForPayment && member.access !== "active");
     return (
-      <div style={panel}>
-        <div style={eyebrow}>{source} • {action} • {folder}</div>
-
-        {photo ? (
-          <img
-            src={photo}
-            alt="Profile"
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              objectFit: "cover",
-              border: "1px solid rgba(245,197,66,.35)",
-              marginBottom: 12,
-            }}
-          />
-        ) : null}
-
-        <h3 style={h3}>{title}</h3>
-        <p style={sub}>{company}</p>
-        <p style={muted}>{name} • {email}</p>
-        <p style={muted}>{city}, {state}</p>
-
-        <div style={{ ...panel, marginTop: 12 }}>
-          <div style={eyebrow}>Message</div>
-          <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{body}</p>
+      <div className={pulse ? "vf-pulse" : ""} style={member.status === "deleted" ? redPanel : pulse ? goldPanel : panel}>
+        <div style={eyebrow}>{member.status} • {member.paymentStatus} • {member.access}</div>
+        <h3 style={h3}>{member.name}</h3>
+        <p style={sub}>{member.company}</p>
+        <p style={muted}>{member.email}</p>
+        <p style={muted}>{member.phone}</p>
+        <p style={muted}>{member.memberType}</p>
+        <p style={muted}>Home/Base State: {member.baseState}</p>
+        <p style={muted}>Operating States: {member.operatingStates}</p>
+        <div style={{ ...row, marginTop: 12 }}>
+          <Pill text={member.status} />
+          <Pill text={member.paymentStatus} />
+          <Pill text={member.access} />
+          <Pill text={member.approvedForPayment ? "payment approved" : "payment locked"} />
         </div>
-
-        <AdminStructuredNeedsBlock item={item} />
-
-        <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
-          <span style={eyebrow}>Owner Reply</span>
-          <textarea
-            value={replyText}
-            onChange={(event) => setReplyText(event.target.value)}
-            placeholder="Write owner reply here..."
-            style={{
-              width: "100%",
-              minHeight: 110,
-              borderRadius: 16,
-              border: "1px solid rgba(207,216,230,.18)",
-              background: "#0b1020",
-              color: "#f8fafc",
-              padding: 14,
-              fontSize: 16,
-              boxSizing: "border-box",
-            }}
-          />
-        </label>
-
-        <div style={{ ...row, marginTop: 14 }}>
-          <button type="button" style={greenBtn} onClick={releaseContact}>Approve / Release Contact</button>
-          <button
-            type="button"
-            style={goldBtn}
-            onClick={() => {
-              saveOwnerReply(item, replyText || "Owner will follow up.");
-              setReplyText("");
-              setRequests(readRequests());
-            }}
-          >
-            Save Owner Reply
-          </button>
-          <button type="button" style={goldBtn} onClick={() => move("saved", "Saved")}>Save</button>
-          <button type="button" style={btn} onClick={() => move("active", "Restored active")}>Restore / Active</button>
-          <button type="button" style={btn} onClick={() => move("closed", "Marked done")}>Mark Done</button>
-          <button type="button" style={btn} onClick={() => move("archived", "Archived")}>Archive</button>
-          <button type="button" style={redBtn} onClick={() => move("deleted", "Deleted")}>Delete</button>
-          {folder === "deleted" ? (
-            <button
-              type="button"
-              style={redBtn}
-              onClick={() => {
-                deleteRequestEverywhere(item);
-                setRequests(readRequests());
-                setNotice(`Deleted forever: ${title}`);
-              }}
-            >
-              Delete Forever
-            </button>
-          ) : null}
+        <div style={{ ...row, marginTop: 15 }}>
+          <button type="button" style={greenBtn} onClick={() => patchMember(member.id, { status: "approved" })}>Approve</button>
+          <button type="button" style={goldBtn} onClick={() => patchMember(member.id, { status: "approved", approvedForPayment: true, paymentStatus: "ready" })}>Approve Payment Button</button>
+          <button type="button" style={greenBtn} onClick={() => patchMember(member.id, { status: "approved", approvedForPayment: true, paymentStatus: "paid", access: "active" })}>Mark Paid</button>
+          <button type="button" style={goldBtn} onClick={() => patchMember(member.id, { status: "approved", approvedForPayment: true, paymentStatus: "comped", access: "active" })}>Grant Free Access</button>
+          <button type="button" style={btn} onClick={() => patchMember(member.id, { paymentStatus: "unpaid", access: "locked" })}>Mark Unpaid</button>
+          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "suspended", access: "locked" })}>Suspend</button>
+          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "denied", approvedForPayment: false, access: "locked" })}>Deny</button>
+          <button type="button" style={redBtn} onClick={() => patchMember(member.id, { status: "deleted", access: "locked" })}>Delete Member</button>
+          {member.status === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteMemberForever(member.id)}>Delete Forever</button> : null}
+          {member.status !== "pending" ? <button type="button" style={btn} onClick={() => patchMember(member.id, { status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" })}>Restore</button> : null}
         </div>
       </div>
     );
   }
 
-  const currentRows =
-    section === "new" ? buckets.newProfiles :
-    section === "payment" ? buckets.payment :
-    section === "active" ? buckets.active :
-    section === "cleanup" ? buckets.cleanup :
-    [];
-
-  const currentRequests = requests.filter((item) => requestFolderOf(item) === requestFolder);
-  const requestFolderCounts = {
-    active: requests.filter((item) => requestFolderOf(item) === "active").length,
-    saved: requests.filter((item) => requestFolderOf(item) === "saved").length,
-    archived: requests.filter((item) => requestFolderOf(item) === "archived").length,
-    closed: requests.filter((item) => requestFolderOf(item) === "closed").length,
-    deleted: requests.filter((item) => requestFolderOf(item) === "deleted").length,
-  };
+  function InvestorCardView({ investor }: { investor: InvestorCard }) {
+    const pulse = investor.status === "pending" || (investor.status === "approved" && investor.approvedForPayment && investor.access !== "active");
+    return (
+      <div className={pulse ? "vf-pulse" : ""} style={investor.status === "deleted" ? redPanel : pulse ? goldPanel : panel}>
+        <div style={eyebrow}>{investor.status} • {investor.paymentStatus} • {investor.access}</div>
+        <h3 style={h3}>{investor.company}</h3>
+        <p style={sub}>{investor.contactName}</p>
+        <p style={muted}>{investor.email}</p>
+        <p style={muted}>{investor.phone}</p>
+        <p style={muted}>Markets: {investor.statesInterested}</p>
+        <p style={muted}>Asset Types: {investor.assetTypes}</p>
+        <div style={{ ...row, marginTop: 12 }}>
+          <Pill text={investor.status} />
+          <Pill text={investor.paymentStatus} />
+          <Pill text={investor.access} />
+          <Pill text={investor.approvedForPayment ? "payment approved" : "payment locked"} />
+        </div>
+        <div style={{ ...row, marginTop: 15 }}>
+          <button type="button" style={greenBtn} onClick={() => patchInvestor(investor.id, { status: "approved" })}>Approve Investor</button>
+          <button type="button" style={goldBtn} onClick={() => patchInvestor(investor.id, { status: "approved", approvedForPayment: true, paymentStatus: "ready" })}>Approve Payment Button</button>
+          <button type="button" style={greenBtn} onClick={() => patchInvestor(investor.id, { status: "approved", approvedForPayment: true, paymentStatus: "paid", access: "active" })}>Mark Paid</button>
+          <button type="button" style={goldBtn} onClick={() => patchInvestor(investor.id, { status: "approved", approvedForPayment: true, paymentStatus: "comped", access: "active" })}>Grant Free Access</button>
+          <button type="button" style={redBtn} onClick={() => patchInvestor(investor.id, { status: "suspended", access: "locked" })}>Suspend</button>
+          <button type="button" style={redBtn} onClick={() => patchInvestor(investor.id, { status: "denied", approvedForPayment: false, access: "locked" })}>Deny</button>
+          <button type="button" style={redBtn} onClick={() => patchInvestor(investor.id, { status: "deleted", access: "locked" })}>Delete Investor</button>
+          {investor.status === "deleted" ? <button type="button" style={redBtn} onClick={() => deleteInvestorForever(investor.id)}>Delete Forever</button> : null}
+          {investor.status !== "pending" ? <button type="button" style={btn} onClick={() => patchInvestor(investor.id, { status: "pending", paymentStatus: "unpaid", approvedForPayment: false, access: "locked" })}>Restore</button> : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main style={page}>
+      <style>{`
+        @keyframes vfPulse {
+          0% { box-shadow: 0 0 0 0 rgba(255,220,104,.00), 0 0 0 rgba(255,220,104,.00); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
+          35% { box-shadow: 0 0 0 8px rgba(255,220,104,.25), 0 0 44px rgba(255,220,104,.55); transform: scale(1.018); outline: 3px solid rgba(245,197,66,.85); }
+          70% { box-shadow: 0 0 0 3px rgba(255,220,104,.10), 0 0 24px rgba(255,220,104,.28); transform: scale(1.006); outline: 2px solid rgba(245,197,66,.62); }
+          100% { box-shadow: 0 0 0 0 rgba(255,220,104,.00), 0 0 0 rgba(255,220,104,.00); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
+        }
+        .vf-pulse { animation: vfPulse .95s ease-in-out infinite; border-color: rgba(255,220,104,.95) !important; }
+      `}</style>
+
       <div style={wrap}>
         <section style={shell}>
-          <div style={eyebrow}>VaultForge Admin</div>
-          <div style={{ ...row, marginTop: 12 }}>
+          <div style={eyebrow}>VaultForge Admin Command</div>
+          <p style={sub}>Owner control • members • investors • payment approval • cleanup</p>
+          <div style={{ ...row, marginTop: 16 }}>
             <Link href="/" style={btn}>Home</Link>
-            <Link href="/member-controlled-threads" style={btn}>Members</Link>
+            <button type="button" style={tab === "overview" ? goldBtn : btn} onClick={() => setTab("overview")}>Admin Command</button>
+            <button type="button" style={tab === "members" ? goldBtn : btn} onClick={() => setTab("members")}>Members</button>
+            <button type="button" style={tab === "investors" ? goldBtn : btn} onClick={() => setTab("investors")}>Investors</button>
+            <Link href="/member-controlled-threads" style={btn}>Controlled Threads</Link>
             <Link href="/investor-room" style={btn}>Investor Room</Link>
-            <button type="button" style={goldBtn} onClick={refresh}>Refresh</button>
             <Link href="/logout" style={redBtn}>Logout</Link>
           </div>
         </section>
 
-        <VaultForgeAlertCenter audience="admin" title="Admin Alerts" />
-
         <section style={hero}>
-          <div style={eyebrow}>Owner Control Center</div>
-          <h1 style={h1}>Simple admin.</h1>
-          <p style={sub}>Approve profile sends the user to Payment / Access. When payment is made, admin gets a payment alert and the card moves to Active Users.</p>
+          <div style={eyebrow}>VaultForge Admin Command</div>
+          <h1 style={h1}>Admin command center.</h1>
+          <p style={sub}>Buttons are direct controls. No card click layer. No nested button conflict.</p>
         </section>
 
         {notice ? (
@@ -1087,95 +707,131 @@ function RequestCard({ item, index }: { item: any; index: number }) {
           </section>
         ) : null}
 
-        <section style={shell}>
-          <div style={grid}>
-            <Metric title="New Profiles" count={buckets.newProfiles.length} active={section === "new"} onClick={() => setSection("new")} />
-            <Metric title="Payment / Access" count={buckets.payment.length} active={section === "payment"} onClick={() => setSection("payment")} />
-            <Metric title="Active Users" count={buckets.active.length} active={section === "active"} onClick={() => setSection("active")} />
-            <Metric title="Cleanup" count={buckets.cleanup.length} active={section === "cleanup"} onClick={() => setSection("cleanup")} />
-            <Metric title="Owner Messages" count={requestFolderCounts.active} active={section === "requests"} onClick={() => { setSection("requests"); setRequestFolder("active"); }} />
-          </div>
-        </section>
+        {tab === "overview" ? (
+          <section style={shell}>
+            <div style={grid}>
+              <Metric title="Profile Approvals" count={pendingMembers.length + pendingInvestors.length} note="submitted profiles waiting on approval" active={pendingMembers.length + pendingInvestors.length > 0} onClick={() => { setTab("members"); setMemberFilter("pending"); }} />
+              <Metric title="Member Payment Ready" count={paymentReadyMembers.length} note="approved payment button but not paid/comped" active={paymentReadyMembers.length > 0} onClick={() => { setTab("members"); setMemberFilter("approved"); }} />
+              <Metric title="New Members" count={pendingMembers.length} note="pending member approvals" active={pendingMembers.length > 0} onClick={() => { setTab("members"); setMemberFilter("pending"); }} />
+              <Metric title="Active Members" count={activeMembers.length} note="approved and active members" onClick={() => { setTab("members"); setMemberFilter("approved"); }} />
+              <Metric title="Deleted Members" count={deletedMembers.length} note="member cleanup folder" active={deletedMembers.length > 0} onClick={() => { setTab("members"); setMemberFilter("deleted"); }} />
+              <Metric title="New Investors" count={pendingInvestors.length} note="pending investor approvals" active={pendingInvestors.length > 0} onClick={() => { setTab("investors"); setInvestorFilter("pending"); }} />
+              <Metric title="Investor Payment Ready" count={paymentReadyInvestors.length} note="approved payment button but not paid/comped" active={paymentReadyInvestors.length > 0} onClick={() => { setTab("investors"); setInvestorFilter("approved"); }} />
+              <Metric title="Paid Investors" count={paidInvestors.length} note="active investor access" onClick={() => { setTab("investors"); setInvestorFilter("approved"); }} />
+              <Metric title="Deleted Investors" count={deletedInvestors.length} note="investor cleanup folder" active={deletedInvestors.length > 0} onClick={() => { setTab("investors"); setInvestorFilter("deleted"); }} />
+            </div>
+          </section>
+        ) : null}
 
+        {tab === "members" ? (
+          <section style={shell}>
+            <div style={eyebrow}>Member Control</div>
+            <h2 style={h2}>Member cards.</h2>
+            <div style={{ ...row, marginBottom: 18 }}>
+              {(["all", "pending", "approved", "deleted"] as const).map((item) => (
+                <button key={item} type="button" style={memberFilter === item ? goldBtn : btn} onClick={() => setMemberFilter(item)}>{item}</button>
+              ))}
+              <button type="button" style={redBtn} onClick={clearDeletedMembers}>Clear Deleted Members</button>
+              <button type="button" style={btn} onClick={refresh}>Refresh</button>
+            </div>
+            <div style={grid}>
+              {filteredMembers.length ? filteredMembers.map((member) => <MemberCardView key={member.id} member={member} />) : (
+                <div style={panel}><h3 style={h3}>No member cards in this lane.</h3></div>
+              )}
+            </div>
+          </section>
+        ) : null}
 
-        <section style={shell}>
-          <div style={eyebrow}>Admin Folder Control</div>
-          <h2 style={h2}>Profiles, users, deals, pain, and owner-message folders.</h2>
-          <div style={grid}>
-            <Metric title="Pending Profiles" count={buckets.newProfiles.length} active={false} onClick={() => setSection("new")} />
-            <Metric title="Payment Ready" count={buckets.payment.length} active={false} onClick={() => setSection("payment")} />
-            <Metric title="Active Users" count={buckets.active.length} active={false} onClick={() => setSection("active")} />
-            <Metric title="Cleanup Users" count={buckets.cleanup.length} active={false} onClick={() => setSection("cleanup")} />
-            <Metric title="Owner Msg Active" count={requestFolderCounts.active} active={false} onClick={() => { setSection("requests"); setRequestFolder("active"); }} />
-            <Metric title="Owner Msg Saved" count={requestFolderCounts.saved} active={false} onClick={() => { setSection("requests"); setRequestFolder("saved"); }} />
-            <Metric title="Owner Msg Archived" count={requestFolderCounts.archived} active={false} onClick={() => { setSection("requests"); setRequestFolder("archived"); }} />
-            <Metric title="Owner Msg Deleted" count={requestFolderCounts.deleted} active={false} onClick={() => { setSection("requests"); setRequestFolder("deleted"); }} />
-          </div>
-        </section>
-
-
-        <section style={shell}>
-          <div style={{ ...row, marginBottom: 16 }}>
-            <button type="button" style={section === "new" ? goldBtn : btn} onClick={() => setSection("new")}>New Profiles</button>
-            <button type="button" style={section === "payment" ? goldBtn : btn} onClick={() => setSection("payment")}>Payment / Access</button>
-            <button type="button" style={section === "active" ? goldBtn : btn} onClick={() => setSection("active")}>Active Users</button>
-            <button type="button" style={section === "cleanup" ? goldBtn : btn} onClick={() => setSection("cleanup")}>Cleanup</button>
-            <button type="button" style={section === "requests" ? goldBtn : btn} onClick={() => setSection("requests")}>Owner Messages</button>
-          </div>
-
-          <div style={eyebrow}>
-            {section === "new" ? "New Profiles" :
-             section === "payment" ? "Payment / Access" :
-             section === "active" ? "Active Users" :
-             section === "cleanup" ? "Cleanup" :
-             "Owner Messages"}
-          </div>
-
-          {section !== "requests" ? (
-            <>
-              <h2 style={h2}>
-                {currentRows.length
-                  ? section === "active"
-                    ? "Active user cards."
-                    : section === "payment"
-                      ? "Payment/access cards."
-                      : section === "cleanup"
-                        ? "Cleanup cards."
-                        : "New profile cards."
-                  : "Nothing in this section."}
-              </h2>
-              <div style={grid}>
-                {currentRows.length ? currentRows.map((item) => <PersonCard key={`${item.kind}-${item.id}`} item={item} />) : (
-                  <div style={panel}><p style={sub}>This lane is empty.</p></div>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 style={h2}>{requests.length ? "Owner message inbox." : "No owner messages."}</h2>
-
-              <div style={{ ...row, marginBottom: 16 }}>
-                {(["active", "saved", "archived", "closed", "deleted"] as RequestFolder[]).map((folderName) => (
-                  <button
-                    key={folderName}
-                    type="button"
-                    style={requestFolder === folderName ? goldBtn : btn}
-                    onClick={() => setRequestFolder(folderName)}
-                  >
-                    {folderName.charAt(0).toUpperCase() + folderName.slice(1)} ({requestFolderCounts[folderName]})
-                  </button>
-                ))}
-              </div>
-
-              <div style={grid}>
-                {currentRequests.length ? currentRequests.map((item, index) => <RequestCard key={`${item?.sourceKey || "request"}-${item?.rowId || item?.id || index}-${index}`} item={item} index={index} />) : (
-                  <div style={panel}><p style={sub}>No owner messages in this folder.</p></div>
-                )}
-              </div>
-            </>
-          )}
-        </section>
+        {tab === "investors" ? (
+          <section style={shell}>
+            <div style={eyebrow}>Investor Control</div>
+            <h2 style={h2}>Investor cards.</h2>
+            <div style={{ ...row, marginBottom: 18 }}>
+              {(["all", "pending", "approved", "deleted"] as const).map((item) => (
+                <button key={item} type="button" style={investorFilter === item ? goldBtn : btn} onClick={() => setInvestorFilter(item)}>{item}</button>
+              ))}
+              <button type="button" style={redBtn} onClick={clearDeletedInvestors}>Clear Deleted Investors</button>
+              <button type="button" style={btn} onClick={refresh}>Refresh</button>
+            </div>
+            <div style={grid}>
+              {filteredInvestors.length ? filteredInvestors.map((investor) => <InvestorCardView key={investor.id} investor={investor} />) : (
+                <div style={panel}><h3 style={h3}>No investor cards in this lane.</h3></div>
+              )}
+            </div>
+          </section>
+        ) : null}
       </div>
-    </main>
+    
+        {/* ADMIN_PAYMENT_ALERT_MODAL_FIX */}
+        {selectedAdminAlert ? (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 9999,
+              background: "rgba(0,0,0,.72)",
+              padding: 20,
+              overflow: "auto",
+            }}
+            onClick={() => setSelectedAdminAlert(null)}
+          >
+            <section
+              style={{
+                maxWidth: 900,
+                margin: "40px auto",
+                border: "1px solid rgba(245,197,66,.55)",
+                borderRadius: 26,
+                background: "#101725",
+                padding: 24,
+                color: "#f7f8ff",
+              }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div style={{ color: "#ffda5e", textTransform: "uppercase", letterSpacing: ".32em", fontSize: 12, fontWeight: 1000 }}>
+                Payment Alert Detail
+              </div>
+              <h2 style={{ fontSize: 44, lineHeight: 1, letterSpacing: "-.06em", margin: "12px 0", fontWeight: 1000 }}>
+                {selectedAdminAlert?.email || selectedAdminAlert?.name || selectedAdminAlert?.title || "Payment Alert"}
+              </h2>
+              <p style={{ color: "rgba(235,240,255,.78)", fontSize: 18 }}>
+                Type: {selectedAdminAlert?.type || selectedAdminAlert?.role || selectedAdminAlert?.memberType || "Member / Investor"}
+              </p>
+              <p style={{ color: "rgba(235,240,255,.78)", fontSize: 18 }}>
+                Status: {selectedAdminAlert?.adminAlertStatus || selectedAdminAlert?.status || "active"}
+              </p>
+              <p style={{ color: "rgba(235,240,255,.78)", fontSize: 18 }}>
+                Open the related lane to review this payment/access item.
+              </p>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 18 }}>
+                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "active")} style={adminInlineGoldButton}>
+                  Active
+                </button>
+                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "saved")} style={adminInlineButton}>
+                  Save
+                </button>
+                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "archived")} style={adminInlineButton}>
+                  Archive
+                </button>
+                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "closed")} style={adminInlineButton}>
+                  Close
+                </button>
+                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "deleted")} style={adminInlineRedButton}>
+                  Delete
+                </button>
+                {(selectedAdminAlert?.adminAlertStatus || selectedAdminAlert?.status) === "deleted" ? (
+                  <button type="button" onClick={() => deleteAdminAlertForever(selectedAdminAlert)} style={adminInlineRedButton}>
+                    Delete Forever
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => setSelectedAdminAlert(null)} style={adminInlineButton}>
+                  Done
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+</main>
   );
 }
