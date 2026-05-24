@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 type RequestFolder = "new" | "active" | "execution" | "saved" | "archived" | "passed" | "deleted";
 
