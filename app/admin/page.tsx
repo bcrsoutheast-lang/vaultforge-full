@@ -734,7 +734,182 @@ export default function AdminPage() {
     window.dispatchEvent(new Event("vaultforge-owner-reply-change"));
   }
 
-  function RequestCard({ item, index }: { item: any; index: number }) {
+  
+function vfAdminPretty(value: unknown, fallback = "") {
+  return clean(value, fallback)
+    .replace(/\\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/TYPE:/g, "Type:")
+    .replace(/URGENCY:/g, "Urgency:")
+    .replace(/SUBJECT:/g, "Subject:")
+    .replace(/SENDER:/g, "Sender:")
+    .replace(/RECIPIENT:/g, "Recipient:")
+    .replace(/HEADER:/g, "Header:")
+    .replace(/MESSAGE:/g, "Message:")
+    .replace(/AMOUNT \/ BUDGET:/g, "Amount / Budget:")
+    .replace(/TIMELINE:/g, "Timeline:")
+    .replace(/CONDITIONS:/g, "Conditions:")
+    .replace(/NEXT MOVE:/g, "Next Move:");
+}
+
+function vfAdminHumanLabel(key: string) {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace("Arv", "ARV")
+    .replace("Jv", "JV")
+    .replace("Ltv", "LTV")
+    .replace("Ltc", "LTC");
+}
+
+function vfAdminParsedFields(message: string) {
+  const pretty = vfAdminPretty(message);
+  const out: Record<string, string> = {};
+  const pairs: [string, RegExp][] = [
+    ["Type", /Type:\s*([^\n]+)/i],
+    ["Urgency", /Urgency:\s*([^\n]+)/i],
+    ["Subject", /Subject:\s*([^\n]+)/i],
+    ["Sender", /Sender:\s*([^\n]+)/i],
+    ["Recipient", /Recipient:\s*([^\n]+)/i],
+    ["Header", /Header:\s*([^\n]+)/i],
+    ["Message", /Message:\s*([^\n]+)/i],
+    ["Amount / Budget", /Amount \/ Budget:\s*([^\n]+)/i],
+    ["Timeline", /Timeline:\s*([^\n]+)/i],
+    ["Conditions", /Conditions:\s*([^\n]+)/i],
+    ["Next Move", /Next Move:\s*([^\n]+)/i],
+  ];
+
+  pairs.forEach(([label, regex]) => {
+    const match = pretty.match(regex);
+    if (match?.[1]) out[label] = clean(match[1]);
+  });
+
+  return out;
+}
+
+function vfAdminStructuredNeeds(row: any) {
+  const details = row?.details && typeof row.details === "object" ? row.details : {};
+  const parsed = vfAdminParsedFields(row?.body || row?.message || row?.notes || row?.roomHeader || "");
+  const rows: { label: string; value: string }[] = [];
+
+  Object.entries(details).forEach(([key, value]) => {
+    const text = clean(value);
+    if (text && !["Not listed", "NA", "N/A"].includes(text)) rows.push({ label: vfAdminHumanLabel(key), value: text });
+  });
+
+  Object.entries(parsed).forEach(([label, value]) => {
+    const text = clean(value);
+    if (text && !["Not listed", "NA", "N/A"].includes(text) && !rows.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
+      rows.push({ label, value: text });
+    }
+  });
+
+  return rows.slice(0, 14);
+}
+
+function vfAdminNeedAI(row: any) {
+  const text = `${row?.requestTitle || ""} ${row?.title || ""} ${row?.body || ""} ${row?.message || ""} ${JSON.stringify(row?.details || {})}`.toLowerCase();
+
+  if (text.includes("lender") || text.includes("hard money") || text.includes("capital") || text.includes("funding")) {
+    return {
+      lane: "Private lender / capital partner",
+      warning: "Check capital amount, purchase price, ARV, repairs, close deadline, collateral, docs, and exit strategy.",
+      next: "Route to lender/capital member only after numbers and timeline are clear.",
+      urgency: text.includes("urgent") || text.includes("closing") || text.includes("deadline") ? "High" : "Medium",
+    };
+  }
+
+  if (text.includes("contractor") || text.includes("rehab") || text.includes("scope")) {
+    return {
+      lane: "Contractor / operator",
+      warning: "Check trade, scope, access, photos, bid deadline, start date, permit status, and budget.",
+      next: "Route to contractor/operator who matches market and trade need.",
+      urgency: text.includes("urgent") || text.includes("stalled") ? "High" : "Medium",
+    };
+  }
+
+  if (text.includes("title") || text.includes("closing") || text.includes("escrow")) {
+    return {
+      lane: "Title / closing specialist",
+      warning: "Check issue type, closing date, contract, title report, payoff, party status, and escrow contact.",
+      next: "Route to title/closing specialist before contact release.",
+      urgency: "High",
+    };
+  }
+
+  if (text.includes("operator") || text.includes("boots") || text.includes("ground")) {
+    return {
+      lane: "Operator / boots-on-ground",
+      warning: "Check task, exact location, deadline, access details, proof required, and compensation.",
+      next: "Route to local operator or field member.",
+      urgency: text.includes("same day") || text.includes("urgent") ? "High" : "Medium",
+    };
+  }
+
+  if (text.includes("jv") || text.includes("partner")) {
+    return {
+      lane: "JV / partner match",
+      warning: "Check role needed, contribution, deal stage, proposed split, timeline, and proof.",
+      next: "Route only after partner role is clear.",
+      urgency: "Medium",
+    };
+  }
+
+  return {
+    lane: "Owner review / designated member lane",
+    warning: "Request is missing a clean category or enough execution detail.",
+    next: "Ask investor for exact need, market, urgency, amount, conditions, and next move.",
+    urgency: "Normal",
+  };
+}
+
+function AdminStructuredNeedsBlock({ item }: { item: any }) {
+  const needs = vfAdminStructuredNeeds(item);
+  const ai = vfAdminNeedAI(item);
+
+  return (
+    <div style={{ ...panel, marginTop: 12, borderColor: "rgba(48,255,135,.35)" }}>
+      <div style={eyebrow}>Investor Needs / AI Routing</div>
+
+      <div style={grid}>
+        <div style={panel}>
+          <div style={eyebrow}>Recommended Lane</div>
+          <p style={muted}>{ai.lane}</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Urgency</div>
+          <p style={muted}>{ai.urgency}</p>
+        </div>
+      </div>
+
+      <div style={{ ...panel, marginTop: 10 }}>
+        <div style={eyebrow}>AI Warning</div>
+        <p style={muted}>{ai.warning}</p>
+      </div>
+
+      <div style={{ ...panel, marginTop: 10, borderColor: "rgba(245,197,66,.45)" }}>
+        <div style={eyebrow}>Best Next Move</div>
+        <p style={muted}>{ai.next}</p>
+      </div>
+
+      <div style={{ ...grid, marginTop: 10 }}>
+        {needs.length ? needs.map((need) => (
+          <div key={`${need.label}-${need.value}`} style={panel}>
+            <div style={eyebrow}>{need.label}</div>
+            <p style={muted}>{need.value}</p>
+          </div>
+        )) : (
+          <div style={panel}>
+            <div style={eyebrow}>Missing Info</div>
+            <p style={muted}>No structured investor needs found. Ask for amount, timeline, market, conditions, and desired next move.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RequestCard({ item, index }: { item: any; index: number }) {
     const [replyText, setReplyText] = useState("");
     const title = clean(item?.requestTitle || item?.title || item?.subject || item?.topic, "Request / Message");
     const body = pretty(item?.body || item?.message || item?.notes || item?.roomHeader, "No message body listed.");
@@ -808,6 +983,8 @@ export default function AdminPage() {
           <div style={eyebrow}>Message</div>
           <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{body}</p>
         </div>
+
+        <AdminStructuredNeedsBlock item={item} />
 
         <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
           <span style={eyebrow}>Owner Reply</span>
