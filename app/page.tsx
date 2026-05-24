@@ -3,450 +3,44 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type Countdown = {
-  expired: boolean;
-  days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
+type SignalCard = {
+  id: string;
+  type: "Deal" | "Pain";
+  state: string;
+  city: string;
+  title: string;
+  assetType: string;
+  urgency?: string;
+  price?: string;
+  fix?: string;
+  arv?: string;
+  need?: string;
+  summary: string;
+  photo?: string;
 };
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
+const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const FOUNDER_DEADLINE = new Date("2026-06-01T23:59:59-04:00").getTime();
 
-const founderRoles = [
-  { key: "buyers", title: "Buyers / Acquisitions", cap: 20, aliases: ["buyer", "buyers", "acquisition", "acquisitions"] },
-  { key: "lenders", title: "Lenders / Debt Capital", cap: 12, aliases: ["lender", "lenders", "debt", "private lender", "hard money"] },
-  { key: "operators", title: "Operators / Execution", cap: 15, aliases: ["operator", "operators", "asset manager", "execution"] },
-  { key: "contractors", title: "Contractors / Construction", cap: 15, aliases: ["contractor", "contractors", "construction", "builder", "rehab"] },
-  { key: "developers", title: "Developers", cap: 10, aliases: ["developer", "developers", "development"] },
-  { key: "wholesalers", title: "Wholesalers / Deal Sourcers", cap: 15, aliases: ["wholesaler", "wholesalers", "deal sourcer", "sourcer"] },
-  { key: "capital", title: "Capital Partners / Equity", cap: 8, aliases: ["capital", "equity", "partner", "lp", "private capital"] },
-  { key: "realtors", title: "Disposition / Realtors", cap: 8, aliases: ["realtor", "agent", "disposition", "brokerage"] },
-  { key: "legal", title: "Legal / Title", cap: 5, aliases: ["legal", "title", "attorney", "lawyer", "closing"] },
-  { key: "specialists", title: "Specialists / Wildcard", cap: 12, aliases: ["specialist", "insurance", "architect", "engineer", "surveyor", "permit", "property manager"] },
+const fallbackDeals: SignalCard[] = [
+  { id: "deal-ga-1", type: "Deal", state: "GA", city: "Cartersville", title: "Residential value-add near job growth corridor", assetType: "Residential", price: "$184,000", fix: "$38,000", arv: "$285,000", need: "Buyer • lender • contractor review", summary: "Limited outside view. Full address, owner/member contact, documents, photos, and route thread unlock inside.", photo: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=80" },
+  { id: "deal-ga-2", type: "Deal", state: "GA", city: "Atlanta", title: "Small commercial reposition with tenant upside", assetType: "Commercial", price: "$610,000", fix: "$95,000", arv: "$850,000", need: "Capital • operator • title support", summary: "Limited outside view. Full rent roll, member notes, owner route, and execution lane unlock inside.", photo: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80" },
+  { id: "deal-tn-1", type: "Deal", state: "TN", city: "Chattanooga", title: "Fast-close residential opportunity", assetType: "Residential", price: "$215,000", fix: "$42,000", arv: "$335,000", need: "Cash buyer • private lender", summary: "Buyer/lender lane available inside after approved access.", photo: "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=900&q=80" },
+  { id: "deal-fl-1", type: "Deal", state: "FL", city: "Jacksonville", title: "Infill land opportunity needing entitlement review", assetType: "Land", price: "$129,000", fix: "Entitlement", arv: "$235,000", need: "Developer • capital partner", summary: "Zoning, member notes, and route thread hidden outside.", photo: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=900&q=80" },
+  { id: "deal-tx-1", type: "Deal", state: "TX", city: "Dallas", title: "Development pad needing capital partner", assetType: "Land", price: "$325,000", fix: "Site work", arv: "$540,000", need: "Equity • JV • operator", summary: "Capital/JV route hidden until approved access.", photo: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80" },
 ];
 
-const tickerItems = [
-  "PRIVATE INTELLIGENCE NETWORK",
-  "PAIN → SIGNAL → ROUTING → EXECUTION",
-  "APPROVED MEMBERS ONLY",
-  "DEALS ROUTED BY FIT",
-  "PAIN SIGNALS ROUTED BY NEED",
-  "PROFILE DEPTH IMPROVES ROUTING",
-  "MEMBER-TO-MEMBER EXECUTION",
-  "INVESTOR ACCESS IS SEPARATE",
-  "NOT A LISTINGS SITE",
-  "FOUNDING ALLOCATIONS CLOSE JUNE 1",
+const fallbackPain: SignalCard[] = [
+  { id: "pain-ga-1", type: "Pain", state: "GA", city: "Atlanta", title: "Capital gap before closing window", assetType: "Residential", urgency: "Closing Risk", need: "Private lender • hard money • JV capital", summary: "Borrower needs a fast capital lane before contract pressure turns into a lost opportunity.", photo: "https://images.unsplash.com/photo-1582407947304-fd86f028f716?auto=format&fit=crop&w=900&q=80" },
+  { id: "pain-nc-1", type: "Pain", state: "NC", city: "Charlotte", title: "Contractor stalled rehab schedule", assetType: "Residential", urgency: "Time Sensitive", need: "Contractor • boots on ground • operator", summary: "Project is behind schedule and needs a reliable contractor/operator lane.", photo: "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=900&q=80" },
+  { id: "pain-tn-1", type: "Pain", state: "TN", city: "Nashville", title: "Seller deadline creating fast-close pressure", assetType: "Residential", urgency: "Urgent", need: "Cash buyer • lender • disposition partner", summary: "Owner needs a fast close or creative structure before the window closes.", photo: "https://images.unsplash.com/photo-1605146769289-440113cc3d00?auto=format&fit=crop&w=900&q=80" },
+  { id: "pain-sc-1", type: "Pain", state: "SC", city: "Charleston", title: "Title issue blocking closing movement", assetType: "Land", urgency: "Closing Risk", need: "Attorney • title • closing help", summary: "Closing cannot move until the title issue is reviewed by the right lane.", photo: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=900&q=80" },
+  { id: "pain-al-1", type: "Pain", state: "AL", city: "Birmingham", title: "Owner needs fast disposition path", assetType: "Residential", urgency: "Urgent", need: "Buyer • disposition partner", summary: "Owner pressure may turn into a buyer match, wholesale lane, or referral route.", photo: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=80" },
 ];
-
-const painExamples = [
-  "Distressed seller pressure",
-  "Capital gap",
-  "Stalled construction",
-  "Operator needed",
-  "Contractor failure",
-  "Title / legal issue",
-  "Permit or city issue",
-  "Lender exit",
-  "Emergency sale",
-  "Partnership breakdown",
-  "Vacant property pressure",
-  "Portfolio liquidation",
-];
-
-const OPERATING_STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
-
-const sampleDealPostings = [
-  {
-    state: "GA",
-    city: "Cartersville",
-    type: "Deal Opportunity",
-    headline: "Residential value-add near strong contractor demand",
-    teaser: "Limited teaser: residential opportunity, buyer/operator fit, execution help may be needed.",
-    need: "Buyer, lender, contractor review",
-  },
-  {
-    state: "GA",
-    city: "Atlanta",
-    type: "Deal Opportunity",
-    headline: "Infill opportunity with capital partner angle",
-    teaser: "Limited teaser: opportunity needs buyer review and possible JV structure.",
-    need: "Buyer, lender, JV partner",
-  },
-  {
-    state: "TN",
-    city: "Chattanooga",
-    type: "Deal Opportunity",
-    headline: "Small-balance opportunity with fast-close angle",
-    teaser: "Limited teaser: potential acquisition target with private details locked inside.",
-    need: "Capital partner or buyer review",
-  },
-  {
-    state: "FL",
-    city: "Jacksonville",
-    type: "Deal Opportunity",
-    headline: "Rental / flip candidate needing underwriting",
-    teaser: "Limited teaser: deal room shows strategy, market, and request lane after access.",
-    need: "Investor review and title/closing support",
-  },
-  {
-    state: "TX",
-    city: "Dallas",
-    type: "Deal Opportunity",
-    headline: "Operator-heavy opportunity needing execution team",
-    teaser: "Limited teaser: project needs people who can move fast and coordinate execution.",
-    need: "Operator, lender, contractor",
-  },
-  {
-    state: "AL",
-    city: "Birmingham",
-    type: "Deal Opportunity",
-    headline: "Light rehab with disposition lane",
-    teaser: "Limited teaser: clean execution path depends on buyer and contractor fit.",
-    need: "Buyer, contractor, disposition",
-  },
-  {
-    state: "NC",
-    city: "Raleigh",
-    type: "Deal Opportunity",
-    headline: "Rental acquisition needing underwriting",
-    teaser: "Limited teaser: investor can request numbers and owner contact through VaultForge.",
-    need: "Investor review, lender",
-  },
-  {
-    state: "SC",
-    city: "Charleston",
-    type: "Deal Opportunity",
-    headline: "Small multifamily review lane",
-    teaser: "Limited teaser: deal needs underwriting, capital, and operator look.",
-    need: "Capital, operator",
-  },
-];
-
-const samplePainPostings = [
-  {
-    state: "GA",
-    city: "Atlanta",
-    type: "Pain Signal",
-    headline: "Capital gap before closing window",
-    teaser: "Limited teaser: investor/member may solve with funding, JV, or structured terms.",
-    need: "Private capital or hard money",
-  },
-  {
-    state: "NC",
-    city: "Charlotte",
-    type: "Pain Signal",
-    headline: "Contractor stalled rehab timeline",
-    teaser: "Limited teaser: project needs execution help before pressure turns into loss.",
-    need: "Contractor / operator",
-  },
-  {
-    state: "SC",
-    city: "Greenville",
-    type: "Pain Signal",
-    headline: "Title/closing issue blocking deal movement",
-    teaser: "Limited teaser: closing problem requires the right member lane.",
-    need: "Title / attorney / closing help",
-  },
-  {
-    state: "AL",
-    city: "Birmingham",
-    type: "Pain Signal",
-    headline: "Owner needs fast disposition path",
-    teaser: "Limited teaser: problem may turn into acquisition, referral, or buyer match.",
-    need: "Buyer / disposition partner",
-  },
-  {
-    state: "TN",
-    city: "Nashville",
-    type: "Pain Signal",
-    headline: "Seller deadline creating fast-close pressure",
-    teaser: "Limited teaser: right buyer/capital route can solve the pressure.",
-    need: "Cash buyer or private lender",
-  },
-  {
-    state: "FL",
-    city: "Orlando",
-    type: "Pain Signal",
-    headline: "Insurance issue delaying project exit",
-    teaser: "Limited teaser: needs insurance/risk help before closing path clears.",
-    need: "Insurance, title, operator",
-  },
-  {
-    state: "TX",
-    city: "Austin",
-    type: "Pain Signal",
-    headline: "Operator needed for stalled project",
-    teaser: "Limited teaser: project needs local execution and progress control.",
-    need: "Operator, boots on ground",
-  },
-];
-
-
-const publicDealWindows = [
-  {
-    state: "GA",
-    assetType: "Residential",
-    city: "Cartersville",
-    photo: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=80",
-    title: "Residential value-add near job growth corridor",
-    beds: "3",
-    baths: "2",
-    price: "$184,000",
-    fixAmount: "$38,000",
-    arv: "$285,000",
-    teaser: "Limited outside view. Full address, owner/member contact, photos, documents, and route thread unlock inside.",
-  },
-  {
-    state: "GA",
-    assetType: "Commercial",
-    city: "Atlanta",
-    photo: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80",
-    title: "Small commercial reposition with tenant upside",
-    beds: "N/A",
-    baths: "2 restrooms",
-    price: "$610,000",
-    fixAmount: "$95,000",
-    arv: "$850,000",
-    teaser: "Limited outside view. Full rent roll, owner route, member notes, and execution lane unlock inside.",
-  },
-  {
-    state: "TN",
-    assetType: "Residential",
-    city: "Chattanooga",
-    photo: "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=900&q=80",
-    title: "Fast-close residential opportunity",
-    beds: "4",
-    baths: "2",
-    price: "$215,000",
-    fixAmount: "$42,000",
-    arv: "$335,000",
-    teaser: "Buyer/lender lane available inside after approved access.",
-  },
-  {
-    state: "FL",
-    assetType: "Land",
-    city: "Jacksonville",
-    photo: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=900&q=80",
-    title: "Infill land opportunity needing entitlement review",
-    beds: "Land",
-    baths: "N/A",
-    price: "$129,000",
-    fixAmount: "Entitlement",
-    arv: "$235,000",
-    teaser: "Zoning, member notes, and route thread hidden outside.",
-  },
-  {
-    state: "NC",
-    assetType: "Residential",
-    city: "Charlotte",
-    photo: "https://images.unsplash.com/photo-1598228723793-52759bba239c?auto=format&fit=crop&w=900&q=80",
-    title: "Rental conversion with operator need",
-    beds: "3",
-    baths: "1.5",
-    price: "$198,000",
-    fixAmount: "$31,000",
-    arv: "$292,000",
-    teaser: "Full underwriting and owner/member contact available inside.",
-  },
-  {
-    state: "SC",
-    assetType: "Commercial",
-    city: "Greenville",
-    photo: "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=80",
-    title: "Mixed-use small bay with local operator angle",
-    beds: "N/A",
-    baths: "2 restrooms",
-    price: "$475,000",
-    fixAmount: "$70,000",
-    arv: "$675,000",
-    teaser: "Inside room shows execution lane, owner request, and route options.",
-  },
-  {
-    state: "TX",
-    assetType: "Land",
-    city: "Dallas",
-    photo: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80",
-    title: "Development pad needing capital partner",
-    beds: "Land",
-    baths: "N/A",
-    price: "$325,000",
-    fixAmount: "Site work",
-    arv: "$540,000",
-    teaser: "Capital/JV route hidden until approved access.",
-  },
-  {
-    state: "AL",
-    assetType: "Residential",
-    city: "Birmingham",
-    photo: "https://images.unsplash.com/photo-1576941089067-2de3c901e126?auto=format&fit=crop&w=900&q=80",
-    title: "Light rehab with disposition lane",
-    beds: "3",
-    baths: "2",
-    price: "$122,000",
-    fixAmount: "$24,000",
-    arv: "$195,000",
-    teaser: "Buyer, contractor, and title lane available inside.",
-  },
-];
-
-const publicPainWindows = [
-  {
-    state: "GA",
-    city: "Atlanta",
-    photo: "https://images.unsplash.com/photo-1582407947304-fd86f028f716?auto=format&fit=crop&w=900&q=80",
-    title: "Capital gap before closing window",
-    category: "Funding Gap",
-    urgency: "Closing Risk",
-    assetType: "Residential",
-    summary: "Borrower needs a fast capital lane before contract pressure turns into a lost opportunity.",
-    need: "Private lender / hard money / JV capital",
-  },
-  {
-    state: "GA",
-    city: "Marietta",
-    photo: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80",
-    title: "Contractor stalled rehab schedule",
-    category: "Execution Problem",
-    urgency: "Time Sensitive",
-    assetType: "Residential",
-    summary: "Project is behind schedule and needs a reliable contractor/operator lane.",
-    need: "Contractor / boots on ground / project operator",
-  },
-  {
-    state: "TN",
-    city: "Nashville",
-    photo: "https://images.unsplash.com/photo-1605146769289-440113cc3d00?auto=format&fit=crop&w=900&q=80",
-    title: "Seller deadline creating fast-close pressure",
-    category: "Distressed Seller",
-    urgency: "Urgent",
-    assetType: "Residential",
-    summary: "Owner needs a fast close or creative structure before the window closes.",
-    need: "Cash buyer / lender / disposition partner",
-  },
-  {
-    state: "FL",
-    city: "Orlando",
-    photo: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=900&q=80",
-    title: "Insurance issue delaying project exit",
-    category: "Insurance / Closing",
-    urgency: "Time Sensitive",
-    assetType: "Commercial",
-    summary: "Insurance issue is blocking the exit path and needs a member solution.",
-    need: "Insurance / title / closing support",
-  },
-  {
-    state: "NC",
-    city: "Charlotte",
-    photo: "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=900&q=80",
-    title: "Operator needed for rental conversion",
-    category: "Operator Needed",
-    urgency: "Normal",
-    assetType: "Residential",
-    summary: "Deal has potential but needs local execution and management fit.",
-    need: "Operator / property manager",
-  },
-  {
-    state: "SC",
-    city: "Charleston",
-    photo: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=900&q=80",
-    title: "Title issue blocking closing movement",
-    category: "Title / Legal",
-    urgency: "Closing Risk",
-    assetType: "Land",
-    summary: "Closing cannot move until title issue is reviewed by the right lane.",
-    need: "Attorney / title / closing help",
-  },
-  {
-    state: "TX",
-    city: "Austin",
-    photo: "https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=900&q=80",
-    title: "Development project needs capital partner",
-    category: "Capital Gap",
-    urgency: "Time Sensitive",
-    assetType: "Land",
-    summary: "Site has potential but needs capital and execution structure.",
-    need: "Equity / JV / private lender",
-  },
-  {
-    state: "AL",
-    city: "Birmingham",
-    photo: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=80",
-    title: "Owner needs fast disposition path",
-    category: "Emergency Exit",
-    urgency: "Urgent",
-    assetType: "Residential",
-    summary: "Owner pressure may turn into a buyer match, wholesale lane, or referral route.",
-    need: "Buyer / disposition partner",
-  },
-];
-
-
-function stateCounts(rows: any[]) {
-  return OPERATING_STATES.map((state) => ({
-    state,
-    count: rows.filter((row) => row.state === state).length,
-  }));
-}
-
-function liveMemberCounts() {
-  const profiles = allProfiles();
-  return OPERATING_STATES.map((state) => {
-    const realCount = profiles.filter((profile: any) => {
-      const based = String(profile?.basedState || profile?.state || profile?.homeState || "").toUpperCase();
-      const states = Array.isArray(profile?.statesOperated || profile?.states_served || profile?.operatingStates)
-        ? (profile?.statesOperated || profile?.states_served || profile?.operatingStates)
-        : [];
-      return based === state || states.map((x: any) => String(x).toUpperCase()).includes(state);
-    }).length;
-
-    const preview: Record<string, number> = { GA: 6, TN: 3, AL: 2, FL: 4, NC: 3, SC: 2, TX: 4 };
-    return { state, count: Math.max(realCount, preview[state] || 0) };
-  });
-}
-
-function liveInvestorCounts() {
-  const rows: any[] = [];
-  const keys = ["vaultforge_investor_application_v1", "vaultforge_investor_applications_v1", "vaultforge_investors_v1", "vf_investors"];
-  for (const key of keys) {
-    const parsed = readJson<any>(key, []);
-    if (Array.isArray(parsed)) rows.push(...parsed.filter(Boolean));
-    else if (parsed && typeof parsed === "object") rows.push(parsed);
-  }
-
-  return OPERATING_STATES.map((state) => {
-    const realCount = rows.filter((profile: any) => {
-      const states = Array.isArray(profile?.statesInterested || profile?.states || profile?.markets)
-        ? (profile?.statesInterested || profile?.states || profile?.markets)
-        : String(profile?.state || "").split(",");
-      return states.map((x: any) => String(x).trim().toUpperCase()).includes(state);
-    }).length;
-    const preview: Record<string, number> = { GA: 4, TN: 2, AL: 1, FL: 3, NC: 2, SC: 1, TX: 3 };
-    return { state, count: Math.max(realCount, preview[state] || 0) };
-  });
-}
-
-const logoCandidates = [
-  "/vaultforge-logo.png",
-  "/VaultForge-logo.png",
-  "/vaultforge-logo.jpg",
-  "/vaultforge-logo.jpeg",
-  "/logo.png",
-  "/logo.jpg",
-  "/vf-logo.png",
-  "/VF-logo.png",
-  "/vaultforge.png",
-  "/VaultForge.png",
-];
-
-function ok() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-}
 
 function readJson<T>(key: string, fallback: T): T {
-  if (!ok()) return fallback;
-
+  if (typeof window === "undefined") return fallback;
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
@@ -455,91 +49,24 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
+function clean(value: unknown, fallback = "") {
+  const text = String(value || "").trim();
+  return text || fallback;
 }
 
 function lower(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function allProfiles() {
-  if (!ok()) return [];
-
-  const keys = [
-    "vaultforge_profiles",
-    "vaultforge_member_profiles",
-    "vaultforge_admin_members_v1",
-    "vf_profiles",
-    "members",
-    "profiles",
-  ];
-
-  const rows: any[] = [];
-
-  for (const key of keys) {
-    const parsed = readJson<unknown>(key, []);
-    if (Array.isArray(parsed)) rows.push(...parsed.filter(Boolean));
-    else if (parsed && typeof parsed === "object") rows.push(...Object.values(parsed as Record<string, unknown>).filter(Boolean));
-  }
-
-  const single = readJson<any>("vaultforge_profile", null);
-  if (single && typeof single === "object" && !Array.isArray(single)) rows.push(single);
-
-  const seen = new Set<string>();
-  return rows.filter((profile: any, index) => {
-    const id = lower(profile?.email || profile?.memberEmail || profile?.id || `profile-${index}`);
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
+function currentEmail() {
+  if (typeof window === "undefined") return "";
+  const profile = readJson<any>("vaultforge_profile", {});
+  return lower(profile?.email || localStorage.getItem("vf_email") || localStorage.getItem("member_email") || localStorage.getItem("email"));
 }
 
-function roleText(profile: any) {
-  return [
-    profile?.memberType,
-    profile?.member_type,
-    profile?.role,
-    profile?.category,
-    profile?.type,
-    profile?.businessType,
-    profile?.business_type,
-    profile?.strategy,
-    profile?.strategies,
-    profile?.services,
-    profile?.serviceType,
-    profile?.service_type,
-  ]
-    .flat()
-    .map((item) => String(item || "").toLowerCase())
-    .join(" ");
-}
-
-function founderCounts() {
-  const profiles = allProfiles();
-
-  return founderRoles.map((role) => {
-    const filled = profiles.filter((profile) => {
-      const text = roleText(profile);
-      return role.aliases.some((alias) => text.includes(alias));
-    }).length;
-
-    return {
-      ...role,
-      filled,
-      remaining: Math.max(role.cap - filled, 0),
-      full: filled >= role.cap,
-    };
-  });
-}
-
-function countdown(): Countdown {
+function countdown() {
   const diff = FOUNDER_DEADLINE - Date.now();
-
-  if (diff <= 0) {
-    return { expired: true, days: 0, hours: 0, minutes: 0, seconds: 0 };
-  }
-
+  if (diff <= 0) return { expired: true, days: 0, hours: 0, minutes: 0, seconds: 0 };
   return {
     expired: false,
     days: Math.floor(diff / (1000 * 60 * 60 * 24)),
@@ -549,503 +76,213 @@ function countdown(): Countdown {
   };
 }
 
-function currentEmail() {
-  if (!ok()) return "";
-
-  const profile = readJson<any>("vaultforge_profile", {});
-  return lower(profile?.email || localStorage.getItem("vf_email") || localStorage.getItem("member_email") || localStorage.getItem("email"));
+function normalizeDeal(row: any, index: number): SignalCard {
+  return {
+    id: clean(row?.id || row?.roomId || row?.dealId, `live-deal-${index}`),
+    type: "Deal",
+    state: clean(row?.state || row?.dealState || row?.propertyState || row?.marketState, "GA").toUpperCase(),
+    city: clean(row?.city || row?.market || row?.area, "Market"),
+    title: clean(row?.title || row?.headline || row?.name, "Live Deal Opportunity"),
+    assetType: clean(row?.assetType || row?.asset_type || row?.type, "Real Estate"),
+    price: clean(row?.askingPrice || row?.asking_price || row?.price || row?.amount, "Request inside"),
+    fix: clean(row?.repairs || row?.repairEstimate || row?.fixAmount, "Review inside"),
+    arv: clean(row?.arv || row?.afterRepairValue || row?.value, "Review inside"),
+    need: clean(row?.need || row?.requestNeed || row?.routeNeed, "Investor/member review"),
+    summary: clean(row?.teaser || row?.summary || row?.notes || row?.description, "Live deal room available inside VaultForge."),
+    photo: clean(row?.photo || row?.image || row?.imageUrl || row?.photoUrl || row?.photos?.[0] || row?.photoUrls?.[0]),
+  };
 }
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background: "#05070d",
-  color: "#f7f7fb",
-  fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-  overflowX: "hidden",
-};
+function normalizePain(row: any, index: number): SignalCard {
+  return {
+    id: clean(row?.id || row?.roomId || row?.painId || row?.signalId, `live-pain-${index}`),
+    type: "Pain",
+    state: clean(row?.state || row?.painState || row?.propertyState || row?.marketState, "GA").toUpperCase(),
+    city: clean(row?.city || row?.market || row?.area, "Market"),
+    title: clean(row?.title || row?.headline || row?.problemTitle, "Live Pain Signal"),
+    assetType: clean(row?.assetType || row?.asset_type || row?.propertyType, "Real Estate"),
+    urgency: clean(row?.urgency || row?.priority || row?.timeline, "Live"),
+    need: clean(row?.need || row?.helpNeeded || row?.routeNeed, "Problem solver / capital / execution"),
+    summary: clean(row?.summary || row?.problem || row?.notes || row?.description, "Live problem signal available inside VaultForge."),
+    photo: clean(row?.photo || row?.image || row?.imageUrl || row?.photoUrl || row?.photos?.[0] || row?.photoUrls?.[0]),
+  };
+}
 
-const wrap: React.CSSProperties = { maxWidth: 1420, margin: "0 auto", padding: "18px 18px 100px" };
-const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: 18 };
-const navSide: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 28, fontWeight: 950, letterSpacing: -1 };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
-const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
+function readLiveDeals() {
+  const keys = ["vaultforge_deal_rooms_v1", "vaultforge_deals_v1", "vf_deals", "vaultforge_projects_v1", "vaultforge_clean_deal_rooms_v1"];
+  const rows: any[] = [];
+  keys.forEach((key) => {
+    const parsed = readJson<any>(key, []);
+    if (Array.isArray(parsed)) rows.push(...parsed);
+    else if (parsed && typeof parsed === "object") rows.push(...Object.values(parsed));
+  });
+  const live = rows.filter(Boolean).map(normalizeDeal);
+  return live.length ? live : fallbackDeals;
+}
 
-const hero: React.CSSProperties = {
-  border: "1px solid rgba(245,197,66,.28)",
-  borderRadius: 34,
-  padding: "clamp(28px,5vw,58px)",
-  marginBottom: 20,
-  background:
-    "radial-gradient(circle at top right, rgba(245,197,66,.18), transparent 34%), radial-gradient(circle at bottom left, rgba(255,45,60,.12), transparent 32%), linear-gradient(180deg,#080d19,#050816)",
-  boxShadow: "0 0 55px rgba(245,197,66,.08)",
-};
+function readLivePain() {
+  const keys = ["vaultforge_pain_rooms_v1", "vaultforge_pain_requests_v1", "vf_pain_requests", "vaultforge_clean_pain_rooms_v1"];
+  const rows: any[] = [];
+  keys.forEach((key) => {
+    const parsed = readJson<any>(key, []);
+    if (Array.isArray(parsed)) rows.push(...parsed);
+    else if (parsed && typeof parsed === "object") rows.push(...Object.values(parsed));
+  });
+  const live = rows.filter(Boolean).map(normalizePain);
+  return live.length ? live : fallbackPain;
+}
 
-const tickerWrap: React.CSSProperties = { borderTop: "1px solid rgba(245,197,66,.25)", borderBottom: "1px solid rgba(245,197,66,.25)", background: "#090d14", overflow: "hidden", marginBottom: 20 };
-const tickerTrack: React.CSSProperties = { display: "flex", gap: 40, width: "max-content", padding: "14px 0", animation: "tickerMove 38s linear infinite" };
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 28, marginBottom: 22 };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 24, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
-const goldPanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.55)", boxShadow: "0 0 28px rgba(245,197,66,.12)" };
-const redPanel: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.56)", boxShadow: "0 0 28px rgba(255,70,70,.10)" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 13, marginBottom: 12 };
-const h1: React.CSSProperties = { fontSize: "clamp(42px,8vw,96px)", lineHeight: 0.92, letterSpacing: -3, margin: "0 0 22px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,56px)", lineHeight: 1, letterSpacing: -2, margin: "0 0 16px", fontWeight: 950 };
-const h3: React.CSSProperties = { fontSize: "clamp(23px,3.5vw,36px)", lineHeight: 1.05, letterSpacing: -1, margin: "0 0 12px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: "clamp(19px,2.5vw,26px)", lineHeight: 1.28, margin: 0 };
-const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 16 };
-const wideGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 18 };
-const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-const badge: React.CSSProperties = { display: "inline-flex", border: "1px solid rgba(245,197,66,.32)", borderRadius: 999, padding: "9px 13px", color: "#ffd45a", background: "rgba(245,197,66,.07)", fontWeight: 900, margin: "6px 6px 0 0" };
+const css = `
+@keyframes vfTicker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+@keyframes vfPulse { 0%,100% { box-shadow: 0 0 0 rgba(255,220,104,0); } 50% { box-shadow: 0 0 42px rgba(255,220,104,.26); } }
+.vf-page { min-height: 100vh; background: radial-gradient(circle at top left, rgba(245,200,76,.16), transparent 30%), radial-gradient(circle at top right, rgba(190,18,60,.18), transparent 26%), linear-gradient(180deg,#02040a,#071018 48%,#02040a); color:#f8fafc; font-family: Inter, Arial, system-ui, sans-serif; overflow-x:hidden; }
+.vf-wrap { max-width: 1440px; margin:0 auto; padding:18px 18px 110px; }
+.vf-nav { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
+.vf-brand { color:#ffdc68; font-weight:950; font-size:30px; letter-spacing:-1.5px; }
+.vf-navlinks { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.vf-btn { border:1px solid rgba(207,216,230,.18); background:#171c29; color:#f7f7fb; border-radius:999px; padding:13px 17px; font-weight:950; text-decoration:none; display:inline-block; cursor:pointer; }
+.vf-gold { border:0; background:#ffdc68; color:#10131a; }
+.vf-red { background:#271016; border-color:rgba(255,70,70,.50); color:#ffb3b3; }
+.vf-hero { border:1px solid rgba(245,197,66,.30); border-radius:36px; padding:clamp(28px,5vw,62px); background: radial-gradient(circle at 74% 10%, rgba(245,197,66,.22), transparent 30%), radial-gradient(circle at 10% 90%, rgba(255,45,60,.15), transparent 34%), linear-gradient(180deg,#0b101b,#050816); box-shadow:0 0 70px rgba(245,197,66,.12); margin-bottom:20px; }
+.vf-logoBox { width:min(420px,84vw); margin:0 auto 28px; border:1px solid rgba(245,197,66,.30); border-radius:30px; padding:18px; background:radial-gradient(circle, rgba(245,197,66,.13), transparent 65%), #070b14; text-align:center; color:#ffdc68; font-size:54px; font-weight:950; letter-spacing:-2px; }
+.vf-eyebrow { color:#ffdc68; text-transform:uppercase; letter-spacing:6px; font-weight:950; font-size:12px; margin-bottom:12px; }
+.vf-h1 { font-size:clamp(46px,8vw,104px); line-height:.88; letter-spacing:-5px; margin:0 0 22px; font-weight:950; max-width:1120px; }
+.vf-h2 { font-size:clamp(31px,5vw,58px); line-height:.96; letter-spacing:-2px; margin:0 0 16px; font-weight:950; }
+.vf-h3 { font-size:clamp(23px,3vw,34px); line-height:1.04; letter-spacing:-1px; margin:0 0 12px; font-weight:950; }
+.vf-sub { color:#cbd5e1; font-size:clamp(19px,2.3vw,26px); line-height:1.32; margin:0; max-width:1120px; }
+.vf-muted { color:#aeb7c7; margin:8px 0 0; line-height:1.38; }
+.vf-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.vf-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
+.vf-wide { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:18px; }
+.vf-section { border:1px solid rgba(245,197,66,.24); background:linear-gradient(180deg,#080d19,#050816); border-radius:32px; padding:clamp(22px,4vw,34px); margin-bottom:22px; }
+.vf-panel { background:#121724; border:1px solid rgba(207,216,230,.16); border-radius:24px; padding:22px; color:#f7f7fb; text-decoration:none; }
+.vf-goldPanel { border-color:rgba(245,197,66,.55); box-shadow:0 0 28px rgba(245,197,66,.12); }
+.vf-redPanel { border-color:rgba(255,70,70,.55); box-shadow:0 0 28px rgba(255,70,70,.10); }
+.vf-badge { display:inline-flex; border:1px solid rgba(245,197,66,.32); border-radius:999px; padding:9px 13px; color:#ffdc68; background:rgba(245,197,66,.07); font-weight:900; margin:6px 6px 0 0; }
+.vf-ticker { border-top:1px solid rgba(245,197,66,.25); border-bottom:1px solid rgba(245,197,66,.25); background:#090d14; overflow:hidden; margin-bottom:22px; }
+.vf-track { display:flex; gap:40px; width:max-content; padding:14px 0; animation:vfTicker 38s linear infinite; }
+.vf-cardImg { width:100%; height:190px; object-fit:cover; border-radius:22px; border:1px solid rgba(245,197,66,.25); margin-bottom:14px; background:#090d14; }
+.vf-liveDot { width:10px; height:10px; border-radius:999px; background:#30ff87; display:inline-block; margin-right:8px; box-shadow:0 0 18px rgba(48,255,135,.8); }
+.vf-signal { animation:vfPulse 1.8s ease-in-out infinite; }
+@media(max-width:720px){ .vf-wrap{padding:12px 12px 90px}.vf-navlinks{overflow-x:auto; flex-wrap:nowrap; width:100%; padding-bottom:4px}.vf-btn{white-space:nowrap}.vf-h1{letter-spacing:-3px}.vf-section,.vf-hero{border-radius:26px}.vf-wide{grid-template-columns:1fr} }
+`;
 
 function Nav({ owner }: { owner: boolean }) {
   return (
-    <nav style={nav}>
-      <div style={navSide}>
-        <div style={brand}>VAULTFORGE</div>
-        <span style={badge}>PRIVATE APPROVED ACCESS ONLY</span>
-      </div>
-
-      <div style={navSide}>
-        <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-        <Link href="/investor-access" style={goldBtn}>Investor Room Access</Link>
-        <Link href="/create-login" style={btn}>Create Login</Link>
-        <Link href="/login" style={btn}>Members Login</Link>
-        <Link href="/investor-login" style={btn}>Investor Room Login</Link>
-        <Link href="/admin" style={owner ? redBtn : btn}>Admin Login</Link>
+    <nav className="vf-nav">
+      <div className="vf-row"><div className="vf-brand">VAULTFORGE</div><span className="vf-badge">PRIVATE APPROVED ACCESS ONLY</span></div>
+      <div className="vf-navlinks">
+        <Link href="/member-access" className="vf-btn vf-gold">Request Member Access</Link>
+        <Link href="/investor-access" className="vf-btn vf-gold">Investor Room Access</Link>
+        <Link href="/create-login" className="vf-btn">Create Login</Link>
+        <Link href="/login" className="vf-btn">Members Login</Link>
+        <Link href="/investor-login" className="vf-btn">Investor Login</Link>
+        <Link href="/admin" className={owner ? "vf-btn vf-red" : "vf-btn"}>Admin</Link>
       </div>
     </nav>
   );
 }
 
-function LogoHero() {
-  const [index, setIndex] = useState(0);
-  const current = logoCandidates[index];
+function Ticker() {
+  const items = ["PRIVATE INTELLIGENCE NETWORK", "PAIN → SIGNAL → ROUTING → EXECUTION", "APPROVED MEMBERS ONLY", "DEALS ROUTED BY FIT", "PAIN SIGNALS ROUTED BY NEED", "INVESTOR ACCESS IS SEPARATE", "NOT A LISTINGS SITE", "FOUNDER ALLOCATIONS CLOSE JUNE 1"];
+  return <div className="vf-ticker"><div className="vf-track">{[...items, ...items].map((item, index) => <div key={`${item}-${index}`} style={{ whiteSpace: "nowrap", color: "#ffdc68", fontWeight: 950, letterSpacing: 3 }}>{item}</div>)}</div></div>;
+}
 
+function SignalCardView({ item }: { item: SignalCard }) {
+  const isPain = item.type === "Pain";
   return (
-    <div style={{ display: "flex", justifyContent: "center", margin: "0 0 28px" }}>
-      <div style={{ width: "min(420px, 84vw)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 30, padding: 18, background: "radial-gradient(circle, rgba(245,197,66,.13), transparent 68%), #070b14", boxShadow: "0 0 55px rgba(245,197,66,.16)" }}>
-        {current ? (
-          <img
-            src={current}
-            alt="VaultForge"
-            style={{ width: "100%", height: "auto", display: "block", borderRadius: 18 }}
-            onError={() => setIndex((value) => (value + 1 < logoCandidates.length ? value + 1 : logoCandidates.length))}
-          />
-        ) : (
-          <div style={{ minHeight: 170, display: "grid", placeItems: "center", color: "#ffd45a", fontSize: 56, fontWeight: 950, letterSpacing: -2 }}>VAULTFORGE</div>
-        )}
+    <div className={`vf-panel ${isPain ? "vf-redPanel" : "vf-goldPanel"} vf-signal`}>
+      {item.photo ? <img className="vf-cardImg" src={item.photo} alt={item.title} /> : null}
+      <div className="vf-eyebrow"><span className="vf-liveDot" />LIVE {item.type} • {item.city}, {item.state}</div>
+      <h3 className="vf-h3">{item.title}</h3>
+      <p className="vf-sub" style={{ fontSize: 18 }}>{item.summary}</p>
+      <div className="vf-grid" style={{ marginTop: 14 }}>
+        <div className="vf-panel"><div className="vf-eyebrow">Asset</div><p className="vf-muted">{item.assetType}</p></div>
+        <div className="vf-panel"><div className="vf-eyebrow">{isPain ? "Urgency" : "Price"}</div><p className="vf-muted">{isPain ? item.urgency || "Live" : item.price || "Inside"}</p></div>
+        {!isPain ? <div className="vf-panel"><div className="vf-eyebrow">Fix / ARV</div><p className="vf-muted">{item.fix || "Inside"} / {item.arv || "Inside"}</p></div> : null}
+        <div className="vf-panel"><div className="vf-eyebrow">Need</div><p className="vf-muted">{item.need || "Review inside"}</p></div>
       </div>
+      <div className="vf-row" style={{ marginTop: 16 }}><Link href="/investor-access" className="vf-btn vf-gold">Enter To See Inside</Link><Link href="/member-access" className="vf-btn">{isPain ? "Apply To Solve Pain" : "Apply To Work Deals"}</Link></div>
     </div>
   );
 }
 
-function Ticker() {
-  return (
-    <div style={tickerWrap}>
-      <div style={tickerTrack}>
-        {[...tickerItems, ...tickerItems].map((item, index) => (
-          <div key={`${item}-${index}`} style={{ whiteSpace: "nowrap", color: "#ffd45a", fontWeight: 950, letterSpacing: 3 }}>{item}</div>
-        ))}
-      </div>
-    </div>
-  );
+function StateCard({ state, deals, pain }: { state: string; deals: number; pain: number }) {
+  return <div className="vf-panel"><div className="vf-eyebrow">{state}</div><h3 className="vf-h3">{deals + pain} live signals</h3><p className="vf-muted">Deal windows: {deals}</p><p className="vf-muted">Pain signals: {pain}</p></div>;
 }
 
 function Section({ label, title, children }: { label: string; title: string; children: React.ReactNode }) {
-  return (
-    <section style={card}>
-      <div style={eyebrow}>{label}</div>
-      <h2 style={h2}>{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function CountdownCards({ timer }: { timer: Countdown }) {
-  return (
-    <div style={grid}>
-      {[
-        ["Days", timer.days],
-        ["Hours", timer.hours],
-        ["Minutes", timer.minutes],
-        ["Seconds", timer.seconds],
-      ].map(([label, value]) => (
-        <div key={label} style={goldPanel}>
-          <div style={eyebrow}>{label}</div>
-          <h2 style={h2}>{String(value).padStart(2, "0")}</h2>
-          <p style={muted}>until founding allocations close</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FounderAllocationCard({ item }: { item: any }) {
-  const percent = item.cap ? Math.min(100, Math.round((item.filled / item.cap) * 100)) : 0;
-
-  return (
-    <div style={item.full ? redPanel : goldPanel}>
-      <div style={eyebrow}>{item.title}</div>
-      <h3 style={h3}>{item.filled} / {item.cap} Filled</h3>
-      <p style={sub}>{item.remaining} founder allocations remaining</p>
-      <div style={{ height: 10, borderRadius: 999, background: "rgba(255,255,255,.08)", overflow: "hidden", marginTop: 14 }}>
-        <div style={{ height: "100%", width: `${percent}%`, background: item.full ? "#ff4d5e" : "#ffdc68" }} />
-      </div>
-      <p style={muted}>{item.full ? "Founder allocation closed." : item.remaining <= 2 ? "Almost full." : "Founder allocation open."}</p>
-    </div>
-  );
-}
-
-
-function LivePostingCard({ item }: { item: any }) {
-  return (
-    <div style={goldPanel}>
-      <div style={eyebrow}>{item.type} • {item.state}</div>
-      <h3 style={h3}>{item.headline}</h3>
-      <p style={sub}>{item.city}, {item.state}</p>
-      <p style={muted}>{item.teaser}</p>
-      <p style={muted}>Need: {item.need}</p>
-      <div style={{ ...row, marginTop: 14 }}>
-        <Link href="/investor-access" style={goldBtn}>Enter To See Inside</Link>
-        <Link href="/member-access" style={btn}>Apply To Work Deals</Link>
-      </div>
-    </div>
-  );
-}
-
-
-function PublicDealWindowCard({ item }: { item: any }) {
-  return (
-    <div style={goldPanel}>
-      <img src={item.photo} alt={item.title} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(245,197,66,.25)", marginBottom: 14 }} />
-      <div style={eyebrow}>{item.assetType} Deal • {item.city}, {item.state}</div>
-      <h3 style={h3}>{item.title}</h3>
-      <div style={{ ...grid, marginTop: 12 }}>
-        <div style={panel}><div style={eyebrow}>Beds</div><p style={muted}>{item.beds}</p></div>
-        <div style={panel}><div style={eyebrow}>Bath</div><p style={muted}>{item.baths}</p></div>
-        <div style={panel}><div style={eyebrow}>Price</div><p style={muted}>{item.price}</p></div>
-        <div style={panel}><div style={eyebrow}>Fix</div><p style={muted}>{item.fixAmount}</p></div>
-        <div style={panel}><div style={eyebrow}>ARV</div><p style={muted}>{item.arv}</p></div>
-        <div style={panel}><div style={eyebrow}>State</div><p style={muted}>{item.state}</p></div>
-      </div>
-      <p style={{ ...muted, marginTop: 12 }}>{item.teaser}</p>
-      <div style={{ ...row, marginTop: 14 }}>
-        <Link href="/investor-access" style={goldBtn}>Enter To See Deal</Link>
-        <Link href="/member-access" style={btn}>Apply To Work Deals</Link>
-      </div>
-    </div>
-  );
-}
-
-function PublicPainWindowCard({ item }: { item: any }) {
-  return (
-    <div style={redPanel}>
-      <img src={item.photo} alt={item.title} style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 22, border: "1px solid rgba(255,70,70,.25)", marginBottom: 14 }} />
-      <div style={eyebrow}>{item.category} • {item.city}, {item.state}</div>
-      <h3 style={h3}>{item.title}</h3>
-      <p style={sub}>{item.summary}</p>
-      <div style={{ ...grid, marginTop: 12 }}>
-        <div style={panel}><div style={eyebrow}>Urgency</div><p style={muted}>{item.urgency}</p></div>
-        <div style={panel}><div style={eyebrow}>Asset</div><p style={muted}>{item.assetType}</p></div>
-        <div style={panel}><div style={eyebrow}>Need</div><p style={muted}>{item.need}</p></div>
-        <div style={panel}><div style={eyebrow}>State</div><p style={muted}>{item.state}</p></div>
-      </div>
-      <p style={{ ...muted, marginTop: 12 }}>No member personal info shown outside. Inside access unlocks request thread, routing, and controlled contact workflow.</p>
-      <div style={{ ...row, marginTop: 14 }}>
-        <Link href="/investor-access" style={goldBtn}>Enter To See Pain Signal</Link>
-        <Link href="/member-access" style={btn}>Apply To Solve Pain</Link>
-      </div>
-    </div>
-  );
-}
-
-
-function StateCountCard({ state, memberCount, investorCount, dealCount, painCount }: { state: string; memberCount: number; investorCount: number; dealCount: number; painCount: number }) {
-  return (
-    <div style={panel}>
-      <div style={eyebrow}>{state}</div>
-      <h3 style={h3}>{dealCount + painCount} live signals</h3>
-      <p style={muted}>Members: {memberCount}</p>
-      <p style={muted}>Investors: {investorCount}</p>
-      <p style={muted}>Deal teasers: {dealCount} • Pain teasers: {painCount}</p>
-    </div>
-  );
+  return <section className="vf-section"><div className="vf-eyebrow">{label}</div><h2 className="vf-h2">{title}</h2>{children}</section>;
 }
 
 export default function HomePage() {
   const [tick, setTick] = useState(0);
+  const [selectedState, setSelectedState] = useState("GA");
   const [owner, setOwner] = useState(false);
-  const [selectedPublicState, setSelectedPublicState] = useState("GA");
 
   useEffect(() => {
-    const refresh = () => {
-      setOwner(currentEmail() === OWNER_EMAIL);
-      setTick((value) => value + 1);
-    };
-
+    const refresh = () => { setOwner(currentEmail() === OWNER_EMAIL); setTick((v) => v + 1); };
     refresh();
-
-    const interval = window.setInterval(() => setTick((value) => value + 1), 1000);
-
+    const interval = window.setInterval(() => setTick((v) => v + 1), 1000);
     window.addEventListener("storage", refresh);
-    window.addEventListener("vaultforge-access-change", refresh);
-    window.addEventListener("vaultforge-admin-members-change", refresh);
-
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("vaultforge-access-change", refresh);
-      window.removeEventListener("vaultforge-admin-members-change", refresh);
-    };
+    window.addEventListener("vaultforge-admin-action-change", refresh);
+    window.addEventListener("vaultforge-investor-change", refresh);
+    return () => { window.clearInterval(interval); window.removeEventListener("storage", refresh); window.removeEventListener("vaultforge-admin-action-change", refresh); window.removeEventListener("vaultforge-investor-change", refresh); };
   }, []);
 
   const timer = useMemo(() => countdown(), [tick]);
-  const counts = useMemo(() => founderCounts(), [tick]);
-  const founderClosed = timer.expired || counts.every((item) => item.full);
-  const totalFilled = counts.reduce((sum, item) => sum + item.filled, 0);
-  const totalCap = counts.reduce((sum, item) => sum + item.cap, 0);
-  const memberStateCounts = useMemo(() => liveMemberCounts(), [tick]);
-  const investorStateCounts = useMemo(() => liveInvestorCounts(), [tick]);
-  const dealStateCounts = useMemo(() => stateCounts(sampleDealPostings), []);
-  const painStateCounts = useMemo(() => stateCounts(samplePainPostings), []);
-  const selectedDealWindows = useMemo(() => publicDealWindows.filter((item) => item.state === selectedPublicState).slice(0, 2), [selectedPublicState]);
-  const selectedPainWindows = useMemo(() => publicPainWindows.filter((item) => item.state === selectedPublicState).slice(0, 2), [selectedPublicState]);
+  const deals = useMemo(() => readLiveDeals(), [tick]);
+  const pain = useMemo(() => readLivePain(), [tick]);
+  const shownDeals = deals.filter((d) => d.state === selectedState).slice(0, 2);
+  const shownPain = pain.filter((p) => p.state === selectedState).slice(0, 2);
 
   return (
-    <main style={page}>
-      <style>{`@keyframes tickerMove { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
-
-      <div style={wrap}>
+    <main className="vf-page">
+      <style>{css}</style>
+      <div className="vf-wrap">
         <Nav owner={owner} />
-
-        <section style={hero}>
-          <LogoHero />
-          <div style={eyebrow}>VaultForge Intelligence</div>
-          <h1 style={h1}>Private real estate intelligence.</h1>
-          <p style={sub}>VaultForge is a private real estate execution network where approved members post Deal Opportunities and Pain Signals, and approved investors can request information, funding help, owner contact, or routed execution without seeing the private member directory.</p>
-          <p style={{ ...sub, marginTop: 16 }}>Deals, capital, contractors, title/closing, operators, insurance, buyers, and problem solvers in one controlled system.</p>
-
-          <div style={{ ...row, marginTop: 24 }}>
-            <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-            <Link href="/investor-access" style={goldBtn}>Investor Room Access</Link>
-            <Link href="/create-login" style={btn}>Create Login + Password</Link>
-            <Link href="/login" style={btn}>Members Login</Link>
-            <Link href="/investor-login" style={btn}>Investor Room Login</Link>
-            <Link href="/admin" style={btn}>Admin Login</Link>
-          </div>
-
-          <div style={{ marginTop: 22 }}>
-            <span style={badge}>PRIVATE NETWORK</span>
-            <span style={badge}>APPROVED MEMBERS ONLY</span>
-            <span style={badge}>PAIN → SIGNAL → ROUTING → EXECUTION</span>
-          </div>
+        <section className="vf-hero">
+          <div className="vf-logoBox">VAULTFORGE</div>
+          <div className="vf-eyebrow">VaultForge Intelligence</div>
+          <h1 className="vf-h1">Private real estate intelligence.</h1>
+          <p className="vf-sub">VaultForge is a private real estate execution network where approved members post Deal Opportunities and Pain Signals, and approved investors can request information, funding help, owner contact, or routed execution without seeing the private member directory.</p>
+          <p className="vf-sub" style={{ marginTop: 16 }}>Deals, capital, contractors, title/closing, operators, insurance, buyers, and problem solvers in one controlled system.</p>
+          <div className="vf-row" style={{ marginTop: 24 }}><Link href="/member-access" className="vf-btn vf-gold">Request Member Access</Link><Link href="/investor-access" className="vf-btn vf-gold">Investor Room Access</Link><Link href="/create-login" className="vf-btn">Create Login + Password</Link><Link href="/login" className="vf-btn">Members Login</Link><Link href="/investor-login" className="vf-btn">Investor Room Login</Link></div>
+          <div style={{ marginTop: 22 }}><span className="vf-badge">BUILT BY OPERATORS</span><span className="vf-badge">PRIVATE NETWORK</span><span className="vf-badge">PAIN → SIGNAL → ROUTING → EXECUTION</span></div>
         </section>
-
-
-        <Section label="Live VaultForge Market Preview" title="Click a state. See Deals and Pain split.">
-          <p style={sub}>This is the outside window into VaultForge. Public visitors see limited teaser information only. Approved Investor Room or Member Room access unlocks the full request thread, owner contact workflow, routing, documents, messages, and execution lanes.</p>
-
-          <div style={{ ...row, marginTop: 22 }}>
-            {OPERATING_STATES.map((state) => (
-              <button
-                key={state}
-                type="button"
-                style={state === selectedPublicState ? goldBtn : btn}
-                onClick={() => setSelectedPublicState(state)}
-              >
-                {state}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ ...grid, marginTop: 22 }}>
-            {OPERATING_STATES.map((state) => (
-              <StateCountCard
-                key={`top-${state}`}
-                state={state}
-                memberCount={memberStateCounts.find((item) => item.state === state)?.count || 0}
-                investorCount={investorStateCounts.find((item) => item.state === state)?.count || 0}
-                dealCount={publicDealWindows.filter((item) => item.state === state).length}
-                painCount={publicPainWindows.filter((item) => item.state === state).length}
-              />
-            ))}
-          </div>
-        </Section>
-
-        <Section label={`${selectedPublicState} Deal Opportunities`} title="Two live deal windows. Limited outside info.">
-          <p style={sub}>Residential shows beds, baths, price, fix amount, ARV, and state. Commercial and Land show matching fields where appropriate. Full location, owner/member contact, documents, and thread are inside.</p>
-          <div style={{ ...wideGrid, marginTop: 22 }}>
-            {selectedDealWindows.map((item) => <PublicDealWindowCard key={`deal-window-${item.state}-${item.city}-${item.title}`} item={item} />)}
-          </div>
-        </Section>
-
-        <Section label={`${selectedPublicState} Pain Signals`} title="Two live pain windows. No member info outside.">
-          <p style={sub}>Pain cards show the problem type, urgency, asset, state, and what help is needed. They do not reveal member identity or personal contact outside the room.</p>
-          <div style={{ ...wideGrid, marginTop: 22 }}>
-            {selectedPainWindows.map((item) => <PublicPainWindowCard key={`pain-window-${item.state}-${item.city}-${item.title}`} item={item} />)}
-          </div>
-        </Section>
-
         <Ticker />
-
+        <Section label="Live VaultForge Market Preview" title="Click a state. See Deals and Pain split.">
+          <p className="vf-sub">This is the outside window into VaultForge. Public visitors see limited teaser information only. Approved Investor Room or Member Room access unlocks the full request thread, owner contact workflow, routing, documents, messages, and execution lanes.</p>
+          <div className="vf-row" style={{ marginTop: 22 }}>{STATES.map((state) => <button key={state} type="button" className={state === selectedState ? "vf-btn vf-gold" : "vf-btn"} onClick={() => setSelectedState(state)}>{state}</button>)}</div>
+          <div className="vf-grid" style={{ marginTop: 22 }}>{STATES.map((state) => <StateCard key={state} state={state} deals={deals.filter((d) => d.state === state).length} pain={pain.filter((p) => p.state === state).length} />)}</div>
+        </Section>
+        <Section label={`${selectedState} Deal Opportunities`} title="Live deal windows. Limited outside info.">
+          <p className="vf-sub">Residential shows beds, baths, price, fix amount, ARV, and state where available. Commercial and Land show matching fields. Full location, owner/member contact, documents, and thread are inside.</p>
+          <div className="vf-wide" style={{ marginTop: 22 }}>{(shownDeals.length ? shownDeals : deals.slice(0, 2)).map((item) => <SignalCardView key={item.id} item={item} />)}</div>
+        </Section>
+        <Section label={`${selectedState} Pain Signals`} title="Live pain windows. No member info outside.">
+          <p className="vf-sub">Pain cards show the problem type, urgency, asset, state, and what help is needed. They do not reveal member identity or personal contact outside the room.</p>
+          <div className="vf-wide" style={{ marginTop: 22 }}>{(shownPain.length ? shownPain : pain.slice(0, 2)).map((item) => <SignalCardView key={item.id} item={item} />)}</div>
+        </Section>
+        <section className="vf-grid" style={{ marginBottom: 22 }}>
+          <div className="vf-panel vf-goldPanel"><div className="vf-eyebrow">Founder Network</div><h2 className="vf-h2">Private</h2><p className="vf-muted">approved access and balanced role allocations</p></div>
+          <div className="vf-panel vf-goldPanel"><div className="vf-eyebrow">Member Founder Pricing</div><h2 className="vf-h2">{timer.expired ? "$99" : "$49"}</h2><p className="vf-muted">{timer.expired ? "$99 activation, then $299/month" : "$49 activation, $49 second month, then $299/month"}</p></div>
+          <div className="vf-panel vf-goldPanel"><div className="vf-eyebrow">Investor Access</div><h2 className="vf-h2">$79</h2><p className="vf-muted">first month, then $149/month</p></div>
+          <div className="vf-panel vf-redPanel"><div className="vf-eyebrow">Founder Countdown</div><h2 className="vf-h2">{String(timer.days).padStart(2, "0")}d {String(timer.hours).padStart(2, "0")}h</h2><p className="vf-muted">founding allocations close June 1</p></div>
+        </section>
         <Section label="Two Controlled Access Lanes" title="Members build the network. Investors access the signal room.">
-          <p style={sub}>VaultForge now runs two separate experiences: a private member command center for operators and an investor room for approved capital, buyers, and deal reviewers. The investor room can see controlled Deal Opportunities and Pain submissions, but it does not expose the private member directory.</p>
-
-          <div style={{ ...wideGrid, marginTop: 22 }}>
-            <div style={goldPanel}>
-              <div style={eyebrow}>Investor Room</div>
-              <h3 style={h3}>Controlled access to deal and pain signals.</h3>
-              <p style={muted}>Investors can review limited Deal Opportunity cards, Pain submissions, state signals, request more information, message through controlled threads, and request execution help.</p>
-              <p style={muted}>Investor price: $79 first month, then $149/month.</p>
-              <div style={{ ...row, marginTop: 16 }}>
-                <Link href="/investor-access" style={goldBtn}>Get Investor Room Access</Link>
-                <Link href="/investor-login" style={btn}>Investor Room Login</Link>
-              </div>
-            </div>
-
-            <div style={goldPanel}>
-              <div style={eyebrow}>Private Members Site</div>
-              <h3 style={h3}>Approved operators, capital, buyers, and problem solvers.</h3>
-              <p style={muted}>Members operate inside the private command center: routed requests, Deal/Pain rooms, messages, alerts, profile-based routing, state intelligence, and execution lanes.</p>
-              <p style={muted}>Members are not publicly browsed. The network is protected by profile review, admin approval, payment unlock, and controlled contact release.</p>
-              <div style={{ ...row, marginTop: 16 }}>
-                <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-                <Link href="/login" style={btn}>Members Login</Link>
-              </div>
-            </div>
+          <div className="vf-wide" style={{ marginTop: 22 }}>
+            <div className="vf-panel vf-goldPanel"><div className="vf-eyebrow">Investor Room</div><h3 className="vf-h3">Controlled access to deal and pain signals.</h3><p className="vf-muted">Investors can review Deal Opportunity cards, Pain submissions, state signals, request more information, message through controlled threads, and request execution help.</p><p className="vf-muted">Investor price: $79 first month, then $149/month.</p><div className="vf-row" style={{ marginTop: 16 }}><Link href="/investor-access" className="vf-btn vf-gold">Get Investor Room Access</Link><Link href="/investor-login" className="vf-btn">Investor Room Login</Link></div></div>
+            <div className="vf-panel vf-goldPanel"><div className="vf-eyebrow">Private Members Site</div><h3 className="vf-h3">Approved operators, capital, buyers, and problem solvers.</h3><p className="vf-muted">Members operate inside the private command center: routed requests, Deal/Pain rooms, messages, alerts, profile-based routing, state intelligence, and execution lanes.</p><p className="vf-muted">Members are not publicly browsed. The network is protected by profile review, admin approval, payment unlock, and controlled contact release.</p><div className="vf-row" style={{ marginTop: 16 }}><Link href="/member-access" className="vf-btn vf-gold">Request Member Access</Link><Link href="/login" className="vf-btn">Members Login</Link></div></div>
           </div>
         </Section>
-
         <Section label="One-Stop Real Estate Execution Shop" title="Deals, problems, people, and next moves in one private system.">
-          <p style={sub}>VaultForge is built for the messy real estate work that happens before, during, and after a deal: finding capital, locating buyers, solving title/closing problems, finding contractors, routing operators, reviewing Pain signals, requesting boots on ground, and turning pressure into execution.</p>
-
-          <div style={{ ...grid, marginTop: 20 }}>
-            <div style={panel}><div style={eyebrow}>Capital</div><p style={sub}>Private lenders, hard money, equity partners, JV capital, proof-of-funds context, and funding gap routing.</p></div>
-            <div style={panel}><div style={eyebrow}>Execution</div><p style={sub}>Contractors, operators, boots on ground, property management, disposition, insurance, and transaction support.</p></div>
-            <div style={panel}><div style={eyebrow}>Deal Intelligence</div><p style={sub}>Deal Opportunities, Pain submissions, market pressure, state filters, routed requests, and controlled message threads.</p></div>
-            <div style={panel}><div style={eyebrow}>Protection</div><p style={sub}>Profiles attached, contact hidden, member data private, admin approval, payment unlock, and release-only introductions.</p></div>
-          </div>
+          <p className="vf-sub">VaultForge is built for the messy real estate work that happens before, during, and after a deal: finding capital, locating buyers, solving title/closing problems, finding contractors, routing operators, reviewing Pain signals, requesting boots on ground, and turning pressure into execution.</p>
+          <div className="vf-grid" style={{ marginTop: 20 }}><div className="vf-panel"><div className="vf-eyebrow">Capital</div><p className="vf-sub" style={{ fontSize: 18 }}>Private lenders, hard money, equity partners, JV capital, proof-of-funds context, and funding gap routing.</p></div><div className="vf-panel"><div className="vf-eyebrow">Execution</div><p className="vf-sub" style={{ fontSize: 18 }}>Contractors, operators, boots on ground, property management, disposition, insurance, and transaction support.</p></div><div className="vf-panel"><div className="vf-eyebrow">Deal Intelligence</div><p className="vf-sub" style={{ fontSize: 18 }}>Deal Opportunities, Pain submissions, market pressure, state filters, routed requests, and controlled message threads.</p></div><div className="vf-panel"><div className="vf-eyebrow">Protection</div><p className="vf-sub" style={{ fontSize: 18 }}>Profiles attached, contact hidden, member data private, admin approval, payment unlock, and release-only introductions.</p></div></div>
         </Section>
-
-        <Section label="Access Sequence" title="Profile first. Approval next. Payment unlocks the room.">
-          <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>01 Create Login</div><p style={sub}>Members and investors both create login/password access first so the profile, locked room preview, messages, approval status, payment button, and final room unlock stay tied together.</p></div>
-            <div style={panel}><div style={eyebrow}>02 Submit Profile</div><p style={sub}>Investor or member profile goes to admin with your market, role, strategy, capital/execution ability, and contact preference.</p></div>
-            <div style={panel}><div style={eyebrow}>03 Locked Room Preview</div><p style={sub}>After submission, you can see the locked Investor Room or Member Room preview while admin reviews your profile.</p></div>
-            <div style={panel}><div style={eyebrow}>04 Admin Approval</div><p style={sub}>When approved, the payment button lights up. After payment, the room unlocks automatically.</p></div>
-          </div>
-        </Section>
-
-        <Section label="Why People Will Want In" title="This is where off-market pressure gets organized before it becomes public noise.">
-          <div style={wideGrid}>
-            <div style={goldPanel}><div style={eyebrow}>Signal Before Listing</div><h3 style={h3}>Problems become opportunities.</h3><p style={muted}>Capital gaps, stalled rehabs, title problems, partner issues, insurance trouble, and urgent exits can become routed execution signals.</p></div>
-            <div style={goldPanel}><div style={eyebrow}>No Public Member Exposure</div><h3 style={h3}>Private by design.</h3><p style={muted}>Investors request through VaultForge. Members decide what to accept, pass, message, or release.</p></div>
-            <div style={goldPanel}><div style={eyebrow}>Command Center Feel</div><h3 style={h3}>Not another dashboard.</h3><p style={muted}>Profiles, rooms, replies, requests, cleanup folders, and execution lanes work together instead of scattered texts and spreadsheets.</p></div>
-          </div>
-        </Section>
-
-
-        <section style={{ marginBottom: 22 }}>
-          <div style={grid}>
-            <div style={goldPanel}><div style={eyebrow}>Founder Network</div><h2 style={h2}>{totalFilled} / {totalCap}</h2><p style={muted}>real filled founder allocations</p></div>
-            <div style={goldPanel}><div style={eyebrow}>Member Founder Pricing</div><h2 style={h2}>{founderClosed ? "$99" : "$49"}</h2><p style={muted}>{founderClosed ? "$99 activation, then $299/month" : "$49 activation, $49 second month, then $299/month"}</p></div>
-            <div style={goldPanel}><div style={eyebrow}>Investor Access</div><h2 style={h2}>$79</h2><p style={muted}>first month, then $149/month</p></div>
-            <div style={redPanel}><div style={eyebrow}>Pain Signals</div><h2 style={h2}>Live</h2><p style={muted}>problem pressure routed by profile fit</p></div>
-          </div>
-        </section>
-
-        <Section label="Founder Access Countdown" title={founderClosed ? "Founding allocations closed." : "Founding allocations close June 1."}>
-          <CountdownCards timer={timer} />
-          <div style={{ ...panel, marginTop: 18 }}>
-            <p style={sub}>{founderClosed ? "Standard member access is now active: $99 activation, then $299/month." : "Member founder access: $49 activation, $49 second month, then $299/month. Founder allocations close June 1 or when strategic categories reach capacity."}</p>
-          </div>
-        </Section>
-
-        <Section label="Founding Network Allocations" title="Balanced network. Limited seats by role.">
-          <p style={sub}>VaultForge intentionally limits member categories so the network does not become overloaded with only buyers, only wholesalers, or only operators. The goal is a functioning execution ecosystem.</p>
-          <div style={{ ...grid, marginTop: 20 }}>
-            {counts.map((item) => <FounderAllocationCard key={item.key} item={item} />)}
-          </div>
-        </Section>
-
-        <Section label="Investor Room" title="Investors can do business inside without seeing the private directory.">
-          <p style={sub}>Investor Room is not empty access and it is not just a preview. Approved investors can work inside VaultForge through controlled Deal Opportunities, Pain submissions, request cards, structured replies, and execution lanes. They do not browse the private member directory, but they can still contact a Deal owner, Pain owner, or routed member through VaultForge when a card fits what they want.</p>
-          <p style={{ ...muted, marginTop: 12 }}>Example: an investor sees a Deal Opportunity and needs funding. They can request lender routing. They see a Pain submission that needs a contractor, operator, or capital solution. They can request contact through the controlled thread. Member personal info stays protected until approval, but business can still move.</p>
-          <div style={{ ...grid, marginTop: 20 }}>
-            <div style={goldPanel}><div style={eyebrow}>Investor Pricing</div><h3 style={h3}>$79 first month</h3><p style={muted}>Then $149/month.</p></div>
-            <div style={panel}><div style={eyebrow}>Investor Sees</div><p style={sub}>Limited Deal Opportunity cards, Pain submissions, state filters, request cards, structured replies, and execution request lanes.</p></div>
-            <div style={panel}><div style={eyebrow}>Investor Protection</div><p style={sub}>Investors do not see the private member directory or personal contact data, but they can request routed contact, funding, deal details, Pain solutions, and execution help through VaultForge.</p></div>
-          </div>
-          <div style={{ ...row, marginTop: 22 }}>
-            <Link href="/investor-access" style={goldBtn}>Investor Access</Link>
-            <Link href="/investor-login" style={btn}>Investor Login</Link>
-            <Link href="/investor-application" style={btn}>Investor Application</Link>
-          </div>
-        </Section>
-
-
-        <Section label="Profile Intelligence" title="More profile intelligence creates smarter routing.">
-          <p style={sub}>VaultForge Intelligence routes alerts, signals, opportunities, pain requests, operator matches, capital needs, and execution opportunities using profile intelligence.</p>
-          <p style={{ ...muted, marginTop: 12 }}>The more complete your profile becomes, the smarter VaultForge gets at routing the right signals, markets, opportunities, and member connections to you.</p>
-        </Section>
-
-        <Section label="Not Real Estate Listings" title="This is private execution infrastructure.">
-          <p style={sub}>Most platforms show finished listings after the market already sees them. VaultForge surfaces real-world pressure, routes the signal, and connects approved members before the opportunity becomes public noise.</p>
-          <div style={{ ...grid, marginTop: 20 }}>
-            <div style={panel}><div style={eyebrow}>Not A Marketplace</div><p style={sub}>VaultForge is not built for public browsing, mass posting, or open listings.</p></div>
-            <div style={panel}><div style={eyebrow}>Not Social Media</div><p style={sub}>Members connect through routed intelligence, not random feeds or public chatter.</p></div>
-            <div style={panel}><div style={eyebrow}>Not Lead Lists</div><p style={sub}>Signals are routed by fit, execution need, capital, pressure, and member capability.</p></div>
-          </div>
-        </Section>
-
-        <Section label="Pain Intelligence" title="Pain is where opportunity begins.">
-          <p style={sub}>Pain means a real-world problem requiring execution: capital gaps, stalled construction, distressed sellers, lender pressure, permit issues, tenant problems, operator needs, emergency exits, off-market opportunities, or partnership breakdowns.</p>
-          <div style={{ marginTop: 18 }}>
-            {painExamples.map((item) => <span key={item} style={badge}>{item}</span>)}
-          </div>
-        </Section>
-
-        <Section label="Core Engine" title="Pain → Signal → Routing → Execution">
-          <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>01</div><h3 style={h3}>Pain / Opportunity</h3><p style={muted}>A member submits a deal, opportunity, pressure point, capital need, operator request, or execution problem.</p></div>
-            <div style={panel}><div style={eyebrow}>02</div><h3 style={h3}>VaultForge Signal</h3><p style={muted}>VaultForge Intelligence classifies the situation, identifies risk, urgency, service need, and execution path.</p></div>
-            <div style={panel}><div style={eyebrow}>03</div><h3 style={h3}>Private Routing</h3><p style={muted}>The signal is routed to members, buyers, lenders, contractors, operators, or partners positioned to help.</p></div>
-            <div style={panel}><div style={eyebrow}>04</div><h3 style={h3}>Execution</h3><p style={muted}>Members connect directly through rooms, messages, alerts, and route queues to move the situation forward.</p></div>
-          </div>
-        </Section>
-
-        <Section label="Access Flow" title="Private access is controlled.">
-          <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>Create Login</div><p style={sub}>Email, password, and recovery path create the member identity.</p></div>
-            <div style={panel}><div style={eyebrow}>Complete Profile</div><p style={sub}>Profile intelligence tells VaultForge what you do, where you operate, and how you execute.</p></div>
-            <div style={panel}><div style={eyebrow}>Admin Approval</div><p style={sub}>Owner approval activates the payment button for the right room.</p></div>
-            <div style={panel}><div style={eyebrow}>Payment Unlock</div><p style={sub}>After payment, Investor Room or Member Room access unlocks automatically.</p></div>
-          </div>
-        </Section>
-
-        <Section label="Legal / Disclaimers" title="Private network. Independent decisions.">
-          <div style={wideGrid}>
-            <div style={panel}><div style={eyebrow}>Not Broker / Lender</div><p style={muted}>VaultForge is not a broker, lender, attorney, investment advisor, securities dealer, or fiduciary.</p></div>
-            <div style={panel}><div style={eyebrow}>No Guarantees</div><p style={muted}>VaultForge does not guarantee profits, funding, deals, introductions, closings, returns, or execution outcomes.</p></div>
-            <div style={panel}><div style={eyebrow}>Due Diligence</div><p style={muted}>Members and investors are responsible for independent underwriting, legal review, compliance, verification, negotiations, and transaction decisions.</p></div>
-            <div style={panel}><div style={eyebrow}>Cancellation Policy</div><p style={muted}>Memberships renew monthly until canceled. Cancellation stops future renewals. Activation payments and started billing cycles are not prorated or refunded.</p></div>
-            <div style={panel}><div style={eyebrow}>Founder Status</div><p style={muted}>Founder pricing is limited and promotional. Founder status may be lost if membership is canceled and later restarted.</p></div>
-            <div style={panel}><div style={eyebrow}>Approval Rights</div><p style={muted}>VaultForge may approve, deny, suspend, or remove access to protect network quality and execution balance.</p></div>
-          </div>
-        </Section>
-
-        <section style={hero}>
-          <div style={eyebrow}>VaultForge Intelligence</div>
-          <h2 style={h2}>See pressure before the market does.</h2>
-          <p style={sub}>Not every opportunity should become public. Not every problem belongs on the open market. VaultForge exists to coordinate execution before the rest of the market sees the pressure.</p>
-          <div style={{ ...row, marginTop: 22 }}>
-            <Link href="/member-access" style={goldBtn}>Request Member Access</Link>
-            <Link href="/investor-access" style={btn}>Investor Room Access</Link>
-            <Link href="/contact-admin" style={btn}>Contact Admin</Link>
-          </div>
-        </section>
+        <Section label="Not Real Estate Listings" title="This is private execution infrastructure."><p className="vf-sub">Most platforms show finished listings after the market already sees them. VaultForge surfaces real-world pressure, routes the signal, and connects approved members before the opportunity becomes public noise.</p></Section>
+        <Section label="Legal / Disclaimers" title="Private network. Independent decisions."><div className="vf-wide"><div className="vf-panel"><div className="vf-eyebrow">Not Broker / Lender</div><p className="vf-muted">VaultForge is not a broker, lender, attorney, investment advisor, securities dealer, or fiduciary.</p></div><div className="vf-panel"><div className="vf-eyebrow">No Guarantees</div><p className="vf-muted">VaultForge does not guarantee profits, funding, deals, introductions, closings, returns, or execution outcomes.</p></div><div className="vf-panel"><div className="vf-eyebrow">Due Diligence</div><p className="vf-muted">Members and investors are responsible for independent underwriting, legal review, compliance, verification, negotiations, and transaction decisions.</p></div></div></Section>
+        <section className="vf-hero"><div className="vf-eyebrow">VaultForge Intelligence</div><h2 className="vf-h2">See pressure before the market does.</h2><p className="vf-sub">Not every opportunity should become public. Not every problem belongs on the open market. VaultForge exists to coordinate execution before the rest of the market sees the pressure.</p><div className="vf-row" style={{ marginTop: 22 }}><Link href="/member-access" className="vf-btn vf-gold">Request Member Access</Link><Link href="/investor-access" className="vf-btn">Investor Room Access</Link><Link href="/contact-admin" className="vf-btn">Contact Admin</Link></div></section>
       </div>
     </main>
   );
