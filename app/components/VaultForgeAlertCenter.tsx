@@ -341,6 +341,60 @@ const button: React.CSSProperties = {
 const goldButton: React.CSSProperties = { ...button, border: 0, background: "#ffdc68", color: "#10131a" };
 const redButton: React.CSSProperties = { ...button, background: "#271016", borderColor: "rgba(255,70,70,.55)", color: "#ffb3b3" };
 
+
+function saveThreadReply(target: any, body: string, audience: AlertAudience) {
+  const text = clean(body);
+  if (!text) return false;
+
+  const reply = {
+    id: `vf-reply-${Date.now()}`,
+    requestId: rowId(target, target?.__rowId || ""),
+    sourceKey: target?.__sourceKey || "",
+    originalTitle: titleFor(target),
+    originalMessage: messageFor(target),
+    from: audience === "admin" ? "Owner/Admin" : audience === "member" ? "Member" : "Investor",
+    toEmail: target?.investorEmail || target?.email || "",
+    toName: target?.investorName || target?.name || "",
+    body: text,
+    message: text,
+    status: "active",
+    folder: "active",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const ownerReplies = readJson<any[]>("vaultforge_owner_replies_v1", []);
+  const memberReplies = readJson<any[]>("vaultforge_member_replies_v1", []);
+  const adminReplies = readJson<any[]>("vaultforge_admin_replies_v1", []);
+
+  if (audience === "member") {
+    writeJson("vaultforge_member_replies_v1", [reply, ...memberReplies].slice(0, 120));
+  } else if (audience === "admin") {
+    writeJson("vaultforge_owner_replies_v1", [reply, ...ownerReplies].slice(0, 120));
+  } else {
+    writeJson("vaultforge_admin_replies_v1", [reply, ...adminReplies].slice(0, 120));
+  }
+
+  dispatchAlertChange();
+  return true;
+}
+
+function repliesFor(target: any) {
+  const id = rowId(target, target?.__rowId || "");
+  const allReplies = [
+    ...readJson<any[]>("vaultforge_owner_replies_v1", []),
+    ...readJson<any[]>("vaultforge_member_replies_v1", []),
+    ...readJson<any[]>("vaultforge_admin_replies_v1", []),
+  ];
+
+  return allReplies.filter((reply) => {
+    const replyRequestId = clean(reply?.requestId);
+    const replyTitle = clean(reply?.originalTitle);
+    return replyRequestId === id || replyTitle === titleFor(target);
+  });
+}
+
+
 export default function VaultForgeAlertCenter({
   audience = "member",
   title = "Live Alerts",
@@ -353,6 +407,7 @@ export default function VaultForgeAlertCenter({
   const [selectedRow, setSelectedRow] = useState<any | null>(null);
   const [folder, setFolder] = useState<Folder>("active");
   const [notice, setNotice] = useState("");
+  const [replyText, setReplyText] = useState("");
 
   useEffect(() => {
     const refresh = () => setTick((value) => value + 1);
@@ -449,7 +504,7 @@ export default function VaultForgeAlertCenter({
           <button
             key={item.key}
             type="button"
-            onClick={() => { setOpenAlertKey(item.key); setSelectedRow(null); setFolder("active"); setNotice(""); }}
+            onClick={() => { setOpenAlertKey(item.key); setSelectedRow(null); setFolder("active"); setNotice(""); setReplyText(""); }}
             style={{
               textAlign: "left",
               color: "#f8fafc",
@@ -480,12 +535,12 @@ export default function VaultForgeAlertCenter({
                 <p style={{ color: "#cbd5e1", fontSize: 19, lineHeight: 1.35 }}>{visibleRows.length} cards in {folder}</p>
               </div>
 
-              <button type="button" onClick={() => { setOpenAlertKey(""); setSelectedRow(null); setNotice(""); }} style={button}>Close</button>
+              <button type="button" onClick={() => { setOpenAlertKey(""); setSelectedRow(null); setNotice(""); setReplyText(""); }} style={button}>Close</button>
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
               {(["active", "saved", "archived", "closed", "deleted"] as Folder[]).map((item) => (
-                <button key={item} type="button" onClick={() => { setFolder(item); setSelectedRow(null); setNotice(""); }} style={folder === item ? goldButton : button}>
+                <button key={item} type="button" onClick={() => { setFolder(item); setSelectedRow(null); setNotice(""); setReplyText(""); }} style={folder === item ? goldButton : button}>
                   {item.charAt(0).toUpperCase() + item.slice(1)} ({openAlert.rows.filter((row) => folderOf(row) === item).length})
                 </button>
               ))}
@@ -516,8 +571,74 @@ export default function VaultForgeAlertCenter({
                 </div>
 
                 <div style={{ background: "#111827", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 14, marginTop: 12 }}>
-                  <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Message</div>
+                  <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Original Message</div>
                   <p style={{ color: "#cbd5e1", margin: "7px 0 0", lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{messageFor(selectedRow)}</p>
+                </div>
+
+                <div style={{ background: "#111827", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 14, marginTop: 12 }}>
+                  <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Message / Reply Thread</div>
+
+                  <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                    {repliesFor(selectedRow).length ? (
+                      repliesFor(selectedRow).map((reply: any, index: number) => (
+                        <div
+                          key={`${reply?.id || index}`}
+                          style={{
+                            background: "#0b1020",
+                            border: "1px solid rgba(207,216,230,.12)",
+                            borderRadius: 16,
+                            padding: 12,
+                          }}
+                        >
+                          <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 3, fontWeight: 950, fontSize: 10 }}>
+                            {clean(reply?.from, "Reply")} • {clean(reply?.createdAt, "now")}
+                          </div>
+                          <p style={{ color: "#cbd5e1", margin: "7px 0 0", whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                            {pretty(reply?.body || reply?.message, "No reply body.")}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ color: "#aeb7c7", margin: 0 }}>No replies yet.</p>
+                    )}
+                  </div>
+
+                  <textarea
+                    value={replyText}
+                    onChange={(event) => setReplyText(event.target.value)}
+                    placeholder="Write reply here..."
+                    style={{
+                      width: "100%",
+                      minHeight: 110,
+                      marginTop: 12,
+                      borderRadius: 16,
+                      border: "1px solid rgba(207,216,230,.18)",
+                      background: "#0b1020",
+                      color: "#f8fafc",
+                      padding: 14,
+                      fontSize: 16,
+                      boxSizing: "border-box",
+                    }}
+                  />
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const saved = saveThreadReply(selectedRow, replyText, audience);
+                        if (saved) {
+                          setReplyText("");
+                          setNotice("Reply saved to this request thread.");
+                          setTick((value) => value + 1);
+                        } else {
+                          setNotice("Type a reply first.");
+                        }
+                      }}
+                      style={goldButton}
+                    >
+                      Send Reply
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
@@ -550,7 +671,7 @@ export default function VaultForgeAlertCenter({
                   <button
                     type="button"
                     key={`${openAlert.key}-${row?.__rowId || row?.id || row?.email || index}`}
-                    onClick={() => { setSelectedRow(row); setNotice(""); }}
+                    onClick={() => { setSelectedRow(row); setNotice(""); setReplyText(""); }}
                     style={{ textAlign: "left", color: "#f8fafc", background: "#0b1020", border: "1px solid rgba(207,216,230,.14)", borderRadius: 20, padding: 16, cursor: "pointer" }}
                   >
                     <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11, marginBottom: 8 }}>{subFor(row)}</div>
