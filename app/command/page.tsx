@@ -992,31 +992,31 @@ function MemberTopPulseCards({
     <section style={{ ...goldPanel, marginBottom: 18 }}>
       <div style={eyebrow}>Member Alerts • {total} Active</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 12 }}>
-        <Link href="/my-rooms?lane=deals" style={cardStyle(deals, "rgba(245,197,66,.85)")}>
+        <Link href="/my-rooms?view=activeDeals" style={cardStyle(deals, "rgba(245,197,66,.85)")}>
           <div style={eyebrow}>Deals</div>
           <h2 style={h2}>{deals}</h2>
-          <p style={muted}>deal opportunity rooms</p>
+          <p style={muted}>active deal rooms</p>
           <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
         </Link>
 
-        <Link href="/my-rooms?lane=pain" style={cardStyle(pains, "rgba(255,70,70,.70)")}>
+        <Link href="/my-rooms?view=activePain" style={cardStyle(pains, "rgba(255,70,70,.70)")}>
           <div style={eyebrow}>Pain</div>
           <h2 style={h2}>{pains}</h2>
-          <p style={muted}>problem / pain signals</p>
+          <p style={muted}>active pain rooms</p>
           <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
         </Link>
 
-        <Link href="/member-controlled-threads?lane=new" style={cardStyle(requests, "rgba(0,132,255,.75)")}>
+        <Link href="/member-controlled-threads?desk=requests" style={cardStyle(requests, "rgba(0,132,255,.75)")}>
           <div style={eyebrow}>Requests</div>
           <h2 style={h2}>{requests}</h2>
-          <p style={muted}>routed investor / member work</p>
+          <p style={muted}>new routed requests</p>
           <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
         </Link>
 
         <Link href="/messages" style={cardStyle(messages, "rgba(48,255,135,.70)")}>
           <div style={eyebrow}>Messages</div>
           <h2 style={h2}>{messages}</h2>
-          <p style={muted}>reply threads</p>
+          <p style={muted}>message threads</p>
           <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
         </Link>
       </div>
@@ -1332,8 +1332,8 @@ export default function CommandPage() {
             requests.
           </p>
           <div style={{ ...row, marginTop: 18 }}>
-            <Link href="/member-controlled-threads?lane=new" style={goldBtn}>
-              Open Request Inbox
+            <Link href="/member-controlled-threads?desk=requests" style={goldBtn}>
+              Open Requests
             </Link>
             <Link href="/messages" style={btn}>
               Messages
@@ -1344,7 +1344,7 @@ export default function CommandPage() {
               title="New Requests"
               value={newRequests}
               note="routed investor requests needing review"
-              href="/member-controlled-threads?lane=new"
+              href="/member-controlled-threads?desk=requests"
               danger={newRequests > 0}
             />
             <MetricCard
