@@ -504,121 +504,41 @@ function BloombergMessageForm({
   const [nextMove, setNextMove] = useState("");
   const [privateNote, setPrivateNote] = useState("");
 
-  function submit() {
-    const base = {
-      messageType,
-      urgency,
-      subject,
-      body,
-      amount,
-      timeline,
-      conditions,
-      nextMove,
-      privateNote,
-      sender,
-      recipient,
-      header,
-    };
-    const summary = buildBloombergSummary(base);
-    onSend({ ...base, summary });
-    setBody("");
-    setAmount("");
-    setTimeline("");
-    setConditions("");
-    setNextMove("");
-    setPrivateNote("");
-  }
+  function StructuredMessageTicket({ thread }: { thread: any }) {
+  const subject = clean(thread?.requestTitle || thread?.title || thread?.subject || "Structured Request Message");
+  const sender = clean(thread?.senderEmail || thread?.investorEmail || thread?.email || "Investor");
+  const recipient = clean(thread?.recipient || thread?.assignedTo || "Designated member lane");
+  const header = clean(thread?.roomHeader || thread?.requestHeader || thread?.header || subject);
+  const body = prettyInvestorText(thread?.body || thread?.message || thread?.notes || thread?.requestMessage || "No message body listed.");
 
   return (
     <div style={{ ...panel, marginTop: 14 }}>
       <div style={eyebrow}>Structured Message Ticket</div>
-      <h3 style={h3}>{subject || "Structured Request Message"}</h3>
+      <h3 style={h3}>{subject}</h3>
 
       <div style={{ ...grid, marginTop: 12 }}>
         <div style={panel}>
           <div style={eyebrow}>Sender</div>
-          <p style={muted}>{sender || "Auto-filled sender"}</p>
+          <p style={muted}>{sender}</p>
         </div>
         <div style={panel}>
           <div style={eyebrow}>Recipient</div>
-          <p style={muted}>{recipient || "Auto-filled recipient"}</p>
+          <p style={muted}>{recipient}</p>
         </div>
       </div>
 
       <div style={{ ...panel, marginTop: 12 }}>
         <div style={eyebrow}>Attached Header</div>
-        <p style={sub}>{header || "Request/deal/pain context auto-attached"}</p>
+        <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{header}</p>
       </div>
 
-      <div style={{ ...grid, marginTop: 12 }}>
-        <label style={{ display: "grid", gap: 8 }}>
-          <span style={eyebrow}>Message Type</span>
-          <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
-            {["Request Info", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ display: "grid", gap: 8 }}>
-          <span style={eyebrow}>Urgency</span>
-          <select style={input} value={urgency} onChange={(event) => setUrgency(event.target.value)}>
-            {["Normal", "Time Sensitive", "Urgent", "Closing Risk"].map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
-        <span style={eyebrow}>Subject</span>
-        <input style={input} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Auto-filled from request, editable..." />
-      </label>
-
-      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
-        <span style={eyebrow}>Message / Terms / Ask</span>
-        <textarea style={{ ...input, minHeight: 120 }} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write the actual request, reply, terms, bid, question, or update..." />
-      </label>
-
-      <div style={{ ...grid, marginTop: 12 }}>
-        <label style={{ display: "grid", gap: 8 }}>
-          <span style={eyebrow}>Amount / Budget</span>
-          <input style={input} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="$ amount, LTC/LTV, bid, budget..." />
-        </label>
-        <label style={{ display: "grid", gap: 8 }}>
-          <span style={eyebrow}>Timeline</span>
-          <input style={input} value={timeline} onChange={(event) => setTimeline(event.target.value)} placeholder="Close date, response deadline, work start..." />
-        </label>
-      </div>
-
-      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
-        <span style={eyebrow}>Conditions</span>
-        <input style={input} value={conditions} onChange={(event) => setConditions(event.target.value)} placeholder="Subject to docs, walkthrough, proof, title, underwriting..." />
-      </label>
-
-      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
-        <span style={eyebrow}>Best Next Move</span>
-        <input style={input} value={nextMove} onChange={(event) => setNextMove(event.target.value)} placeholder="Schedule call, send docs, release contact, route to member..." />
-      </label>
-
-      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
-        <span style={eyebrow}>Private Note</span>
-        <input style={input} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} placeholder="Internal note, caution, context. Saved inside structured message." />
-      </label>
-
-      <div style={{ ...row, marginTop: 14 }}>
-        <button type="button" style={goldBtn} onClick={submit}>{submitLabel}</button>
-        {onCancel ? : null}
+      <div style={{ ...panel, marginTop: 12 }}>
+        <div style={eyebrow}>Message</div>
+        <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{body}</p>
       </div>
     </div>
   );
 }
-
-
-
-const MOCK_MEMBER_PAYMENT_KEY = "vaultforge_mock_member_payment_v1";
-const MOCK_INVESTOR_PAYMENT_KEY = "vaultforge_mock_investor_payment_v1";
-const MOCK_APPROVALS_KEY = "vaultforge_mock_access_approvals_v1";
 
 function mockAccessRecord(email: string, kind: "member" | "investor") {
   const approvals = readJson<Record<string, any>>(MOCK_APPROVALS_KEY, {});
