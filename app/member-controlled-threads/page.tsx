@@ -1103,18 +1103,6 @@ function MemberIdentityPanel({ profile }: { profile: any }) {
   const provide = Array.isArray(profile?.canProvide) && profile.canProvide.length ? profile.canProvide.join(" • ") : "Capabilities not listed";
 
   return (
-    
-        <MemberTopAlertCards
-          newCount={topNewCount}
-          activeCount={topActiveCount}
-          dealPainCount={topDealPainCount}
-          messageCount={topMessageCount}
-          onNew={() => { setLane("new"); setActiveId(""); }}
-          onActive={() => { setLane("active"); setActiveId(""); }}
-          onSignals={() => { setLane("execution"); setActiveId(""); }}
-          onMessages={() => { setLane("investor"); setActiveId(""); }}
-        />
-
 <section style={{ ...goldPanel, marginBottom: 18 }}>
       <div style={{ ...row, alignItems: "flex-start" }}>
         {logo ? (
@@ -1446,6 +1434,18 @@ export default function MemberControlledThreadsPage() {
     return (
       <main style={pageStyle}>
         <div style={wrap}>
+
+        <MemberTopAlertCards
+          newCount={topNewCount}
+          activeCount={topActiveCount}
+          dealPainCount={topDealPainCount}
+          messageCount={topMessageCount}
+          onNew={() => { setLane("new"); setActiveId(""); }}
+          onActive={() => { setLane("active"); setActiveId(""); }}
+          onSignals={() => { setLane("execution"); setActiveId(""); }}
+          onMessages={() => { setLane("investor"); setActiveId(""); }}
+        />
+
         <VaultForgeAlertCenter audience="member" title="Member Alerts" />
           <section style={hero}>
             <div style={eyebrow}>VaultForge Member Request Command</div>
