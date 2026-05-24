@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 type Status = "pending" | "approved" | "suspended" | "denied" | "deleted";
 type PaymentStatus = "unpaid" | "ready" | "paid" | "comped";
 type AccessStatus = "locked" | "active";
+type RequestFolder = "active" | "saved" | "archived" | "closed" | "deleted";
 
 type PersonKind = "member" | "investor";
 
@@ -107,6 +108,125 @@ function writeJson(key: string, value: unknown) {
   if (!ok()) return;
   localStorage.setItem(key, JSON.stringify(value));
 }
+
+
+function pretty(value: unknown, fallback = "") {
+  return clean(value, fallback)
+    .replace(/\\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/TYPE:/g, "Type:")
+    .replace(/URGENCY:/g, "Urgency:")
+    .replace(/SUBJECT:/g, "Subject:")
+    .replace(/SENDER:/g, "Sender:")
+    .replace(/RECIPIENT:/g, "Recipient:")
+    .replace(/HEADER:/g, "Header:")
+    .replace(/MESSAGE:/g, "Message:")
+    .replace(/AMOUNT \/ BUDGET:/g, "Amount / Budget:")
+    .replace(/TIMELINE:/g, "Timeline:")
+    .replace(/CONDITIONS:/g, "Conditions:")
+    .replace(/NEXT MOVE:/g, "Next Move:");
+}
+
+function requestFolderOf(row: any): RequestFolder {
+  const value = lower(row?.folder || row?.status);
+  if (value.includes("saved")) return "saved";
+  if (value.includes("archived")) return "archived";
+  if (value.includes("closed") || value.includes("done") || value.includes("complete")) return "closed";
+  if (value.includes("deleted") || value.includes("trash")) return "deleted";
+  return "active";
+}
+
+function requestId(row: any, fallback = "") {
+  return clean(row?.id || row?.requestId || row?.roomId || row?.dealId || row?.painId || row?.signalId || row?.email || fallback);
+}
+
+function requestStorageKeys() {
+  return [
+    DESIGNATED_ROUTE_MESSAGES_KEY,
+    OWNER_DIRECT_MESSAGES_KEY,
+    SIMPLE_REQUESTS_KEY,
+    ADMIN_MESSAGES_KEY,
+    ADMIN_INBOX_KEY,
+    INVESTOR_ADMIN_MESSAGES_KEY,
+    INVESTOR_REQUESTS_KEY,
+    CONTROLLED_THREADS_KEY,
+    OWNER_REPLIES_KEY,
+  ];
+}
+
+function updateRequestEverywhere(item: any, nextFolder: RequestFolder) {
+  const targetId = requestId(item, item?.rowId || "");
+  const sourceKey = clean(item?.sourceKey);
+
+  requestStorageKeys().forEach((key) => {
+    const value = readJson<any>(key, []);
+
+    if (Array.isArray(value)) {
+      const nextRows = value.map((row, index) => {
+        const candidateId = requestId(row, `${key}-${index}`);
+        const matches = candidateId === targetId || (sourceKey === key && candidateId === item?.rowId);
+        return matches
+          ? {
+              ...row,
+              status: nextFolder,
+              folder: nextFolder,
+              updatedAt: new Date().toISOString(),
+            }
+          : row;
+      });
+      writeJson(key, nextRows);
+      return;
+    }
+
+    if (value && typeof value === "object") {
+      const candidateId = requestId(value, key);
+      if (candidateId === targetId || sourceKey === key) {
+        writeJson(key, {
+          ...value,
+          status: nextFolder,
+          folder: nextFolder,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+  });
+
+  window.dispatchEvent(new Event("vaultforge-request-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+}
+
+function deleteRequestEverywhere(item: any) {
+  const targetId = requestId(item, item?.rowId || "");
+  const sourceKey = clean(item?.sourceKey);
+
+  requestStorageKeys().forEach((key) => {
+    const value = readJson<any>(key, []);
+
+    if (Array.isArray(value)) {
+      writeJson(
+        key,
+        value.filter((row, index) => {
+          const candidateId = requestId(row, `${key}-${index}`);
+          return !(candidateId === targetId || (sourceKey === key && candidateId === item?.rowId));
+        }),
+      );
+      return;
+    }
+
+    if (value && typeof value === "object") {
+      const candidateId = requestId(value, key);
+      if (candidateId === targetId || sourceKey === key) {
+        localStorage.removeItem(key);
+      }
+    }
+  });
+
+  window.dispatchEvent(new Event("vaultforge-request-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+}
+
 
 function readDeletedSet(key: string) {
   return new Set(readJson<string[]>(key, []));
@@ -297,22 +417,38 @@ function readInvestors(): AdminPerson[] {
 }
 
 function readRequests() {
-  const keys = [DESIGNATED_ROUTE_MESSAGES_KEY, OWNER_DIRECT_MESSAGES_KEY, SIMPLE_REQUESTS_KEY, ADMIN_MESSAGES_KEY, ADMIN_INBOX_KEY, INVESTOR_ADMIN_MESSAGES_KEY, INVESTOR_REQUESTS_KEY, CONTROLLED_THREADS_KEY];
+  const keys = [
+    DESIGNATED_ROUTE_MESSAGES_KEY,
+    OWNER_DIRECT_MESSAGES_KEY,
+    SIMPLE_REQUESTS_KEY,
+    ADMIN_MESSAGES_KEY,
+    ADMIN_INBOX_KEY,
+    INVESTOR_ADMIN_MESSAGES_KEY,
+    INVESTOR_REQUESTS_KEY,
+    CONTROLLED_THREADS_KEY,
+  ];
   const rows: any[] = [];
 
   keys.forEach((key) => {
     const value = readJson<any>(key, []);
     if (Array.isArray(value)) {
-      value.forEach((row) => rows.push({ ...row, sourceKey: key }));
+      value.forEach((row, index) => rows.push({ ...row, sourceKey: key, rowId: requestId(row, `${key}-${index}`) }));
     } else if (value && typeof value === "object") {
-      Object.values(value).forEach((row: any) => rows.push({ ...row, sourceKey: key }));
+      Object.values(value).forEach((row: any, index) => rows.push({ ...row, sourceKey: key, rowId: requestId(row, `${key}-${index}`) }));
     }
   });
 
+  const seen = new Set<string>();
   return rows
     .filter((row) => row && typeof row === "object")
+    .filter((row) => {
+      const key = `${requestId(row, row?.rowId)}|${row?.sourceKey || ""}`.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .sort((a, b) => String(b?.createdAt || b?.updatedAt || "").localeCompare(String(a?.createdAt || a?.updatedAt || "")))
-    .slice(0, 40);
+    .slice(0, 120);
 }
 
 function savePeople(members: AdminPerson[], investors: AdminPerson[]) {
@@ -588,18 +724,19 @@ export default function AdminPage() {
       from: "Owner",
       body: replyText,
       message: replyText,
-      status: "owner_replied",
+      status: "active",
+      folder: "active",
       createdAt: new Date().toISOString(),
     };
     writeJson(OWNER_REPLIES_KEY, [reply, ...replies].slice(0, 120));
-    setNotice("Owner reply saved. Investor-side reply display is the next build.");
+    setNotice("Owner reply saved to the request thread.");
     window.dispatchEvent(new Event("vaultforge-owner-reply-change"));
   }
 
   function RequestCard({ item, index }: { item: any; index: number }) {
     const [replyText, setReplyText] = useState("");
     const title = clean(item?.requestTitle || item?.title || item?.subject || item?.topic, "Request / Message");
-    const body = clean(item?.body || item?.message || item?.notes || item?.roomHeader, "No message body listed.");
+    const body = pretty(item?.body || item?.message || item?.notes || item?.roomHeader, "No message body listed.");
     const email = clean(item?.email || item?.investorEmail || item?.memberEmail || item?.investorProfile?.email, "No email listed");
     const source = clean(item?.routedTo || item?.source || item?.type || item?.sourceKey || item?.kind, "owner message");
     const action = clean(item?.action || item?.buttonClicked || item?.requestType, "Owner Message");
@@ -608,10 +745,43 @@ export default function AdminPage() {
     const photo = clean(item?.investorPhotoUrl || item?.investorProfile?.photoUrl);
     const company = clean(item?.investorCompany || item?.investorProfile?.company || item?.company, "Company not listed");
     const name = clean(item?.investorName || item?.investorProfile?.contactName || item?.name, "Name not listed");
+    const folder = requestFolderOf(item);
+
+    function move(next: RequestFolder, label: string) {
+      updateRequestEverywhere(item, next);
+      setRequests(readRequests());
+      setNotice(`${label}: ${title}`);
+    }
+
+    function releaseContact() {
+      updateRequestEverywhere({ ...item, releasedContact: true }, "active");
+      const updated = {
+        ...item,
+        releasedContact: true,
+        contactReleased: true,
+        status: "active",
+        folder: "active",
+        updatedAt: new Date().toISOString(),
+      };
+      requestStorageKeys().forEach((key) => {
+        const value = readJson<any>(key, []);
+        if (Array.isArray(value)) {
+          writeJson(
+            key,
+            value.map((row, rowIndex) => {
+              const matches = requestId(row, `${key}-${rowIndex}`) === requestId(item, item?.rowId || "");
+              return matches ? updated : row;
+            }),
+          );
+        }
+      });
+      setRequests(readRequests());
+      setNotice(`Contact release approved: ${title}`);
+    }
 
     return (
       <div style={panel}>
-        <div style={eyebrow}>{source} • {action}</div>
+        <div style={eyebrow}>{source} • {action} • {folder}</div>
 
         {photo ? (
           <img
@@ -632,13 +802,63 @@ export default function AdminPage() {
         <p style={sub}>{company}</p>
         <p style={muted}>{name} • {email}</p>
         <p style={muted}>{city}, {state}</p>
-        <p style={muted}>{body}</p>
+
+        <div style={{ ...panel, marginTop: 12 }}>
+          <div style={eyebrow}>Message</div>
+          <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{body}</p>
+        </div>
+
+        <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+          <span style={eyebrow}>Owner Reply</span>
+          <textarea
+            value={replyText}
+            onChange={(event) => setReplyText(event.target.value)}
+            placeholder="Write owner reply here..."
+            style={{
+              width: "100%",
+              minHeight: 110,
+              borderRadius: 16,
+              border: "1px solid rgba(207,216,230,.18)",
+              background: "#0b1020",
+              color: "#f8fafc",
+              padding: 14,
+              fontSize: 16,
+              boxSizing: "border-box",
+            }}
+          />
+        </label>
 
         <div style={{ ...row, marginTop: 14 }}>
-          <button type="button" style={greenBtn} onClick={() => setNotice("Intro approved. Controlled intro thread is next.")}>Approve / Release Contact</button>
-          <button type="button" style={goldBtn} onClick={() => setNotice("Message back selected. Admin reply popup is next.")}>Save Owner Reply</button>
-          <button type="button" style={btn} onClick={() => setNotice("Marked done.")}>Mark Done</button>
-          <button type="button" style={redBtn} onClick={() => setNotice("Archived request.")}>Archive</button>
+          <button type="button" style={greenBtn} onClick={releaseContact}>Approve / Release Contact</button>
+          <button
+            type="button"
+            style={goldBtn}
+            onClick={() => {
+              saveOwnerReply(item, replyText || "Owner will follow up.");
+              setReplyText("");
+              setRequests(readRequests());
+            }}
+          >
+            Save Owner Reply
+          </button>
+          <button type="button" style={goldBtn} onClick={() => move("saved", "Saved")}>Save</button>
+          <button type="button" style={btn} onClick={() => move("active", "Restored active")}>Restore / Active</button>
+          <button type="button" style={btn} onClick={() => move("closed", "Marked done")}>Mark Done</button>
+          <button type="button" style={btn} onClick={() => move("archived", "Archived")}>Archive</button>
+          <button type="button" style={redBtn} onClick={() => move("deleted", "Deleted")}>Delete</button>
+          {folder === "deleted" ? (
+            <button
+              type="button"
+              style={redBtn}
+              onClick={() => {
+                deleteRequestEverywhere(item);
+                setRequests(readRequests());
+                setNotice(`Deleted forever: ${title}`);
+              }}
+            >
+              Delete Forever
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -650,6 +870,15 @@ export default function AdminPage() {
     section === "active" ? buckets.active :
     section === "cleanup" ? buckets.cleanup :
     [];
+
+  const currentRequests = requests.filter((item) => requestFolderOf(item) === requestFolder);
+  const requestFolderCounts = {
+    active: requests.filter((item) => requestFolderOf(item) === "active").length,
+    saved: requests.filter((item) => requestFolderOf(item) === "saved").length,
+    archived: requests.filter((item) => requestFolderOf(item) === "archived").length,
+    closed: requests.filter((item) => requestFolderOf(item) === "closed").length,
+    deleted: requests.filter((item) => requestFolderOf(item) === "deleted").length,
+  };
 
   return (
     <main style={page}>
@@ -686,9 +915,26 @@ export default function AdminPage() {
             <Metric title="Payment / Access" count={buckets.payment.length} active={section === "payment"} onClick={() => setSection("payment")} />
             <Metric title="Active Users" count={buckets.active.length} active={section === "active"} onClick={() => setSection("active")} />
             <Metric title="Cleanup" count={buckets.cleanup.length} active={section === "cleanup"} onClick={() => setSection("cleanup")} />
-            <Metric title="Owner Messages" count={requests.length} active={section === "requests"} onClick={() => setSection("requests")} />
+            <Metric title="Owner Messages" count={requestFolderCounts.active} active={section === "requests"} onClick={() => { setSection("requests"); setRequestFolder("active"); }} />
           </div>
         </section>
+
+
+        <section style={shell}>
+          <div style={eyebrow}>Admin Folder Control</div>
+          <h2 style={h2}>Profiles, users, deals, pain, and owner-message folders.</h2>
+          <div style={grid}>
+            <Metric title="Pending Profiles" count={buckets.newProfiles.length} active={false} onClick={() => setSection("new")} />
+            <Metric title="Payment Ready" count={buckets.payment.length} active={false} onClick={() => setSection("payment")} />
+            <Metric title="Active Users" count={buckets.active.length} active={false} onClick={() => setSection("active")} />
+            <Metric title="Cleanup Users" count={buckets.cleanup.length} active={false} onClick={() => setSection("cleanup")} />
+            <Metric title="Owner Msg Active" count={requestFolderCounts.active} active={false} onClick={() => { setSection("requests"); setRequestFolder("active"); }} />
+            <Metric title="Owner Msg Saved" count={requestFolderCounts.saved} active={false} onClick={() => { setSection("requests"); setRequestFolder("saved"); }} />
+            <Metric title="Owner Msg Archived" count={requestFolderCounts.archived} active={false} onClick={() => { setSection("requests"); setRequestFolder("archived"); }} />
+            <Metric title="Owner Msg Deleted" count={requestFolderCounts.deleted} active={false} onClick={() => { setSection("requests"); setRequestFolder("deleted"); }} />
+          </div>
+        </section>
+
 
         <section style={shell}>
           <div style={{ ...row, marginBottom: 16 }}>
@@ -729,9 +975,23 @@ export default function AdminPage() {
           ) : (
             <>
               <h2 style={h2}>{requests.length ? "Owner message inbox." : "No owner messages."}</h2>
+
+              <div style={{ ...row, marginBottom: 16 }}>
+                {(["active", "saved", "archived", "closed", "deleted"] as RequestFolder[]).map((folderName) => (
+                  <button
+                    key={folderName}
+                    type="button"
+                    style={requestFolder === folderName ? goldBtn : btn}
+                    onClick={() => setRequestFolder(folderName)}
+                  >
+                    {folderName.charAt(0).toUpperCase() + folderName.slice(1)} ({requestFolderCounts[folderName]})
+                  </button>
+                ))}
+              </div>
+
               <div style={grid}>
-                {requests.length ? requests.map((item, index) => <RequestCard key={`${item?.id || index}-${index}`} item={item} index={index} />) : (
-                  <div style={panel}><p style={sub}>No owner messages found.</p></div>
+                {currentRequests.length ? currentRequests.map((item, index) => <RequestCard key={`${item?.sourceKey || "request"}-${item?.rowId || item?.id || index}-${index}`} item={item} index={index} />) : (
+                  <div style={panel}><p style={sub}>No owner messages in this folder.</p></div>
                 )}
               </div>
             </>
