@@ -3,6 +3,35 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+
+const MY_ROOMS_DELETED_FOREVER_KEY = "vaultforge_my_rooms_deleted_forever_v1";
+
+function readDeletedForeverRoomIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(MY_ROOMS_DELETED_FOREVER_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDeletedForeverRoomIds(ids: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(MY_ROOMS_DELETED_FOREVER_KEY, JSON.stringify(Array.from(new Set(ids.map(String)))));
+  } catch {
+    // local cleanup only
+  }
+}
+
+function isRoomDeletedForever(room: any) {
+  const id = String(room?.id || room?.roomId || room?.slug || room?.title || "");
+  return id ? readDeletedForeverRoomIds().includes(id) : false;
+}
+
+
 type RoomKind = "deal" | "pain";
 type RoomStatus = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
 type RoomStage = "New" | "Reviewing" | "Diagnosing" | "Routed" | "Under Contract" | "In Progress" | "Sold" | "Resolved";
@@ -1322,13 +1351,51 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
         {kind === "deal" && status !== "sold" ? <button type="button" style={goldBtn} onClick={() => { saveRoomStatus(kind, room, "sold"); refresh(); }}>Mark Sold</button> : null}
         {kind === "pain" && status !== "resolved" ? <button type="button" style={goldBtn} onClick={() => { saveRoomStatus(kind, room, "resolved"); refresh(); }}>Mark Resolved</button> : null}
         {status !== "deleted" ? <button type="button" style={redBtn} onClick={() => { saveRoomStatus(kind, room, "deleted"); refresh(); }}>Delete</button> : null}
-        {status !== "active" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "active"); refresh(); }}>Restore Active Active</button> : null}
+        {status !== "active" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "active"); refresh(); }}>Restore Active Active</button>
+              <button type="button" style={redBtn} onClick={() => deleteRoomForever(room)}>Delete Forever</button> : null}
       </div>
     </div>
   );
 }
 
 export default function MyRoomsPage() {
+
+  function deleteRoomForever(room: any) {
+    const roomId = String(room?.id || room?.roomId || room?.slug || room?.title || "");
+    if (!roomId) return;
+
+    writeDeletedForeverRoomIds([...readDeletedForeverRoomIds(), roomId]);
+
+    try {
+      const keysToClean = [
+        "vaultforge_rooms_v1",
+        "vaultforge_deal_rooms_v1",
+        "vaultforge_pain_rooms_v1",
+        "vaultforge_member_rooms_v1",
+        "vaultforge_room_state_v1",
+        "vaultforge_room_states_v1",
+      ];
+
+      keysToClean.forEach((key) => {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+
+        if (Array.isArray(parsed)) {
+          const next = parsed.filter((item: any) => String(item?.id || item?.roomId || item?.slug || item?.title || "") !== roomId);
+          window.localStorage.setItem(key, JSON.stringify(next));
+        } else if (parsed && typeof parsed === "object") {
+          delete parsed[roomId];
+          window.localStorage.setItem(key, JSON.stringify(parsed));
+        }
+      });
+    } catch {
+      // local cleanup only
+    }
+
+    window.location.reload();
+  }
+
   const [tick, setTick] = useState(0);
   const [view, setView] = useState<ViewKey>("activeDeals");
 
