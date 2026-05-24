@@ -2,6 +2,7 @@
 
 
 import Link from "next/link";
+import VaultForgeAlertCenter from "../components/VaultForgeAlertCenter";
 import { useEffect, useMemo, useState } from "react";
 
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
@@ -1170,6 +1171,7 @@ export default function MemberControlledThreadsPage() {
     return (
       <main style={pageStyle}>
         <div style={wrap}>
+        <VaultForgeAlertCenter audience="member" title="Member Alerts" />
           <section style={hero}>
             <div style={eyebrow}>VaultForge Member Request Command</div>
             <h1 style={h1}>Preparing member room.</h1>
@@ -1220,7 +1222,7 @@ export default function MemberControlledThreadsPage() {
             <Link href="/command" style={goldBtn}>Member Command</Link>
             <Link href="/message-command" style={btn}>Message Command</Link>
             {isOwner ? <Link href="/investor-room" style={btn}>Investor Room</Link> : null}
-            <Link href="/admin" style={btn}>Admin</Link>
+            {isOwner ? <Link href="/admin" style={btn}>Admin</Link> : null}
           </div>
 
           <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
