@@ -28,6 +28,7 @@ const PAIN_KEYS = [
 ];
 
 const MESSAGE_KEYS = [
+  "vaultforge_designated_route_messages_v1",
   "vaultforge_owner_direct_messages_v1",
   "vaultforge_requests_v1",
   "vaultforge_admin_investor_inbox_v1",
