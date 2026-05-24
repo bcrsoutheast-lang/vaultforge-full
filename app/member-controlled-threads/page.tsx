@@ -29,6 +29,9 @@ type DeskCard = {
   source: string;
 };
 
+const STORAGE_KEY = "vaultforge_member_request_desk_clean_v1";
+const DELETED_FOREVER_KEY = "vaultforge_member_request_desk_deleted_forever_v1";
+
 const wrap: React.CSSProperties = {
   minHeight: "100vh",
   background:
@@ -39,10 +42,7 @@ const wrap: React.CSSProperties = {
     'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
 };
 
-const shell: React.CSSProperties = {
-  maxWidth: 1180,
-  margin: "0 auto",
-};
+const shell: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
 
 const nav: React.CSSProperties = {
   display: "flex",
@@ -88,6 +88,13 @@ const redBtn: React.CSSProperties = {
   border: "1px solid rgba(255,65,65,.55)",
 };
 
+const dangerBtn: React.CSSProperties = {
+  ...btn,
+  background: "rgba(115,8,16,.74)",
+  color: "#ffb2b2",
+  border: "1px solid rgba(255,65,65,.75)",
+};
+
 const card: React.CSSProperties = {
   border: "1px solid rgba(207,216,230,.16)",
   borderRadius: 26,
@@ -100,8 +107,7 @@ const card: React.CSSProperties = {
 const goldCard: React.CSSProperties = {
   ...card,
   borderColor: "rgba(245,197,66,.42)",
-  background:
-    "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))",
+  background: "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))",
 };
 
 const panel: React.CSSProperties = {
@@ -117,12 +123,7 @@ const grid: React.CSSProperties = {
   gap: 14,
 };
 
-const row: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 12,
-  alignItems: "center",
-};
+const row: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" };
 
 const eyebrow: React.CSSProperties = {
   color: "#ffda5e",
@@ -189,15 +190,11 @@ function collectArrays(value: any): any[] {
   if (!value || typeof value !== "object") return [];
 
   const rows: any[] = [];
-
   Object.values(value).forEach((item) => {
     if (Array.isArray(item)) rows.push(...item);
   });
 
-  if (value.id || value.title || value.subject || value.message || value.body) {
-    rows.push(value);
-  }
-
+  if (value.id || value.title || value.subject || value.message || value.body) rows.push(value);
   return rows;
 }
 
@@ -241,9 +238,7 @@ function laneFromItem(item: any, key: string): DeskCard["lane"] {
 }
 
 function statusFromItem(item: any): CardStatus {
-  const raw = String(
-    item?.status || item?.folder || item?.requestStatus || item?.state || item?.stage || "new"
-  ).toLowerCase();
+  const raw = String(item?.status || item?.folder || item?.requestStatus || item?.state || item?.stage || "new").toLowerCase();
 
   if (raw.includes("active") || raw.includes("accepted") || raw.includes("work")) return "active";
   if (raw.includes("execution") || raw.includes("route")) return "execution";
@@ -274,11 +269,23 @@ function isRequestLike(item: any, key: string) {
   );
 }
 
+function readDeletedForever(): string[] {
+  if (typeof window === "undefined") return [];
+  return safeParse<string[]>(window.localStorage.getItem(DELETED_FOREVER_KEY), []);
+}
+
+function writeDeletedForever(ids: string[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(DELETED_FOREVER_KEY, JSON.stringify(Array.from(new Set(ids))));
+}
+
 function loadCards(): DeskCard[] {
   if (typeof window === "undefined") return [];
 
+  const deletedForever = new Set(readDeletedForever());
+
   const keys = new Set<string>([
-    "vaultforge_member_request_desk_clean_v1",
+    STORAGE_KEY,
     "vaultforge_investor_requests_v1",
     "vaultforge_member_requests_v1",
     "vaultforge_request_threads_v1",
@@ -308,11 +315,16 @@ function loadCards(): DeskCard[] {
   const rows: DeskCard[] = [];
 
   Array.from(keys).forEach((key) => {
+    if (key === DELETED_FOREVER_KEY) return;
+
     const parsed = safeParse<any>(window.localStorage.getItem(key), null);
     const items = collectArrays(parsed);
 
     items.forEach((item, index) => {
       if (!isRequestLike(item, key)) return;
+
+      const rawId = clean(item?.id || item?.threadId || item?.requestId || `${key}-${index}`, `${key}-${index}`);
+      if (deletedForever.has(rawId)) return;
 
       const title =
         item?.title ||
@@ -325,7 +337,7 @@ function loadCards(): DeskCard[] {
         "Request";
 
       rows.push({
-        id: clean(item?.id || item?.threadId || item?.requestId || `${key}-${index}`, `${key}-${index}`),
+        id: rawId,
         title: clean(title, "Request"),
         lane: laneFromItem(item, key),
         status: statusFromItem(item),
@@ -339,18 +351,14 @@ function loadCards(): DeskCard[] {
   });
 
   const unique = new Map<string, DeskCard>();
-
-  rows.forEach((item) => {
-    const signature = `${item.title}|${item.lane}|${item.sender}|${item.message}`.toLowerCase();
-    unique.set(item.id || signature, item);
-  });
+  rows.forEach((item) => unique.set(item.id, item));
 
   return Array.from(unique.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 function saveCards(cards: DeskCard[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem("vaultforge_member_request_desk_clean_v1", JSON.stringify(cards));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
 }
 
 function laneTitle(lane: Lane) {
@@ -400,11 +408,7 @@ function DeskTile({
         minHeight: 158,
         textAlign: "left",
         cursor: "pointer",
-        borderColor: active
-          ? danger
-            ? "rgba(255,70,70,.70)"
-            : "rgba(245,197,66,.72)"
-          : "rgba(207,216,230,.15)",
+        borderColor: active ? (danger ? "rgba(255,70,70,.70)" : "rgba(245,197,66,.72)") : "rgba(207,216,230,.15)",
         boxShadow: active ? "0 0 0 1px rgba(245,197,66,.22)" : "none",
       }}
     >
@@ -419,12 +423,14 @@ function DeskTile({
 function CardView({
   item,
   onMove,
+  onDeleteForever,
 }: {
   item: DeskCard;
   onMove: (next: CardStatus) => void;
+  onDeleteForever: () => void;
 }) {
   return (
-    <article style={{ ...panel, borderColor: "rgba(245,197,66,.34)" }}>
+    <article style={{ ...panel, borderColor: item.status === "deleted" ? "rgba(255,65,65,.50)" : "rgba(245,197,66,.34)" }}>
       <div style={eyebrow}>
         {item.lane} • {item.state} • {statusLabel(item.status)}
       </div>
@@ -439,6 +445,9 @@ function CardView({
         <button type="button" style={btn} onClick={() => onMove("archived")}>Archive</button>
         <button type="button" style={redBtn} onClick={() => onMove("passed")}>Pass</button>
         <button type="button" style={redBtn} onClick={() => onMove("deleted")}>Delete</button>
+        {item.status === "deleted" ? (
+          <button type="button" style={dangerBtn} onClick={onDeleteForever}>Delete Forever</button>
+        ) : null}
       </div>
     </article>
   );
@@ -455,13 +464,8 @@ export default function MemberControlledThreadsPage() {
   }, []);
 
   const grouped = useMemo(() => {
-    const cleanup = cards.filter((item) =>
-      ["saved", "archived", "passed", "deleted"].includes(item.status)
-    );
-
-    const activeNonCleanup = cards.filter(
-      (item) => !["saved", "archived", "passed", "deleted"].includes(item.status)
-    );
+    const cleanup = cards.filter((item) => ["saved", "archived", "passed", "deleted"].includes(item.status));
+    const activeNonCleanup = cards.filter((item) => !["saved", "archived", "passed", "deleted"].includes(item.status));
 
     return {
       deal: activeNonCleanup.filter((item) => item.lane === "deal"),
@@ -480,10 +484,7 @@ export default function MemberControlledThreadsPage() {
   const visible = grouped[lane] || [];
 
   function moveCard(id: string, nextStatus: CardStatus) {
-    const next = cards.map((item) =>
-      item.id === id ? { ...item, status: nextStatus } : item
-    );
-
+    const next = cards.map((item) => (item.id === id ? { ...item, status: nextStatus } : item));
     setCards(next);
     saveCards(next);
 
@@ -494,6 +495,16 @@ export default function MemberControlledThreadsPage() {
     } else {
       setLane("active");
     }
+  }
+
+  function deleteForever(id: string) {
+    const deletedForever = readDeletedForever();
+    writeDeletedForever([...deletedForever, id]);
+
+    const next = cards.filter((item) => item.id !== id);
+    setCards(next);
+    saveCards(next);
+    setLane("deleted");
   }
 
   return (
@@ -513,7 +524,7 @@ export default function MemberControlledThreadsPage() {
           <div style={eyebrow}>VaultForge Request Desk</div>
           <h1 style={h1}>Grouped request command.</h1>
           <p style={sub}>
-            Deal Opportunities, Pain Intake, and Request Threads are separated. Cleanup is one professional folder with Saved, Archived, Passed, and Deleted inside.
+            Deal Opportunities, Pain Intake, Request Threads, and Execution Requests stay separated. Cleanup is one folder with Saved, Archived, Passed, and Deleted inside.
           </p>
         </section>
 
@@ -522,80 +533,41 @@ export default function MemberControlledThreadsPage() {
           <h2 style={h2}>Separate lanes. No mixed cards.</h2>
 
           <div style={{ ...grid, marginTop: 18 }}>
-            <DeskTile
-              title="Deal Opportunities"
-              count={grouped.deal.length}
-              note="deal request cards tied to opportunity rooms"
-              active={lane === "deal"}
-              onClick={() => setLane("deal")}
-            />
-            <DeskTile
-              title="Pain Intake"
-              count={grouped.pain.length}
-              note="problem-solving and pressure request cards"
-              active={lane === "pain"}
-              danger
-              onClick={() => setLane("pain")}
-            />
-            <DeskTile
-              title="Request Threads"
-              count={grouped.requests.length}
-              note="new routed requests and owner/member replies"
-              active={lane === "requests"}
-              onClick={() => setLane("requests")}
-            />
-            <DeskTile
-              title="Execution Requests"
-              count={grouped.execution.length}
-              note="lender, title, contractor, JV, operator, and field help"
-              active={lane === "execution"}
-              onClick={() => setLane("execution")}
-            />
+            <DeskTile title="Deal Opportunities" count={grouped.deal.length} note="deal request cards tied to opportunity rooms" active={lane === "deal"} onClick={() => setLane("deal")} />
+            <DeskTile title="Pain Intake" count={grouped.pain.length} note="problem-solving and pressure request cards" active={lane === "pain"} danger onClick={() => setLane("pain")} />
+            <DeskTile title="Request Threads" count={grouped.requests.length} note="new routed requests and owner/member replies" active={lane === "requests"} onClick={() => setLane("requests")} />
+            <DeskTile title="Execution Requests" count={grouped.execution.length} note="lender, title, contractor, JV, operator, and field help" active={lane === "execution"} onClick={() => setLane("execution")} />
           </div>
         </section>
 
         <section style={card}>
           <div style={eyebrow}>Cleanup Folder</div>
-          <h2 style={h2}>One folder for saved, archived, passed, and deleted.</h2>
+          <h2 style={h2}>Saved, archived, passed, and deleted.</h2>
 
-          <div style={{ ...grid, marginTop: 18 }}>
-            <DeskTile
-              title="Cleanup"
-              count={grouped.cleanup.length}
-              note="all inactive request cards in one place"
-              active={lane === "cleanup"}
-              onClick={() => setLane("cleanup")}
-            />
-            <DeskTile
-              title="Saved"
-              count={grouped.saved.length}
-              note="kept for follow-up"
-              active={lane === "saved"}
-              onClick={() => setLane("saved")}
-            />
-            <DeskTile
-              title="Archived"
-              count={grouped.archived.length}
-              note="preserved but hidden from active work"
-              active={lane === "archived"}
-              onClick={() => setLane("archived")}
-            />
-            <DeskTile
-              title="Deleted"
-              count={grouped.deleted.length}
-              note="trash folder before permanent cleanup"
-              active={lane === "deleted"}
-              danger
-              onClick={() => setLane("deleted")}
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setLane("cleanup")}
+            style={{
+              ...panel,
+              width: "100%",
+              textAlign: "left",
+              cursor: "pointer",
+              borderColor: lane === "cleanup" ? "rgba(245,197,66,.72)" : "rgba(207,216,230,.15)",
+              marginTop: 14,
+            }}
+          >
+            <div style={eyebrow}>Cleanup</div>
+            <h2 style={{ ...h2, color: grouped.cleanup.length ? "#1e90ff" : "#f7f8ff" }}>{grouped.cleanup.length}</h2>
+            <p style={muted}>one combined folder for inactive request cards</p>
+            <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Open</p>
+          </button>
 
           <div style={{ ...row, marginTop: 14 }}>
             <button type="button" style={lane === "cleanup" ? goldBtn : btn} onClick={() => setLane("cleanup")}>All Cleanup</button>
-            <button type="button" style={lane === "saved" ? goldBtn : btn} onClick={() => setLane("saved")}>Saved</button>
-            <button type="button" style={lane === "archived" ? goldBtn : btn} onClick={() => setLane("archived")}>Archived</button>
-            <button type="button" style={lane === "passed" ? goldBtn : btn} onClick={() => setLane("passed")}>Passed</button>
-            <button type="button" style={lane === "deleted" ? goldBtn : btn} onClick={() => setLane("deleted")}>Deleted</button>
+            <button type="button" style={lane === "saved" ? goldBtn : btn} onClick={() => setLane("saved")}>Saved ({grouped.saved.length})</button>
+            <button type="button" style={lane === "archived" ? goldBtn : btn} onClick={() => setLane("archived")}>Archived ({grouped.archived.length})</button>
+            <button type="button" style={lane === "passed" ? goldBtn : btn} onClick={() => setLane("passed")}>Passed ({grouped.passed.length})</button>
+            <button type="button" style={lane === "deleted" ? goldBtn : btn} onClick={() => setLane("deleted")}>Deleted ({grouped.deleted.length})</button>
           </div>
         </section>
 
@@ -610,6 +582,7 @@ export default function MemberControlledThreadsPage() {
                   key={item.id}
                   item={item}
                   onMove={(nextStatus) => moveCard(item.id, nextStatus)}
+                  onDeleteForever={() => deleteForever(item.id)}
                 />
               ))}
             </div>
