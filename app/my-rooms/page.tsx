@@ -1425,7 +1425,7 @@ export default function MyRoomsPage() {
         <Section title="Active Operations">
           <div style={grid}>
             <MetricButton
-              title="Active Deal Rooms"
+              title="Deal Rooms"
               count={activeDealCount}
               note="live opportunity execution rooms"
               active={view === "activeDeals"}
@@ -1433,7 +1433,7 @@ export default function MyRoomsPage() {
               onClick={() => setView("activeDeals")}
             />
             <MetricButton
-              title="Active Pain Rooms"
+              title="Pain Rooms"
               count={activePainCount}
               note="active pressure/problem rooms"
               active={view === "activePain"}
@@ -1444,7 +1444,7 @@ export default function MyRoomsPage() {
             <MetricButton
               title="Assigned / Routed"
               count={assignedRoutedCount}
-              note="rooms requiring member response or execution"
+              note="routed rooms needing response"
               active={view === "assignedToMe" || view === "routedToMe"}
               alert
               onClick={() => setView("assignedToMe")}
