@@ -940,29 +940,17 @@ function Nav({ ownerEmail }: { ownerEmail: string }) {
       <Link href="/my-rooms" style={btn}>
         My Rooms
       </Link>
-      <Link href="/routing" style={btn}>
-        Routing
-      </Link>
       <Link href="/members" style={btn}>
         Members
       </Link>
       <Link href="/network" style={btn}>
         Network
       </Link>
-      <Link href="/state-map" style={btn}>
-        State Map
-      </Link>
-      <Link href="/alerts" style={btn}>
-        Alerts
-      </Link>
       <Link href="/messages" style={btn}>
         Messages
       </Link>
       <Link href="/deal-create" style={btn}>
-        Create Deal
-      </Link>
-      <Link href="/pain-intake" style={btn}>
-        Pain Intake
+        Create
       </Link>
       <Link href="/profile" style={btn}>
         Profile
@@ -976,6 +964,63 @@ function Nav({ ownerEmail }: { ownerEmail: string }) {
         Logout
       </Link>
     </nav>
+  );
+}
+
+
+function MemberTopPulseCards({
+  deals,
+  pains,
+  requests,
+  messages,
+}: {
+  deals: number;
+  pains: number;
+  requests: number;
+  messages: number;
+}) {
+  const total = deals + pains + requests + messages;
+
+  const cardStyle = (count: number, border: string): React.CSSProperties => ({
+    ...panel,
+    borderColor: count > 0 ? border : "rgba(207,216,230,.16)",
+    boxShadow: count > 0 ? `0 0 0 1px ${border}, 0 0 28px rgba(245,197,66,.10)` : "none",
+    minHeight: 150,
+  });
+
+  return (
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
+      <div style={eyebrow}>Member Alerts • {total} Active</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 12 }}>
+        <Link href="/my-rooms?lane=deals" style={cardStyle(deals, "rgba(245,197,66,.85)")}>
+          <div style={eyebrow}>Deals</div>
+          <h2 style={h2}>{deals}</h2>
+          <p style={muted}>deal opportunity rooms</p>
+          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
+        </Link>
+
+        <Link href="/my-rooms?lane=pain" style={cardStyle(pains, "rgba(255,70,70,.70)")}>
+          <div style={eyebrow}>Pain</div>
+          <h2 style={h2}>{pains}</h2>
+          <p style={muted}>problem / pain signals</p>
+          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
+        </Link>
+
+        <Link href="/member-controlled-threads?lane=new" style={cardStyle(requests, "rgba(0,132,255,.75)")}>
+          <div style={eyebrow}>Requests</div>
+          <h2 style={h2}>{requests}</h2>
+          <p style={muted}>routed investor / member work</p>
+          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
+        </Link>
+
+        <Link href="/messages" style={cardStyle(messages, "rgba(48,255,135,.70)")}>
+          <div style={eyebrow}>Messages</div>
+          <h2 style={h2}>{messages}</h2>
+          <p style={muted}>reply threads</p>
+          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
+        </Link>
+      </div>
+    </section>
   );
 }
 
@@ -1211,6 +1256,12 @@ export default function CommandPage() {
     <main style={page}>
       <div style={wrap}>
         <Nav ownerEmail={ownerEmail} />
+        <MemberTopPulseCards
+          deals={activeDeals}
+          pains={activePain}
+          requests={newRequests + activeRequests + executionRequests}
+          messages={messages + adminReplies + investorReplies}
+        />
         <VaultForgeBrandLogo />
         <OwnerCommandBadge email={ownerEmail} />
 
@@ -1218,8 +1269,8 @@ export default function CommandPage() {
           <div style={eyebrow}>VaultForge Member Command</div>
           <h1 style={h1}>Execution intelligence desk.</h1>
           <p style={sub}>
-            Your member command center for rooms, routing, pressure, messages,
-            alerts, and operational execution.
+            Your member command center for rooms, requests, messages,
+            and operational execution.
           </p>
 
           <div style={{ ...row, marginTop: 18 }}>
@@ -1227,10 +1278,7 @@ export default function CommandPage() {
               Open My Rooms
             </Link>
             <Link href="/deal-create" style={goldBtn}>
-              Create Deal
-            </Link>
-            <Link href="/pain-intake" style={goldBtn}>
-              Create Pain
+              Create
             </Link>
             <Link href="/messages" style={btn}>
               Messages
@@ -1239,6 +1287,33 @@ export default function CommandPage() {
         </section>
 
         <MemberIdentity member={member} />
+
+        <section style={{ ...panel, marginBottom: 20 }}>
+          <div style={eyebrow}>Member Command Structure</div>
+          <h2 style={h2}>Top cards alert you. Boards organize the work.</h2>
+          <p style={sub}>
+            The big cards at the top show what needs attention. Alerts, routing, and intelligence stay behind the scenes and attach to the correct Deal, Pain, Request, or Message.
+          </p>
+          <div style={{ ...grid, marginTop: 16 }}>
+            <div style={panel}>
+              <div style={eyebrow}>Rooms</div>
+              <p style={muted}>Deal and Pain work lives in My Rooms.</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Requests</div>
+              <p style={muted}>Investor/member requests live in the request inbox.</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Messages</div>
+              <p style={muted}>Replies stay tied to the correct room or request.</p>
+            </div>
+            <div style={panel}>
+              <div style={eyebrow}>Cleanup</div>
+              <p style={muted}>Saved, archived, deleted, sold, and resolved stay in folders.</p>
+            </div>
+          </div>
+        </section>
+
 
         <section
           style={{
@@ -1260,11 +1335,8 @@ export default function CommandPage() {
             <Link href="/member-controlled-threads?lane=new" style={goldBtn}>
               Open Request Inbox
             </Link>
-            <Link href="/controlled-threads" style={btn}>
-              Controlled Threads
-            </Link>
-            <Link href="/member-threads" style={btn}>
-              Member Threads
+            <Link href="/messages" style={btn}>
+              Messages
             </Link>
           </div>
           <div style={{ ...grid, marginTop: 18 }}>
@@ -1283,9 +1355,9 @@ export default function CommandPage() {
               danger={activeRequests > 0}
             />
             <MetricCard
-              title="Admin Replies"
+              title="Owner Replies"
               value={adminReplies}
-              note="admin notes attached to routed requests"
+              note="owner notes attached to routed requests"
               href="/member-controlled-threads?lane=admin"
               danger={adminReplies > 0}
             />
@@ -1367,24 +1439,23 @@ export default function CommandPage() {
               href="/my-rooms"
             />
             <LaneCard
-              title="Routing"
-              badge="Route Queue"
-              note="review routed rooms, accept/pass/claim execution, and track route response."
-              href="/routing"
-              danger={routed > 0}
-            />
-            <LaneCard
-              title="Intelligence Alerts"
-              badge="Signal Feed"
-              note={`${alerts} alert record(s) found locally. Open alerts for market pressure and route signals.`}
-              href="/alerts"
-              danger={alerts > 0}
+              title="Messages"
+              badge="Communication"
+              note="owner, member, and investor replies tied to the right rooms and requests."
+              href="/messages"
+              danger={messages > 0}
             />
             <LaneCard
               title="Member Network"
               badge="Network"
               note="find buyers, lenders, operators, developers, and execution partners."
               href="/network"
+            />
+            <LaneCard
+              title="Create"
+              badge="New Work"
+              note="start a new opportunity or problem-solving workflow."
+              href="/deal-create"
             />
           </div>
         </section>
@@ -1443,7 +1514,7 @@ export default function CommandPage() {
                   Create Deal
                 </Link>
                 <Link href="/pain-intake" style={goldBtn}>
-                  Create Pain
+                  Pain Intake
                 </Link>
               </div>
             </div>
@@ -1457,9 +1528,8 @@ export default function CommandPage() {
             system.
           </h2>
           <p style={sub}>
-            Keep Command clean. Use My Rooms for execution. Use room
-            intelligence for underwriting, root cause, route fit, and
-            operational next moves.
+            Keep Command clean. Alerts, routing, and intelligence work behind the scenes.
+            Use My Rooms for execution, requests, replies, cleanup, and next moves.
           </p>
         </section>
       </div>
