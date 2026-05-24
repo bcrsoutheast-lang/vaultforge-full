@@ -1238,15 +1238,7 @@ function MemberOperatingGuide() {
 
           <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
         </section>
-
-        <MockPaymentButton
-          kind="member"
-          email={email || currentEmail()}
-          label="Access Status"
-          price="$49"
-        />
-
-        <MemberIdentityPanel profile={memberProfile} />
+<MemberIdentityPanel profile={memberProfile} />
 
         <MemberOperatingGuide />
 
