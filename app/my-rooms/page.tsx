@@ -400,7 +400,7 @@ function roomHealth(kind: RoomKind, room: Room) {
       score: 10,
       label: "Deleted",
       warning: "Hidden from active workspace.",
-      next: "Restore active only if this room needs work again.",
+      next: "Restore Active active only if this room needs work again.",
       attention: false,
     };
   }
@@ -410,7 +410,7 @@ function roomHealth(kind: RoomKind, room: Room) {
       score: 45,
       label: "Archived",
       warning: "Not active right now.",
-      next: "Restore active if execution resumes, or leave archived for records.",
+      next: "Restore Active active if execution resumes, or leave archived for records.",
       attention: false,
     };
   }
@@ -991,14 +991,10 @@ function Nav() {
       <div style={brand}>VAULTFORGE</div>
       <Link href="/command" style={btn}>Command</Link>
       <Link href="/my-rooms" style={goldBtn}>My Rooms</Link>
-      <Link href="/routing" style={btn}>Routing</Link>
       <Link href="/members" style={btn}>Members</Link>
       <Link href="/network" style={btn}>Network</Link>
-      <Link href="/state-map" style={btn}>State Map</Link>
-      <Link href="/alerts" style={btn}>Alerts</Link>
       <Link href="/messages" style={btn}>Messages</Link>
-      <Link href="/deal-create" style={btn}>Create Deal</Link>
-      <Link href="/pain-intake" style={btn}>Pain Intake</Link>
+      <Link href="/deal-create" style={btn}>Create</Link>
       <Link href="/profile" style={btn}>Profile</Link>
       <Link href="/logout" style={redBtn}>Logout</Link>
     </nav>
@@ -1107,6 +1103,74 @@ function openAssignedOrRoutedCount(deals: Room[], pains: Room[]) {
 }
 
 
+
+
+function MyRoomsTopPulseCards({
+  activeDeals,
+  activePain,
+  assignedRouted,
+  cleanup,
+  onDeals,
+  onPain,
+  onAssigned,
+  onCleanup,
+}: {
+  activeDeals: number;
+  activePain: number;
+  assignedRouted: number;
+  cleanup: number;
+  onDeals: () => void;
+  onPain: () => void;
+  onAssigned: () => void;
+  onCleanup: () => void;
+}) {
+  const total = activeDeals + activePain + assignedRouted + cleanup;
+
+  const cardStyle = (count: number, border: string): React.CSSProperties => ({
+    ...panel,
+    borderColor: count > 0 ? border : "rgba(207,216,230,.16)",
+    boxShadow: count > 0 ? `0 0 0 1px ${border}, 0 0 28px rgba(245,197,66,.10)` : "none",
+    textAlign: "left",
+    cursor: "pointer",
+    width: "100%",
+    minHeight: 150,
+  });
+
+  return (
+    <section style={{ ...card, borderColor: "rgba(245,197,66,.38)" }}>
+      <div style={eyebrow}>My Rooms Alerts • {total} Active</div>
+      <div style={grid}>
+        <button type="button" style={cardStyle(activeDeals, "rgba(245,197,66,.85)")} onClick={onDeals}>
+          <div style={eyebrow}>Deal Rooms</div>
+          <h2 style={h2}>{activeDeals}</h2>
+          <p style={muted}>active opportunity rooms</p>
+          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
+        </button>
+
+        <button type="button" style={cardStyle(activePain, "rgba(255,70,70,.70)")} onClick={onPain}>
+          <div style={eyebrow}>Pain Rooms</div>
+          <h2 style={h2}>{activePain}</h2>
+          <p style={muted}>active pressure rooms</p>
+          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
+        </button>
+
+        <button type="button" style={cardStyle(assignedRouted, "rgba(0,132,255,.75)")} onClick={onAssigned}>
+          <div style={eyebrow}>Assigned / Routed</div>
+          <h2 style={h2}>{assignedRouted}</h2>
+          <p style={muted}>rooms needing response</p>
+          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
+        </button>
+
+        <button type="button" style={cardStyle(cleanup, "rgba(48,255,135,.70)")} onClick={onCleanup}>
+          <div style={eyebrow}>Cleanup</div>
+          <h2 style={h2}>{cleanup}</h2>
+          <p style={muted}>saved / archived / deleted</p>
+          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
+        </button>
+      </div>
+    </section>
+  );
+}
 
 function MetricButton({
   title,
@@ -1259,7 +1323,7 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
         {kind === "deal" && status !== "sold" ? <button type="button" style={goldBtn} onClick={() => { saveRoomStatus(kind, room, "sold"); refresh(); }}>Mark Sold</button> : null}
         {kind === "pain" && status !== "resolved" ? <button type="button" style={goldBtn} onClick={() => { saveRoomStatus(kind, room, "resolved"); refresh(); }}>Mark Resolved</button> : null}
         {status !== "deleted" ? <button type="button" style={redBtn} onClick={() => { saveRoomStatus(kind, room, "deleted"); refresh(); }}>Delete</button> : null}
-        {status !== "active" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "active"); refresh(); }}>Restore Active</button> : null}
+        {status !== "active" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "active"); refresh(); }}>Restore Active Active</button> : null}
       </div>
     </div>
   );
@@ -1301,6 +1365,16 @@ export default function MyRoomsPage() {
 
   const needsAttention = attentionCount(deals, pains);
 
+  const activeDealCount = deals.filter(isOpenDealRoom).length;
+  const activePainCount = pains.filter(isOpenPainRoom).length;
+  const assignedRoutedCount = openAssignedOrRoutedCount(deals, pains);
+  const cleanupCount =
+    countFor("savedDeals", deals, pains) +
+    countFor("savedPain", deals, pains) +
+    countFor("archived", deals, pains) +
+    countFor("deleted", deals, pains);
+
+
   const cards: { view: ViewKey; title: string; note: string }[] = [
     { view: "activeDeals", title: "Active Deals", note: "my open opportunity rooms" },
     { view: "activePain", title: "Active Pain", note: "my open pressure rooms" },
@@ -1323,6 +1397,18 @@ export default function MyRoomsPage() {
         <VaultForgeBrandLogo />
         <MemberDisplayCard />
 
+        <MyRoomsTopPulseCards
+          activeDeals={activeDealCount}
+          activePain={activePainCount}
+          assignedRouted={assignedRoutedCount}
+          cleanup={cleanupCount}
+          onDeals={() => setView("activeDeals")}
+          onPain={() => setView("activePain")}
+          onAssigned={() => setView("assignedToMe")}
+          onCleanup={() => setView("savedDeals")}
+        />
+
+
         <section style={hero}>
           <div style={eyebrow}>My Rooms</div>
           <h1 style={h1}>Member workspace cleanup.</h1>
@@ -1330,258 +1416,132 @@ export default function MyRoomsPage() {
             Keep your own rooms clean without destroying the intelligence system. Mark sold, resolved, archived, saved, deleted, or restore active.
           </p>
           <div style={{ ...row, marginTop: 18 }}>
-            <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
-            <Link href="/pain-intake" style={goldBtn}>Create Pain</Link>
+            <Link href="/deal-create" style={goldBtn}>Create</Link>
             <Link href="/network" style={btn}>Network</Link>
-            <Link href="/state-map" style={btn}>State Map</Link>
+            <Link href="/messages" style={btn}>Messages</Link>
           </div>
         </section>
 
-        <Section title="Workspace Ownership">
+        <Section title="Active Operations">
           <div style={grid}>
             <MetricButton
-              title="My Deal Rooms"
-              count={deals.filter(isOpenDealRoom).length}
-              note="open active opportunity rooms only"
+              title="Active Deal Rooms"
+              count={activeDealCount}
+              note="live opportunity execution rooms"
               active={view === "activeDeals"}
+              alert
               onClick={() => setView("activeDeals")}
             />
             <MetricButton
-              title="My Pain Rooms"
-              count={pains.filter(isOpenPainRoom).length}
-              note="open active pressure rooms only"
+              title="Active Pain Rooms"
+              count={activePainCount}
+              note="active pressure/problem rooms"
               active={view === "activePain"}
+              alert
+              danger
               onClick={() => setView("activePain")}
             />
             <MetricButton
               title="Assigned / Routed"
-              count={openAssignedOrRoutedCount(deals, pains)}
-              note="open rooms sent to this member for action"
+              count={assignedRoutedCount}
+              note="rooms requiring member response or execution"
               active={view === "assignedToMe" || view === "routedToMe"}
+              alert
               onClick={() => setView("assignedToMe")}
             />
             <MetricButton
-              title="Global Hidden"
-              count={Math.max(0, allDealRooms.length + allPainRooms.length - deals.length - pains.length)}
-              note="rooms not tied to this member identity"
+              title="Needs Attention"
+              count={needsAttention}
+              note="rooms needing update, routing, sold/resolved status, or cleanup"
               active={false}
-              onClick={() => setView("activeDeals")}
-            />
-          </div>
-        </Section>
-
-        <Section title="Needs Attention">
-          <button
-            type="button"
-            style={{ ...(needsAttention ? pulseRed : panel), textAlign: "left", cursor: "pointer", width: "100%" }}
-            onClick={() => setView("activeDeals")}
-          >
-            <div style={eyebrow}>VaultForge Room Health</div>
-            <h2 style={h2}>{needsAttention}</h2>
-            <p style={sub}>{needsAttention ? "room(s) need action, update, routing, sold/resolved status, or cleanup." : "No urgent room health warnings."}</p>
-            <p style={muted}>Click to review active rooms.</p>
-          </button>
-        </Section>
-
-        <Section title="Execution Timeline">
-          <div style={grid}>
-            <MetricButton
-              title="Deal New / Reviewing"
-              count={deals.filter(isOpenDealRoom).filter((room) => roomStage("deal", room) === "New" || roomStage("deal", room) === "Reviewing").length}
-              note="deals needing review"
-              active={view === "activeDeals"}
-              onClick={() => setView("activeDeals")}
-            />
-            <MetricButton
-              title="Deal Routed / Contract"
-              count={(stages["Routed"] || 0) + (stages["Under Contract"] || 0)}
-              note="rooms in execution"
-              active={view === "routedToMe"}
-              onClick={() => setView("routedToMe")}
-            />
-            <MetricButton
-              title="Sold Deals"
-              count={stages["Sold"] || 0}
-              note="completed opportunity rooms"
-              active={view === "sold"}
-              onClick={() => setView("sold")}
-            />
-            <MetricButton
-              title="Pain Diagnosing / Routed"
-              count={pains.filter(isOpenPainRoom).filter((room) => roomStage("pain", room) === "Diagnosing" || roomStage("pain", room) === "Routed").length}
-              note="pressure rooms moving"
-              active={view === "activePain"}
-              onClick={() => setView("activePain")}
-            />
-            <MetricButton
-              title="Pain In Progress"
-              count={pains.filter(isOpenPainRoom).filter((room) => roomStage("pain", room) === "In Progress").length}
-              note="solver work underway"
-              active={view === "activePain"}
               alert
               danger
-              onClick={() => setView("activePain")}
-            />
-            <MetricButton
-              title="Resolved Pain"
-              count={stages["Resolved"] || 0}
-              note="handled problem rooms"
-              active={view === "resolved"}
-              onClick={() => setView("resolved")}
-            />
-          </div>
-        </Section>
-
-        <Section title="Route Response Board">
-          <div style={grid}>
-            <MetricButton
-              title="Pending Routes"
-              count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "pending").length}
-              note="waiting on accept/pass/claim"
-              active={view === "routedToMe"}
-              alert
-              danger
-              onClick={() => setView("routedToMe")}
-            />
-            <MetricButton
-              title="Accepted"
-              count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "accepted").length}
-              note="accepted by this workspace"
-              active={view === "assignedToMe"}
-              onClick={() => setView("assignedToMe")}
-            />
-            <MetricButton
-              title="Passed"
-              count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "passed").length}
-              note="not a fit / rejected"
-              active={view === "assignedToMe"}
-              onClick={() => setView("assignedToMe")}
-            />
-            <MetricButton
-              title="Claimed"
-              count={[...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => currentRouteStatusForRoom(item.kind, item.room) === "claimed").length}
-              note="member claimed execution"
-              active={view === "routedToMe"}
-              onClick={() => setView("routedToMe")}
-            />
-          </div>
-        </Section>
-
-        <Section title="Folder Cards">
-          <div style={grid}>
-            <ViewCard
-              view="activeDeals"
-              title="Active Deals"
-              count={countFor("activeDeals", deals, pains)}
-              note="open opportunity rooms"
-              active={view === "activeDeals"}
               onClick={() => setView("activeDeals")}
             />
-            <ViewCard
-              view="activePain"
-              title="Active Pain"
-              count={countFor("activePain", deals, pains)}
-              note="open pressure rooms"
-              active={view === "activePain"}
-              onClick={() => setView("activePain")}
-            />
+          </div>
+        </Section>
 
+        <Section title="Room Management">
+          <div style={grid}>
             <ViewCard
               view="savedDeals"
-              title="Saved Deals"
-              count={countFor("savedDeals", deals, pains)}
-              note="kept opportunity rooms"
-              active={view === "savedDeals"}
+              title="Saved"
+              count={countFor("savedDeals", deals, pains) + countFor("savedPain", deals, pains)}
+              note="rooms stored for later review"
+              active={view === "savedDeals" || view === "savedPain"}
               onClick={() => setView("savedDeals")}
             />
             <ViewCard
-              view="savedPain"
-              title="Saved Pain"
-              count={countFor("savedPain", deals, pains)}
-              note="kept pressure rooms"
-              active={view === "savedPain"}
-              onClick={() => setView("savedPain")}
-            />
-
-            <ViewCard
               view="archived"
-              title="Archived Deals"
-              count={countDealStatus(deals, "archived")}
-              note="inactive deal rooms"
+              title="Archived"
+              count={countFor("archived", deals, pains)}
+              note="inactive but preserved rooms"
               active={view === "archived"}
               onClick={() => setView("archived")}
             />
             <ViewCard
-              view="archived"
-              title="Archived Pain"
-              count={countPainStatus(pains, "archived")}
-              note="inactive pain rooms"
-              active={view === "archived"}
-              onClick={() => setView("archived")}
-            />
-
-            <ViewCard
-              view="sold"
-              title="Sold Deals"
-              count={countFor("sold", deals, pains)}
-              note="completed opportunity rooms"
-              active={view === "sold"}
-              onClick={() => setView("sold")}
-            />
-            <ViewCard
-              view="resolved"
-              title="Resolved Pain"
-              count={countFor("resolved", deals, pains)}
-              note="handled problem rooms"
-              active={view === "resolved"}
-              onClick={() => setView("resolved")}
-            />
-
-            <ViewCard
               view="deleted"
-              title="Deleted Deals"
-              count={countDealStatus(deals, "deleted")}
-              note="hidden deal cleanup"
+              title="Deleted"
+              count={countFor("deleted", deals, pains)}
+              note="workspace cleanup folder"
               active={view === "deleted"}
               onClick={() => setView("deleted")}
-            />
-            <ViewCard
-              view="deleted"
-              title="Deleted Pain"
-              count={countPainStatus(pains, "deleted")}
-              note="hidden pain cleanup"
-              active={view === "deleted"}
-              onClick={() => setView("deleted")}
-            />
-
-            <ViewCard
-              view="assignedToMe"
-              title="Assigned To Me"
-              count={countFor("assignedToMe", deals, pains)}
-              note="rooms assigned into my workspace"
-              active={view === "assignedToMe"}
-              onClick={() => setView("assignedToMe")}
-            />
-            <ViewCard
-              view="routedToMe"
-              title="Routed To Me"
-              count={countFor("routedToMe", deals, pains)}
-              note="rooms routed for action"
-              active={view === "routedToMe"}
-              onClick={() => setView("routedToMe")}
             />
             <ViewCard
               view="following"
               title="Following"
               count={countFor("following", deals, pains)}
-              note="rooms I am watching"
+              note="rooms being monitored"
               active={view === "following"}
               onClick={() => setView("following")}
             />
           </div>
         </Section>
 
-        <Section title={cards.find((item) => item.view === view)?.title || "Rooms"}>
+        <Section title="Execution Pipeline">
+          <div style={grid}>
+            <MetricButton
+              title="Reviewing"
+              count={deals.filter((room) => roomStage("deal", room) === "Reviewing").length}
+              note="deals under review"
+              active={view === "activeDeals"}
+              onClick={() => setView("activeDeals")}
+            />
+            <MetricButton
+              title="Routed"
+              count={stages["Routed"] || 0}
+              note="execution routing active"
+              active={view === "routedToMe"}
+              alert
+              onClick={() => setView("routedToMe")}
+            />
+            <MetricButton
+              title="Under Contract"
+              count={stages["Under Contract"] || 0}
+              note="live deal execution underway"
+              active={view === "activeDeals"}
+              onClick={() => setView("activeDeals")}
+            />
+            <MetricButton
+              title="In Progress"
+              count={stages["In Progress"] || 0}
+              note="pain/problem solving underway"
+              active={view === "activePain"}
+              alert
+              danger
+              onClick={() => setView("activePain")}
+            />
+            <MetricButton
+              title="Completed Work"
+              count={(stages["Sold"] || 0) + (stages["Resolved"] || 0)}
+              note="completed execution rooms"
+              active={view === "sold" || view === "resolved"}
+              onClick={() => setView("sold")}
+            />
+          </div>
+        </Section>
+
+        <Section title={`Room Feed • ${cards.find((item) => item.view === view)?.title || "Rooms"}`}>
           {visible.length ? (
             <div style={grid}>
               {visible.map((item) => (
@@ -1593,8 +1553,7 @@ export default function MyRoomsPage() {
               <h2 style={h2}>No rooms here.</h2>
               <p style={sub}>Create a Deal or Pain room, or open another folder card.</p>
               <div style={{ ...row, marginTop: 16 }}>
-                <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
-                <Link href="/pain-intake" style={goldBtn}>Create Pain</Link>
+                <Link href="/deal-create" style={goldBtn}>Create</Link>
               </div>
             </div>
           )}
@@ -1603,18 +1562,18 @@ export default function MyRoomsPage() {
         <Section title="How This Works">
           <div style={grid}>
             <div style={panel}>
-              <div style={eyebrow}>Member Cleanup</div>
-              <p style={sub}>Delete hides from your workspace.</p>
-              <p style={muted}>It does not have to destroy the global intelligence history.</p>
+              <div style={eyebrow}>Workspace Cleanup</div>
+              <p style={sub}>Save, archive, delete, sold, and resolved keep your workspace clean.</p>
+              <p style={muted}>Cleanup does not destroy the intelligence trail.</p>
             </div>
             <div style={panel}>
-              <div style={eyebrow}>Sold / Resolved</div>
+              <div style={eyebrow}>Completed Work</div>
               <p style={sub}>Deals become Sold. Pain becomes Resolved.</p>
-              <p style={muted}>This later powers performance history and AI follow-up.</p>
+              <p style={muted}>This powers performance history, AI follow-up, and future routing quality.</p>
             </div>
             <div style={panel}>
-              <div style={eyebrow}>Restore</div>
-              <p style={sub}>Any folder can restore back to Active.</p>
+              <div style={eyebrow}>Restore Active</div>
+              <p style={sub}>Archived, saved, deleted, sold, or resolved rooms can be restored when work resumes.</p>
               <p style={muted}>This keeps the member area clean without panic deletes.</p>
             </div>
           </div>
