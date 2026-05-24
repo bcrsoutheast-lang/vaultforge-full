@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type AlertAudience = "admin" | "member" | "investor" | "public";
 type AlertTone = "gold" | "red" | "blue" | "green";
+type Folder = "active" | "saved" | "archived" | "closed" | "deleted";
 
 type AlertItem = {
   key: string;
@@ -37,6 +38,7 @@ const MESSAGE_KEYS = [
   "vaultforge_admin_messages_v1",
   "vaultforge_investor_admin_messages_v1",
   "vaultforge_investor_requests_v1",
+  "vaultforge_investor_execution_requests_v1",
 ];
 
 const PROFILE_KEYS = [
@@ -45,7 +47,13 @@ const PROFILE_KEYS = [
   "vaultforge_admin_members_v1",
 ];
 
-const ALL_CONTROL_KEYS = Array.from(new Set([...DEAL_KEYS, ...PAIN_KEYS, ...MESSAGE_KEYS, ...PROFILE_KEYS, "vaultforge_owner_replies_v1"]));
+const REPLY_KEYS = [
+  "vaultforge_owner_replies_v1",
+  "vaultforge_member_replies_v1",
+  "vaultforge_admin_replies_v1",
+];
+
+const ALL_CONTROL_KEYS = Array.from(new Set([...DEAL_KEYS, ...PAIN_KEYS, ...MESSAGE_KEYS, ...PROFILE_KEYS, ...REPLY_KEYS]));
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -67,8 +75,34 @@ function clean(value: unknown, fallback = "") {
   return text || fallback;
 }
 
+function pretty(value: unknown, fallback = "") {
+  return clean(value, fallback)
+    .replace(/\\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/TYPE:/g, "Type:")
+    .replace(/URGENCY:/g, "Urgency:")
+    .replace(/SUBJECT:/g, "Subject:")
+    .replace(/SENDER:/g, "Sender:")
+    .replace(/RECIPIENT:/g, "Recipient:")
+    .replace(/HEADER:/g, "Header:")
+    .replace(/MESSAGE:/g, "Message:")
+    .replace(/AMOUNT \/ BUDGET:/g, "Amount / Budget:")
+    .replace(/TIMELINE:/g, "Timeline:")
+    .replace(/CONDITIONS:/g, "Conditions:")
+    .replace(/NEXT MOVE:/g, "Next Move:");
+}
+
 function rowId(row: any, fallback = "") {
-  return clean(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId || row?.email || fallback);
+  return clean(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId || row?.requestId || row?.email || fallback);
+}
+
+function folderOf(row: any): Folder {
+  const value = String(row?.folder || row?.status || "").toLowerCase();
+  if (value.includes("saved")) return "saved";
+  if (value.includes("archived")) return "archived";
+  if (value.includes("closed") || value.includes("done") || value.includes("complete")) return "closed";
+  if (value.includes("deleted") || value.includes("trash")) return "deleted";
+  return "active";
 }
 
 function rowsFromKeys(keys: string[]) {
@@ -94,26 +128,6 @@ function rowsFromKeys(keys: string[]) {
   return rows;
 }
 
-function isNew(row: any) {
-  const status = String(row?.status || row?.accessStatus || row?.paymentStatus || row?.folder || "").toLowerCase();
-  return (
-    !status ||
-    status.includes("new") ||
-    status.includes("pending") ||
-    status.includes("ready") ||
-    status.includes("paid") ||
-    status.includes("message") ||
-    status.includes("active")
-  );
-}
-
-function visibleRows(rows: any[]) {
-  return rows.filter((row) => {
-    const status = String(row?.status || row?.folder || "").toLowerCase();
-    return !status.includes("deleted") && !status.includes("hidden");
-  });
-}
-
 function paymentRows() {
   const approvals = readJson<Record<string, any>>("vaultforge_mock_access_approvals_v1", {});
   const approvalRows = Object.entries(approvals || {}).map(([key, value]: any) => ({
@@ -137,15 +151,10 @@ function paymentRows() {
 }
 
 function profileRows() {
-  const rows = rowsFromKeys(PROFILE_KEYS);
-  return rows.filter((row) => {
+  return rowsFromKeys(PROFILE_KEYS).filter((row) => {
     const status = String(row?.status || row?.memberStatus || row?.accessStatus || "").toLowerCase();
     return !status || status.includes("pending") || status.includes("new") || status.includes("ready");
   });
-}
-
-function ownerReplyRows() {
-  return rowsFromKeys(["vaultforge_owner_replies_v1"]);
 }
 
 function titleFor(row: any) {
@@ -165,10 +174,10 @@ function titleFor(row: any) {
 
 function subFor(row: any) {
   const bits = [
-    row?.kind || row?.type || row?.source || row?.__sourceKey,
+    row?.routedTo || row?.kind || row?.type || row?.source || row?.__sourceKey,
     row?.city,
     row?.state,
-    row?.status || row?.folder,
+    folderOf(row),
   ]
     .map((item) => clean(item))
     .filter(Boolean);
@@ -177,7 +186,7 @@ function subFor(row: any) {
 }
 
 function messageFor(row: any) {
-  return clean(
+  return pretty(
     row?.body ||
       row?.message ||
       row?.summary ||
@@ -211,17 +220,20 @@ function countColor(tone: AlertTone, count: number) {
 }
 
 function dispatchAlertChange() {
-  window.dispatchEvent(new Event("vaultforge-request-change"));
-  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
-  window.dispatchEvent(new Event("vaultforge-owner-reply-change"));
-  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
-  window.dispatchEvent(new Event("vaultforge-admin-action-change"));
-  window.dispatchEvent(new Event("vaultforge-deal-change"));
-  window.dispatchEvent(new Event("vaultforge-pain-change"));
-  window.dispatchEvent(new Event("vaultforge-room-change"));
+  [
+    "vaultforge-request-change",
+    "vaultforge-owner-message-change",
+    "vaultforge-owner-reply-change",
+    "vaultforge-admin-message-change",
+    "vaultforge-admin-action-change",
+    "vaultforge-deal-change",
+    "vaultforge-pain-change",
+    "vaultforge-room-change",
+    "vaultforge-investor-change",
+  ].forEach((name) => window.dispatchEvent(new Event(name)));
 }
 
-function updateRowEverywhere(target: any, nextStatus: string) {
+function updateRowEverywhere(target: any, nextStatus: Folder) {
   const targetId = rowId(target, target?.__rowId || "");
   const sourceKey = clean(target?.__sourceKey);
 
@@ -288,6 +300,19 @@ function deleteRowEverywhere(target: any) {
   dispatchAlertChange();
 }
 
+const button: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "#171c29",
+  color: "#f7f7fb",
+  borderRadius: 999,
+  padding: "11px 14px",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const goldButton: React.CSSProperties = { ...button, border: 0, background: "#ffdc68", color: "#10131a" };
+const redButton: React.CSSProperties = { ...button, background: "#271016", borderColor: "rgba(255,70,70,.55)", color: "#ffb3b3" };
+
 export default function VaultForgeAlertCenter({
   audience = "member",
   title = "Live Alerts",
@@ -296,14 +321,14 @@ export default function VaultForgeAlertCenter({
   title?: string;
 }) {
   const [tick, setTick] = useState(0);
-  const [openAlert, setOpenAlert] = useState<AlertItem | null>(null);
+  const [openAlertKey, setOpenAlertKey] = useState("");
   const [selectedRow, setSelectedRow] = useState<any | null>(null);
+  const [folder, setFolder] = useState<Folder>("active");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
     const refresh = () => setTick((value) => value + 1);
     const interval = window.setInterval(refresh, 4500);
-
     [
       "storage",
       "vaultforge-request-change",
@@ -339,147 +364,64 @@ export default function VaultForgeAlertCenter({
   }, []);
 
   const alerts = useMemo<AlertItem[]>(() => {
-    const dealRows = visibleRows(rowsFromKeys(DEAL_KEYS));
-    const painRows = visibleRows(rowsFromKeys(PAIN_KEYS));
-    const messageRows = rowsFromKeys(MESSAGE_KEYS).filter(isNew);
+    const dealRows = rowsFromKeys(DEAL_KEYS);
+    const painRows = rowsFromKeys(PAIN_KEYS);
+    const messageRows = rowsFromKeys(MESSAGE_KEYS);
     const payments = paymentRows();
     const profiles = profileRows();
-    const replies = ownerReplyRows();
+    const replies = rowsFromKeys(REPLY_KEYS);
 
     const base: AlertItem[] = [
-      {
-        key: "deals",
-        label: "New Deals",
-        count: dealRows.length,
-        tone: "gold",
-        note: "deal opportunity cards",
-        rows: dealRows,
-      },
-      {
-        key: "pain",
-        label: "New Pain",
-        count: painRows.length,
-        tone: "red",
-        note: "problem/pain signals",
-        rows: painRows,
-      },
-      {
-        key: "messages",
-        label: "Messages",
-        count: messageRows.length,
-        tone: "blue",
-        note: "owner/member/investor requests",
-        rows: messageRows,
-      },
+      { key: "deals", label: "Deals", count: dealRows.filter((row) => folderOf(row) === "active").length, tone: "gold", note: "deal opportunity cards", rows: dealRows },
+      { key: "pain", label: "Pain", count: painRows.filter((row) => folderOf(row) === "active").length, tone: "red", note: "problem/pain signals", rows: painRows },
+      { key: "messages", label: "Messages", count: messageRows.filter((row) => folderOf(row) === "active").length, tone: "blue", note: "owner/member/investor requests", rows: messageRows },
     ];
 
     if (audience === "admin") {
-      base.unshift({
-        key: "profiles",
-        label: "Profiles",
-        count: profiles.length,
-        tone: "green",
-        note: "profiles needing review",
-        rows: profiles,
-      });
-
-      base.push({
-        key: "payments",
-        label: "Payment Alerts",
-        count: payments.length,
-        tone: "gold",
-        note: "paid/unlocked records",
-        rows: payments,
-      });
+      base.unshift({ key: "profiles", label: "Profiles", count: profiles.filter((row) => folderOf(row) === "active").length, tone: "green", note: "profiles needing review", rows: profiles });
+      base.push({ key: "payments", label: "Payment Alerts", count: payments.length, tone: "gold", note: "paid/unlocked records", rows: payments });
     }
 
     if (audience === "investor") {
-      base.push({
-        key: "owner",
-        label: "Owner Replies",
-        count: replies.length,
-        tone: "green",
-        note: "owner replies to requests",
-        rows: replies,
-      });
+      base.push({ key: "owner", label: "Owner Replies", count: replies.filter((row) => folderOf(row) === "active").length, tone: "green", note: "owner replies to requests", rows: replies });
     }
 
     if (audience === "member") {
-      base.push({
-        key: "routes",
-        label: "Routed Requests",
-        count: messageRows.length,
-        tone: "green",
-        note: "requests needing action",
-        rows: messageRows,
-      });
+      base.push({ key: "routes", label: "Routed Requests", count: messageRows.filter((row) => folderOf(row) === "active").length, tone: "green", note: "requests needing action", rows: messageRows });
     }
 
     return base;
   }, [audience, tick]);
 
+  const openAlert = alerts.find((item) => item.key === openAlertKey) || null;
+  const visibleRows = openAlert ? openAlert.rows.filter((row) => folderOf(row) === folder) : [];
   const total = alerts.reduce((sum, item) => sum + item.count, 0);
 
-  function controlRow(status: string, label: string) {
+  function controlRow(next: Folder, label: string) {
     if (!selectedRow) return;
-
-    updateRowEverywhere(selectedRow, status);
-    setSelectedRow({ ...selectedRow, status, folder: status });
+    updateRowEverywhere(selectedRow, next);
+    setSelectedRow({ ...selectedRow, status: next, folder: next });
     setNotice(`${label} complete.`);
     setTick((value) => value + 1);
   }
 
   return (
-    <section
-      style={{
-        border: "1px solid rgba(245,197,66,.24)",
-        background: "linear-gradient(180deg,#080d19,#050816)",
-        borderRadius: 26,
-        padding: 18,
-        margin: "0 0 18px",
-      }}
-    >
+    <section style={{ border: "1px solid rgba(245,197,66,.24)", background: "linear-gradient(180deg,#080d19,#050816)", borderRadius: 26, padding: 18, margin: "0 0 18px" }}>
       <style>{`
-        @keyframes vfAlertPulse {
-          0%, 100% { transform: scale(1); opacity: .94; }
-          50% { transform: scale(1.035); opacity: 1; }
-        }
-
-        @keyframes vfAlertGlow {
-          0%, 100% { filter: brightness(1); }
-          50% { filter: brightness(1.16); }
-        }
+        @keyframes vfAlertPulse { 0%,100% { transform: scale(1); opacity: .94; } 50% { transform: scale(1.035); opacity: 1; } }
+        @keyframes vfAlertGlow { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.16); } }
       `}</style>
 
-      <div
-        style={{
-          color: "#ffd45a",
-          textTransform: "uppercase",
-          letterSpacing: 5,
-          fontWeight: 950,
-          fontSize: 12,
-          marginBottom: 10,
-        }}
-      >
+      <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 10 }}>
         {title} • {total} active
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))",
-          gap: 10,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 10 }}>
         {alerts.map((item) => (
           <button
             key={item.key}
             type="button"
-            onClick={() => {
-              setOpenAlert(item);
-              setSelectedRow(null);
-              setNotice("");
-            }}
+            onClick={() => { setOpenAlertKey(item.key); setSelectedRow(null); setFolder("active"); setNotice(""); }}
             style={{
               textAlign: "left",
               color: "#f8fafc",
@@ -492,188 +434,52 @@ export default function VaultForgeAlertCenter({
               boxShadow: item.count > 0 ? toneGlow(item.tone) : "none",
             }}
           >
-            <div
-              style={{
-                color: "#ffd45a",
-                textTransform: "uppercase",
-                letterSpacing: 3,
-                fontWeight: 950,
-                fontSize: 10,
-                marginBottom: 7,
-              }}
-            >
-              {item.label}
-            </div>
-
-            <div
-              style={{
-                color: countColor(item.tone, item.count),
-                fontWeight: 950,
-                fontSize: 34,
-                lineHeight: 1,
-              }}
-            >
-              {item.count}
-            </div>
-
-            <p style={{ color: "#aeb7c7", margin: "6px 0 0", fontSize: 12 }}>
-              {item.note}
-            </p>
-
-            <p style={{ color: "#ffd45a", margin: "9px 0 0", fontSize: 11, fontWeight: 900 }}>
-              Tap to open
-            </p>
+            <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 3, fontWeight: 950, fontSize: 10, marginBottom: 7 }}>{item.label}</div>
+            <div style={{ color: countColor(item.tone, item.count), fontWeight: 950, fontSize: 34, lineHeight: 1 }}>{item.count}</div>
+            <p style={{ color: "#aeb7c7", margin: "6px 0 0", fontSize: 12 }}>{item.note}</p>
+            <p style={{ color: "#ffd45a", margin: "9px 0 0", fontSize: 11, fontWeight: 900 }}>Tap to open</p>
           </button>
         ))}
       </div>
 
       {openAlert ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.78)",
-            zIndex: 9999,
-            padding: 18,
-            overflow: "auto",
-          }}
-        >
-          <div
-            style={{
-              maxWidth: 960,
-              margin: "36px auto",
-              background: "#111827",
-              border: `1px solid ${toneBorder(openAlert.tone)}`,
-              borderRadius: 26,
-              padding: 22,
-              boxShadow: toneGlow(openAlert.tone),
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-                alignItems: "flex-start",
-              }}
-            >
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.78)", zIndex: 9999, padding: 18, overflow: "auto" }}>
+          <div style={{ maxWidth: 980, margin: "36px auto", background: "#111827", border: `1px solid ${toneBorder(openAlert.tone)}`, borderRadius: 26, padding: 22, boxShadow: toneGlow(openAlert.tone) }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
               <div>
-                <div
-                  style={{
-                    color: "#ffd45a",
-                    textTransform: "uppercase",
-                    letterSpacing: 5,
-                    fontWeight: 950,
-                    fontSize: 12,
-                    marginBottom: 10,
-                  }}
-                >
-                  Alert Detail
-                </div>
-
-                <h2
-                  style={{
-                    fontSize: "clamp(32px,6vw,58px)",
-                    lineHeight: 0.95,
-                    letterSpacing: -2,
-                    margin: 0,
-                    fontWeight: 950,
-                  }}
-                >
-                  {openAlert.label}
-                </h2>
-
-                <p style={{ color: "#cbd5e1", fontSize: 19, lineHeight: 1.35 }}>
-                  {openAlert.count} {openAlert.note}
-                </p>
+                <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 10 }}>Alert Folders</div>
+                <h2 style={{ fontSize: "clamp(32px,6vw,58px)", lineHeight: 0.95, letterSpacing: -2, margin: 0, fontWeight: 950 }}>{openAlert.label}</h2>
+                <p style={{ color: "#cbd5e1", fontSize: 19, lineHeight: 1.35 }}>{visibleRows.length} cards in {folder}</p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenAlert(null);
-                  setSelectedRow(null);
-                  setNotice("");
-                }}
-                style={{
-                  border: "1px solid rgba(207,216,230,.18)",
-                  background: "#171c29",
-                  color: "#f7f7fb",
-                  borderRadius: 999,
-                  padding: "11px 15px",
-                  fontWeight: 950,
-                  cursor: "pointer",
-                }}
-              >
-                Close
-              </button>
+              <button type="button" onClick={() => { setOpenAlertKey(""); setSelectedRow(null); setNotice(""); }} style={button}>Close</button>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+              {(["active", "saved", "archived", "closed", "deleted"] as Folder[]).map((item) => (
+                <button key={item} type="button" onClick={() => { setFolder(item); setSelectedRow(null); setNotice(""); }} style={folder === item ? goldButton : button}>
+                  {item.charAt(0).toUpperCase() + item.slice(1)} ({openAlert.rows.filter((row) => folderOf(row) === item).length})
+                </button>
+              ))}
             </div>
 
             {notice ? (
-              <div
-                style={{
-                  marginTop: 14,
-                  border: "1px solid rgba(245,197,66,.45)",
-                  background: "rgba(245,197,66,.08)",
-                  borderRadius: 18,
-                  padding: 14,
-                  color: "#ffd45a",
-                  fontWeight: 900,
-                }}
-              >
+              <div style={{ marginTop: 14, border: "1px solid rgba(245,197,66,.45)", background: "rgba(245,197,66,.08)", borderRadius: 18, padding: 14, color: "#ffd45a", fontWeight: 900 }}>
                 {notice}
               </div>
             ) : null}
 
             {selectedRow ? (
-              <div
-                style={{
-                  marginTop: 18,
-                  background: "#0b1020",
-                  border: `1px solid ${toneBorder(openAlert.tone)}`,
-                  borderRadius: 22,
-                  padding: 18,
-                }}
-              >
-                <div
-                  style={{
-                    color: "#ffd45a",
-                    textTransform: "uppercase",
-                    letterSpacing: 5,
-                    fontWeight: 950,
-                    fontSize: 12,
-                    marginBottom: 10,
-                  }}
-                >
-                  Request Detail / Controls
-                </div>
+              <div style={{ marginTop: 18, background: "#0b1020", border: `1px solid ${toneBorder(openAlert.tone)}`, borderRadius: 22, padding: 18 }}>
+                <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 5, fontWeight: 950, fontSize: 12, marginBottom: 10 }}>Card Detail / Cleanup</div>
+                <h3 style={{ fontSize: "clamp(28px,5vw,44px)", margin: "0 0 10px", fontWeight: 950, letterSpacing: -1 }}>{titleFor(selectedRow)}</h3>
 
-                <h3
-                  style={{
-                    fontSize: "clamp(28px,5vw,44px)",
-                    margin: "0 0 10px",
-                    fontWeight: 950,
-                    letterSpacing: -1,
-                  }}
-                >
-                  {titleFor(selectedRow)}
-                </h3>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))",
-                    gap: 12,
-                    marginTop: 14,
-                  }}
-                >
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12, marginTop: 14 }}>
                   <div style={{ background: "#111827", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 14 }}>
                     <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Status</div>
-                    <p style={{ color: "#cbd5e1", margin: "7px 0 0" }}>{clean(selectedRow?.status || selectedRow?.folder, "new")}</p>
+                    <p style={{ color: "#cbd5e1", margin: "7px 0 0" }}>{folderOf(selectedRow)}</p>
                     <p style={{ color: "#aeb7c7", margin: "7px 0 0" }}>{subFor(selectedRow)}</p>
                   </div>
-
                   <div style={{ background: "#111827", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 14 }}>
                     <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Attached Profile</div>
                     <p style={{ color: "#cbd5e1", margin: "7px 0 0" }}>{clean(selectedRow?.investorCompany || selectedRow?.company, "Company not listed")}</p>
@@ -683,16 +489,16 @@ export default function VaultForgeAlertCenter({
 
                 <div style={{ background: "#111827", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 14, marginTop: 12 }}>
                   <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Message</div>
-                  <p style={{ color: "#cbd5e1", margin: "7px 0 0", lineHeight: 1.45 }}>{messageFor(selectedRow)}</p>
+                  <p style={{ color: "#cbd5e1", margin: "7px 0 0", lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{messageFor(selectedRow)}</p>
                 </div>
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
                   <button type="button" onClick={() => controlRow("saved", "Saved")} style={goldButton}>Save</button>
-                  <button type="button" onClick={() => controlRow("archived", "Archived")} style={darkButton}>Archive</button>
-                  <button type="button" onClick={() => controlRow("new", "Restored active")} style={darkButton}>Restore / Active</button>
-                  <button type="button" onClick={() => controlRow("closed", "Closed")} style={darkButton}>Close Item</button>
+                  <button type="button" onClick={() => controlRow("archived", "Archived")} style={button}>Archive</button>
+                  <button type="button" onClick={() => controlRow("active", "Restored active")} style={button}>Restore / Active</button>
+                  <button type="button" onClick={() => controlRow("closed", "Closed")} style={button}>Close Item</button>
                   <button type="button" onClick={() => controlRow("deleted", "Deleted")} style={redButton}>Delete</button>
-                  {String(selectedRow?.status || selectedRow?.folder || "").toLowerCase().includes("deleted") ? (
+                  {folderOf(selectedRow) === "deleted" ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -710,82 +516,25 @@ export default function VaultForgeAlertCenter({
               </div>
             ) : null}
 
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                marginTop: 18,
-              }}
-            >
-              {openAlert.rows.length ? (
-                openAlert.rows.slice(0, 25).map((row, index) => (
+            <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+              {visibleRows.length ? (
+                visibleRows.slice(0, 25).map((row, index) => (
                   <button
                     type="button"
-                    key={`${openAlert.key}-${row?.id || row?.email || index}`}
-                    onClick={() => {
-                      setSelectedRow(row);
-                      setNotice("");
-                    }}
-                    style={{
-                      textAlign: "left",
-                      color: "#f8fafc",
-                      background: "#0b1020",
-                      border: "1px solid rgba(207,216,230,.14)",
-                      borderRadius: 20,
-                      padding: 16,
-                      cursor: "pointer",
-                    }}
+                    key={`${openAlert.key}-${row?.__rowId || row?.id || row?.email || index}`}
+                    onClick={() => { setSelectedRow(row); setNotice(""); }}
+                    style={{ textAlign: "left", color: "#f8fafc", background: "#0b1020", border: "1px solid rgba(207,216,230,.14)", borderRadius: 20, padding: 16, cursor: "pointer" }}
                   >
-                    <div
-                      style={{
-                        color: "#ffd45a",
-                        textTransform: "uppercase",
-                        letterSpacing: 4,
-                        fontWeight: 950,
-                        fontSize: 11,
-                        marginBottom: 8,
-                      }}
-                    >
-                      {subFor(row)}
-                    </div>
-
-                    <h3
-                      style={{
-                        fontSize: 24,
-                        margin: "0 0 8px",
-                        fontWeight: 950,
-                      }}
-                    >
-                      {titleFor(row)}
-                    </h3>
-
-                    <p style={{ color: "#aeb7c7", margin: 0, lineHeight: 1.4 }}>
-                      {messageFor(row)}
-                    </p>
-
-                    {(row?.investorEmail || row?.email || row?.phone) ? (
-                      <p style={{ color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.4 }}>
-                        {clean(row?.investorName || row?.name)} {clean(row?.investorEmail || row?.email)} {clean(row?.phone)}
-                      </p>
-                    ) : null}
-
-                    <p style={{ color: "#ffd45a", margin: "10px 0 0", fontWeight: 900 }}>
-                      Tap to open cleanup controls.
-                    </p>
+                    <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11, marginBottom: 8 }}>{subFor(row)}</div>
+                    <h3 style={{ fontSize: 24, margin: "0 0 8px", fontWeight: 950 }}>{titleFor(row)}</h3>
+                    <p style={{ color: "#aeb7c7", margin: 0, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>{messageFor(row)}</p>
+                    {(row?.investorEmail || row?.email || row?.phone) ? <p style={{ color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.4 }}>{clean(row?.investorName || row?.name)} {clean(row?.investorEmail || row?.email)} {clean(row?.phone)}</p> : null}
+                    <p style={{ color: "#ffd45a", margin: "10px 0 0", fontWeight: 900 }}>Tap to open cleanup controls.</p>
                   </button>
                 ))
               ) : (
-                <div
-                  style={{
-                    background: "#0b1020",
-                    border: "1px solid rgba(207,216,230,.14)",
-                    borderRadius: 20,
-                    padding: 16,
-                  }}
-                >
-                  <p style={{ color: "#aeb7c7", margin: 0 }}>
-                    No cards in this alert lane yet.
-                  </p>
+                <div style={{ background: "#0b1020", border: "1px solid rgba(207,216,230,.14)", borderRadius: 20, padding: 16 }}>
+                  <p style={{ color: "#aeb7c7", margin: 0 }}>No cards in this folder.</p>
                 </div>
               )}
             </div>
@@ -795,27 +544,3 @@ export default function VaultForgeAlertCenter({
     </section>
   );
 }
-
-const darkButton: React.CSSProperties = {
-  border: "1px solid rgba(207,216,230,.18)",
-  background: "#171c29",
-  color: "#f7f7fb",
-  borderRadius: 999,
-  padding: "11px 14px",
-  fontWeight: 950,
-  cursor: "pointer",
-};
-
-const goldButton: React.CSSProperties = {
-  ...darkButton,
-  border: 0,
-  background: "#ffdc68",
-  color: "#10131a",
-};
-
-const redButton: React.CSSProperties = {
-  ...darkButton,
-  background: "#271016",
-  borderColor: "rgba(255,70,70,.55)",
-  color: "#ffb3b3",
-};
