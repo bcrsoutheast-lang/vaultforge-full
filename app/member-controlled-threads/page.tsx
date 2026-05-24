@@ -1104,9 +1104,7 @@ function MemberIdentityPanel({ profile }: { profile: any }) {
   const provide = Array.isArray(profile?.canProvide) && profile.canProvide.length ? profile.canProvide.join(" • ") : "Capabilities not listed";
 
   return (
-        <MemberCreatePanel />
-
-<section style={{ ...goldPanel, marginBottom: 18 }}>
+        <section style={{ ...goldPanel, marginBottom: 18 }}>
       <div style={{ ...row, alignItems: "flex-start" }}>
         {logo ? (
           <img
@@ -1488,6 +1486,8 @@ export default function MemberControlledThreadsPage() {
             <h1 style={h1}>Preparing member room.</h1>
             <p style={sub}>Loading browser workspace safely.</p>
           </section>
+
+        <MemberCreatePanel />
         </div>
       </main>
     );
