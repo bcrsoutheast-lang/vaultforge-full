@@ -2,6 +2,7 @@
 
 
 import Link from "next/link";
+import VaultForgeAlertCenter from "../components/VaultForgeAlertCenter";
 import { useEffect, useMemo, useState } from "react";
 
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
@@ -3405,6 +3406,8 @@ export default function InvestorRoomPage() {
   return (
     <main style={page}>
       <div style={wrap}>
+        <VaultForgeAlertCenter audience="investor" title="Investor Alerts" />
+
         <TopNav
           onMessageAdmin={() => setMessageAdminOpen(true)}
           isOwner={String(investor?.email || browserValue("vf_email") || browserValue("vaultforge_investor_email") || "").toLowerCase() === OWNER_EMAIL.toLowerCase()}
