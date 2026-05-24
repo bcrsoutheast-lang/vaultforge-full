@@ -1325,7 +1325,9 @@ function BloombergMessageForm({
         <input style={input} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} placeholder="Internal note, caution, context. Saved inside structured message." />
       </label>
 
-      <div style={{ ...row, marginTop: 14 }}>
+      <VaultForgeAISnapshot kind={kind} item={item} />
+
+        <div style={{ ...row, marginTop: 14 }}>
         <button type="button" style={goldBtn} onClick={submit}>{submitLabel}</button>
         {onCancel ? <button type="button" style={btn} onClick={onCancel}>Collapse / Done</button> : null}
       </div>
@@ -2102,6 +2104,205 @@ function SimpleRequestModal({
   );
 }
 
+
+
+function vfNum(value: any) {
+  const m = String(value || "").replace(/[$,\s]/g, "").match(/-?\d+(\.\d+)?/);
+  return m ? Number(m[0]) : 0;
+}
+
+function vfPick(item: any, keys: string[], fallback = "") {
+  for (const key of keys) {
+    const value = key.split(".").reduce((acc: any, part) => acc?.[part], item);
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return fallback;
+}
+
+function vfText(item: any) {
+  return [
+    item?.title,
+    item?.headline,
+    item?.summary,
+    item?.notes,
+    item?.description,
+    item?.assetType,
+    item?.propertyType,
+    item?.need,
+    item?.urgency,
+    item?.timeline,
+    item?.city,
+    item?.state,
+  ].map((x) => String(x || "").toLowerCase()).join(" ");
+}
+
+function vaultForgeAI(kind: Kind, item: any) {
+  const text = vfText(item);
+  const asking = vfNum(vfPick(item, ["askingPrice", "asking_price", "asking", "price", "purchasePrice", "amount"]));
+  const repairs = vfNum(vfPick(item, ["repairs", "repairEstimate", "repair_estimate", "fixAmount", "rehab", "rehabBudget"]));
+  const arv = vfNum(vfPick(item, ["arv", "afterRepairValue", "after_repair_value", "value", "projectedValue"]));
+  const spread = arv && asking ? arv - asking - repairs : 0;
+  const spreadPct = arv ? Math.round((spread / arv) * 100) : 0;
+
+  let score = 60;
+  let urgency = 4;
+  let risk = 4;
+  let difficulty = 4;
+  let capitalNeed = 4;
+  let bottleneck = "Missing information";
+  let bestFit = "Owner/member review";
+  let nextMove = "Request more details";
+  let market = "Normal";
+
+  if (kind === "Deal") {
+    if (spreadPct >= 25) score += 20;
+    else if (spreadPct >= 15) score += 12;
+    else if (spreadPct <= 5 && arv) score -= 18;
+
+    if (repairs > 75000) difficulty += 3;
+    if (repairs > 25000) capitalNeed += 2;
+    if (asking > 300000) capitalNeed += 2;
+    if (/commercial|land|development|entitlement/.test(text)) difficulty += 2;
+    if (/urgent|fast|closing|deadline/.test(text)) urgency += 3;
+
+    if (/contractor|rehab|scope|construction/.test(text)) bottleneck = "Contractor / scope control";
+    else if (/capital|funding|lender|loan/.test(text)) bottleneck = "Capital stack";
+    else if (/title|closing|escrow/.test(text)) bottleneck = "Title / closing";
+    else bottleneck = "Number verification";
+
+    if (/land|development|entitlement/.test(text)) {
+      bestFit = "Developer + equity partner";
+      nextMove = "Request zoning, entitlement status, survey, and capital need";
+    } else if (repairs > 50000) {
+      bestFit = "Operator + contractor + private lender";
+      nextMove = "Request rehab scope, bid, photos, and lender route";
+    } else if (spreadPct >= 18) {
+      bestFit = "Cash buyer + private lender";
+      nextMove = "Request underwriting package and owner/member release";
+    } else {
+      bestFit = "Acquisitions reviewer";
+      nextMove = "Verify price, ARV, repairs, access, and seller path";
+    }
+
+    risk = Math.min(10, Math.max(2, difficulty + (spreadPct <= 8 && arv ? 2 : 0)));
+    market = spreadPct >= 18 ? "Strong" : spreadPct >= 8 ? "Watch" : "Needs verification";
+  } else {
+    urgency = /urgent|emergency|closing|deadline|same day|72/.test(text) ? 9 : 5;
+
+    if (/capital|funding|lender|loan|gap/.test(text)) {
+      bottleneck = "Funding gap";
+      bestFit = "Private lender / JV capital";
+      nextMove = "Request amount, deadline, collateral, docs, and exit strategy";
+      capitalNeed = 8;
+    } else if (/contractor|rehab|construction|stalled/.test(text)) {
+      bottleneck = "Execution labor";
+      bestFit = "Contractor / operator";
+      nextMove = "Request scope, access, photos, bid deadline, and permit status";
+      difficulty = 7;
+    } else if (/title|legal|closing|escrow/.test(text)) {
+      bottleneck = "Title / legal blocker";
+      bestFit = "Title / attorney / closing specialist";
+      nextMove = "Request issue summary, title docs, and closing date";
+      difficulty = 6;
+    } else if (/operator|boots|ground|site/.test(text)) {
+      bottleneck = "Local execution";
+      bestFit = "Operator / boots-on-ground";
+      nextMove = "Request exact site task, deadline, photos, and compensation";
+      difficulty = 6;
+    } else {
+      bottleneck = "Problem classification";
+      bestFit = "Owner review + routed member";
+      nextMove = "Classify the problem and choose the correct execution lane";
+    }
+
+    risk = Math.min(10, Math.max(4, urgency - 1));
+    score = Math.min(96, 48 + urgency * 4 + difficulty);
+    market = urgency >= 8 ? "Pressure" : "Developing";
+  }
+
+  return {
+    score: Math.min(98, Math.max(12, score)),
+    label: score >= 78 ? "HIGH" : score >= 55 ? "MEDIUM" : "LOW",
+    urgency: Math.min(10, Math.max(1, urgency)),
+    risk: Math.min(10, Math.max(1, risk)),
+    riskLabel: risk >= 8 ? "HIGH" : risk >= 5 ? "MEDIUM" : "LOW",
+    difficulty: Math.min(10, Math.max(1, difficulty)),
+    capitalNeed: Math.min(10, Math.max(1, capitalNeed)),
+    bottleneck,
+    bestFit,
+    nextMove,
+    market,
+    spread,
+    spreadPct,
+  };
+}
+
+function VaultForgeAISnapshot({ kind, item }: { kind: Kind; item: any }) {
+  const ai = vaultForgeAI(kind, item);
+  return (
+    <div style={{ ...goldPanel, marginTop: 14 }}>
+      <div style={eyebrow}>Live AI Snapshot</div>
+      <h3 style={h3}>{ai.label} execution probability</h3>
+
+      <div style={grid}>
+        <div style={panel}><div style={eyebrow}>Execution Score</div><p style={sub}>{ai.score}/100</p></div>
+        <div style={panel}><div style={eyebrow}>Urgency</div><p style={sub}>{ai.urgency}/10</p></div>
+        <div style={panel}><div style={eyebrow}>Risk</div><p style={sub}>{ai.riskLabel}</p></div>
+        <div style={panel}><div style={eyebrow}>Capital Need</div><p style={sub}>{ai.capitalNeed}/10</p></div>
+      </div>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <div style={panel}><div style={eyebrow}>Likely Bottleneck</div><p style={muted}>{ai.bottleneck}</p></div>
+        <div style={panel}><div style={eyebrow}>Best Fit</div><p style={muted}>{ai.bestFit}</p></div>
+        <div style={panel}><div style={eyebrow}>Market Signal</div><p style={muted}>{ai.market}</p></div>
+        <div style={panel}><div style={eyebrow}>Difficulty</div><p style={muted}>{ai.difficulty}/10</p></div>
+      </div>
+
+      {kind === "Deal" && ai.spread ? (
+        <div style={{ ...panel, marginTop: 12 }}>
+          <div style={eyebrow}>Deal Spread Read</div>
+          <p style={muted}>Estimated spread after repairs: ${Math.round(ai.spread).toLocaleString()} ({ai.spreadPct}% of ARV).</p>
+        </div>
+      ) : null}
+
+      <div style={{ ...panel, marginTop: 12, borderColor: "rgba(48,255,135,.35)" }}>
+        <div style={eyebrow}>AI Recommended Next Move</div>
+        <p style={sub}>{ai.nextMove}</p>
+      </div>
+    </div>
+  );
+}
+
+function VaultForgeAICommandBrief({ deals, pains, requests }: { deals: any[]; pains: any[]; requests: any[] }) {
+  const strongDeals = deals.filter((item) => vaultForgeAI("Deal", item).score >= 78).length;
+  const urgentPain = pains.filter((item) => vaultForgeAI("Pain", item).urgency >= 8).length;
+  const openRequests = requests.filter((item) => !String(item?.status || item?.folder || "").toLowerCase().includes("archived") && !String(item?.status || item?.folder || "").toLowerCase().includes("deleted")).length;
+
+  return (
+    <section style={goldPanel}>
+      <div style={eyebrow}>Live AI Command Brief</div>
+      <h2 style={h2}>Investor Room intelligence is active.</h2>
+      <div style={grid}>
+        <div style={panel}><div style={eyebrow}>Live Signals</div><p style={sub}>{deals.length + pains.length}</p></div>
+        <div style={panel}><div style={eyebrow}>Strong Deals</div><p style={sub}>{strongDeals}</p></div>
+        <div style={panel}><div style={eyebrow}>Urgent Pain</div><p style={sub}>{urgentPain}</p></div>
+        <div style={panel}><div style={eyebrow}>Open Requests</div><p style={sub}>{openRequests}</p></div>
+      </div>
+      <div style={{ ...panel, marginTop: 12, borderColor: "rgba(48,255,135,.35)" }}>
+        <div style={eyebrow}>AI Next Move</div>
+        <p style={sub}>
+          {urgentPain
+            ? "Prioritize urgent Pain signals. Route capital, contractor, or operator help before pressure turns into loss."
+            : strongDeals
+              ? "Review the strongest Deal signals and request missing owner/member details."
+              : openRequests
+                ? "Work open requests and push replies toward execution."
+                : "Open a Deal or Pain signal and let VaultForge classify the best execution lane."}
+        </p>
+      </div>
+    </section>
+  );
+}
 
 function RoomCard({
   kind,
@@ -3546,6 +3747,8 @@ export default function InvestorRoomPage() {
     <main style={page}>
       <div style={wrap}>
         <VaultForgeAlertCenter audience="investor" title="Investor Alerts" />
+
+        <VaultForgeAICommandBrief deals={deals || []} pains={pains || []} requests={requests || []} />
 
         <TopNav
           onMessageOwner={() => setMessageOwnerOpen(true)}
