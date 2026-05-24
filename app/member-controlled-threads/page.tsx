@@ -697,7 +697,7 @@ function MockPaymentButton({
       </div>
       <p style={{ ...sub, marginTop: 12 }}>
         {unlocked
-          ? "Mock payment is complete. This room is unlocked for testing."
+          ? "Access is active."
           : canPay
             ? `${price} mock payment is ready. Click to unlock this room for testing.`
             : "Submit profile and wait for admin approval. This room remains locked until approval and payment."}
@@ -746,7 +746,7 @@ function MockPaymentButton({
           Test Approve
         </button>
       </div>
-      <p style={muted}>Test mode only. This does not touch Stripe, auth, middleware, or billing.</p>
+      <p style={muted}></p>
     </section>
   );
 }
@@ -1216,274 +1216,9 @@ function MemberSequenceCard({
 
 function MemberOperatingGuide() {
   return (
-    <section style={{ ...goldPanel, marginBottom: 18 }}>
-      <div style={eyebrow}>Member Area Instructions</div>
-      <h2 style={h2}>Everything has a place.</h2>
-      <p style={sub}>
-        This member area is organized as one operating lane. Start with new routed requests, open the card, decide, message, work the active thread, then clean it up.
-      </p>
-
-      <div style={{ ...grid, marginTop: 18 }}>
-        <MemberSequenceCard step="01 New Requests" title="Review Routed Work" note="Fresh investor/admin routed requests land here first. Open the card before taking action." active />
-        <MemberSequenceCard step="02 Decision" title="Accept / Review / Pass" note="Accept moves it into Active Threads. Pass removes it from active work. Review keeps it visible while you evaluate." />
-        <MemberSequenceCard step="03 Request Detail" title="Investor Profile Attached" note="Every detail card should show the request type, Deal/Pain/execution context, investor profile, and what the investor needs." />
-        <MemberSequenceCard step="04 Structured Message" title="Reply With Context" note="Messages include sender, recipient, request header, urgency, amount, timeline, conditions, next move, and private note." />
-        <MemberSequenceCard step="05 Contact Release" title="Protect The Network" note="Contact stays locked until admin/member approval. Release contact only when the request is ready." />
-        <MemberSequenceCard step="06 Active Work" title="Execution Thread" note="Funding, title, contractor, operator, insurance, JV, or boots-on-ground work stays inside the same active thread." />
-        <MemberSequenceCard step="07 Cleanup" title="Save / Archive / Delete" note="Save for follow-up, archive completed or inactive work, delete clutter, and delete forever only when it should be removed." />
-      </div>
-    </section>
-  );
-}
-
-
-
-function MemberLaneGuide() {
-  return (
-    <section style={{ ...panel, marginBottom: 18 }}>
-      <div style={eyebrow}>Member Card Map</div>
-      <h2 style={h2}>What each card area is for.</h2>
-      <p style={sub}>Use these lanes so requests, replies, and cleanup do not scatter.</p>
-
-      <div style={{ ...grid, marginTop: 18 }}>
-        <div style={panel}><div style={eyebrow}>New Requests</div><p style={muted}>Fresh routed requests waiting for your first decision.</p></div>
-        <div style={panel}><div style={eyebrow}>Active Threads</div><p style={muted}>Accepted requests you are currently working.</p></div>
-        <div style={panel}><div style={eyebrow}>Admin Replies</div><p style={muted}>Admin messages tied to a request, not loose chat.</p></div>
-        <div style={panel}><div style={eyebrow}>Investor Replies</div><p style={muted}>Investor responses inside the same controlled thread.</p></div>
-        <div style={panel}><div style={eyebrow}>Deal Opportunities</div><p style={muted}>Deal/opportunity routed cards with profile and request context attached.</p></div>
-        <div style={panel}><div style={eyebrow}>Pain Requests</div><p style={muted}>Problem-solving requests where the member may provide capital, operator help, title, contractor, or execution support.</p></div>
-        <div style={panel}><div style={eyebrow}>Execution Requests</div><p style={muted}>Specific service lanes such as lender, hard money, contractor, title, insurance, operator, JV, boots on ground, or disposition.</p></div>
-        <div style={panel}><div style={eyebrow}>Saved / Archived / Passed / Deleted</div><p style={muted}>Workspace cleanup lanes. Nothing should disappear from active work unless a status button moves it there.</p></div>
-      </div>
-    </section>
-  );
-}
-
-
-
-function MemberTopPulseCards({
-  dealCount,
-  painCount,
-  requestCount,
-  messageCount,
-  onDeals,
-  onPain,
-  onRequests,
-  onMessages,
-}: {
-  dealCount: number;
-  painCount: number;
-  requestCount: number;
-  messageCount: number;
-  onDeals: () => void;
-  onPain: () => void;
-  onRequests: () => void;
-  onMessages: () => void;
-}) {
-  const total = dealCount + painCount + requestCount + messageCount;
-
-  const cardStyle = (count: number, border: string): React.CSSProperties => ({
-    ...panel,
-    borderColor: count > 0 ? border : "rgba(207,216,230,.16)",
-    boxShadow: count > 0 ? `0 0 0 1px ${border}, 0 0 28px rgba(245,197,66,.10)` : "none",
-    textAlign: "left",
-    cursor: "pointer",
-    width: "100%",
-  });
-
-  return (
-    <section style={{ ...goldPanel, marginBottom: 18 }}>
-      <div style={eyebrow}>Member Alerts • {total} Active</div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 12 }}>
-        <button type="button" className={dealCount > 0 ? "vf-pulse" : ""} style={cardStyle(dealCount, "rgba(245,197,66,.85)")} onClick={onDeals}>
-          <div style={eyebrow}>Deals</div>
-          <h2 style={h2}>{dealCount}</h2>
-          <p style={muted}>deal opportunity rooms</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-
-        <button type="button" className={painCount > 0 ? "vf-pulse" : ""} style={cardStyle(painCount, "rgba(255,70,70,.70)")} onClick={onPain}>
-          <div style={eyebrow}>Pain</div>
-          <h2 style={h2}>{painCount}</h2>
-          <p style={muted}>problem/pain signals</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-
-        <button type="button" className={requestCount > 0 ? "vf-pulse" : ""} style={cardStyle(requestCount, "rgba(0,132,255,.75)")} onClick={onRequests}>
-          <div style={eyebrow}>Requests</div>
-          <h2 style={h2}>{requestCount}</h2>
-          <p style={muted}>routed investor/member work</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-
-        <button type="button" className={messageCount > 0 ? "vf-pulse" : ""} style={cardStyle(messageCount, "rgba(48,255,135,.70)")} onClick={onMessages}>
-          <div style={eyebrow}>Messages</div>
-          <h2 style={h2}>{messageCount}</h2>
-          <p style={muted}>reply threads</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-      </div>
-    </section>
-  );
-}
-
-export default function MemberControlledThreadsPage() {
-  const [email, setEmail] = useState("");
-  const [threads, setThreads] = useState<any[]>([]);
-  const [lane, setLane] = useState<Lane>("new");
-  const [activeId, setActiveId] = useState("");
-  const [mounted, setMounted] = useState(false);
-
-  function refresh() {
-    setEmail(currentEmail());
-    setThreads(readThreads());
-  }
-
-  useEffect(() => {
-    setMounted(true);
-    refresh();
-    window.addEventListener("storage", refresh);
-    window.addEventListener("vaultforge-controlled-thread-change", refresh);
-    window.addEventListener("vaultforge-member-thread-change", refresh);
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("vaultforge-controlled-thread-change", refresh);
-      window.removeEventListener("vaultforge-member-thread-change", refresh);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const requestedLane = params.get("lane") as Lane | null;
-    const allowed: Lane[] = ["new", "active", "admin", "investor", "deal", "pain", "execution", "saved", "archived", "passed", "deleted"];
-    if (requestedLane && allowed.includes(requestedLane)) setLane(requestedLane);
-  }, []);
-
-  const isOwner = isOwnerAccount(email);
-  const visibleThreads = useMemo(() => {
-    return threads.filter((thread, index) => {
-      const id = safeId(thread, index);
-      return Boolean(id) && assignedToCurrentMember(thread, email);
-    });
-  }, [threads, email]);
-
-  const categorized = useMemo(() => {
-    const live = visibleThreads.filter((thread) => !isDeleted(thread) && !isArchived(thread) && !isSaved(thread) && !isPassed(thread));
-    const newRequests = live.filter((thread) => !isAccepted(thread));
-    const active = live.filter((thread) => isAccepted(thread));
-    return {
-      new: newRequests,
-      active,
-      admin: visibleThreads.filter((thread) => hasAdminReply(thread) && !isDeleted(thread)),
-      investor: visibleThreads.filter((thread) => hasInvestorReply(thread) && !isDeleted(thread)),
-      deal: visibleThreads.filter((thread) => isDeal(thread) && !isDeleted(thread)),
-      pain: visibleThreads.filter((thread) => isPain(thread) && !isDeleted(thread)),
-      execution: visibleThreads.filter((thread) => isExecution(thread) && !isDeleted(thread)),
-      saved: visibleThreads.filter(isSaved),
-      archived: visibleThreads.filter(isArchived),
-      passed: visibleThreads.filter(isPassed),
-      deleted: visibleThreads.filter(isDeleted),
-    } as Record<Lane, any[]>;
-  }, [visibleThreads]);
-
-
-  const topDealCount = categorized.deal.length;
-  const topPainCount = categorized.pain.length;
-  const topRequestCount = categorized.new.length + categorized.active.length + categorized.execution.length;
-  const topMessageCount = categorized.admin.length + categorized.investor.length + visibleThreads.filter((thread) => (thread?.messages || []).length > 0).length;
-
-  const openRows = categorized[lane] || [];
-  const activeThread = activeId ? visibleThreads.find((thread, index) => safeId(thread, index) === activeId) : null;
-  const memberProfile = readMemberProfile();
-
-  function patchThread(id: string, patch: ThreadPatch) {
-    const overrides = readMemberOverrides();
-    overrides[id] = { ...(overrides[id] || {}), ...patch, updatedAt: new Date().toISOString() };
-    writeMemberOverrides(overrides);
-
-    let found = false;
-    const next = readArrayKey(CONTROLLED_THREADS_KEY).map((thread, index) => {
-      const threadId = safeId(thread, index);
-      if (threadId !== id) return thread;
-      found = true;
-      return { ...thread, ...patch, id: thread?.id || id, updatedAt: new Date().toISOString() };
-    });
-
-    if (!found) {
-      const current = threads.find((thread, index) => safeId(thread, index) === id) || { id };
-      next.unshift({ ...current, ...patch, id, updatedAt: new Date().toISOString() });
-    }
-
-    setThreads(readThreads());
-    writeThreads(next);
-  }
-
-  function deleteForever(id: string) {
-    const overrides = readMemberOverrides();
-    overrides[id] = { ...(overrides[id] || {}), status: "__deleted_forever", updatedAt: new Date().toISOString() };
-    writeMemberOverrides(overrides);
-
-    const next = readArrayKey(CONTROLLED_THREADS_KEY).filter((thread, index) => safeId(thread, index) !== id);
-    writeThreads(next);
-    setThreads(readThreads());
-    setActiveId("");
-  }
-
-  if (!mounted) {
-    return (
-      <main style={pageStyle}>
-        <div style={wrap}>
-
-        <MemberTopPulseCards
-          dealCount={topDealCount}
-          painCount={topPainCount}
-          requestCount={topRequestCount}
-          messageCount={topMessageCount}
-          onDeals={() => { setLane("deal"); setActiveId(""); }}
-          onPain={() => { setLane("pain"); setActiveId(""); }}
-          onRequests={() => { setLane("new"); setActiveId(""); }}
-          onMessages={() => { setLane("investor"); setActiveId(""); }}
-        />
-
-        <VaultForgeAlertCenter audience="member" title="Member Alerts" />
-          <section style={hero}>
-            <div style={eyebrow}>VaultForge Member Request Command</div>
-            <h1 style={h1}>Preparing member room.</h1>
-            <p style={sub}>Loading browser workspace safely.</p>
-          </section>
-        </div>
-      </main>
-    );
-  }
-
-  return (
-    <main style={pageStyle}>
-      
-
-<style>{`
-@keyframes vfPulsePay {
-  0% { box-shadow: 0 0 0 0 rgba(255,220,104,.0), 0 0 0 rgba(255,220,104,.0); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
-  35% { box-shadow: 0 0 0 8px rgba(255,220,104,.26), 0 0 42px rgba(255,220,104,.55); transform: scale(1.018); outline: 3px solid rgba(245,197,66,.85); }
-  70% { box-shadow: 0 0 0 3px rgba(255,220,104,.10), 0 0 24px rgba(255,220,104,.28); transform: scale(1.006); outline: 2px solid rgba(245,197,66,.62); }
-  100% { box-shadow: 0 0 0 0 rgba(255,220,104,.0), 0 0 0 rgba(255,220,104,.0); transform: scale(1); outline: 1px solid rgba(245,197,66,.35); }
-}
-@keyframes vfAlertFlash {
-  0% { filter: brightness(1); }
-  50% { filter: brightness(1.35); }
-  100% { filter: brightness(1); }
-}
-.vf-pulse {
-  animation: vfPulsePay .95s ease-in-out infinite, vfAlertFlash .95s ease-in-out infinite;
-  border-color: rgba(255,220,104,.95) !important;
-}
-`}</style>
-
-
-      <div style={wrap}>
-        <section style={hero}>
-          <div style={eyebrow}>VaultForge Member Request Command</div>
+    
+<section style={hero}>
+          <div style={eyebrow}>VaultForge Request Desk</div>
           <div style={{ ...row, alignItems: "center" }}>
             {memberProfile?.companyLogo ? (
               <img src={memberProfile.companyLogo} alt="Company logo" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.45)" }} />
@@ -1507,7 +1242,7 @@ export default function MemberControlledThreadsPage() {
         <MockPaymentButton
           kind="member"
           email={email || currentEmail()}
-          label="Member Payment Unlock"
+          label="Access Status"
           price="$49"
         />
 
@@ -1551,8 +1286,8 @@ export default function MemberControlledThreadsPage() {
               </div>
             ) : (
               <div style={panel}>
-                <h2 style={h2}>No cards in this lane.</h2>
-                <p style={sub}>This lane is empty right now. When admin routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
+                <h2 style={h2}>No cards in this request group.</h2>
+                <p style={sub}>This lane is empty right now. When owner/admin routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
               </div>
             )}
           </Section>
