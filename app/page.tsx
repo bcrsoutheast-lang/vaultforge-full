@@ -197,19 +197,29 @@ function countdown() {
 }
 
 function normalizeDeal(row: any, index: number): SignalCard {
+  const rawState =
+    row?.state ||
+    row?.dealState ||
+    row?.propertyState ||
+    row?.marketState ||
+    row?.selectedState ||
+    row?.addressState ||
+    row?.locationState ||
+    "GA";
+
   return {
-    id: clean(row?.id || row?.roomId || row?.dealId, `live-deal-${index}`),
+    id: clean(row?.id || row?.roomId || row?.dealId || row?.projectId, `live-deal-${index}`),
     type: "Deal",
-    state: clean(row?.state || row?.dealState || row?.propertyState || row?.marketState, "GA").toUpperCase(),
-    city: clean(row?.city || row?.market || row?.area, "Market"),
-    title: clean(row?.title || row?.headline || row?.name, "Live Deal Opportunity"),
-    assetType: clean(row?.assetType || row?.asset_type || row?.type, "Real Estate"),
-    price: clean(row?.askingPrice || row?.asking_price || row?.price || row?.amount, "Request inside"),
-    fix: clean(row?.repairs || row?.repairEstimate || row?.fixAmount, "Review inside"),
-    arv: clean(row?.arv || row?.afterRepairValue || row?.value, "Review inside"),
-    need: clean(row?.need || row?.requestNeed || row?.routeNeed, "Investor/member review"),
-    summary: clean(row?.teaser || row?.summary || row?.notes || row?.description, "Live deal room available inside VaultForge."),
-    photo: clean(row?.photo || row?.image || row?.imageUrl || row?.photoUrl || row?.photos?.[0] || row?.photoUrls?.[0]),
+    state: clean(rawState, "GA").toUpperCase(),
+    city: clean(row?.city || row?.market || row?.area || row?.submarket || row?.county, "Market"),
+    title: clean(row?.title || row?.headline || row?.name || row?.dealTitle || row?.projectName || row?.propertyName || row?.strategy, "Live Deal Opportunity"),
+    assetType: clean(row?.assetType || row?.asset_type || row?.propertyType || row?.type || row?.dealType, "Real Estate"),
+    price: clean(row?.askingPrice || row?.asking_price || row?.asking || row?.ask || row?.price || row?.purchasePrice || row?.amount, "Request inside"),
+    fix: clean(row?.repairs || row?.repairEstimate || row?.repair_estimate || row?.fixAmount || row?.rehab || row?.rehabBudget, "Review inside"),
+    arv: clean(row?.arv || row?.afterRepairValue || row?.after_repair_value || row?.value || row?.projectedValue, "Review inside"),
+    need: clean(row?.need || row?.requestNeed || row?.routeNeed || row?.helpNeeded || row?.capitalNeed, "Investor/member review"),
+    summary: clean(row?.teaser || row?.summary || row?.notes || row?.description || row?.privateNotes, "Live deal room available inside VaultForge."),
+    photo: clean(row?.photo || row?.image || row?.imageUrl || row?.photoUrl || row?.coverPhoto || row?.photos?.[0] || row?.photoUrls?.[0] || row?.photo_urls?.[0]),
   };
 }
 
@@ -229,7 +239,20 @@ function normalizePain(row: any, index: number): SignalCard {
 }
 
 function readLiveDeals() {
-  const keys = ["vaultforge_deal_rooms_v1", "vaultforge_deals_v1", "vf_deals", "vaultforge_projects_v1", "vaultforge_clean_deal_rooms_v1"];
+  const keys = [
+    "vaultforge_deal_rooms_v1",
+    "vaultforge_clean_deal_rooms_v1",
+    "vaultforge_investor_deal_cards_v1",
+    "vaultforge_investor_deals_v1",
+    "vaultforge_deal_cards_v1",
+    "vaultforge_deals_v1",
+    "vaultforge_projects_v1",
+    "vaultforge_property_cards_v1",
+    "vaultforge_submitted_deals_v1",
+    "vf_deals",
+    "vf_deal_rooms",
+    "vf_projects",
+  ];
   const rows: any[] = [];
   keys.forEach((key) => {
     const parsed = readJson<any>(key, []);
@@ -237,11 +260,26 @@ function readLiveDeals() {
     else if (parsed && typeof parsed === "object") rows.push(...Object.values(parsed));
   });
   const live = rows.filter(Boolean).map(normalizeDeal);
-  return live.length ? live : fallbackDeals;
+  const seen = new Set<string>();
+  const deduped = live.filter((item) => {
+    const key = `${item.id}|${item.title}|${item.city}|${item.state}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return deduped.length ? deduped : fallbackDeals;
 }
 
 function readLivePain() {
-  const keys = ["vaultforge_pain_rooms_v1", "vaultforge_pain_requests_v1", "vf_pain_requests", "vaultforge_clean_pain_rooms_v1"];
+  const keys = [
+    "vaultforge_pain_rooms_v1",
+    "vaultforge_clean_pain_rooms_v1",
+    "vaultforge_pain_requests_v1",
+    "vaultforge_investor_pain_cards_v1",
+    "vaultforge_pain_cards_v1",
+    "vf_pain_requests",
+    "vf_pain_rooms",
+  ];
   const rows: any[] = [];
   keys.forEach((key) => {
     const parsed = readJson<any>(key, []);
