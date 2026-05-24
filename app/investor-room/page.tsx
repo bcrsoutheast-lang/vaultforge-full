@@ -2272,37 +2272,6 @@ function VaultForgeAISnapshot({ kind, item }: { kind: Kind; item: any }) {
   );
 }
 
-function VaultForgeAICommandBrief({ deals, pains, requests }: { deals: any[]; pains: any[]; requests: any[] }) {
-  const strongDeals = deals.filter((item) => vaultForgeAI("Deal", item).score >= 78).length;
-  const urgentPain = pains.filter((item) => vaultForgeAI("Pain", item).urgency >= 8).length;
-  const openRequests = requests.filter((item) => !String(item?.status || item?.folder || "").toLowerCase().includes("archived") && !String(item?.status || item?.folder || "").toLowerCase().includes("deleted")).length;
-
-  return (
-    <section style={goldPanel}>
-      <div style={eyebrow}>Live AI Command Brief</div>
-      <h2 style={h2}>Investor Room intelligence is active.</h2>
-      <div style={grid}>
-        <div style={panel}><div style={eyebrow}>Live Signals</div><p style={sub}>{deals.length + pains.length}</p></div>
-        <div style={panel}><div style={eyebrow}>Strong Deals</div><p style={sub}>{strongDeals}</p></div>
-        <div style={panel}><div style={eyebrow}>Urgent Pain</div><p style={sub}>{urgentPain}</p></div>
-        <div style={panel}><div style={eyebrow}>Open Requests</div><p style={sub}>{openRequests}</p></div>
-      </div>
-      <div style={{ ...panel, marginTop: 12, borderColor: "rgba(48,255,135,.35)" }}>
-        <div style={eyebrow}>AI Next Move</div>
-        <p style={sub}>
-          {urgentPain
-            ? "Prioritize urgent Pain signals. Route capital, contractor, or operator help before pressure turns into loss."
-            : strongDeals
-              ? "Review the strongest Deal signals and request missing owner/member details."
-              : openRequests
-                ? "Work open requests and push replies toward execution."
-                : "Open a Deal or Pain signal and let VaultForge classify the best execution lane."}
-        </p>
-      </div>
-    </section>
-  );
-}
-
 function RoomCard({
   kind,
   item,
@@ -3748,10 +3717,7 @@ export default function InvestorRoomPage() {
     <main style={page}>
       <div style={wrap}>
         <VaultForgeAlertCenter audience="investor" title="Investor Alerts" />
-
-        <VaultForgeAICommandBrief deals={deals || []} pains={pains || []} requests={requests || []} />
-
-        <TopNav
+<TopNav
           onMessageOwner={() => setMessageOwnerOpen(true)}
           isOwner={String(investor?.email || browserValue("vf_email") || browserValue("vaultforge_investor_email") || "").toLowerCase() === OWNER_EMAIL.toLowerCase()}
         />
