@@ -3,31 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-
-const adminInlineButton: React.CSSProperties = {
-  border: "1px solid rgba(207,216,230,.18)",
-  background: "rgba(18,24,38,.92)",
-  color: "#f7f8ff",
-  borderRadius: 999,
-  padding: "12px 18px",
-  fontWeight: 900,
-  cursor: "pointer",
-};
-
-const adminInlineGoldButton: React.CSSProperties = {
-  ...adminInlineButton,
-  background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
-  color: "#080a10",
-};
-
-const adminInlineRedButton: React.CSSProperties = {
-  ...adminInlineButton,
-  background: "rgba(90,10,18,.72)",
-  color: "#ffb2b2",
-  border: "1px solid rgba(255,65,65,.65)",
-};
-
-
 type Status = "pending" | "approved" | "suspended" | "denied" | "deleted";
 type PaymentStatus = "unpaid" | "ready" | "paid" | "comped";
 type AccessStatus = "locked" | "active";
@@ -407,47 +382,6 @@ function Pill({ text }: { text: string }) {
 
 export default function AdminPage() {
   const [members, setMembers] = useState<MemberCard[]>([]);
-
-  const [selectedAdminAlert, setSelectedAdminAlert] = useState<any | null>(null);
-  const [adminAlertFolder, setAdminAlertFolder] = useState<"active" | "saved" | "archived" | "closed" | "deleted">("active");
-  const [adminAlertNotice, setAdminAlertNotice] = useState("");
-
-  function adminAlertId(item: any, index = 0) {
-    return String(item?.id || item?.email || item?.title || item?.name || `admin-alert-${index}`);
-  }
-
-  function adminAlertStatus(item: any) {
-    return String(item?.adminAlertStatus || item?.folder || item?.status || "active").toLowerCase();
-  }
-
-  function setAdminAlertStatus(target: any, status: "active" | "saved" | "archived" | "closed" | "deleted") {
-    try {
-      const raw = window.localStorage.getItem("vaultforge_admin_alert_overrides_v1");
-      const overrides = raw ? JSON.parse(raw) : {};
-      overrides[adminAlertId(target)] = status;
-      window.localStorage.setItem("vaultforge_admin_alert_overrides_v1", JSON.stringify(overrides));
-      setAdminAlertNotice(status === "deleted" ? "Moved to deleted folder." : `Moved to ${status}.`);
-      setSelectedAdminAlert({ ...target, adminAlertStatus: status });
-    } catch {
-      setAdminAlertNotice("Saved locally.");
-      setSelectedAdminAlert({ ...target, adminAlertStatus: status });
-    }
-  }
-
-  function deleteAdminAlertForever(target: any) {
-    try {
-      const raw = window.localStorage.getItem("vaultforge_admin_alert_deleted_forever_v1");
-      const deleted = raw ? JSON.parse(raw) : [];
-      const nextDeleted = Array.from(new Set([...(Array.isArray(deleted) ? deleted : []), adminAlertId(target)]));
-      window.localStorage.setItem("vaultforge_admin_alert_deleted_forever_v1", JSON.stringify(nextDeleted));
-      setAdminAlertNotice("Deleted forever.");
-      setSelectedAdminAlert(null);
-    } catch {
-      setAdminAlertNotice("Deleted forever.");
-      setSelectedAdminAlert(null);
-    }
-  }
-
   const [investors, setInvestors] = useState<InvestorCard[]>([]);
   const [tab, setTab] = useState<"overview" | "members" | "investors">("overview");
   const [memberFilter, setMemberFilter] = useState<"all" | "pending" | "approved" | "deleted">("all");
@@ -697,7 +631,7 @@ export default function AdminPage() {
         <section style={hero}>
           <div style={eyebrow}>VaultForge Admin Command</div>
           <h1 style={h1}>Admin command center.</h1>
-          <p style={sub}>Buttons are direct controls. No card click layer. No nested button conflict.</p>
+          <p style={sub}>Owner control • members • investors • payment approval • cleanup</p>
         </section>
 
         {notice ? (
@@ -761,77 +695,6 @@ export default function AdminPage() {
           </section>
         ) : null}
       </div>
-    
-        {/* ADMIN_PAYMENT_ALERT_MODAL_FIX */}
-        {selectedAdminAlert ? (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 9999,
-              background: "rgba(0,0,0,.72)",
-              padding: 20,
-              overflow: "auto",
-            }}
-            onClick={() => setSelectedAdminAlert(null)}
-          >
-            <section
-              style={{
-                maxWidth: 900,
-                margin: "40px auto",
-                border: "1px solid rgba(245,197,66,.55)",
-                borderRadius: 26,
-                background: "#101725",
-                padding: 24,
-                color: "#f7f8ff",
-              }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div style={{ color: "#ffda5e", textTransform: "uppercase", letterSpacing: ".32em", fontSize: 12, fontWeight: 1000 }}>
-                Payment Alert Detail
-              </div>
-              <h2 style={{ fontSize: 44, lineHeight: 1, letterSpacing: "-.06em", margin: "12px 0", fontWeight: 1000 }}>
-                {selectedAdminAlert?.email || selectedAdminAlert?.name || selectedAdminAlert?.title || "Payment Alert"}
-              </h2>
-              <p style={{ color: "rgba(235,240,255,.78)", fontSize: 18 }}>
-                Type: {selectedAdminAlert?.type || selectedAdminAlert?.role || selectedAdminAlert?.memberType || "Member / Investor"}
-              </p>
-              <p style={{ color: "rgba(235,240,255,.78)", fontSize: 18 }}>
-                Status: {selectedAdminAlert?.adminAlertStatus || selectedAdminAlert?.status || "active"}
-              </p>
-              <p style={{ color: "rgba(235,240,255,.78)", fontSize: 18 }}>
-                Open the related lane to review this payment/access item.
-              </p>
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 18 }}>
-                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "active")} style={adminInlineGoldButton}>
-                  Active
-                </button>
-                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "saved")} style={adminInlineButton}>
-                  Save
-                </button>
-                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "archived")} style={adminInlineButton}>
-                  Archive
-                </button>
-                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "closed")} style={adminInlineButton}>
-                  Close
-                </button>
-                <button type="button" onClick={() => setAdminAlertStatus(selectedAdminAlert, "deleted")} style={adminInlineRedButton}>
-                  Delete
-                </button>
-                {(selectedAdminAlert?.adminAlertStatus || selectedAdminAlert?.status) === "deleted" ? (
-                  <button type="button" onClick={() => deleteAdminAlertForever(selectedAdminAlert)} style={adminInlineRedButton}>
-                    Delete Forever
-                  </button>
-                ) : null}
-                <button type="button" onClick={() => setSelectedAdminAlert(null)} style={adminInlineButton}>
-                  Done
-                </button>
-              </div>
-            </section>
-          </div>
-        ) : null}
-
-</main>
+    </main>
   );
 }
