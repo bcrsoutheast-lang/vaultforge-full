@@ -3,1651 +3,543 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-
-const MY_ROOMS_DELETED_FOREVER_KEY = "vaultforge_my_rooms_deleted_forever_v1";
-
-function readDeletedForeverRoomIds(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(MY_ROOMS_DELETED_FOREVER_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeDeletedForeverRoomIds(ids: string[]) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(MY_ROOMS_DELETED_FOREVER_KEY, JSON.stringify(Array.from(new Set(ids.map(String)))));
-  } catch {
-    // local cleanup only
-  }
-}
-
-function isRoomDeletedForever(room: any) {
-  const id = String(room?.id || room?.roomId || room?.slug || room?.title || "");
-  return id ? readDeletedForeverRoomIds().includes(id) : false;
-}
-
-
 type RoomKind = "deal" | "pain";
-type RoomStatus = "active" | "saved" | "archived" | "deleted" | "sold" | "resolved";
-type RoomStage = "New" | "Reviewing" | "Diagnosing" | "Routed" | "Under Contract" | "In Progress" | "Sold" | "Resolved";
+type RoomStatus = "active" | "saved" | "archived" | "sold" | "resolved" | "deleted";
 
 type Room = {
-  id?: string;
-  roomId?: string;
-  title?: string;
-  name?: string;
-  state?: string;
-  city?: string;
-  county?: string;
-  assetClass?: string;
-  propertyType?: string;
-  severity?: string;
-  timePressure?: string;
-  painTypes?: string[] | string;
-  needs?: string[] | string;
-  routingNeeds?: string[] | string;
-  routeTo?: string[] | string;
-  strategy?: string[] | string;
-  roomState?: string;
-  cleanupState?: string;
-  stateStatus?: string;
-  memberRoomStatus?: RoomStatus;
-  executionStage?: RoomStage;
-  dealStage?: RoomStage;
-  painStage?: RoomStage;
-  ownerEmail?: string;
-  memberEmail?: string;
-  createdBy?: string;
-  createdByEmail?: string;
-  alertRead?: boolean;
-  viewedAt?: string;
-  coverPhoto?: string;
-  photoUrl?: string;
-  imageUrl?: string;
-  photos?: string[];
-  photoUrls?: string[];
-  createdAt?: string;
-  updatedAt?: string;
-  [key: string]: unknown;
+  id: string;
+  kind: RoomKind;
+  title: string;
+  city: string;
+  county: string;
+  state: string;
+  asset: string;
+  strategy: string;
+  status: RoomStatus;
+  message: string;
+  updatedAt: string;
+  source: string;
 };
 
-type ViewKey =
-  | "activeDeals"
-  | "activePain"
-  | "savedDeals"
-  | "savedPain"
-  | "assignedToMe"
-  | "routedToMe"
-  | "following"
-  | "archived"
-  | "sold"
-  | "resolved"
-  | "deleted";
+const ROOM_STORE = "vaultforge_my_rooms_clean_v2";
+const FOREVER_STORE = "vaultforge_my_rooms_deleted_forever_v2";
 
-const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
-const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
-const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
-const MEMBER_STATE_KEY = "vaultforge_my_room_status_v1";
-const WATCH_KEY = "vaultforge_room_watchlist_v1";
-const WATCH_META_KEY = "vaultforge_room_watch_meta_v1";
-const ROOM_ACTIVITY_KEY = "vaultforge_room_activity_v2";
-const ROUTE_STATUS_KEY = "vaultforge_route_status_v1";
-const READ_KEY = "vaultforge_room_alert_read_v1";
-const STAGE_KEY = "vaultforge_room_execution_stage_v1";
-const DEAL_STAGES: RoomStage[] = ["New", "Reviewing", "Routed", "Under Contract", "Sold"];
-const PAIN_STAGES: RoomStage[] = ["New", "Diagnosing", "Routed", "In Progress", "Resolved"];
+const wrap: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at 18% 10%, rgba(245,197,66,.12), transparent 32%), radial-gradient(circle at 86% 8%, rgba(120,0,30,.18), transparent 34%), #05070b",
+  color: "#f7f8ff",
+  padding: "28px 20px 84px",
+  fontFamily:
+    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+};
 
-function ok() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-}
+const shell: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
 
-function j<T>(raw: string | null, fallback: T): T {
+const nav: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+  alignItems: "center",
+  marginBottom: 22,
+};
+
+const brand: React.CSSProperties = {
+  color: "#ffda5e",
+  fontWeight: 1000,
+  fontSize: 28,
+  letterSpacing: "-.04em",
+  marginRight: 10,
+};
+
+const btn: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "rgba(18,24,38,.92)",
+  color: "#f7f8ff",
+  borderRadius: 999,
+  padding: "12px 18px",
+  fontWeight: 900,
+  textDecoration: "none",
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const goldBtn: React.CSSProperties = {
+  ...btn,
+  background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
+  color: "#080a10",
+  border: "1px solid rgba(255,220,90,.65)",
+};
+
+const redBtn: React.CSSProperties = {
+  ...btn,
+  background: "rgba(90,10,18,.72)",
+  color: "#ffb2b2",
+  border: "1px solid rgba(255,65,65,.65)",
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.16)",
+  borderRadius: 26,
+  background: "rgba(15,21,34,.88)",
+  padding: 24,
+  boxShadow: "0 18px 50px rgba(0,0,0,.24)",
+  marginBottom: 20,
+};
+
+const goldCard: React.CSSProperties = {
+  ...card,
+  borderColor: "rgba(245,197,66,.42)",
+  background:
+    "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))",
+};
+
+const panel: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.15)",
+  borderRadius: 22,
+  background: "rgba(17,23,36,.78)",
+  padding: 20,
+};
+
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+  gap: 14,
+};
+
+const row: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+  alignItems: "center",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#ffda5e",
+  textTransform: "uppercase",
+  letterSpacing: ".34em",
+  fontSize: 12,
+  fontWeight: 1000,
+};
+
+const h1: React.CSSProperties = {
+  fontSize: "clamp(42px,7vw,82px)",
+  lineHeight: ".92",
+  letterSpacing: "-.08em",
+  margin: "12px 0",
+  fontWeight: 1000,
+};
+
+const h2: React.CSSProperties = {
+  fontSize: "clamp(30px,4.5vw,54px)",
+  lineHeight: ".95",
+  letterSpacing: "-.065em",
+  margin: "10px 0",
+  fontWeight: 1000,
+};
+
+const h3: React.CSSProperties = {
+  fontSize: 28,
+  lineHeight: 1,
+  letterSpacing: "-.05em",
+  margin: "8px 0",
+  fontWeight: 1000,
+};
+
+const sub: React.CSSProperties = {
+  color: "rgba(235,240,255,.78)",
+  fontSize: 20,
+  lineHeight: 1.45,
+  margin: "8px 0",
+};
+
+const muted: React.CSSProperties = {
+  color: "rgba(235,240,255,.68)",
+  fontSize: 15,
+  lineHeight: 1.45,
+  margin: "6px 0",
+};
+
+function parse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
   try {
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    return JSON.parse(raw) as T;
   } catch {
     return fallback;
   }
 }
 
-function writeJson(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
+function clean(value: unknown, fallback = "Not listed") {
+  const text = String(value || "").trim();
+  return text || fallback;
 }
 
-function txt(value: unknown, fallback = "") {
-  const clean = String(value || "").trim();
-  return clean || fallback;
-}
-
-function list(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
-  if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
-  return [];
-}
-
-function arr<T>(key: string): T[] {
-  if (!ok()) return [];
-  const parsed = j<unknown>(localStorage.getItem(key), []);
-  return Array.isArray(parsed) ? (parsed as T[]) : [];
-}
-
-function rid(room: Room | null | undefined) {
-  return txt(room?.id || room?.roomId);
-}
-
-function roomTitle(room: Room, kind: RoomKind) {
-  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
-}
-
-function loc(room: Room) {
-  return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
-}
-
-function keysFor(kind: RoomKind) {
-  return kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
-}
-
-function firstPhoto(room: Room) {
-  const possible = [txt(room.coverPhoto), txt(room.photoUrl), txt(room.imageUrl), ...list(room.photos), ...list(room.photoUrls)].filter(Boolean);
-  return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
-}
-
-function normalizeRoom(row: any, kind: RoomKind): Room {
-  const id = txt(row?.id || row?.roomId || row?.painId || row?.dealId || row?.signalId);
-  const photos = list(row?.photos || row?.photoUrls);
-  const cover = txt(row?.coverPhoto || row?.photoUrl || row?.imageUrl || photos[0]);
-  return {
-    ...row,
-    id,
-    roomId: id,
-    title: txt(row?.title || row?.name || row?.painTitle || row?.dealTitle || row?.problemTitle, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room"),
-    state: txt(row?.state, "GA"),
-    city: txt(row?.city),
-    county: txt(row?.county),
-    photos,
-    photoUrls: photos,
-    coverPhoto: cover,
-    photoUrl: cover,
-    imageUrl: cover,
-  };
-}
-
-function rawStatus(room: Room): RoomStatus {
-  const state = txt(room.memberRoomStatus || room.roomState || room.cleanupState || room.stateStatus, "active");
-  if (state === "saved" || state === "archived" || state === "deleted" || state === "sold" || state === "resolved") return state;
+function statusFrom(raw: unknown): RoomStatus {
+  const value = String(raw || "active").toLowerCase();
+  if (value.includes("save")) return "saved";
+  if (value.includes("archive")) return "archived";
+  if (value.includes("sold")) return "sold";
+  if (value.includes("resolve")) return "resolved";
+  if (value.includes("delete") || value.includes("trash")) return "deleted";
   return "active";
 }
 
-function stateMap() {
-  const map: Record<string, RoomStatus> = {};
-  if (!ok()) return map;
-  STATE_KEYS.forEach((key) => Object.assign(map, j<Record<string, RoomStatus>>(localStorage.getItem(key), {})));
-  Object.assign(map, j<Record<string, RoomStatus>>(localStorage.getItem(MEMBER_STATE_KEY), {}));
-  return map;
+function kindFrom(item: any, key: string): RoomKind {
+  const text = `${key} ${JSON.stringify(item || {})}`.toLowerCase();
+  if (text.includes("pain") || text.includes("problem") || text.includes("distress")) return "pain";
+  return "deal";
 }
 
-
-function stageMap() {
-  return ok() ? j<Record<string, RoomStage>>(localStorage.getItem(STAGE_KEY), {}) : {};
+function foreverIds() {
+  if (typeof window === "undefined") return [];
+  return parse<string[]>(window.localStorage.getItem(FOREVER_STORE), []);
 }
 
-function defaultStage(kind: RoomKind, room: Room): RoomStage {
-  const status = rawStatus(room);
-  if (kind === "deal" && status === "sold") return "Sold";
-  if (kind === "pain" && status === "resolved") return "Resolved";
-  const existing = txt(room.executionStage || room.dealStage || room.painStage);
-  if (kind === "deal" && DEAL_STAGES.includes(existing as RoomStage)) return existing as RoomStage;
-  if (kind === "pain" && PAIN_STAGES.includes(existing as RoomStage)) return existing as RoomStage;
-  return "New";
+function saveForeverIds(ids: string[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(FOREVER_STORE, JSON.stringify(Array.from(new Set(ids))));
 }
 
-function roomStage(kind: RoomKind, room: Room): RoomStage {
-  const id = rid(room);
-  const stages = stageMap();
-  const mapped = stages[id] || stages[`${kind}:${id}`];
-  if (mapped) return mapped;
-  return defaultStage(kind, room);
-}
-
-function saveRoomStage(kind: RoomKind, room: Room, stage: RoomStage) {
-  if (!ok()) return;
-  const id = rid(room);
-  if (!id) return;
-
-  const stages = stageMap();
-  stages[id] = stage;
-  stages[`${kind}:${id}`] = stage;
-  writeJson(STAGE_KEY, stages);
-
-  const finalStatus =
-    kind === "deal" && stage === "Sold" ? "sold"
-    : kind === "pain" && stage === "Resolved" ? "resolved"
-    : rawStatus(room) === "sold" || rawStatus(room) === "resolved" ? "active"
-    : rawStatus(room);
-
-  const next = {
-    ...room,
-    executionStage: stage,
-    dealStage: kind === "deal" ? stage : room.dealStage,
-    painStage: kind === "pain" ? stage : room.painStage,
-    memberRoomStatus: finalStatus,
-    roomState: finalStatus,
-    cleanupState: finalStatus,
-    stateStatus: finalStatus,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const directKey = kind === "deal" ? `vaultforge_deal_room_${id}` : `vaultforge_pain_room_${id}`;
-  writeJson(directKey, next);
-
-  for (const key of keysFor(kind)) {
-    const rows = allRooms(kind).filter((item) => rid(item) !== id);
-    writeJson(key, [next, ...rows]);
-  }
-
-  addRoomActivity(kind, room, "Stage Change", `Execution stage moved to ${stage}.`);
-
-  if (stage === "Sold" || stage === "Resolved") {
-    saveRoomStatus(kind, next, stage === "Sold" ? "sold" : "resolved");
-  }
-
-  window.dispatchEvent(new Event("vaultforge-room-stage-change"));
-  window.dispatchEvent(new Event("vaultforge-my-rooms-change"));
-}
-
-function nextActionFor(kind: RoomKind, room: Room) {
-  const stage = roomStage(kind, room);
-  const health = roomHealth(kind, room);
-  if (stage === "Sold") return "Keep this deal as performance history.";
-  if (stage === "Resolved") return "Keep this pain room as resolution history.";
-  if (stage === "New") return kind === "deal" ? "Review numbers, proof, photos, control, and routing target." : "Diagnose blocker, deadline, money need, risk, and solver type.";
-  if (stage === "Reviewing") return "Move this deal to Routed once a buyer/capital/operator target is chosen.";
-  if (stage === "Diagnosing") return "Move this pain room to Routed once the right solver lane is clear.";
-  if (stage === "Routed") return "Message or intro the best-fit member and track response.";
-  if (stage === "Under Contract") return "Track close path. Mark Sold when complete.";
-  if (stage === "In Progress") return "Track solver progress. Mark Resolved when handled.";
-  return health.next;
-}
-
-function stageCounts(deals: Room[], pains: Room[]) {
-  const out: Record<string, number> = {};
-  for (const stage of [...DEAL_STAGES, ...PAIN_STAGES]) out[stage] = 0;
-  for (const room of deals) out[roomStage("deal", room)] = (out[roomStage("deal", room)] || 0) + 1;
-  for (const room of pains) out[roomStage("pain", room)] = (out[roomStage("pain", room)] || 0) + 1;
-  return out;
-}
-
-
-function allRooms(kind: RoomKind): Room[] {
-  if (!ok()) return [];
-  const out: Room[] = [];
-  const seen = new Set<string>();
-
-  for (const key of keysFor(kind)) {
-    for (const row of arr<any>(key)) {
-      const room = normalizeRoom(row, kind);
-      const id = rid(room);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push(room);
-    }
-  }
-
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const key = localStorage.key(i) || "";
-    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
-    if (!match) continue;
-
-    const value = j<any>(localStorage.getItem(key), null);
-
-    if (Array.isArray(value)) {
-      for (const row of value) {
-        const room = normalizeRoom(row, kind);
-        const id = rid(room);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        out.push(room);
-      }
-    } else if (value && typeof value === "object") {
-      const room = normalizeRoom(value, kind);
-      const id = rid(room);
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        out.push(room);
-      }
-    }
-  }
-
-  const states = stateMap();
-
-  return out
-    .map((room) => {
-      const id = rid(room);
-      const status = states[id] || states[`${kind}:${id}`] || rawStatus(room);
-      return { ...room, memberRoomStatus: status, roomState: status, cleanupState: status, stateStatus: status, executionStage: roomStage(kind, { ...room, memberRoomStatus: status, roomState: status, cleanupState: status, stateStatus: status }) };
-    })
-    .sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
-}
-
-function readMap() {
-  return ok() ? j<Record<string, string>>(localStorage.getItem(READ_KEY), {}) : {};
-}
-
-function unread(kind: RoomKind, room: Room) {
-  const reads = readMap();
-  const id = rid(room);
-  return !room.alertRead && !room.viewedAt && !reads[id] && !reads[`${kind}:${id}`];
-}
-
-function saveRoomStatus(kind: RoomKind, room: Room, status: RoomStatus) {
-  if (!ok()) return;
-
-  const id = rid(room);
-  if (!id) return;
-
-  const states = stateMap();
-  states[id] = status;
-  states[`${kind}:${id}`] = status;
-  writeJson(MEMBER_STATE_KEY, states);
-
-  const next = {
-    ...room,
-    memberRoomStatus: status,
-    roomState: status,
-    cleanupState: status,
-    stateStatus: status,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const directKey = kind === "deal" ? `vaultforge_deal_room_${id}` : `vaultforge_pain_room_${id}`;
-  writeJson(directKey, next);
-
-  for (const key of keysFor(kind)) {
-    const rows = allRooms(kind).filter((item) => rid(item) !== id);
-    writeJson(key, [next, ...rows]);
-  }
-
-  addRoomActivity(kind, room, "Status Change", `Room moved to ${status}.`);
-  window.dispatchEvent(new Event("vaultforge-room-state-change"));
-  window.dispatchEvent(new Event("vaultforge-my-rooms-change"));
-  window.dispatchEvent(new Event(kind === "deal" ? "vaultforge-deal-change" : "vaultforge-pain-change"));
-}
-
-
-function num(value: unknown) {
-  const parsed = Number(String(value || "").replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function daysOld(room: Room) {
-  const date = txt(room.updatedAt || room.createdAt);
-  if (!date) return 0;
-  const time = new Date(date).getTime();
-  if (!Number.isFinite(time)) return 0;
-  return Math.max(0, Math.floor((Date.now() - time) / 86400000));
-}
-
-function roomHealth(kind: RoomKind, room: Room) {
-  const status = rawStatus(room);
-  const age = daysOld(room);
-  let score = 70;
-  let label = "Healthy";
-  let next = "Keep monitoring and move the room through the execution path.";
-  let warning = "";
-
-  if (status === "sold") {
-    return {
-      score: 100,
-      label: "Sold",
-      warning: "Completed deal room.",
-      next: "Keep as performance history. Later this can feed close-rate and member trust scores.",
-      attention: false,
-    };
-  }
-
-  if (status === "resolved") {
-    return {
-      score: 100,
-      label: "Resolved",
-      warning: "Problem handled.",
-      next: "Keep as resolution history. Later this can feed solver performance and routing intelligence.",
-      attention: false,
-    };
-  }
-
-  if (status === "deleted") {
-    return {
-      score: 10,
-      label: "Deleted",
-      warning: "Hidden from active workspace.",
-      next: "Restore Active active only if this room needs work again.",
-      attention: false,
-    };
-  }
-
-  if (status === "archived") {
-    return {
-      score: 45,
-      label: "Archived",
-      warning: "Not active right now.",
-      next: "Restore Active active if execution resumes, or leave archived for records.",
-      attention: false,
-    };
-  }
-
-  if (status === "saved") score += 8;
-
-  if (kind === "deal") {
-    const ask = num(room.askingPrice || room.askPrice);
-    const value = num(room.propertyValue || room.value);
-    const repairs = num(room.repairs);
-    const spread = value && ask ? value - ask - repairs : 0;
-    const hasPhotos = list(room.photos || room.photoUrls).length > 0 || firstPhoto(room);
-
-    if (!ask || !value) {
-      score -= 18;
-      warning = "Missing deal numbers.";
-      next = "Add ask price, value/ARV, repairs, control status, and proof before routing hard.";
-    }
-
-    if (spread > 25000) score += 8;
-    if (spread > 75000) score += 12;
-    if (spread <= 0 && ask && value) {
-      score -= 15;
-      warning = "Weak or unclear spread.";
-      next = "Verify numbers before sending this to buyers or capital.";
-    }
-
-    if (!hasPhotos) {
-      score -= 8;
-      if (!warning) warning = "No room photos.";
-    }
-
-    if (age >= 7 && status === "active") {
-      score -= 12;
-      warning = "Stale active deal.";
-      next = "Update status, message a fit, archive it, or mark sold if done.";
-    }
-
-    if (score >= 85) label = "High Momentum";
-    else if (score >= 65) label = "Working";
-    else if (score >= 45) label = "Needs Proof";
-    else label = "Needs Attention";
-  } else {
-    let severity = 35;
-    const sev = txt(room.severity);
-    if (sev === "Medium") severity = 50;
-    if (sev === "High") severity = 70;
-    if (sev === "Critical") severity = 88;
-    if (sev === "Emergency") severity = 96;
-    if (txt(room.timePressure).includes("24") || txt(room.timePressure).includes("72")) severity += 8;
-    severity = Math.min(100, severity);
-
-    score = 100 - Math.round(severity * 0.45);
-
-    if (severity >= 85) {
-      warning = "Critical pressure.";
-      next = "Message or route this to a solver now. Do not let it sit in active.";
-    } else if (severity >= 70) {
-      warning = "High pressure.";
-      next = "Confirm blocker, money needed, deadline, and route to a fit.";
-    }
-
-    if (age >= 3 && status === "active" && severity >= 70) {
-      score -= 12;
-      warning = "High pressure and stale.";
-      next = "Update, route, message, resolve, or archive. This needs action.";
-    }
-
-    if (list(room.blockers).length === 0 && list(room.painTypes).length === 0) {
-      score -= 10;
-      if (!warning) warning = "Missing problem classification.";
-      next = "Add pain type, blockers, risk, deadline, and next required solver.";
-    }
-
-    if (score >= 75) label = "Controlled";
-    else if (score >= 55) label = "Active Pressure";
-    else if (score >= 35) label = "Needs Solver";
-    else label = "Needs Attention";
-  }
-
-  score = Math.max(0, Math.min(100, score));
-  const attention = status === "active" && (score < 55 || Boolean(warning));
-
-  return {
-    score,
-    label,
-    warning: warning || "No urgent warning.",
-    next,
-    attention,
-  };
-}
-
-function healthColor(score: number) {
-  if (score >= 75) return "#ffdc68";
-  if (score >= 50) return "#f5a742";
-  return "#ff4b5c";
-}
-
-
-
-
-function activityKey(kind: RoomKind, room: Room) {
-  return `${kind}:${rid(room)}`;
-}
-
-function readRoomActivity(kind: RoomKind, room: Room) {
-  if (!ok()) return [] as { at: string; action: string; note: string }[];
-  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ROOM_ACTIVITY_KEY), {});
-  return all[activityKey(kind, room)] || [];
-}
-
-function addRoomActivity(kind: RoomKind, room: Room, action: string, note: string) {
-  if (!ok()) return;
-  const key = activityKey(kind, room);
-  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ROOM_ACTIVITY_KEY), {});
-  all[key] = [{ at: new Date().toISOString(), action, note }, ...(all[key] || [])].slice(0, 75);
-  writeJson(ROOM_ACTIVITY_KEY, all);
-  window.dispatchEvent(new Event("vaultforge-room-activity-change"));
-}
-
-
-
-
-type CurrentMemberIdentity = {
-  id: string;
-  email: string;
-  hasIdentity: boolean;
-};
-
-function currentMemberIdentity(): CurrentMemberIdentity {
-  if (!ok()) {
-    return { id: "", email: "", hasIdentity: false };
-  }
-
-  let profile: any = {};
-  const profileKeys = [
-    "vaultforge_profile",
-    "vaultforge_member_profile",
-    "vf_profile",
-    "member_profile",
-    "profile",
-  ];
-
-  for (const key of profileKeys) {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw && raw.startsWith("{")) {
-        profile = { ...profile, ...JSON.parse(raw) };
-      }
-    } catch {
-      // ignore bad local storage values
-    }
-  }
-
-  const email = txt(
-    profile.email ||
-      profile.memberEmail ||
-      profile.member_email ||
-      localStorage.getItem("vf_email") ||
-      localStorage.getItem("member_email") ||
-      localStorage.getItem("email")
-  ).toLowerCase();
-
-  const id = txt(
-    profile.id ||
-      profile.memberId ||
-      profile.member_id ||
-      profile.auth_user_id ||
-      profile.user_id ||
-      email ||
-      "local_member"
-  ).toLowerCase();
-
-  return {
-    id,
-    email,
-    hasIdentity: Boolean(id || email),
-  };
-}
-
-
-function routeStatusMap() {
-  return ok() ? j<Record<string, { status: string; at: string; memberName: string; memberEmail: string; roomId: string; kind: string }>>(localStorage.getItem(ROUTE_STATUS_KEY), {}) : {};
-}
-
-function currentRouteEntriesForRoom(kind: RoomKind, room: Room) {
-  const id = rid(room);
-  const current = currentMemberIdentity();
-  return Object.entries(routeStatusMap()).filter(([key, value]) => {
-    if (value.kind !== kind || value.roomId !== id) return false;
-    const keyLower = key.toLowerCase();
-    return Boolean(
-      (current.id && keyLower.includes(current.id.toLowerCase())) ||
-      (current.email && keyLower.includes(current.email.toLowerCase())) ||
-      roomAssignedToCurrentMember(room) ||
-      roomRoutedToCurrentMember(room)
-    );
+function collect(value: any): any[] {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  const rows: any[] = [];
+  Object.values(value).forEach((item) => {
+    if (Array.isArray(item)) rows.push(...item);
   });
+  if (value.id || value.title || value.name || value.subject) rows.push(value);
+  return rows;
 }
 
-function currentRouteStatusForRoom(kind: RoomKind, room: Room) {
-  const entries = currentRouteEntriesForRoom(kind, room);
-  const ranked = ["claimed", "accepted", "pending", "passed"];
-  for (const status of ranked) {
-    if (entries.some(([, value]) => value.status === status)) return status;
-  }
-  return entries[0]?.[1]?.status || "";
-}
+function loadRooms(): Room[] {
+  if (typeof window === "undefined") return [];
 
-function setCurrentRouteStatus(kind: RoomKind, room: Room, status: "accepted" | "passed" | "claimed") {
-  if (!ok()) return;
-  const id = rid(room);
-  const current = currentMemberIdentity();
-  const map = routeStatusMap();
-  let touched = false;
+  const deletedForever = new Set(foreverIds());
 
-  for (const [key, value] of Object.entries(map)) {
-    if (value.kind !== kind || value.roomId !== id) continue;
-    const keyLower = key.toLowerCase();
-    const belongs =
-      (current.id && keyLower.includes(current.id.toLowerCase())) ||
-      (current.email && keyLower.includes(current.email.toLowerCase()));
+  const keys = new Set<string>([
+    ROOM_STORE,
+    "vaultforge_rooms_v1",
+    "vaultforge_deal_rooms_v1",
+    "vaultforge_pain_rooms_v1",
+    "vaultforge_member_rooms_v1",
+    "vaultforge_property_cards_v1",
+    "vaultforge_projects_v1",
+    "vaultforge_deals_v1",
+    "vaultforge_pain_requests_v1",
+  ]);
 
-    if (belongs || roomAssignedToCurrentMember(room) || roomRoutedToCurrentMember(room)) {
-      map[key] = { ...value, status, at: new Date().toISOString() };
-      touched = true;
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i) || "";
+    const lower = key.toLowerCase();
+    if (
+      lower.includes("room") ||
+      lower.includes("deal") ||
+      lower.includes("pain") ||
+      lower.includes("project") ||
+      lower.includes("property")
+    ) {
+      keys.add(key);
     }
   }
 
-  if (!touched) {
-    const routeKey = `${kind}:${id}:${current.id || current.email || "local_member"}`;
-    map[routeKey] = {
-      status,
-      at: new Date().toISOString(),
-      memberName: current.id || "local_member",
-      memberEmail: current.email,
-      roomId: id,
-      kind,
-    };
-  }
-
-  writeJson(ROUTE_STATUS_KEY, map);
-  addRoomActivity(kind, room, "Route Response", `Route marked ${status}.`);
-  window.dispatchEvent(new Event("vaultforge-route-status-change"));
-  window.dispatchEvent(new Event("vaultforge-alert-change"));
-}
-
-
-function watchKey(kind: RoomKind, room: Room) {
-  return `${kind}:${rid(room)}`;
-}
-
-function watchList() {
-  return ok() ? j<string[]>(localStorage.getItem(WATCH_KEY), []) : [];
-}
-
-function watchMeta() {
-  return ok() ? j<Record<string, { at: string; updates: number }>>(localStorage.getItem(WATCH_META_KEY), {}) : {};
-}
-
-function isWatchingRoom(kind: RoomKind, room: Room) {
-  return watchList().includes(watchKey(kind, room));
-}
-
-function toggleWatchRoom(kind: RoomKind, room: Room) {
-  if (!ok()) return false;
-  const key = watchKey(kind, room);
-  const current = watchList();
-  const meta = watchMeta();
-
-  let next: string[];
-  let watching: boolean;
-
-  if (current.includes(key)) {
-    next = current.filter((item) => item !== key);
-    delete meta[key];
-    watching = false;
-  } else {
-    next = [key, ...current];
-    meta[key] = { at: new Date().toISOString(), updates: 0 };
-    watching = true;
-  }
-
-  writeJson(WATCH_KEY, next);
-  writeJson(WATCH_META_KEY, meta);
-  addRoomActivity(kind, room, watching ? "Watch" : "Unwatch", watching ? "Started following this room." : "Stopped following this room.");
-  window.dispatchEvent(new Event("vaultforge-room-watch-change"));
-  window.dispatchEvent(new Event("vaultforge-alert-change"));
-  return watching;
-}
-
-function watchingCount(kind: RoomKind, room: Room) {
-  const key = watchKey(kind, room);
-  let count = isWatchingRoom(kind, room) ? 1 : 0;
-  count += list(room.watchers).length + list(room.watcherIds).length + list(room.watcherEmails).length;
-  return count;
-}
-
-function roomIsFollowedByCurrentMember(kind: RoomKind, room: Room) {
-  const current = currentMemberIdentity();
-  if (isWatchingRoom(kind, room)) return true;
-  const ids = list(room.watchers).concat(list(room.watcherIds)).map((value) => value.toLowerCase());
-  const emails = list(room.watcherEmails).map((value) => value.toLowerCase());
-  return Boolean((current.id && ids.includes(current.id.toLowerCase())) || (current.email && emails.includes(current.email)));
-}
-
-
-function roomAssignedIds(room: Room) {
-  return [
-    ...list(room.assignedTo),
-    ...list(room.assignedToIds),
-    ...list(room.routedTo),
-    ...list(room.routedToIds),
-    ...list(room.watchers),
-    ...list(room.collaborators),
-  ].map((value) => value.toLowerCase());
-}
-
-function roomAssignedEmails(room: Room) {
-  return [
-    ...list(room.assignedToEmail),
-    ...list(room.assignedToEmails),
-    ...list(room.routedToEmail),
-    ...list(room.routedToEmails),
-    ...list(room.watcherEmails),
-    ...list(room.collaboratorEmails),
-  ].map((value) => value.toLowerCase());
-}
-
-function roomBelongsToCurrentMember(room: Room) {
-  const current = currentMemberIdentity();
-
-  const ownerId = txt(room.ownerId || room.createdBy || room.memberId || room.createdById).toLowerCase();
-  const ownerEmail = txt(room.ownerEmail || room.createdByEmail || room.memberEmail).toLowerCase();
-
-  const assignedIds = roomAssignedIds(room);
-  const assignedEmails = roomAssignedEmails(room);
-
-  const hasOwnershipData =
-    Boolean(ownerId) ||
-    Boolean(ownerEmail) ||
-    assignedIds.length > 0 ||
-    assignedEmails.length > 0;
-
-  if (!hasOwnershipData) {
-    return true;
-  }
-
-  if (current.id && ownerId && ownerId === current.id.toLowerCase()) return true;
-  if (current.email && ownerEmail && ownerEmail === current.email) return true;
-  if (current.id && assignedIds.includes(current.id.toLowerCase())) return true;
-  if (current.email && assignedEmails.includes(current.email)) return true;
-
-  return false;
-}
-
-function ownershipLabel(room: Room) {
-  const current = currentMemberIdentity();
-  const ownerId = txt(room.ownerId || room.createdBy || room.memberId || room.createdById);
-  const ownerEmail = txt(room.ownerEmail || room.createdByEmail || room.memberEmail);
-
-  if (!ownerId && !ownerEmail) return "Local/demo room";
-  if ((current.id && ownerId.toLowerCase() === current.id.toLowerCase()) || (current.email && ownerEmail.toLowerCase() === current.email)) return "Owned by me";
-  if (roomAssignedIds(room).includes(current.id.toLowerCase()) || roomAssignedEmails(room).includes(current.email)) return "Assigned/routed to me";
-  return "Other member room";
-}
-
-
-const styleTag = `
-@keyframes vfPulseRed {
-  0% { box-shadow: 0 0 0 rgba(255,60,70,.0); transform: translateY(0); }
-  50% { box-shadow: 0 0 34px rgba(255,60,70,.34); transform: translateY(-1px); }
-  100% { box-shadow: 0 0 0 rgba(255,60,70,.0); transform: translateY(0); }
-}
-@keyframes vfPulseGold {
-  0% { box-shadow: 0 0 0 rgba(255,220,104,.0); transform: translateY(0); }
-  50% { box-shadow: 0 0 34px rgba(255,220,104,.28); transform: translateY(-1px); }
-  100% { box-shadow: 0 0 0 rgba(255,220,104,.0); transform: translateY(0); }
-}
-`;
-
-const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
-const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
-const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
-const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
-const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
-const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.75)", boxShadow: "0 0 26px rgba(245,197,66,.18)" };
-const pulseRed: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", animation: "vfPulseRed 2.1s ease-in-out infinite" };
-const pulseGold: React.CSSProperties = { ...panel, borderColor: "rgba(255,220,104,.70)", animation: "vfPulseGold 2.3s ease-in-out infinite" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
-const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
-const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
-const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-
-const logoWrap: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  margin: "8px 0 24px",
-};
-
-const logoShell: React.CSSProperties = {
-  width: "min(520px, 92vw)",
-  border: "1px solid rgba(245,197,66,.32)",
-  borderRadius: 34,
-  background: "radial-gradient(circle at top, rgba(245,197,66,.18), transparent 38%), linear-gradient(180deg,#0b101d,#050816)",
-  boxShadow: "0 0 42px rgba(245,197,66,.13)",
-  padding: 22,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexDirection: "column",
-  textAlign: "center",
-};
-
-const logoImg: React.CSSProperties = {
-  maxWidth: "min(390px, 78vw)",
-  maxHeight: 140,
-  width: "auto",
-  height: "auto",
-  objectFit: "contain",
-  display: "block",
-};
-
-const logoFallback: React.CSSProperties = {
-  color: "#ffd45a",
-  fontSize: "clamp(40px,9vw,82px)",
-  fontWeight: 950,
-  letterSpacing: -4,
-  lineHeight: 0.9,
-};
-
-const imgStyle: React.CSSProperties = { width: "100%", height: 150, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
-
-
-function VaultForgeBrandLogo() {
-  const logoPaths = [
-    "/vaultforge-logo.png",
-    "/VaultForge-logo.png",
-    "/vaultforge-logo.jpg",
-    "/vaultforge-logo.webp",
-    "/logo.png",
-    "/logo.jpg",
-    "/logo.webp",
-    "/vf-logo.png",
-    "/brand/logo.png",
-  ];
-
-  const [index, setIndex] = useState(0);
-  const [failed, setFailed] = useState(false);
-  const src = logoPaths[index];
-
-  return (
-    <div style={logoWrap}>
-      <div style={logoShell}>
-        {!failed && src ? (
-          <img
-            src={src}
-            alt="VaultForge"
-            style={logoImg}
-            onError={() => {
-              const next = index + 1;
-              if (next < logoPaths.length) setIndex(next);
-              else setFailed(true);
-            }}
-          />
-        ) : (
-          <div style={logoFallback}>VaultForge</div>
-        )}
-        <p style={{ ...muted, marginTop: 12 }}>Private real estate execution intelligence network</p>
-      </div>
-    </div>
-  );
-}
-
-function safeProfileText(value: unknown, fallback: string) {
-  const clean = String(value || "").trim();
-  return clean && clean !== "undefined" && clean !== "null" ? clean : fallback;
-}
-
-function readMemberDisplay() {
-  if (typeof window === "undefined") {
-    return {
-      displayName: "Member Workspace",
-      company: "Company not listed",
-      email: "Email not listed",
-      memberType: "Private Member",
-      states: "States not listed",
-    };
-  }
-
-  let profile: any = {};
-  const keys = ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"];
-
-  for (const key of keys) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
-    } catch {
-      // ignore local storage parse errors
-    }
-  }
-
-  const email = safeProfileText(
-    profile.email ||
-      profile.memberEmail ||
-      profile.member_email ||
-      window.localStorage.getItem("vf_email") ||
-      window.localStorage.getItem("member_email") ||
-      window.localStorage.getItem("email"),
-    "Email not listed"
-  );
-
-  const displayName = safeProfileText(
-    profile.fullName ||
-      profile.full_name ||
-      profile.name ||
-      profile.ownerName ||
-      window.localStorage.getItem("vf_name") ||
-      window.localStorage.getItem("member_name"),
-    email.includes("@") ? email.split("@")[0] : "Member Workspace"
-  );
-
-  const company = safeProfileText(
-    profile.company ||
-      profile.companyName ||
-      profile.company_name ||
-      profile.businessName ||
-      window.localStorage.getItem("vf_company") ||
-      window.localStorage.getItem("member_company"),
-    "Company not listed"
-  );
-
-  const memberType = safeProfileText(profile.memberType || profile.member_type || profile.role || profile.investorType, "Private Member");
-
-  const statesRaw = profile.states || profile.operatingStates || profile.statesOperated || profile.serviceStates || profile.markets;
-  const states = Array.isArray(statesRaw) ? statesRaw.join(" • ") : safeProfileText(statesRaw, "States not listed");
-
-  return { displayName, company, email, memberType, states };
-}
-
-function MemberDisplayCard() {
-  const [member, setMember] = useState(() => ({
-    displayName: "Member Workspace",
-    company: "Company not listed",
-    email: "Email not listed",
-    memberType: "Private Member",
-    states: "States not listed",
-  }));
-  useEffect(() => {
-    setMember(readMemberDisplay());
-  }, []);
-
-  return (
-    <section style={{ ...panel, borderColor: "rgba(245,197,66,.32)", marginBottom: 22 }}>
-      <div style={eyebrow}>Member Command Identity</div>
-      <h2 style={h2}>{member.displayName}</h2>
-      <p style={sub}>{member.company}</p>
-      <p style={muted}>{member.email} • {member.memberType}</p>
-      <p style={muted}>{member.states}</p>
-    </section>
-  );
-}
-
-
-function Nav() {
-  return (
-    <nav style={nav}>
-      <div style={brand}>VAULTFORGE</div>
-      <Link href="/command" style={btn}>Command</Link>
-      <Link href="/my-rooms" style={goldBtn}>My Rooms</Link>
-      <Link href="/members" style={btn}>Members</Link>
-      <Link href="/network" style={btn}>Network</Link>
-      <Link href="/messages" style={btn}>Messages</Link>
-      <Link href="/deal-create" style={btn}>Create</Link>
-      <Link href="/profile" style={btn}>Profile</Link>
-      <Link href="/logout" style={redBtn}>Logout</Link>
-    </nav>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
-}
-
-
-function roomAssignedToCurrentMember(room: Room) {
-  const current = currentMemberIdentity();
-  if (!current.id && !current.email) return false;
-  const ids = roomAssignedIds(room);
-  const emails = roomAssignedEmails(room);
-  return Boolean(
-    (current.id && ids.includes(current.id.toLowerCase())) ||
-    (current.email && emails.includes(current.email))
-  );
-}
-
-function roomRoutedToCurrentMember(room: Room) {
-  const current = currentMemberIdentity();
-  if (!current.id && !current.email) return false;
-
-  const routedIds = [
-    ...list(room.routedTo),
-    ...list(room.routedToIds),
-    ...list(room.routingMemberIds),
-  ].map((value) => value.toLowerCase());
-
-  const routedEmails = [
-    ...list(room.routedToEmail),
-    ...list(room.routedToEmails),
-    ...list(room.routingMemberEmails),
-  ].map((value) => value.toLowerCase());
-
-  return Boolean(
-    (current.id && routedIds.includes(current.id.toLowerCase())) ||
-    (current.email && routedEmails.includes(current.email))
-  );
-}
-
-
-function countFor(view: ViewKey, deals: Room[], pains: Room[]) {
-  if (view === "activeDeals") return deals.filter(isOpenDealRoom).length;
-  if (view === "activePain") return pains.filter(isOpenPainRoom).length;
-  if (view === "savedDeals") return deals.filter((room) => rawStatus(room) === "saved").length;
-  if (view === "savedPain") return pains.filter((room) => rawStatus(room) === "saved").length;
-  if (view === "assignedToMe") return [...deals, ...pains].filter(roomAssignedToCurrentMember).length;
-  if (view === "routedToMe") return [...deals, ...pains].filter(roomRoutedToCurrentMember).length;
-  if (view === "following") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomIsFollowedByCurrentMember(item.kind, item.room)).length;
-    if (view === "archived") return [...deals, ...pains].filter((room) => rawStatus(room) === "archived").length;
-  if (view === "sold") return deals.filter((room) => rawStatus(room) === "sold").length;
-  if (view === "resolved") return pains.filter((room) => rawStatus(room) === "resolved").length;
-    if (view === "deleted") return [...deals, ...pains].filter((room) => rawStatus(room) === "deleted").length;
-  return 0;
-}
-
-
-function attentionCount(deals: Room[], pains: Room[]) {
-  return [
-    ...deals.map((room) => ({ kind: "deal" as RoomKind, room })),
-    ...pains.map((room) => ({ kind: "pain" as RoomKind, room })),
-  ].filter((item) => roomHealth(item.kind, item.room).attention).length;
-}
-
-function roomsFor(view: ViewKey, deals: Room[], pains: Room[]) {
-  if (view === "activeDeals") return deals.filter(isOpenDealRoom).map((room) => ({ kind: "deal" as RoomKind, room }));
-  if (view === "activePain") return pains.filter(isOpenPainRoom).map((room) => ({ kind: "pain" as RoomKind, room }));
-  if (view === "savedDeals") return deals.filter((room) => rawStatus(room) === "saved").map((room) => ({ kind: "deal" as RoomKind, room }));
-  if (view === "savedPain") return pains.filter((room) => rawStatus(room) === "saved").map((room) => ({ kind: "pain" as RoomKind, room }));
-  if (view === "assignedToMe") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomAssignedToCurrentMember(item.room));
-  if (view === "routedToMe") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomRoutedToCurrentMember(item.room));
-  if (view === "following") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => roomIsFollowedByCurrentMember(item.kind, item.room));
-  if (view === "archived") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => rawStatus(item.room) === "archived");
-  if (view === "sold") return deals.filter((room) => rawStatus(room) === "sold").map((room) => ({ kind: "deal" as RoomKind, room }));
-  if (view === "resolved") return pains.filter((room) => rawStatus(room) === "resolved").map((room) => ({ kind: "pain" as RoomKind, room }));
-  if (view === "deleted") return [...deals.map((room) => ({ kind: "deal" as RoomKind, room })), ...pains.map((room) => ({ kind: "pain" as RoomKind, room }))].filter((item) => rawStatus(item.room) === "deleted");
-  return [];
-}
-
-
-function isOpenDealRoom(room: Room) {
-  const status = rawStatus(room);
-  const stage = roomStage("deal", room);
-  return status === "active" && stage !== "Sold";
-}
-
-function isOpenPainRoom(room: Room) {
-  const status = rawStatus(room);
-  const stage = roomStage("pain", room);
-  return status === "active" && stage !== "Resolved";
-}
-
-function openAssignedOrRoutedCount(deals: Room[], pains: Room[]) {
-  return [
-    ...deals.map((room) => ({ kind: "deal" as RoomKind, room })),
-    ...pains.map((room) => ({ kind: "pain" as RoomKind, room })),
-  ].filter((item) => {
-    const status = rawStatus(item.room);
-    if (status !== "active") return false;
-    return roomAssignedToCurrentMember(item.room) || roomRoutedToCurrentMember(item.room);
-  }).length;
-}
-
-
-
-
-function MyRoomsTopPulseCards({
-  activeDeals,
-  activePain,
-  assignedRouted,
-  cleanup,
-  onDeals,
-  onPain,
-  onAssigned,
-  onCleanup,
-}: {
-  activeDeals: number;
-  activePain: number;
-  assignedRouted: number;
-  cleanup: number;
-  onDeals: () => void;
-  onPain: () => void;
-  onAssigned: () => void;
-  onCleanup: () => void;
-}) {
-  const total = activeDeals + activePain + assignedRouted + cleanup;
-
-  const cardStyle = (count: number, border: string): React.CSSProperties => ({
-    ...panel,
-    borderColor: count > 0 ? border : "rgba(207,216,230,.16)",
-    boxShadow: count > 0 ? `0 0 0 1px ${border}, 0 0 28px rgba(245,197,66,.10)` : "none",
-    textAlign: "left",
-    cursor: "pointer",
-    width: "100%",
-    minHeight: 150,
+  const rows: Room[] = [];
+
+  Array.from(keys).forEach((key) => {
+    if (key === FOREVER_STORE) return;
+    const parsed = parse<any>(window.localStorage.getItem(key), null);
+
+    collect(parsed).forEach((item, index) => {
+      if (!item || typeof item !== "object") return;
+
+      const text = `${key} ${JSON.stringify(item)}`.toLowerCase();
+      if (
+        !text.includes("deal") &&
+        !text.includes("room") &&
+        !text.includes("pain") &&
+        !text.includes("property") &&
+        !text.includes("project")
+      ) {
+        return;
+      }
+
+      const id = clean(item.id || item.roomId || item.slug || `${key}-${index}`, `${key}-${index}`);
+      if (deletedForever.has(id)) return;
+
+      rows.push({
+        id,
+        kind: kindFrom(item, key),
+        title: clean(item.title || item.name || item.projectName || item.propertyName || item.subject || "Untitled Room", "Untitled Room"),
+        city: clean(item.city || item.market || item.propertyCity || "NA", "NA"),
+        county: clean(item.county || item.propertyCounty || "", ""),
+        state: clean(item.state || item.propertyState || item.marketState || "NA", "NA"),
+        asset: clean(item.asset || item.assetType || item.propertyType || item.category || "Not listed", "Not listed"),
+        strategy: clean(item.strategy || item.dealStrategy || item.need || item.problemType || "Not listed", "Not listed"),
+        status: statusFrom(item.status || item.folder || item.roomStatus || item.workspaceStatus),
+        message: clean(item.message || item.summary || item.notes || item.description || "No room notes listed.", "No room notes listed."),
+        updatedAt: clean(item.updatedAt || item.updated_at || item.createdAt || item.created_at || new Date().toISOString(), new Date().toISOString()),
+        source: key,
+      });
+    });
   });
 
-  return (
-    <section style={{ ...card, borderColor: "rgba(245,197,66,.38)" }}>
-      <div style={eyebrow}>My Rooms Alerts • {total} Active</div>
-      <div style={grid}>
-        <button type="button" style={cardStyle(activeDeals, "rgba(245,197,66,.85)")} onClick={onDeals}>
-          <div style={eyebrow}>Deal Rooms</div>
-          <h2 style={h2}>{activeDeals}</h2>
-          <p style={muted}>active opportunity rooms</p>
-          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
-        </button>
+  const unique = new Map<string, Room>();
+  rows.forEach((room) => unique.set(room.id, room));
 
-        <button type="button" style={cardStyle(activePain, "rgba(255,70,70,.70)")} onClick={onPain}>
-          <div style={eyebrow}>Pain Rooms</div>
-          <h2 style={h2}>{activePain}</h2>
-          <p style={muted}>active pressure rooms</p>
-          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
-        </button>
-
-        <button type="button" style={cardStyle(assignedRouted, "rgba(0,132,255,.75)")} onClick={onAssigned}>
-          <div style={eyebrow}>Assigned / Routed</div>
-          <h2 style={h2}>{assignedRouted}</h2>
-          <p style={muted}>rooms needing response</p>
-          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
-        </button>
-
-        <button type="button" style={cardStyle(cleanup, "rgba(48,255,135,.70)")} onClick={onCleanup}>
-          <div style={eyebrow}>Cleanup</div>
-          <h2 style={h2}>{cleanup}</h2>
-          <p style={muted}>saved / archived / deleted</p>
-          <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Tap to open</p>
-        </button>
-      </div>
-    </section>
-  );
+  return Array.from(unique.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-function MetricButton({
+function saveRooms(rooms: Room[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ROOM_STORE, JSON.stringify(rooms));
+}
+
+function statusLabel(status: RoomStatus) {
+  if (status === "active") return "Active";
+  if (status === "saved") return "Saved";
+  if (status === "archived") return "Archived";
+  if (status === "sold") return "Sold";
+  if (status === "resolved") return "Resolved";
+  return "Deleted";
+}
+
+function Tile({
   title,
   count,
   note,
   active,
-  alert,
   danger,
   onClick,
 }: {
   title: string;
   count: number;
   note: string;
-  active?: boolean;
-  alert?: boolean;
+  active: boolean;
   danger?: boolean;
   onClick: () => void;
 }) {
-  const style = active ? activePanel : alert && count ? (danger ? pulseRed : pulseGold) : panel;
-
   return (
     <button
       type="button"
-      style={{ ...style, textAlign: "left", cursor: "pointer", width: "100%" }}
       onClick={onClick}
+      style={{
+        ...panel,
+        minHeight: 154,
+        cursor: "pointer",
+        textAlign: "left",
+        borderColor: active
+          ? danger
+            ? "rgba(255,65,65,.70)"
+            : "rgba(245,197,66,.72)"
+          : "rgba(207,216,230,.15)",
+      }}
     >
       <div style={eyebrow}>{title}</div>
-      <h2 style={h2}>{count}</h2>
+      <h2 style={{ ...h2, color: count ? "#1e90ff" : "#f7f8ff" }}>{count}</h2>
       <p style={muted}>{note}</p>
-      <p style={muted}>Click to open</p>
+      <p style={{ ...muted, color: "#ffd45a", fontWeight: 950 }}>Open</p>
     </button>
   );
 }
 
-
-
-function roomStatusIs(room: Room, status: string) {
-  return rawStatus(room) === status || room.memberRoomStatus === status || room.roomState === status || room.cleanupState === status || room.stateStatus === status;
-}
-
-function countDealStatus(deals: Room[], status: string) {
-  return deals.filter((room) => roomStatusIs(room, status)).length;
-}
-
-function countPainStatus(pains: Room[], status: string) {
-  return pains.filter((room) => roomStatusIs(room, status)).length;
-}
-
-
-function ViewCard({ view, title, note, count, active, onClick }: { view: ViewKey; title: string; note: string; count: number; active: boolean; onClick: () => void }) {
-  const style = active ? activePanel : count ? (view.includes("Pain") || view === "resolved" ? pulseRed : pulseGold) : panel;
-
+function RoomCard({
+  room,
+  moveRoom,
+  deleteForever,
+}: {
+  room: Room;
+  moveRoom: (id: string, status: RoomStatus) => void;
+  deleteForever: (id: string) => void;
+}) {
   return (
-    <button type="button" style={{ ...style, textAlign: "left", cursor: "pointer" }} onClick={onClick}>
-      <div style={eyebrow}>{title}</div>
-      <h2 style={h2}>{count}</h2>
-      <p style={muted}>{note}</p>
-    </button>
-  );
-}
+    <article style={{ ...panel, borderColor: room.status === "deleted" ? "rgba(255,65,65,.58)" : "rgba(245,197,66,.42)" }}>
+      <div style={eyebrow}>
+        {room.kind === "deal" ? "Deal Room" : "Pain Room"} • {statusLabel(room.status)}
+      </div>
 
-function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh: () => void }) {
-  const id = rid(room);
-  const status = rawStatus(room);
-  const img = firstPhoto(room);
-  const href = kind === "deal" ? `/deal-rooms/${encodeURIComponent(id)}` : `/pain-rooms/${encodeURIComponent(id)}`;
-  const hot = unread(kind, room);
-  const health = roomHealth(kind, room);
-  const stage = roomStage(kind, room);
-  const stages = kind === "deal" ? DEAL_STAGES : PAIN_STAGES;
-  const age = daysOld(room);
-  const watching = isWatchingRoom(kind, room);
-  const watchCount = watchingCount(kind, room);
-  const routeStatus = currentRouteStatusForRoom(kind, room);
-  const style = routeStatus === "pending" ? pulseRed : routeStatus === "accepted" || routeStatus === "claimed" ? pulseGold : watching ? pulseGold : health.attention ? (kind === "pain" ? pulseRed : pulseGold) : hot ? (kind === "pain" ? pulseRed : pulseGold) : panel;
-
-  return (
-    <div style={style}>
-      {img ? <img src={img} alt={roomTitle(room, kind)} style={imgStyle} /> : null}
-      <div style={eyebrow}>{kind === "deal" ? "Deal Room" : "Pain Room"} • {status}</div>
-      <h2 style={h2}>{roomTitle(room, kind)}</h2>
-      <p style={sub}>{loc(room)}</p>
-      <p style={muted}>
-        {kind === "deal"
-          ? `${txt(room.assetClass, "Asset")} • ${txt(room.propertyType, "Type")} • ${list(room.strategy).join(", ") || "Strategy open"}`
-          : `${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")} • ${txt(room.timePressure, "Timeline open")}`}
+      <h3 style={h3}>{room.title}</h3>
+      <p style={sub}>
+        {[room.city, room.county, room.state].filter(Boolean).join(", ")}
       </p>
-      <p style={muted}>Workspace: {ownershipLabel(room)} • Watching {watchCount} • Route Status: {routeStatus || "none"}</p>
+      <p style={muted}>
+        {room.asset} • {room.strategy}
+      </p>
+      <p style={muted}>{room.message}</p>
+      <p style={muted}>Last updated: {room.updatedAt}</p>
 
-      <div style={{ marginTop: 16 }}>
-        <div style={eyebrow}>{kind === "deal" ? "Deal Momentum" : "Pain Health"} • {health.label}</div>
-        <div style={{ height: 11, background: "#070a12", borderRadius: 999, overflow: "hidden", border: "1px solid rgba(207,216,230,.12)" }}>
-          <div style={{ width: `${health.score}%`, height: "100%", background: healthColor(health.score) }} />
-        </div>
-        <p style={health.attention ? { ...muted, color: "#ffb8b8" } : muted}>{health.warning}</p>
-        <p style={muted}>{health.next}</p>
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <div style={eyebrow}>Execution Stage • {stage}</div>
-        <div style={row}>
-          {stages.map((item) => (
-            <button
-              key={item}
-              type="button"
-              style={stage === item ? goldBtn : btn}
-              onClick={() => {
-                saveRoomStage(kind, room, item);
-                refresh();
-              }}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-        <p style={muted}>Last updated: {txt(room.updatedAt || room.createdAt, "Not listed")} • Age: {age} day(s)</p>
-        <p style={muted}>Next action: {nextActionFor(kind, room)}</p>
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <div style={eyebrow}>Recent Activity</div>
-        {readRoomActivity(kind, room).slice(0, 3).length ? (
-          readRoomActivity(kind, room).slice(0, 3).map((event, index) => (
-            <p key={`${event.at}-${index}`} style={muted}>
-              {new Date(event.at).toLocaleString()} • {event.action}: {event.note}
-            </p>
-          ))
-        ) : (
-          <p style={muted}>No room activity logged yet.</p>
-        )}
-      </div>
-
-      <div style={{ ...row, marginTop: 16 }}>
-        <Link href={href} style={goldBtn}>Open</Link>
-        <button type="button" style={watching ? goldBtn : btn} onClick={() => { toggleWatchRoom(kind, room); refresh(); }}>{watching ? "Following" : "Watch"}</button>
-        <Link href={`/messages?type=${kind}&room=${encodeURIComponent(id)}&subject=${encodeURIComponent((kind === "deal" ? "Deal Room: " : "Pain Room: ") + roomTitle(room, kind))}`} style={btn}>Message</Link>
-
-        {(roomAssignedToCurrentMember(room) || roomRoutedToCurrentMember(room) || routeStatus) && routeStatus !== "accepted" && routeStatus !== "claimed" ? (
-          <button type="button" style={goldBtn} onClick={() => { setCurrentRouteStatus(kind, room, "accepted"); refresh(); }}>Accept Route</button>
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={() => moveRoom(room.id, "active")}>
+          Restore Active
+        </button>
+        <button type="button" style={btn} onClick={() => moveRoom(room.id, "saved")}>
+          Save
+        </button>
+        <button type="button" style={btn} onClick={() => moveRoom(room.id, "archived")}>
+          Archive
+        </button>
+        <button type="button" style={btn} onClick={() => moveRoom(room.id, "sold")}>
+          Mark Sold
+        </button>
+        <button type="button" style={btn} onClick={() => moveRoom(room.id, "resolved")}>
+          Resolve
+        </button>
+        <button type="button" style={redBtn} onClick={() => moveRoom(room.id, "deleted")}>
+          Delete
+        </button>
+        {room.status === "deleted" ? (
+          <button type="button" style={redBtn} onClick={() => deleteForever(room.id)}>
+            Delete Forever
+          </button>
         ) : null}
-        {(roomAssignedToCurrentMember(room) || roomRoutedToCurrentMember(room) || routeStatus) && routeStatus !== "passed" ? (
-          <button type="button" style={btn} onClick={() => { setCurrentRouteStatus(kind, room, "passed"); refresh(); }}>Pass</button>
-        ) : null}
-        {(roomAssignedToCurrentMember(room) || roomRoutedToCurrentMember(room) || routeStatus) && routeStatus !== "claimed" ? (
-          <button type="button" style={goldBtn} onClick={() => { setCurrentRouteStatus(kind, room, "claimed"); refresh(); }}>Claim Execution</button>
-        ) : null}
-
-        {status !== "saved" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "saved"); refresh(); }}>Save</button> : null}
-        {status !== "archived" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "archived"); refresh(); }}>Archive</button> : null}
-        {kind === "deal" && status !== "sold" ? <button type="button" style={goldBtn} onClick={() => { saveRoomStatus(kind, room, "sold"); refresh(); }}>Mark Sold</button> : null}
-        {kind === "pain" && status !== "resolved" ? <button type="button" style={goldBtn} onClick={() => { saveRoomStatus(kind, room, "resolved"); refresh(); }}>Mark Resolved</button> : null}
-        {status !== "deleted" ? <button type="button" style={redBtn} onClick={() => { saveRoomStatus(kind, room, "deleted"); refresh(); }}>Delete</button> : null}
-        {status !== "active" ? <button type="button" style={btn} onClick={() => { saveRoomStatus(kind, room, "active"); refresh(); }}>Restore Active Active</button>
-              <button type="button" style={redBtn} onClick={() => deleteRoomForever(room)}>Delete Forever</button> : null}
       </div>
-    </div>
+    </article>
   );
 }
 
 export default function MyRoomsPage() {
-
-  function deleteRoomForever(room: any) {
-    const roomId = String(room?.id || room?.roomId || room?.slug || room?.title || "");
-    if (!roomId) return;
-
-    writeDeletedForeverRoomIds([...readDeletedForeverRoomIds(), roomId]);
-
-    try {
-      const keysToClean = [
-        "vaultforge_rooms_v1",
-        "vaultforge_deal_rooms_v1",
-        "vaultforge_pain_rooms_v1",
-        "vaultforge_member_rooms_v1",
-        "vaultforge_room_state_v1",
-        "vaultforge_room_states_v1",
-      ];
-
-      keysToClean.forEach((key) => {
-        const raw = window.localStorage.getItem(key);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-
-        if (Array.isArray(parsed)) {
-          const next = parsed.filter((item: any) => String(item?.id || item?.roomId || item?.slug || item?.title || "") !== roomId);
-          window.localStorage.setItem(key, JSON.stringify(next));
-        } else if (parsed && typeof parsed === "object") {
-          delete parsed[roomId];
-          window.localStorage.setItem(key, JSON.stringify(parsed));
-        }
-      });
-    } catch {
-      // local cleanup only
-    }
-
-    window.location.reload();
-  }
-
-  const [tick, setTick] = useState(0);
-  const [view, setView] = useState<ViewKey>("activeDeals");
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [view, setView] = useState<RoomStatus | "all" | "deal" | "pain" | "cleanup">("all");
 
   useEffect(() => {
-    const refresh = () => setTick((value) => value + 1);
-    window.addEventListener("storage", refresh);
-    window.addEventListener("vaultforge-room-state-change", refresh);
-    window.addEventListener("vaultforge-my-rooms-change", refresh);
-    window.addEventListener("vaultforge-room-watch-change", refresh);
-    window.addEventListener("vaultforge-room-activity-change", refresh);
-    window.addEventListener("vaultforge-route-status-change", refresh);
-    window.addEventListener("vaultforge-deal-change", refresh);
-    window.addEventListener("vaultforge-pain-change", refresh);
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("vaultforge-room-state-change", refresh);
-      window.removeEventListener("vaultforge-my-rooms-change", refresh);
-      window.removeEventListener("vaultforge-room-watch-change", refresh);
-      window.removeEventListener("vaultforge-room-activity-change", refresh);
-      window.removeEventListener("vaultforge-route-status-change", refresh);
-      window.removeEventListener("vaultforge-deal-change", refresh);
-      window.removeEventListener("vaultforge-pain-change", refresh);
-    };
+    const loaded = loadRooms();
+    setRooms(loaded);
+    saveRooms(loaded);
   }, []);
 
-  const allDealRooms = useMemo(() => allRooms("deal"), [tick]);
-  const allPainRooms = useMemo(() => allRooms("pain"), [tick]);
-  const deals = useMemo(() => allDealRooms.filter(roomBelongsToCurrentMember), [allDealRooms]);
-  const pains = useMemo(() => allPainRooms.filter(roomBelongsToCurrentMember), [allPainRooms]);
-  const visible = useMemo(() => roomsFor(view, deals, pains), [view, deals, pains]);
-  const stages = useMemo(() => stageCounts(deals, pains), [deals, pains]);
-  const refresh = () => setTick((value) => value + 1);
+  const grouped = useMemo(() => {
+    return {
+      all: rooms,
+      deal: rooms.filter((room) => room.kind === "deal" && room.status === "active"),
+      pain: rooms.filter((room) => room.kind === "pain" && room.status === "active"),
+      active: rooms.filter((room) => room.status === "active"),
+      saved: rooms.filter((room) => room.status === "saved"),
+      archived: rooms.filter((room) => room.status === "archived"),
+      sold: rooms.filter((room) => room.status === "sold"),
+      resolved: rooms.filter((room) => room.status === "resolved"),
+      deleted: rooms.filter((room) => room.status === "deleted"),
+      cleanup: rooms.filter((room) => ["saved", "archived", "sold", "resolved", "deleted"].includes(room.status)),
+    };
+  }, [rooms]);
 
-  const needsAttention = attentionCount(deals, pains);
+  const visible =
+    view === "all"
+      ? grouped.active
+      : view === "deal"
+        ? grouped.deal
+        : view === "pain"
+          ? grouped.pain
+          : view === "cleanup"
+            ? grouped.cleanup
+            : grouped[view];
 
-  const activeDealCount = deals.filter(isOpenDealRoom).length;
-  const activePainCount = pains.filter(isOpenPainRoom).length;
-  const assignedRoutedCount = openAssignedOrRoutedCount(deals, pains);
-  const cleanupCount =
-    countFor("savedDeals", deals, pains) +
-    countFor("savedPain", deals, pains) +
-    countFor("archived", deals, pains) +
-    countFor("deleted", deals, pains);
+  function moveRoom(id: string, status: RoomStatus) {
+    const next = rooms.map((room) => (room.id === id ? { ...room, status, updatedAt: new Date().toISOString() } : room));
+    setRooms(next);
+    saveRooms(next);
 
+    if (["saved", "archived", "sold", "resolved", "deleted"].includes(status)) {
+      setView(status);
+    } else {
+      setView("active");
+    }
+  }
 
-  const cards: { view: ViewKey; title: string; note: string }[] = [
-    { view: "activeDeals", title: "Active Deals", note: "my open opportunity rooms" },
-    { view: "activePain", title: "Active Pain", note: "my open pressure rooms" },
-    { view: "savedDeals", title: "Saved Deals", note: "kept opportunity rooms" },
-    { view: "savedPain", title: "Saved Pain", note: "kept pain rooms" },
-    { view: "assignedToMe", title: "Assigned To Me", note: "rooms assigned into my workspace" },
-    { view: "routedToMe", title: "Routed To Me", note: "rooms routed for action" },
-    { view: "following", title: "Following", note: "rooms I am watching" },
-    { view: "archived", title: "Archived", note: "not active, not deleted" },
-    { view: "sold", title: "Sold Deals", note: "completed opportunity rooms" },
-    { view: "resolved", title: "Resolved Pain", note: "handled problem rooms" },
-    { view: "deleted", title: "Deleted", note: "hidden cleanup folder" },
-  ];
+  function deleteForever(id: string) {
+    saveForeverIds([...foreverIds(), id]);
+
+    const next = rooms.filter((room) => room.id !== id);
+    setRooms(next);
+    saveRooms(next);
+    setView("deleted");
+  }
 
   return (
-    <main style={page}>
-      <style>{styleTag}</style>
-      <div style={wrap}>
-        <Nav />
-        <VaultForgeBrandLogo />
-        <MemberDisplayCard />
+    <main style={wrap}>
+      <div style={shell}>
+        <nav style={nav}>
+          <div style={brand}>VAULTFORGE</div>
+          <Link href="/command" style={btn}>Command</Link>
+          <Link href="/member-controlled-threads" style={btn}>Request Desk</Link>
+          <Link href="/messages" style={btn}>Messages</Link>
+          <Link href="/network" style={btn}>Network</Link>
+          <Link href="/profile" style={btn}>Profile</Link>
+          <Link href="/logout" style={redBtn}>Logout</Link>
+        </nav>
 
-        <MyRoomsTopPulseCards
-          activeDeals={activeDealCount}
-          activePain={activePainCount}
-          assignedRouted={assignedRoutedCount}
-          cleanup={cleanupCount}
-          onDeals={() => setView("activeDeals")}
-          onPain={() => setView("activePain")}
-          onAssigned={() => setView("assignedToMe")}
-          onCleanup={() => setView("savedDeals")}
-        />
-
-        <section style={{ ...card, borderColor: "rgba(245,197,66,.35)" }}>
-          <div style={eyebrow}>Deal Room Dashboard</div>
-          <h2 style={h2}>Deal rooms stay separate from pain and requests.</h2>
-          <div style={{ ...grid, marginTop: 16 }}>
-            <MetricButton
-              title="Active Deals"
-              count={activeDealCount}
-              note="live opportunity rooms"
-              active={view === "activeDeals"}
-              alert
-              onClick={() => setView("activeDeals")}
-            />
-            <ViewCard
-              view="savedDeals"
-              title="Saved Deals"
-              count={countFor("savedDeals", deals, pains)}
-              note="deal rooms saved for review"
-              active={view === "savedDeals"}
-              onClick={() => setView("savedDeals")}
-            />
-            <MetricButton
-              title="Reviewing"
-              count={deals.filter((room) => roomStage("deal", room) === "Reviewing").length}
-              note="deal rooms still being evaluated"
-              active={view === "activeDeals"}
-              onClick={() => setView("activeDeals")}
-            />
-            <MetricButton
-              title="Sold / Closed"
-              count={countFor("sold", deals, pains)}
-              note="completed deal rooms"
-              active={view === "sold"}
-              onClick={() => setView("sold")}
-            />
-          </div>
-        </section>
-
-        <section style={{ ...card, borderColor: "rgba(255,70,70,.35)" }}>
-          <div style={eyebrow}>Pain Room Dashboard</div>
-          <h2 style={h2}>Pain rooms are problem-solving rooms.</h2>
-          <div style={{ ...grid, marginTop: 16 }}>
-            <MetricButton
-              title="Active Pain"
-              count={activePainCount}
-              note="live pressure/problem rooms"
-              active={view === "activePain"}
-              alert
-              danger
-              onClick={() => setView("activePain")}
-            />
-            <ViewCard
-              view="savedPain"
-              title="Saved Pain"
-              count={countFor("savedPain", deals, pains)}
-              note="pain rooms saved for follow-up"
-              active={view === "savedPain"}
-              onClick={() => setView("savedPain")}
-            />
-            <MetricButton
-              title="In Progress"
-              count={stages["In Progress"] || 0}
-              note="problem solving underway"
-              active={view === "activePain"}
-              alert
-              danger
-              onClick={() => setView("activePain")}
-            />
-            <MetricButton
-              title="Resolved"
-              count={countFor("resolved", deals, pains)}
-              note="completed problem rooms"
-              active={view === "resolved"}
-              onClick={() => setView("resolved")}
-            />
-          </div>
-        </section>
-
-
-
-        <section style={hero}>
+        <section style={goldCard}>
           <div style={eyebrow}>My Rooms</div>
           <h1 style={h1}>Member workspace cleanup.</h1>
           <p style={sub}>
-            Keep your own rooms clean without destroying the intelligence system. Mark sold, resolved, archived, saved, deleted, or restore active.
+            Deal rooms and Pain rooms are separate. Cleanup is one operating area with saved, archived, sold, resolved, deleted, and delete forever.
           </p>
-          <div style={{ ...row, marginTop: 18 }}>
-            <Link href="/deal-create" style={goldBtn}>Create</Link>
-            <Link href="/network" style={btn}>Network</Link>
-            <Link href="/messages" style={btn}>Messages</Link>
+          <div style={{ ...row, marginTop: 16 }}>
+            <Link href="/create-deal" style={goldBtn}>Create Deal</Link>
+            <Link href="/pain-intake" style={goldBtn}>Create Pain</Link>
+            <Link href="/state-map" style={btn}>State Map</Link>
           </div>
         </section>
-        
 
+        <section style={card}>
+          <div style={eyebrow}>Room Groups</div>
+          <h2 style={h2}>Clean groups. No mixed cards.</h2>
 
-        
-
-
-        
-
-        <Section title="Room Folders">
-          <p style={sub}>Save, archive, delete, or complete rooms without mixing them into active work.</p>
-          <div style={{ ...grid, marginTop: 16 }}>
-            <ViewCard
-              view="savedDeals"
-              title="Saved Deals"
-              count={countFor("savedDeals", deals, pains)}
-              note="deal rooms kept for review"
-              active={view === "savedDeals"}
-              onClick={() => setView("savedDeals")}
-            />
-            <ViewCard
-              view="savedPain"
-              title="Saved Pain"
-              count={countFor("savedPain", deals, pains)}
-              note="pain rooms kept for review"
-              active={view === "savedPain"}
-              onClick={() => setView("savedPain")}
-            />
-            <ViewCard
-              view="archived"
-              title="Archived"
-              count={countFor("archived", deals, pains)}
-              note="hidden from active work but preserved"
-              active={view === "archived"}
-              onClick={() => setView("archived")}
-            />
-            <ViewCard
-              view="deleted"
-              title="Deleted"
-              count={countFor("deleted", deals, pains)}
-              note="cleanup folder before permanent removal"
-              active={view === "deleted"}
-              onClick={() => setView("deleted")}
-            />
+          <div style={{ ...grid, marginTop: 18 }}>
+            <Tile title="Active Deal Rooms" count={grouped.deal.length} note="open deal opportunity rooms" active={view === "deal"} onClick={() => setView("deal")} />
+            <Tile title="Active Pain Rooms" count={grouped.pain.length} note="open problem-solving rooms" active={view === "pain"} danger onClick={() => setView("pain")} />
+            <Tile title="All Active Rooms" count={grouped.active.length} note="all rooms currently active" active={view === "active" || view === "all"} onClick={() => setView("active")} />
+            <Tile title="Cleanup" count={grouped.cleanup.length} note="saved, archived, sold, resolved, and deleted" active={view === "cleanup"} onClick={() => setView("cleanup")} />
           </div>
-        </Section>
+        </section>
 
-<Section title={`Selected Room Group • ${cards.find((item) => item.view === view)?.title || "Rooms"}`}>
+        <section style={card}>
+          <div style={eyebrow}>Cleanup Folders</div>
+          <h2 style={h2}>One place for inactive rooms.</h2>
+
+          <div style={{ ...grid, marginTop: 18 }}>
+            <Tile title="Saved" count={grouped.saved.length} note="rooms kept for follow-up" active={view === "saved"} onClick={() => setView("saved")} />
+            <Tile title="Archived" count={grouped.archived.length} note="hidden from active work but preserved" active={view === "archived"} onClick={() => setView("archived")} />
+            <Tile title="Sold / Resolved" count={grouped.sold.length + grouped.resolved.length} note="closed outcome folders" active={view === "sold" || view === "resolved"} onClick={() => setView("sold")} />
+            <Tile title="Deleted" count={grouped.deleted.length} note="trash folder with delete forever" active={view === "deleted"} danger onClick={() => setView("deleted")} />
+          </div>
+
+          <div style={{ ...row, marginTop: 14 }}>
+            <button type="button" style={view === "cleanup" ? goldBtn : btn} onClick={() => setView("cleanup")}>All Cleanup</button>
+            <button type="button" style={view === "saved" ? goldBtn : btn} onClick={() => setView("saved")}>Saved</button>
+            <button type="button" style={view === "archived" ? goldBtn : btn} onClick={() => setView("archived")}>Archived</button>
+            <button type="button" style={view === "sold" ? goldBtn : btn} onClick={() => setView("sold")}>Sold</button>
+            <button type="button" style={view === "resolved" ? goldBtn : btn} onClick={() => setView("resolved")}>Resolved</button>
+            <button type="button" style={view === "deleted" ? goldBtn : btn} onClick={() => setView("deleted")}>Deleted</button>
+          </div>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Selected Room Group</div>
+          <h2 style={h2}>
+            {view === "deal"
+              ? "Active Deal Rooms"
+              : view === "pain"
+                ? "Active Pain Rooms"
+                : view === "cleanup"
+                  ? "Cleanup"
+                  : `${String(view).charAt(0).toUpperCase()}${String(view).slice(1)} Rooms`}
+          </h2>
+
           {visible.length ? (
             <div style={grid}>
-              {visible.map((item) => (
-                <RoomCard key={`${item.kind}-${rid(item.room)}`} kind={item.kind} room={item.room} refresh={refresh} />
+              {visible.map((room) => (
+                <RoomCard key={room.id} room={room} moveRoom={moveRoom} deleteForever={deleteForever} />
               ))}
             </div>
           ) : (
             <div style={panel}>
-              <h2 style={h2}>No rooms here.</h2>
-              <p style={sub}>Create a Deal or Pain room, or open another folder card.</p>
-              <div style={{ ...row, marginTop: 16 }}>
-                <Link href="/deal-create" style={goldBtn}>Create</Link>
-              </div>
+              <h2 style={h2}>No rooms in this group.</h2>
+              <p style={sub}>
+                Move a room with Save, Archive, Sold, Resolve, Delete, or Delete Forever and it will update immediately.
+              </p>
             </div>
           )}
-        </Section>
-
-        <Section title="How This Works">
-          <div style={grid}>
-            <div style={panel}>
-              <div style={eyebrow}>Workspace Cleanup</div>
-              <p style={sub}>Save, archive, delete, sold, and resolved keep your workspace clean.</p>
-              <p style={muted}>Cleanup does not destroy the intelligence trail.</p>
-            </div>
-            <div style={panel}>
-              <div style={eyebrow}>Completed Work</div>
-              <p style={sub}>Deals become Sold. Pain becomes Resolved.</p>
-              <p style={muted}>This powers performance history, AI follow-up, and future routing quality.</p>
-            </div>
-            <div style={panel}>
-              <div style={eyebrow}>Restore Active</div>
-              <p style={sub}>Archived, saved, deleted, sold, or resolved rooms can be restored when work resumes.</p>
-              <p style={muted}>This keeps the member area clean without panic deletes.</p>
-            </div>
-          </div>
-        </Section>
+        </section>
       </div>
     </main>
   );
