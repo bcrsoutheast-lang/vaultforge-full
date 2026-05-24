@@ -773,6 +773,73 @@ function LaneCard({ title, count, note, active, pulse, danger, onClick }: { titl
   );
 }
 
+
+function MemberTopAlertCards({
+  newCount,
+  activeCount,
+  dealPainCount,
+  messageCount,
+  onNew,
+  onActive,
+  onSignals,
+  onMessages,
+}: {
+  newCount: number;
+  activeCount: number;
+  dealPainCount: number;
+  messageCount: number;
+  onNew: () => void;
+  onActive: () => void;
+  onSignals: () => void;
+  onMessages: () => void;
+}) {
+  const total = newCount + activeCount + dealPainCount + messageCount;
+
+  const cardStyle = (count: number, border: string): React.CSSProperties => ({
+    ...panel,
+    borderColor: count > 0 ? border : "rgba(207,216,230,.16)",
+    boxShadow: count > 0 ? `0 0 0 1px ${border}, 0 0 28px rgba(245,197,66,.10)` : "none",
+    textAlign: "left",
+    cursor: "pointer",
+    width: "100%",
+  });
+
+  return (
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
+      <div style={eyebrow}>Member Alerts • {total} Active</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 12 }}>
+        <button type="button" className={newCount > 0 ? "vf-pulse" : ""} style={cardStyle(newCount, "rgba(245,197,66,.85)")} onClick={onNew}>
+          <div style={eyebrow}>New</div>
+          <h2 style={h2}>{newCount}</h2>
+          <p style={muted}>routed requests</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+
+        <button type="button" className={activeCount > 0 ? "vf-pulse" : ""} style={cardStyle(activeCount, "rgba(48,255,135,.70)")} onClick={onActive}>
+          <div style={eyebrow}>Active</div>
+          <h2 style={h2}>{activeCount}</h2>
+          <p style={muted}>work threads</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+
+        <button type="button" className={dealPainCount > 0 ? "vf-pulse" : ""} style={cardStyle(dealPainCount, "rgba(255,70,70,.70)")} onClick={onSignals}>
+          <div style={eyebrow}>Deal / Pain</div>
+          <h2 style={h2}>{dealPainCount}</h2>
+          <p style={muted}>signal cards</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+
+        <button type="button" className={messageCount > 0 ? "vf-pulse" : ""} style={cardStyle(messageCount, "rgba(0,132,255,.75)")} onClick={onMessages}>
+          <div style={eyebrow}>Messages</div>
+          <h2 style={h2}>{messageCount}</h2>
+          <p style={muted}>reply threads</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function InvestorProfileCard({ profile, photoUrl, released }: { profile: any; photoUrl?: string; released: boolean }) {
   const investorTypes = Array.isArray(profile?.investorTypes) ? profile.investorTypes.join(" • ") : profile?.investorTypes || "Not listed";
   const strategies = Array.isArray(profile?.buyingStrategies) ? profile.buyingStrategies.join(" • ") : profile?.buyingStrategies || "Not listed";
@@ -1220,7 +1287,7 @@ function MemberOperatingGuide() {
       <div style={eyebrow}>Member Area Instructions</div>
       <h2 style={h2}>Everything has a place.</h2>
       <p style={sub}>
-        This member area is organized as one operating lane. Start with new routed requests, open the card, decide, message, work the active thread, then clean it up.
+        This member area now works like the Investor Room: top alert cards first, then one clean operating board. Alerts, routing, intelligence, admin replies, and investor replies stay behind the scenes inside the correct request card.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
@@ -1238,22 +1305,22 @@ function MemberOperatingGuide() {
 
 
 
+
 function MemberLaneGuide() {
   return (
     <section style={{ ...panel, marginBottom: 18 }}>
-      <div style={eyebrow}>Member Card Map</div>
-      <h2 style={h2}>What each card area is for.</h2>
-      <p style={sub}>Use these lanes so requests, replies, and cleanup do not scatter.</p>
+      <div style={eyebrow}>Member Operating Map</div>
+      <h2 style={h2}>Fewer rooms. Cleaner work.</h2>
+      <p style={sub}>
+        Alerts, routing, intelligence, admin replies, and investor replies are no longer separate rooms to chase. They are attached inside the right Deal, Pain, or Execution card.
+      </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
-        <div style={panel}><div style={eyebrow}>New Requests</div><p style={muted}>Fresh routed requests waiting for your first decision.</p></div>
-        <div style={panel}><div style={eyebrow}>Active Threads</div><p style={muted}>Accepted requests you are currently working.</p></div>
-        <div style={panel}><div style={eyebrow}>Admin Replies</div><p style={muted}>Admin messages tied to a request, not loose chat.</p></div>
-        <div style={panel}><div style={eyebrow}>Investor Replies</div><p style={muted}>Investor responses inside the same controlled thread.</p></div>
-        <div style={panel}><div style={eyebrow}>Deal Opportunities</div><p style={muted}>Deal/opportunity routed cards with profile and request context attached.</p></div>
-        <div style={panel}><div style={eyebrow}>Pain Requests</div><p style={muted}>Problem-solving requests where the member may provide capital, operator help, title, contractor, or execution support.</p></div>
-        <div style={panel}><div style={eyebrow}>Execution Requests</div><p style={muted}>Specific service lanes such as lender, hard money, contractor, title, insurance, operator, JV, boots on ground, or disposition.</p></div>
-        <div style={panel}><div style={eyebrow}>Saved / Archived / Passed / Deleted</div><p style={muted}>Workspace cleanup lanes. Nothing should disappear from active work unless a status button moves it there.</p></div>
+        <div style={panel}><div style={eyebrow}>New Requests</div><p style={muted}>Fresh routed work needing your decision.</p></div>
+        <div style={panel}><div style={eyebrow}>Active Work</div><p style={muted}>Accepted work threads you are handling.</p></div>
+        <div style={panel}><div style={eyebrow}>Deal / Pain Signals</div><p style={muted}>Opportunity and problem cards with investor needs and AI read attached.</p></div>
+        <div style={panel}><div style={eyebrow}>Execution Requests</div><p style={muted}>Lender, contractor, title, operator, insurance, JV, and boots-on-ground requests.</p></div>
+        <div style={panel}><div style={eyebrow}>Cleanup</div><p style={muted}>Saved, archived, passed, and deleted folders keep the workspace clean.</p></div>
       </div>
     </section>
   );
@@ -1319,6 +1386,12 @@ export default function MemberControlledThreadsPage() {
       deleted: visibleThreads.filter(isDeleted),
     } as Record<Lane, any[]>;
   }, [visibleThreads]);
+
+
+  const topNewCount = categorized.new.length;
+  const topActiveCount = categorized.active.length;
+  const topDealPainCount = categorized.deal.length + categorized.pain.length + categorized.execution.length;
+  const topMessageCount = categorized.admin.length + categorized.investor.length + visibleThreads.filter((thread) => (thread?.messages || []).length > 0).length;
 
   const openRows = categorized[lane] || [];
   const activeThread = activeId ? visibleThreads.find((thread, index) => safeId(thread, index) === activeId) : null;
@@ -1396,6 +1469,18 @@ export default function MemberControlledThreadsPage() {
 
 
       <div style={wrap}>
+
+        <MemberTopAlertCards
+          newCount={topNewCount}
+          activeCount={topActiveCount}
+          dealPainCount={topDealPainCount}
+          messageCount={topMessageCount}
+          onNew={() => { setLane("new"); setActiveId(""); }}
+          onActive={() => { setLane("active"); setActiveId(""); }}
+          onSignals={() => { setLane("execution"); setActiveId(""); }}
+          onMessages={() => { setLane("investor"); setActiveId(""); }}
+        />
+
         <section style={hero}>
           <div style={eyebrow}>VaultForge Member Request Command</div>
           <div style={{ ...row, alignItems: "center" }}>
@@ -1431,18 +1516,15 @@ export default function MemberControlledThreadsPage() {
 
         <MemberLaneGuide />
 
-        <Section title="Member Request Cards">
+        <Section title="Member Operating Board">
           <div style={grid}>
-            <LaneCard title="New Requests" count={categorized.new.length} note="routed investor requests needing a member decision" active={lane === "new"} pulse={categorized.new.length > 0} onClick={() => { setLane("new"); setActiveId(""); }} />
-            <LaneCard title="Active Threads" count={categorized.active.length} note="accepted requests being worked" active={lane === "active"} onClick={() => { setLane("active"); setActiveId(""); }} />
-            <LaneCard title="Admin Replies" count={categorized.admin.length} note="admin messages attached to requests" active={lane === "admin"} pulse={categorized.admin.length > 0} onClick={() => { setLane("admin"); setActiveId(""); }} />
-            <LaneCard title="Investor Replies" count={categorized.investor.length} note="investor replies attached to requests" active={lane === "investor"} pulse={categorized.investor.length > 0} onClick={() => { setLane("investor"); setActiveId(""); }} />
-            <LaneCard title="Deal Opportunities" count={categorized.deal.length} note="deal/opportunity routed cards" active={lane === "deal"} onClick={() => { setLane("deal"); setActiveId(""); }} />
-            <LaneCard title="Pain Requests" count={categorized.pain.length} note="problem-solving routed cards" active={lane === "pain"} onClick={() => { setLane("pain"); setActiveId(""); }} />
-            <LaneCard title="Execution Requests" count={categorized.execution.length} note="lender/title/contractor/operator style requests" active={lane === "execution"} onClick={() => { setLane("execution"); setActiveId(""); }} />
+            <LaneCard title="New Requests" count={categorized.new.length} note="fresh routed work needing a decision" active={lane === "new"} pulse={categorized.new.length > 0} onClick={() => { setLane("new"); setActiveId(""); }} />
+            <LaneCard title="Active Work" count={categorized.active.length} note="accepted threads being worked" active={lane === "active"} pulse={categorized.active.length > 0} onClick={() => { setLane("active"); setActiveId(""); }} />
+            <LaneCard title="Deal Signals" count={categorized.deal.length} note="deal/opportunity cards" active={lane === "deal"} pulse={categorized.deal.length > 0} onClick={() => { setLane("deal"); setActiveId(""); }} />
+            <LaneCard title="Pain Signals" count={categorized.pain.length} note="problem-solving cards" active={lane === "pain"} pulse={categorized.pain.length > 0} onClick={() => { setLane("pain"); setActiveId(""); }} />
+            <LaneCard title="Execution Requests" count={categorized.execution.length} note="lender/title/contractor/operator requests" active={lane === "execution"} pulse={categorized.execution.length > 0} onClick={() => { setLane("execution"); setActiveId(""); }} />
             <LaneCard title="Saved" count={categorized.saved.length} note="saved request cards" active={lane === "saved"} onClick={() => { setLane("saved"); setActiveId(""); }} />
             <LaneCard title="Archived" count={categorized.archived.length} note="completed or hidden request cards" active={lane === "archived"} onClick={() => { setLane("archived"); setActiveId(""); }} />
-            <LaneCard title="Passed" count={categorized.passed.length} note="declined/passed requests" active={lane === "passed"} danger={categorized.passed.length > 0} onClick={() => { setLane("passed"); setActiveId(""); }} />
             <LaneCard title="Deleted" count={categorized.deleted.length} note="cleanup folder with delete forever" active={lane === "deleted"} danger={categorized.deleted.length > 0} onClick={() => { setLane("deleted"); setActiveId(""); }} />
           </div>
         </Section>
@@ -1455,7 +1537,7 @@ export default function MemberControlledThreadsPage() {
             onDeleteForever={() => deleteForever(safeId(activeThread))}
           />
         ) : (
-          <Section title={`${lane.toUpperCase()} Cards`}>
+          <Section title={`${lane.toUpperCase()} Work Cards`}>
             {openRows.length ? (
               <div style={grid}>
                 {openRows.map((thread, index) => {
