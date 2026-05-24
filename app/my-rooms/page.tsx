@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type RoomKind = "deal" | "pain";
@@ -970,6 +969,15 @@ function MemberDisplayCard() {
     states: "States not listed",
   }));
 
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedView = params.get("view");
+    if (requestedView) {
+      setView(requestedView as any);
+    }
+  }, []);
+
   useEffect(() => {
     setMember(readMemberDisplay());
   }, []);
@@ -1332,9 +1340,7 @@ function RoomCard({ kind, room, refresh }: { kind: RoomKind; room: Room; refresh
 
 export default function MyRoomsPage() {
   const [tick, setTick] = useState(0);
-  const searchParams = useSearchParams();
-  const initialView = (searchParams.get("view") || "activeDeals") as ViewKey;
-  const [view, setView] = useState<ViewKey>(initialView);
+  const [view, setView] = useState<ViewKey>("activeDeals");
 
   useEffect(() => {
     const refresh = () => setTick((value) => value + 1);
