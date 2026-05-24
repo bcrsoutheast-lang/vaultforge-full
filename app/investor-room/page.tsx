@@ -1434,9 +1434,7 @@ function BloombergMessageForm({
       </div>
 
       <div style={{ ...grid, marginTop: 12 }}>
-        <SmartExecutionFieldBlock lane={lane} />
-
-        <label style={{ display: "grid", gap: 8 }}>
+<label style={{ display: "grid", gap: 8 }}>
           <span style={eyebrow}>Message Type</span>
           <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
             {["Message Owner", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Owner Note", "Member Reply", "Investor Reply"].map((item) => (
