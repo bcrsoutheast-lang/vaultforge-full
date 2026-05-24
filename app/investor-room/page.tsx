@@ -1325,7 +1325,6 @@ function BloombergMessageForm({
         <input style={input} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} placeholder="Internal note, caution, context. Saved inside structured message." />
       </label>
 
-      <VaultForgeAISnapshot kind={kind} item={item} />
 
         <div style={{ ...row, marginTop: 14 }}>
         <button type="button" style={goldBtn} onClick={submit}>{submitLabel}</button>
@@ -2345,7 +2344,9 @@ function RoomCard({
         and contact details are hidden until deeper access is approved.
       </p>
 
-      <div style={{ ...row, marginTop: 14 }}>
+      <VaultForgeAISnapshot kind={kind} item={item} />
+
+        <div style={{ ...row, marginTop: 14 }}>
         <button
           type="button"
           style={goldBtn}
