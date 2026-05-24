@@ -6,13 +6,13 @@ import VaultForgeAlertCenter from "../components/VaultForgeAlertCenter";
 import { useEffect, useMemo, useState } from "react";
 
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
-const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
+const ADMIN_INBOX_KEY = "vaultforge_owner_investor_inbox_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
 const DESIGNATED_ROUTE_MESSAGES_KEY = "vaultforge_designated_route_messages_v1";
 const OWNER_DIRECT_MESSAGES_KEY = "vaultforge_owner_direct_messages_v1";
 const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
-const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
+const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_owner_messages_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const MEMBER_REQUEST_OVERRIDES_KEY = "vaultforge_member_request_overrides_v1";
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
@@ -21,7 +21,7 @@ const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
 const PROFILE_PHOTO_BACKUP_KEY = "vaultforge_member_profile_photo_v1";
 const COMPANY_LOGO_BACKUP_KEY = "vaultforge_member_company_logo_v1";
 
-type Lane = "new" | "active" | "admin" | "investor" | "deal" | "pain" | "execution" | "saved" | "archived" | "passed" | "deleted";
+type Lane = "new" | "active" | "owner" | "investor" | "deal" | "pain" | "execution" | "saved" | "archived" | "passed" | "deleted";
 
 type ThreadPatch = Record<string, any>;
 
@@ -311,8 +311,8 @@ function isPain(thread: any) {
   return text.includes("pain") || text.includes("problem");
 }
 
-function hasAdminReply(thread: any) {
-  return list(thread?.messages).some((message: any) => lower(message?.role || message?.from).includes("admin")) || Boolean(thread?.adminReply || thread?.adminNote || thread?.ownerReply);
+function hasOwnerReply(thread: any) {
+  return list(thread?.messages).some((message: any) => lower(message?.role || message?.from).includes("owner")) || Boolean(thread?.ownerReply || thread?.ownerNote || thread?.ownerReply);
 }
 
 function hasInvestorReply(thread: any) {
@@ -554,7 +554,7 @@ function BloombergMessageForm({
         <label style={{ display: "grid", gap: 8 }}>
           <span style={eyebrow}>Message Type</span>
           <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
-            {["Request Info", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
+            {["Request Info", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Owner Note", "Member Reply", "Investor Reply"].map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </select>
@@ -644,7 +644,7 @@ function paymentStatusFor(email: string, kind: "member" | "investor") {
   return {
     approved: Boolean(
       record.approved ||
-      record.adminApproved ||
+      record.ownerApproved ||
       record.approvedForPayment ||
       record.paymentStatus === "ready" ||
       record.accessStatus === "payment_ready" ||
@@ -690,17 +690,17 @@ function MockPaymentButton({
   return (
     <section className={canPay && !unlocked ? "vf-pulse" : ""} style={canPay && !unlocked ? goldPanel : panel}>
       <div style={eyebrow}>{label}</div>
-      <h2 style={h2}>{unlocked ? "Room Unlocked" : canPay ? "PAYMENT READY — CLICK MOCK PAY" : "LOCKED — Waiting On Admin Approval"}</h2>
+      <h2 style={h2}>{unlocked ? "Room Unlocked" : canPay ? "PAYMENT READY — CLICK MOCK PAY" : "LOCKED — Waiting On Owner Approval"}</h2>
       <div style={{ ...panel, marginTop: 10, borderColor: canPay && !unlocked ? "rgba(255,220,104,.92)" : "rgba(255,70,70,.42)" }}>
-        <div style={eyebrow}>{unlocked ? "Access Active" : canPay ? ownerBypass ? "Owner/Test Bypass — Payment Available" : "Admin Approved — Payment Available" : "Locked Preview"}</div>
-        <p style={muted}>{unlocked ? "This room is unlocked." : canPay ? "This card should be visibly pulsing. Click Mock Pay to unlock for testing." : "Regular users should see this locked until admin approval."}</p>
+        <div style={eyebrow}>{unlocked ? "Access Active" : canPay ? ownerBypass ? "Owner/Test Bypass — Payment Available" : "Owner Approved — Payment Available" : "Locked Preview"}</div>
+        <p style={muted}>{unlocked ? "This room is unlocked." : canPay ? "This card should be visibly pulsing. Click Mock Pay to unlock for testing." : "Regular users should see this locked until owner approval."}</p>
       </div>
       <p style={{ ...sub, marginTop: 12 }}>
         {unlocked
           ? "Access is active."
           : canPay
             ? `${price} mock payment is ready. Click to unlock this room for testing.`
-            : "Submit profile and wait for admin approval. This room remains locked until approval and payment."}
+            : "Submit profile and wait for owner approval. This room remains locked until approval and payment."}
       </p>
       <div style={{ ...row, marginTop: 14 }}>
         <button
@@ -736,7 +736,7 @@ function MockPaymentButton({
           onClick={() => {
             setMockAccessRecord(email, kind, {
               approved: true,
-              adminApproved: true,
+              ownerApproved: true,
               paymentStatus: "ready",
               accessStatus: "payment_ready",
             });
@@ -810,7 +810,7 @@ function InvestorProfileCard({ profile, photoUrl, released }: { profile: any; ph
                 <p style={muted}>Website: {profile?.website || "Not listed"}</p>
               </>
             ) : (
-              <p style={muted}>Contact stays hidden until you/admin approve release.</p>
+              <p style={muted}>Contact stays hidden until you/owner approve release.</p>
             )}
           </div>
         </div>
@@ -1036,186 +1036,6 @@ function MemberIdentityPanel({ profile }: { profile: any }) {
   const provide = Array.isArray(profile?.canProvide) && profile.canProvide.length ? profile.canProvide.join(" • ") : "Capabilities not listed";
 
   return (
-    <section style={{ ...goldPanel, marginBottom: 18 }}>
-      <div style={{ ...row, alignItems: "flex-start" }}>
-        {logo ? (
-          <img
-            src={logo}
-            alt="Member company"
-            style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 24, border: "1px solid rgba(245,197,66,.45)" }}
-          />
-        ) : null}
-
-        <div>
-          <div style={eyebrow}>Member Command Identity</div>
-          <h2 style={h2}>{clean(profile?.company || profile?.name || "VaultForge Member")}</h2>
-          <p style={sub}>{clean(profile?.name || "Member")} • {clean(profile?.memberType || "Private Member")}</p>
-          <p style={muted}>{states}</p>
-          <p style={muted}>Can provide: {provide}</p>
-          <p style={muted}>Contact preference: {clean(profile?.contactPreference || "VaultForge Message")} • Response: {clean(profile?.responseSpeed || "24 Hours")}</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function MemberPublicProfileCard({ profile }: { profile: any }) {
-  const pub = publicMemberProfile(profile);
-  return (
-    <div style={panel}>
-      <div style={eyebrow}>Member Profile Attached</div>
-      <div style={{ ...row, alignItems: "flex-start" }}>
-        {pub.companyLogo || pub.profilePhoto ? (
-          <img
-            src={pub.companyLogo || pub.profilePhoto}
-            alt="Member profile"
-            style={{ width: 82, height: 82, objectFit: "cover", borderRadius: 20, border: "1px solid rgba(245,197,66,.35)" }}
-          />
-        ) : null}
-
-        <div>
-          <h3 style={h3}>{pub.company}</h3>
-          <p style={muted}>{pub.memberType}{pub.title ? ` • ${pub.title}` : ""}</p>
-          <p style={muted}>States: {pub.statesOperated.length ? pub.statesOperated.join(" • ") : pub.basedState || "Not listed"}</p>
-          <p style={muted}>Capabilities: {pub.canProvide.length ? pub.canProvide.join(" • ") : "Not listed"}</p>
-          <p style={muted}>Personal email and phone stay hidden until contact release.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: any; onPatch: (patch: ThreadPatch) => void; onDeleteForever: () => void; onBack: () => void }) {
-  const [reply, setReply] = useState("");
-  const [infoRequest, setInfoRequest] = useState("");
-  const profile = profileFrom(thread);
-  const memberProfile = typeof window === "undefined" ? {} : readMemberProfile();
-  const memberPublic = publicMemberProfile(memberProfile);
-  const released = Boolean(thread?.contactReleased);
-
-  function addMessage(role: string, body: string, patch: ThreadPatch = {}) {
-    if (!body.trim()) return;
-    const message = {
-      id: `member-thread-message-${Date.now()}`,
-      from: role,
-      role: role.toLowerCase(),
-      body: body.trim(),
-      createdAt: new Date().toISOString(),
-      read: false,
-    };
-    onPatch({
-      ...patch,
-      messages: [...(thread.messages || []), message],
-      unread: true,
-      investorUnread: true,
-      adminUnread: true,
-      memberProfilePublic: memberPublic,
-      memberCompany: memberPublic.company,
-      memberLogo: memberPublic.companyLogo,
-      memberProfilePhoto: memberPublic.profilePhoto,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  return (
-    <section style={goldPanel}>
-      <div style={eyebrow}>Open Request Detail</div>
-      <h2 style={h2}>{titleFor(thread)}</h2>
-      <p style={sub}>{roomHeaderFor(thread)}</p>
-      <p style={muted}>Status: {statusOf(thread) || "new"} • Source: {sourceOf(thread) || "request"} • State: {thread?.state || "not listed"}</p>
-      <p style={muted}>Thread ID: {safeId(thread)}</p>
-
-      <InvestorNeedsBlock thread={thread} />
-
-      <div style={{ ...row, marginTop: 16 }}>
-        <button type="button" style={btn} onClick={onBack}>Collapse / Done</button>
-        <button type="button" style={goldBtn} onClick={() => onPatch({ status: "accepted", stage: "member_accepted", memberAccepted: true, unread: false, updatedAt: new Date().toISOString() })}>Accept / Work It</button>
-        <button type="button" style={goldBtn} onClick={() => onPatch({ status: "reviewing", stage: "member_reviewing", unread: false, updatedAt: new Date().toISOString() })}>Reviewing</button>
-        <button type="button" style={goldBtn} onClick={() => onPatch({ contactReleased: true, status: "contact_released", stage: "contact_released", updatedAt: new Date().toISOString() })}>Release Contact</button>
-        <button type="button" style={btn} onClick={() => onPatch({ saved: true, status: "saved", stage: "saved", updatedAt: new Date().toISOString() })}>Save</button>
-        <button type="button" style={btn} onClick={() => onPatch({ saved: false, status: "archived", stage: "archived", updatedAt: new Date().toISOString() })}>Archive</button>
-        <button type="button" style={redBtn} onClick={() => onPatch({ saved: false, status: "passed", stage: "member_passed", updatedAt: new Date().toISOString() })}>Pass</button>
-        <button type="button" style={redBtn} onClick={() => onPatch({ saved: false, status: "deleted", stage: "deleted", updatedAt: new Date().toISOString() })}>Delete</button>
-        <button type="button" style={redBtn} onClick={onDeleteForever}>Delete Forever</button>
-        {statusOf(thread) !== "new" ? <button type="button" style={btn} onClick={() => onPatch({ saved: false, status: "new", stage: "member_inbox", updatedAt: new Date().toISOString() })}>Move To Inbox</button> : null}
-      </div>
-
-      <div style={{ ...grid, marginTop: 18 }}>
-        <InvestorProfileCard profile={profile} photoUrl={thread?.investorPhotoUrl || profile?.photoUrl} released={released} />
-
-        <MemberPublicProfileCard profile={memberProfile} />
-
-        <div style={panel}>
-          <div style={eyebrow}>Next Move</div>
-          <h3 style={h3}>{isAccepted(thread) ? "Active working thread" : "Needs member decision"}</h3>
-          <p style={muted}>Accept to move this into Active Threads. Pass moves it out of active. Need More Info sends a message back on the same controlled request thread.</p>
-          <p style={muted}>Deal/Pain/Execution context stays attached so replies do not scatter into random inboxes.</p>
-        </div>
-      </div>
-
-      <div style={{ ...panel, marginTop: 18 }}>
-        <div style={eyebrow}>Thread Messages</div>
-        {(thread.messages || []).length ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            {(thread.messages || []).map((message: any, index: number) => <MessageBubble key={message?.id || index} message={message} />)}
-          </div>
-        ) : (
-          <p style={muted}>No messages yet. Send a reply or request more info below.</p>
-        )}
-      </div>
-
-      <BloombergMessageForm
-        sender={currentEmail() || "Member"}
-        recipient="Investor / VaultForge Admin"
-        header={roomHeaderFor(thread)}
-        defaultSubject={titleFor(thread)}
-        defaultType="Member Reply"
-        submitLabel="Send Structured Reply"
-        onSend={(payload) => {
-          setReply(payload.summary);
-          addMessage("Member", payload.summary, {
-            status: payload.messageType === "Need Documents" || payload.messageType === "Request Info" ? "needs_more_info" : "member_replied",
-            stage: payload.messageType === "Need Documents" || payload.messageType === "Request Info" ? "member_requested_info" : "member_reply_sent",
-            messageType: payload.messageType,
-            urgency: payload.urgency,
-            investorProfile: profile,
-            memberProfilePublic: memberPublic,
-            memberCompany: memberPublic.company,
-            memberLogo: memberPublic.companyLogo,
-            memberProfilePhoto: memberPublic.profilePhoto,
-          });
-          setReply("");
-          setInfoRequest("");
-        }}
-      />
-    </section>
-  );
-}
-
-
-function MemberSequenceCard({
-  step,
-  title,
-  note,
-  active,
-}: {
-  step: string;
-  title: string;
-  note: string;
-  active?: boolean;
-}) {
-  return (
-    <div style={active ? goldPanel : panel}>
-      <div style={eyebrow}>{step}</div>
-      <h3 style={h3}>{title}</h3>
-      <p style={muted}>{note}</p>
-    </div>
-  );
-}
-
-function MemberOperatingGuide() {
-  return (
     
 <section style={hero}>
           <div style={eyebrow}>VaultForge Request Desk</div>
@@ -1233,22 +1053,18 @@ function MemberOperatingGuide() {
             <Link href="/command" style={goldBtn}>Member Command</Link>
             <Link href="/message-command" style={btn}>Message Command</Link>
             {isOwner ? <Link href="/investor-room" style={btn}>Investor Room</Link> : null}
-            {isOwner ? <Link href="/admin" style={btn}>Admin</Link> : null}
+            {isOwner ? <Link href="/owner" style={btn}>Owner</Link> : null}
           </div>
 
-          <p style={muted}>Detected member/admin email: {email || "not detected"}</p>
+          <p style={muted}>Detected member/owner email: {email || "not detected"}</p>
         </section>
-<MemberIdentityPanel profile={memberProfile} />
+<MemberLaneGuide />
 
-        <MemberOperatingGuide />
-
-        <MemberLaneGuide />
-
-        <Section title="Member Request Cards">
+        <Section title="Request Desk">
           <div style={grid}>
             <LaneCard title="New Requests" count={categorized.new.length} note="routed investor requests needing a member decision" active={lane === "new"} pulse={categorized.new.length > 0} onClick={() => { setLane("new"); setActiveId(""); }} />
             <LaneCard title="Active Threads" count={categorized.active.length} note="accepted requests being worked" active={lane === "active"} onClick={() => { setLane("active"); setActiveId(""); }} />
-            <LaneCard title="Admin Replies" count={categorized.admin.length} note="admin messages attached to requests" active={lane === "admin"} pulse={categorized.admin.length > 0} onClick={() => { setLane("admin"); setActiveId(""); }} />
+            <LaneCard title="Owner Replies" count={categorized.owner.length} note="owner messages attached to requests" active={lane === "owner"} pulse={categorized.owner.length > 0} onClick={() => { setLane("owner"); setActiveId(""); }} />
             <LaneCard title="Investor Replies" count={categorized.investor.length} note="investor replies attached to requests" active={lane === "investor"} pulse={categorized.investor.length > 0} onClick={() => { setLane("investor"); setActiveId(""); }} />
             <LaneCard title="Deal Opportunities" count={categorized.deal.length} note="deal/opportunity routed cards" active={lane === "deal"} onClick={() => { setLane("deal"); setActiveId(""); }} />
             <LaneCard title="Pain Requests" count={categorized.pain.length} note="problem-solving routed cards" active={lane === "pain"} onClick={() => { setLane("pain"); setActiveId(""); }} />
@@ -1279,7 +1095,7 @@ function MemberOperatingGuide() {
             ) : (
               <div style={panel}>
                 <h2 style={h2}>No cards in this request group.</h2>
-                <p style={sub}>This lane is empty right now. When owner/admin routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
+                <p style={sub}>This lane is empty right now. When owner/owner routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
               </div>
             )}
           </Section>
