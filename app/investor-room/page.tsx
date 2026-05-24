@@ -12,6 +12,7 @@ const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY =
   "vaultforge_investor_execution_requests_v1";
+const DESIGNATED_ROUTE_MESSAGES_KEY = "vaultforge_designated_route_messages_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
@@ -582,7 +583,7 @@ function investorProfileSnapshot(investor: any) {
   };
 }
 
-function saveInvestorAdminMessage(subject: string, body: string) {
+function saveInvestorOwnerMessage(subject: string, body: string) {
   const rows = readJson<any[]>(INVESTOR_ADMIN_MESSAGES_KEY, []);
   const investor = readInvestor();
   const profile = investorProfileSnapshot(investor);
@@ -620,7 +621,7 @@ function saveInvestorAdminMessage(subject: string, body: string) {
   });
   writeJson("vaultforge_admin_messages_v1", adminRows.slice(0, 40));
 
-  pushAdminInbox({
+  pushOwnerInbox({
     id: `admin-message-to-admin-${Date.now()}`,
     type: "message_admin",
     requestTitle: subject || "Message Owner",
@@ -642,6 +643,76 @@ function saveInvestorAdminMessage(subject: string, body: string) {
   window.dispatchEvent(new Event("vaultforge-owner-message-change"));
 }
 
+
+function designatedRecipientForLane(lane: any) {
+  const key = String(lane?.key || "").toLowerCase();
+
+  const map: Record<string, { label: string; role: string; queue: string }> = {
+    lender: {
+      label: "Designated Lender Lane",
+      role: "lender",
+      queue: "lenders",
+    },
+    hard_money: {
+      label: "Designated Hard Money Lane",
+      role: "hard_money_lender",
+      queue: "hard_money",
+    },
+    jv_partner: {
+      label: "Designated JV Partner Lane",
+      role: "jv_partner",
+      queue: "jv_partners",
+    },
+    contractor: {
+      label: "Designated Contractor Lane",
+      role: "contractor",
+      queue: "contractors",
+    },
+    title_closing: {
+      label: "Designated Title / Closing Lane",
+      role: "title_closing",
+      queue: "title_closing",
+    },
+    insurance: {
+      label: "Designated Insurance Lane",
+      role: "insurance",
+      queue: "insurance",
+    },
+    property_management: {
+      label: "Designated Property Management Lane",
+      role: "property_manager",
+      queue: "property_management",
+    },
+    operator: {
+      label: "Designated Operator Lane",
+      role: "operator",
+      queue: "operators",
+    },
+    disposition: {
+      label: "Designated Disposition Lane",
+      role: "disposition",
+      queue: "disposition",
+    },
+    boots_on_ground: {
+      label: "Designated Boots-On-Ground Lane",
+      role: "boots_on_ground",
+      queue: "boots_on_ground",
+    },
+    equity_partner: {
+      label: "Designated Equity Partner Lane",
+      role: "equity_partner",
+      queue: "equity_partners",
+    },
+  };
+
+  return map[key] || {
+    label: "Designated Member Lane",
+    role: key || "member",
+    queue: key || "members",
+  };
+}
+
+
 function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
   try {
     compactVaultForgeLocalStorage();
@@ -655,6 +726,7 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
     const createdAt = new Date().toISOString();
     const executionId = `execution-request-${now}`;
     const adminInboxId = `admin-execution-request-${now}`;
+    const designated = designatedRecipientForLane(lane);
     const header = `${lane.title} - ${kind} - ${title} - ${state || "Unknown State"}`;
     const compactProfile = compactInvestorProfile(
       profile || safeInvestorSnapshot(),
@@ -662,6 +734,9 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
 
     const adminInboxRow = compactStorageRow({
       id: adminInboxId,
+      routedTo: designated.label,
+      designatedRole: designated.role,
+      designatedQueue: designated.queue,
       type: "execution_request",
       requestType: lane.key,
       requestTitle: lane.title,
@@ -670,7 +745,10 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
       body: notes || "Investor requested execution support.",
       message: `${header}\n\n${notes || "Investor requested execution support."}`,
       status: "new",
-      source: "investor-room-execution",
+      source: "designated-route-message",
+      routedTo: designated.label,
+      designatedRole: designated.role,
+      designatedQueue: designated.queue,
       kind,
       itemId: itemId(item, kind),
       state,
@@ -684,11 +762,15 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
       updatedAt: createdAt,
     });
 
+    const designatedRows = readJson<any[]>(DESIGNATED_ROUTE_MESSAGES_KEY, []);
+    writeJson(DESIGNATED_ROUTE_MESSAGES_KEY, [adminInboxRow, ...designatedRows].slice(0, 120));
+
+    // Owner visibility mirror only. The request is routed to the designated lane, not admin routing.
     const currentInbox = readJson<any[]>(ADMIN_INBOX_KEY, []);
     writeJson(ADMIN_INBOX_KEY, [adminInboxRow, ...currentInbox].slice(0, 25));
 
-    const savedAdminInboxRows = readJson<any[]>(ADMIN_INBOX_KEY, []);
-    const adminSaved = savedAdminInboxRows.some(
+    const savedOwnerInboxRows = readJson<any[]>(ADMIN_INBOX_KEY, []);
+    const adminSaved = savedOwnerInboxRows.some(
       (row) => row?.id === adminInboxId,
     );
 
@@ -698,12 +780,12 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
     }
 
     const verifiedInboxRows = readJson<any[]>(ADMIN_INBOX_KEY, []);
-    const verifiedAdminSaved = verifiedInboxRows.some(
+    const verifiedOwnerSaved = verifiedInboxRows.some(
       (row) => row?.id === adminInboxId,
     );
-    if (!verifiedAdminSaved) {
+    if (!verifiedOwnerSaved) {
       throw new Error(
-        "Admin inbox could not save after emergency cleanup. Clear Safari site data for this domain once, then resend.",
+        "Owner inbox could not save after emergency cleanup. Clear Safari site data for this domain once, then resend.",
       );
     }
 
@@ -739,7 +821,7 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
         [executionRow, ...executionRows].slice(0, 15),
       );
     } catch {
-      // Admin inbox is the source of truth. Do not fail the send just because duplicate investor tracking is full.
+      // Owner inbox is the source of truth. Do not fail the send just because duplicate investor tracking is full.
     }
 
     window.dispatchEvent(
@@ -750,7 +832,7 @@ function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
 
     return {
       ok: true,
-      message: `${lane.title} sent to admin inbox with investor profile attached.`,
+      message: `${lane.title} sent to ${designated.label} with investor profile attached.`,
       executionId,
       adminInboxId,
     };
@@ -830,7 +912,7 @@ function safeInvestorSnapshot() {
   };
 }
 
-function pushAdminInbox(row: any) {
+function pushOwnerInbox(row: any) {
   const rows = readJson<any[]>(ADMIN_INBOX_KEY, []);
   const profile = compactInvestorProfile(
     row.investorProfile || safeInvestorSnapshot(),
@@ -906,7 +988,7 @@ function sendRequest(kind: Kind, item: any, body: string) {
   });
 
   writeJson(INVESTOR_REQUESTS_KEY, rows.slice(0, 60));
-  pushAdminInbox({
+  pushOwnerInbox({
     id: `admin-deal-pain-request-${Date.now()}`,
     type: "deal_pain_request",
     requestTitle: `${kind} Request`,
@@ -1194,7 +1276,7 @@ function BloombergMessageForm({
         <label style={{ display: "grid", gap: 8 }}>
           <span style={eyebrow}>Message Type</span>
           <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
-            {["Message Owner", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
+            {["Message Owner", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Owner Note", "Member Reply", "Investor Reply"].map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </select>
@@ -1330,9 +1412,9 @@ function MockPaymentButton({
   return (
     <section className={canPay && !unlocked ? "vf-pulse" : ""} style={canPay && !unlocked ? goldPanel : panel}>
       <div style={eyebrow}>{label}</div>
-      <h2 style={h2}>{unlocked ? "Room Unlocked" : canPay ? "PAYMENT READY — CLICK MOCK PAY" : "LOCKED — Waiting On Admin Approval"}</h2>
+      <h2 style={h2}>{unlocked ? "Room Unlocked" : canPay ? "PAYMENT READY — CLICK MOCK PAY" : "LOCKED — Waiting On Owner Approval"}</h2>
       <div style={{ ...panel, marginTop: 10, borderColor: canPay && !unlocked ? "rgba(255,220,104,.92)" : "rgba(255,70,70,.42)" }}>
-        <div style={eyebrow}>{unlocked ? "Access Active" : canPay ? ownerBypass ? "Owner/Test Bypass — Payment Available" : "Admin Approved — Payment Available" : "Locked Preview"}</div>
+        <div style={eyebrow}>{unlocked ? "Access Active" : canPay ? ownerBypass ? "Owner/Test Bypass — Payment Available" : "Owner Approved — Payment Available" : "Locked Preview"}</div>
         <p style={muted}>{unlocked ? "This room is unlocked." : canPay ? "This card should be visibly pulsing. Click Mock Pay to unlock for testing." : "Regular users should see this locked until admin approval."}</p>
       </div>
       <p style={{ ...sub, marginTop: 12 }}>
@@ -1453,10 +1535,10 @@ function logoutInvestor() {
 }
 
 function TopNav({
-  onMessageAdmin,
+  onMessageOwner,
   isOwner,
 }: {
-  onMessageAdmin: () => void;
+  onMessageOwner: () => void;
   isOwner: boolean;
 }) {
   return (
@@ -1474,14 +1556,14 @@ function TopNav({
         <Link href="/investor-payment" style={btn}>
           Payment
         </Link>
-        <button type="button" style={goldBtn} onClick={onMessageAdmin}>
+        <button type="button" style={goldBtn} onClick={onMessageOwner}>
           Message Owner
         </button>
         <button type="button" style={btn} onClick={logoutInvestor}>
           Logout
         </button>
         <Link href="/admin" style={redBtn}>
-          Admin
+          Owner
         </Link>
       </div>
     </div>
@@ -1642,7 +1724,7 @@ function RequestPipeline() {
         <div style={panel}>
           <div style={eyebrow}>03 Reviewed</div>
           <p style={muted}>
-            Admin/member reviews investor fit and request context.
+            Owner/member reviews investor fit and request context.
           </p>
         </div>
         <div style={panel}>
@@ -1698,10 +1780,10 @@ function UrgencyBadges({ kind }: { kind: Kind }) {
 
 function InvestorIdentityCard({
   investor,
-  onMessageAdmin,
+  onMessageOwner,
 }: {
   investor: any;
-  onMessageAdmin: () => void;
+  onMessageOwner: () => void;
 }) {
   const score = typeof profileScore === "function" ? profileScore(investor) : 0;
   const email = String(
@@ -1776,7 +1858,7 @@ function InvestorIdentityCard({
           <Link href="/investor-payment" style={btn}>
             Payment
           </Link>
-          <button type="button" style={btn} onClick={onMessageAdmin}>
+          <button type="button" style={btn} onClick={onMessageOwner}>
             Message Owner
           </button>
           <button type="button" style={btn} onClick={logoutInvestor}>
@@ -1784,7 +1866,7 @@ function InvestorIdentityCard({
           </button>
           {isOwner ? (
             <Link href="/admin" style={redBtn}>
-              Admin
+              Owner
             </Link>
           ) : null}
         </div>
@@ -2133,7 +2215,7 @@ function RoomCard({
 
           <BloombergMessageForm
             sender={readInvestor()?.email || "Investor"}
-            recipient="VaultForge Admin / Routed Member"
+            recipient="Designated Member Lane"
             header={header}
             defaultSubject={`${kind} Request - ${itemTitle(item, kind)}`}
             defaultType="Message Owner"
@@ -2170,7 +2252,7 @@ function RoomCard({
 
           {sent ? (
             <p style={muted}>
-              Request sent to VaultForge admin/member workflow.
+              Request sent to VaultForge owner/member workflow.
             </p>
           ) : null}
         </div>
@@ -2179,7 +2261,7 @@ function RoomCard({
   );
 }
 
-function MessageAdminModal({
+function MessageOwnerModal({
   open,
   onClose,
 }: {
@@ -2207,7 +2289,7 @@ function MessageAdminModal({
         <div style={{ ...row, justifyContent: "space-between" }}>
           <div>
             <div style={eyebrow}>Investor Message Owner</div>
-            <h2 style={h2}>Contact VaultForge Admin</h2>
+            <h2 style={h2}>Contact VaultForge Owner</h2>
           </div>
           <button type="button" style={btn} onClick={onClose}>
             Close
@@ -2220,14 +2302,14 @@ function MessageAdminModal({
 
         <BloombergMessageForm
           sender={readInvestor()?.email || "Investor"}
-          recipient="VaultForge Admin"
+          recipient="VaultForge Owner"
           header="Investor Message Owner"
           defaultSubject={subject || "Investor message to admin"}
-          defaultType="Admin Note"
+          defaultType="Owner Note"
           submitLabel="Send Message Owner"
           onCancel={onClose}
           onSend={(payload) => {
-            saveInvestorAdminMessage(payload.subject, payload.summary || payload.body || "Investor requested admin support.");
+            saveInvestorOwnerMessage(payload.subject, payload.summary || payload.body || "Investor requested admin support.");
             setSent(true);
             setSubject("");
             setBody("");
@@ -2297,14 +2379,13 @@ function ExecutionRequestModal({
         <div style={{ ...panel, marginTop: 16 }}>
           <div style={eyebrow}>Controlled Routing</div>
           <p style={muted}>
-            This does not expose the member directory. VaultForge routes your
-            request internally with your investor profile attached.
+            This does not expose the member directory. VaultForge sends your request directly to the designated member lane with your investor profile attached.
           </p>
         </div>
 
         <BloombergMessageForm
           sender={readInvestor()?.email || "Investor"}
-          recipient="VaultForge Admin / Matching Members"
+          recipient="Designated Member Lane"
           header={header}
           defaultSubject={lane.title}
           defaultType="Message Owner"
@@ -2783,17 +2864,17 @@ function InvestorRequestCenter() {
         </div>
 
         <div style={panel}>
-          <div style={eyebrow}>Admin Messages</div>
+          <div style={eyebrow}>Owner Messages</div>
           {adminMessages.length ? (
             adminMessages.map((row) => (
               <RequestMiniCard
                 key={row.id}
                 row={row}
-                label="Admin Message"
+                label="Owner Message"
                 onOpen={() =>
                   setSelected({
                     row,
-                    label: "Admin Message",
+                    label: "Owner Message",
                     group: "adminMessage",
                   })
                 }
@@ -2970,10 +3051,10 @@ function InvestorThreadMessageCard({ thread, onCollapse, onChanged }: { thread: 
 
       <div style={{ ...grid, marginTop: 14 }}>
         <div style={panel}>
-          <div style={eyebrow}>Admin Replies</div>
+          <div style={eyebrow}>Owner Replies</div>
           {adminMessages.length ? adminMessages.slice(-4).map((message: any) => (
             <div key={message.id || `${message.createdAt}-${message.body}`} style={{ ...panel, marginTop: 8 }}>
-              <p style={muted}>{message.from || 'VaultForge Admin'} • {message.createdAt || ''}</p>
+              <p style={muted}>{message.from || 'VaultForge Owner'} • {message.createdAt || ''}</p>
               <p style={sub}>{message.body || message.message || ''}</p>
             </div>
           )) : <p style={muted}>No admin replies yet.</p>}
@@ -3004,7 +3085,7 @@ function InvestorThreadMessageCard({ thread, onCollapse, onChanged }: { thread: 
 
       <BloombergMessageForm
         sender={investorEmailForThreads() || "Investor"}
-        recipient="VaultForge Admin / Member"
+        recipient="VaultForge Designated Member"
         header={thread?.roomHeader || thread?.subject || thread?.title || "Request Thread"}
         defaultSubject={thread?.subject || thread?.title || "Investor Request Reply"}
         defaultType="Investor Reply"
@@ -3073,14 +3154,14 @@ function InvestorThreadCenter() {
   return (
     <section style={{ ...hero, marginTop: 20 }} data-refresh={refresh}>
       <div style={eyebrow}>Request Messages</div>
-      <h2 style={h2}>Admin and member replies.</h2>
+      <h2 style={h2}>Owner and member replies.</h2>
       <p style={sub}>
         Every approved Deal, Pain, or execution request becomes a message card here.
-        Admin replies and member replies stay tied to the original request.
+        Owner replies and member replies stay tied to the original request.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
-        <Metric title='Admin Reply Cards' count={adminReplyCount} note='admin replies tied to requests' pulse={adminReplyCount > 0} />
+        <Metric title='Owner Reply Cards' count={adminReplyCount} note='admin replies tied to requests' pulse={adminReplyCount > 0} />
         <Metric title='Member Reply Cards' count={memberReplyCount} note='member/operator replies tied to requests' pulse={memberReplyCount > 0} />
         <Metric title='Open Request Threads' count={activeThreads.length} note='controlled request conversations' pulse={activeThreads.length > 0} />
       </div>
@@ -3137,7 +3218,7 @@ const INVESTOR_HELP_TOPICS: { key: InvestorHelpTopic; title: string; short: stri
     short: "This is your controlled investor access room.",
     bullets: [
       "You see teaser Deal and Pain cards, not the private member directory.",
-      "Every request you send attaches your investor profile so admin/members know who is asking.",
+      "Every request you send attaches your investor profile so owner/members know who is asking.",
       "VaultForge routes requests internally so member contact info stays protected until approved.",
       "Use Deal/Pain cards for a specific opportunity. Use Execution Requests when you need help like funding, title, contractor, operator, or boots on ground.",
     ],
@@ -3183,7 +3264,7 @@ const INVESTOR_HELP_TOPICS: { key: InvestorHelpTopic; title: string; short: stri
       "Use Request Lender, Hard Money, JV, Contractor, Title/Closing, Insurance, Operator, Disposition, Boots on Ground, or Equity Partner.",
       "If a Deal/Pain card is open, the execution request attaches to that room.",
       "If no card is open, it sends a general execution request.",
-      "Admin receives it and can route it to matching members based on what they do.",
+      "Owner receives it and can route it to matching members based on what they do.",
     ],
   },
   {
@@ -3194,7 +3275,7 @@ const INVESTOR_HELP_TOPICS: { key: InvestorHelpTopic; title: string; short: stri
       "Use Message Owner for account, routing, payment, access, or deal-room questions.",
       "Your investor profile is attached so admin can see who is contacting them.",
       "This is separate from a Deal/Pain request unless you reference the deal or pain in your message.",
-      "Admin replies should appear in your request/message thread cards.",
+      "Owner replies should appear in your request/message thread cards.",
     ],
   },
   {
@@ -3202,7 +3283,7 @@ const INVESTOR_HELP_TOPICS: { key: InvestorHelpTopic; title: string; short: stri
     title: "Request Message Threads",
     short: "Replies stay tied to the original request.",
     bullets: [
-      "Admin replies, member replies, and your replies are kept inside the request thread.",
+      "Owner replies, member replies, and your replies are kept inside the request thread.",
       "Use the request message cards to reply back without creating scattered messages.",
       "A member can reply, ask for more info, accept, or release contact when approved.",
       "Keep threads clean with Save, Archive, Delete, Delete Forever, and Collapse/Done.",
@@ -3226,7 +3307,7 @@ const INVESTOR_HELP_TOPICS: { key: InvestorHelpTopic; title: string; short: stri
     bullets: [
       "Investors do not get direct member directory access.",
       "Members do not automatically expose email or phone.",
-      "Contact release should happen only after admin/member approval.",
+      "Contact release should happen only after owner/member approval.",
       "This protects the network and keeps introductions controlled.",
     ],
   },
@@ -3338,7 +3419,7 @@ export default function InvestorRoomPage() {
   const [folder, setFolder] = useState<Folder>("active");
   const [activeRoom, setActiveRoom] = useState<ActiveRoom>(null);
   const [selectedExecutionLane, setSelectedExecutionLane] = useState<any>(null);
-  const [messageAdminOpen, setMessageAdminOpen] = useState(false);
+  const [messageOwnerOpen, setMessageOwnerOpen] = useState(false);
   const [tick, setTick] = useState(0);
   const [mounted, setMounted] = useState(false);
 
@@ -3470,14 +3551,14 @@ export default function InvestorRoomPage() {
         <VaultForgeAlertCenter audience="investor" title="Investor Alerts" />
 
         <TopNav
-          onMessageAdmin={() => setMessageAdminOpen(true)}
+          onMessageOwner={() => setMessageOwnerOpen(true)}
           isOwner={String(investor?.email || browserValue("vf_email") || browserValue("vaultforge_investor_email") || "").toLowerCase() === OWNER_EMAIL.toLowerCase()}
         />
         <TickerRibbon />
 
-        <MessageAdminModal
-          open={messageAdminOpen}
-          onClose={() => setMessageAdminOpen(false)}
+        <MessageOwnerModal
+          open={messageOwnerOpen}
+          onClose={() => setMessageOwnerOpen(false)}
         />
 
         <section style={hero}>
@@ -3494,7 +3575,7 @@ export default function InvestorRoomPage() {
             <button type="button" style={kind === "Pain" && folder === "active" ? goldBtn : btn} onClick={() => openKind("Pain")}>
               Open Pain Signals
             </button>
-            <button type="button" style={goldBtn} onClick={() => setMessageAdminOpen(true)}>
+            <button type="button" style={goldBtn} onClick={() => setMessageOwnerOpen(true)}>
               Message Owner
             </button>
             <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>
@@ -3531,7 +3612,7 @@ export default function InvestorRoomPage() {
             <InvestorSequenceStep
               step="04 Replies"
               title="Message Threads"
-              note="Admin/member replies stay tied to the original request."
+              note="Owner/member replies stay tied to the original request."
             />
             <InvestorSequenceStep
               step="05 Execution"
@@ -3548,7 +3629,7 @@ export default function InvestorRoomPage() {
 
         <InvestorIdentityCard
           investor={investor}
-          onMessageAdmin={() => setMessageAdminOpen(true)}
+          onMessageOwner={() => setMessageOwnerOpen(true)}
         />
 
         <section style={{ marginBottom: 18 }}>
@@ -3603,7 +3684,7 @@ export default function InvestorRoomPage() {
           <InvestorAreaHeader
             eyebrowText="02 Request Tracking"
             title="Track every request you sent."
-            note="These are your outgoing requests to VaultForge/admin/member routing. Use this before digging through folders."
+            note="These are your outgoing requests to VaultForge/owner/member routing. Use this before digging through folders."
           />
           <div style={grid}>
             <Metric
@@ -3748,7 +3829,7 @@ export default function InvestorRoomPage() {
         <section style={{ ...panel, marginBottom: 18 }}>
           <InvestorAreaHeader
             eyebrowText="05 Message Threads"
-            title="Admin/member replies tied to requests."
+            title="Owner/member replies tied to requests."
             note="Replies are no longer generic. Each one carries sender, recipient, request header, type, urgency, timeline, amount, conditions, and next move."
           />
           <InvestorThreadCenter />
@@ -3829,7 +3910,7 @@ export default function InvestorRoomPage() {
               </p>
             </div>
             <div style={panel}>
-              <div style={eyebrow}>Admin Control</div>
+              <div style={eyebrow}>Owner Control</div>
               <p style={muted}>
                 No direct contact is exposed until the member/admin workflow
                 approves deeper access.
