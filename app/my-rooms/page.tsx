@@ -1421,61 +1421,139 @@ export default function MyRoomsPage() {
             <Link href="/messages" style={btn}>Messages</Link>
           </div>
         </section>
-
-        <Section title="Active Operations">
-          <div style={grid}>
+        <Section title="Deal Room Command">
+          <p style={sub}>Deal rooms are opportunity inventory. Click a card to open that exact deal group.</p>
+          <div style={{ ...grid, marginTop: 16 }}>
             <MetricButton
-              title="Deal Rooms"
+              title="Active Deals"
               count={activeDealCount}
-              note="live opportunity execution rooms"
+              note="live opportunity rooms being worked"
               active={view === "activeDeals"}
               alert
               onClick={() => setView("activeDeals")}
             />
+            <ViewCard
+              view="savedDeals"
+              title="Saved Deals"
+              count={countFor("savedDeals", deals, pains)}
+              note="deal rooms kept for later review"
+              active={view === "savedDeals"}
+              onClick={() => setView("savedDeals")}
+            />
             <MetricButton
-              title="Pain Rooms"
+              title="Reviewing"
+              count={deals.filter((room) => roomStage("deal", room) === "Reviewing").length}
+              note="deals still being evaluated"
+              active={view === "activeDeals"}
+              onClick={() => setView("activeDeals")}
+            />
+            <MetricButton
+              title="Sold / Closed"
+              count={countFor("sold", deals, pains)}
+              note="completed deal execution rooms"
+              active={view === "sold"}
+              onClick={() => setView("sold")}
+            />
+          </div>
+        </Section>
+
+        <Section title="Pain Room Command">
+          <p style={sub}>Pain rooms are problem-solving signals. Click a card to open the right pain group.</p>
+          <div style={{ ...grid, marginTop: 16 }}>
+            <MetricButton
+              title="Active Pain"
               count={activePainCount}
-              note="active pressure/problem rooms"
+              note="open pressure/problem rooms"
+              active={view === "activePain"}
+              alert
+              danger
+              onClick={() => setView("activePain")}
+            />
+            <ViewCard
+              view="savedPain"
+              title="Saved Pain"
+              count={countFor("savedPain", deals, pains)}
+              note="pain rooms kept for later follow-up"
+              active={view === "savedPain"}
+              onClick={() => setView("savedPain")}
+            />
+            <MetricButton
+              title="In Progress"
+              count={stages["In Progress"] || 0}
+              note="problem solving already underway"
               active={view === "activePain"}
               alert
               danger
               onClick={() => setView("activePain")}
             />
             <MetricButton
+              title="Resolved"
+              count={countFor("resolved", deals, pains)}
+              note="finished problem-solving rooms"
+              active={view === "resolved"}
+              onClick={() => setView("resolved")}
+            />
+          </div>
+        </Section>
+
+        <Section title="Assigned Work">
+          <p style={sub}>Routed work and execution requests live here. Alerts and routing stay behind the scenes.</p>
+          <div style={{ ...grid, marginTop: 16 }}>
+            <MetricButton
               title="Assigned / Routed"
               count={assignedRoutedCount}
-              note="routed rooms needing response"
+              note="rooms requiring member response"
               active={view === "assignedToMe" || view === "routedToMe"}
               alert
               onClick={() => setView("assignedToMe")}
             />
             <MetricButton
+              title="Execution Requests"
+              count={assignedRoutedCount}
+              note="lender, title, contractor, JV, operator, and boots-on-ground work"
+              active={view === "routedToMe"}
+              onClick={() => setView("routedToMe")}
+            />
+            <MetricButton
               title="Needs Attention"
               count={needsAttention}
-              note="rooms needing update, routing, sold/resolved status, or cleanup"
+              note="rooms needing an update, decision, or cleanup"
               active={false}
               alert
               danger
               onClick={() => setView("activeDeals")}
             />
+            <Link href="/messages" style={panel}>
+              <div style={eyebrow}>Messages</div>
+              <h2 style={h2}>Open</h2>
+              <p style={muted}>owner, member, and investor replies tied to rooms</p>
+            </Link>
           </div>
         </Section>
-
-        <Section title="Room Management">
-          <div style={grid}>
+        <Section title="Room Folders">
+          <p style={sub}>Save, archive, delete, or complete rooms without mixing them into active work.</p>
+          <div style={{ ...grid, marginTop: 16 }}>
             <ViewCard
               view="savedDeals"
-              title="Saved"
-              count={countFor("savedDeals", deals, pains) + countFor("savedPain", deals, pains)}
-              note="rooms stored for later review"
-              active={view === "savedDeals" || view === "savedPain"}
+              title="Saved Deals"
+              count={countFor("savedDeals", deals, pains)}
+              note="deal rooms kept for review"
+              active={view === "savedDeals"}
               onClick={() => setView("savedDeals")}
+            />
+            <ViewCard
+              view="savedPain"
+              title="Saved Pain"
+              count={countFor("savedPain", deals, pains)}
+              note="pain rooms kept for review"
+              active={view === "savedPain"}
+              onClick={() => setView("savedPain")}
             />
             <ViewCard
               view="archived"
               title="Archived"
               count={countFor("archived", deals, pains)}
-              note="inactive but preserved rooms"
+              note="hidden from active work but preserved"
               active={view === "archived"}
               onClick={() => setView("archived")}
             />
@@ -1483,65 +1561,14 @@ export default function MyRoomsPage() {
               view="deleted"
               title="Deleted"
               count={countFor("deleted", deals, pains)}
-              note="workspace cleanup folder"
+              note="cleanup folder before permanent removal"
               active={view === "deleted"}
               onClick={() => setView("deleted")}
             />
-            <ViewCard
-              view="following"
-              title="Following"
-              count={countFor("following", deals, pains)}
-              note="rooms being monitored"
-              active={view === "following"}
-              onClick={() => setView("following")}
-            />
           </div>
         </Section>
 
-        <Section title="Execution Pipeline">
-          <div style={grid}>
-            <MetricButton
-              title="Reviewing"
-              count={deals.filter((room) => roomStage("deal", room) === "Reviewing").length}
-              note="deals under review"
-              active={view === "activeDeals"}
-              onClick={() => setView("activeDeals")}
-            />
-            <MetricButton
-              title="Routed"
-              count={stages["Routed"] || 0}
-              note="execution routing active"
-              active={view === "routedToMe"}
-              alert
-              onClick={() => setView("routedToMe")}
-            />
-            <MetricButton
-              title="Under Contract"
-              count={stages["Under Contract"] || 0}
-              note="live deal execution underway"
-              active={view === "activeDeals"}
-              onClick={() => setView("activeDeals")}
-            />
-            <MetricButton
-              title="In Progress"
-              count={stages["In Progress"] || 0}
-              note="pain/problem solving underway"
-              active={view === "activePain"}
-              alert
-              danger
-              onClick={() => setView("activePain")}
-            />
-            <MetricButton
-              title="Completed Work"
-              count={(stages["Sold"] || 0) + (stages["Resolved"] || 0)}
-              note="completed execution rooms"
-              active={view === "sold" || view === "resolved"}
-              onClick={() => setView("sold")}
-            />
-          </div>
-        </Section>
-
-        <Section title={`Room Feed • ${cards.find((item) => item.view === view)?.title || "Rooms"}`}>
+<Section title={`Room Feed • ${cards.find((item) => item.view === view)?.title || "Rooms"}`}>
           {visible.length ? (
             <div style={grid}>
               {visible.map((item) => (
