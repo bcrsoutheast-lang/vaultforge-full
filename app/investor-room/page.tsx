@@ -14,6 +14,7 @@ const INVESTOR_EXECUTION_REQUESTS_KEY =
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
+const OWNER_DIRECT_MESSAGES_KEY = "vaultforge_owner_direct_messages_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
 const INVESTOR_HIDDEN_KEY = "vaultforge_investor_room_hidden_v1";
 
@@ -591,7 +592,7 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     subject: subject || "Investor message to admin",
     body,
     message: body,
-    status: "new",
+    status: "new_owner_message",
     priority: "normal",
     lane: "investor-admin",
     investorEmail: profile.email,
@@ -612,7 +613,7 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     email: profile.email || "",
     status: "new",
     priority: "normal",
-    source: "investor-room",
+    source: "owner-direct-message",
     investorProfile: compactInvestorProfile(profile),
     createdAt: new Date().toISOString(),
   });
@@ -621,9 +622,9 @@ function saveInvestorAdminMessage(subject: string, body: string) {
   pushAdminInbox({
     id: `admin-message-to-admin-${Date.now()}`,
     type: "message_admin",
-    requestTitle: subject || "Message Admin",
-    title: subject || "Message Admin",
-    subject: subject || "Message Admin",
+    requestTitle: subject || "Message Owner",
+    title: subject || "Message Owner",
+    subject: subject || "Message Owner",
     body: body || "Investor requested admin support.",
     message: body || "Investor requested admin support.",
     status: "new",
@@ -637,6 +638,7 @@ function saveInvestorAdminMessage(subject: string, body: string) {
 
   window.dispatchEvent(new Event("vaultforge-investor-admin-message-change"));
   window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
 }
 
 function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
@@ -1191,7 +1193,7 @@ function BloombergMessageForm({
         <label style={{ display: "grid", gap: 8 }}>
           <span style={eyebrow}>Message Type</span>
           <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
-            {["Request Info", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
+            {["Message Owner", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
               <option key={item} value={item}>{item}</option>
             ))}
           </select>
@@ -1472,7 +1474,7 @@ function TopNav({
           Payment
         </Link>
         <button type="button" style={goldBtn} onClick={onMessageAdmin}>
-          Message Admin
+          Message Owner
         </button>
         <button type="button" style={btn} onClick={logoutInvestor}>
           Logout
@@ -1718,7 +1720,7 @@ function InvestorIdentityCard({
             Payment
           </Link>
           <button type="button" style={btn} onClick={onMessageAdmin}>
-            Message Admin
+            Message Owner
           </button>
           <button type="button" style={btn} onClick={logoutInvestor}>
             Logout
@@ -1826,7 +1828,7 @@ function saveSimpleControlledRequest(payload: {
   const request = compactStorageRow({
     id: `vf-request-${Date.now()}`,
     type: "controlled_request",
-    source: "investor-room",
+    source: "owner-direct-message",
     status: "new",
     action: payload.action,
     buttonClicked: payload.action,
@@ -1842,8 +1844,8 @@ function saveSimpleControlledRequest(payload: {
     email: payload.email || profile.email || "",
     phone: payload.phone || profile.phone || "",
     contactMethod: payload.contactMethod,
-    body: payload.message || `${payload.action} request submitted.`,
-    message: payload.message || `${payload.action} request submitted.`,
+    body: payload.message || `${payload.action} message submitted.`,
+    message: payload.message || `${payload.action} message submitted.`,
     investorEmail: payload.email || profile.email || "",
     investorCompany: profile.company || "",
     investorName: payload.name || profile.contactName || "",
@@ -1856,12 +1858,16 @@ function saveSimpleControlledRequest(payload: {
   const requests = readJson<any[]>(SIMPLE_REQUESTS_KEY, []);
   writeJson(SIMPLE_REQUESTS_KEY, [request, ...requests].slice(0, 120));
 
+  const ownerMessages = readJson<any[]>(OWNER_DIRECT_MESSAGES_KEY, []);
+  writeJson(OWNER_DIRECT_MESSAGES_KEY, [request, ...ownerMessages].slice(0, 120));
+
   const adminInbox = readJson<any[]>(ADMIN_INBOX_KEY, []);
   writeJson(ADMIN_INBOX_KEY, [request, ...adminInbox].slice(0, 120));
 
   window.dispatchEvent(new Event("vaultforge-request-change"));
   window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
   window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
   return request;
 }
 
@@ -1897,7 +1903,7 @@ function SimpleRequestModal({
     try {
       if (!String(email || "").trim()) throw new Error("Email is required.");
       saveSimpleControlledRequest({ kind, item, action, name, email, phone, contactMethod, message });
-      setNotice("Request sent to VaultForge admin.");
+      setNotice("Message sent directly to owner.");
     } catch (error: any) {
       setNotice(error?.message || "Request could not be saved.");
     }
@@ -1908,7 +1914,7 @@ function SimpleRequestModal({
       <div style={{ maxWidth: 760, margin: "40px auto", ...goldPanel }}>
         <div style={{ ...row, justifyContent: "space-between" }}>
           <div>
-            <div style={eyebrow}>Controlled Request</div>
+            <div style={eyebrow}>Owner Direct Message</div>
             <h2 style={h2}>{action}</h2>
           </div>
           <button type="button" style={btn} onClick={onClose}>Close</button>
@@ -1946,11 +1952,11 @@ function SimpleRequestModal({
 
         <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
           <span style={eyebrow}>Message</span>
-          <textarea style={{ ...input, minHeight: 130 }} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="What do you want admin/member to know?" />
+          <textarea style={{ ...input, minHeight: 130 }} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="What do you want the owner to know?" />
         </label>
 
         <div style={{ ...row, marginTop: 16 }}>
-          <button type="button" style={goldBtn} onClick={submit}>Send To Admin</button>
+          <button type="button" style={goldBtn} onClick={submit}>Send To Owner</button>
           <button type="button" style={btn} onClick={onClose}>Cancel</button>
         </div>
 
@@ -2013,21 +2019,21 @@ function RoomCard({
 
         {kind === "Deal" ? (
           <>
-            <button type="button" style={goldBtn} onClick={() => setSimpleAction("Request Info")}>Request Info</button>
+            <button type="button" style={goldBtn} onClick={() => setSimpleAction("Message Owner")}>Message Owner</button>
             <button type="button" style={btn} onClick={() => setSimpleAction("Interested")}>Interested</button>
-            <button type="button" style={btn} onClick={() => setSimpleAction("Need Funding")}>Need Funding</button>
-            <button type="button" style={btn} onClick={() => setSimpleAction("Want To Partner")}>Want To Partner</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Ask About Funding")}>Ask About Funding</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Partner / JV")}>Partner / JV</button>
           </>
         ) : (
           <>
-            <button type="button" style={goldBtn} onClick={() => setSimpleAction("I Can Solve This")}>I Can Solve This</button>
-            <button type="button" style={btn} onClick={() => setSimpleAction("Need More Info")}>Need More Info</button>
+            <button type="button" style={goldBtn} onClick={() => setSimpleAction("Message Owner")}>Message Owner</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Request Details")}>Request Details</button>
             <button type="button" style={btn} onClick={() => setSimpleAction("Funding Available")}>Funding Available</button>
             <button type="button" style={btn} onClick={() => setSimpleAction("Operator Available")}>Operator Available</button>
           </>
         )}
 
-        <button type="button" style={btn} onClick={() => setSimpleAction("Message Admin")}>Message Admin</button>
+        <button type="button" style={btn} onClick={() => setSimpleAction("General Owner Message")}>General Owner Message</button>
 
         <button type="button" style={btn} onClick={() => onMove("saved")}>
           Save
@@ -2073,7 +2079,7 @@ function RoomCard({
             recipient="VaultForge Admin / Routed Member"
             header={header}
             defaultSubject={`${kind} Request - ${itemTitle(item, kind)}`}
-            defaultType="Request Info"
+            defaultType="Message Owner"
             submitLabel="Send Request Through VaultForge"
             onSend={(payload) => {
               setMessage(payload.summary);
@@ -2143,7 +2149,7 @@ function MessageAdminModal({
       <div style={{ maxWidth: 820, margin: "40px auto", ...goldPanel }}>
         <div style={{ ...row, justifyContent: "space-between" }}>
           <div>
-            <div style={eyebrow}>Investor Message Admin</div>
+            <div style={eyebrow}>Investor Message Owner</div>
             <h2 style={h2}>Contact VaultForge Admin</h2>
           </div>
           <button type="button" style={btn} onClick={onClose}>
@@ -2158,10 +2164,10 @@ function MessageAdminModal({
         <BloombergMessageForm
           sender={readInvestor()?.email || "Investor"}
           recipient="VaultForge Admin"
-          header="Investor Message Admin"
+          header="Investor Message Owner"
           defaultSubject={subject || "Investor message to admin"}
           defaultType="Admin Note"
-          submitLabel="Send Message Admin"
+          submitLabel="Send Message Owner"
           onCancel={onClose}
           onSend={(payload) => {
             saveInvestorAdminMessage(payload.subject, payload.summary || payload.body || "Investor requested admin support.");
@@ -2244,7 +2250,7 @@ function ExecutionRequestModal({
           recipient="VaultForge Admin / Matching Members"
           header={header}
           defaultSubject={lane.title}
-          defaultType="Request Info"
+          defaultType="Message Owner"
           submitLabel="Send Execution Request"
           onCancel={onClose}
           onSend={(payload) => {
@@ -3125,10 +3131,10 @@ const INVESTOR_HELP_TOPICS: { key: InvestorHelpTopic; title: string; short: stri
   },
   {
     key: "admin",
-    title: "Message Admin",
+    title: "Message Owner",
     short: "Contact VaultForge admin directly.",
     bullets: [
-      "Use Message Admin for account, routing, payment, access, or deal-room questions.",
+      "Use Message Owner for account, routing, payment, access, or deal-room questions.",
       "Your investor profile is attached so admin can see who is contacting them.",
       "This is separate from a Deal/Pain request unless you reference the deal or pain in your message.",
       "Admin replies should appear in your request/message thread cards.",
@@ -3425,7 +3431,7 @@ export default function InvestorRoomPage() {
               Open Pain Signals
             </button>
             <button type="button" style={goldBtn} onClick={() => setMessageAdminOpen(true)}>
-              Message Admin
+              Message Owner
             </button>
             <button type="button" style={btn} onClick={() => { setFolder("active"); setActiveRoom(null); }}>
               Collapse / Done
@@ -3454,7 +3460,7 @@ export default function InvestorRoomPage() {
             />
             <InvestorSequenceStep
               step="03 Requests"
-              title="Request Info"
+              title="Message Owner"
               note="Ask for controlled Deal/Pain information without exposing private member data."
               active={activeRequestCount(readAllInvestorRequests()) > 0}
             />
