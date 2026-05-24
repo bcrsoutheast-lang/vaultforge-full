@@ -13,6 +13,7 @@ const INVESTOR_EXECUTION_REQUESTS_KEY =
   "vaultforge_investor_execution_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
+const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
 const INVESTOR_CLEANUP_KEY = "vaultforge_investor_room_cleanup_v2";
 const INVESTOR_HIDDEN_KEY = "vaultforge_investor_room_hidden_v1";
 
@@ -549,25 +550,6 @@ function isHidden(item: any, kind: Kind) {
   return Boolean(hiddenMap()[cleanupKey(item, kind)]);
 }
 
-
-function investorProfilePhoto(investor: any) {
-  return (
-    investor?.profilePhoto ||
-    investor?.photoUrl ||
-    investor?.avatar ||
-    ""
-  );
-}
-
-function investorCompanyLogo(investor: any) {
-  return (
-    investor?.companyLogo ||
-    investor?.logoUrl ||
-    investor?.company_logo ||
-    ""
-  );
-}
-
 function investorProfileSnapshot(investor: any) {
   return {
     photoUrl: investor?.photoUrl || "",
@@ -615,8 +597,7 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     investorEmail: profile.email,
     investorCompany: profile.company,
     investorName: profile.contactName,
-    investorPhotoUrl: investorProfilePhoto(profile) || profile.photoUrl,
-    investorCompanyLogo: investorCompanyLogo(profile),
+    investorPhotoUrl: profile.photoUrl,
     investorProfile: compactInvestorProfile(profile),
     createdAt: new Date().toISOString(),
   });
@@ -651,8 +632,7 @@ function saveInvestorAdminMessage(subject: string, body: string) {
     investorEmail: profile?.email || "",
     investorCompany: profile?.company || "",
     investorName: profile?.contactName || "",
-    investorPhotoUrl: investorProfilePhoto(profile) || profile?.photoUrl || "",
-    investorCompanyLogo: investorCompanyLogo(profile),
+    investorPhotoUrl: profile?.photoUrl || "",
   });
 
   window.dispatchEvent(new Event("vaultforge-investor-admin-message-change"));
@@ -915,8 +895,7 @@ function sendRequest(kind: Kind, item: any, body: string) {
     investorEmail: profile.email,
     investorCompany: profile.company,
     investorName: profile.contactName,
-    investorPhotoUrl: investorProfilePhoto(profile) || profile.photoUrl,
-    investorCompanyLogo: investorCompanyLogo(profile),
+    investorPhotoUrl: profile.photoUrl,
     investorProfile: compactInvestorProfile(profile),
     message: `${header}\n\n${body || "Investor requested more information."}`,
     status: "new",
@@ -942,8 +921,7 @@ function sendRequest(kind: Kind, item: any, body: string) {
     investorEmail: profile?.email || "",
     investorCompany: profile?.company || "",
     investorName: profile?.contactName || "",
-    investorPhotoUrl: investorProfilePhoto(profile) || profile?.photoUrl || "",
-    investorCompanyLogo: investorCompanyLogo(profile),
+    investorPhotoUrl: profile?.photoUrl || "",
   });
 
   window.dispatchEvent(new Event("vaultforge-investor-request-change"));
@@ -1682,9 +1660,9 @@ function InvestorIdentityCard({
         }}
       >
         <div style={{ ...row, alignItems: "flex-start" }}>
-          {investorProfilePhoto(investor) ? (
+          {investor?.photoUrl ? (
             <img
-              src={investorProfilePhoto(investor)}
+              src={investor.photoUrl}
               alt="Investor profile"
               style={{
                 width: 96,
@@ -1725,35 +1703,7 @@ function InvestorIdentityCard({
               Payment: {investor?.paymentStatus || "unpaid"} • Status:{" "}
               {investor?.status || "pending"}
             </p>
-
             <p style={muted}>Profile Intelligence: {score}% complete</p>
-
-            {investorCompanyLogo(investor) ? (
-              <div
-                style={{
-                  marginTop: 14,
-                  background: "#0a0f1c",
-                  border: "1px solid rgba(245,197,66,.28)",
-                  borderRadius: 18,
-                  padding: 12,
-                  width: 180,
-                }}
-              >
-                <div style={eyebrow}>Company Logo</div>
-
-                <img
-                  src={investorCompanyLogo(investor)}
-                  alt="Company Logo"
-                  style={{
-                    width: "100%",
-                    maxHeight: 90,
-                    objectFit: "contain",
-                    borderRadius: 12,
-                    background: "#05070d",
-                  }}
-                />
-              </div>
-            ) : null}
             {isOwner ? (
               <p style={muted}>Owner/admin identity detected.</p>
             ) : null}
@@ -1855,6 +1805,162 @@ function MiniValues({ item }: { item: any }) {
   );
 }
 
+
+function saveSimpleControlledRequest(payload: {
+  kind: Kind;
+  item: any;
+  action: string;
+  name: string;
+  email: string;
+  phone: string;
+  contactMethod: string;
+  message: string;
+}) {
+  const investor = readInvestor();
+  const profile = investorProfileSnapshot(investor);
+  const title = itemTitle(payload.item, payload.kind);
+  const state = itemState(payload.item);
+  const city = clean(payload.item?.city || payload.item?.market || payload.item?.area || "Market not listed");
+  const now = new Date().toISOString();
+
+  const request = compactStorageRow({
+    id: `vf-request-${Date.now()}`,
+    type: "controlled_request",
+    source: "investor-room",
+    status: "new",
+    action: payload.action,
+    buttonClicked: payload.action,
+    kind: payload.kind,
+    itemId: itemId(payload.item, payload.kind),
+    title,
+    requestTitle: `${payload.action} - ${payload.kind}`,
+    subject: `${payload.action} - ${title}`,
+    state,
+    city,
+    roomHeader: `${payload.kind} • ${title} • ${city}, ${state || "NA"}`,
+    name: payload.name || profile.contactName || "",
+    email: payload.email || profile.email || "",
+    phone: payload.phone || profile.phone || "",
+    contactMethod: payload.contactMethod,
+    body: payload.message || `${payload.action} request submitted.`,
+    message: payload.message || `${payload.action} request submitted.`,
+    investorEmail: payload.email || profile.email || "",
+    investorCompany: profile.company || "",
+    investorName: payload.name || profile.contactName || "",
+    investorPhotoUrl: profile.photoUrl || "",
+    investorProfile: compactInvestorProfile(profile),
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const requests = readJson<any[]>(SIMPLE_REQUESTS_KEY, []);
+  writeJson(SIMPLE_REQUESTS_KEY, [request, ...requests].slice(0, 120));
+
+  const adminInbox = readJson<any[]>(ADMIN_INBOX_KEY, []);
+  writeJson(ADMIN_INBOX_KEY, [request, ...adminInbox].slice(0, 120));
+
+  window.dispatchEvent(new Event("vaultforge-request-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+  return request;
+}
+
+function SimpleRequestModal({
+  open,
+  kind,
+  item,
+  action,
+  onClose,
+}: {
+  open: boolean;
+  kind: Kind;
+  item: any;
+  action: string;
+  onClose: () => void;
+}) {
+  const investor = readInvestor();
+  const profile = investorProfileSnapshot(investor);
+  const [name, setName] = useState(profile.contactName || "");
+  const [email, setEmail] = useState(profile.email || "");
+  const [phone, setPhone] = useState(profile.phone || "");
+  const [contactMethod, setContactMethod] = useState("VaultForge message");
+  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState("");
+
+  if (!open) return null;
+
+  const title = itemTitle(item, kind);
+  const state = itemState(item);
+  const city = clean(item?.city || item?.market || item?.area || "Market not listed");
+
+  function submit() {
+    try {
+      if (!String(email || "").trim()) throw new Error("Email is required.");
+      saveSimpleControlledRequest({ kind, item, action, name, email, phone, contactMethod, message });
+      setNotice("Request sent to VaultForge admin.");
+    } catch (error: any) {
+      setNotice(error?.message || "Request could not be saved.");
+    }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,.78)", padding: 18, overflow: "auto" }}>
+      <div style={{ maxWidth: 760, margin: "40px auto", ...goldPanel }}>
+        <div style={{ ...row, justifyContent: "space-between" }}>
+          <div>
+            <div style={eyebrow}>Controlled Request</div>
+            <h2 style={h2}>{action}</h2>
+          </div>
+          <button type="button" style={btn} onClick={onClose}>Close</button>
+        </div>
+
+        <div style={{ ...panel, marginTop: 14 }}>
+          <div style={eyebrow}>Attached Room</div>
+          <p style={sub}>{kind} • {title}</p>
+          <p style={muted}>{city}, {state || "NA"}</p>
+        </div>
+
+        <div style={{ ...grid, marginTop: 14 }}>
+          <label style={{ display: "grid", gap: 8 }}>
+            <span style={eyebrow}>Name</span>
+            <input style={input} value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" />
+          </label>
+          <label style={{ display: "grid", gap: 8 }}>
+            <span style={eyebrow}>Email</span>
+            <input style={input} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Your email" />
+          </label>
+          <label style={{ display: "grid", gap: 8 }}>
+            <span style={eyebrow}>Phone</span>
+            <input style={input} value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Your phone" />
+          </label>
+          <label style={{ display: "grid", gap: 8 }}>
+            <span style={eyebrow}>Best Contact</span>
+            <select style={input} value={contactMethod} onChange={(event) => setContactMethod(event.target.value)}>
+              <option>VaultForge message</option>
+              <option>Phone</option>
+              <option>Email</option>
+              <option>Text</option>
+            </select>
+          </label>
+        </div>
+
+        <label style={{ display: "grid", gap: 8, marginTop: 14 }}>
+          <span style={eyebrow}>Message</span>
+          <textarea style={{ ...input, minHeight: 130 }} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="What do you want admin/member to know?" />
+        </label>
+
+        <div style={{ ...row, marginTop: 16 }}>
+          <button type="button" style={goldBtn} onClick={submit}>Send To Admin</button>
+          <button type="button" style={btn} onClick={onClose}>Cancel</button>
+        </div>
+
+        {notice ? <p style={{ ...sub, marginTop: 14, color: notice.includes("sent") ? "#9effb2" : "#ffaaaa" }}>{notice}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+
 function RoomCard({
   kind,
   item,
@@ -1879,10 +1985,12 @@ function RoomCard({
     folder === "deleted" ? redPanel : folder === "saved" ? goldPanel : panel;
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
+  const [simpleAction, setSimpleAction] = useState("");
   const header = `${kind} Request • ${itemTitle(item, kind)} • ${itemState(item) || "Unknown State"}`;
 
   return (
     <div style={isOpen ? goldPanel : wrapper}>
+      <SimpleRequestModal open={Boolean(simpleAction)} kind={kind} item={item} action={simpleAction} onClose={() => setSimpleAction("")} />
       <div style={eyebrow}>
         {kind} • {itemState(item) || "NA"}{" "}
         {folder !== "active" ? `• ${folder}` : ""}
@@ -1902,6 +2010,25 @@ function RoomCard({
         >
           {isOpen ? "Collapse / Done" : "Open Details"}
         </button>
+
+        {kind === "Deal" ? (
+          <>
+            <button type="button" style={goldBtn} onClick={() => setSimpleAction("Request Info")}>Request Info</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Interested")}>Interested</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Need Funding")}>Need Funding</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Want To Partner")}>Want To Partner</button>
+          </>
+        ) : (
+          <>
+            <button type="button" style={goldBtn} onClick={() => setSimpleAction("I Can Solve This")}>I Can Solve This</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Need More Info")}>Need More Info</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Funding Available")}>Funding Available</button>
+            <button type="button" style={btn} onClick={() => setSimpleAction("Operator Available")}>Operator Available</button>
+          </>
+        )}
+
+        <button type="button" style={btn} onClick={() => setSimpleAction("Message Admin")}>Message Admin</button>
+
         <button type="button" style={btn} onClick={() => onMove("saved")}>
           Save
         </button>
