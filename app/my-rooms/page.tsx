@@ -968,16 +968,6 @@ function MemberDisplayCard() {
     memberType: "Private Member",
     states: "States not listed",
   }));
-
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const requestedView = params.get("view");
-    if (requestedView) {
-      setView(requestedView as any);
-    }
-  }, []);
-
   useEffect(() => {
     setMember(readMemberDisplay());
   }, []);
