@@ -1446,7 +1446,7 @@ export default function MemberControlledThreadsPage() {
           onMessages={() => { setLane("investor"); setActiveId(""); }}
         />
 
-        <VaultForgeAlertCenter audience="member" title="Member Alerts" />
+<VaultForgeAlertCenter audience="member" title="Member Alerts" />
           <section style={hero}>
             <div style={eyebrow}>VaultForge Member Request Command</div>
             <h1 style={h1}>Preparing member room.</h1>
