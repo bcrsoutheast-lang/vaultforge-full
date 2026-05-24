@@ -608,7 +608,7 @@ function BloombergMessageForm({
 
       <div style={{ ...row, marginTop: 14 }}>
         <button type="button" style={goldBtn} onClick={submit}>{submitLabel}</button>
-        {onCancel ? <button type="button" style={btn} onClick={onCancel}>Collapse / Done</button> : null}
+        {onCancel ? : null}
       </div>
     </div>
   );
@@ -774,26 +774,30 @@ function LaneCard({ title, count, note, active, pulse, danger, onClick }: { titl
 }
 
 
-function MemberTopAlertCards({
-  newCount,
-  activeCount,
-  dealPainCount,
+
+
+
+
+function MemberTopPulseCards({
+  dealCount,
+  painCount,
+  requestCount,
   messageCount,
-  onNew,
-  onActive,
-  onSignals,
+  onDeals,
+  onPain,
+  onRequests,
   onMessages,
 }: {
-  newCount: number;
-  activeCount: number;
-  dealPainCount: number;
+  dealCount: number;
+  painCount: number;
+  requestCount: number;
   messageCount: number;
-  onNew: () => void;
-  onActive: () => void;
-  onSignals: () => void;
+  onDeals: () => void;
+  onPain: () => void;
+  onRequests: () => void;
   onMessages: () => void;
 }) {
-  const total = newCount + activeCount + dealPainCount + messageCount;
+  const total = dealCount + painCount + requestCount + messageCount;
 
   const cardStyle = (count: number, border: string): React.CSSProperties => ({
     ...panel,
@@ -809,31 +813,31 @@ function MemberTopAlertCards({
       <div style={eyebrow}>Member Alerts • {total} Active</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 12 }}>
-        <button type="button" className={newCount > 0 ? "vf-pulse" : ""} style={cardStyle(newCount, "rgba(245,197,66,.85)")} onClick={onNew}>
+        <button type="button" className={dealCount > 0 ? "vf-pulse" : ""} style={cardStyle(dealCount, "rgba(245,197,66,.85)")} onClick={onDeals}>
           <div style={eyebrow}>Deals</div>
-          <h2 style={h2}>{newCount}</h2>
-          <p style={muted}>new routed deal/work</p>
+          <h2 style={h2}>{dealCount}</h2>
+          <p style={muted}>deal opportunity rooms</p>
           <p style={muted}>Tap to open</p>
         </button>
 
-        <button type="button" className={dealPainCount > 0 ? "vf-pulse" : ""} style={cardStyle(dealPainCount, "rgba(255,70,70,.70)")} onClick={onSignals}>
+        <button type="button" className={painCount > 0 ? "vf-pulse" : ""} style={cardStyle(painCount, "rgba(255,70,70,.70)")} onClick={onPain}>
           <div style={eyebrow}>Pain</div>
-          <h2 style={h2}>{dealPainCount}</h2>
-          <p style={muted}>pain/execution signals</p>
+          <h2 style={h2}>{painCount}</h2>
+          <p style={muted}>problem/pain signals</p>
           <p style={muted}>Tap to open</p>
         </button>
 
-        <button type="button" className={messageCount > 0 ? "vf-pulse" : ""} style={cardStyle(messageCount, "rgba(0,132,255,.75)")} onClick={onMessages}>
+        <button type="button" className={requestCount > 0 ? "vf-pulse" : ""} style={cardStyle(requestCount, "rgba(0,132,255,.75)")} onClick={onRequests}>
+          <div style={eyebrow}>Requests</div>
+          <h2 style={h2}>{requestCount}</h2>
+          <p style={muted}>routed investor/member work</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+
+        <button type="button" className={messageCount > 0 ? "vf-pulse" : ""} style={cardStyle(messageCount, "rgba(48,255,135,.70)")} onClick={onMessages}>
           <div style={eyebrow}>Messages</div>
           <h2 style={h2}>{messageCount}</h2>
           <p style={muted}>reply threads</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-
-        <button type="button" className={activeCount > 0 ? "vf-pulse" : ""} style={cardStyle(activeCount, "rgba(48,255,135,.70)")} onClick={onActive}>
-          <div style={eyebrow}>Owner Replies</div>
-          <h2 style={h2}>{activeCount}</h2>
-          <p style={muted}>active work/replies</p>
           <p style={muted}>Tap to open</p>
         </button>
       </div>
@@ -1311,15 +1315,15 @@ function MemberLaneGuide() {
   return (
     <section style={{ ...panel, marginBottom: 18 }}>
       <div style={eyebrow}>Member Operating Map</div>
-      <h2 style={h2}>Fewer rooms. Cleaner work.</h2>
+      <h2 style={h2}>Cards grouped by what they do.</h2>
       <p style={sub}>
-        Alerts, routing, intelligence, owner replies, and investor replies stay behind the scenes inside the right Deal, Pain, or Execution card.
+        Top cards alert you. Lower cards organize the work: requests, active threads, deal/pain lanes, execution, and cleanup.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
         <div style={panel}><div style={eyebrow}>New Requests</div><p style={muted}>Fresh routed work needing your decision.</p></div>
         <div style={panel}><div style={eyebrow}>Active Work</div><p style={muted}>Accepted work threads you are handling.</p></div>
-        <div style={panel}><div style={eyebrow}>Deal / Pain Signals</div><p style={muted}>Opportunity and problem cards with investor needs and AI read attached.</p></div>
+        <div style={panel}><div style={eyebrow}>Deal / Pain Requests</div><p style={muted}>Opportunity and problem cards with investor needs and AI read attached.</p></div>
         <div style={panel}><div style={eyebrow}>Execution Requests</div><p style={muted}>Lender, contractor, title, operator, insurance, JV, and boots-on-ground requests.</p></div>
         <div style={panel}><div style={eyebrow}>Cleanup</div><p style={muted}>Saved, archived, passed, and deleted folders keep the workspace clean.</p></div>
       </div>
@@ -1329,37 +1333,6 @@ function MemberLaneGuide() {
 
 
 
-function MemberCreatePanel() {
-  return (
-    <section style={{ ...goldPanel, marginBottom: 18 }}>
-      <div style={eyebrow}>Create</div>
-      <h2 style={h2}>One create button. Three clean lanes.</h2>
-      <p style={sub}>
-        Deal, Pain, and execution requests should start from one controlled create area instead of scattered buttons.
-      </p>
-
-      <div style={{ ...grid, marginTop: 16 }}>
-        <Link href="/deal-rooms" style={panel}>
-          <div style={eyebrow}>Create</div>
-          <h3 style={h3}>Opportunity room</h3>
-          <p style={muted}>Post or manage a deal opportunity with numbers, photos, and owner/member context.</p>
-        </Link>
-
-        <Link href="/pain" style={panel}>
-          <div style={eyebrow}>Create Pain</div>
-          <h3 style={h3}>Problem signal</h3>
-          <p style={muted}>Submit a real estate problem needing capital, operator help, title, contractor, or execution.</p>
-        </Link>
-
-        <Link href="/member-controlled-threads" style={panel}>
-          <div style={eyebrow}>Execution Request</div>
-          <h3 style={h3}>Work thread</h3>
-          <p style={muted}>Use member request cards for lender, contractor, operator, title, insurance, JV, or boots-on-ground lanes.</p>
-        </Link>
-      </div>
-    </section>
-  );
-}
 
 export default function MemberControlledThreadsPage() {
   const [email, setEmail] = useState("");
@@ -1422,9 +1395,9 @@ export default function MemberControlledThreadsPage() {
   }, [visibleThreads]);
 
 
-  const topNewCount = categorized.new.length;
-  const topActiveCount = categorized.active.length;
-  const topDealPainCount = categorized.deal.length + categorized.pain.length + categorized.execution.length;
+  const topDealCount = categorized.deal.length;
+  const topPainCount = categorized.pain.length;
+  const topRequestCount = categorized.new.length + categorized.active.length + categorized.execution.length;
   const topMessageCount = categorized.admin.length + categorized.investor.length + visibleThreads.filter((thread) => (thread?.messages || []).length > 0).length;
 
   const openRows = categorized[lane] || [];
@@ -1469,14 +1442,14 @@ export default function MemberControlledThreadsPage() {
       <main style={pageStyle}>
         <div style={wrap}>
 
-        <MemberTopAlertCards
-          newCount={topNewCount}
-          activeCount={topActiveCount}
-          dealPainCount={topDealPainCount}
+        <MemberTopPulseCards
+          dealCount={topDealCount}
+          painCount={topPainCount}
+          requestCount={topRequestCount}
           messageCount={topMessageCount}
-          onNew={() => { setLane("new"); setActiveId(""); }}
-          onActive={() => { setLane("active"); setActiveId(""); }}
-          onSignals={() => { setLane("execution"); setActiveId(""); }}
+          onDeals={() => { setLane("deal"); setActiveId(""); }}
+          onPain={() => { setLane("pain"); setActiveId(""); }}
+          onRequests={() => { setLane("new"); setActiveId(""); }}
           onMessages={() => { setLane("investor"); setActiveId(""); }}
         />
 
@@ -1486,9 +1459,7 @@ export default function MemberControlledThreadsPage() {
             <h1 style={h1}>Preparing member room.</h1>
             <p style={sub}>Loading browser workspace safely.</p>
           </section>
-
-        <MemberCreatePanel />
-        </div>
+</div>
       </main>
     );
   }
@@ -1556,8 +1527,8 @@ export default function MemberControlledThreadsPage() {
           <div style={grid}>
             <LaneCard title="New Requests" count={categorized.new.length} note="fresh routed work needing a decision" active={lane === "new"} pulse={categorized.new.length > 0} onClick={() => { setLane("new"); setActiveId(""); }} />
             <LaneCard title="Active Work" count={categorized.active.length} note="accepted threads being worked" active={lane === "active"} pulse={categorized.active.length > 0} onClick={() => { setLane("active"); setActiveId(""); }} />
-            <LaneCard title="Deal Signals" count={categorized.deal.length} note="deal/opportunity cards" active={lane === "deal"} pulse={categorized.deal.length > 0} onClick={() => { setLane("deal"); setActiveId(""); }} />
-            <LaneCard title="Pain Signals" count={categorized.pain.length} note="problem-solving cards" active={lane === "pain"} pulse={categorized.pain.length > 0} onClick={() => { setLane("pain"); setActiveId(""); }} />
+            <LaneCard title="Deal Requests" count={categorized.deal.length} note="deal/opportunity cards" active={lane === "deal"} pulse={categorized.deal.length > 0} onClick={() => { setLane("deal"); setActiveId(""); }} />
+            <LaneCard title="Pain Requests" count={categorized.pain.length} note="problem-solving cards" active={lane === "pain"} pulse={categorized.pain.length > 0} onClick={() => { setLane("pain"); setActiveId(""); }} />
             <LaneCard title="Execution Requests" count={categorized.execution.length} note="lender/title/contractor/operator requests" active={lane === "execution"} pulse={categorized.execution.length > 0} onClick={() => { setLane("execution"); setActiveId(""); }} />
             <LaneCard title="Saved" count={categorized.saved.length} note="saved request cards" active={lane === "saved"} onClick={() => { setLane("saved"); setActiveId(""); }} />
             <LaneCard title="Archived" count={categorized.archived.length} note="completed or hidden request cards" active={lane === "archived"} onClick={() => { setLane("archived"); setActiveId(""); }} />
@@ -1583,8 +1554,8 @@ export default function MemberControlledThreadsPage() {
               </div>
             ) : (
               <div style={panel}>
-                <h2 style={h2}>No cards in this lane.</h2>
-                <p style={sub}>This lane is empty right now. When admin routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
+                <h2 style={h2}>No cards in this group.</h2>
+                <p style={sub}>This group is empty right now. When admin routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
               </div>
             )}
           </Section>
