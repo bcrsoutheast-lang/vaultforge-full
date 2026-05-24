@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import VaultForgeAlertCenter from "../components/VaultForgeAlertCenter";
 import { useEffect, useMemo, useState } from "react";
 
 type Status = "pending" | "approved" | "suspended" | "denied" | "deleted";
@@ -662,6 +663,8 @@ export default function AdminPage() {
             <Link href="/logout" style={redBtn}>Logout</Link>
           </div>
         </section>
+
+        <VaultForgeAlertCenter audience="admin" title="Admin Alerts" />
 
         <section style={hero}>
           <div style={eyebrow}>Owner Control Center</div>
