@@ -41,6 +41,7 @@ const HARD_DELETED_INVESTORS_KEY = "vaultforge_admin_deleted_investor_ids_v1";
 const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
+const DESIGNATED_ROUTE_MESSAGES_KEY = "vaultforge_designated_route_messages_v1";
 const OWNER_DIRECT_MESSAGES_KEY = "vaultforge_owner_direct_messages_v1";
 const OWNER_REPLIES_KEY = "vaultforge_owner_replies_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
@@ -296,7 +297,7 @@ function readInvestors(): AdminPerson[] {
 }
 
 function readRequests() {
-  const keys = [OWNER_DIRECT_MESSAGES_KEY, SIMPLE_REQUESTS_KEY, ADMIN_MESSAGES_KEY, ADMIN_INBOX_KEY, INVESTOR_ADMIN_MESSAGES_KEY, INVESTOR_REQUESTS_KEY, CONTROLLED_THREADS_KEY];
+  const keys = [DESIGNATED_ROUTE_MESSAGES_KEY, OWNER_DIRECT_MESSAGES_KEY, SIMPLE_REQUESTS_KEY, ADMIN_MESSAGES_KEY, ADMIN_INBOX_KEY, INVESTOR_ADMIN_MESSAGES_KEY, INVESTOR_REQUESTS_KEY, CONTROLLED_THREADS_KEY];
   const rows: any[] = [];
 
   keys.forEach((key) => {
@@ -600,7 +601,7 @@ export default function AdminPage() {
     const title = clean(item?.requestTitle || item?.title || item?.subject || item?.topic, "Request / Message");
     const body = clean(item?.body || item?.message || item?.notes || item?.roomHeader, "No message body listed.");
     const email = clean(item?.email || item?.investorEmail || item?.memberEmail || item?.investorProfile?.email, "No email listed");
-    const source = clean(item?.source || item?.type || item?.sourceKey || item?.kind, "owner message");
+    const source = clean(item?.routedTo || item?.source || item?.type || item?.sourceKey || item?.kind, "owner message");
     const action = clean(item?.action || item?.buttonClicked || item?.requestType, "Owner Message");
     const state = clean(item?.state, "NA");
     const city = clean(item?.city, "Market");
