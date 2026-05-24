@@ -40,6 +40,8 @@ const HARD_DELETED_INVESTORS_KEY = "vaultforge_admin_deleted_investor_ids_v1";
 const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
+const OWNER_DIRECT_MESSAGES_KEY = "vaultforge_owner_direct_messages_v1";
+const OWNER_REPLIES_KEY = "vaultforge_owner_replies_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
@@ -293,7 +295,7 @@ function readInvestors(): AdminPerson[] {
 }
 
 function readRequests() {
-  const keys = [SIMPLE_REQUESTS_KEY, ADMIN_MESSAGES_KEY, ADMIN_INBOX_KEY, INVESTOR_ADMIN_MESSAGES_KEY, INVESTOR_REQUESTS_KEY, CONTROLLED_THREADS_KEY];
+  const keys = [OWNER_DIRECT_MESSAGES_KEY, SIMPLE_REQUESTS_KEY, ADMIN_MESSAGES_KEY, ADMIN_INBOX_KEY, INVESTOR_ADMIN_MESSAGES_KEY, INVESTOR_REQUESTS_KEY, CONTROLLED_THREADS_KEY];
   const rows: any[] = [];
 
   keys.forEach((key) => {
@@ -413,12 +415,14 @@ export default function AdminPage() {
     window.addEventListener("vaultforge-mock-access-change", refresh);
     window.addEventListener("vaultforge-investor-change", refresh);
     window.addEventListener("vaultforge-request-change", refresh);
+    window.addEventListener("vaultforge-owner-message-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-admin-action-change", refresh);
       window.removeEventListener("vaultforge-mock-access-change", refresh);
       window.removeEventListener("vaultforge-investor-change", refresh);
       window.removeEventListener("vaultforge-request-change", refresh);
+      window.removeEventListener("vaultforge-owner-message-change", refresh);
     };
   }, []);
 
@@ -570,12 +574,33 @@ export default function AdminPage() {
     );
   }
 
+
+  function saveOwnerReply(item: any, replyText: string) {
+    const replies = readJson<any[]>(OWNER_REPLIES_KEY, []);
+    const reply = {
+      id: `owner-reply-${Date.now()}`,
+      requestId: item?.id || "",
+      originalTitle: item?.title || item?.requestTitle || item?.subject || "Owner message",
+      toEmail: item?.investorEmail || item?.email || item?.investorProfile?.email || "",
+      toName: item?.investorName || item?.name || item?.investorProfile?.contactName || "",
+      from: "Owner",
+      body: replyText,
+      message: replyText,
+      status: "owner_replied",
+      createdAt: new Date().toISOString(),
+    };
+    writeJson(OWNER_REPLIES_KEY, [reply, ...replies].slice(0, 120));
+    setNotice("Owner reply saved. Investor-side reply display is the next build.");
+    window.dispatchEvent(new Event("vaultforge-owner-reply-change"));
+  }
+
   function RequestCard({ item, index }: { item: any; index: number }) {
+    const [replyText, setReplyText] = useState("");
     const title = clean(item?.requestTitle || item?.title || item?.subject || item?.topic, "Request / Message");
     const body = clean(item?.body || item?.message || item?.notes || item?.roomHeader, "No message body listed.");
     const email = clean(item?.email || item?.investorEmail || item?.memberEmail || item?.investorProfile?.email, "No email listed");
-    const source = clean(item?.source || item?.type || item?.sourceKey || item?.kind, "request");
-    const action = clean(item?.action || item?.buttonClicked || item?.requestType, "Message");
+    const source = clean(item?.source || item?.type || item?.sourceKey || item?.kind, "owner message");
+    const action = clean(item?.action || item?.buttonClicked || item?.requestType, "Owner Message");
     const state = clean(item?.state, "NA");
     const city = clean(item?.city, "Market");
     const photo = clean(item?.investorPhotoUrl || item?.investorProfile?.photoUrl);
@@ -608,8 +633,8 @@ export default function AdminPage() {
         <p style={muted}>{body}</p>
 
         <div style={{ ...row, marginTop: 14 }}>
-          <button type="button" style={greenBtn} onClick={() => setNotice("Intro approved. Controlled intro thread is next.")}>Approve Intro</button>
-          <button type="button" style={goldBtn} onClick={() => setNotice("Message back selected. Admin reply popup is next.")}>Message Back</button>
+          <button type="button" style={greenBtn} onClick={() => setNotice("Intro approved. Controlled intro thread is next.")}>Approve / Release Contact</button>
+          <button type="button" style={goldBtn} onClick={() => setNotice("Message back selected. Admin reply popup is next.")}>Save Owner Reply</button>
           <button type="button" style={btn} onClick={() => setNotice("Marked done.")}>Mark Done</button>
           <button type="button" style={redBtn} onClick={() => setNotice("Archived request.")}>Archive</button>
         </div>
@@ -657,7 +682,7 @@ export default function AdminPage() {
             <Metric title="Payment / Access" count={buckets.payment.length} active={section === "payment"} onClick={() => setSection("payment")} />
             <Metric title="Active Users" count={buckets.active.length} active={section === "active"} onClick={() => setSection("active")} />
             <Metric title="Cleanup" count={buckets.cleanup.length} active={section === "cleanup"} onClick={() => setSection("cleanup")} />
-            <Metric title="Requests / Messages" count={requests.length} active={section === "requests"} onClick={() => setSection("requests")} />
+            <Metric title="Owner Messages" count={requests.length} active={section === "requests"} onClick={() => setSection("requests")} />
           </div>
         </section>
 
@@ -667,7 +692,7 @@ export default function AdminPage() {
             <button type="button" style={section === "payment" ? goldBtn : btn} onClick={() => setSection("payment")}>Payment / Access</button>
             <button type="button" style={section === "active" ? goldBtn : btn} onClick={() => setSection("active")}>Active Users</button>
             <button type="button" style={section === "cleanup" ? goldBtn : btn} onClick={() => setSection("cleanup")}>Cleanup</button>
-            <button type="button" style={section === "requests" ? goldBtn : btn} onClick={() => setSection("requests")}>Requests / Messages</button>
+            <button type="button" style={section === "requests" ? goldBtn : btn} onClick={() => setSection("requests")}>Owner Messages</button>
           </div>
 
           <div style={eyebrow}>
@@ -675,7 +700,7 @@ export default function AdminPage() {
              section === "payment" ? "Payment / Access" :
              section === "active" ? "Active Users" :
              section === "cleanup" ? "Cleanup" :
-             "Requests / Messages"}
+             "Owner Messages"}
           </div>
 
           {section !== "requests" ? (
@@ -699,10 +724,10 @@ export default function AdminPage() {
             </>
           ) : (
             <>
-              <h2 style={h2}>{requests.length ? "Request/message inbox." : "No requests or messages."}</h2>
+              <h2 style={h2}>{requests.length ? "Owner message inbox." : "No owner messages."}</h2>
               <div style={grid}>
                 {requests.length ? requests.map((item, index) => <RequestCard key={`${item?.id || index}-${index}`} item={item} index={index} />) : (
-                  <div style={panel}><p style={sub}>No investor/member/admin messages found.</p></div>
+                  <div style={panel}><p style={sub}>No owner messages found.</p></div>
                 )}
               </div>
             </>
