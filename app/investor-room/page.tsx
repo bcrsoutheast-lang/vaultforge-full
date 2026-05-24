@@ -1566,6 +1566,62 @@ function IntelligencePanel({ investor }: { investor: any }) {
   );
 }
 
+
+function updateStoredRequestStatus(requestId: string, nextStatus: string) {
+  const keys = [
+    "vaultforge_requests_v1",
+    "vaultforge_owner_direct_messages_v1",
+    "vaultforge_admin_investor_inbox_v1",
+    "vaultforge_investor_requests_v1",
+    "vaultforge_investor_execution_requests_v1",
+  ];
+
+  keys.forEach((key) => {
+    const rows = readJson<any[]>(key, []);
+    if (!Array.isArray(rows)) return;
+
+    const nextRows = rows.map((row) => {
+      if (String(row?.id || "") !== String(requestId || "")) return row;
+      return {
+        ...row,
+        status: nextStatus,
+        folder: nextStatus,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    writeJson(key, nextRows);
+  });
+
+  window.dispatchEvent(new Event("vaultforge-request-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
+}
+
+function deleteStoredRequestForever(requestId: string) {
+  const keys = [
+    "vaultforge_requests_v1",
+    "vaultforge_owner_direct_messages_v1",
+    "vaultforge_admin_investor_inbox_v1",
+    "vaultforge_investor_requests_v1",
+    "vaultforge_investor_execution_requests_v1",
+  ];
+
+  keys.forEach((key) => {
+    const rows = readJson<any[]>(key, []);
+    if (!Array.isArray(rows)) return;
+    writeJson(
+      key,
+      rows.filter((row) => String(row?.id || "") !== String(requestId || "")),
+    );
+  });
+
+  window.dispatchEvent(new Event("vaultforge-request-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-investor-inbox-change"));
+}
+
+
 function RequestPipeline() {
   return (
     <section style={panel}>
@@ -3269,6 +3325,11 @@ function InvestorAreaHeader({
   );
 }
 
+
+function refreshInvestorRequests() {
+  window.dispatchEvent(new Event("vaultforge-request-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
+}
 
 export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
