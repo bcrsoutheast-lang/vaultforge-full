@@ -39,6 +39,7 @@ const HARD_DELETED_MEMBERS_KEY = "vaultforge_admin_deleted_member_ids_v1";
 const HARD_DELETED_INVESTORS_KEY = "vaultforge_admin_deleted_investor_ids_v1";
 const ADMIN_MESSAGES_KEY = "vaultforge_admin_messages_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
+const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
@@ -292,7 +293,7 @@ function readInvestors(): AdminPerson[] {
 }
 
 function readRequests() {
-  const keys = [ADMIN_MESSAGES_KEY, ADMIN_INBOX_KEY, INVESTOR_ADMIN_MESSAGES_KEY, INVESTOR_REQUESTS_KEY, CONTROLLED_THREADS_KEY];
+  const keys = [SIMPLE_REQUESTS_KEY, ADMIN_MESSAGES_KEY, ADMIN_INBOX_KEY, INVESTOR_ADMIN_MESSAGES_KEY, INVESTOR_REQUESTS_KEY, CONTROLLED_THREADS_KEY];
   const rows: any[] = [];
 
   keys.forEach((key) => {
@@ -411,11 +412,13 @@ export default function AdminPage() {
     window.addEventListener("vaultforge-admin-action-change", refresh);
     window.addEventListener("vaultforge-mock-access-change", refresh);
     window.addEventListener("vaultforge-investor-change", refresh);
+    window.addEventListener("vaultforge-request-change", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("vaultforge-admin-action-change", refresh);
       window.removeEventListener("vaultforge-mock-access-change", refresh);
       window.removeEventListener("vaultforge-investor-change", refresh);
+      window.removeEventListener("vaultforge-request-change", refresh);
     };
   }, []);
 
@@ -572,13 +575,44 @@ export default function AdminPage() {
     const body = clean(item?.body || item?.message || item?.notes || item?.roomHeader, "No message body listed.");
     const email = clean(item?.email || item?.investorEmail || item?.memberEmail || item?.investorProfile?.email, "No email listed");
     const source = clean(item?.source || item?.type || item?.sourceKey || item?.kind, "request");
+    const action = clean(item?.action || item?.buttonClicked || item?.requestType, "Message");
+    const state = clean(item?.state, "NA");
+    const city = clean(item?.city, "Market");
+    const photo = clean(item?.investorPhotoUrl || item?.investorProfile?.photoUrl);
+    const company = clean(item?.investorCompany || item?.investorProfile?.company || item?.company, "Company not listed");
+    const name = clean(item?.investorName || item?.investorProfile?.contactName || item?.name, "Name not listed");
 
     return (
       <div style={panel}>
-        <div style={eyebrow}>{source}</div>
+        <div style={eyebrow}>{source} • {action}</div>
+
+        {photo ? (
+          <img
+            src={photo}
+            alt="Profile"
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 16,
+              objectFit: "cover",
+              border: "1px solid rgba(245,197,66,.35)",
+              marginBottom: 12,
+            }}
+          />
+        ) : null}
+
         <h3 style={h3}>{title}</h3>
-        <p style={muted}>{email}</p>
+        <p style={sub}>{company}</p>
+        <p style={muted}>{name} • {email}</p>
+        <p style={muted}>{city}, {state}</p>
         <p style={muted}>{body}</p>
+
+        <div style={{ ...row, marginTop: 14 }}>
+          <button type="button" style={greenBtn} onClick={() => setNotice("Intro approved. Controlled intro thread is next.")}>Approve Intro</button>
+          <button type="button" style={goldBtn} onClick={() => setNotice("Message back selected. Admin reply popup is next.")}>Message Back</button>
+          <button type="button" style={btn} onClick={() => setNotice("Marked done.")}>Mark Done</button>
+          <button type="button" style={redBtn} onClick={() => setNotice("Archived request.")}>Archive</button>
+        </div>
       </div>
     );
   }
@@ -597,8 +631,7 @@ export default function AdminPage() {
           <div style={eyebrow}>VaultForge Admin</div>
           <div style={{ ...row, marginTop: 12 }}>
             <Link href="/" style={btn}>Home</Link>
-            <Link href="/member-controlled-threads" style={goldBtn}>Members Area</Link>
-            <Link href="/command" style={btn}>Member Command</Link>
+            <Link href="/member-controlled-threads" style={btn}>Members</Link>
             <Link href="/investor-room" style={btn}>Investor Room</Link>
             <button type="button" style={goldBtn} onClick={refresh}>Refresh</button>
             <Link href="/logout" style={redBtn}>Logout</Link>
@@ -609,12 +642,6 @@ export default function AdminPage() {
           <div style={eyebrow}>Owner Control Center</div>
           <h1 style={h1}>Simple admin.</h1>
           <p style={sub}>Approve profile sends the user to Payment / Access. When payment is made, admin gets a payment alert and the card moves to Active Users.</p>
-
-          <div style={{ ...row, marginTop: 18 }}>
-            <Link href="/member-controlled-threads" style={goldBtn}>Open Members Area</Link>
-            <Link href="/command" style={btn}>Open Member Command</Link>
-            <Link href="/investor-room" style={btn}>Open Investor Room</Link>
-          </div>
         </section>
 
         {notice ? (
