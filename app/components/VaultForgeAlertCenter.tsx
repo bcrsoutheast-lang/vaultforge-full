@@ -17,17 +17,27 @@ type AlertItem = {
 
 const DEAL_KEYS = [
   "vaultforge_deal_rooms_v1",
-  "vaultforge_deals_v1",
-  "vf_deals",
-  "vaultforge_projects_v1",
   "vaultforge_clean_deal_rooms_v1",
+  "vaultforge_investor_deal_cards_v1",
+  "vaultforge_investor_deals_v1",
+  "vaultforge_deal_cards_v1",
+  "vaultforge_deals_v1",
+  "vaultforge_projects_v1",
+  "vaultforge_property_cards_v1",
+  "vaultforge_submitted_deals_v1",
+  "vf_deals",
+  "vf_deal_rooms",
+  "vf_projects",
 ];
 
 const PAIN_KEYS = [
   "vaultforge_pain_rooms_v1",
-  "vaultforge_pain_requests_v1",
-  "vf_pain_requests",
   "vaultforge_clean_pain_rooms_v1",
+  "vaultforge_pain_requests_v1",
+  "vaultforge_investor_pain_cards_v1",
+  "vaultforge_pain_cards_v1",
+  "vf_pain_requests",
+  "vf_pain_rooms",
 ];
 
 const MESSAGE_KEYS = [
@@ -126,6 +136,24 @@ function rowsFromKeys(keys: string[]) {
   });
 
   return rows;
+}
+
+function dedupeRows(rows: any[]) {
+  const seen = new Set<string>();
+  return rows.filter((row, index) => {
+    const key = String(
+      row?.id ||
+        row?.roomId ||
+        row?.dealId ||
+        row?.painId ||
+        row?.signalId ||
+        `${row?.title || row?.headline || ""}|${row?.city || ""}|${row?.state || ""}|${row?.createdAt || index}`,
+    ).toLowerCase();
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function paymentRows() {
@@ -364,9 +392,9 @@ export default function VaultForgeAlertCenter({
   }, []);
 
   const alerts = useMemo<AlertItem[]>(() => {
-    const dealRows = rowsFromKeys(DEAL_KEYS);
-    const painRows = rowsFromKeys(PAIN_KEYS);
-    const messageRows = rowsFromKeys(MESSAGE_KEYS);
+    const dealRows = dedupeRows(rowsFromKeys(DEAL_KEYS));
+    const painRows = dedupeRows(rowsFromKeys(PAIN_KEYS));
+    const messageRows = dedupeRows(rowsFromKeys(MESSAGE_KEYS));
     const payments = paymentRows();
     const profiles = profileRows();
     const replies = rowsFromKeys(REPLY_KEYS);
