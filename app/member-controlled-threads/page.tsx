@@ -9,6 +9,9 @@ const CONTROLLED_THREADS_KEY = "vaultforge_controlled_intro_threads_v1";
 const ADMIN_INBOX_KEY = "vaultforge_admin_investor_inbox_v1";
 const INVESTOR_REQUESTS_KEY = "vaultforge_investor_requests_v1";
 const INVESTOR_EXECUTION_REQUESTS_KEY = "vaultforge_investor_execution_requests_v1";
+const DESIGNATED_ROUTE_MESSAGES_KEY = "vaultforge_designated_route_messages_v1";
+const OWNER_DIRECT_MESSAGES_KEY = "vaultforge_owner_direct_messages_v1";
+const SIMPLE_REQUESTS_KEY = "vaultforge_requests_v1";
 const INVESTOR_ADMIN_MESSAGES_KEY = "vaultforge_investor_admin_messages_v1";
 const INVESTOR_APP_KEY = "vaultforge_investor_application_v1";
 const MEMBER_REQUEST_OVERRIDES_KEY = "vaultforge_member_request_overrides_v1";
@@ -178,7 +181,7 @@ function normalizeThread(row: any, sourceKey: string, index: number) {
   const investorProfile = row?.investorProfile || baseInvestorProfile();
   const kind = inferKind(row);
   const requestTitle = clean(row?.requestTitle || row?.title || row?.subject || row?.topic || `${kind} Request`);
-  const body = clean(row?.roomHeader || row?.message || row?.body || row?.notes || row?.requestMessage || "Routed investor request");
+  const body = clean(row?.message || row?.body || row?.notes || row?.requestMessage || row?.roomHeader || "Routed investor request");
 
   return {
     ...row,
@@ -216,6 +219,9 @@ function readThreads() {
     { key: ADMIN_INBOX_KEY, rows: readArrayKey(ADMIN_INBOX_KEY) },
     { key: INVESTOR_REQUESTS_KEY, rows: readArrayKey(INVESTOR_REQUESTS_KEY) },
     { key: INVESTOR_EXECUTION_REQUESTS_KEY, rows: readArrayKey(INVESTOR_EXECUTION_REQUESTS_KEY) },
+    { key: DESIGNATED_ROUTE_MESSAGES_KEY, rows: readArrayKey(DESIGNATED_ROUTE_MESSAGES_KEY) },
+    { key: OWNER_DIRECT_MESSAGES_KEY, rows: readArrayKey(OWNER_DIRECT_MESSAGES_KEY) },
+    { key: SIMPLE_REQUESTS_KEY, rows: readArrayKey(SIMPLE_REQUESTS_KEY) },
     { key: INVESTOR_ADMIN_MESSAGES_KEY, rows: readArrayKey(INVESTOR_ADMIN_MESSAGES_KEY) },
   ];
 
@@ -813,6 +819,187 @@ function InvestorProfileCard({ profile, photoUrl, released }: { profile: any; ph
   );
 }
 
+
+function prettyInvestorText(value: unknown, fallback = "") {
+  return clean(value, fallback)
+    .replace(/\\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/TYPE:/g, "Type:")
+    .replace(/URGENCY:/g, "Urgency:")
+    .replace(/SUBJECT:/g, "Subject:")
+    .replace(/SENDER:/g, "Sender:")
+    .replace(/RECIPIENT:/g, "Recipient:")
+    .replace(/HEADER:/g, "Header:")
+    .replace(/MESSAGE:/g, "Message:")
+    .replace(/AMOUNT \/ BUDGET:/g, "Amount / Budget:")
+    .replace(/TIMELINE:/g, "Timeline:")
+    .replace(/CONDITIONS:/g, "Conditions:")
+    .replace(/NEXT MOVE:/g, "Next Move:")
+    .replace(/PRIVATE NOTE:/g, "Private Note:");
+}
+
+function humanNeedLabel(key: string) {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace("Arv", "ARV")
+    .replace("Jv", "JV")
+    .replace("Ltv", "LTV")
+    .replace("Ltc", "LTC");
+}
+
+function parsedInvestorTicketFields(message: string) {
+  const pretty = prettyInvestorText(message);
+  const out: Record<string, string> = {};
+  const pairs: [string, RegExp][] = [
+    ["Type", /Type:\s*([^\n]+)/i],
+    ["Urgency", /Urgency:\s*([^\n]+)/i],
+    ["Subject", /Subject:\s*([^\n]+)/i],
+    ["Sender", /Sender:\s*([^\n]+)/i],
+    ["Recipient", /Recipient:\s*([^\n]+)/i],
+    ["Header", /Header:\s*([^\n]+)/i],
+    ["Message", /Message:\s*([^\n]+)/i],
+    ["Amount / Budget", /Amount \/ Budget:\s*([^\n]+)/i],
+    ["Timeline", /Timeline:\s*([^\n]+)/i],
+    ["Conditions", /Conditions:\s*([^\n]+)/i],
+    ["Next Move", /Next Move:\s*([^\n]+)/i],
+    ["Private Note", /Private Note:\s*([^\n]+)/i],
+  ];
+
+  pairs.forEach(([label, regex]) => {
+    const match = pretty.match(regex);
+    if (match?.[1]) out[label] = clean(match[1]);
+  });
+
+  return out;
+}
+
+function structuredInvestorNeeds(thread: any) {
+  const details = thread?.details && typeof thread.details === "object" ? thread.details : {};
+  const parsed = parsedInvestorTicketFields(thread?.body || thread?.message || thread?.notes || thread?.roomHeader || "");
+  const rows: { label: string; value: string }[] = [];
+
+  Object.entries(details).forEach(([key, value]) => {
+    const text = clean(value);
+    if (text && !["Not listed", "NA", "N/A"].includes(text)) rows.push({ label: humanNeedLabel(key), value: text });
+  });
+
+  Object.entries(parsed).forEach(([label, value]) => {
+    const text = clean(value);
+    if (text && !["Not listed", "NA", "N/A"].includes(text) && !rows.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
+      rows.push({ label, value: text });
+    }
+  });
+
+  return rows.slice(0, 14);
+}
+
+function investorNeedAI(thread: any) {
+  const text = `${thread?.requestTitle || ""} ${thread?.title || ""} ${thread?.body || ""} ${thread?.message || ""} ${thread?.roomHeader || ""} ${JSON.stringify(thread?.details || {})}`.toLowerCase();
+
+  if (text.includes("lender") || text.includes("hard money") || text.includes("capital") || text.includes("funding") || text.includes("loan")) {
+    return {
+      lane: "Private lender / capital partner",
+      warning: "Verify capital amount, purchase price, ARV, repair budget, close deadline, collateral, docs, and exit strategy.",
+      next: "Ask investor for any missing numbers and decide if you can fund, refer, or request more docs.",
+      urgency: text.includes("urgent") || text.includes("closing") || text.includes("deadline") ? "High" : "Medium",
+    };
+  }
+
+  if (text.includes("contractor") || text.includes("rehab") || text.includes("scope") || text.includes("construction")) {
+    return {
+      lane: "Contractor / operator",
+      warning: "Verify trade, scope, access, photos, bid deadline, start date, permit status, and budget.",
+      next: "Reply with whether you can bid, need photos/scope, or can refer a qualified contractor/operator.",
+      urgency: text.includes("urgent") || text.includes("stalled") ? "High" : "Medium",
+    };
+  }
+
+  if (text.includes("title") || text.includes("closing") || text.includes("escrow") || text.includes("legal")) {
+    return {
+      lane: "Title / closing specialist",
+      warning: "Verify issue type, close date, contract, title report, payoff, party status, and escrow contact.",
+      next: "Ask for title issue summary and closing date before contact release.",
+      urgency: "High",
+    };
+  }
+
+  if (text.includes("operator") || text.includes("boots") || text.includes("ground") || text.includes("site")) {
+    return {
+      lane: "Operator / boots-on-ground",
+      warning: "Verify task, location, deadline, access details, proof required, and compensation.",
+      next: "Reply if you can handle the local task or need more site details.",
+      urgency: text.includes("same day") || text.includes("urgent") ? "High" : "Medium",
+    };
+  }
+
+  if (text.includes("jv") || text.includes("partner")) {
+    return {
+      lane: "JV / partner match",
+      warning: "Verify role needed, contribution, deal stage, proposed split, timeline, and proof.",
+      next: "Clarify partner role and whether you can contribute capital, operations, or buyer path.",
+      urgency: "Medium",
+    };
+  }
+
+  if (text.includes("insurance")) {
+    return {
+      lane: "Insurance / risk lane",
+      warning: "Verify coverage type, property condition, deadline, lender requirement, and known issues.",
+      next: "Ask for property condition and coverage deadline.",
+      urgency: "Medium",
+    };
+  }
+
+  return {
+    lane: "Designated member lane",
+    warning: "Request is missing clean structured need fields.",
+    next: "Ask investor for exact need, market, urgency, amount, conditions, and desired next move.",
+    urgency: "Normal",
+  };
+}
+
+function InvestorNeedsBlock({ thread }: { thread: any }) {
+  const needs = structuredInvestorNeeds(thread);
+  const ai = investorNeedAI(thread);
+
+  return (
+    <div style={{ ...goldPanel, marginTop: 18 }}>
+      <div style={eyebrow}>Investor Needs / Smart AI Read</div>
+      <h3 style={h3}>{ai.lane}</h3>
+
+      <div style={grid}>
+        <div style={panel}>
+          <div style={eyebrow}>Urgency</div>
+          <p style={muted}>{ai.urgency}</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>AI Warning</div>
+          <p style={muted}>{ai.warning}</p>
+        </div>
+        <div style={panel}>
+          <div style={eyebrow}>Best Next Move</div>
+          <p style={muted}>{ai.next}</p>
+        </div>
+      </div>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        {needs.length ? needs.map((need) => (
+          <div key={`${need.label}-${need.value}`} style={panel}>
+            <div style={eyebrow}>{need.label}</div>
+            <p style={muted}>{need.value}</p>
+          </div>
+        )) : (
+          <div style={panel}>
+            <div style={eyebrow}>Missing Structured Info</div>
+            <p style={muted}>Ask for amount, timeline, market, conditions, and next move.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RequestCard({ thread, active, onOpen }: { thread: any; active: boolean; onOpen: () => void }) {
   const profile = profileFrom(thread);
   const status = statusOf(thread);
@@ -823,9 +1010,10 @@ function RequestCard({ thread, active, onOpen }: { thread: any; active: boolean;
     <button type="button" style={{ ...style, textAlign: "left", cursor: "pointer", width: "100%" }} onClick={onOpen}>
       <div style={eyebrow}>{status || "new"} • {sourceOf(thread) || "request"}</div>
       <h3 style={h3}>{titleFor(thread)}</h3>
-      <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{prettyThreadText(roomHeaderFor(thread))}</p>
+      <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{prettyInvestorText(roomHeaderFor(thread))}</p>
       <p style={muted}>Investor: {profile?.contactName || thread?.investorName || "Not listed"} • {profile?.company || thread?.investorCompany || "Company not listed"}</p>
       <p style={muted}>State: {thread?.state || "not listed"} • Messages: {(thread?.messages || []).length || 0}</p>
+      <p style={muted}>AI Lane: {investorNeedAI(thread).lane} • Urgency: {investorNeedAI(thread).urgency}</p>
       <p style={muted}>Click to open request detail</p>
     </button>
   );
@@ -836,7 +1024,7 @@ function MessageBubble({ message }: { message: any }) {
   return (
     <div style={panel}>
       <div style={eyebrow}>{role} • {clean(message?.createdAt || message?.at || "")}</div>
-      <p style={sub}>{clean(message?.body || message?.message || message?.text || "")}</p>
+      <p style={{ ...sub, whiteSpace: "pre-wrap" }}>{prettyInvestorText(message?.body || message?.message || message?.text || "")}</p>
     </div>
   );
 }
@@ -898,173 +1086,6 @@ function MemberPublicProfileCard({ profile }: { profile: any }) {
 }
 
 
-
-function prettyThreadText(value: unknown, fallback = "") {
-  return clean(value, fallback)
-    .replace(/\\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/TYPE:/g, "Type:")
-    .replace(/URGENCY:/g, "Urgency:")
-    .replace(/SUBJECT:/g, "Subject:")
-    .replace(/SENDER:/g, "Sender:")
-    .replace(/RECIPIENT:/g, "Recipient:")
-    .replace(/HEADER:/g, "Header:")
-    .replace(/MESSAGE:/g, "Message:")
-    .replace(/AMOUNT \/ BUDGET:/g, "Amount / Budget:")
-    .replace(/TIMELINE:/g, "Timeline:")
-    .replace(/CONDITIONS:/g, "Conditions:")
-    .replace(/NEXT MOVE:/g, "Next Move:")
-    .replace(/PRIVATE NOTE:/g, "Private Note:");
-}
-
-function detailLabel(key: string) {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-    .replace("Arv", "ARV")
-    .replace("Jv", "JV")
-    .replace("Ltc", "LTC")
-    .replace("Ltv", "LTV");
-}
-
-function parseStructuredMessage(value: unknown) {
-  const text = prettyThreadText(value);
-  const pairs: { label: string; regex: RegExp }[] = [
-    { label: "Type", regex: /Type:\s*([^\n]+)/i },
-    { label: "Urgency", regex: /Urgency:\s*([^\n]+)/i },
-    { label: "Subject", regex: /Subject:\s*([^\n]+)/i },
-    { label: "Sender", regex: /Sender:\s*([^\n]+)/i },
-    { label: "Recipient", regex: /Recipient:\s*([^\n]+)/i },
-    { label: "Header", regex: /Header:\s*([^\n]+)/i },
-    { label: "Message", regex: /Message:\s*([^\n]+)/i },
-    { label: "Amount / Budget", regex: /Amount \/ Budget:\s*([^\n]+)/i },
-    { label: "Timeline", regex: /Timeline:\s*([^\n]+)/i },
-    { label: "Conditions", regex: /Conditions:\s*([^\n]+)/i },
-    { label: "Next Move", regex: /Next Move:\s*([^\n]+)/i },
-    { label: "Private Note", regex: /Private Note:\s*([^\n]+)/i },
-  ];
-
-  return pairs
-    .map((pair) => ({ label: pair.label, value: clean(text.match(pair.regex)?.[1]) }))
-    .filter((item) => item.value && !["Not listed", "NA", "N/A"].includes(item.value));
-}
-
-function structuredInvestorNeeds(thread: any) {
-  const detailObject = thread?.details && typeof thread.details === "object" && !Array.isArray(thread.details) ? thread.details : {};
-  const detailRows = Object.entries(detailObject)
-    .map(([key, value]) => ({ label: detailLabel(key), value: clean(value) }))
-    .filter((item) => item.value && !["Not listed", "NA", "N/A"].includes(item.value));
-
-  const parsedRows = parseStructuredMessage(thread?.body || thread?.message || thread?.notes || thread?.roomHeader || "");
-  const combined: { label: string; value: string }[] = [];
-
-  [...detailRows, ...parsedRows].forEach((item) => {
-    if (!combined.some((existing) => existing.label.toLowerCase() === item.label.toLowerCase())) combined.push(item);
-  });
-
-  return combined.slice(0, 14);
-}
-
-function smartNeedAnalysis(thread: any) {
-  const raw = `${thread?.requestTitle || ""} ${thread?.title || ""} ${thread?.source || ""} ${thread?.type || ""} ${thread?.body || ""} ${thread?.message || ""} ${JSON.stringify(thread?.details || {})}`.toLowerCase();
-
-  if (raw.includes("lender") || raw.includes("hard money") || raw.includes("capital") || raw.includes("funding")) {
-    return {
-      lane: "Private lender / capital route",
-      ask: "Confirm capital amount, purchase price, rehab budget, ARV/value, close deadline, exit strategy, and docs ready.",
-      next: "Ask for contract, scope, comps, photos, insurance status, and payoff/closing timeline before committing.",
-      warning: "Missing loan numbers or deadline can delay lender routing.",
-    };
-  }
-
-  if (raw.includes("contractor") || raw.includes("rehab") || raw.includes("construction")) {
-    return {
-      lane: "Contractor / field execution route",
-      ask: "Confirm trade needed, scope, access, bid deadline, start timeline, permit status, and budget range.",
-      next: "Ask for photos, scope list, access details, and whether this is a bid or active rescue job.",
-      warning: "Missing scope and access details can stop contractor response.",
-    };
-  }
-
-  if (raw.includes("title") || raw.includes("closing") || raw.includes("escrow")) {
-    return {
-      lane: "Title / closing route",
-      ask: "Confirm close date, issue type, transaction type, contract/title docs, seller/buyer status, and escrow contact.",
-      next: "Ask for the exact title blocker and deadline first.",
-      warning: "Title issues need documents, not general notes.",
-    };
-  }
-
-  if (raw.includes("operator") || raw.includes("boots") || raw.includes("ground")) {
-    return {
-      lane: "Operator / boots-on-ground route",
-      ask: "Confirm task needed, market/location, deadline, access, proof required, and compensation/terms.",
-      next: "Ask what has to physically happen and by when.",
-      warning: "Local tasks need exact access and proof requirements.",
-    };
-  }
-
-  if (raw.includes("jv") || raw.includes("partner")) {
-    return {
-      lane: "JV / partner route",
-      ask: "Confirm partner role, deal stage, expected contribution, proposed split, proof needed, and timeline.",
-      next: "Ask whether they need capital, operations, buyer, credit, or construction partner.",
-      warning: "JV requests need clear role and split before routing.",
-    };
-  }
-
-  return {
-    lane: "General execution route",
-    ask: "Confirm exact goal, urgency, market, amount/budget, conditions, and best next move.",
-    next: "Ask what outcome they want and what is blocking it right now.",
-    warning: "General requests should be tightened before routing.",
-  };
-}
-
-function InvestorNeedsPanel({ thread }: { thread: any }) {
-  const needs = structuredInvestorNeeds(thread);
-  const ai = smartNeedAnalysis(thread);
-
-  return (
-    <div style={{ ...goldPanel, marginTop: 18 }}>
-      <div style={eyebrow}>Investor Needs / Smart AI Read</div>
-      <h3 style={h3}>What the investor actually needs.</h3>
-
-      <div style={{ ...grid, marginTop: 12 }}>
-        <div style={panel}>
-          <div style={eyebrow}>Best Route</div>
-          <p style={sub}>{ai.lane}</p>
-        </div>
-        <div style={panel}>
-          <div style={eyebrow}>AI Next Move</div>
-          <p style={muted}>{ai.next}</p>
-        </div>
-      </div>
-
-      <div style={{ ...panel, marginTop: 12, borderColor: "rgba(255,70,70,.35)" }}>
-        <div style={eyebrow}>Missing Info Warning</div>
-        <p style={muted}>{ai.warning}</p>
-      </div>
-
-      {needs.length ? (
-        <div style={{ ...grid, marginTop: 12 }}>
-          {needs.map((item) => (
-            <div key={`${item.label}-${item.value}`} style={panel}>
-              <div style={eyebrow}>{item.label}</div>
-              <p style={muted}>{item.value}</p>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div style={{ ...panel, marginTop: 12 }}>
-          <div style={eyebrow}>Investor Fields</div>
-          <p style={muted}>{ai.ask}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: any; onPatch: (patch: ThreadPatch) => void; onDeleteForever: () => void; onBack: () => void }) {
   const [reply, setReply] = useState("");
   const [infoRequest, setInfoRequest] = useState("");
@@ -1101,11 +1122,11 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
     <section style={goldPanel}>
       <div style={eyebrow}>Open Request Detail</div>
       <h2 style={h2}>{titleFor(thread)}</h2>
-      <p style={{ ...sub, whiteSpace: "pre-wrap" }}>{prettyThreadText(roomHeaderFor(thread))}</p>
+      <p style={sub}>{roomHeaderFor(thread)}</p>
       <p style={muted}>Status: {statusOf(thread) || "new"} • Source: {sourceOf(thread) || "request"} • State: {thread?.state || "not listed"}</p>
       <p style={muted}>Thread ID: {safeId(thread)}</p>
 
-      <InvestorNeedsPanel thread={thread} />
+      <InvestorNeedsBlock thread={thread} />
 
       <div style={{ ...row, marginTop: 16 }}>
         <button type="button" style={btn} onClick={onBack}>Collapse / Done</button>
@@ -1146,7 +1167,7 @@ function RequestDetail({ thread, onPatch, onDeleteForever, onBack }: { thread: a
 
       <BloombergMessageForm
         sender={currentEmail() || "Member"}
-        recipient="Investor / Member Thread"
+        recipient="Investor / VaultForge Admin"
         header={roomHeaderFor(thread)}
         defaultSubject={titleFor(thread)}
         defaultType="Member Reply"
