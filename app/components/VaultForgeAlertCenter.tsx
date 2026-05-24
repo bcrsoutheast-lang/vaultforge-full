@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 type AlertAudience = "admin" | "member" | "investor" | "public";
-
 type AlertTone = "gold" | "red" | "blue" | "green";
 
 type AlertItem = {
@@ -46,9 +45,10 @@ const PROFILE_KEYS = [
   "vaultforge_admin_members_v1",
 ];
 
+const ALL_CONTROL_KEYS = Array.from(new Set([...DEAL_KEYS, ...PAIN_KEYS, ...MESSAGE_KEYS, ...PROFILE_KEYS, "vaultforge_owner_replies_v1"]));
+
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
-
   try {
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
@@ -57,9 +57,18 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function writeJson(key: string, value: unknown) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
 function clean(value: unknown, fallback = "") {
   const text = String(value || "").trim();
   return text || fallback;
+}
+
+function rowId(row: any, fallback = "") {
+  return clean(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId || row?.email || fallback);
 }
 
 function rowsFromKeys(keys: string[]) {
@@ -70,14 +79,14 @@ function rowsFromKeys(keys: string[]) {
   keys.forEach((key) => {
     const parsed = readJson<any>(key, []);
     if (Array.isArray(parsed)) {
-      parsed.filter(Boolean).forEach((row) => rows.push({ ...row, __sourceKey: key }));
+      parsed.filter(Boolean).forEach((row, index) => rows.push({ ...row, __sourceKey: key, __rowId: rowId(row, `${key}-${index}`) }));
     } else if (parsed && typeof parsed === "object") {
       if (key.includes("payment") || key.includes("approvals")) {
-        rows.push({ ...parsed, __sourceKey: key });
+        rows.push({ ...parsed, __sourceKey: key, __rowId: rowId(parsed, key) });
       } else {
         Object.values(parsed)
           .filter(Boolean)
-          .forEach((row: any) => rows.push({ ...row, __sourceKey: key }));
+          .forEach((row: any, index) => rows.push({ ...row, __sourceKey: key, __rowId: rowId(row, `${key}-${index}`) }));
       }
     }
   });
@@ -111,6 +120,7 @@ function paymentRows() {
     id: key,
     ...(value || {}),
     __sourceKey: "vaultforge_mock_access_approvals_v1",
+    __rowId: key,
   }));
 
   const directMember = readJson<any>("vaultforge_mock_member_payment_v1", {});
@@ -118,8 +128,8 @@ function paymentRows() {
 
   return [
     ...approvalRows,
-    directMember && Object.keys(directMember).length ? { ...directMember, id: "member-payment", __sourceKey: "vaultforge_mock_member_payment_v1" } : null,
-    directInvestor && Object.keys(directInvestor).length ? { ...directInvestor, id: "investor-payment", __sourceKey: "vaultforge_mock_investor_payment_v1" } : null,
+    directMember && Object.keys(directMember).length ? { ...directMember, id: "member-payment", __sourceKey: "vaultforge_mock_member_payment_v1", __rowId: "member-payment" } : null,
+    directInvestor && Object.keys(directInvestor).length ? { ...directInvestor, id: "investor-payment", __sourceKey: "vaultforge_mock_investor_payment_v1", __rowId: "investor-payment" } : null,
   ].filter(Boolean).filter((row: any) => {
     const status = String(row?.paymentStatus || row?.accessStatus || "").toLowerCase();
     return row?.paid || row?.unlocked || status === "paid" || status === "active" || status === "ready";
@@ -158,7 +168,7 @@ function subFor(row: any) {
     row?.kind || row?.type || row?.source || row?.__sourceKey,
     row?.city,
     row?.state,
-    row?.status,
+    row?.status || row?.folder,
   ]
     .map((item) => clean(item))
     .filter(Boolean);
@@ -200,6 +210,84 @@ function countColor(tone: AlertTone, count: number) {
   return "#1688ff";
 }
 
+function dispatchAlertChange() {
+  window.dispatchEvent(new Event("vaultforge-request-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-message-change"));
+  window.dispatchEvent(new Event("vaultforge-owner-reply-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-message-change"));
+  window.dispatchEvent(new Event("vaultforge-admin-action-change"));
+  window.dispatchEvent(new Event("vaultforge-deal-change"));
+  window.dispatchEvent(new Event("vaultforge-pain-change"));
+  window.dispatchEvent(new Event("vaultforge-room-change"));
+}
+
+function updateRowEverywhere(target: any, nextStatus: string) {
+  const targetId = rowId(target, target?.__rowId || "");
+  const sourceKey = clean(target?.__sourceKey);
+
+  ALL_CONTROL_KEYS.forEach((key) => {
+    const parsed = readJson<any>(key, []);
+
+    if (Array.isArray(parsed)) {
+      const nextRows = parsed.map((row, index) => {
+        const candidateId = rowId(row, `${key}-${index}`);
+        const matches = candidateId === targetId || (sourceKey === key && candidateId === target?.__rowId);
+        return matches
+          ? {
+              ...row,
+              status: nextStatus,
+              folder: nextStatus,
+              updatedAt: new Date().toISOString(),
+            }
+          : row;
+      });
+      writeJson(key, nextRows);
+      return;
+    }
+
+    if (parsed && typeof parsed === "object") {
+      const candidateId = rowId(parsed, key);
+      if (candidateId === targetId || sourceKey === key) {
+        writeJson(key, {
+          ...parsed,
+          status: nextStatus,
+          folder: nextStatus,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+  });
+
+  dispatchAlertChange();
+}
+
+function deleteRowEverywhere(target: any) {
+  const targetId = rowId(target, target?.__rowId || "");
+  const sourceKey = clean(target?.__sourceKey);
+
+  ALL_CONTROL_KEYS.forEach((key) => {
+    const parsed = readJson<any>(key, []);
+
+    if (Array.isArray(parsed)) {
+      const nextRows = parsed.filter((row, index) => {
+        const candidateId = rowId(row, `${key}-${index}`);
+        return !(candidateId === targetId || (sourceKey === key && candidateId === target?.__rowId));
+      });
+      writeJson(key, nextRows);
+      return;
+    }
+
+    if (parsed && typeof parsed === "object") {
+      const candidateId = rowId(parsed, key);
+      if (candidateId === targetId || sourceKey === key) {
+        localStorage.removeItem(key);
+      }
+    }
+  });
+
+  dispatchAlertChange();
+}
+
 export default function VaultForgeAlertCenter({
   audience = "member",
   title = "Live Alerts",
@@ -209,6 +297,8 @@ export default function VaultForgeAlertCenter({
 }) {
   const [tick, setTick] = useState(0);
   const [openAlert, setOpenAlert] = useState<AlertItem | null>(null);
+  const [selectedRow, setSelectedRow] = useState<any | null>(null);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     const refresh = () => setTick((value) => value + 1);
@@ -330,6 +420,15 @@ export default function VaultForgeAlertCenter({
 
   const total = alerts.reduce((sum, item) => sum + item.count, 0);
 
+  function controlRow(status: string, label: string) {
+    if (!selectedRow) return;
+
+    updateRowEverywhere(selectedRow, status);
+    setSelectedRow({ ...selectedRow, status, folder: status });
+    setNotice(`${label} complete.`);
+    setTick((value) => value + 1);
+  }
+
   return (
     <section
       style={{
@@ -376,7 +475,11 @@ export default function VaultForgeAlertCenter({
           <button
             key={item.key}
             type="button"
-            onClick={() => setOpenAlert(item)}
+            onClick={() => {
+              setOpenAlert(item);
+              setSelectedRow(null);
+              setNotice("");
+            }}
             style={{
               textAlign: "left",
               color: "#f8fafc",
@@ -437,7 +540,7 @@ export default function VaultForgeAlertCenter({
         >
           <div
             style={{
-              maxWidth: 920,
+              maxWidth: 960,
               margin: "36px auto",
               background: "#111827",
               border: `1px solid ${toneBorder(openAlert.tone)}`,
@@ -488,7 +591,11 @@ export default function VaultForgeAlertCenter({
 
               <button
                 type="button"
-                onClick={() => setOpenAlert(null)}
+                onClick={() => {
+                  setOpenAlert(null);
+                  setSelectedRow(null);
+                  setNotice("");
+                }}
                 style={{
                   border: "1px solid rgba(207,216,230,.18)",
                   background: "#171c29",
@@ -503,6 +610,106 @@ export default function VaultForgeAlertCenter({
               </button>
             </div>
 
+            {notice ? (
+              <div
+                style={{
+                  marginTop: 14,
+                  border: "1px solid rgba(245,197,66,.45)",
+                  background: "rgba(245,197,66,.08)",
+                  borderRadius: 18,
+                  padding: 14,
+                  color: "#ffd45a",
+                  fontWeight: 900,
+                }}
+              >
+                {notice}
+              </div>
+            ) : null}
+
+            {selectedRow ? (
+              <div
+                style={{
+                  marginTop: 18,
+                  background: "#0b1020",
+                  border: `1px solid ${toneBorder(openAlert.tone)}`,
+                  borderRadius: 22,
+                  padding: 18,
+                }}
+              >
+                <div
+                  style={{
+                    color: "#ffd45a",
+                    textTransform: "uppercase",
+                    letterSpacing: 5,
+                    fontWeight: 950,
+                    fontSize: 12,
+                    marginBottom: 10,
+                  }}
+                >
+                  Request Detail / Controls
+                </div>
+
+                <h3
+                  style={{
+                    fontSize: "clamp(28px,5vw,44px)",
+                    margin: "0 0 10px",
+                    fontWeight: 950,
+                    letterSpacing: -1,
+                  }}
+                >
+                  {titleFor(selectedRow)}
+                </h3>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))",
+                    gap: 12,
+                    marginTop: 14,
+                  }}
+                >
+                  <div style={{ background: "#111827", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 14 }}>
+                    <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Status</div>
+                    <p style={{ color: "#cbd5e1", margin: "7px 0 0" }}>{clean(selectedRow?.status || selectedRow?.folder, "new")}</p>
+                    <p style={{ color: "#aeb7c7", margin: "7px 0 0" }}>{subFor(selectedRow)}</p>
+                  </div>
+
+                  <div style={{ background: "#111827", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 14 }}>
+                    <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Attached Profile</div>
+                    <p style={{ color: "#cbd5e1", margin: "7px 0 0" }}>{clean(selectedRow?.investorCompany || selectedRow?.company, "Company not listed")}</p>
+                    <p style={{ color: "#aeb7c7", margin: "7px 0 0" }}>{clean(selectedRow?.investorName || selectedRow?.name)} {clean(selectedRow?.investorEmail || selectedRow?.email)} {clean(selectedRow?.phone)}</p>
+                  </div>
+                </div>
+
+                <div style={{ background: "#111827", border: "1px solid rgba(207,216,230,.14)", borderRadius: 18, padding: 14, marginTop: 12 }}>
+                  <div style={{ color: "#ffd45a", textTransform: "uppercase", letterSpacing: 4, fontWeight: 950, fontSize: 11 }}>Message</div>
+                  <p style={{ color: "#cbd5e1", margin: "7px 0 0", lineHeight: 1.45 }}>{messageFor(selectedRow)}</p>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                  <button type="button" onClick={() => controlRow("saved", "Saved")} style={goldButton}>Save</button>
+                  <button type="button" onClick={() => controlRow("archived", "Archived")} style={darkButton}>Archive</button>
+                  <button type="button" onClick={() => controlRow("new", "Restored active")} style={darkButton}>Restore / Active</button>
+                  <button type="button" onClick={() => controlRow("closed", "Closed")} style={darkButton}>Close Item</button>
+                  <button type="button" onClick={() => controlRow("deleted", "Deleted")} style={redButton}>Delete</button>
+                  {String(selectedRow?.status || selectedRow?.folder || "").toLowerCase().includes("deleted") ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        deleteRowEverywhere(selectedRow);
+                        setSelectedRow(null);
+                        setNotice("Deleted forever.");
+                        setTick((value) => value + 1);
+                      }}
+                      style={redButton}
+                    >
+                      Delete Forever
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             <div
               style={{
                 display: "grid",
@@ -512,13 +719,21 @@ export default function VaultForgeAlertCenter({
             >
               {openAlert.rows.length ? (
                 openAlert.rows.slice(0, 25).map((row, index) => (
-                  <div
+                  <button
+                    type="button"
                     key={`${openAlert.key}-${row?.id || row?.email || index}`}
+                    onClick={() => {
+                      setSelectedRow(row);
+                      setNotice("");
+                    }}
                     style={{
+                      textAlign: "left",
+                      color: "#f8fafc",
                       background: "#0b1020",
                       border: "1px solid rgba(207,216,230,.14)",
                       borderRadius: 20,
                       padding: 16,
+                      cursor: "pointer",
                     }}
                   >
                     <div
@@ -553,7 +768,11 @@ export default function VaultForgeAlertCenter({
                         {clean(row?.investorName || row?.name)} {clean(row?.investorEmail || row?.email)} {clean(row?.phone)}
                       </p>
                     ) : null}
-                  </div>
+
+                    <p style={{ color: "#ffd45a", margin: "10px 0 0", fontWeight: 900 }}>
+                      Tap to open cleanup controls.
+                    </p>
+                  </button>
                 ))
               ) : (
                 <div
@@ -576,3 +795,27 @@ export default function VaultForgeAlertCenter({
     </section>
   );
 }
+
+const darkButton: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "#171c29",
+  color: "#f7f7fb",
+  borderRadius: 999,
+  padding: "11px 14px",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const goldButton: React.CSSProperties = {
+  ...darkButton,
+  border: 0,
+  background: "#ffdc68",
+  color: "#10131a",
+};
+
+const redButton: React.CSSProperties = {
+  ...darkButton,
+  background: "#271016",
+  borderColor: "rgba(255,70,70,.55)",
+  color: "#ffb3b3",
+};
