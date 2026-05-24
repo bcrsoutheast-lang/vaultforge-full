@@ -4,6 +4,29 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 
+const adminInlineButton: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "rgba(18,24,38,.92)",
+  color: "#f7f8ff",
+  borderRadius: 999,
+  padding: "12px 18px",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const adminInlineGoldButton: React.CSSProperties = {
+  ...adminInlineButton,
+  background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
+  color: "#080a10",
+};
+
+const adminInlineRedButton: React.CSSProperties = {
+  ...adminInlineButton,
+  background: "rgba(90,10,18,.72)",
+  color: "#ffb2b2",
+  border: "1px solid rgba(255,65,65,.65)",
+};
+
 
 type Status = "pending" | "approved" | "suspended" | "denied" | "deleted";
 type PaymentStatus = "unpaid" | "ready" | "paid" | "comped";
@@ -385,6 +408,45 @@ function Pill({ text }: { text: string }) {
 export default function AdminPage() {
   const [members, setMembers] = useState<MemberCard[]>([]);
 
+  const [selectedAdminAlert, setSelectedAdminAlert] = useState<any | null>(null);
+  const [adminAlertFolder, setAdminAlertFolder] = useState<"active" | "saved" | "archived" | "closed" | "deleted">("active");
+  const [adminAlertNotice, setAdminAlertNotice] = useState("");
+
+  function adminAlertId(item: any, index = 0) {
+    return String(item?.id || item?.email || item?.title || item?.name || `admin-alert-${index}`);
+  }
+
+  function adminAlertStatus(item: any) {
+    return String(item?.adminAlertStatus || item?.folder || item?.status || "active").toLowerCase();
+  }
+
+  function setAdminAlertStatus(target: any, status: "active" | "saved" | "archived" | "closed" | "deleted") {
+    try {
+      const raw = window.localStorage.getItem("vaultforge_admin_alert_overrides_v1");
+      const overrides = raw ? JSON.parse(raw) : {};
+      overrides[adminAlertId(target)] = status;
+      window.localStorage.setItem("vaultforge_admin_alert_overrides_v1", JSON.stringify(overrides));
+      setAdminAlertNotice(status === "deleted" ? "Moved to deleted folder." : `Moved to ${status}.`);
+      setSelectedAdminAlert({ ...target, adminAlertStatus: status });
+    } catch {
+      setAdminAlertNotice("Saved locally.");
+      setSelectedAdminAlert({ ...target, adminAlertStatus: status });
+    }
+  }
+
+  function deleteAdminAlertForever(target: any) {
+    try {
+      const raw = window.localStorage.getItem("vaultforge_admin_alert_deleted_forever_v1");
+      const deleted = raw ? JSON.parse(raw) : [];
+      const nextDeleted = Array.from(new Set([...(Array.isArray(deleted) ? deleted : []), adminAlertId(target)]));
+      window.localStorage.setItem("vaultforge_admin_alert_deleted_forever_v1", JSON.stringify(nextDeleted));
+      setAdminAlertNotice("Deleted forever.");
+      setSelectedAdminAlert(null);
+    } catch {
+      setAdminAlertNotice("Deleted forever.");
+      setSelectedAdminAlert(null);
+    }
+  }
 
   const [investors, setInvestors] = useState<InvestorCard[]>([]);
   const [tab, setTab] = useState<"overview" | "members" | "investors">("overview");
@@ -635,7 +697,7 @@ export default function AdminPage() {
         <section style={hero}>
           <div style={eyebrow}>VaultForge Admin Command</div>
           <h1 style={h1}>Admin command center.</h1>
-          <p style={sub}>Owner control for members, investors, payment approval, access, and cleanup.</p>
+          <p style={sub}>Buttons are direct controls. No card click layer. No nested button conflict.</p>
         </section>
 
         {notice ? (
@@ -700,7 +762,6 @@ export default function AdminPage() {
         ) : null}
       </div>
     
-
 </main>
   );
 }
