@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 
 
 
-
 type Status = "pending" | "approved" | "suspended" | "denied" | "deleted";
 type PaymentStatus = "unpaid" | "ready" | "paid" | "comped";
 type AccessStatus = "locked" | "active";
@@ -385,6 +384,8 @@ function Pill({ text }: { text: string }) {
 
 export default function AdminPage() {
   const [members, setMembers] = useState<MemberCard[]>([]);
+
+
   const [investors, setInvestors] = useState<InvestorCard[]>([]);
   const [tab, setTab] = useState<"overview" | "members" | "investors">("overview");
   const [memberFilter, setMemberFilter] = useState<"all" | "pending" | "approved" | "deleted">("all");
@@ -698,13 +699,8 @@ export default function AdminPage() {
           </section>
         ) : null}
       </div>
-                <button type="button" onClick={() => undefined(null)} style={undefined}>
-                  Done
-                </button>
-              </div>
-            </section>
-          </div>
-        ) : null}
-    </main>
+    
+
+</main>
   );
 }
