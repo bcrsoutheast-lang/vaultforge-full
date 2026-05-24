@@ -504,41 +504,121 @@ function BloombergMessageForm({
   const [nextMove, setNextMove] = useState("");
   const [privateNote, setPrivateNote] = useState("");
 
-  function StructuredMessageTicket({ thread }: { thread: any }) {
-  const subject = clean(thread?.requestTitle || thread?.title || thread?.subject || "Structured Request Message");
-  const sender = clean(thread?.senderEmail || thread?.investorEmail || thread?.email || "Investor");
-  const recipient = clean(thread?.recipient || thread?.assignedTo || "Designated member lane");
-  const header = clean(thread?.roomHeader || thread?.requestHeader || thread?.header || subject);
-  const body = prettyInvestorText(thread?.body || thread?.message || thread?.notes || thread?.requestMessage || "No message body listed.");
+  function submit() {
+    const base = {
+      messageType,
+      urgency,
+      subject,
+      body,
+      amount,
+      timeline,
+      conditions,
+      nextMove,
+      privateNote,
+      sender,
+      recipient,
+      header,
+    };
+    const summary = buildBloombergSummary(base);
+    onSend({ ...base, summary });
+    setBody("");
+    setAmount("");
+    setTimeline("");
+    setConditions("");
+    setNextMove("");
+    setPrivateNote("");
+  }
 
   return (
     <div style={{ ...panel, marginTop: 14 }}>
       <div style={eyebrow}>Structured Message Ticket</div>
-      <h3 style={h3}>{subject}</h3>
+      <h3 style={h3}>{subject || "Structured Request Message"}</h3>
 
       <div style={{ ...grid, marginTop: 12 }}>
         <div style={panel}>
           <div style={eyebrow}>Sender</div>
-          <p style={muted}>{sender}</p>
+          <p style={muted}>{sender || "Auto-filled sender"}</p>
         </div>
         <div style={panel}>
           <div style={eyebrow}>Recipient</div>
-          <p style={muted}>{recipient}</p>
+          <p style={muted}>{recipient || "Auto-filled recipient"}</p>
         </div>
       </div>
 
       <div style={{ ...panel, marginTop: 12 }}>
         <div style={eyebrow}>Attached Header</div>
-        <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{header}</p>
+        <p style={sub}>{header || "Request/deal/pain context auto-attached"}</p>
       </div>
 
-      <div style={{ ...panel, marginTop: 12 }}>
-        <div style={eyebrow}>Message</div>
-        <p style={{ ...muted, whiteSpace: "pre-wrap" }}>{body}</p>
+      <div style={{ ...grid, marginTop: 12 }}>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Message Type</span>
+          <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
+            {["Request Info", "Request Update", "Interested / Accept", "Submit Terms", "Pass", "Need Documents", "Release Contact Request", "Funding Offer", "Contractor Bid", "Title / Closing Update", "Admin Note", "Member Reply", "Investor Reply"].map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Urgency</span>
+          <select style={input} value={urgency} onChange={(event) => setUrgency(event.target.value)}>
+            {["Normal", "Time Sensitive", "Urgent", "Closing Risk"].map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Subject</span>
+        <input style={input} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Auto-filled from request, editable..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Message / Terms / Ask</span>
+        <textarea style={{ ...input, minHeight: 120 }} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write the actual request, reply, terms, bid, question, or update..." />
+      </label>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Amount / Budget</span>
+          <input style={input} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="$ amount, LTC/LTV, bid, budget..." />
+        </label>
+        <label style={{ display: "grid", gap: 8 }}>
+          <span style={eyebrow}>Timeline</span>
+          <input style={input} value={timeline} onChange={(event) => setTimeline(event.target.value)} placeholder="Close date, response deadline, work start..." />
+        </label>
+      </div>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Conditions</span>
+        <input style={input} value={conditions} onChange={(event) => setConditions(event.target.value)} placeholder="Subject to docs, walkthrough, proof, title, underwriting..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Best Next Move</span>
+        <input style={input} value={nextMove} onChange={(event) => setNextMove(event.target.value)} placeholder="Schedule call, send docs, release contact, route to member..." />
+      </label>
+
+      <label style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <span style={eyebrow}>Private Note</span>
+        <input style={input} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} placeholder="Internal note, caution, context. Saved inside structured message." />
+      </label>
+
+      <div style={{ ...row, marginTop: 14 }}>
+        <button type="button" style={goldBtn} onClick={submit}>{submitLabel}</button>
+        {onCancel ? <button type="button" style={btn} onClick={onCancel}>Collapse / Done</button> : null}
       </div>
     </div>
   );
 }
+
+
+
+const MOCK_MEMBER_PAYMENT_KEY = "vaultforge_mock_member_payment_v1";
+const MOCK_INVESTOR_PAYMENT_KEY = "vaultforge_mock_investor_payment_v1";
+const MOCK_APPROVALS_KEY = "vaultforge_mock_access_approvals_v1";
 
 function mockAccessRecord(email: string, kind: "member" | "investor") {
   const approvals = readJson<Record<string, any>>(MOCK_APPROVALS_KEY, {});
@@ -690,78 +770,6 @@ function LaneCard({ title, count, note, active, pulse, danger, onClick }: { titl
       <p style={muted}>{note}</p>
       <p style={muted}>Click to open</p>
     </button>
-  );
-}
-
-
-
-
-
-
-function MemberTopPulseCards({
-  dealCount,
-  painCount,
-  requestCount,
-  messageCount,
-  onDeals,
-  onPain,
-  onRequests,
-  onMessages,
-}: {
-  dealCount: number;
-  painCount: number;
-  requestCount: number;
-  messageCount: number;
-  onDeals: () => void;
-  onPain: () => void;
-  onRequests: () => void;
-  onMessages: () => void;
-}) {
-  const total = dealCount + painCount + requestCount + messageCount;
-
-  const cardStyle = (count: number, border: string): React.CSSProperties => ({
-    ...panel,
-    borderColor: count > 0 ? border : "rgba(207,216,230,.16)",
-    boxShadow: count > 0 ? `0 0 0 1px ${border}, 0 0 28px rgba(245,197,66,.10)` : "none",
-    textAlign: "left",
-    cursor: "pointer",
-    width: "100%",
-  });
-
-  return (
-    <section style={{ ...goldPanel, marginBottom: 18 }}>
-      <div style={eyebrow}>Member Alerts • {total} Active</div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 12 }}>
-        <button type="button" className={dealCount > 0 ? "vf-pulse" : ""} style={cardStyle(dealCount, "rgba(245,197,66,.85)")} onClick={onDeals}>
-          <div style={eyebrow}>Deals</div>
-          <h2 style={h2}>{dealCount}</h2>
-          <p style={muted}>deal opportunity rooms</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-
-        <button type="button" className={painCount > 0 ? "vf-pulse" : ""} style={cardStyle(painCount, "rgba(255,70,70,.70)")} onClick={onPain}>
-          <div style={eyebrow}>Pain</div>
-          <h2 style={h2}>{painCount}</h2>
-          <p style={muted}>problem/pain signals</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-
-        <button type="button" className={requestCount > 0 ? "vf-pulse" : ""} style={cardStyle(requestCount, "rgba(0,132,255,.75)")} onClick={onRequests}>
-          <div style={eyebrow}>Requests</div>
-          <h2 style={h2}>{requestCount}</h2>
-          <p style={muted}>routed investor/member work</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-
-        <button type="button" className={messageCount > 0 ? "vf-pulse" : ""} style={cardStyle(messageCount, "rgba(48,255,135,.70)")} onClick={onMessages}>
-          <div style={eyebrow}>Messages</div>
-          <h2 style={h2}>{messageCount}</h2>
-          <p style={muted}>reply threads</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-      </div>
-    </section>
   );
 }
 
@@ -1028,7 +1036,7 @@ function MemberIdentityPanel({ profile }: { profile: any }) {
   const provide = Array.isArray(profile?.canProvide) && profile.canProvide.length ? profile.canProvide.join(" • ") : "Capabilities not listed";
 
   return (
-        <section style={{ ...goldPanel, marginBottom: 18 }}>
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
       <div style={{ ...row, alignItems: "flex-start" }}>
         {logo ? (
           <img
@@ -1212,7 +1220,7 @@ function MemberOperatingGuide() {
       <div style={eyebrow}>Member Area Instructions</div>
       <h2 style={h2}>Everything has a place.</h2>
       <p style={sub}>
-        This member area now works like the Investor Room: top alert cards first, then one clean operating board. Alerts, routing, intelligence, admin replies, and investor replies stay behind the scenes inside the correct request card.
+        This member area is organized as one operating lane. Start with new routed requests, open the card, decide, message, work the active thread, then clean it up.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
@@ -1230,22 +1238,22 @@ function MemberOperatingGuide() {
 
 
 
-
 function MemberLaneGuide() {
   return (
     <section style={{ ...panel, marginBottom: 18 }}>
-      <div style={eyebrow}>Member Operating Map</div>
-      <h2 style={h2}>Cards grouped by what they do.</h2>
-      <p style={sub}>
-        Top cards alert you. Lower cards organize the work: requests, active threads, deal/pain lanes, execution, and cleanup.
-      </p>
+      <div style={eyebrow}>Member Card Map</div>
+      <h2 style={h2}>What each card area is for.</h2>
+      <p style={sub}>Use these lanes so requests, replies, and cleanup do not scatter.</p>
 
       <div style={{ ...grid, marginTop: 18 }}>
-        <div style={panel}><div style={eyebrow}>New Requests</div><p style={muted}>Fresh routed work needing your decision.</p></div>
-        <div style={panel}><div style={eyebrow}>Active Work</div><p style={muted}>Accepted work threads you are handling.</p></div>
-        <div style={panel}><div style={eyebrow}>Deal / Pain Requests</div><p style={muted}>Opportunity and problem cards with investor needs and AI read attached.</p></div>
-        <div style={panel}><div style={eyebrow}>Execution Requests</div><p style={muted}>Lender, contractor, title, operator, insurance, JV, and boots-on-ground requests.</p></div>
-        <div style={panel}><div style={eyebrow}>Cleanup</div><p style={muted}>Saved, archived, passed, and deleted folders keep the workspace clean.</p></div>
+        <div style={panel}><div style={eyebrow}>New Requests</div><p style={muted}>Fresh routed requests waiting for your first decision.</p></div>
+        <div style={panel}><div style={eyebrow}>Active Threads</div><p style={muted}>Accepted requests you are currently working.</p></div>
+        <div style={panel}><div style={eyebrow}>Admin Replies</div><p style={muted}>Admin messages tied to a request, not loose chat.</p></div>
+        <div style={panel}><div style={eyebrow}>Investor Replies</div><p style={muted}>Investor responses inside the same controlled thread.</p></div>
+        <div style={panel}><div style={eyebrow}>Deal Opportunities</div><p style={muted}>Deal/opportunity routed cards with profile and request context attached.</p></div>
+        <div style={panel}><div style={eyebrow}>Pain Requests</div><p style={muted}>Problem-solving requests where the member may provide capital, operator help, title, contractor, or execution support.</p></div>
+        <div style={panel}><div style={eyebrow}>Execution Requests</div><p style={muted}>Specific service lanes such as lender, hard money, contractor, title, insurance, operator, JV, boots on ground, or disposition.</p></div>
+        <div style={panel}><div style={eyebrow}>Saved / Archived / Passed / Deleted</div><p style={muted}>Workspace cleanup lanes. Nothing should disappear from active work unless a status button moves it there.</p></div>
       </div>
     </section>
   );
@@ -1253,6 +1261,72 @@ function MemberLaneGuide() {
 
 
 
+function MemberTopPulseCards({
+  dealCount,
+  painCount,
+  requestCount,
+  messageCount,
+  onDeals,
+  onPain,
+  onRequests,
+  onMessages,
+}: {
+  dealCount: number;
+  painCount: number;
+  requestCount: number;
+  messageCount: number;
+  onDeals: () => void;
+  onPain: () => void;
+  onRequests: () => void;
+  onMessages: () => void;
+}) {
+  const total = dealCount + painCount + requestCount + messageCount;
+
+  const cardStyle = (count: number, border: string): React.CSSProperties => ({
+    ...panel,
+    borderColor: count > 0 ? border : "rgba(207,216,230,.16)",
+    boxShadow: count > 0 ? `0 0 0 1px ${border}, 0 0 28px rgba(245,197,66,.10)` : "none",
+    textAlign: "left",
+    cursor: "pointer",
+    width: "100%",
+  });
+
+  return (
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
+      <div style={eyebrow}>Member Alerts • {total} Active</div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 12 }}>
+        <button type="button" className={dealCount > 0 ? "vf-pulse" : ""} style={cardStyle(dealCount, "rgba(245,197,66,.85)")} onClick={onDeals}>
+          <div style={eyebrow}>Deals</div>
+          <h2 style={h2}>{dealCount}</h2>
+          <p style={muted}>deal opportunity rooms</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+
+        <button type="button" className={painCount > 0 ? "vf-pulse" : ""} style={cardStyle(painCount, "rgba(255,70,70,.70)")} onClick={onPain}>
+          <div style={eyebrow}>Pain</div>
+          <h2 style={h2}>{painCount}</h2>
+          <p style={muted}>problem/pain signals</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+
+        <button type="button" className={requestCount > 0 ? "vf-pulse" : ""} style={cardStyle(requestCount, "rgba(0,132,255,.75)")} onClick={onRequests}>
+          <div style={eyebrow}>Requests</div>
+          <h2 style={h2}>{requestCount}</h2>
+          <p style={muted}>routed investor/member work</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+
+        <button type="button" className={messageCount > 0 ? "vf-pulse" : ""} style={cardStyle(messageCount, "rgba(48,255,135,.70)")} onClick={onMessages}>
+          <div style={eyebrow}>Messages</div>
+          <h2 style={h2}>{messageCount}</h2>
+          <p style={muted}>reply threads</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+      </div>
+    </section>
+  );
+}
 
 export default function MemberControlledThreadsPage() {
   const [email, setEmail] = useState("");
@@ -1373,13 +1447,13 @@ export default function MemberControlledThreadsPage() {
           onMessages={() => { setLane("investor"); setActiveId(""); }}
         />
 
-<VaultForgeAlertCenter audience="member" title="Member Alerts" />
+        <VaultForgeAlertCenter audience="member" title="Member Alerts" />
           <section style={hero}>
             <div style={eyebrow}>VaultForge Member Request Command</div>
             <h1 style={h1}>Preparing member room.</h1>
             <p style={sub}>Loading browser workspace safely.</p>
           </section>
-</div>
+        </div>
       </main>
     );
   }
@@ -1408,7 +1482,7 @@ export default function MemberControlledThreadsPage() {
 
 
       <div style={wrap}>
-<section style={hero}>
+        <section style={hero}>
           <div style={eyebrow}>VaultForge Member Request Command</div>
           <div style={{ ...row, alignItems: "center" }}>
             {memberProfile?.companyLogo ? (
@@ -1443,15 +1517,18 @@ export default function MemberControlledThreadsPage() {
 
         <MemberLaneGuide />
 
-        <Section title="Member Operating Board">
+        <Section title="Member Request Cards">
           <div style={grid}>
-            <LaneCard title="New Requests" count={categorized.new.length} note="fresh routed work needing a decision" active={lane === "new"} pulse={categorized.new.length > 0} onClick={() => { setLane("new"); setActiveId(""); }} />
-            <LaneCard title="Active Work" count={categorized.active.length} note="accepted threads being worked" active={lane === "active"} pulse={categorized.active.length > 0} onClick={() => { setLane("active"); setActiveId(""); }} />
-            <LaneCard title="Deal Requests" count={categorized.deal.length} note="deal/opportunity cards" active={lane === "deal"} pulse={categorized.deal.length > 0} onClick={() => { setLane("deal"); setActiveId(""); }} />
-            <LaneCard title="Pain Requests" count={categorized.pain.length} note="problem-solving cards" active={lane === "pain"} pulse={categorized.pain.length > 0} onClick={() => { setLane("pain"); setActiveId(""); }} />
-            <LaneCard title="Execution Requests" count={categorized.execution.length} note="lender/title/contractor/operator requests" active={lane === "execution"} pulse={categorized.execution.length > 0} onClick={() => { setLane("execution"); setActiveId(""); }} />
+            <LaneCard title="New Requests" count={categorized.new.length} note="routed investor requests needing a member decision" active={lane === "new"} pulse={categorized.new.length > 0} onClick={() => { setLane("new"); setActiveId(""); }} />
+            <LaneCard title="Active Threads" count={categorized.active.length} note="accepted requests being worked" active={lane === "active"} onClick={() => { setLane("active"); setActiveId(""); }} />
+            <LaneCard title="Admin Replies" count={categorized.admin.length} note="admin messages attached to requests" active={lane === "admin"} pulse={categorized.admin.length > 0} onClick={() => { setLane("admin"); setActiveId(""); }} />
+            <LaneCard title="Investor Replies" count={categorized.investor.length} note="investor replies attached to requests" active={lane === "investor"} pulse={categorized.investor.length > 0} onClick={() => { setLane("investor"); setActiveId(""); }} />
+            <LaneCard title="Deal Opportunities" count={categorized.deal.length} note="deal/opportunity routed cards" active={lane === "deal"} onClick={() => { setLane("deal"); setActiveId(""); }} />
+            <LaneCard title="Pain Requests" count={categorized.pain.length} note="problem-solving routed cards" active={lane === "pain"} onClick={() => { setLane("pain"); setActiveId(""); }} />
+            <LaneCard title="Execution Requests" count={categorized.execution.length} note="lender/title/contractor/operator style requests" active={lane === "execution"} onClick={() => { setLane("execution"); setActiveId(""); }} />
             <LaneCard title="Saved" count={categorized.saved.length} note="saved request cards" active={lane === "saved"} onClick={() => { setLane("saved"); setActiveId(""); }} />
             <LaneCard title="Archived" count={categorized.archived.length} note="completed or hidden request cards" active={lane === "archived"} onClick={() => { setLane("archived"); setActiveId(""); }} />
+            <LaneCard title="Passed" count={categorized.passed.length} note="declined/passed requests" active={lane === "passed"} danger={categorized.passed.length > 0} onClick={() => { setLane("passed"); setActiveId(""); }} />
             <LaneCard title="Deleted" count={categorized.deleted.length} note="cleanup folder with delete forever" active={lane === "deleted"} danger={categorized.deleted.length > 0} onClick={() => { setLane("deleted"); setActiveId(""); }} />
           </div>
         </Section>
@@ -1464,7 +1541,7 @@ export default function MemberControlledThreadsPage() {
             onDeleteForever={() => deleteForever(safeId(activeThread))}
           />
         ) : (
-          <Section title={`${lane.toUpperCase()} Work Cards`}>
+          <Section title={`${lane.toUpperCase()} Cards`}>
             {openRows.length ? (
               <div style={grid}>
                 {openRows.map((thread, index) => {
@@ -1474,8 +1551,8 @@ export default function MemberControlledThreadsPage() {
               </div>
             ) : (
               <div style={panel}>
-                <h2 style={h2}>No cards in this group.</h2>
-                <p style={sub}>This group is empty right now. When admin routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
+                <h2 style={h2}>No cards in this lane.</h2>
+                <p style={sub}>This lane is empty right now. When admin routes or approves a matching investor request, the card appears here with profile, request header, message thread, and action buttons.</p>
               </div>
             )}
           </Section>
