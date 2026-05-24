@@ -807,25 +807,19 @@ function MemberTopAlertCards({
   return (
     <section style={{ ...goldPanel, marginBottom: 18 }}>
       <div style={eyebrow}>Member Alerts • {total} Active</div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 12 }}>
         <button type="button" className={newCount > 0 ? "vf-pulse" : ""} style={cardStyle(newCount, "rgba(245,197,66,.85)")} onClick={onNew}>
-          <div style={eyebrow}>New</div>
+          <div style={eyebrow}>Deals</div>
           <h2 style={h2}>{newCount}</h2>
-          <p style={muted}>routed requests</p>
-          <p style={muted}>Tap to open</p>
-        </button>
-
-        <button type="button" className={activeCount > 0 ? "vf-pulse" : ""} style={cardStyle(activeCount, "rgba(48,255,135,.70)")} onClick={onActive}>
-          <div style={eyebrow}>Active</div>
-          <h2 style={h2}>{activeCount}</h2>
-          <p style={muted}>work threads</p>
+          <p style={muted}>new routed deal/work</p>
           <p style={muted}>Tap to open</p>
         </button>
 
         <button type="button" className={dealPainCount > 0 ? "vf-pulse" : ""} style={cardStyle(dealPainCount, "rgba(255,70,70,.70)")} onClick={onSignals}>
-          <div style={eyebrow}>Deal / Pain</div>
+          <div style={eyebrow}>Pain</div>
           <h2 style={h2}>{dealPainCount}</h2>
-          <p style={muted}>signal cards</p>
+          <p style={muted}>pain/execution signals</p>
           <p style={muted}>Tap to open</p>
         </button>
 
@@ -833,6 +827,13 @@ function MemberTopAlertCards({
           <div style={eyebrow}>Messages</div>
           <h2 style={h2}>{messageCount}</h2>
           <p style={muted}>reply threads</p>
+          <p style={muted}>Tap to open</p>
+        </button>
+
+        <button type="button" className={activeCount > 0 ? "vf-pulse" : ""} style={cardStyle(activeCount, "rgba(48,255,135,.70)")} onClick={onActive}>
+          <div style={eyebrow}>Owner Replies</div>
+          <h2 style={h2}>{activeCount}</h2>
+          <p style={muted}>active work/replies</p>
           <p style={muted}>Tap to open</p>
         </button>
       </div>
@@ -1103,6 +1104,8 @@ function MemberIdentityPanel({ profile }: { profile: any }) {
   const provide = Array.isArray(profile?.canProvide) && profile.canProvide.length ? profile.canProvide.join(" • ") : "Capabilities not listed";
 
   return (
+        <MemberCreatePanel />
+
 <section style={{ ...goldPanel, marginBottom: 18 }}>
       <div style={{ ...row, alignItems: "flex-start" }}>
         {logo ? (
@@ -1312,7 +1315,7 @@ function MemberLaneGuide() {
       <div style={eyebrow}>Member Operating Map</div>
       <h2 style={h2}>Fewer rooms. Cleaner work.</h2>
       <p style={sub}>
-        Alerts, routing, intelligence, admin replies, and investor replies are no longer separate rooms to chase. They are attached inside the right Deal, Pain, or Execution card.
+        Alerts, routing, intelligence, owner replies, and investor replies stay behind the scenes inside the right Deal, Pain, or Execution card.
       </p>
 
       <div style={{ ...grid, marginTop: 18 }}>
@@ -1326,6 +1329,39 @@ function MemberLaneGuide() {
   );
 }
 
+
+
+function MemberCreatePanel() {
+  return (
+    <section style={{ ...goldPanel, marginBottom: 18 }}>
+      <div style={eyebrow}>Create</div>
+      <h2 style={h2}>One create button. Three clean lanes.</h2>
+      <p style={sub}>
+        Deal, Pain, and execution requests should start from one controlled create area instead of scattered buttons.
+      </p>
+
+      <div style={{ ...grid, marginTop: 16 }}>
+        <Link href="/deal-rooms" style={panel}>
+          <div style={eyebrow}>Create</div>
+          <h3 style={h3}>Opportunity room</h3>
+          <p style={muted}>Post or manage a deal opportunity with numbers, photos, and owner/member context.</p>
+        </Link>
+
+        <Link href="/pain" style={panel}>
+          <div style={eyebrow}>Create Pain</div>
+          <h3 style={h3}>Problem signal</h3>
+          <p style={muted}>Submit a real estate problem needing capital, operator help, title, contractor, or execution.</p>
+        </Link>
+
+        <Link href="/member-controlled-threads" style={panel}>
+          <div style={eyebrow}>Execution Request</div>
+          <h3 style={h3}>Work thread</h3>
+          <p style={muted}>Use member request cards for lender, contractor, operator, title, insurance, JV, or boots-on-ground lanes.</p>
+        </Link>
+      </div>
+    </section>
+  );
+}
 
 export default function MemberControlledThreadsPage() {
   const [email, setEmail] = useState("");
