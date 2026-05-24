@@ -3744,9 +3744,246 @@ function refreshInvestorRequests() {
   window.dispatchEvent(new Event("vaultforge-owner-message-change"));
 }
 
+
+type SmartExecutionTemplate = {
+  title: string;
+  label: string;
+  description: string;
+  fields: { label: string; name: string; placeholder: string }[];
+};
+
+function smartExecutionTemplate(title: string): SmartExecutionTemplate {
+  const key = String(title || "").toLowerCase();
+
+  if (key.includes("lender") || key.includes("hard money") || key.includes("equity")) {
+    return {
+      title,
+      label: "Funding Intelligence Request",
+      description: "AI checks capital gap, closing pressure, missing docs, lender fit, and best funding route.",
+      fields: [
+        { label: "Capital Amount Needed", name: "capital_amount", placeholder: "$ amount needed" },
+        { label: "Purchase Price", name: "purchase_price", placeholder: "$ purchase price" },
+        { label: "Repairs / Budget", name: "repairs", placeholder: "$ rehab or project budget" },
+        { label: "ARV / Value", name: "arv", placeholder: "$ ARV or current value" },
+        { label: "Close Deadline", name: "deadline", placeholder: "closing/funding deadline" },
+        { label: "Exit Strategy", name: "exit", placeholder: "flip, rental, refinance, sale, JV" },
+      ],
+    };
+  }
+
+  if (key.includes("contractor")) {
+    return {
+      title,
+      label: "Contractor / Scope Request",
+      description: "AI checks trade fit, scope risk, timeline pressure, access needs, and operator support.",
+      fields: [
+        { label: "Trade Needed", name: "trade", placeholder: "GC, roof, HVAC, plumbing, electrical..." },
+        { label: "Scope Summary", name: "scope", placeholder: "what work needs done?" },
+        { label: "Property Access", name: "access", placeholder: "vacant, occupied, lockbox, appointment" },
+        { label: "Bid Needed By", name: "bid_deadline", placeholder: "bid deadline" },
+        { label: "Start Timeline", name: "start", placeholder: "when work must start" },
+        { label: "Budget Range", name: "budget", placeholder: "$ budget range" },
+      ],
+    };
+  }
+
+  if (key.includes("title") || key.includes("closing")) {
+    return {
+      title,
+      label: "Title / Closing Request",
+      description: "AI checks legal/title blockers, close date risk, document gaps, and specialist fit.",
+      fields: [
+        { label: "Closing Date", name: "closing_date", placeholder: "target closing date" },
+        { label: "Issue Type", name: "issue", placeholder: "title, lien, probate, assignment, escrow" },
+        { label: "Transaction Type", name: "transaction", placeholder: "purchase, assignment, refinance, sale" },
+        { label: "Docs Available", name: "docs", placeholder: "contract, title report, payoff, probate docs" },
+        { label: "Seller / Buyer Status", name: "party_status", placeholder: "responsive, distressed, unknown" },
+      ],
+    };
+  }
+
+  if (key.includes("insurance")) {
+    return {
+      title,
+      label: "Insurance / Risk Request",
+      description: "AI checks coverage type, risk blockers, lender requirements, and closing impact.",
+      fields: [
+        { label: "Coverage Needed", name: "coverage", placeholder: "builder risk, vacant, landlord, liability" },
+        { label: "Property Condition", name: "condition", placeholder: "vacant, occupied, rehab, stabilized" },
+        { label: "Coverage Deadline", name: "deadline", placeholder: "when coverage is needed" },
+        { label: "Known Issues", name: "issues", placeholder: "claims, cancellation, risk, unknown" },
+        { label: "Lender Requirement", name: "lender_requirement", placeholder: "required by lender?" },
+      ],
+    };
+  }
+
+  if (key.includes("property management")) {
+    return {
+      title,
+      label: "Property Management Request",
+      description: "AI checks door count, rental type, stabilization need, and local management fit.",
+      fields: [
+        { label: "Unit / Door Count", name: "doors", placeholder: "number of units/doors" },
+        { label: "Rental Type", name: "rental_type", placeholder: "LTR, MTR, STR, multifamily, commercial" },
+        { label: "Occupancy", name: "occupancy", placeholder: "vacant, occupied, partially occupied" },
+        { label: "Management Need", name: "need", placeholder: "leasing, turns, rent collection, stabilization" },
+        { label: "Start Date", name: "start", placeholder: "when management is needed" },
+      ],
+    };
+  }
+
+  if (key.includes("operator") || key.includes("boots")) {
+    return {
+      title,
+      label: "Operator / Boots-On-Ground Request",
+      description: "AI checks local execution need, site risk, proof required, and deadline pressure.",
+      fields: [
+        { label: "Task Needed", name: "task", placeholder: "photos, walkthrough, seller meet, site check" },
+        { label: "Market / Location", name: "market", placeholder: "city/county/address if approved" },
+        { label: "Deadline", name: "deadline", placeholder: "when task must be done" },
+        { label: "Access Details", name: "access", placeholder: "lockbox, appointment, vacant, seller" },
+        { label: "Proof Needed", name: "proof", placeholder: "photos, video, report, bid, signature" },
+      ],
+    };
+  }
+
+  if (key.includes("jv")) {
+    return {
+      title,
+      label: "JV / Partner Request",
+      description: "AI checks partner role, contribution, deal stage, proof needed, and execution fit.",
+      fields: [
+        { label: "Partner Role", name: "role", placeholder: "capital, operator, buyer, contractor, credit" },
+        { label: "Deal Stage", name: "stage", placeholder: "under contract, owned, LOI, reviewing" },
+        { label: "Expected Contribution", name: "contribution", placeholder: "capital, operations, experience" },
+        { label: "Proposed Split", name: "split", placeholder: "equity/profit structure" },
+        { label: "Timeline", name: "timeline", placeholder: "deadline or project timeline" },
+      ],
+    };
+  }
+
+  if (key.includes("disposition")) {
+    return {
+      title,
+      label: "Disposition / Exit Request",
+      description: "AI checks buyer type, exit pressure, pricing gap, and best disposition lane.",
+      fields: [
+        { label: "Exit Type", name: "exit_type", placeholder: "resale, wholesale, buyer list, agent" },
+        { label: "Target Buyer", name: "target_buyer", placeholder: "cash buyer, landlord, developer" },
+        { label: "Price Target", name: "price_target", placeholder: "$ target price" },
+        { label: "Deadline", name: "deadline", placeholder: "when exit is needed" },
+        { label: "Marketing Status", name: "marketing", placeholder: "not listed, listed, private only" },
+      ],
+    };
+  }
+
+  return {
+    title,
+    label: "Execution Request",
+    description: "AI checks request type, route fit, urgency, and missing execution details.",
+    fields: [
+      { label: "Goal", name: "goal", placeholder: "what result do you need?" },
+      { label: "Urgency", name: "urgency", placeholder: "same day, 72hr, 7 day, flexible" },
+      { label: "Market", name: "market", placeholder: "city/state/county" },
+      { label: "Budget / Amount", name: "amount", placeholder: "$ if applicable" },
+      { label: "Conditions", name: "conditions", placeholder: "terms or blockers" },
+    ],
+  };
+}
+
+function SmartExecutionModal({
+  title,
+  open,
+  onClose,
+}: {
+  title: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const template = smartExecutionTemplate(title);
+  const [saved, setSaved] = useState("");
+
+  if (!open) return null;
+
+  function submitSmartForm(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const form = new FormData(event.currentTarget);
+    const details: Record<string, string> = {};
+    template.fields.forEach((field) => {
+      details[field.name] = String(form.get(field.name) || "").trim();
+    });
+
+    const row = {
+      id: `vf-smart-execution-${Date.now()}`,
+      type: "smart_execution_request",
+      title: template.title,
+      requestTitle: template.title,
+      smartLabel: template.label,
+      body: template.description,
+      message: template.description,
+      details,
+      status: "active",
+      folder: "active",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const existing = readJson<any[]>("vaultforge_designated_route_messages_v1", []);
+    writeJson("vaultforge_designated_route_messages_v1", [row, ...existing].slice(0, 120));
+
+    window.dispatchEvent(new Event("vaultforge-request-change"));
+    window.dispatchEvent(new Event("vaultforge-owner-message-change"));
+    setSaved("Smart execution request saved and routed.");
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,.78)", overflow: "auto", padding: 18 }}>
+      <div style={{ maxWidth: 860, margin: "38px auto", ...goldPanel }}>
+        <div style={{ ...row, justifyContent: "space-between" }}>
+          <div>
+            <div style={eyebrow}>Smart AI Execution Form</div>
+            <h2 style={h2}>{template.label}</h2>
+          </div>
+          <button type="button" style={btn} onClick={onClose}>Close</button>
+        </div>
+
+        <p style={sub}>{template.description}</p>
+
+        <form onSubmit={submitSmartForm} style={{ marginTop: 16 }}>
+          <div style={grid}>
+            {template.fields.map((field) => (
+              <label key={field.name} style={{ display: "grid", gap: 8 }}>
+                <span style={eyebrow}>{field.label}</span>
+                <input name={field.name} style={input} placeholder={field.placeholder} />
+              </label>
+            ))}
+          </div>
+
+          <div style={{ ...panel, marginTop: 14, borderColor: "rgba(48,255,135,.35)" }}>
+            <div style={eyebrow}>AI Use</div>
+            <p style={muted}>
+              VaultForge will use these fields to score urgency, route fit, missing info, and best next move.
+            </p>
+          </div>
+
+          <div style={{ ...row, marginTop: 16 }}>
+            <button type="submit" style={goldBtn}>Send Smart Request</button>
+            <button type="button" style={btn} onClick={onClose}>Cancel</button>
+          </div>
+
+          {saved ? <p style={{ ...sub, marginTop: 12, color: "#9effb2" }}>{saved}</p> : null}
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
 export default function InvestorRoomPage() {
   const [investor, setInvestor] = useState<any>({});
-  const [state, setState] = useState("GA");
+
+  const [smartExecutionOpen, setSmartExecutionOpen] = useState("");  const [state, setState] = useState("GA");
   const [kind, setKind] = useState<Kind>("Deal");
   const [folder, setFolder] = useState<Folder>("active");
   const [activeRoom, setActiveRoom] = useState<ActiveRoom>(null);
@@ -3881,7 +4118,9 @@ export default function InvestorRoomPage() {
     <main style={page}>
       <div style={wrap}>
         <VaultForgeAlertCenter audience="investor" title="Investor Alerts" />
-<TopNav
+<SmartExecutionModal title={smartExecutionOpen} open={Boolean(smartExecutionOpen)} onClose={() => setSmartExecutionOpen("")} />
+
+        <TopNav
           onMessageOwner={() => setMessageOwnerOpen(true)}
           isOwner={String(investor?.email || browserValue("vf_email") || browserValue("vaultforge_investor_email") || "").toLowerCase() === OWNER_EMAIL.toLowerCase()}
         />
