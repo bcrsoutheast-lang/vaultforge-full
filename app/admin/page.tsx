@@ -534,6 +534,7 @@ function Metric({ title, count, active, onClick }: { title: string; count: numbe
 }
 
 export default function AdminPage() {
+  const [requestFolder, setRequestFolder] = useState<RequestFolder>("active");
   const [members, setMembers] = useState<AdminPerson[]>([]);
   const [investors, setInvestors] = useState<AdminPerson[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
