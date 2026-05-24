@@ -713,6 +713,170 @@ function designatedRecipientForLane(lane: any) {
 }
 
 
+
+function smartExecutionFields(lane: any) {
+  const key = String(lane?.key || lane?.title || "").toLowerCase();
+
+  if (key.includes("lender") || key.includes("hard_money") || key.includes("equity")) {
+    return {
+      label: "Funding Intelligence",
+      fields: [
+        ["Loan / Capital Amount", "loan_amount", "$ amount needed"],
+        ["Purchase Price", "purchase_price", "$ purchase price"],
+        ["Rehab / Budget", "rehab_budget", "$ rehab budget"],
+        ["ARV / Value", "arv_value", "$ after repair value / value"],
+        ["Close Deadline", "close_deadline", "closing date / funding deadline"],
+        ["Exit Strategy", "exit_strategy", "flip, rental, refinance, sale, JV"],
+        ["Docs Ready", "docs_ready", "contract, scope, comps, insurance, entity docs"],
+      ],
+      ai: "AI checks spread, capital gap, missing docs, closing pressure, and best lender type.",
+    };
+  }
+
+  if (key.includes("contractor")) {
+    return {
+      label: "Contractor / Scope Intelligence",
+      fields: [
+        ["Trade Needed", "trade_needed", "GC, roof, HVAC, plumbing, electrical, flooring"],
+        ["Scope Summary", "scope_summary", "what work needs done"],
+        ["Property Access", "property_access", "vacant, occupied, lockbox, appointment"],
+        ["Bid Needed By", "bid_deadline", "bid deadline"],
+        ["Start Timeline", "start_timeline", "when work must start"],
+        ["Budget Range", "budget_range", "$ expected budget"],
+        ["Permits Needed", "permits_needed", "yes, no, unknown"],
+      ],
+      ai: "AI checks scope risk, timeline pressure, trade fit, and whether an operator is needed.",
+    };
+  }
+
+  if (key.includes("title") || key.includes("closing")) {
+    return {
+      label: "Title / Closing Intelligence",
+      fields: [
+        ["Closing Date", "closing_date", "target closing date"],
+        ["Issue Type", "issue_type", "title, probate, lien, assignment, double close, escrow"],
+        ["Transaction Type", "transaction_type", "purchase, assignment, refinance, sale"],
+        ["Entity / Buyer", "entity_buyer", "buyer/entity name if available"],
+        ["Seller Status", "seller_status", "responsive, distressed, probate, unknown"],
+        ["Docs Available", "title_docs", "contract, title report, payoff, probate docs"],
+      ],
+      ai: "AI checks closing blocker, document gap, specialist needed, and time risk.",
+    };
+  }
+
+  if (key.includes("insurance")) {
+    return {
+      label: "Insurance / Risk Intelligence",
+      fields: [
+        ["Coverage Needed", "coverage_needed", "builder risk, landlord, vacant, liability"],
+        ["Property Condition", "property_condition", "occupied, vacant, rehab, stabilized"],
+        ["Deadline", "insurance_deadline", "when coverage is needed"],
+        ["Prior Claims / Issues", "claims_issues", "known risk, claim, cancellation, unknown"],
+        ["Lender Requirement", "lender_requirement", "coverage required by lender?"],
+      ],
+      ai: "AI checks coverage urgency, closing risk, lender requirement, and risk blocker.",
+    };
+  }
+
+  if (key.includes("property_management")) {
+    return {
+      label: "Property Management Intelligence",
+      fields: [
+        ["Unit / Door Count", "door_count", "number of units/doors"],
+        ["Rental Type", "rental_type", "LTR, MTR, STR, multifamily, commercial"],
+        ["Occupancy", "occupancy", "vacant, occupied, partially occupied"],
+        ["Management Need", "management_need", "leasing, turns, rent collection, stabilization"],
+        ["Market / County", "market_county", "city/county"],
+        ["Start Date", "management_start", "when management is needed"],
+      ],
+      ai: "AI checks property type, management fit, urgency, and stabilization need.",
+    };
+  }
+
+  if (key.includes("operator") || key.includes("boots")) {
+    return {
+      label: "Operator / Boots-On-Ground Intelligence",
+      fields: [
+        ["Task Needed", "task_needed", "walkthrough, photos, meet seller, site check, verify contractor"],
+        ["Exact Location", "exact_location", "city/county or address if approved"],
+        ["Deadline", "field_deadline", "when task must be done"],
+        ["Access Details", "access_details", "lockbox, appointment, seller contact, vacant"],
+        ["Compensation / Terms", "compensation", "fee, JV, hourly, negotiable"],
+        ["Proof Needed", "proof_needed", "photos, video, report, bid, signature"],
+      ],
+      ai: "AI checks local execution need, site risk, urgency, and route fit.",
+    };
+  }
+
+  if (key.includes("jv")) {
+    return {
+      label: "JV / Partner Intelligence",
+      fields: [
+        ["Partner Role", "partner_role", "capital, operator, buyer, contractor, credit partner"],
+        ["Deal Stage", "deal_stage", "under contract, owned, lead, LOI, reviewing"],
+        ["Expected Contribution", "expected_contribution", "capital, operations, signing, experience"],
+        ["Proposed Split", "proposed_split", "equity/profit structure"],
+        ["Timeline", "jv_timeline", "deadline or project timeline"],
+        ["Proof / Experience Needed", "partner_proof", "POF, track record, local experience"],
+      ],
+      ai: "AI checks partner fit, role clarity, missing proof, and execution risk.",
+    };
+  }
+
+  if (key.includes("disposition")) {
+    return {
+      label: "Disposition / Exit Intelligence",
+      fields: [
+        ["Exit Type", "exit_type", "resale, wholesale, buyer list, agent, auction"],
+        ["Target Buyer", "target_buyer", "cash buyer, landlord, developer, owner occupant"],
+        ["Price Target", "price_target", "$ target resale/assignment price"],
+        ["Deadline", "dispo_deadline", "when exit is needed"],
+        ["Marketing Status", "marketing_status", "not listed, listed, blasted, private only"],
+        ["Showing / Access", "showing_access", "walkthrough/open access details"],
+      ],
+      ai: "AI checks exit pressure, buyer type, price gap, and disposition lane.",
+    };
+  }
+
+  return {
+    label: "Execution Intelligence",
+    fields: [
+      ["Request Goal", "request_goal", "what result do you need?"],
+      ["Urgency", "request_urgency", "same day, 72hr, 7 day, flexible"],
+      ["Market", "request_market", "city/state/county"],
+      ["Budget / Amount", "request_amount", "$ if applicable"],
+      ["Conditions", "request_conditions", "important terms or blockers"],
+      ["Best Next Move", "request_next_move", "what should happen next?"],
+    ],
+    ai: "AI checks request type, route fit, urgency, and missing execution details.",
+  };
+}
+
+function SmartExecutionFieldBlock({ lane }: { lane: any }) {
+  const smart = smartExecutionFields(lane);
+
+  return (
+    <div style={{ ...panel, marginTop: 14, borderColor: "rgba(48,255,135,.35)" }}>
+      <div style={eyebrow}>{smart.label}</div>
+      <p style={muted}>{smart.ai}</p>
+
+      <div style={{ ...grid, marginTop: 12 }}>
+        {smart.fields.map(([label, name, placeholder]) => (
+          <label key={name} style={{ display: "grid", gap: 8 }}>
+            <span style={eyebrow}>{label}</span>
+            <input
+              name={name}
+              style={input}
+              placeholder={placeholder}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function saveExecutionRequest(kind: Kind, item: any, lane: any, notes: string) {
   try {
     compactVaultForgeLocalStorage();
@@ -1270,6 +1434,8 @@ function BloombergMessageForm({
       </div>
 
       <div style={{ ...grid, marginTop: 12 }}>
+        <SmartExecutionFieldBlock lane={lane} />
+
         <label style={{ display: "grid", gap: 8 }}>
           <span style={eyebrow}>Message Type</span>
           <select style={input} value={messageType} onChange={(event) => setMessageType(event.target.value)}>
