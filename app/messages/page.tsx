@@ -32,6 +32,15 @@ type RoomSnapshot = {
   source: string;
 };
 
+type ThreadMessage = {
+  id: string;
+  from: string;
+  recipient: string;
+  message: string;
+  createdAt: string;
+  senderProfile?: Partial<ProfileSnapshot>;
+};
+
 type Thread = {
   id: string;
   lane: Lane;
@@ -43,9 +52,11 @@ type Thread = {
   folder: Folder;
   unread: boolean;
   createdAt: string;
+  updatedAt?: string;
   senderProfile?: ProfileSnapshot;
   recipientProfile?: Partial<ProfileSnapshot>;
   roomSnapshot?: RoomSnapshot;
+  messages?: ThreadMessage[];
 };
 
 const THREADS_KEY = "vf_message_center_threads_v1";
@@ -68,73 +79,15 @@ const shell: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
 const row: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" };
 const nav: React.CSSProperties = { ...row, marginBottom: 20 };
 const brand: React.CSSProperties = { color: "#ffda5e", fontWeight: 1000, fontSize: 28, letterSpacing: "-.04em" };
-
-const button: React.CSSProperties = {
-  border: "1px solid rgba(207,216,230,.18)",
-  background: "rgba(18,24,38,.92)",
-  color: "#f7f8ff",
-  borderRadius: 999,
-  padding: "12px 18px",
-  fontWeight: 900,
-  textDecoration: "none",
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const goldButton: React.CSSProperties = {
-  ...button,
-  background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
-  color: "#080a10",
-  border: "1px solid rgba(255,220,90,.65)",
-};
-
-const redButton: React.CSSProperties = {
-  ...button,
-  background: "rgba(90,10,18,.72)",
-  color: "#ffb2b2",
-  border: "1px solid rgba(255,65,65,.65)",
-};
-
-const card: React.CSSProperties = {
-  border: "1px solid rgba(207,216,230,.16)",
-  borderRadius: 26,
-  background: "rgba(15,21,34,.88)",
-  padding: 24,
-  marginBottom: 20,
-};
-
-const goldCard: React.CSSProperties = {
-  ...card,
-  borderColor: "rgba(245,197,66,.42)",
-  background: "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))",
-};
-
-const tile: React.CSSProperties = {
-  border: "1px solid rgba(245,197,66,.35)",
-  borderRadius: 22,
-  background: "rgba(17,23,36,.78)",
-  padding: 20,
-  color: "#f7f8ff",
-  textAlign: "left",
-};
-
+const button: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "rgba(18,24,38,.92)", color: "#f7f8ff", borderRadius: 999, padding: "12px 18px", fontWeight: 900, textDecoration: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
+const goldButton: React.CSSProperties = { ...button, background: "linear-gradient(135deg,#ffe16a,#f4bf37)", color: "#080a10", border: "1px solid rgba(255,220,90,.65)" };
+const redButton: React.CSSProperties = { ...button, background: "rgba(90,10,18,.72)", color: "#ffb2b2", border: "1px solid rgba(255,65,65,.65)" };
+const card: React.CSSProperties = { border: "1px solid rgba(207,216,230,.16)", borderRadius: 26, background: "rgba(15,21,34,.88)", padding: 24, marginBottom: 20 };
+const goldCard: React.CSSProperties = { ...card, borderColor: "rgba(245,197,66,.42)", background: "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))" };
+const tile: React.CSSProperties = { border: "1px solid rgba(245,197,66,.35)", borderRadius: 22, background: "rgba(17,23,36,.78)", padding: 20, color: "#f7f8ff", textAlign: "left" };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 14 };
 const threadGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(285px,1fr))", gap: 14 };
-
-const input: React.CSSProperties = {
-  width: "100%",
-  border: "1px solid rgba(207,216,230,.18)",
-  background: "rgba(18,24,38,.92)",
-  color: "#f7f8ff",
-  borderRadius: 18,
-  padding: "14px 16px",
-  fontSize: 16,
-  outline: "none",
-  boxSizing: "border-box",
-};
-
+const input: React.CSSProperties = { width: "100%", border: "1px solid rgba(207,216,230,.18)", background: "rgba(18,24,38,.92)", color: "#f7f8ff", borderRadius: 18, padding: "14px 16px", fontSize: 16, outline: "none", boxSizing: "border-box" };
 const label: React.CSSProperties = { color: "#ffda5e", textTransform: "uppercase", letterSpacing: ".34em", fontSize: 12, fontWeight: 1000, display: "block", marginBottom: 8 };
 const eyebrow: React.CSSProperties = { color: "#ffda5e", textTransform: "uppercase", letterSpacing: ".34em", fontSize: 12, fontWeight: 1000 };
 const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,82px)", lineHeight: ".92", letterSpacing: "-.08em", margin: "12px 0", fontWeight: 1000 };
@@ -146,11 +99,7 @@ const avatar: React.CSSProperties = { width: 52, height: 52, objectFit: "cover",
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+  try { return JSON.parse(raw) as T; } catch { return fallback; }
 }
 
 function clean(value: unknown, fallback = "") {
@@ -224,23 +173,32 @@ function readProfile(): ProfileSnapshot {
   return defaultProfile();
 }
 
+function normalizeThread(row: any): Thread {
+  const lane = clean(row?.lane || "General", "General") as Lane;
+  const messages = Array.isArray(row?.messages) ? row.messages : [];
+  return {
+    id: clean(row?.id || `thread-${Date.now()}`, `thread-${Date.now()}`),
+    lane,
+    from: clean(row?.from || row?.senderProfile?.email || row?.senderProfile?.name || "Not listed", "Not listed"),
+    recipient: clean(row?.recipient || "VaultForge Owner", "VaultForge Owner"),
+    title: clean(row?.title || "Untitled Message", "Untitled Message"),
+    room: clean(row?.room || row?.roomSnapshot?.title || "General", "General"),
+    message: clean(row?.message || messages[messages.length - 1]?.message || "No message entered.", "No message entered."),
+    folder: (clean(row?.folder || "active", "active") as Folder),
+    unread: Boolean(row?.unread),
+    createdAt: clean(row?.createdAt || new Date().toLocaleString(), new Date().toLocaleString()),
+    updatedAt: clean(row?.updatedAt || row?.createdAt || ""),
+    senderProfile: row?.senderProfile,
+    recipientProfile: row?.recipientProfile,
+    roomSnapshot: row?.roomSnapshot,
+    messages,
+  };
+}
+
 function parseThreads(): Thread[] {
   if (typeof window === "undefined") return [];
   const rows = parseJson<any[]>(window.localStorage.getItem(THREADS_KEY), []);
-  return Array.isArray(rows)
-    ? rows.map((row) => ({
-        ...row,
-        lane: row?.lane || "General",
-        from: clean(row?.from || row?.senderProfile?.email || row?.senderProfile?.name || "Not listed", "Not listed"),
-        recipient: clean(row?.recipient || "VaultForge Owner", "VaultForge Owner"),
-        title: clean(row?.title || "Untitled Message", "Untitled Message"),
-        room: clean(row?.room || row?.roomSnapshot?.title || "General", "General"),
-        message: clean(row?.message || "No message entered.", "No message entered."),
-        folder: row?.folder || "active",
-        unread: Boolean(row?.unread),
-        createdAt: clean(row?.createdAt || new Date().toLocaleString(), new Date().toLocaleString()),
-      }))
-    : [];
+  return Array.isArray(rows) ? rows.map(normalizeThread) : [];
 }
 
 function saveThreads(threads: Thread[]) {
@@ -304,6 +262,7 @@ export default function MessagesPage() {
   const [folder, setFolder] = useState<Folder>("active");
   const [selected, setSelected] = useState<Thread | null>(null);
   const [profile, setProfile] = useState<ProfileSnapshot>(() => defaultProfile());
+  const [syncStatus, setSyncStatus] = useState("Local fallback ready.");
 
   const [lane, setLane] = useState<Lane>("Owner");
   const [from, setFrom] = useState("");
@@ -313,13 +272,14 @@ export default function MessagesPage() {
   const [message, setMessage] = useState("");
   const [roomId, setRoomId] = useState("");
   const [roomKind, setRoomKind] = useState("");
+  const [replyMessage, setReplyMessage] = useState("");
 
   useEffect(() => {
     const forever = new Set(deletedForeverIds());
-    const loaded = parseThreads().filter((thread) => !forever.has(thread.id));
     const currentProfile = readProfile();
+    const localThreads = parseThreads().filter((thread) => !forever.has(thread.id));
 
-    setThreads(loaded);
+    setThreads(localThreads);
     setProfile(currentProfile);
 
     const params = new URLSearchParams(window.location.search);
@@ -338,7 +298,38 @@ export default function MessagesPage() {
     if (incomingRoomId) setRoomId(incomingRoomId);
     if (incomingKind) setRoomKind(incomingKind);
     setMessage("");
+
+    loadSupabaseMessages(currentProfile, localThreads);
   }, []);
+
+  async function loadSupabaseMessages(currentProfile: ProfileSnapshot, localThreads: Thread[]) {
+    try {
+      const params = new URLSearchParams();
+      if (currentProfile.email) params.set("email", currentProfile.email);
+      if (currentProfile.name) params.set("name", currentProfile.name);
+      const response = await fetch(`/api/messages/list?${params.toString()}`, { cache: "no-store" });
+      const data = await response.json();
+
+      if (!data?.ok) {
+        setSyncStatus(data?.error || "Supabase message sync unavailable. Using browser fallback.");
+        return;
+      }
+
+      const remoteThreads = Array.isArray(data.threads) ? data.threads.map(normalizeThread) : [];
+      const merged = new Map<string, Thread>();
+
+      [...remoteThreads, ...localThreads].forEach((thread) => {
+        if (!merged.has(thread.id)) merged.set(thread.id, thread);
+      });
+
+      const next = Array.from(merged.values()).filter((thread) => !deletedForeverIds().includes(thread.id));
+      setThreads(next);
+      saveThreads(next);
+      setSyncStatus("Supabase message sync active.");
+    } catch {
+      setSyncStatus("Supabase message sync unavailable. Using browser fallback.");
+    }
+  }
 
   const grouped = useMemo(() => ({
     active: threads.filter((thread) => thread.folder === "active"),
@@ -355,7 +346,29 @@ export default function MessagesPage() {
     saveThreads(next);
   }
 
-  function createThread() {
+  async function sendToSupabase(thread: Thread) {
+    try {
+      const response = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(thread),
+      });
+      const data = await response.json();
+
+      if (!data?.ok) {
+        setSyncStatus(data?.error || data?.supabase_error || "Supabase save failed. Message saved locally only.");
+        return thread;
+      }
+
+      setSyncStatus("Message saved to Supabase.");
+      return normalizeThread(data.thread || thread);
+    } catch {
+      setSyncStatus("Supabase save failed. Message saved locally only.");
+      return thread;
+    }
+  }
+
+  async function createThread() {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
     if (!cleanTitle && !cleanMessage) return;
@@ -364,6 +377,7 @@ export default function MessagesPage() {
     const finalRoom = room.trim() || "General";
     const finalTitle = cleanTitle || `Message about ${finalRoom}`;
     const finalRecipient = recipient.trim() || "VaultForge Owner";
+    const now = new Date().toLocaleString();
 
     const thread: Thread = {
       id: `thread-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -375,19 +389,66 @@ export default function MessagesPage() {
       message: cleanMessage || "No message entered.",
       folder: "active",
       unread: true,
-      createdAt: new Date().toLocaleString(),
+      createdAt: now,
+      updatedAt: now,
       senderProfile: sender,
       recipientProfile: { name: finalRecipient, email: finalRecipient.includes("@") ? finalRecipient : "", memberType: "Owner" },
       roomSnapshot: { id: roomId || finalRoom, kind: roomKind || lane, title: finalRoom, owner: finalRecipient, source: "messages" },
+      messages: [{
+        id: `msg-${Date.now()}`,
+        from: from.trim() || sender.email || sender.name || "Not listed",
+        recipient: finalRecipient,
+        message: cleanMessage || "No message entered.",
+        createdAt: now,
+        senderProfile: sender,
+      }],
     };
 
-    const next = [thread, ...threads];
+    const saved = await sendToSupabase(thread);
+    const next = [saved, ...threads.filter((item) => item.id !== saved.id)];
     persist(next);
-    setSelected(thread);
+    setSelected(saved);
     setFolder("active");
     setTitle("");
     setRoom("");
     setMessage("");
+  }
+
+  async function replyToSelected() {
+    if (!selected || !replyMessage.trim()) return;
+
+    const sender = readProfile();
+    const previousFrom = selected.from;
+    const nextRecipient = previousFrom === (sender.email || sender.name) ? selected.recipient : previousFrom;
+    const now = new Date().toLocaleString();
+
+    const entry: ThreadMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      from: sender.email || sender.name || "Not listed",
+      recipient: nextRecipient || selected.recipient,
+      message: replyMessage.trim(),
+      createdAt: now,
+      senderProfile: sender,
+    };
+
+    const updated: Thread = {
+      ...selected,
+      from: entry.from,
+      recipient: entry.recipient,
+      message: entry.message,
+      unread: true,
+      folder: "active",
+      updatedAt: now,
+      senderProfile: sender,
+      messages: [...(selected.messages || []), entry],
+    };
+
+    const saved = await sendToSupabase(updated);
+    const next = threads.map((thread) => thread.id === saved.id ? saved : thread);
+    persist(next);
+    setSelected(saved);
+    setReplyMessage("");
+    setFolder("active");
   }
 
   function moveThread(id: string, nextFolder: Folder) {
@@ -426,8 +487,9 @@ export default function MessagesPage() {
 
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Message Command</div>
-          <h1 style={h1}>Messages attached to member profiles and rooms.</h1>
-          <p style={sub}>Every new thread now carries sender profile, recipient, title, room, lane, and message context.</p>
+          <h1 style={h1}>Real room messaging with profile context.</h1>
+          <p style={sub}>Messages now attempt Supabase sync first and keep browser fallback so the page stays green.</p>
+          <p style={{ ...muted, color: syncStatus.includes("active") || syncStatus.includes("saved") ? "#7dff9b" : "#ffda5e", fontWeight: 900 }}>{syncStatus}</p>
         </section>
 
         <section style={card}>
@@ -468,7 +530,7 @@ export default function MessagesPage() {
             <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write the message here" rows={5} style={{ ...input, resize: "vertical" }} />
           </label>
 
-          <div style={{ ...row, marginTop: 16 }}><button type="button" onClick={createThread} style={goldButton}>Create Message Thread</button></div>
+          <div style={{ ...row, marginTop: 16 }}><button type="button" onClick={createThread} style={goldButton}>Send / Create Message Thread</button></div>
         </section>
 
         {selected ? (
@@ -480,7 +542,26 @@ export default function MessagesPage() {
               <div style={tile}><div style={eyebrow}>Recipient</div><p style={sub}>{selected.recipient}</p><p style={muted}>{profileDisplay(selected.recipientProfile)}</p></div>
               <div style={tile}><div style={eyebrow}>Room</div><p style={sub}>{selected.room}</p><p style={muted}>{selected.roomSnapshot?.kind || selected.lane}</p></div>
             </div>
-            <div style={{ ...tile, marginTop: 14 }}><div style={eyebrow}>Message</div><p style={sub}>{selected.message}</p><p style={muted}>Created: {selected.createdAt}</p></div>
+
+            <div style={{ ...tile, marginTop: 14 }}>
+              <div style={eyebrow}>Conversation</div>
+              {(selected.messages && selected.messages.length ? selected.messages : [{ id: "legacy", from: selected.from, recipient: selected.recipient, message: selected.message, createdAt: selected.createdAt }]).map((item) => (
+                <div key={item.id} style={{ borderTop: "1px solid rgba(207,216,230,.12)", paddingTop: 12, marginTop: 12 }}>
+                  <p style={muted}><strong style={{ color: "#f7f8ff" }}>{item.from}</strong> → {item.recipient}</p>
+                  <p style={sub}>{item.message}</p>
+                  <p style={muted}>{item.createdAt}</p>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ ...tile, marginTop: 14 }}>
+              <div style={eyebrow}>Reply</div>
+              <textarea value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} placeholder="Write reply here" rows={4} style={{ ...input, resize: "vertical" }} />
+              <div style={{ ...row, marginTop: 12 }}>
+                <button type="button" style={goldButton} onClick={replyToSelected}>Send Reply</button>
+              </div>
+            </div>
+
             <div style={{ ...row, marginTop: 16 }}>
               <button type="button" style={goldButton} onClick={() => moveThread(selected.id, "active")}>Active</button>
               <button type="button" style={button} onClick={() => markRead(selected.id, false)}>Mark Read</button>
