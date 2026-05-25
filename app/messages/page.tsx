@@ -57,6 +57,9 @@ type Thread = {
   recipientProfile?: Partial<ProfileSnapshot>;
   roomSnapshot?: RoomSnapshot;
   messages?: ThreadMessage[];
+  origin?: string;
+  senderWorkspace?: string;
+  recipientWorkspace?: string;
 };
 
 const THREADS_KEY = "vf_message_center_threads_v1";
@@ -192,6 +195,9 @@ function normalizeThread(row: any): Thread {
     recipientProfile: row?.recipientProfile,
     roomSnapshot: row?.roomSnapshot,
     messages,
+    origin: clean(row?.origin || ""),
+    senderWorkspace: clean(row?.senderWorkspace || ""),
+    recipientWorkspace: clean(row?.recipientWorkspace || ""),
   };
 }
 
@@ -272,6 +278,9 @@ export default function MessagesPage() {
   const [message, setMessage] = useState("");
   const [roomId, setRoomId] = useState("");
   const [roomKind, setRoomKind] = useState("");
+  const [origin, setOrigin] = useState("");
+  const [senderWorkspace, setSenderWorkspace] = useState("");
+  const [recipientWorkspace, setRecipientWorkspace] = useState("");
   const [replyMessage, setReplyMessage] = useState("");
 
   useEffect(() => {
@@ -289,6 +298,9 @@ export default function MessagesPage() {
     const incomingRoom = cleanParam(params.get("room"));
     const incomingKind = cleanParam(params.get("kind"));
     const incomingRoomId = cleanParam(params.get("roomId")) || cleanParam(params.get("id"));
+    const incomingOrigin = cleanParam(params.get("origin"));
+    const incomingSenderWorkspace = cleanParam(params.get("senderWorkspace"));
+    const incomingRecipientWorkspace = cleanParam(params.get("recipientWorkspace"));
 
     if (incomingKind) setLane(laneFromParam(incomingKind));
     if (incomingFrom) setFrom(incomingFrom);
@@ -297,6 +309,9 @@ export default function MessagesPage() {
     if (incomingRoom) setRoom(incomingRoom);
     if (incomingRoomId) setRoomId(incomingRoomId);
     if (incomingKind) setRoomKind(incomingKind);
+    if (incomingOrigin) setOrigin(incomingOrigin);
+    if (incomingSenderWorkspace) setSenderWorkspace(incomingSenderWorkspace);
+    if (incomingRecipientWorkspace) setRecipientWorkspace(incomingRecipientWorkspace);
     setMessage("");
 
     loadSupabaseMessages(currentProfile, localThreads);
@@ -402,6 +417,9 @@ export default function MessagesPage() {
         createdAt: now,
         senderProfile: sender,
       }],
+      origin: origin || "message-center",
+      senderWorkspace: senderWorkspace || "member",
+      recipientWorkspace: recipientWorkspace || "member-owner",
     };
 
     const saved = await sendToSupabase(thread);
@@ -488,7 +506,7 @@ export default function MessagesPage() {
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Message Command</div>
           <h1 style={h1}>Real room messaging with profile context.</h1>
-          <p style={sub}>Messages now attempt Supabase sync first and keep browser fallback so the page stays green.</p>
+          <p style={sub}>Messages now carry workspace separation: investor-room messages stay investor → owner/member, while member-command messages stay member workspace.</p>
           <p style={{ ...muted, color: syncStatus.includes("active") || syncStatus.includes("saved") ? "#7dff9b" : "#ffda5e", fontWeight: 900 }}>{syncStatus}</p>
         </section>
 
