@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type RoomKind = "deal" | "pain";
 type RoomStatus = "active" | "saved" | "archived" | "sold" | "resolved" | "deleted";
-type View = RoomStatus | "all" | "deal" | "pain" | "cleanup";
+type View = RoomStatus | "all" | "deal" | "pain" | "cleanup" | "dealSaved" | "dealArchived" | "dealDeleted" | "painSaved" | "painArchived" | "painDeleted";
 
 type Room = {
   id: string;
@@ -394,6 +394,11 @@ function roomLocation(room: Room) {
   return [room.city, room.county, room.state].filter(Boolean).join(", ") || "Location not listed";
 }
 
+function roomHref(room: Room) {
+  const encoded = encodeURIComponent(room.id);
+  return room.kind === "pain" ? `/pain-rooms/${encoded}` : `/deal-rooms/${encoded}`;
+}
+
 function Tile({
   title,
   count,
@@ -457,6 +462,9 @@ function RoomCard({
       <p style={muted}>Last updated: {room.updatedAt}</p>
 
       <div style={{ ...row, marginTop: 14 }}>
+        <Link href={roomHref(room)} style={goldBtn}>
+          Open Room
+        </Link>
         <button type="button" style={goldBtn} onClick={() => moveRoom(room.id, "active")}>
           Restore Active
         </button>
@@ -527,6 +535,12 @@ export default function MyRoomsPage() {
       resolved: rooms.filter((room) => room.status === "resolved"),
       deleted: rooms.filter((room) => room.status === "deleted"),
       cleanup: rooms.filter((room) => ["saved", "archived", "sold", "resolved", "deleted"].includes(room.status)),
+      dealSaved: rooms.filter((room) => room.kind === "deal" && room.status === "saved"),
+      dealArchived: rooms.filter((room) => room.kind === "deal" && room.status === "archived"),
+      dealDeleted: rooms.filter((room) => room.kind === "deal" && room.status === "deleted"),
+      painSaved: rooms.filter((room) => room.kind === "pain" && room.status === "saved"),
+      painArchived: rooms.filter((room) => room.kind === "pain" && room.status === "archived"),
+      painDeleted: rooms.filter((room) => room.kind === "pain" && room.status === "deleted"),
     };
   }, [rooms]);
 
@@ -539,7 +553,19 @@ export default function MyRoomsPage() {
           ? grouped.pain
           : view === "cleanup"
             ? grouped.cleanup
-            : grouped[view];
+            : view === "dealSaved"
+              ? grouped.dealSaved
+              : view === "dealArchived"
+                ? grouped.dealArchived
+                : view === "dealDeleted"
+                  ? grouped.dealDeleted
+                  : view === "painSaved"
+                    ? grouped.painSaved
+                    : view === "painArchived"
+                      ? grouped.painArchived
+                      : view === "painDeleted"
+                        ? grouped.painDeleted
+                        : grouped[view];
 
   function moveRoom(id: string, status: RoomStatus) {
     updateCanonicalRoomStatus(id, status);
@@ -570,6 +596,7 @@ export default function MyRoomsPage() {
         <nav style={nav}>
           <div style={brand}>VAULTFORGE</div>
           <Link href="/command" style={btn}>Command</Link>
+          <Link href="/member-controlled-threads" style={btn}>Request Desk</Link>
           <Link href="/messages" style={btn}>Messages</Link>
           <Link href="/network" style={btn}>Network</Link>
           <Link href="/profile" style={btn}>Profile</Link>
@@ -606,19 +633,19 @@ export default function MyRoomsPage() {
           <h2 style={h2}>One place for inactive rooms.</h2>
 
           <div style={{ ...grid, marginTop: 18 }}>
-            <Tile title="Saved" count={grouped.saved.length} note="rooms kept for follow-up" active={view === "saved"} onClick={() => setView("saved")} />
-            <Tile title="Archived" count={grouped.archived.length} note="hidden from active work but preserved" active={view === "archived"} onClick={() => setView("archived")} />
-            <Tile title="Sold / Resolved" count={grouped.sold.length + grouped.resolved.length} note="closed outcome folders" active={view === "sold" || view === "resolved"} onClick={() => setView("sold")} />
-            <Tile title="Deleted" count={grouped.deleted.length} note="trash folder with delete forever" active={view === "deleted"} danger onClick={() => setView("deleted")} />
+            <Tile title="Deal Saved" count={grouped.dealSaved.length} note="saved deal rooms" active={view === "dealSaved"} onClick={() => setView("dealSaved")} />
+            <Tile title="Deal Archived" count={grouped.dealArchived.length} note="archived deal rooms" active={view === "dealArchived"} onClick={() => setView("dealArchived")} />
+            <Tile title="Deal Deleted" count={grouped.dealDeleted.length} note="deleted deal rooms" active={view === "dealDeleted"} danger onClick={() => setView("dealDeleted")} />
+            <Tile title="Pain Saved" count={grouped.painSaved.length} note="saved pain rooms" active={view === "painSaved"} onClick={() => setView("painSaved")} />
+            <Tile title="Pain Archived" count={grouped.painArchived.length} note="archived pain rooms" active={view === "painArchived"} onClick={() => setView("painArchived")} />
+            <Tile title="Pain Deleted" count={grouped.painDeleted.length} note="deleted pain rooms" active={view === "painDeleted"} danger onClick={() => setView("painDeleted")} />
           </div>
 
           <div style={{ ...row, marginTop: 14 }}>
             <button type="button" style={view === "cleanup" ? goldBtn : btn} onClick={() => setView("cleanup")}>All Cleanup</button>
-            <button type="button" style={view === "saved" ? goldBtn : btn} onClick={() => setView("saved")}>Saved</button>
-            <button type="button" style={view === "archived" ? goldBtn : btn} onClick={() => setView("archived")}>Archived</button>
-            <button type="button" style={view === "sold" ? goldBtn : btn} onClick={() => setView("sold")}>Sold</button>
-            <button type="button" style={view === "resolved" ? goldBtn : btn} onClick={() => setView("resolved")}>Resolved</button>
-            <button type="button" style={view === "deleted" ? goldBtn : btn} onClick={() => setView("deleted")}>Deleted</button>
+            <button type="button" style={view === "saved" ? goldBtn : btn} onClick={() => setView("saved")}>All Saved</button>
+            <button type="button" style={view === "archived" ? goldBtn : btn} onClick={() => setView("archived")}>All Archived</button>
+            <button type="button" style={view === "deleted" ? goldBtn : btn} onClick={() => setView("deleted")}>All Deleted</button>
           </div>
         </section>
 
@@ -631,7 +658,19 @@ export default function MyRoomsPage() {
                 ? "Active Pain Rooms"
                 : view === "cleanup"
                   ? "Cleanup"
-                  : `${String(view).charAt(0).toUpperCase()}${String(view).slice(1)} Rooms`}
+                  : view === "dealSaved"
+                    ? "Saved Deal Rooms"
+                    : view === "dealArchived"
+                      ? "Archived Deal Rooms"
+                      : view === "dealDeleted"
+                        ? "Deleted Deal Rooms"
+                        : view === "painSaved"
+                          ? "Saved Pain Rooms"
+                          : view === "painArchived"
+                            ? "Archived Pain Rooms"
+                            : view === "painDeleted"
+                              ? "Deleted Pain Rooms"
+                              : `${String(view).charAt(0).toUpperCase()}${String(view).slice(1)} Rooms`}
           </h2>
 
           {visible.length ? (
