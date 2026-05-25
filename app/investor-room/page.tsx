@@ -295,14 +295,16 @@ export default function InvestorRoomPage() {
 
   function moveCard(id: string, status: Status) {
     saveStatus(id, status);
-    let movedKind: Kind = "deal";
-    setCards((current) => {
-      const found = current.find((card) => card.id === id);
-      movedKind = found?.kind || "deal";
-      return current.map((card) => (card.id === id ? { ...card, status } : card));
-    });
+
+    const foundCard = cards.find((card) => card.id === id);
+    const nextLane: Lane = status === "active" ? (foundCard?.kind === "pain" ? "pain" : "deals") : status;
+
+    setCards((current) =>
+      current.map((card) => (card.id === id ? { ...card, status } : card))
+    );
+
     setSelected((current) => (current && current.id === id ? { ...current, status } : current));
-    setLane(status === "active" ? (movedKind === "pain" ? "pain" : "deals") : status);
+    setLane(nextLane);
   }
 
   function deleteForever(id: string) {
