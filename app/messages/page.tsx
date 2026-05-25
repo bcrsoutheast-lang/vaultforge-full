@@ -161,6 +161,126 @@ function readProfile(): ProfileSnapshot {
   return { ...fallback, profilePhoto: backupPhoto };
 }
 
+const ROOM_LOOKUP_KEYS = [
+  "vaultforge_my_rooms_clean_v2",
+  "vaultforge_member_rooms_v1",
+  "vaultforge_command_rooms_v1",
+  "vaultforge_command_deal_rooms_v1",
+  "vaultforge_command_pain_rooms_v1",
+  "vaultforge_owned_rooms_v1",
+  "vaultforge_owned_deal_rooms_v1",
+  "vaultforge_owned_pain_rooms_v1",
+  "vaultforge_investor_deal_rooms_v1",
+  "vaultforge_investor_pain_rooms_v1",
+  "vaultforge_clean_deal_rooms",
+];
+
+function collectRows(value: any): any[] {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  const rows: any[] = [];
+
+  Object.values(value).forEach((item) => {
+    if (Array.isArray(item)) rows.push(...item);
+  });
+
+  if (value.id || value.roomId || value.title || value.name || value.subject) rows.push(value);
+  return rows;
+}
+
+function roomOwnerEmail(row: any) {
+  return clean(
+    row?.ownerEmail ||
+      row?.createdByEmail ||
+      row?.contactEmail ||
+      row?.memberEmail ||
+      row?.submittedByEmail ||
+      ""
+  );
+}
+
+function roomOwnerName(row: any) {
+  return clean(
+    row?.ownerName ||
+      row?.contactName ||
+      row?.submittedByName ||
+      row?.createdBy ||
+      row?.ownerId ||
+      "Room Owner"
+  );
+}
+
+function roomTitle(row: any) {
+  return clean(
+    row?.title ||
+      row?.dealTitle ||
+      row?.painTitle ||
+      row?.projectName ||
+      row?.propertyName ||
+      row?.subject ||
+      row?.address ||
+      ""
+  );
+}
+
+function findRoomById(roomId: string, roomName = "") {
+  if (typeof window === "undefined") return null;
+  const targetId = clean(roomId);
+  const targetName = clean(roomName).toLowerCase();
+
+  const directKeys = targetId
+    ? [`vaultforge_deal_room_${targetId}`, `vaultforge_pain_room_${targetId}`, `vaultforge_room_${targetId}`]
+    : [];
+
+  for (const key of directKeys) {
+    const direct = parseJson<any | null>(window.localStorage.getItem(key), null);
+    if (direct && typeof direct === "object") return direct;
+  }
+
+  for (const key of ROOM_LOOKUP_KEYS) {
+    const parsed = parseJson<any>(window.localStorage.getItem(key), []);
+    const rows = collectRows(parsed);
+    const found = rows.find((row) => {
+      const id = clean(row?.id || row?.roomId || row?.slug);
+      const title = roomTitle(row).toLowerCase();
+      return (targetId && id === targetId) || (targetName && title === targetName);
+    });
+
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function snapshotFromRoom(row: any, fallbackRoomId = ""): RoomSnapshot | undefined {
+  if (!row || typeof row !== "object") return undefined;
+
+  const id = clean(row.id || row.roomId || fallbackRoomId);
+  const title = roomTitle(row);
+  if (!id && !title) return undefined;
+
+  return {
+    id: id || title,
+    kind: clean(row.kind || row.roomType || row.problemType || "Room"),
+    title: title || id,
+    city: clean(row.city || row.propertyCity || row.marketCity),
+    state: clean(row.state || row.propertyState || row.marketState),
+    ownerName: roomOwnerName(row),
+    ownerEmail: roomOwnerEmail(row),
+  };
+}
+
+function recipientFromRoom(row: any, fallback = ADMIN_EMAIL) {
+  return roomOwnerEmail(row) || fallback;
+}
+
+function titleFromRoom(row: any, fallback = "") {
+  const title = roomTitle(row);
+  return title ? `Message about ${title}` : fallback;
+}
+
+
+
 function deletedForeverIds(): string[] {
   if (typeof window === "undefined") return [];
   return parseJson<string[]>(window.localStorage.getItem(DELETED_FOREVER_KEY), []);
@@ -371,12 +491,19 @@ export default function MessagesPage() {
     const incomingTitle = clean(params.get("title")) || (incomingRoom ? `Message about ${incomingRoom}` : "");
     const incomingKind = clean(params.get("kind")) || clean(params.get("lane"));
     const incomingRoomId = clean(params.get("roomId")) || clean(params.get("projectId")) || clean(params.get("id"));
+    const attachedRoom = findRoomById(incomingRoomId, incomingRoom);
+    const attachedSnapshot = snapshotFromRoom(attachedRoom, incomingRoomId);
 
-    if (incomingRecipient) setRecipient(incomingRecipient);
-    if (incomingTitle) setTitle(incomingTitle);
-    if (incomingRoom) setRoom(incomingRoom);
-    if (incomingRoomId) setRoomId(incomingRoomId);
-    setLane(laneForQuery(incomingKind, incomingRoom, incomingRecipient || incomingName));
+    const resolvedRoomTitle = attachedSnapshot?.title || incomingRoom;
+    const resolvedRecipient = attachedSnapshot?.ownerEmail || incomingRecipient;
+    const resolvedRecipientName = attachedSnapshot?.ownerName || incomingName;
+    const resolvedTitle = titleFromRoom(attachedRoom, incomingTitle || (resolvedRoomTitle ? `Message about ${resolvedRoomTitle}` : ""));
+
+    if (resolvedRecipient) setRecipient(resolvedRecipient);
+    if (resolvedTitle) setTitle(resolvedTitle);
+    if (resolvedRoomTitle) setRoom(resolvedRoomTitle);
+    if (incomingRoomId || attachedSnapshot?.id) setRoomId(incomingRoomId || attachedSnapshot?.id || "");
+    setLane(laneForQuery(incomingKind, resolvedRoomTitle, resolvedRecipient || resolvedRecipientName));
 
     const local = readLocalThreads(currentProfile);
     setThreads(local);
@@ -438,9 +565,12 @@ export default function MessagesPage() {
 
     const now = new Date().toISOString();
     const senderProfile = readProfile();
-    const finalRecipient = recipient.trim() || ADMIN_EMAIL;
-    const finalRoom = room.trim() || (lane === "Admin" ? "Admin" : "General");
-    const finalTitle = cleanTitle || `Message: ${finalRoom}`;
+    const attachedRoom = findRoomById(roomId, room);
+    const attachedSnapshot = snapshotFromRoom(attachedRoom, roomId);
+
+    const finalRecipient = recipientFromRoom(attachedRoom, recipient.trim() || ADMIN_EMAIL);
+    const finalRoom = attachedSnapshot?.title || room.trim() || (lane === "Admin" ? "Admin" : "General");
+    const finalTitle = cleanTitle || titleFromRoom(attachedRoom, `Message about ${finalRoom}`);
 
     const entry: ThreadMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -470,7 +600,7 @@ export default function MessagesPage() {
         email: finalRecipient.includes("@") ? finalRecipient : "",
         memberType: finalRecipient === ADMIN_EMAIL ? "Admin" : "Member",
       },
-      roomSnapshot: roomId || finalRoom !== "General" ? {
+      roomSnapshot: attachedSnapshot || (roomId || finalRoom !== "General" ? {
         id: roomId || finalRoom,
         kind: lane,
         title: finalRoom,
@@ -478,7 +608,7 @@ export default function MessagesPage() {
         state: "",
         ownerName: finalRecipient === ADMIN_EMAIL ? ADMIN_NAME : finalRecipient,
         ownerEmail: finalRecipient.includes("@") ? finalRecipient : "",
-      } : undefined,
+      } : undefined),
       messages: [entry],
     };
 
@@ -636,7 +766,7 @@ export default function MessagesPage() {
 
             <label>
               <span style={label}>Deal / Pain / Project Room</span>
-              <input value={room} onChange={(event) => setRoom(event.target.value)} placeholder="optional room title" style={input} />
+              <input value={room} onChange={(event) => setRoom(event.target.value)} placeholder="room title auto-fills from saved room" style={input} />
             </label>
           </div>
 
