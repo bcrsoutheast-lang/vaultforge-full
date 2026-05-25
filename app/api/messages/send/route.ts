@@ -4,7 +4,32 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function supabaseClient() {
+type MessageEntry = {
+  id: string;
+  from: string;
+  recipient: string;
+  message: string;
+  createdAt: string;
+  senderProfile?: Record<string, unknown>;
+};
+
+type ThreadPayload = {
+  id?: string;
+  lane?: string;
+  from?: string;
+  recipient?: string;
+  title?: string;
+  room?: string;
+  roomId?: string;
+  roomKind?: string;
+  message?: string;
+  senderProfile?: Record<string, unknown>;
+  recipientProfile?: Record<string, unknown>;
+  roomSnapshot?: Record<string, unknown>;
+  folder?: string;
+};
+
+function supabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -12,175 +37,158 @@ function supabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) {
-    throw new Error("Missing Supabase environment values.");
-  }
+  if (!url || !key) return null;
 
   return createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+    auth: { autoRefreshToken: false, persistSession: false },
   });
 }
 
-function clean(value: unknown) {
-  return String(value || "").trim();
+function clean(value: unknown, fallback = "") {
+  const text = String(value || "").trim();
+  return text || fallback;
 }
 
-function cleanEmail(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+function emailOnly(value: unknown) {
+  const text = clean(value).toLowerCase();
+  if (!text.includes("@")) return "";
+  return text;
 }
 
-function makeThreadKey(dealId: string, sender: string, recipient: string) {
-  const participants = [sender, recipient].map(cleanEmail).filter(Boolean).sort().join("__");
-  return participants ? `${dealId}__${participants}` : dealId;
+function makeId() {
+  return `thread-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const db = supabase();
+    const body = (await request.json().catch(() => ({}))) as ThreadPayload;
 
-    const sender =
-      cleanEmail(request.headers.get("x-vf-email")) ||
-      cleanEmail(body.sender_email);
-
-    if (!sender) {
-      return NextResponse.json({ error: "Missing sender email." }, { status: 401 });
+    const messageText = clean(body.message);
+    if (!messageText) {
+      return NextResponse.json(
+        { ok: false, error: "Message is required." },
+        { status: 400 }
+      );
     }
 
-    const dealId = clean(body.deal_id);
-    const textMessage = clean(body.body || body.message);
-    const subject = clean(body.subject) || "VaultForge Deal Inquiry";
-    const explicitRecipient = cleanEmail(body.recipient_email);
-
-    if (!dealId) {
-      return NextResponse.json({ error: "Missing deal id." }, { status: 400 });
+    if (!db) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Supabase environment variables are missing. Message stayed in browser fallback only.",
+        },
+        { status: 200 }
+      );
     }
 
-    if (!textMessage) {
-      return NextResponse.json({ error: "Message is required." }, { status: 400 });
-    }
+    const now = new Date().toISOString();
+    const id = clean(body.id) || makeId();
+    const senderEmail =
+      emailOnly(body.senderProfile?.email) || emailOnly(body.from) || "";
+    const recipientEmail =
+      emailOnly(body.recipientProfile?.email) || emailOnly(body.recipient) || "";
 
-    const supabase = supabaseClient();
+    let existing: any = null;
 
-    const { data: deal, error: dealError } = await supabase
-      .from("vf_deals")
-      .select("*")
-      .eq("id", dealId)
-      .maybeSingle();
-
-    if (dealError) {
-      return NextResponse.json({ error: dealError.message }, { status: 500 });
-    }
-
-    if (!deal) {
-      return NextResponse.json({ error: "Deal not found." }, { status: 404 });
-    }
-
-    const ownerEmail =
-      cleanEmail(deal.owner_contact_email) ||
-      cleanEmail(deal.owner_email) ||
-      cleanEmail(deal.member_email) ||
-      sender;
-
-    let recipient = explicitRecipient || ownerEmail;
-    let threadKey = clean(body.thread_key);
-
-    if (recipient === sender || !recipient) {
-      const lookupThreadKey = threadKey || dealId;
-
-      const { data: priorMessages } = await supabase
-        .from("vf_messages")
+    if (body.id) {
+      const lookup = await db
+        .from("vf_message_threads")
         .select("*")
-        .or(`thread_key.eq.${lookupThreadKey},deal_id.eq.${dealId}`)
-        .or(`sender_email.eq.${sender},recipient_email.eq.${sender}`)
-        .neq("sender_email", sender)
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .eq("id", id)
+        .maybeSingle();
 
-      recipient =
-        cleanEmail(priorMessages?.[0]?.sender_email) ||
-        cleanEmail(priorMessages?.[0]?.recipient_email) ||
-        ownerEmail;
+      if (lookup.error && lookup.error.code !== "PGRST116") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Could not read existing thread.",
+            supabase_error: lookup.error.message,
+            code: lookup.error.code,
+          },
+          { status: 200 }
+        );
+      }
+
+      existing = lookup.data || null;
     }
 
-    if (!recipient) {
-      return NextResponse.json({ error: "Missing recipient email." }, { status: 400 });
-    }
+    const oldThread = existing?.thread && typeof existing.thread === "object" ? existing.thread : {};
+    const oldMessages = Array.isArray(existing?.messages) ? existing.messages : [];
 
-    if (!threadKey) {
-      threadKey = makeThreadKey(dealId, sender, recipient);
-    }
-
-    const insert: Record<string, any> = {
-      deal_id: dealId,
-      sender_email: sender,
-      recipient_email: recipient,
-      subject,
-      body: textMessage,
-      message: textMessage,
-      status: "sent",
-      thread_key: threadKey,
-      archived: false,
+    const entry: MessageEntry = {
+      id: `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      from: clean(body.from || body.senderProfile?.email || body.senderProfile?.name, "Not listed"),
+      recipient: clean(body.recipient, "VaultForge Owner"),
+      message: messageText,
+      createdAt: now,
+      senderProfile: body.senderProfile || {},
     };
 
-    let { data, error } = await supabase
-      .from("vf_messages")
-      .insert(insert)
-      .select("*")
-      .single();
+    const thread = {
+      ...oldThread,
+      id,
+      lane: clean(body.lane || oldThread.lane || "General", "General"),
+      from: clean(body.from || oldThread.from || senderEmail, "Not listed"),
+      recipient: clean(body.recipient || oldThread.recipient || recipientEmail || "VaultForge Owner", "VaultForge Owner"),
+      title: clean(body.title || oldThread.title || "Untitled Message", "Untitled Message"),
+      room: clean(body.room || oldThread.room || "General", "General"),
+      folder: clean(body.folder || oldThread.folder || "active", "active"),
+      unread: true,
+      createdAt: clean(oldThread.createdAt || now, now),
+      updatedAt: now,
+      senderProfile: body.senderProfile || oldThread.senderProfile || {},
+      recipientProfile: body.recipientProfile || oldThread.recipientProfile || {},
+      roomSnapshot:
+        body.roomSnapshot ||
+        oldThread.roomSnapshot || {
+          id: clean(body.roomId || body.room || id, id),
+          kind: clean(body.roomKind || body.lane || "General", "General"),
+          title: clean(body.room || body.title || "General", "General"),
+          owner: clean(body.recipient || "VaultForge Owner", "VaultForge Owner"),
+          source: "supabase",
+        },
+      messages: [...oldMessages, entry],
+      message: messageText,
+    };
 
-    if (error && /column .*body.* does not exist|schema cache/i.test(error.message || "")) {
-      const fallback = { ...insert };
-      delete fallback.body;
+    const row = {
+      id,
+      thread,
+      messages: [...oldMessages, entry],
+      sender_email: senderEmail,
+      recipient_email: recipientEmail,
+      title: thread.title,
+      room: thread.room,
+      room_id: clean(body.roomId || thread.roomSnapshot?.id || ""),
+      room_kind: clean(body.roomKind || thread.roomSnapshot?.kind || thread.lane || ""),
+      folder: thread.folder,
+      unread: true,
+      updated_at: now,
+      created_at: existing?.created_at || now,
+    };
 
-      const retry = await supabase
-        .from("vf_messages")
-        .insert(fallback)
-        .select("*")
-        .single();
+    const saved = await db.from("vf_message_threads").upsert(row, { onConflict: "id" }).select("*").single();
 
-      data = retry.data;
-      error = retry.error;
+    if (saved.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Supabase rejected the message save.",
+          supabase_error: saved.error.message,
+          code: saved.error.code,
+          hint:
+            "Run supabase/vf_message_threads.sql from the zip, then resend the message.",
+        },
+        { status: 200 }
+      );
     }
 
-    if (error && /column .*message.* does not exist|schema cache/i.test(error.message || "")) {
-      const fallback = { ...insert };
-      delete fallback.message;
-
-      const retry = await supabase
-        .from("vf_messages")
-        .insert(fallback)
-        .select("*")
-        .single();
-
-      data = retry.data;
-      error = retry.error;
-    }
-
-    if (error && /column .*archived.* does not exist|schema cache/i.test(error.message || "")) {
-      const fallback = { ...insert };
-      delete fallback.archived;
-
-      const retry = await supabase
-        .from("vf_messages")
-        .insert(fallback)
-        .select("*")
-        .single();
-
-      data = retry.data;
-      error = retry.error;
-    }
-
-    if (error) {
-      return NextResponse.json({ error: error.message, details: error }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, message: data, thread_key: threadKey });
+    return NextResponse.json({ ok: true, thread: saved.data?.thread || thread });
   } catch (error: any) {
     return NextResponse.json(
-      { error: "Could not send message.", details: error?.message || String(error) },
+      { ok: false, error: error?.message || "Unknown message send error." },
       { status: 500 }
     );
   }
