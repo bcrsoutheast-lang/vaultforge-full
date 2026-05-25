@@ -7,75 +7,52 @@ type Lane = "deals" | "pain" | "saved" | "archived" | "deleted";
 type Status = "active" | "saved" | "archived" | "deleted";
 type Kind = "deal" | "pain";
 
-type InvestorCard = {
+type CanonicalInvestorRoom = {
   id: string;
+  roomId: string;
   kind: Kind;
+  roomType: Kind;
+  workspace: "investor";
+  visibility: "investor";
   title: string;
   status: Status;
+  investorStatus: Status;
   city: string;
   county: string;
   state: string;
+  address: string;
+  assetClass: string;
+  propertyType: string;
+  strategy: string[];
+  routeTo: string[];
+  askingPrice: string;
+  propertyValue: string;
+  repairs: string;
   summary: string;
-  source: string;
+  analyzer: string;
+  notes: string;
   ownerName: string;
   ownerEmail: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  photoUrl: string;
+  imageUrl: string;
+  coverPhoto: string;
+  photos: string[];
+  source: string;
+  createdAt: string;
+  updatedAt: string;
   raw: Record<string, any>;
 };
 
-const STATUS_KEY = "vf_investor_room_status_v3";
-const DELETED_FOREVER_KEY = "vf_investor_deleted_forever_v3";
+const INVESTOR_DEAL_ROOMS_KEY = "vaultforge_investor_deal_rooms_v1";
+const INVESTOR_PAIN_ROOMS_KEY = "vaultforge_investor_pain_rooms_v1";
+const STATUS_KEY = "vf_investor_room_status_v4";
+const DELETED_FOREVER_KEY = "vf_investor_deleted_forever_v4";
+
 const OWNER_NAME = "VaultForge Owner";
 const OWNER_EMAIL = "bcrsoutheast@gmail.com";
-
-const BLOCKED_KEY_PARTS = [
-  "activity",
-  "history",
-  "analytics",
-  "viewed",
-  "audit",
-  "log",
-  "deleted_forever",
-  "message",
-  "thread",
-  "profile",
-  "directory",
-  "approval",
-  "admin",
-  "status_v3",
-  "mock",
-  "session",
-  "cookie",
-  "command",
-  "member_room",
-  "member_rooms",
-  "my_rooms",
-  "my-rooms",
-  "member_controlled",
-  "member-controlled",
-];
-
-const INVESTOR_ROOM_KEYS = [
-  "vaultforge_investor_rooms_v1",
-  "vaultforge_investor_deal_rooms_v1",
-  "vaultforge_investor_pain_rooms_v1",
-  "vaultforge_public_rooms_v1",
-  "vaultforge_public_deal_rooms_v1",
-  "vaultforge_public_pain_rooms_v1",
-  "vaultforge_deal_rooms_v1",
-  "vaultforge_pain_rooms_v1",
-  "vaultforge_property_cards_v1",
-  "vaultforge_projects_v1",
-  "vaultforge_deals_v1",
-  "vaultforge_pain_requests_v1",
-  "vf_investor_rooms",
-  "vf_investor_deals",
-  "vf_investor_pain",
-  "vf_public_rooms",
-  "vf_deals",
-  "vf_pain",
-  "vf_projects",
-  "vf_property_cards",
-];
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -89,203 +66,260 @@ const page: React.CSSProperties = {
 
 const shell: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
 const nav: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 20 };
+const brand: React.CSSProperties = { color: "#ffda5e", fontWeight: 1000, fontSize: 28, letterSpacing: "-.04em" };
 const button: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "rgba(18,24,38,.92)", color: "#f7f8ff", borderRadius: 999, padding: "12px 18px", fontWeight: 900, textDecoration: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
 const goldButton: React.CSSProperties = { ...button, background: "linear-gradient(135deg,#ffe16a,#f4bf37)", color: "#080a10", border: "1px solid rgba(255,220,90,.65)" };
 const redButton: React.CSSProperties = { ...button, background: "rgba(90,10,18,.72)", color: "#ffb2b2", border: "1px solid rgba(255,65,65,.65)" };
 const card: React.CSSProperties = { border: "1px solid rgba(207,216,230,.16)", borderRadius: 26, background: "rgba(15,21,34,.88)", padding: 24, marginBottom: 20 };
 const goldCard: React.CSSProperties = { ...card, borderColor: "rgba(245,197,66,.42)", background: "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))" };
-const tile: React.CSSProperties = { border: "1px solid rgba(245,197,66,.35)", borderRadius: 22, background: "rgba(17,23,36,.78)", padding: 20, color: "#f7f8ff", textAlign: "left", cursor: "pointer" };
+const tile: React.CSSProperties = { border: "1px solid rgba(245,197,66,.35)", borderRadius: 22, background: "rgba(17,23,36,.78)", padding: 20, color: "#f7f8ff", textAlign: "left" };
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14 };
-const feedGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14 };
+const feedGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 14 };
 const row: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" };
-const brand: React.CSSProperties = { color: "#ffda5e", fontWeight: 1000, fontSize: 28, letterSpacing: "-.04em" };
 const eyebrow: React.CSSProperties = { color: "#ffda5e", textTransform: "uppercase", letterSpacing: ".34em", fontSize: 12, fontWeight: 1000 };
 const h1: React.CSSProperties = { fontSize: "clamp(42px,7vw,82px)", lineHeight: ".92", letterSpacing: "-.08em", margin: "12px 0", fontWeight: 1000 };
 const h2: React.CSSProperties = { fontSize: "clamp(30px,4.5vw,54px)", lineHeight: ".95", letterSpacing: "-.065em", margin: "10px 0", fontWeight: 1000 };
 const h3: React.CSSProperties = { fontSize: 28, lineHeight: 1, letterSpacing: "-.05em", margin: "8px 0", fontWeight: 1000 };
 const sub: React.CSSProperties = { color: "rgba(235,240,255,.78)", fontSize: 20, lineHeight: 1.45, margin: "8px 0" };
 const muted: React.CSSProperties = { color: "rgba(235,240,255,.68)", fontSize: 15, lineHeight: 1.45, margin: "6px 0" };
+const imageStyle: React.CSSProperties = { width: "100%", height: 185, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.22)", marginBottom: 12, background: "rgba(0,0,0,.35)" };
 
-function parse(raw: string | null): any {
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
+function parseJson<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 function clean(value: unknown, fallback = "") {
-  const text = String(value || "").replace(/\\n/g, " ").replace(/\s+/g, " ").trim();
+  const text = String(value || "")
+    .replace(/\\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
   return text || fallback;
 }
 
-function isBadText(value: string) {
-  const text = clean(value).toLowerCase();
+function cleanLower(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function isBadText(value: unknown) {
+  const text = cleanLower(value);
   return !text || text === "na" || text === "n/a" || text === "not listed" || text === "untitled" || text === "untitled room" || text === "undefined" || text === "null";
 }
 
-function getStatus(item: any): Status {
-  const raw = clean(item?.investorStatus || item?.workspaceStatus || item?.roomStatus || item?.folder || item?.status || "active", "active").toLowerCase();
+function list(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function readStatusOverrides(): Record<string, Status> {
+  if (typeof window === "undefined") return {};
+  return parseJson<Record<string, Status>>(window.localStorage.getItem(STATUS_KEY), {});
+}
+
+function writeStatusOverride(id: string, status: Status) {
+  if (typeof window === "undefined") return;
+  const current = readStatusOverrides();
+  current[id] = status;
+  window.localStorage.setItem(STATUS_KEY, JSON.stringify(current));
+}
+
+function deletedForeverIds(): string[] {
+  if (typeof window === "undefined") return [];
+  return parseJson<string[]>(window.localStorage.getItem(DELETED_FOREVER_KEY), []);
+}
+
+function writeDeletedForever(id: string) {
+  if (typeof window === "undefined") return;
+  const next = Array.from(new Set([...deletedForeverIds(), id]));
+  window.localStorage.setItem(DELETED_FOREVER_KEY, JSON.stringify(next));
+}
+
+function statusFrom(row: any): Status {
+  const raw = cleanLower(row?.investorStatus || row?.status || row?.folder || "active");
   if (raw.includes("delete") || raw.includes("trash")) return "deleted";
   if (raw.includes("archive")) return "archived";
   if (raw.includes("save")) return "saved";
   return "active";
 }
 
-function collectRows(data: any): any[] {
-  if (Array.isArray(data)) return data;
-  if (!data || typeof data !== "object") return [];
-  const rows: any[] = [];
-  Object.values(data).forEach((value) => { if (Array.isArray(value)) rows.push(...value); });
-  if (data.id || data.roomId || data.title || data.name || data.projectName || data.propertyName || data.painTitle || data.dealTitle || data.address || data.city || data.state || data.message || data.summary) rows.push(data);
-  return rows;
+function isValidInvestorRoom(row: any, kind: Kind) {
+  if (!row || typeof row !== "object") return false;
+
+  const id = clean(row.id || row.roomId);
+  const title = clean(row.title || row.dealTitle || row.painTitle || row.propertyName || row.address);
+  const city = clean(row.city || row.propertyCity || row.marketCity);
+  const state = clean(row.state || row.propertyState || row.marketState);
+  const summary = clean(row.summary || row.analyzer || row.notes || row.message || row.problem || row.description);
+  const hasMoney = Boolean(clean(row.askingPrice || row.asking || row.price || row.propertyValue || row.arv));
+  const hasAsset = Boolean(clean(row.assetClass || row.asset || row.propertyType || row.problemType));
+  const hasOwner = Boolean(clean(row.ownerEmail || row.createdByEmail || row.contactEmail || row.ownerName || row.contactName));
+  const correctWorkspace =
+    cleanLower(row.workspace) === "investor" ||
+    cleanLower(row.visibility) === "investor" ||
+    cleanLower(row.source) === "deal-create" ||
+    cleanLower(row.source) === "pain-intake" ||
+    cleanLower(row.kind) === kind ||
+    cleanLower(row.roomType) === kind;
+
+  if (!id) return false;
+  if (isBadText(title)) return false;
+  if (!correctWorkspace) return false;
+  if (!hasOwner) return false;
+  if (kind === "deal" && !hasMoney && !hasAsset && !summary) return false;
+  if (kind === "pain" && !summary && !hasAsset) return false;
+  if (isBadText(city) && isBadText(state) && !summary) return false;
+
+  return true;
 }
 
-function isBlockedKey(key: string) {
-  const lower = key.toLowerCase();
-  return BLOCKED_KEY_PARTS.some((part) => lower.includes(part));
+function normalizeRoom(row: any, kind: Kind, overrides: Record<string, Status>): CanonicalInvestorRoom | null {
+  const id = clean(row.id || row.roomId);
+  const title = clean(row.title || row.dealTitle || row.painTitle || row.propertyName || row.address);
+  if (!id || isBadText(title)) return null;
+
+  const photos = list(row.photos || row.photoUrls);
+  const status = overrides[id] || statusFrom(row);
+  const ownerEmail = clean(row.ownerEmail || row.createdByEmail || row.contactEmail || row.submittedByEmail || OWNER_EMAIL, OWNER_EMAIL);
+  const ownerName = clean(row.ownerName || row.contactName || row.submittedByName || "VaultForge Member", "VaultForge Member");
+
+  return {
+    id,
+    roomId: id,
+    kind,
+    roomType: kind,
+    workspace: "investor",
+    visibility: "investor",
+    title,
+    status,
+    investorStatus: status,
+    city: clean(row.city || row.propertyCity || row.marketCity),
+    county: clean(row.county || row.propertyCounty || row.marketCounty),
+    state: clean(row.state || row.propertyState || row.marketState),
+    address: clean(row.address || row.propertyAddress || row.location),
+    assetClass: clean(row.assetClass || row.asset || row.assetType || row.problemType),
+    propertyType: clean(row.propertyType || row.category),
+    strategy: list(row.strategy || row.strategies),
+    routeTo: list(row.routeTo || row.routes),
+    askingPrice: clean(row.askingPrice || row.asking || row.price),
+    propertyValue: clean(row.propertyValue || row.arv || row.value),
+    repairs: clean(row.repairs || row.repairEstimate),
+    summary: clean(row.summary || row.analyzer || row.notes || row.message || row.problem || row.description, kind === "deal" ? "Deal opportunity submitted for investor review." : "Pain/problem submitted for investor review."),
+    analyzer: clean(row.analyzer),
+    notes: clean(row.notes),
+    ownerName,
+    ownerEmail,
+    contactName: clean(row.contactName || ownerName),
+    contactEmail: clean(row.contactEmail || ownerEmail),
+    contactPhone: clean(row.contactPhone || row.phone),
+    photoUrl: clean(row.photoUrl || photos[0]),
+    imageUrl: clean(row.imageUrl || row.coverPhoto || row.photoUrl || photos[0]),
+    coverPhoto: clean(row.coverPhoto || row.imageUrl || row.photoUrl || photos[0]),
+    photos,
+    source: clean(row.source || (kind === "deal" ? INVESTOR_DEAL_ROOMS_KEY : INVESTOR_PAIN_ROOMS_KEY)),
+    createdAt: clean(row.createdAt || row.created_at),
+    updatedAt: clean(row.updatedAt || row.updated_at || row.createdAt || row.created_at || new Date().toISOString()),
+    raw: row,
+  };
 }
 
-function shouldReadKey(key: string) {
-  const lower = key.toLowerCase();
-  if (isBlockedKey(lower)) return false;
+function cleanCanonicalStore(key: string, kind: Kind, forever: Set<string>, overrides: Record<string, Status>) {
+  if (typeof window === "undefined") return [] as CanonicalInvestorRoom[];
 
-  // Investor Room is not Member Command. It only reads investor/public opportunity sources.
-  // This stops member command rooms, member profile state, messages, and my-room folders
-  // from leaking into the investor-facing opportunity board.
-  return INVESTOR_ROOM_KEYS.some((strong) => lower === strong || lower.includes(strong));
-}
+  const rows = parseJson<any[]>(window.localStorage.getItem(key), []);
+  if (!Array.isArray(rows)) return [];
 
-function kindFrom(source: string, item: any): Kind {
-  const blob = `${source} ${JSON.stringify(item || {})}`.toLowerCase();
-  if (blob.includes("pain") || blob.includes("problem") || blob.includes("distress") || blob.includes("foreclosure") || blob.includes("funding gap") || blob.includes("pressure")) return "pain";
-  return "deal";
-}
+  const validRows = rows.filter((row) => {
+    const id = clean(row?.id || row?.roomId);
+    return id && !forever.has(id) && isValidInvestorRoom(row, kind);
+  });
 
-function titleFrom(item: any, kind: Kind) {
-  return clean(item?.title || item?.propertyName || item?.projectName || item?.dealTitle || item?.painTitle || item?.name || item?.subject || item?.address || item?.propertyAddress || "") || (kind === "pain" ? "Pain Signal" : "Deal Opportunity");
-}
-
-function summaryFrom(item: any, kind: Kind) {
-  return clean(item?.summary || item?.message || item?.notes || item?.description || item?.body || item?.need || item?.problem || item?.aiSummary || item?.details || "") || (kind === "pain" ? "Pain/problem submitted for investor review." : "Deal opportunity submitted for investor review.");
-}
-
-function firstOwnerName(item: any) {
-  return clean(item?.ownerName || item?.submittedByName || item?.memberName || item?.sellerName || item?.contactName || item?.name || OWNER_NAME, OWNER_NAME);
-}
-
-function firstOwnerEmail(item: any) {
-  return clean(item?.ownerEmail || item?.submittedByEmail || item?.memberEmail || item?.sellerEmail || item?.contactEmail || item?.email || OWNER_EMAIL, OWNER_EMAIL);
-}
-
-function stableId(source: string, item: any, kind: Kind, index: number) {
-  const directId = clean(item?.id || item?.roomId || item?.slug || item?.uuid || item?.dealId || item?.painId || "");
-  if (directId) return `${kind}:${directId}`;
-  const title = titleFrom(item, kind).toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  const state = clean(item?.state || item?.propertyState || item?.marketState || "na").toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  return `${kind}:${title}:${state}:${source}:${index}`;
-}
-
-function hasRealLocation(item: any) {
-  const city = clean(item?.city || item?.propertyCity || item?.marketCity || item?.basedCity || "");
-  const state = clean(item?.state || item?.propertyState || item?.marketState || item?.market || item?.basedState || "");
-  const county = clean(item?.county || item?.propertyCounty || item?.marketCounty || "");
-  return Boolean(!isBadText(city) || !isBadText(state) || !isBadText(county));
-}
-
-function hasRealCardData(item: any, source: string, kind: Kind) {
-  if (!item || typeof item !== "object") return false;
-  if (isBlockedKey(source)) return false;
-
-  const blob = `${source} ${JSON.stringify(item)}`.toLowerCase();
-  if (blob.includes("room opened") || blob.includes("viewed room") || blob.includes("status change") || blob.includes("open details") || blob.includes("tap to open")) return false;
-
-  const title = titleFrom(item, kind);
-  const summary = summaryFrom(item, kind);
-  const strongTitle = !isBadText(title) && title !== "Deal Opportunity" && title !== "Pain Signal";
-  const strongSummary = !summary.toLowerCase().includes("review numbers, photos, routing, and next action") && !summary.toLowerCase().includes("submitted for investor review");
-  const strongFields = Boolean(item.address || item.propertyAddress || item.arv || item.asking || item.price || item.beds || item.baths || item.assetType || item.propertyType || item.problemType || item.urgency || item.timeline || item.photos || item.photoUrls);
-
-  return Boolean((strongTitle && (hasRealLocation(item) || strongSummary || strongFields)) || (hasRealLocation(item) && (strongSummary || strongFields)));
-}
-
-function loadCards(): InvestorCard[] {
-  if (typeof window === "undefined") return [];
-  const overrides = parse(window.localStorage.getItem(STATUS_KEY)) || {};
-  const forever = new Set<string>(parse(window.localStorage.getItem(DELETED_FOREVER_KEY)) || []);
-  const keys = new Set<string>();
-
-  INVESTOR_ROOM_KEYS.forEach((key) => keys.add(key));
-  for (let i = 0; i < window.localStorage.length; i += 1) {
-    const key = window.localStorage.key(i) || "";
-    if (shouldReadKey(key)) keys.add(key);
+  if (validRows.length !== rows.length) {
+    window.localStorage.setItem(key, JSON.stringify(validRows));
   }
 
-  const map = new Map<string, InvestorCard>();
-  Array.from(keys).forEach((source) => {
-    const data = parse(window.localStorage.getItem(source));
-    collectRows(data).forEach((item, index) => {
-      const kind = kindFrom(source, item);
-      if (!hasRealCardData(item, source, kind)) return;
+  return validRows
+    .map((row) => normalizeRoom(row, kind, overrides))
+    .filter((row): row is CanonicalInvestorRoom => Boolean(row));
+}
 
-      const id = stableId(source, item, kind, index);
-      if (forever.has(id)) return;
+function loadInvestorRooms() {
+  if (typeof window === "undefined") return [] as CanonicalInvestorRoom[];
 
-      const city = clean(item?.city || item?.propertyCity || item?.marketCity || "");
-      const county = clean(item?.county || item?.propertyCounty || item?.marketCounty || "");
-      const state = clean(item?.state || item?.propertyState || item?.marketState || item?.market || "");
+  const forever = new Set(deletedForeverIds());
+  const overrides = readStatusOverrides();
 
-      const card: InvestorCard = {
-        id,
-        kind,
-        title: titleFrom(item, kind),
-        status: overrides[id] || getStatus(item),
-        city,
-        county,
-        state,
-        summary: summaryFrom(item, kind),
-        source,
-        ownerName: firstOwnerName(item),
-        ownerEmail: firstOwnerEmail(item),
-        raw: item,
-      };
+  const dealRooms = cleanCanonicalStore(INVESTOR_DEAL_ROOMS_KEY, "deal", forever, overrides);
+  const painRooms = cleanCanonicalStore(INVESTOR_PAIN_ROOMS_KEY, "pain", forever, overrides);
 
-      const old = map.get(id);
-      if (!old || JSON.stringify(old.raw).length < JSON.stringify(card.raw).length) map.set(id, card);
-    });
+  const map = new Map<string, CanonicalInvestorRoom>();
+  [...dealRooms, ...painRooms].forEach((room) => {
+    const old = map.get(room.id);
+    if (!old || old.updatedAt < room.updatedAt) map.set(room.id, room);
   });
 
-  return Array.from(map.values()).sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
-    return a.title.localeCompare(b.title);
+  return Array.from(map.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function saveRoomBack(room: CanonicalInvestorRoom) {
+  if (typeof window === "undefined") return;
+
+  const key = room.kind === "deal" ? INVESTOR_DEAL_ROOMS_KEY : INVESTOR_PAIN_ROOMS_KEY;
+  const rows = parseJson<any[]>(window.localStorage.getItem(key), []);
+  const next = rows.map((row) => {
+    const id = clean(row?.id || row?.roomId);
+    if (id !== room.id) return row;
+    return { ...row, status: room.status, investorStatus: room.status, updatedAt: new Date().toISOString() };
   });
+
+  window.localStorage.setItem(key, JSON.stringify(next));
 }
 
-function saveStatus(id: string, status: Status) {
-  const overrides = parse(window.localStorage.getItem(STATUS_KEY)) || {};
-  overrides[id] = status;
-  window.localStorage.setItem(STATUS_KEY, JSON.stringify(overrides));
-}
+function messageHref(room?: CanonicalInvestorRoom | null) {
+  if (!room) return "/messages";
 
-function saveDeletedForever(id: string) {
-  const current = parse(window.localStorage.getItem(DELETED_FOREVER_KEY)) || [];
-  window.localStorage.setItem(DELETED_FOREVER_KEY, JSON.stringify(Array.from(new Set([...current, id]))));
-}
-
-function messageHref(card?: InvestorCard | null) {
-  if (!card) return "/messages";
   const params = new URLSearchParams();
-  params.set("kind", card.kind);
-  params.set("room", card.title);
-  params.set("title", card.title);
-  params.set("recipient", card.ownerEmail || card.ownerName || OWNER_EMAIL);
-  params.set("owner", card.ownerName || OWNER_NAME);
-  params.set("roomId", card.id);
+  params.set("kind", room.kind);
+  params.set("room", room.title);
+  params.set("title", room.title);
+  params.set("recipient", room.ownerEmail || OWNER_EMAIL);
+  params.set("owner", room.ownerName || OWNER_NAME);
+  params.set("roomId", room.id);
   params.set("origin", "investor-room");
   params.set("senderWorkspace", "investor");
   params.set("recipientWorkspace", "member-owner");
+
   return `/messages?${params.toString()}`;
 }
 
+function moneyLine(room: CanonicalInvestorRoom) {
+  const ask = room.askingPrice ? `${room.askingPrice} Asking` : "";
+  const value = room.propertyValue ? `${room.propertyValue} Value/ARV` : "";
+  return [ask, value].filter(Boolean).join(" • ");
+}
+
+function locationLine(room: CanonicalInvestorRoom) {
+  return [room.city, room.county, room.state].filter(Boolean).join(", ") || "Location not listed";
+}
+
+function assetLine(room: CanonicalInvestorRoom) {
+  return [room.assetClass, room.propertyType, ...room.strategy].filter(Boolean).join(" • ") || "Details not listed";
+}
+
 function StatCard({ label, count, help, active, onClick }: { label: string; count: number; help: string; active: boolean; onClick: () => void }) {
-  return <button type="button" onClick={onClick} style={{ ...tile, borderColor: active ? "rgba(245,197,66,.75)" : "rgba(245,197,66,.35)" }}><div style={eyebrow}>{label}</div><div style={{ color: "#1e90ff", fontSize: 44, fontWeight: 1000, margin: "8px 0" }}>{count}</div><p style={muted}>{help}</p><p style={{ ...muted, color: "#ffda5e", fontWeight: 950 }}>Tap to open</p></button>;
+  return (
+    <button type="button" onClick={onClick} style={{ ...tile, cursor: "pointer", minHeight: 150, borderColor: active ? "rgba(245,197,66,.75)" : "rgba(245,197,66,.35)" }}>
+      <div style={eyebrow}>{label}</div>
+      <div style={{ color: "#1e90ff", fontSize: 44, fontWeight: 1000, margin: "8px 0" }}>{count}</div>
+      <p style={muted}>{help}</p>
+      <p style={{ ...muted, color: "#ffda5e", fontWeight: 950 }}>Tap to open</p>
+    </button>
+  );
 }
 
 function InfoLine({ label, value }: { label: string; value: string }) {
@@ -294,41 +328,68 @@ function InfoLine({ label, value }: { label: string; value: string }) {
 }
 
 export default function InvestorRoomPage() {
-  const [cards, setCards] = useState<InvestorCard[]>([]);
+  const [rooms, setRooms] = useState<CanonicalInvestorRoom[]>([]);
   const [lane, setLane] = useState<Lane>("deals");
-  const [selected, setSelected] = useState<InvestorCard | null>(null);
+  const [selected, setSelected] = useState<CanonicalInvestorRoom | null>(null);
 
-  useEffect(() => { setCards(loadCards()); }, []);
+  useEffect(() => {
+    setRooms(loadInvestorRooms());
+
+    function refresh() {
+      setRooms(loadInvestorRooms());
+    }
+
+    window.addEventListener("storage", refresh);
+    window.addEventListener("vaultforge-investor-room-change", refresh);
+    window.addEventListener("vaultforge-deal-change", refresh);
+    window.addEventListener("vaultforge-pain-change", refresh);
+
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("vaultforge-investor-room-change", refresh);
+      window.removeEventListener("vaultforge-deal-change", refresh);
+      window.removeEventListener("vaultforge-pain-change", refresh);
+    };
+  }, []);
 
   const grouped = useMemo(() => ({
-    deals: cards.filter((card) => card.kind === "deal" && card.status === "active"),
-    pain: cards.filter((card) => card.kind === "pain" && card.status === "active"),
-    saved: cards.filter((card) => card.status === "saved"),
-    archived: cards.filter((card) => card.status === "archived"),
-    deleted: cards.filter((card) => card.status === "deleted"),
-  }), [cards]);
+    deals: rooms.filter((room) => room.kind === "deal" && room.status === "active"),
+    pain: rooms.filter((room) => room.kind === "pain" && room.status === "active"),
+    saved: rooms.filter((room) => room.status === "saved"),
+    archived: rooms.filter((room) => room.status === "archived"),
+    deleted: rooms.filter((room) => room.status === "deleted"),
+  }), [rooms]);
 
   const visible = grouped[lane];
 
-  function refreshCards() { setCards(loadCards()); setSelected(null); }
+  function refreshRooms() {
+    setSelected(null);
+    setRooms(loadInvestorRooms());
+  }
 
-  function moveCard(id: string, status: Status) {
-    saveStatus(id, status);
+  function moveRoom(id: string, status: Status) {
+    writeStatusOverride(id, status);
 
-    const foundCard = cards.find((card) => card.id === id);
-    const nextLane: Lane = status === "active" ? (foundCard?.kind === "pain" ? "pain" : "deals") : status;
+    const currentRoom = rooms.find((room) => room.id === id);
+    const nextLane: Lane = status === "active" ? (currentRoom?.kind === "pain" ? "pain" : "deals") : status;
 
-    setCards((current) =>
-      current.map((card) => (card.id === id ? { ...card, status } : card))
-    );
+    const next = rooms.map((room) => {
+      if (room.id !== id) return room;
+      const updated = { ...room, status, investorStatus: status, updatedAt: new Date().toISOString() };
+      saveRoomBack(updated);
+      return updated;
+    });
 
-    setSelected((current) => (current && current.id === id ? { ...current, status } : current));
+    setRooms(next);
+    setSelected((current) => current && current.id === id ? { ...current, status, investorStatus: status } : current);
     setLane(nextLane);
   }
 
   function deleteForever(id: string) {
-    saveDeletedForever(id);
-    setCards((current) => current.filter((card) => card.id !== id));
+    writeDeletedForever(id);
+
+    const next = rooms.filter((room) => room.id !== id);
+    setRooms(next);
     setSelected(null);
     setLane("deleted");
   }
@@ -340,28 +401,31 @@ export default function InvestorRoomPage() {
           <div style={brand}>VAULTFORGE</div>
           <Link href="/" style={button}>Home</Link>
           <Link href="/investor-room" style={goldButton}>Investor Room</Link>
+          <Link href="/deal-create" style={button}>Create Deal</Link>
           <Link href="/messages" style={button}>Messages</Link>
         </nav>
 
         <section style={card}>
           <div style={eyebrow}>Investor Alerts</div>
           <div style={{ ...grid, marginTop: 16 }}>
-            <StatCard label="Deals" count={grouped.deals.length} help="active deal opportunities" active={lane === "deals"} onClick={() => setLane("deals")} />
-            <StatCard label="Pain" count={grouped.pain.length} help="active pain/problem cards" active={lane === "pain"} onClick={() => setLane("pain")} />
-            <StatCard label="Saved" count={grouped.saved.length} help="saved deal and pain cards" active={lane === "saved"} onClick={() => setLane("saved")} />
-            <StatCard label="Archived" count={grouped.archived.length} help="hidden but preserved cards" active={lane === "archived"} onClick={() => setLane("archived")} />
+            <StatCard label="Deals" count={grouped.deals.length} help="active investor deal rooms" active={lane === "deals"} onClick={() => setLane("deals")} />
+            <StatCard label="Pain" count={grouped.pain.length} help="active investor pain rooms" active={lane === "pain"} onClick={() => setLane("pain")} />
+            <StatCard label="Saved" count={grouped.saved.length} help="saved investor rooms" active={lane === "saved"} onClick={() => setLane("saved")} />
+            <StatCard label="Archived" count={grouped.archived.length} help="hidden but preserved" active={lane === "archived"} onClick={() => setLane("archived")} />
             <StatCard label="Deleted" count={grouped.deleted.length} help="restore or delete forever" active={lane === "deleted"} onClick={() => setLane("deleted")} />
           </div>
         </section>
 
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Investor Command Room</div>
-          <h1 style={h1}>Signals → Requests → Threads → Execution.</h1>
-          <p style={sub}>Investor Room is now separated from Member Command. It only reads investor/public opportunity records and will not merge member command rooms into this board.</p>
+          <h1 style={h1}>Canonical investor opportunities only.</h1>
+          <p style={sub}>
+            This page reads only investor-facing canonical Deal and Pain records. Invalid Untitled Room / NA rows are automatically ignored and removed from the investor stores.
+          </p>
           <div style={{ ...row, marginTop: 18 }}>
             <button type="button" style={goldButton} onClick={() => setLane("deals")}>Open Deal Signals</button>
             <button type="button" style={button} onClick={() => setLane("pain")}>Open Pain Signals</button>
-            <button type="button" style={button} onClick={refreshCards}>Refresh Cards</button>
+            <button type="button" style={button} onClick={refreshRooms}>Refresh Canonical Rooms</button>
             <Link href={messageHref(selected)} style={goldButton}>Message Owner</Link>
           </div>
         </section>
@@ -370,36 +434,48 @@ export default function InvestorRoomPage() {
           <section style={card}>
             <div style={eyebrow}>{selected.kind} detail • {selected.status}</div>
             <h2 style={h2}>{selected.title}</h2>
-            <p style={sub}>{[selected.city, selected.county, selected.state].filter(Boolean).join(", ") || "Location not listed"}</p>
-            <p style={sub}>{selected.summary}</p>
+            <p style={sub}>{locationLine(selected)}</p>
+            <p style={sub}>{assetLine(selected)}</p>
+            {moneyLine(selected) ? <p style={{ ...sub, color: "#ffda5e", fontWeight: 900 }}>{moneyLine(selected)}</p> : null}
 
             <div style={{ ...feedGrid, marginTop: 14 }}>
               <div style={tile}>
-                <div style={eyebrow}>Location</div>
+                <div style={eyebrow}>Room Snapshot</div>
+                {(selected.imageUrl || selected.coverPhoto || selected.photoUrl) ? (
+                  <img src={selected.imageUrl || selected.coverPhoto || selected.photoUrl} alt={selected.title} style={imageStyle} />
+                ) : null}
                 <InfoLine label="City" value={selected.city} />
                 <InfoLine label="County" value={selected.county} />
                 <InfoLine label="State" value={selected.state} />
+                <InfoLine label="Address" value={selected.address} />
               </div>
+
               <div style={tile}>
-                <div style={eyebrow}>Owner / Source</div>
+                <div style={eyebrow}>Owner / Routing</div>
                 <InfoLine label="Owner" value={selected.ownerName} />
-                <InfoLine label="Email" value={selected.ownerEmail} />
-                <InfoLine label="Storage" value={selected.source} />
-                <InfoLine label="Kind" value={selected.kind} />
-                <InfoLine label="Status" value={selected.status} />
+                <InfoLine label="Owner Email" value={selected.ownerEmail} />
+                <InfoLine label="Contact" value={selected.contactName} />
+                <InfoLine label="Contact Email" value={selected.contactEmail} />
+                <InfoLine label="Contact Phone" value={selected.contactPhone} />
+                <InfoLine label="Route To" value={selected.routeTo.join(", ")} />
               </div>
             </div>
 
+            <div style={{ ...tile, marginTop: 14 }}>
+              <div style={eyebrow}>Intelligence Summary</div>
+              <p style={sub}>{selected.summary}</p>
+            </div>
+
             <details style={{ marginTop: 16 }}>
-              <summary style={{ ...muted, color: "#ffda5e", cursor: "pointer", fontWeight: 900 }}>Show full stored card data</summary>
+              <summary style={{ ...muted, color: "#ffda5e", cursor: "pointer", fontWeight: 900 }}>Show canonical stored data</summary>
               <pre style={{ whiteSpace: "pre-wrap", overflowX: "auto", background: "rgba(0,0,0,.35)", border: "1px solid rgba(207,216,230,.14)", borderRadius: 16, padding: 16, marginTop: 12, color: "rgba(235,240,255,.82)", fontSize: 12 }}>{JSON.stringify(selected.raw, null, 2)}</pre>
             </details>
 
             <div style={{ ...row, marginTop: 18 }}>
-              <button type="button" style={goldButton} onClick={() => moveCard(selected.id, "active")}>Active / Restore</button>
-              <button type="button" style={button} onClick={() => moveCard(selected.id, "saved")}>Save</button>
-              <button type="button" style={button} onClick={() => moveCard(selected.id, "archived")}>Archive</button>
-              <button type="button" style={redButton} onClick={() => moveCard(selected.id, "deleted")}>Delete</button>
+              <button type="button" style={goldButton} onClick={() => moveRoom(selected.id, "active")}>Active / Restore</button>
+              <button type="button" style={button} onClick={() => moveRoom(selected.id, "saved")}>Save</button>
+              <button type="button" style={button} onClick={() => moveRoom(selected.id, "archived")}>Archive</button>
+              <button type="button" style={redButton} onClick={() => moveRoom(selected.id, "deleted")}>Delete</button>
               {selected.status === "deleted" ? <button type="button" style={redButton} onClick={() => deleteForever(selected.id)}>Delete Forever</button> : null}
               <Link href={messageHref(selected)} style={goldButton}>Message Owner</Link>
               <button type="button" style={button} onClick={() => setSelected(null)}>Close</button>
@@ -409,24 +485,38 @@ export default function InvestorRoomPage() {
 
         <section style={card}>
           <div style={eyebrow}>{lane}</div>
-          <h2 style={h2}>{lane === "deals" ? "Deal Opportunity Cards" : lane === "pain" ? "Pain Intake Cards" : `${lane.charAt(0).toUpperCase()}${lane.slice(1)} Cards`}</h2>
+          <h2 style={h2}>
+            {lane === "deals"
+              ? "Investor Deal Opportunities"
+              : lane === "pain"
+                ? "Investor Pain Opportunities"
+                : `${lane.charAt(0).toUpperCase()}${lane.slice(1)} Investor Rooms`}
+          </h2>
 
           {visible.length ? (
             <div style={feedGrid}>
-              {visible.map((item) => (
-                <button type="button" key={item.id} onClick={() => setSelected(item)} style={{ ...tile, minHeight: 230, borderColor: item.status === "deleted" ? "rgba(255,65,65,.58)" : "rgba(245,197,66,.38)" }}>
-                  <div style={eyebrow}>{item.kind} • {item.state || "State not listed"} • {item.status}</div>
-                  <h3 style={{ ...h3, color: "#1e90ff" }}>{item.title}</h3>
-                  <p style={muted}>{[item.city, item.county, item.state].filter(Boolean).join(", ") || "Location not listed"}</p>
-                  <p style={muted}>{item.summary}</p>
+              {visible.map((room) => (
+                <button key={room.id} type="button" onClick={() => setSelected(room)} style={{ ...tile, cursor: "pointer", minHeight: 270, borderColor: room.status === "deleted" ? "rgba(255,65,65,.58)" : "rgba(245,197,66,.38)" }}>
+                  {(room.imageUrl || room.coverPhoto || room.photoUrl) ? (
+                    <img src={room.imageUrl || room.coverPhoto || room.photoUrl} alt={room.title} style={imageStyle} />
+                  ) : null}
+                  <div style={eyebrow}>{room.kind} • {room.state || "State not listed"} • {room.status}</div>
+                  <h3 style={{ ...h3, color: "#1e90ff" }}>{room.title}</h3>
+                  <p style={muted}>{locationLine(room)}</p>
+                  <p style={muted}>{assetLine(room)}</p>
+                  {moneyLine(room) ? <p style={{ ...muted, color: "#ffda5e", fontWeight: 900 }}>{moneyLine(room)}</p> : null}
+                  <p style={muted}>{room.summary}</p>
                   <p style={{ ...muted, color: "#ffda5e", fontWeight: 950 }}>Open Details</p>
                 </button>
               ))}
             </div>
           ) : (
             <div style={tile}>
-              <h3 style={h3}>No real cards in this folder.</h3>
-              <p style={sub}>Empty placeholder rows are now hidden. Create or submit a real Deal/Pain room with title and location/details and it will show here.</p>
+              <h3 style={h3}>No canonical investor rooms in this folder.</h3>
+              <p style={sub}>Create a real Deal/Pain opportunity with title, owner, and details. Old Untitled Room / NA rows are intentionally ignored.</p>
+              <div style={{ ...row, marginTop: 14 }}>
+                <Link href="/deal-create" style={goldButton}>Create Deal</Link>
+              </div>
             </div>
           )}
         </section>
