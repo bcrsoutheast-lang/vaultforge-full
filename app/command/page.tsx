@@ -43,6 +43,10 @@ type CanonicalMemberRoom = {
   createdByEmail: string;
   source: string;
   updatedAt: string;
+  imageUrl: string;
+  photoUrl: string;
+  coverPhoto: string;
+  photos: string[];
   raw: Record<string, any>;
 };
 
@@ -105,6 +109,7 @@ const h3: React.CSSProperties = { fontSize: 30, lineHeight: 1, letterSpacing: "-
 const sub: React.CSSProperties = { color: "rgba(235,240,255,.78)", fontSize: 20, lineHeight: 1.45, margin: "8px 0" };
 const muted: React.CSSProperties = { color: "rgba(235,240,255,.68)", fontSize: 15, lineHeight: 1.45, margin: "6px 0" };
 const avatar: React.CSSProperties = { width: 64, height: 64, objectFit: "cover", borderRadius: 999, border: "1px solid rgba(245,197,66,.45)", background: "rgba(0,0,0,.35)" };
+const imageStyle: React.CSSProperties = { width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.22)", marginBottom: 12, background: "rgba(0,0,0,.35)" };
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -137,6 +142,10 @@ function list(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean);
   if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
   return [];
+}
+
+function listText(value: unknown) {
+  return list(value).join(" • ");
 }
 
 function currentEmail() {
@@ -278,6 +287,10 @@ function normalizeMemberRoom(row: any, overrides: Record<string, RoomStatus>): C
     createdByEmail: clean(row.createdByEmail || row.ownerEmail),
     source: clean(row.source || MEMBER_ROOMS_KEY),
     updatedAt: clean(row.updatedAt || row.updated_at || row.createdAt || row.created_at || new Date().toISOString()),
+    imageUrl: clean(row.imageUrl || row.coverPhoto || row.photoUrl || row.photos?.[0] || row.photoUrls?.[0]),
+    photoUrl: clean(row.photoUrl || row.imageUrl || row.coverPhoto || row.photos?.[0] || row.photoUrls?.[0]),
+    coverPhoto: clean(row.coverPhoto || row.imageUrl || row.photoUrl || row.photos?.[0] || row.photoUrls?.[0]),
+    photos: list(row.photos || row.photoUrls),
     raw: row,
   };
 }
@@ -444,6 +457,26 @@ function assetLine(room: CanonicalMemberRoom) {
   return [room.assetClass, room.propertyType, ...room.strategy].filter(Boolean).join(" • ") || "Details not listed";
 }
 
+function roomHref(room: CanonicalMemberRoom) {
+  const encoded = encodeURIComponent(room.id);
+  return room.kind === "pain" ? `/pain-rooms/${encoded}` : `/deal-rooms/${encoded}`;
+}
+
+function roomImage(room: CanonicalMemberRoom) {
+  return room.imageUrl || room.coverPhoto || room.photoUrl || room.photos[0] || "";
+}
+
+function shortRoomMessage(room: CanonicalMemberRoom) {
+  const location = locationLine(room);
+  const asset = assetLine(room);
+  const base = room.kind === "deal" ? "Deal room" : "Pain room";
+  const summary = room.summary || room.message;
+
+  if (summary && summary.length <= 240) return summary;
+
+  return `${base}: ${room.title}. ${asset}. ${location}. Open the room for photos, numbers, notes, routing, messages, and next steps.`;
+}
+
 function profileLine(profile: ProfileSnapshot) {
   return [profile.email, profile.memberType, profile.basedState].filter(Boolean).join(" • ");
 }
@@ -476,6 +509,7 @@ function MessageCard({ thread }: { thread: CanonicalMessage }) {
 function RoomCard({ room, moveRoom, deleteForever }: { room: CanonicalMemberRoom; moveRoom: (id: string, status: RoomStatus) => void; deleteForever: (id: string) => void }) {
   return (
     <article style={{ ...panel, borderColor: room.status === "deleted" ? "rgba(255,65,65,.56)" : "rgba(245,197,66,.42)" }}>
+      {roomImage(room) ? <img src={roomImage(room)} alt={room.title} style={imageStyle} /> : null}
       <div style={eyebrow}>{room.kind === "deal" ? "Deal Room" : "Pain Room"} • {room.status}</div>
       <h3 style={h3}>{room.title}</h3>
       <p style={sub}>{locationLine(room)}</p>
@@ -488,10 +522,11 @@ function RoomCard({ room, moveRoom, deleteForever }: { room: CanonicalMemberRoom
         </div>
       </div>
 
-      <p style={muted}>{room.message}</p>
+      <p style={muted}>{shortRoomMessage(room)}</p>
       <p style={muted}>Last updated: {room.updatedAt}</p>
 
       <div style={{ ...row, marginTop: 14 }}>
+        <Link href={roomHref(room)} style={goldBtn}>Open Room</Link>
         <button type="button" style={goldBtn} onClick={() => moveRoom(room.id, "active")}>Restore Active</button>
         <button type="button" style={btn} onClick={() => moveRoom(room.id, "saved")}>Save</button>
         <button type="button" style={btn} onClick={() => moveRoom(room.id, "archived")}>Archive</button>
@@ -590,7 +625,7 @@ export default function CommandPage() {
             <AlertTile label="Deals" count={grouped.deal.length} note="canonical member deal rooms" active={view === "deal"} onClick={() => setView("deal")} />
             <AlertTile label="Pain" count={grouped.pain.length} note="canonical member pain rooms" active={view === "pain"} onClick={() => setView("pain")} />
             <AlertTile label="Messages" count={activeMessages.length} note={`${unreadMessages.length} unread canonical thread(s)`} active={view === "messages"} onClick={() => setView("messages")} />
-            <AlertTile label="Saved" count={grouped.saved.length} note="saved member rooms" active={view === "saved"} onClick={() => setView("saved")} />
+            <AlertTile label="Saved" count={grouped.saved.length} note="saved projects and rooms" active={view === "saved"} onClick={() => setView("saved")} />
             <AlertTile label="Archived" count={grouped.archived.length} note="hidden but preserved" active={view === "archived"} onClick={() => setView("archived")} />
             <AlertTile label="Deleted" count={grouped.deleted.length} note="restore or delete forever" active={view === "deleted"} onClick={() => setView("deleted")} />
           </div>
@@ -600,7 +635,7 @@ export default function CommandPage() {
           <div style={eyebrow}>VaultForge Member Command</div>
           <h1 style={h1}>Canonical member workspace only.</h1>
           <p style={sub}>
-            Member Command now ignores legacy room/message pollution. It reads only canonical member-owned rooms and canonical member message threads.
+            Member Command shows clean member rooms, saved projects, and room messages. Open a saved deal or pain room to see full project details, photos, messages, and next steps.
           </p>
           <div style={{ ...row, marginTop: 16 }}>
             <button type="button" style={goldBtn} onClick={() => setView("active")}>Open Active Rooms</button>
@@ -625,7 +660,7 @@ export default function CommandPage() {
 
         <section style={card}>
           <div style={eyebrow}>Room Folders</div>
-          <h2 style={h2}>Canonical Deal, Pain, and Message cards.</h2>
+          <h2 style={h2}>Deal, Pain, and Message cards.</h2>
           <div style={{ ...row, marginTop: 14 }}>
             <button type="button" style={view === "active" ? goldBtn : btn} onClick={() => setView("active")}>Active ({grouped.active.length})</button>
             <button type="button" style={view === "deal" ? goldBtn : btn} onClick={() => setView("deal")}>Deals ({grouped.deal.length})</button>
