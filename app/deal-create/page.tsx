@@ -73,6 +73,10 @@ type DealRoom = {
 
 const STORE_KEY = "vaultforge_clean_deal_rooms";
 const STATE_KEY = "vaultforge_deal_room_state_v2";
+const INVESTOR_DEAL_ROOMS_KEY = "vaultforge_investor_deal_rooms_v1";
+const MEMBER_COMMAND_ROOMS_KEY = "vaultforge_member_rooms_v1";
+const COMMAND_ROOMS_KEY = "vaultforge_command_rooms_v1";
+const CANONICAL_ROOMS_KEY = "vaultforge_rooms_v1";
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
 const ASSETS = ["Residential", "Commercial", "Land"];
 const RES_TYPES = ["Single Family", "Duplex", "Triplex", "Quad", "Townhome", "Condo", "Mobile Home", "Small Multifamily", "Apartment"];
@@ -109,6 +113,13 @@ function countyFromCity(city: string) { return CITY_COUNTY[city.trim().toLowerCa
 function moneyNumber(value: unknown) { const n = Number(String(value || "").replace(/[^0-9.-]/g, "")); return Number.isFinite(n) ? n : 0; }
 function locationFor(room: Partial<DealRoom>) { return [safeText(room.city), safeText(room.county), safeText(room.state)].filter(Boolean).join(", ") || "Market not listed"; }
 
+function upsertById<T extends { id?: string; roomId?: string }>(key: string, row: T) {
+  if (!browserReady()) return false;
+  const id = safeText(row.id || row.roomId);
+  const existing = parseJson<any[]>(localStorage.getItem(key), []);
+  const next = [row, ...existing.filter((item) => safeText(item?.id || item?.roomId) !== id)];
+  return writeJson(key, next);
+}
 
 function currentOwner() {
   if (!browserReady()) {
@@ -183,26 +194,154 @@ function dealIntel(room: DealRoom) {
   return { score, risk, urgency, spread, signal, analyzer };
 }
 
+function investorRecordFromDeal(room: DealRoom) {
+  return {
+    ...room,
+    id: room.id,
+    roomId: room.id,
+    kind: "deal",
+    roomType: "deal",
+    workspace: "investor",
+    visibility: "investor",
+    status: "active",
+    investorStatus: "active",
+    title: room.title,
+    summary: room.analyzer || room.notes || "Deal opportunity submitted for investor review.",
+    ownerName: room.contactName || "VaultForge Member",
+    ownerEmail: room.ownerEmail || room.createdByEmail || room.contactEmail,
+    source: "deal-create",
+  };
+}
+
+function memberRecordFromDeal(room: DealRoom) {
+  return {
+    ...room,
+    id: room.id,
+    roomId: room.id,
+    kind: "deal",
+    roomType: "deal",
+    workspace: "member-command",
+    visibility: "member",
+    status: "active",
+    roomStatus: "active",
+    title: room.title,
+    message: room.analyzer || room.notes || "Deal room created.",
+    source: "deal-create",
+  };
+}
+
+function canonicalRoomFromDeal(room: DealRoom) {
+  return {
+    id: room.id,
+    roomId: room.id,
+    kind: "deal",
+    roomType: "deal",
+    title: room.title,
+    city: room.city,
+    county: room.county,
+    state: room.state,
+    asset: room.assetClass,
+    assetClass: room.assetClass,
+    propertyType: room.propertyType,
+    strategy: room.strategy,
+    routeTo: room.routeTo,
+    status: "active",
+    roomStatus: "active",
+    investorStatus: "active",
+    visibility: "investor",
+    workspace: "canonical",
+    ownerId: room.ownerId,
+    ownerEmail: room.ownerEmail,
+    createdBy: room.createdBy,
+    createdByEmail: room.createdByEmail,
+    summary: room.analyzer || room.notes || "Deal room created.",
+    message: room.analyzer || room.notes || "Deal room created.",
+    imageUrl: room.imageUrl,
+    photoUrl: room.photoUrl,
+    coverPhoto: room.coverPhoto,
+    photos: room.photos,
+    raw: room,
+    source: "deal-create",
+    createdAt: room.createdAt,
+    updatedAt: room.updatedAt,
+  };
+}
+
 function saveDeal(room: DealRoom) {
   if (!browserReady()) return { ok: false, id: "", message: "Browser storage unavailable." };
+
   const id = room.id || `deal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now = new Date().toISOString();
   const intel = dealIntel(room);
   const cover = room.photos[0] || room.coverPhoto || "";
   const owner = currentOwner();
-  const next: DealRoom = { ...room, ...owner, id, roomId: id, coverPhoto: cover, photoUrl: cover, imageUrl: cover, photoUrls: room.photos, memberRoomStatus: "active", executionStage: "New", roomState: "active", cleanupState: "active", stateStatus: "active", alertRead: false, viewedAt: "", createdAt: room.createdAt || now, updatedAt: now, analyzer: intel.analyzer };
+
+  const next: DealRoom = {
+    ...room,
+    ...owner,
+    id,
+    roomId: id,
+    coverPhoto: cover,
+    photoUrl: cover,
+    imageUrl: cover,
+    photoUrls: room.photos,
+    memberRoomStatus: "active",
+    executionStage: "New",
+    roomState: "active",
+    cleanupState: "active",
+    stateStatus: "active",
+    alertRead: false,
+    viewedAt: "",
+    createdAt: room.createdAt || now,
+    updatedAt: now,
+    analyzer: intel.analyzer,
+  };
+
   const existing = readDeals().filter((item) => item.id !== id);
-  const saved = writeJson(STORE_KEY, [next, ...existing]) && writeJson(`vaultforge_deal_room_${id}`, next);
-  if (!saved) {
-    const slim = { ...next, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" };
-    if (!writeJson(STORE_KEY, [slim, ...existing.map((x) => ({ ...x, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }))]) || !writeJson(`vaultforge_deal_room_${id}`, slim)) return { ok: false, id: "", message: "Browser storage full. Delete old test photos/rooms." };
+
+  const primarySaved =
+    writeJson(STORE_KEY, [next, ...existing]) &&
+    writeJson(`vaultforge_deal_room_${id}`, next);
+
+  const investorSaved = upsertById(INVESTOR_DEAL_ROOMS_KEY, investorRecordFromDeal(next));
+  const memberSaved = upsertById(MEMBER_COMMAND_ROOMS_KEY, memberRecordFromDeal(next));
+  const commandSaved = upsertById(COMMAND_ROOMS_KEY, memberRecordFromDeal(next));
+  const canonicalSaved = upsertById(CANONICAL_ROOMS_KEY, canonicalRoomFromDeal(next));
+
+  if (!primarySaved || !investorSaved || !memberSaved || !commandSaved || !canonicalSaved) {
+    const slim: DealRoom = {
+      ...next,
+      photos: [],
+      photoUrls: [],
+      coverPhoto: "",
+      photoUrl: "",
+      imageUrl: "",
+    };
+
+    const slimPrimarySaved =
+      writeJson(STORE_KEY, [slim, ...existing.map((x) => ({ ...x, photos: [], photoUrls: [], coverPhoto: "", photoUrl: "", imageUrl: "" }))]) &&
+      writeJson(`vaultforge_deal_room_${id}`, slim);
+
+    upsertById(INVESTOR_DEAL_ROOMS_KEY, investorRecordFromDeal(slim));
+    upsertById(MEMBER_COMMAND_ROOMS_KEY, memberRecordFromDeal(slim));
+    upsertById(COMMAND_ROOMS_KEY, memberRecordFromDeal(slim));
+    upsertById(CANONICAL_ROOMS_KEY, canonicalRoomFromDeal(slim));
+
+    if (!slimPrimarySaved) {
+      return { ok: false, id: "", message: "Browser storage full. Delete old test photos/rooms." };
+    }
   }
+
   const states = parseJson<Record<string, RoomState>>(localStorage.getItem(STATE_KEY), {});
   states[id] = "active";
   writeJson(STATE_KEY, states);
+
   window.dispatchEvent(new Event("vaultforge-deal-change"));
+  window.dispatchEvent(new Event("vaultforge-investor-room-change"));
+  window.dispatchEvent(new Event("vaultforge-command-room-change"));
   window.dispatchEvent(new Event("vaultforge-room-state-change"));
-  return { ok: true, id, message: "Deal saved." };
+
+  return { ok: true, id, message: "Deal saved to Investor Room and Member Command." };
 }
 
 async function compressImage(file: File, maxWidth = 620, quality = 0.42): Promise<string> {
@@ -263,7 +402,7 @@ const textarea: React.CSSProperties = { ...input, minHeight: 120, resize: "verti
 const photoStyle: React.CSSProperties = { width: "100%", height: 170, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", marginBottom: 12 };
 
 function Nav() {
-  return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={btn}>Command</Link><Link href="/state-map" style={btn}>State Map</Link><Link href="/network" style={btn}>Network</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/deal-create" style={goldBtn}>Create Deal</Link><Link href="/pain-intake" style={btn}>Pain Intake</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>;
+  return <nav style={nav}><div style={brand}>VAULTFORGE</div><Link href="/command" style={btn}>Command</Link><Link href="/investor-room" style={btn}>Investor Room</Link><Link href="/state-map" style={btn}>State Map</Link><Link href="/network" style={btn}>Network</Link><Link href="/deal-rooms" style={btn}>Deal Rooms</Link><Link href="/pain-rooms" style={btn}>Pain Rooms</Link><Link href="/deal-create" style={goldBtn}>Create Deal</Link><Link href="/pain-intake" style={btn}>Pain Intake</Link><Link href="/messages" style={btn}>Messages</Link><Link href="/profile" style={btn}>Profile</Link><Link href="/logout" style={redBtn}>Logout</Link></nav>;
 }
 function Section({ title, children }: { title: string; children: React.ReactNode }) { return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>; }
 function stopKeys(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) { e.stopPropagation(); }
@@ -294,7 +433,7 @@ export default function DealCreatePage() {
       if (!safeText(form.title)) { setError("Add a deal title before saving."); return; }
       const result = saveDeal(form);
       if (!result.ok) { setError(result.message); return; }
-      setSavedId(result.id); setBanner("Deal room saved. Open Room verifies the saved opportunity.");
+      setSavedId(result.id); setBanner("Deal room saved to Investor Room and Member Command.");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally { setSaving(false); }
   }
@@ -303,10 +442,10 @@ export default function DealCreatePage() {
     <main style={page}>
       <div style={wrap}>
         <Nav />
-        <section style={sticky}><div style={row}><button type="button" style={goldBtn} onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Deal Room"}</button>{savedId ? <Link href={`/deal-rooms/${encodeURIComponent(savedId)}`} style={goldBtn}>Open Saved Room</Link> : null}<span style={muted}>{safeText(form.title, "No title yet")} • {form.assetClass} • {locationFor(form)}</span></div></section>
-        {banner ? <section style={activePanel}><div style={eyebrow}>Saved</div><h2 style={h2}>{banner}</h2><div style={{ ...row, marginTop: 18 }}><Link href={`/deal-rooms/${encodeURIComponent(savedId)}`} style={goldBtn}>Open Room</Link><button type="button" style={btn} onClick={() => { setBanner(""); setSavedId(""); setForm(defaultDeal()); }}>Create Another</button></div></section> : null}
+        <section style={sticky}><div style={row}><button type="button" style={goldBtn} onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Deal Room"}</button>{savedId ? <Link href={`/deal-rooms/${encodeURIComponent(savedId)}`} style={goldBtn}>Open Saved Room</Link> : null}{savedId ? <Link href="/investor-room" style={goldBtn}>Open Investor Room</Link> : null}<span style={muted}>{safeText(form.title, "No title yet")} • {form.assetClass} • {locationFor(form)}</span></div></section>
+        {banner ? <section style={activePanel}><div style={eyebrow}>Saved</div><h2 style={h2}>{banner}</h2><div style={{ ...row, marginTop: 18 }}><Link href={`/deal-rooms/${encodeURIComponent(savedId)}`} style={goldBtn}>Open Room</Link><Link href="/investor-room" style={goldBtn}>Open Investor Room</Link><Link href="/command" style={btn}>Open Command</Link><button type="button" style={btn} onClick={() => { setBanner(""); setSavedId(""); setForm(defaultDeal()); }}>Create Another</button></div></section> : null}
         {error ? <section style={activePanel}><div style={eyebrow}>Error</div><h2 style={h2}>{error}</h2></section> : null}
-        <section style={hero}><div style={eyebrow}>Smart Deal Intake</div><h1 style={h1}>Adaptive opportunity form.</h1><p style={sub}>Residential, Commercial, and Land now reveal different fields and power the AI deal score.</p></section>
+        <section style={hero}><div style={eyebrow}>Smart Deal Intake</div><h1 style={h1}>Adaptive opportunity form.</h1><p style={sub}>Residential, Commercial, and Land now save to separated Investor Room and Member Command lanes.</p></section>
         <Section title="AI Deal Preview"><div style={grid}><Meter title="Deal Strength" value={intel.score} /><Meter title="Risk" value={intel.risk} /><Meter title="Urgency" value={intel.urgency} /><div style={panel}><div style={eyebrow}>Signal</div><p style={sub}>{intel.signal}</p><p style={muted}>Estimated spread: {intel.spread ? `$${intel.spread.toLocaleString()}` : "needs ask/value/repairs"}</p></div></div></Section>
         <Section title="Asset + Strategy"><ChipSet title="Asset Class" options={ASSETS} selected={[form.assetClass]} onToggle={setAsset} /><div style={{ height: 18 }} /><ChipSet title="Strategy" options={STRATEGIES} selected={form.strategy} onToggle={(v) => toggle("strategy", v)} /><div style={{ height: 18 }} /><ChipSet title="Route To" options={ROUTES} selected={form.routeTo} onToggle={(v) => toggle("routeTo", v)} /></Section>
         <Section title="Property + Market"><div style={grid}><Field title="Deal Title" value={form.title} onChange={(v) => update("title", v)} /><SelectField title="State" value={form.state} options={STATES} onChange={(v) => update("state", v)} /><Field title="City" value={form.city} onChange={setCity} /><Field title="County" value={form.county} onChange={(v) => update("county", v)} /><Field title="Address / Location" value={form.address} onChange={(v) => update("address", v)} /><SelectField title="Property Type" value={form.propertyType} options={propertyTypes} onChange={(v) => update("propertyType", v)} /></div></Section>
