@@ -84,6 +84,8 @@ const CANONICAL_STORE_KEY = "vaultforge_canonical_deal_rooms_v1";
 const MY_ROOMS_STORE_KEY = "vaultforge_my_rooms_clean_v2";
 const COMMAND_DEAL_STORE_KEY = "vaultforge_command_deal_rooms_v1";
 const MEMBER_ROOMS_STORE_KEY = "vaultforge_member_rooms_v1";
+const DEAL_ALERTS_STORE_KEY = "vaultforge_member_deal_alerts_v1";
+const ALERTS_FEED_STORE_KEY = "vaultforge_alerts_feed_v1";
 const STATE_KEY = "vaultforge_deal_room_state_v2";
 
 const STATES = ["GA", "TN", "AL", "FL", "NC", "SC", "TX"];
@@ -405,6 +407,51 @@ function saveEverywhere(next: DealRoom) {
   return true;
 }
 
+function saveDealAlert(next: DealRoom) {
+  if (!browserReady()) return;
+
+  const alert = {
+    id: `deal-alert-${next.id}`,
+    roomId: next.id,
+    dealId: next.id,
+    kind: "deal",
+    type: "deal",
+    lane: "Deal",
+    workspace: "member-command",
+    visibility: "member",
+    status: "active",
+    title: next.title,
+    state: next.state,
+    city: next.city,
+    county: next.county,
+    assetClass: next.assetClass,
+    propertyType: next.propertyType,
+    strategy: next.strategy,
+    ownerEmail: next.ownerEmail,
+    ownerName: next.ownerName,
+    createdByEmail: next.createdByEmail,
+    coverPhoto: next.coverPhoto,
+    photoUrl: next.photoUrl,
+    imageUrl: next.imageUrl,
+    photos: next.photos,
+    photoUrls: next.photoUrls,
+    summary: next.summary,
+    analyzer: next.analyzer,
+    href: `/deal-rooms/${encodeURIComponent(next.id)}`,
+    createdAt: next.createdAt,
+    updatedAt: next.updatedAt,
+  };
+
+  for (const key of [DEAL_ALERTS_STORE_KEY, ALERTS_FEED_STORE_KEY]) {
+    const rows = readArray(key).filter((item: any) => {
+      const itemId = safeText(item?.roomId || item?.dealId || item?.id);
+      return itemId !== next.id && itemId !== `deal-alert-${next.id}`;
+    });
+
+    writeJson(key, [alert, ...rows]);
+  }
+}
+
 function saveDeal(room: DealRoom) {
   if (!browserReady()) return { ok: false, id: "", message: "Browser storage unavailable." };
 
@@ -464,9 +511,12 @@ function saveDeal(room: DealRoom) {
     }
   }
 
+  saveDealAlert(next);
+
   window.dispatchEvent(new Event("vaultforge-deal-change"));
   window.dispatchEvent(new Event("vaultforge-command-room-change"));
   window.dispatchEvent(new Event("vaultforge-room-state-change"));
+  window.dispatchEvent(new Event("vaultforge-alert-change"));
 
   return { ok: true, id, message: "Deal room saved with canonical photo fields." };
 }
@@ -645,7 +695,7 @@ export default function DealCreatePage() {
       }
 
       setSavedId(result.id);
-      setBanner("Deal room saved with photos into the canonical room system.");
+      setBanner("Deal room saved with photos. Members will see the same room photo and deal info.");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSaving(false);
@@ -683,7 +733,7 @@ export default function DealCreatePage() {
         <section style={hero}>
           <div style={eyebrow}>Smart Deal Intake</div>
           <h1 style={h1}>Adaptive opportunity form.</h1>
-          <p style={sub}>Photos now save into canonical deal-room fields: photos, photoUrls, coverPhoto, photoUrl, and imageUrl.</p>
+          <p style={sub}>Upload photos here when creating the deal. They save with the deal room and travel to Command, My Rooms, Deal Room, and member alerts.</p>
         </section>
 
         <Section title="AI Deal Preview">
