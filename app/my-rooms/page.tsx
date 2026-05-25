@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type RoomKind = "deal" | "pain";
 type RoomStatus = "active" | "saved" | "archived" | "sold" | "resolved" | "deleted";
+type View = RoomStatus | "all" | "deal" | "pain" | "cleanup";
 
 type Room = {
   id: string;
@@ -22,7 +23,20 @@ type Room = {
 };
 
 const ROOM_STORE = "vaultforge_my_rooms_clean_v2";
+const MEMBER_ROOMS_STORE = "vaultforge_member_rooms_v1";
+const COMMAND_ROOMS_STORE = "vaultforge_command_rooms_v1";
 const FOREVER_STORE = "vaultforge_my_rooms_deleted_forever_v2";
+
+const CANONICAL_MEMBER_ROOM_STORES = [
+  ROOM_STORE,
+  MEMBER_ROOMS_STORE,
+  COMMAND_ROOMS_STORE,
+  "vaultforge_command_deal_rooms_v1",
+  "vaultforge_command_pain_rooms_v1",
+  "vaultforge_owned_rooms_v1",
+  "vaultforge_owned_deal_rooms_v1",
+  "vaultforge_owned_pain_rooms_v1",
+];
 
 const wrap: React.CSSProperties = {
   minHeight: "100vh",
@@ -171,9 +185,30 @@ function parse<T>(raw: string | null, fallback: T): T {
   }
 }
 
-function clean(value: unknown, fallback = "Not listed") {
-  const text = String(value || "").trim();
+function clean(value: unknown, fallback = "") {
+  const text = String(value || "")
+    .replace(/\\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   return text || fallback;
+}
+
+function cleanLower(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function badText(value: unknown) {
+  const text = cleanLower(value);
+  return (
+    !text ||
+    text === "na" ||
+    text === "n/a" ||
+    text === "not listed" ||
+    text === "untitled" ||
+    text === "untitled room" ||
+    text === "undefined" ||
+    text === "null"
+  );
 }
 
 function statusFrom(raw: unknown): RoomStatus {
@@ -186,8 +221,8 @@ function statusFrom(raw: unknown): RoomStatus {
   return "active";
 }
 
-function kindFrom(item: any, key: string): RoomKind {
-  const text = `${key} ${JSON.stringify(item || {})}`.toLowerCase();
+function kindFrom(item: any): RoomKind {
+  const text = `${item?.kind || ""} ${item?.roomType || ""} ${item?.source || ""} ${item?.problemType || ""} ${item?.need || ""}`.toLowerCase();
   if (text.includes("pain") || text.includes("problem") || text.includes("distress")) return "pain";
   return "deal";
 }
@@ -209,83 +244,111 @@ function collect(value: any): any[] {
   Object.values(value).forEach((item) => {
     if (Array.isArray(item)) rows.push(...item);
   });
-  if (value.id || value.title || value.name || value.subject) rows.push(value);
+  if (value.id || value.roomId || value.title || value.name || value.subject) rows.push(value);
   return rows;
+}
+
+function listText(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean).join(" • ");
+  return clean(value);
+}
+
+function isValidMemberRoom(item: any) {
+  if (!item || typeof item !== "object") return false;
+
+  const id = clean(item.id || item.roomId || item.slug);
+  const title = clean(item.title || item.name || item.projectName || item.propertyName || item.subject || item.address);
+  const city = clean(item.city || item.market || item.propertyCity);
+  const state = clean(item.state || item.propertyState || item.marketState);
+  const message = clean(item.message || item.summary || item.notes || item.description || item.analyzer || item.problem);
+  const workspace = cleanLower(item.workspace);
+  const visibility = cleanLower(item.visibility);
+  const source = cleanLower(item.source);
+  const owner = clean(item.ownerEmail || item.createdByEmail || item.memberEmail || item.ownerId || item.createdBy);
+  const correctWorkspace =
+    workspace === "member-command" ||
+    workspace === "member" ||
+    visibility === "member" ||
+    source === "deal-create" ||
+    source === "pain-intake" ||
+    source.includes("my-rooms") ||
+    source.includes("member");
+
+  if (!id) return false;
+  if (badText(title)) return false;
+  if (!correctWorkspace) return false;
+  if (!owner && !message) return false;
+  if (badText(city) && badText(state) && !message) return false;
+
+  return true;
+}
+
+function roomFrom(item: any, source: string): Room | null {
+  if (!isValidMemberRoom(item)) return null;
+
+  const id = clean(item.id || item.roomId || item.slug);
+  const title = clean(item.title || item.name || item.projectName || item.propertyName || item.subject || item.address);
+  const kind = kindFrom(item);
+  const status = statusFrom(item.status || item.folder || item.roomStatus || item.workspaceStatus || item.memberRoomStatus);
+
+  return {
+    id,
+    kind,
+    title,
+    city: clean(item.city || item.market || item.propertyCity),
+    county: clean(item.county || item.propertyCounty),
+    state: clean(item.state || item.propertyState || item.marketState),
+    asset: clean(item.asset || item.assetClass || item.assetType || item.propertyType || item.category || item.problemType, "Not listed"),
+    strategy: listText(item.strategy || item.dealStrategy || item.need || item.problemType) || "Not listed",
+    status,
+    message: clean(item.message || item.summary || item.notes || item.description || item.analyzer || item.problem, "No room notes listed."),
+    updatedAt: clean(item.updatedAt || item.updated_at || item.createdAt || item.created_at || new Date().toISOString(), new Date().toISOString()),
+    source,
+  };
+}
+
+function readRows(key: string) {
+  if (typeof window === "undefined") return [] as any[];
+  const parsed = parse<any>(window.localStorage.getItem(key), []);
+  return collect(parsed);
+}
+
+function writeRows(key: string, rows: any[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(rows));
 }
 
 function loadRooms(): Room[] {
   if (typeof window === "undefined") return [];
 
   const deletedForever = new Set(foreverIds());
+  const rooms: Room[] = [];
 
-  const keys = new Set<string>([
-    ROOM_STORE,
-    "vaultforge_rooms_v1",
-    "vaultforge_deal_rooms_v1",
-    "vaultforge_pain_rooms_v1",
-    "vaultforge_member_rooms_v1",
-    "vaultforge_property_cards_v1",
-    "vaultforge_projects_v1",
-    "vaultforge_deals_v1",
-    "vaultforge_pain_requests_v1",
-  ]);
+  CANONICAL_MEMBER_ROOM_STORES.forEach((key) => {
+    const sourceRows = readRows(key);
 
-  for (let i = 0; i < window.localStorage.length; i += 1) {
-    const key = window.localStorage.key(i) || "";
-    const lower = key.toLowerCase();
-    if (
-      lower.includes("room") ||
-      lower.includes("deal") ||
-      lower.includes("pain") ||
-      lower.includes("project") ||
-      lower.includes("property")
-    ) {
-      keys.add(key);
+    const validRows = sourceRows.filter((item) => {
+      const id = clean(item?.id || item?.roomId || item?.slug);
+      return id && !deletedForever.has(id) && isValidMemberRoom(item);
+    });
+
+    if (validRows.length !== sourceRows.length) {
+      writeRows(key, validRows);
     }
-  }
 
-  const rows: Room[] = [];
-
-  Array.from(keys).forEach((key) => {
-    if (key === FOREVER_STORE) return;
-    const parsed = parse<any>(window.localStorage.getItem(key), null);
-
-    collect(parsed).forEach((item, index) => {
-      if (!item || typeof item !== "object") return;
-
-      const text = `${key} ${JSON.stringify(item)}`.toLowerCase();
-      if (
-        !text.includes("deal") &&
-        !text.includes("room") &&
-        !text.includes("pain") &&
-        !text.includes("property") &&
-        !text.includes("project")
-      ) {
-        return;
-      }
-
-      const id = clean(item.id || item.roomId || item.slug || `${key}-${index}`, `${key}-${index}`);
-      if (deletedForever.has(id)) return;
-
-      rows.push({
-        id,
-        kind: kindFrom(item, key),
-        title: clean(item.title || item.name || item.projectName || item.propertyName || item.subject || "Untitled Room", "Untitled Room"),
-        city: clean(item.city || item.market || item.propertyCity || "NA", "NA"),
-        county: clean(item.county || item.propertyCounty || "", ""),
-        state: clean(item.state || item.propertyState || item.marketState || "NA", "NA"),
-        asset: clean(item.asset || item.assetType || item.propertyType || item.category || "Not listed", "Not listed"),
-        strategy: clean(item.strategy || item.dealStrategy || item.need || item.problemType || "Not listed", "Not listed"),
-        status: statusFrom(item.status || item.folder || item.roomStatus || item.workspaceStatus),
-        message: clean(item.message || item.summary || item.notes || item.description || "No room notes listed.", "No room notes listed."),
-        updatedAt: clean(item.updatedAt || item.updated_at || item.createdAt || item.created_at || new Date().toISOString(), new Date().toISOString()),
-        source: key,
-      });
+    validRows.forEach((item) => {
+      const room = roomFrom(item, key);
+      if (room) rooms.push(room);
     });
   });
 
   const unique = new Map<string, Room>();
-  rows.forEach((room) => unique.set(room.id, room));
+  rooms.forEach((room) => {
+    const previous = unique.get(room.id);
+    if (!previous || previous.updatedAt < room.updatedAt) {
+      unique.set(room.id, room);
+    }
+  });
 
   return Array.from(unique.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
@@ -295,6 +358,29 @@ function saveRooms(rooms: Room[]) {
   window.localStorage.setItem(ROOM_STORE, JSON.stringify(rooms));
 }
 
+function updateCanonicalRoomStatus(id: string, status: RoomStatus) {
+  if (typeof window === "undefined") return;
+
+  CANONICAL_MEMBER_ROOM_STORES.forEach((key) => {
+    const rows = readRows(key);
+    let changed = false;
+    const next = rows.map((item) => {
+      const itemId = clean(item?.id || item?.roomId || item?.slug);
+      if (itemId !== id) return item;
+      changed = true;
+      return {
+        ...item,
+        status,
+        roomStatus: status,
+        memberRoomStatus: status,
+        workspaceStatus: status,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    if (changed) writeRows(key, next);
+  });
+}
+
 function statusLabel(status: RoomStatus) {
   if (status === "active") return "Active";
   if (status === "saved") return "Saved";
@@ -302,6 +388,10 @@ function statusLabel(status: RoomStatus) {
   if (status === "sold") return "Sold";
   if (status === "resolved") return "Resolved";
   return "Deleted";
+}
+
+function roomLocation(room: Room) {
+  return [room.city, room.county, room.state].filter(Boolean).join(", ") || "Location not listed";
 }
 
 function Tile({
@@ -359,9 +449,7 @@ function RoomCard({
       </div>
 
       <h3 style={h3}>{room.title}</h3>
-      <p style={sub}>
-        {[room.city, room.county, room.state].filter(Boolean).join(", ")}
-      </p>
+      <p style={sub}>{roomLocation(room)}</p>
       <p style={muted}>
         {room.asset} • {room.strategy}
       </p>
@@ -399,12 +487,32 @@ function RoomCard({
 
 export default function MyRoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [view, setView] = useState<RoomStatus | "all" | "deal" | "pain" | "cleanup">("all");
+  const [view, setView] = useState<View>("all");
 
   useEffect(() => {
     const loaded = loadRooms();
     setRooms(loaded);
     saveRooms(loaded);
+
+    function refresh() {
+      const next = loadRooms();
+      setRooms(next);
+      saveRooms(next);
+    }
+
+    window.addEventListener("storage", refresh);
+    window.addEventListener("vaultforge-command-room-change", refresh);
+    window.addEventListener("vaultforge-room-state-change", refresh);
+    window.addEventListener("vaultforge-deal-change", refresh);
+    window.addEventListener("vaultforge-pain-change", refresh);
+
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("vaultforge-command-room-change", refresh);
+      window.removeEventListener("vaultforge-room-state-change", refresh);
+      window.removeEventListener("vaultforge-deal-change", refresh);
+      window.removeEventListener("vaultforge-pain-change", refresh);
+    };
   }, []);
 
   const grouped = useMemo(() => {
@@ -434,7 +542,9 @@ export default function MyRoomsPage() {
             : grouped[view];
 
   function moveRoom(id: string, status: RoomStatus) {
-    const next = rooms.map((room) => (room.id === id ? { ...room, status, updatedAt: new Date().toISOString() } : room));
+    updateCanonicalRoomStatus(id, status);
+
+    const next = loadRooms();
     setRooms(next);
     saveRooms(next);
 
@@ -448,7 +558,7 @@ export default function MyRoomsPage() {
   function deleteForever(id: string) {
     saveForeverIds([...foreverIds(), id]);
 
-    const next = rooms.filter((room) => room.id !== id);
+    const next = loadRooms().filter((room) => room.id !== id);
     setRooms(next);
     saveRooms(next);
     setView("deleted");
@@ -471,10 +581,10 @@ export default function MyRoomsPage() {
           <div style={eyebrow}>My Rooms</div>
           <h1 style={h1}>Member workspace cleanup.</h1>
           <p style={sub}>
-            Deal rooms and Pain rooms are separate. Cleanup is one operating area with saved, archived, sold, resolved, deleted, and delete forever.
+            My Rooms now reads only canonical member-room stores. Legacy duplicate Untitled/NA cards are ignored and cleaned out.
           </p>
           <div style={{ ...row, marginTop: 16 }}>
-            <Link href="/create-deal" style={goldBtn}>Create Deal</Link>
+            <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
             <Link href="/pain-intake" style={goldBtn}>Create Pain</Link>
             <Link href="/state-map" style={btn}>State Map</Link>
           </div>
@@ -535,7 +645,7 @@ export default function MyRoomsPage() {
             <div style={panel}>
               <h2 style={h2}>No rooms in this group.</h2>
               <p style={sub}>
-                Move a room with Save, Archive, Sold, Resolve, Delete, or Delete Forever and it will update immediately.
+                Only valid member-owned canonical rooms appear here. Old Untitled/NA duplicate rows are intentionally ignored.
               </p>
             </div>
           )}
