@@ -575,7 +575,6 @@ export default function CommandPage() {
         <nav style={nav}>
           <div style={brand}>VAULTFORGE</div>
           <Link href="/command" style={goldBtn}>Command</Link>
-          <Link href="/investor-room" style={btn}>Investor Room</Link>
           <Link href="/my-rooms" style={btn}>My Rooms</Link>
           <Link href="/members" style={btn}>Members</Link>
           <Link href="/network" style={btn}>Network</Link>
