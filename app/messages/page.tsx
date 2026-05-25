@@ -3,1002 +3,546 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type Lane = "deal" | "pain" | "member" | "general";
-type ThreadStatus = "active" | "saved" | "archived" | "deleted";
-
-type Message = {
-  id: string;
-  body: string;
-  from: string;
-  fromEmail: string;
-  at: string;
-  read: boolean;
-  attachments: string[];
-};
+type Folder = "active" | "unread" | "saved" | "archived" | "deleted";
+type Lane = "Owner" | "Investor" | "Member" | "Deal Room" | "Pain Room" | "General";
 
 type Thread = {
   id: string;
   lane: Lane;
-  roomId: string;
-  roomType: "deal" | "pain" | "member" | "general";
-  subject: string;
-  state: string;
-  roomTitle: string;
-  roomSubtitle: string;
-  participants: string[];
-  toEmail: string;
-  status: ThreadStatus;
+  from: string;
+  recipient: string;
+  title: string;
+  room: string;
+  message: string;
+  folder: Folder;
   unread: boolean;
-  saved: boolean;
   createdAt: string;
-  updatedAt: string;
-  messages: Message[];
 };
 
-type Room = {
-  id?: string;
-  roomId?: string;
-  title?: string;
-  name?: string;
-  state?: string;
-  city?: string;
-  county?: string;
-  assetClass?: string;
-  propertyType?: string;
-  severity?: string;
-  timePressure?: string;
-  painTypes?: string[] | string;
-  routeTo?: string[] | string;
-  needs?: string[] | string;
-  routingNeeds?: string[] | string;
-  roomState?: string;
-  cleanupState?: string;
-  stateStatus?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  [key: string]: unknown;
+const THREADS_KEY = "vf_message_center_threads_v1";
+const FOREVER_KEY = "vf_message_center_deleted_forever_v1";
+
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at 18% 10%, rgba(245,197,66,.12), transparent 32%), radial-gradient(circle at 86% 8%, rgba(120,0,30,.18), transparent 34%), #05070b",
+  color: "#f7f8ff",
+  padding: "28px 20px 90px",
+  fontFamily:
+    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
 };
 
-const THREAD_KEY = "vaultforge_message_threads_v2";
-const LEGACY_KEYS = ["vaultforge_message_command_threads_v1", "vaultforge_message_command_messages", "vf_message_threads"];
-const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
-const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
-const ACTIVITY_KEY = "vaultforge_room_activity_v2";
-
-function ok() {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-}
-
-function j<T>(raw: string | null, fallback: T): T {
-  try {
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function txt(value: unknown, fallback = "") {
-  const clean = String(value || "").trim();
-  return clean || fallback;
-}
-
-function list(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
-  if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
-  return [];
-}
-
-function arr<T>(key: string): T[] {
-  if (!ok()) return [];
-  const parsed = j<unknown>(localStorage.getItem(key), []);
-  return Array.isArray(parsed) ? (parsed as T[]) : [];
-}
-
-function currentMember() {
-  if (!ok()) return { id: "local_member", email: "", name: "Me" };
-  const profileKeys = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
-
-  for (const key of profileKeys) {
-    const profile = j<any | null>(localStorage.getItem(key), null);
-    if (profile && typeof profile === "object") {
-      const email = txt(profile.email).toLowerCase();
-      const name = txt(profile.name || profile.fullName || profile.full_name || profile.company, "Me");
-      const id = txt(profile.id || email || "local_member");
-      return { id, email, name };
-    }
-  }
-
-  const email = txt(localStorage.getItem("vf_email") || localStorage.getItem("vaultforge_email") || localStorage.getItem("member_email")).toLowerCase();
-  return { id: email || "local_member", email, name: "Me" };
-}
-
-function rid(room: Room | null | undefined) {
-  return txt(room?.id || room?.roomId);
-}
-
-function loc(room: Room) {
-  return [txt(room.city), txt(room.county), txt(room.state)].filter(Boolean).join(", ") || "Market not listed";
-}
-
-function titleFor(room: Room, kind: "deal" | "pain") {
-  return txt(room.title || room.name, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room");
-}
-
-function normalizeRoom(row: any, kind: "deal" | "pain"): Room {
-  const id = txt(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId);
-  return {
-    ...row,
-    id,
-    roomId: id,
-    title: txt(row?.title || row?.name || row?.dealTitle || row?.painTitle || row?.problemTitle, kind === "deal" ? "Untitled Deal Room" : "Untitled Pain Room"),
-    state: txt(row?.state, "GA"),
-    city: txt(row?.city),
-    county: txt(row?.county),
-  };
-}
-
-function allRooms(kind: "deal" | "pain"): Room[] {
-  if (!ok()) return [];
-  const out: Room[] = [];
-  const seen = new Set<string>();
-  const keys = kind === "deal" ? DEAL_KEYS : PAIN_KEYS;
-
-  for (const key of keys) {
-    for (const row of arr<any>(key)) {
-      const room = normalizeRoom(row, kind);
-      const id = rid(room);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      out.push(room);
-    }
-  }
-
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const key = localStorage.key(i) || "";
-    const match = kind === "deal" ? key.includes("deal_room") || key.includes("deal_rooms") : key.includes("pain_room") || key.includes("pain_rooms");
-    if (!match) continue;
-
-    const value = j<any>(localStorage.getItem(key), null);
-    if (Array.isArray(value)) {
-      for (const row of value) {
-        const room = normalizeRoom(row, kind);
-        const id = rid(room);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        out.push(room);
-      }
-    } else if (value && typeof value === "object") {
-      const room = normalizeRoom(value, kind);
-      const id = rid(room);
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        out.push(room);
-      }
-    }
-  }
-
-  return out;
-}
-
-function getRoom(kind: "deal" | "pain", id: string) {
-  return allRooms(kind).find((room) => rid(room) === id) || null;
-}
-
-function roomContext(kind: "deal" | "pain", roomId: string) {
-  const room = getRoom(kind, roomId);
-
-  if (!room) {
-    return {
-      state: "",
-      roomTitle: roomId ? `${kind.toUpperCase()} ROOM ${roomId.slice(0, 8)}` : "Room Context",
-      roomSubtitle: "Room data not found",
-    };
-  }
-
-  if (kind === "deal") {
-    return {
-      state: txt(room.state),
-      roomTitle: titleFor(room, "deal"),
-      roomSubtitle: `${loc(room)} • ${txt(room.assetClass, "Deal")} • ${txt(room.propertyType, "Type")} • Route ${list(room.routeTo).join(", ") || "open"}`,
-    };
-  }
-
-  return {
-    state: txt(room.state),
-    roomTitle: titleFor(room, "pain"),
-    roomSubtitle: `${loc(room)} • ${list(room.painTypes).join(", ") || "Pain"} • ${txt(room.severity, "High")} • Needs ${list(room.needs || room.routingNeeds).join(", ") || "solver"}`,
-  };
-}
-
-
-function roomParticipants(kind: "deal" | "pain", roomId: string, toEmail = "") {
-  const current = currentMember();
-  const room = getRoom(kind, roomId);
-  const people = new Set<string>();
-
-  if (current.email) people.add(current.email);
-  if (current.name && !current.email) people.add(current.name);
-  if (toEmail) people.add(toEmail);
-
-  if (room) {
-    const possible = [
-      txt(room.ownerEmail),
-      txt(room.createdByEmail),
-      txt(room.memberEmail),
-      txt(room.email),
-      txt(room.contactEmail),
-      txt(room.sellerEmail),
-      txt(room.buyerEmail),
-      txt(room.contactName),
-      txt(room.ownerId),
-      txt(room.createdBy),
-      ...list(room.routedToEmails),
-      ...list(room.routedToEmail),
-      ...list(room.assignedToEmails),
-      ...list(room.assignedToEmail),
-      ...list(room.routedTo),
-      ...list(room.assignedTo),
-      ...list(room.participants),
-      ...list(room.participantEmails),
-      ...list(room.collaboratorEmails),
-      ...list(room.watcherEmails),
-    ];
-
-    for (const item of possible) {
-      const clean = txt(item);
-      if (clean) people.add(clean);
-    }
-  }
-
-  return Array.from(people).filter(Boolean);
-}
-
-function hydrateParticipants(thread: Thread) {
-  const current = currentMember();
-  const people = new Set<string>();
-
-  for (const p of list(thread.participants)) people.add(p);
-  if (thread.toEmail) people.add(thread.toEmail);
-  if (current.email) people.add(current.email);
-
-  if ((thread.roomType === "deal" || thread.roomType === "pain") && thread.roomId) {
-    for (const p of roomParticipants(thread.roomType, thread.roomId, thread.toEmail)) people.add(p);
-  }
-
-  for (const msg of thread.messages) {
-    if (msg.fromEmail) people.add(msg.fromEmail);
-    else if (msg.from && msg.from !== "VaultForge" && msg.from !== "Me") people.add(msg.from);
-  }
-
-  return Array.from(people).filter(Boolean);
-}
-
-
-function cleanLane(raw: unknown): Lane {
-  const lane = txt(raw, "general").toLowerCase();
-  if (lane.includes("deal")) return "deal";
-  if (lane.includes("pain")) return "pain";
-  if (lane.includes("member")) return "member";
-  return "general";
-}
-
-function normalizeMessage(raw: any, fallbackId: string, index: number): Message {
-  const now = new Date().toISOString();
-  return {
-    id: txt(raw?.id, `${fallbackId}_msg_${index}`),
-    body: txt(raw?.body || raw?.text || raw?.message),
-    from: txt(raw?.from || raw?.sender || raw?.author, "VaultForge"),
-    fromEmail: txt(raw?.fromEmail || raw?.senderEmail || raw?.email),
-    at: txt(raw?.at || raw?.createdAt || raw?.updatedAt, now),
-    read: Boolean(raw?.read),
-    attachments: list(raw?.attachments),
-  };
-}
-
-function normalizeThread(raw: any): Thread {
-  const now = new Date().toISOString();
-  const lane = cleanLane(raw?.lane || raw?.type || raw?.roomType);
-  const roomType: Thread["roomType"] = lane === "deal" || lane === "pain" ? lane : lane === "member" ? "member" : "general";
-  const roomId = txt(raw?.roomId || raw?.room_id || raw?.room || raw?.itemId || raw?.id_ref);
-  const context = lane === "deal" || lane === "pain" ? roomContext(lane, roomId) : {
-    state: txt(raw?.state),
-    roomTitle: txt(raw?.roomTitle || raw?.subject, lane === "member" ? "Member Message" : "Member Comms Message"),
-    roomSubtitle: txt(raw?.roomSubtitle || raw?.lane, lane),
-  };
-
-  const id = txt(raw?.id || raw?.threadKey || raw?.thread_id || raw?.message_id) || `${lane}_${roomId || "general"}_${Date.now()}`;
-  let messages: Message[] = [];
-
-  if (Array.isArray(raw?.messages)) {
-    messages = raw.messages.map((msg: any, index: number) => normalizeMessage(msg, id, index)).filter((msg: Message) => msg.body);
-  } else if (txt(raw?.body || raw?.text || raw?.message)) {
-    messages = [normalizeMessage(raw, id, 0)];
-  }
-
-  const status = txt(raw?.status, "active");
-  const unread = Boolean(raw?.unread || raw?.isUnread || messages.some((msg) => !msg.read && msg.from !== "Me"));
-
-  const baseThread: Thread = {
-    id,
-    lane,
-    roomId,
-    roomType,
-    subject: txt(raw?.subject || raw?.title || context.roomTitle, context.roomTitle),
-    state: txt(raw?.state || context.state),
-    roomTitle: context.roomTitle,
-    roomSubtitle: context.roomSubtitle,
-    participants: [],
-    toEmail: txt(raw?.toEmail || raw?.to || raw?.recipient),
-    status: (["active", "saved", "archived", "deleted"].includes(status) ? status : "active") as ThreadStatus,
-    unread,
-    saved: Boolean(raw?.saved),
-    createdAt: txt(raw?.createdAt, now),
-    updatedAt: txt(raw?.updatedAt || raw?.createdAt, now),
-    messages,
-  };
-
-  baseThread.participants = hydrateParticipants(baseThread);
-  return baseThread;
-}
-
-
-function exactThreadKey(thread: Thread) {
-  return [
-    thread.id,
-    thread.lane,
-    thread.roomId,
-    thread.subject,
-    thread.roomTitle,
-    thread.createdAt,
-  ].map((part) => String(part || "").trim()).join("::");
-}
-
-function sameThread(a: Thread, b: Thread) {
-  return exactThreadKey(a) === exactThreadKey(b);
-}
-
-
-function readThreads(): Thread[] {
-  if (!ok()) return [];
-  const out: Thread[] = [];
-  const seen = new Set<string>();
-
-  for (const key of [THREAD_KEY, ...LEGACY_KEYS]) {
-    for (const raw of arr<any>(key)) {
-      const thread = normalizeThread(raw);
-      if (!thread.id || seen.has(thread.id)) continue;
-      seen.add(thread.id);
-      out.push(thread);
-    }
-  }
-
-  return out.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
-}
-
-function writeThreads(threads: Thread[]) {
-  writeJson(THREAD_KEY, threads);
-  window.dispatchEvent(new Event("vaultforge-messages-change"));
-  window.dispatchEvent(new Event("vaultforge-alert-change"));
-}
-
-function addRoomActivity(thread: Thread, action: string, note: string) {
-  if (!ok()) return;
-  if (thread.roomType !== "deal" && thread.roomType !== "pain") return;
-  if (!thread.roomId) return;
-
-  const key = `${thread.roomType}:${thread.roomId}`;
-  const all = j<Record<string, { at: string; action: string; note: string }[]>>(localStorage.getItem(ACTIVITY_KEY), {});
-  all[key] = [{ at: new Date().toISOString(), action, note }, ...(all[key] || [])].slice(0, 75);
-  writeJson(ACTIVITY_KEY, all);
-  window.dispatchEvent(new Event("vaultforge-room-activity-change"));
-}
-
-function makeThread(lane: Lane, subject: string, roomId = "", toEmail = ""): Thread {
-  const now = new Date().toISOString();
-  const context = lane === "deal" || lane === "pain" ? roomContext(lane, roomId) : { state: "", roomTitle: subject, roomSubtitle: lane };
-  const member = currentMember();
-
-  const thread: Thread = {
-    id: `${lane}_${roomId || toEmail || "general"}_${Date.now()}`,
-    lane,
-    roomId,
-    roomType: lane === "deal" || lane === "pain" ? lane : lane === "member" ? "member" : "general",
-    subject,
-    state: context.state,
-    roomTitle: context.roomTitle,
-    roomSubtitle: context.roomSubtitle,
-    participants: [],
-    toEmail,
-    status: "active",
-    unread: false,
-    saved: false,
-    createdAt: now,
-    updatedAt: now,
-    messages: [],
-  };
-
-  thread.participants = hydrateParticipants(thread);
-  return thread;
-}
-
-function seedFromUrl() {
-  if (!ok()) return null as Thread | null;
-  const url = new URL(window.location.href);
-  const type = txt(url.searchParams.get("type") || url.searchParams.get("lane") || "general").toLowerCase();
-  const lane: Lane = type.includes("deal") ? "deal" : type.includes("pain") ? "pain" : type.includes("member") ? "member" : "general";
-  const roomId = txt(url.searchParams.get("room") || url.searchParams.get("roomId") || "");
-  const toEmail = txt(url.searchParams.get("to") || url.searchParams.get("email") || "");
-  const subject = txt(url.searchParams.get("subject"), lane === "deal" ? "Deal Room Message" : lane === "pain" ? "Pain Room Message" : lane === "member" ? "Member Message" : "Member Comms Message");
-
-  if (!roomId && !toEmail && !url.searchParams.get("subject")) return null;
-  return makeThread(lane, subject, roomId, toEmail);
-}
-
-const styleTag = `
-@keyframes vfPulseRed {
-  0% { box-shadow: 0 0 0 rgba(255,60,70,.0); transform: translateY(0); }
-  50% { box-shadow: 0 0 34px rgba(255,60,70,.34); transform: translateY(-1px); }
-  100% { box-shadow: 0 0 0 rgba(255,60,70,.0); transform: translateY(0); }
-}
-@keyframes vfPulseGold {
-  0% { box-shadow: 0 0 0 rgba(255,220,104,.0); transform: translateY(0); }
-  50% { box-shadow: 0 0 34px rgba(255,220,104,.28); transform: translateY(-1px); }
-  100% { box-shadow: 0 0 0 rgba(255,220,104,.0); transform: translateY(0); }
-}
-`;
-
-const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
-const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 90 };
-const nav: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 18 };
-const brand: React.CSSProperties = { color: "#ffd45a", fontSize: 27, fontWeight: 950, letterSpacing: -1, marginRight: 10 };
-const btn: React.CSSProperties = { border: "1px solid rgba(207,216,230,.18)", background: "#171c29", color: "#f7f7fb", borderRadius: 999, padding: "13px 18px", fontWeight: 950, textDecoration: "none", display: "inline-block", cursor: "pointer" };
-const goldBtn: React.CSSProperties = { ...btn, border: 0, background: "#ffdc68", color: "#10131a" };
-const redBtn: React.CSSProperties = { ...btn, background: "#271016", borderColor: "rgba(255,70,70,.48)", color: "#ffaaaa" };
-const hero: React.CSSProperties = { border: "1px solid rgba(245,197,66,.28)", borderRadius: 28, padding: 30, marginBottom: 20, background: "radial-gradient(circle at top right, rgba(245,197,66,.16), transparent 32%), linear-gradient(180deg,#080d19,#050816)" };
-const card: React.CSSProperties = { background: "linear-gradient(180deg,#080d19,#050816)", border: "1px solid rgba(245,197,66,.28)", borderRadius: 26, padding: 26, marginBottom: 22 };
-const panel: React.CSSProperties = { background: "#121724", border: "1px solid rgba(207,216,230,.16)", borderRadius: 22, padding: 22, color: "#f7f7fb", textDecoration: "none", display: "block" };
-const activePanel: React.CSSProperties = { ...panel, borderColor: "rgba(245,197,66,.75)", boxShadow: "0 0 26px rgba(245,197,66,.18)" };
-const pulseRed: React.CSSProperties = { ...panel, borderColor: "rgba(255,70,70,.70)", animation: "vfPulseRed 2.1s ease-in-out infinite" };
-const pulseGold: React.CSSProperties = { ...panel, borderColor: "rgba(255,220,104,.70)", animation: "vfPulseGold 2.3s ease-in-out infinite" };
-const eyebrow: React.CSSProperties = { color: "#ffd45a", textTransform: "uppercase", letterSpacing: 7, fontWeight: 950, fontSize: 15, marginBottom: 12 };
-const h1: React.CSSProperties = { fontSize: "clamp(44px,8vw,86px)", lineHeight: 0.9, letterSpacing: -4, margin: "0 0 18px", fontWeight: 950 };
-const h2: React.CSSProperties = { fontSize: "clamp(30px,5vw,52px)", lineHeight: 0.95, letterSpacing: -2, margin: "0 0 14px", fontWeight: 950 };
-const sub: React.CSSProperties = { color: "#c9d0dc", fontSize: 21, lineHeight: 1.35, margin: 0 };
-const muted: React.CSSProperties = { color: "#aeb7c7", margin: "8px 0 0", lineHeight: 1.35 };
-const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(245px,1fr))", gap: 16 };
-const row: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" };
-
-const commandBanner: React.CSSProperties = {
-  border: "1px solid rgba(245,197,66,.30)",
-  borderRadius: 30,
-  padding: 26,
-  marginBottom: 20,
-  background: "radial-gradient(circle at top right, rgba(245,197,66,.18), transparent 34%), linear-gradient(180deg,#080d19,#050816)",
-  boxShadow: "0 0 40px rgba(245,197,66,.08)",
+const shell: React.CSSProperties = {
+  maxWidth: 1180,
+  margin: "0 auto",
 };
 
-const signalGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 14,
+const row: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+  alignItems: "center",
+};
+
+const nav: React.CSSProperties = {
+  ...row,
   marginBottom: 20,
 };
 
-const signalCard: React.CSSProperties = {
-  background: "#121724",
+const brand: React.CSSProperties = {
+  color: "#ffda5e",
+  fontWeight: 1000,
+  fontSize: 28,
+  letterSpacing: "-.04em",
+};
+
+const button: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "rgba(18,24,38,.92)",
+  color: "#f7f8ff",
+  borderRadius: 999,
+  padding: "12px 18px",
+  fontWeight: 900,
+  textDecoration: "none",
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const goldButton: React.CSSProperties = {
+  ...button,
+  background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
+  color: "#080a10",
+  border: "1px solid rgba(255,220,90,.65)",
+};
+
+const redButton: React.CSSProperties = {
+  ...button,
+  background: "rgba(90,10,18,.72)",
+  color: "#ffb2b2",
+  border: "1px solid rgba(255,65,65,.65)",
+};
+
+const card: React.CSSProperties = {
   border: "1px solid rgba(207,216,230,.16)",
+  borderRadius: 26,
+  background: "rgba(15,21,34,.88)",
+  padding: 24,
+  marginBottom: 20,
+};
+
+const goldCard: React.CSSProperties = {
+  ...card,
+  borderColor: "rgba(245,197,66,.42)",
+  background:
+    "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))",
+};
+
+const tile: React.CSSProperties = {
+  border: "1px solid rgba(245,197,66,.35)",
   borderRadius: 22,
-  padding: 18,
-  color: "#f7f7fb",
+  background: "rgba(17,23,36,.78)",
+  padding: 20,
+  color: "#f7f8ff",
   textAlign: "left",
 };
 
-const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid rgba(207,216,230,.18)", background: "#151b2a", color: "#f8fafc", borderRadius: 18, padding: "15px 16px", fontSize: 16 };
-const textarea: React.CSSProperties = { ...input, minHeight: 120, resize: "vertical" };
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+  gap: 14,
+};
 
-function Nav() {
-  return (
-    <nav style={nav}>
-      <div style={brand}>VAULTFORGE</div>
-      <Link href="/command" style={btn}>Command</Link>
-      <Link href="/my-rooms" style={btn}>My Rooms</Link>
-      <Link href="/state-map" style={btn}>State Map</Link>
-      <Link href="/network" style={btn}>Network</Link>
-      <Link href="/alerts" style={btn}>Alerts</Link>
-      <Link href="/messages" style={goldBtn}>Execution Messages</Link>
-      <Link href="/deal-create" style={btn}>Create Deal</Link>
-      <Link href="/pain-intake" style={btn}>Pain Intake</Link>
-      <Link href="/profile" style={btn}>Profile</Link>
-      <Link href="/logout" style={redBtn}>Logout</Link>
-    </nav>
-  );
-}
+const threadGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(285px,1fr))",
+  gap: 14,
+};
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section style={card}><div style={eyebrow}>{title}</div>{children}</section>;
-}
+const input: React.CSSProperties = {
+  width: "100%",
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "rgba(18,24,38,.92)",
+  color: "#f7f8ff",
+  borderRadius: 18,
+  padding: "14px 16px",
+  fontSize: 16,
+  outline: "none",
+  boxSizing: "border-box",
+};
 
-function laneLabel(lane: Lane) {
-  if (lane === "deal") return "Deal";
-  if (lane === "pain") return "Pain";
-  if (lane === "member") return "Member";
-  return "Member Comms";
-}
+const label: React.CSSProperties = {
+  color: "#ffda5e",
+  textTransform: "uppercase",
+  letterSpacing: ".34em",
+  fontSize: 12,
+  fontWeight: 1000,
+  display: "block",
+  marginBottom: 8,
+};
 
-function ThreadCard({ thread, active, onOpen }: { thread: Thread; active: boolean; onOpen: () => void }) {
-  const style = active ? activePanel : thread.unread ? (thread.lane === "pain" ? pulseRed : pulseGold) : panel;
-  const latest = thread.messages[thread.messages.length - 1];
+const eyebrow: React.CSSProperties = {
+  color: "#ffda5e",
+  textTransform: "uppercase",
+  letterSpacing: ".34em",
+  fontSize: 12,
+  fontWeight: 1000,
+};
 
-  return (
-    <button type="button" style={{ ...style, textAlign: "left", cursor: "pointer" }} onClick={onOpen}>
-      <div style={eyebrow}>{laneLabel(thread.lane)} Thread {thread.unread ? "• Unread" : ""}</div>
-      <h2 style={h2}>{thread.subject}</h2>
-      <p style={sub}>{thread.roomTitle}</p>
-      <p style={muted}>{thread.roomSubtitle}</p>
-      <p style={muted}>{thread.messages.length} message(s) • {new Date(thread.updatedAt).toLocaleString()}</p>
-      <p style={muted}>Operators: {hydrateParticipants(thread).join(", ") || "Owner/member not attached yet"}</p>
-      {latest ? <p style={muted}>Latest Signal: {latest.body.slice(0, 120)}{latest.body.length > 120 ? "..." : ""}</p> : <p style={muted}>No execution replies yet.</p>}
-    </button>
-  );
-}
+const h1: React.CSSProperties = {
+  fontSize: "clamp(42px,7vw,82px)",
+  lineHeight: ".92",
+  letterSpacing: "-.08em",
+  margin: "12px 0",
+  fontWeight: 1000,
+};
 
-function MessageBubble({ message }: { message: Message }) {
-  const mine = message.from === "Me";
-  return (
-    <div style={{ ...panel, marginLeft: mine ? "auto" : 0, maxWidth: 860, borderColor: mine ? "rgba(245,197,66,.5)" : "rgba(207,216,230,.16)" }}>
-      <div style={eyebrow}>{message.from} • {new Date(message.at).toLocaleString()}</div>
-      <p style={sub}>{message.body}</p>
-      {message.attachments.length ? <p style={muted}>Attachments: {message.attachments.length}</p> : null}
-    </div>
-  );
-}
+const h2: React.CSSProperties = {
+  fontSize: "clamp(30px,4.5vw,54px)",
+  lineHeight: ".95",
+  letterSpacing: "-.065em",
+  margin: "10px 0",
+  fontWeight: 1000,
+};
 
-function StatusFolder({ title, count, active, onClick }: { title: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button type="button" style={active ? activePanel : count ? pulseGold : panel} onClick={onClick}>
-      <div style={eyebrow}>{title}</div>
-      <h2 style={h2}>{count}</h2>
-      <p style={muted}>thread(s)</p>
-    </button>
-  );
-}
+const h3: React.CSSProperties = {
+  fontSize: 28,
+  lineHeight: 1,
+  letterSpacing: "-.05em",
+  margin: "8px 0",
+  fontWeight: 1000,
+};
 
+const sub: React.CSSProperties = {
+  color: "rgba(235,240,255,.78)",
+  fontSize: 20,
+  lineHeight: 1.45,
+  margin: "8px 0",
+};
 
-function safeDisplay(value: unknown, fallback: string) {
-  const clean = String(value || "").trim();
-  return clean && clean !== "undefined" && clean !== "null" ? clean : fallback;
-}
+const muted: React.CSSProperties = {
+  color: "rgba(235,240,255,.68)",
+  fontSize: 15,
+  lineHeight: 1.45,
+  margin: "6px 0",
+};
 
-function readCommandMember() {
-  if (typeof window === "undefined") {
-    return { name: "Member Workspace", company: "Company not listed", email: "Email not listed" };
+function parseThreads(): Thread[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const rows = JSON.parse(window.localStorage.getItem(THREADS_KEY) || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
   }
-
-  let profile: any = {};
-  for (const key of ["vaultforge_profile", "vaultforge_member_profile", "vf_profile", "member_profile", "profile"]) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (raw && raw.startsWith("{")) profile = { ...profile, ...JSON.parse(raw) };
-    } catch {
-      // ignore
-    }
-  }
-
-  const email = safeDisplay(
-    profile.email ||
-      profile.memberEmail ||
-      profile.member_email ||
-      window.localStorage.getItem("vf_email") ||
-      window.localStorage.getItem("member_email") ||
-      window.localStorage.getItem("email"),
-    "Email not listed"
-  );
-
-  const name = safeDisplay(
-    profile.fullName ||
-      profile.full_name ||
-      profile.name ||
-      window.localStorage.getItem("vf_name") ||
-      window.localStorage.getItem("member_name"),
-    email.includes("@") ? email.split("@")[0] : "Member Workspace"
-  );
-
-  const company = safeDisplay(
-    profile.company ||
-      profile.companyName ||
-      profile.company_name ||
-      profile.businessName ||
-      window.localStorage.getItem("vf_company") ||
-      window.localStorage.getItem("member_company"),
-    "Company not listed"
-  );
-
-  return { name, company, email };
 }
 
-function LaneSignalCard({
-  title,
+function saveThreads(threads: Thread[]) {
+  window.localStorage.setItem(THREADS_KEY, JSON.stringify(threads));
+}
+
+function deletedForeverIds(): string[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const rows = JSON.parse(window.localStorage.getItem(FOREVER_KEY) || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDeletedForever(id: string) {
+  const ids = Array.from(new Set([...deletedForeverIds(), id]));
+  window.localStorage.setItem(FOREVER_KEY, JSON.stringify(ids));
+}
+
+function currentEmail() {
+  if (typeof window === "undefined") return "";
+
+  return (
+    window.localStorage.getItem("vf_email") ||
+    window.localStorage.getItem("vaultforge_email") ||
+    window.localStorage.getItem("email") ||
+    ""
+  );
+}
+
+function folderTitle(folder: Folder) {
+  if (folder === "active") return "Active Threads";
+  if (folder === "unread") return "Unread Threads";
+  if (folder === "saved") return "Saved Threads";
+  if (folder === "archived") return "Archived Threads";
+  return "Deleted Threads";
+}
+
+function StatCard({
+  label,
   count,
-  note,
-  danger,
+  active,
   onClick,
 }: {
-  title: string;
+  label: string;
   count: number;
-  note: string;
-  danger?: boolean;
-  onClick?: () => void;
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      style={{
-        ...signalCard,
-        borderColor: danger && count ? "rgba(255,70,70,.52)" : "rgba(245,197,66,.22)",
-        width: "100%",
-        cursor: onClick ? "pointer" : "default",
-      }}
       onClick={onClick}
+      style={{
+        ...tile,
+        cursor: "pointer",
+        minHeight: 150,
+        borderColor: active ? "rgba(245,197,66,.75)" : "rgba(245,197,66,.35)",
+      }}
     >
-      <div style={eyebrow}>{title}</div>
-      <h2 style={h2}>{count}</h2>
-      <p style={muted}>{note}</p>
-      {onClick ? <p style={muted}>Click to open</p> : null}
+      <div style={eyebrow}>{label}</div>
+      <div style={{ color: "#1e90ff", fontSize: 44, fontWeight: 1000, margin: "8px 0" }}>{count}</div>
+      <p style={muted}>thread(s)</p>
+      <p style={{ ...muted, color: "#ffda5e", fontWeight: 950 }}>Tap to open</p>
     </button>
   );
 }
 
-function MessageCommandHeader({
-  threads,
-  activeLane,
-  setLane,
-  setFolder,
-}: {
-  threads: Thread[];
-  activeLane: Lane;
-  setLane: (lane: Lane | "all") => void;
-  setFolder: (folder: ThreadStatus | "unread") => void;
-}) {
-  const [member, setMember] = useState(() => ({ name: "Member Workspace", company: "Company not listed", email: "Email not listed" }));
-
-  useEffect(() => {
-    setMember(readCommandMember());
-  }, []);
-
-  const active = threads.filter((thread) => thread.status === "active");
-  const unread = active.filter((thread) => thread.unread || thread.messages.some((msg) => !msg.read)).length;
-  const deal = active.filter((thread) => thread.lane === "deal").length;
-  const pain = active.filter((thread) => thread.lane === "pain").length;
-  const routing = active.filter((thread) => thread.lane === "member" || thread.lane === "general").length;
-
-  return (
-    <>
-      <section style={commandBanner}>
-        <div style={eyebrow}>VaultForge Execution Communications</div>
-        <h1 style={h1}>Room-linked command traffic.</h1>
-        <p style={sub}>
-          {member.name} • {member.company} • {member.email}
-        </p>
-        <p style={muted}>
-          Current lane: {laneLabel(activeLane)}. Messages should carry room context, routing intent, and execution next steps.
-        </p>
-      </section>
-
-      <section style={signalGrid}>
-        <LaneSignalCard title="Active Threads" count={active.length} note="open communication lanes" onClick={() => { setLane("all"); setFolder("active"); }} />
-        <LaneSignalCard title="Unread" count={unread} note="threads needing review" danger onClick={() => { setLane("all"); setFolder("unread"); }} />
-        <LaneSignalCard title="Deal Comms" count={deal} note="opportunity room traffic" onClick={() => { setLane("deal"); setFolder("active"); }} />
-        <LaneSignalCard title="Pain Comms" count={pain} note="problem-solving traffic" danger={pain > 0} onClick={() => { setLane("pain"); setFolder("active"); }} />
-        <LaneSignalCard title="Routing / Intros" count={routing} note="assignment and introduction traffic" danger={routing > 0} onClick={() => { setLane("member"); setFolder("active"); }} />
-      </section>
-    </>
-  );
-}
-
-
-export default function ExecutionMessagesPage() {
-  const [tick, setTick] = useState(0);
-  const [lane, setLane] = useState<Lane | "all">("all");
-  const [folder, setFolder] = useState<ThreadStatus | "unread">("active");
+export default function MessagesPage() {
   const [threads, setThreads] = useState<Thread[]>([]);
-  const [activeKey, setActiveKey] = useState("");
-  const [reply, setReply] = useState("");
-  const [newSubject, setNewSubject] = useState("");
-  const [newLane, setNewLane] = useState<Lane>("general");
-  const [newTo, setNewTo] = useState("");
+  const [folder, setFolder] = useState<Folder>("active");
+  const [selected, setSelected] = useState<Thread | null>(null);
+
+  const [lane, setLane] = useState<Lane>("Owner");
+  const [from, setFrom] = useState("");
+  const [recipient, setRecipient] = useState("VaultForge Owner");
+  const [title, setTitle] = useState("");
+  const [room, setRoom] = useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const refresh = () => setTick((x) => x + 1);
-    window.addEventListener("storage", refresh);
-    window.addEventListener("vaultforge-messages-change", refresh);
-    window.addEventListener("vaultforge-alert-change", refresh);
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("vaultforge-messages-change", refresh);
-      window.removeEventListener("vaultforge-alert-change", refresh);
-    };
+    const forever = new Set(deletedForeverIds());
+    const loaded = parseThreads().filter((thread) => !forever.has(thread.id));
+
+    setThreads(loaded);
+
+    const email = currentEmail();
+    if (email) setFrom(email);
   }, []);
 
-  useEffect(() => {
-    let current = readThreads();
-    const seeded = seedFromUrl();
+  const grouped = useMemo(() => {
+    return {
+      active: threads.filter((thread) => thread.folder === "active"),
+      unread: threads.filter((thread) => thread.unread && thread.folder !== "deleted"),
+      saved: threads.filter((thread) => thread.folder === "saved"),
+      archived: threads.filter((thread) => thread.folder === "archived"),
+      deleted: threads.filter((thread) => thread.folder === "deleted"),
+    };
+  }, [threads]);
 
-    if (seeded) {
-      const exists = current.find((thread) =>
-        thread.lane === seeded.lane &&
-        thread.roomId === seeded.roomId &&
-        thread.toEmail === seeded.toEmail &&
-        thread.subject === seeded.subject
-      );
-
-      if (!exists) {
-        current = [seeded, ...current];
-        writeThreads(current);
-      } else {
-        setActiveKey(exactThreadKey(exists));
-      }
-    }
-
-    setThreads(current);
-  }, [tick]);
-
-  const counts = useMemo(() => ({
-    all: threads.filter((thread) => thread.status === "active").length,
-    deal: threads.filter((thread) => thread.status === "active" && thread.lane === "deal").length,
-    pain: threads.filter((thread) => thread.status === "active" && thread.lane === "pain").length,
-    member: threads.filter((thread) => thread.status === "active" && thread.lane === "member").length,
-    general: threads.filter((thread) => thread.status === "active" && thread.lane === "general").length,
-    unread: threads.filter((thread) => thread.status === "active" && thread.unread).length,
-    saved: threads.filter((thread) => thread.status === "saved" || thread.saved).length,
-    archived: threads.filter((thread) => thread.status === "archived").length,
-    deleted: threads.filter((thread) => thread.status === "deleted").length,
-  }), [threads]);
-
-  const visible = useMemo(() => {
-    let next = threads;
-
-    if (folder === "unread") next = next.filter((thread) => thread.status === "active" && thread.unread);
-    else if (folder === "saved") next = next.filter((thread) => thread.status === "saved" || thread.saved);
-    else next = next.filter((thread) => thread.status === folder);
-
-    if (lane !== "all") next = next.filter((thread) => thread.lane === lane);
-
-    return next;
-  }, [threads, lane, folder]);
-
-  const activeThread = threads.find((thread) => exactThreadKey(thread) === activeKey) || null;
+  const visible = folder === "unread" ? grouped.unread : grouped[folder];
 
   function persist(next: Thread[]) {
-    const hydrated = next.map((thread) => ({ ...thread, participants: hydrateParticipants(thread) }));
-    setThreads(hydrated);
-    writeThreads(hydrated);
-  }
-
-  function openThread(target: Thread) {
-    const now = new Date().toISOString();
-    const targetKey = exactThreadKey(target);
-
-    const next = threads.map((thread) =>
-      exactThreadKey(thread) === targetKey
-        ? {
-            ...thread,
-            unread: false,
-            updatedAt: now,
-            messages: thread.messages.map((msg) => ({ ...msg, read: true })),
-          }
-        : thread
-    );
-
-    persist(next);
-
-    const refreshed = next.find((thread) => exactThreadKey(thread) === targetKey) || target;
-    setActiveKey(exactThreadKey(refreshed));
-  }
-
-  function updateThread(id: string, changes: Partial<Thread>) {
-    const target = threads.find((thread) => thread.id === id && (!activeKey || exactThreadKey(thread) === activeKey));
-    const targetKey = target ? exactThreadKey(target) : "";
-    persist(threads.map((thread) =>
-      (targetKey ? exactThreadKey(thread) === targetKey : thread.id === id)
-        ? { ...thread, ...changes, updatedAt: new Date().toISOString() }
-        : thread
-    ));
-  }
-
-  function permanentlyDeleteThread(target: Thread) {
-    const targetKey = exactThreadKey(target);
-    const next = threads.filter((thread) => exactThreadKey(thread) !== targetKey);
-    persist(next);
-    setActiveKey("");
-  }
-
-  function sendReply() {
-    if (!activeThread || !reply.trim()) return;
-    const member = currentMember();
-    const message: Message = {
-      id: `${activeThread.id}_msg_${Date.now()}`,
-      body: reply.trim(),
-      from: "Me",
-      fromEmail: member.email,
-      at: new Date().toISOString(),
-      read: true,
-      attachments: [],
-    };
-
-    const next = threads.map((thread) =>
-      exactThreadKey(thread) === exactThreadKey(activeThread)
-        ? { ...thread, messages: [...thread.messages, message], participants: hydrateParticipants({ ...thread, messages: [...thread.messages, message] }), unread: false, updatedAt: message.at, status: thread.status === "deleted" ? "active" : thread.status }
-        : thread
-    );
-
-    persist(next);
-    addRoomActivity(activeThread, "Message Sent", reply.trim().slice(0, 180));
-    setReply("");
+    setThreads(next);
+    saveThreads(next);
   }
 
   function createThread() {
-    if (!newSubject.trim()) return;
-    const thread = makeThread(newLane, newSubject.trim(), "", newTo.trim());
-    const message: Message = {
-      id: `${thread.id}_msg_0`,
-      body: "Thread created.",
-      from: "VaultForge",
-      fromEmail: "",
-      at: new Date().toISOString(),
-      read: true,
-      attachments: [],
+    const cleanTitle = title.trim();
+    const cleanMessage = message.trim();
+
+    if (!cleanTitle && !cleanMessage) return;
+
+    const thread: Thread = {
+      id: `thread-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      lane,
+      from: from.trim() || "Not listed",
+      recipient: recipient.trim() || "VaultForge Owner",
+      title: cleanTitle || "Untitled Message",
+      room: room.trim() || "General",
+      message: cleanMessage || "No message entered.",
+      folder: "active",
+      unread: true,
+      createdAt: new Date().toLocaleString(),
     };
-    thread.messages = [message];
-    persist([thread, ...threads]);
-    setActiveKey(exactThreadKey(thread));
-    setNewSubject("");
-    setNewTo("");
+
+    const next = [thread, ...threads];
+    persist(next);
+    setSelected(thread);
+    setFolder("active");
+    setTitle("");
+    setRoom("");
+    setMessage("");
   }
 
-  function laneButton(value: Lane | "all", label: string, count: number) {
-    const unread = value === "all"
-      ? counts.unread
-      : threads.filter((thread) => thread.status === "active" && thread.lane === value && thread.unread).length;
-
-    return (
-      <button type="button" style={lane === value ? activePanel : unread ? pulseRed : panel} onClick={() => { setLane(value); setActiveKey(""); }}>
-        <div style={eyebrow}>{label}</div>
-        <h2 style={h2}>{count}</h2>
-        <p style={muted}>{unread} unread</p>
-      </button>
+  function moveThread(id: string, nextFolder: Folder) {
+    const next = threads.map((thread) =>
+      thread.id === id
+        ? { ...thread, folder: nextFolder, unread: nextFolder === "unread" ? true : thread.unread }
+        : thread
     );
+
+    persist(next);
+
+    if (selected?.id === id) {
+      setSelected({ ...selected, folder: nextFolder });
+    }
+
+    setFolder(nextFolder);
+  }
+
+  function markRead(id: string, unread: boolean) {
+    const next = threads.map((thread) =>
+      thread.id === id ? { ...thread, unread } : thread
+    );
+
+    persist(next);
+
+    if (selected?.id === id) {
+      setSelected({ ...selected, unread });
+    }
+  }
+
+  function deleteForever(id: string) {
+    saveDeletedForever(id);
+    const next = threads.filter((thread) => thread.id !== id);
+    persist(next);
+    setSelected(null);
+    setFolder("deleted");
   }
 
   return (
     <main style={page}>
-      <style>{styleTag}</style>
-      <div style={wrap}>
-        <Nav />
-        <MessageCommandHeader threads={threads} activeLane={lane === "all" ? "general" : lane} setLane={setLane} setFolder={setFolder} />
+      <div style={shell}>
+        <nav style={nav}>
+          <div style={brand}>VAULTFORGE</div>
+          <Link href="/" style={button}>Home</Link>
+          <Link href="/investor-room" style={button}>Investor Room</Link>
+          <Link href="/command" style={button}>Command</Link>
+          <Link href="/messages" style={goldButton}>Messages</Link>
+          <Link href="/logout" style={redButton}>Logout</Link>
+        </nav>
 
-        <section style={hero}>
-          <div style={eyebrow}>Execution Communications</div>
-          <h1 style={h1}>Threaded inbox.</h1>
-          <p style={sub}>Cards first. Open a thread to read and reply. Deal, Pain, Member, and Member Comms messages stay separated and carry room context.</p>
+        <section style={goldCard}>
+          <div style={eyebrow}>VaultForge Message Command</div>
+          <h1 style={h1}>Messages by room, sender, recipient, and title.</h1>
+          <p style={sub}>
+            This is the clean message center. It is separate from member area. Every thread should show From, Recipient, Title, Room, and Message.
+          </p>
         </section>
 
-        <Section title="Message Lanes">
-          <div style={grid}>
-            {laneButton("all", "All Cards", counts.all)}
-            {laneButton("deal", "Deal Threads", counts.deal)}
-            {laneButton("pain", "Pain Threads", counts.pain)}
-            {laneButton("member", "Member Threads", counts.member)}
-            {laneButton("general", "Member Comms Threads", counts.general)}
+        <section style={card}>
+          <div style={eyebrow}>Message Folders</div>
+          <div style={{ ...grid, marginTop: 16 }}>
+            <StatCard label="Active" count={grouped.active.length} active={folder === "active"} onClick={() => setFolder("active")} />
+            <StatCard label="Unread" count={grouped.unread.length} active={folder === "unread"} onClick={() => setFolder("unread")} />
+            <StatCard label="Saved" count={grouped.saved.length} active={folder === "saved"} onClick={() => setFolder("saved")} />
+            <StatCard label="Archived" count={grouped.archived.length} active={folder === "archived"} onClick={() => setFolder("archived")} />
+            <StatCard label="Deleted" count={grouped.deleted.length} active={folder === "deleted"} onClick={() => setFolder("deleted")} />
           </div>
-        </Section>
+        </section>
 
-        <Section title="Thread Folders">
-          <div style={grid}>
-            <StatusFolder title="Active" count={counts.all} active={folder === "active"} onClick={() => { setFolder("active"); setActiveKey(""); }} />
-            <StatusFolder title="Unread" count={counts.unread} active={folder === "unread"} onClick={() => { setFolder("unread"); setActiveKey(""); }} />
-            <StatusFolder title="Saved" count={counts.saved} active={folder === "saved"} onClick={() => { setFolder("saved"); setActiveKey(""); }} />
-            <StatusFolder title="Archived Threads" count={counts.archived} active={folder === "archived"} onClick={() => { setFolder("archived"); setActiveKey(""); }} />
-            <StatusFolder title="Deleted Threads" count={counts.deleted} active={folder === "deleted"} onClick={() => { setFolder("deleted"); setActiveKey(""); }} />
-          </div>
-        </Section>
+        <section style={card}>
+          <div style={eyebrow}>Create Command Thread</div>
 
-        <Section title="Create Command Thread">
-          <div style={grid}>
+          <div style={{ ...grid, marginTop: 16 }}>
             <label>
-              <div style={eyebrow}>Lane</div>
-              <select style={input} value={newLane} onChange={(event) => setNewLane(event.target.value as Lane)}>
-                <option value="general">Member Comms</option>
-                <option value="member">Member</option>
-                <option value="deal">Deal</option>
-                <option value="pain">Pain</option>
+              <span style={label}>Lane</span>
+              <select value={lane} onChange={(event) => setLane(event.target.value as Lane)} style={input}>
+                <option>Owner</option>
+                <option>Investor</option>
+                <option>Member</option>
+                <option>Deal Room</option>
+                <option>Pain Room</option>
+                <option>General</option>
               </select>
             </label>
+
             <label>
-              <div style={eyebrow}>Subject</div>
-              <input style={input} value={newSubject} onKeyDownCapture={(event) => event.stopPropagation()} onChange={(event) => setNewSubject(event.target.value)} placeholder="Thread subject" />
+              <span style={label}>From</span>
+              <input value={from} onChange={(event) => setFrom(event.target.value)} placeholder="sender email/name" style={input} />
             </label>
+
             <label>
-              <div style={eyebrow}>To / Email</div>
-              <input style={input} value={newTo} onKeyDownCapture={(event) => event.stopPropagation()} onChange={(event) => setNewTo(event.target.value)} placeholder="optional" />
+              <span style={label}>Recipient</span>
+              <input value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="recipient email/name" style={input} />
+            </label>
+
+            <label>
+              <span style={label}>Title</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="message title" style={input} />
+            </label>
+
+            <label>
+              <span style={label}>Room</span>
+              <input value={room} onChange={(event) => setRoom(event.target.value)} placeholder="Deal Room / Pain Room / General" style={input} />
             </label>
           </div>
+
+          <label style={{ display: "block", marginTop: 16 }}>
+            <span style={label}>Message</span>
+            <textarea
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder="Write the message here"
+              rows={5}
+              style={{ ...input, resize: "vertical" }}
+            />
+          </label>
+
           <div style={{ ...row, marginTop: 16 }}>
-            <button type="button" style={goldBtn} onClick={createThread}>Create Command Thread</button>
+            <button type="button" onClick={createThread} style={goldButton}>
+              Create Message Thread
+            </button>
           </div>
-        </Section>
+        </section>
 
-        <Section title={activeThread ? "Open Thread" : "Thread Cards"}>
-          {!activeThread ? (
-            visible.length ? (
-              <div style={grid}>
-                {visible.map((thread) => (
-                  <ThreadCard key={exactThreadKey(thread)} thread={thread} active={activeKey === exactThreadKey(thread)} onOpen={() => openThread(thread)} />
-                ))}
-              </div>
-            ) : (
-              <div style={panel}>
-                <h2 style={h2}>No threads here.</h2>
-                <p style={sub}>Create a thread or open another lane/folder.</p>
-              </div>
-            )
-          ) : (
-            <div style={{ display: "grid", gap: 16 }}>
-              <div style={activeThread.unread ? pulseRed : activePanel}>
-                <div style={eyebrow}>{laneLabel(activeThread.lane)} Thread</div>
-                <h2 style={h2}>{activeThread.subject}</h2>
-                <p style={sub}>{activeThread.roomTitle}</p>
-                <p style={muted}>{activeThread.roomSubtitle}</p>
-                <p style={muted}>Operators: {hydrateParticipants(activeThread).join(", ") || "Owner/member not attached yet"}</p>
+        {selected ? (
+          <section style={card}>
+            <div style={eyebrow}>{selected.lane} • {selected.folder}</div>
+            <h2 style={h2}>{selected.title}</h2>
 
-                <div style={{ ...row, marginTop: 16 }}>
-                  <button type="button" style={btn} onClick={() => setActiveKey("")}>Back to Cards</button>
-                  <button type="button" style={activeThread.saved || activeThread.status === "saved" ? goldBtn : btn} onClick={() => updateThread(activeThread.id, { saved: !activeThread.saved, status: activeThread.saved ? "active" : "saved" })}>{activeThread.saved || activeThread.status === "saved" ? "Saved" : "Save"}</button>
-                  <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { unread: !activeThread.unread })}>{activeThread.unread ? "Mark Read" : "Mark Unread"}</button>
-                  {activeThread.status !== "deleted" ? (
-                    <button type="button" style={btn} onClick={() => updateThread(activeThread.id, { status: "archived" })}>Archive</button>
-                  ) : null}
-
-                  {activeThread.status !== "deleted" ? (
-                    <button type="button" style={redBtn} onClick={() => updateThread(activeThread.id, { status: "deleted" })}>Delete</button>
-                  ) : (
-                    <button type="button" style={redBtn} onClick={() => permanentlyDeleteThread(activeThread)}>Delete Forever</button>
-                  )}
-
-                  {activeThread.status !== "active" ? <button type="button" style={goldBtn} onClick={() => updateThread(activeThread.id, { status: "active" })}>Restore</button> : null}
-                  {activeThread.roomType === "deal" && activeThread.roomId ? <Link href={`/deal-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Deal Room</Link> : null}
-                  {activeThread.roomType === "pain" && activeThread.roomId ? <Link href={`/pain-rooms/${encodeURIComponent(activeThread.roomId)}`} style={goldBtn}>Open Pain Room</Link> : null}
-                </div>
+            <div style={{ ...grid, marginTop: 14 }}>
+              <div style={tile}>
+                <div style={eyebrow}>From</div>
+                <p style={sub}>{selected.from}</p>
               </div>
 
-              <div style={{ display: "grid", gap: 12 }}>
-                {activeThread.messages.length ? activeThread.messages.map((message) => <MessageBubble key={message.id} message={message} />) : <p style={sub}>No messages yet. Send Execution Reply below to start this thread.</p>}
+              <div style={tile}>
+                <div style={eyebrow}>Recipient</div>
+                <p style={sub}>{selected.recipient}</p>
               </div>
 
-              <div style={panel}>
-                <div style={eyebrow}>Send Reply</div>
-                <textarea
-                  style={textarea}
-                  placeholder="Type reply..."
-                  value={reply}
-                  onChange={(event) => setReply(event.target.value)}
-                  onKeyDownCapture={(event) => event.stopPropagation()}
-                />
-                <div style={{ ...row, marginTop: 14 }}>
-                  <button type="button" style={goldBtn} onClick={sendReply}>Send Reply</button>
-                </div>
+              <div style={tile}>
+                <div style={eyebrow}>Room</div>
+                <p style={sub}>{selected.room}</p>
               </div>
             </div>
+
+            <div style={{ ...tile, marginTop: 14 }}>
+              <div style={eyebrow}>Message</div>
+              <p style={sub}>{selected.message}</p>
+              <p style={muted}>Created: {selected.createdAt}</p>
+            </div>
+
+            <div style={{ ...row, marginTop: 16 }}>
+              <button type="button" style={goldButton} onClick={() => moveThread(selected.id, "active")}>Active</button>
+              <button type="button" style={button} onClick={() => markRead(selected.id, false)}>Mark Read</button>
+              <button type="button" style={button} onClick={() => markRead(selected.id, true)}>Mark Unread</button>
+              <button type="button" style={button} onClick={() => moveThread(selected.id, "saved")}>Save</button>
+              <button type="button" style={button} onClick={() => moveThread(selected.id, "archived")}>Archive</button>
+              <button type="button" style={redButton} onClick={() => moveThread(selected.id, "deleted")}>Delete</button>
+              {selected.folder === "deleted" ? (
+                <button type="button" style={redButton} onClick={() => deleteForever(selected.id)}>Delete Forever</button>
+              ) : null}
+              <button type="button" style={button} onClick={() => setSelected(null)}>Close</button>
+            </div>
+          </section>
+        ) : null}
+
+        <section style={card}>
+          <div style={eyebrow}>{folderTitle(folder)}</div>
+          <h2 style={h2}>Thread Cards</h2>
+
+          {visible.length ? (
+            <div style={threadGrid}>
+              {visible.map((thread) => (
+                <button
+                  key={thread.id}
+                  type="button"
+                  onClick={() => {
+                    setSelected(thread);
+                    markRead(thread.id, false);
+                  }}
+                  style={{
+                    ...tile,
+                    cursor: "pointer",
+                    borderColor: thread.unread ? "rgba(245,197,66,.78)" : "rgba(245,197,66,.35)",
+                  }}
+                >
+                  <div style={eyebrow}>{thread.lane} • {thread.folder}</div>
+                  <h3 style={h3}>{thread.title}</h3>
+                  <p style={muted}>
+                    <strong style={{ color: "#f7f8ff" }}>From:</strong> {thread.from}
+                  </p>
+                  <p style={muted}>
+                    <strong style={{ color: "#f7f8ff" }}>Recipient:</strong> {thread.recipient}
+                  </p>
+                  <p style={muted}>
+                    <strong style={{ color: "#f7f8ff" }}>Room:</strong> {thread.room}
+                  </p>
+                  <p style={muted}>{thread.message}</p>
+                  <p style={{ ...muted, color: "#ffda5e", fontWeight: 950 }}>Open Thread</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={tile}>
+              <h3 style={h3}>No threads here.</h3>
+              <p style={sub}>Create a thread or open another folder.</p>
+            </div>
           )}
-        </Section>
+        </section>
       </div>
     </main>
   );
