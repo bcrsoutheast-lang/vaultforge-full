@@ -112,6 +112,8 @@ const DEAL_KEYS = [
   "vaultforge_my_rooms_clean_v2",
   "vaultforge_command_deal_rooms_v1",
   "vaultforge_member_rooms_v1",
+  "vaultforge_member_deal_alerts_v1",
+  "vaultforge_alerts_feed_v1",
   "vaultforge_clean_deal_rooms",
   "vaultforge_deal_rooms",
   "vaultforge_rooms_deals",
@@ -152,6 +154,7 @@ function list(value: unknown): string[] {
 function cleanImage(value: unknown) {
   const raw = String(value || "").trim();
   if (!raw) return "";
+
   const parsed = j<string | null>(raw, null);
   const text = String(parsed || raw).trim().replace(/^"|"$/g, "");
 
@@ -183,33 +186,6 @@ function bestImageFrom(row: any) {
   ];
 
   return candidates.find(Boolean) || "";
-}
-
-async function compressImage(file: File, maxWidth = 780, quality = 0.45): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onerror = () => resolve("");
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => resolve("");
-      img.onload = () => {
-        try {
-          const scale = Math.min(1, maxWidth / img.width);
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(img.width * scale));
-          canvas.height = Math.max(1, Math.round(img.height * scale));
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return resolve("");
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/jpeg", quality));
-        } catch {
-          resolve("");
-        }
-      };
-      img.src = String(reader.result || "");
-    };
-    reader.readAsDataURL(file);
-  });
 }
 
 function moneyNum(value: unknown) {
@@ -352,17 +328,42 @@ function getRoom(kind: RoomKind, id: string) {
   if (!ok()) return null as Room | null;
 
   const states = stateMap();
+  const copies: Room[] = [];
 
   for (const key of directKeys(kind, id)) {
     const found = j<any | null>(localStorage.getItem(key), null);
-    if (found) {
-      const room = normalizeRoom(found, kind);
-      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
-      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
-    }
+    if (found && typeof found === "object") copies.push(normalizeRoom(found, kind));
   }
 
-  return allRooms(kind).find((room) => rid(room) === id) || null;
+  allRooms(kind)
+    .filter((room) => rid(room) === id || txt((room as any).roomId) === id || txt((room as any).dealId) === id)
+    .forEach((room) => copies.push(normalizeRoom(room, kind)));
+
+  if (!copies.length) return null;
+
+  const merged = copies.reduce((acc, item) => {
+    const photos = Array.from(new Set([...imageList(acc.photos), ...imageList(acc.photoUrls), ...imageList(item.photos), ...imageList(item.photoUrls)]));
+    const cover = bestImageFrom({ ...acc, ...item, photos, photoUrls: photos });
+
+    return normalizeRoom(
+      {
+        ...acc,
+        ...item,
+        photos,
+        photoUrls: photos,
+        coverPhoto: cover,
+        photoUrl: cover,
+        imageUrl: cover,
+      },
+      kind
+    );
+  }, copies[0]);
+
+  const state = states[id] || states[`${kind}:${id}`] || roomState(merged);
+  const next = { ...merged, roomState: state, cleanupState: state, stateStatus: state };
+
+  saveRoom(kind, next);
+  return next;
 }
 
 function writeJson(key: string, value: unknown) {
@@ -826,7 +827,6 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
   const [panelKey, setPanelKey] = useState<"intel" | "numbers" | "execution" | "matches" | "routing" | "activity" | "messages" | "notes">("intel");
   const [watched, setWatched] = useState(false);
   const [watchCount, setWatchCount] = useState(0);
-  const [photoStatus, setPhotoStatus] = useState("");
 
   useEffect(() => {
     const found = getRoom("deal", id);
@@ -870,39 +870,6 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
     setWatchCount(watchingCount("deal", id));
   }
 
-  async function replaceRoomPhoto(files: FileList | null) {
-    const file = files?.[0];
-    if (!file || !room) return;
-
-    setPhotoStatus("Saving photo...");
-    const image = await compressImage(file);
-
-    if (!image) {
-      setPhotoStatus("Photo could not be read. Try a different image.");
-      return;
-    }
-
-    const existingPhotos = imageList(room.photos).filter(Boolean);
-    const nextPhotos = Array.from(new Set([image, ...existingPhotos])).slice(0, 6);
-
-    const nextRoom = normalizeRoom(
-      {
-        ...room,
-        photos: nextPhotos,
-        photoUrls: nextPhotos,
-        coverPhoto: image,
-        photoUrl: image,
-        imageUrl: image,
-        updatedAt: new Date().toISOString(),
-      },
-      "deal"
-    );
-
-    saveRoom("deal", nextRoom);
-    setRoom(nextRoom);
-    setPhotoStatus("Photo saved to this deal room.");
-  }
-
   return (
     <main style={page}>
       <div style={wrap}>
@@ -913,8 +880,8 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
             <img src={img} alt={titleFor(room, "deal")} style={photoStyle} />
           ) : (
             <div style={{ ...panel, marginBottom: 16 }}>
-              <div style={eyebrow}>No Saved Photo Found</div>
-              <p style={muted}>Use Room Actions → Room Photo to attach a photo to this exact deal.</p>
+              <div style={eyebrow}>No Deal Photo Saved</div>
+              <p style={muted}>This deal room has no readable saved image. Upload the deal photo when creating the deal so it appears here and in member alerts.</p>
             </div>
           )}
           <div style={eyebrow}>Opportunity Room • {roomState(room)}</div>
@@ -932,18 +899,6 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
             <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
             <button type="button" style={redBtn} onClick={() => move("deleted")}>Delete</button>
             <Link href="/deal-rooms" style={btn}>Back</Link>
-          </div>
-
-          <div style={{ ...panel, marginTop: 18 }}>
-            <div style={eyebrow}>Room Photo</div>
-            <p style={muted}>Add or replace the saved photo for this exact deal room. This writes coverPhoto, photoUrl, imageUrl, photos[0], and photoUrls[0].</p>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => replaceRoomPhoto(event.target.files)}
-              style={{ marginTop: 14, color: "#f7f7fb" }}
-            />
-            {photoStatus ? <p style={{ ...muted, color: photoStatus.includes("saved") ? "#7dff9b" : "#ffd45a", fontWeight: 900 }}>{photoStatus}</p> : null}
           </div>
         </Section>
 
