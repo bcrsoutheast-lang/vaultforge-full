@@ -401,7 +401,6 @@ export default function InvestorRoomPage() {
           <div style={brand}>VAULTFORGE</div>
           <Link href="/" style={button}>Home</Link>
           <Link href="/investor-room" style={goldButton}>Investor Room</Link>
-          <Link href="/deal-create" style={button}>Create Deal</Link>
           <Link href="/messages" style={button}>Messages</Link>
         </nav>
 
@@ -418,9 +417,9 @@ export default function InvestorRoomPage() {
 
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Investor Command Room</div>
-          <h1 style={h1}>Canonical investor opportunities only.</h1>
+          <h1 style={h1}>Investor opportunities only.</h1>
           <p style={sub}>
-            This page reads only investor-facing canonical Deal and Pain records. Invalid Untitled Room / NA rows are automatically ignored and removed from the investor stores.
+            Investors can review Deal and Pain opportunities, save or archive them, and message the owner. Deal creation stays on the member side.
           </p>
           <div style={{ ...row, marginTop: 18 }}>
             <button type="button" style={goldButton} onClick={() => setLane("deals")}>Open Deal Signals</button>
@@ -513,10 +512,7 @@ export default function InvestorRoomPage() {
           ) : (
             <div style={tile}>
               <h3 style={h3}>No canonical investor rooms in this folder.</h3>
-              <p style={sub}>Create a real Deal/Pain opportunity with title, owner, and details. Old Untitled Room / NA rows are intentionally ignored.</p>
-              <div style={{ ...row, marginTop: 14 }}>
-                <Link href="/deal-create" style={goldButton}>Create Deal</Link>
-              </div>
+              <p style={sub}>No investor-facing opportunities are available in this folder yet. Members create deal and pain opportunities from the member side; investors review and message owners here.</p>
             </div>
           )}
         </section>
