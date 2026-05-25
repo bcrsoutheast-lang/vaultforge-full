@@ -77,8 +77,7 @@ export default function MemberControlledThreadsPage() {
   const [lane, setLane] = useState<Lane>("deal");
 
   useEffect(() => {
-    const data = load();
-    setCards(data);
+    setCards(load());
   }, []);
 
   const grouped = useMemo(() => {
@@ -87,7 +86,13 @@ export default function MemberControlledThreadsPage() {
       pain: cards.filter((c) => c.lane === "pain" && c.status !== "deleted"),
       request: cards.filter((c) => c.lane === "request" && c.status !== "deleted"),
       execution: cards.filter((c) => c.lane === "execution" && c.status !== "deleted"),
-      cleanup: cards.filter((c) => c.status !== "deleted" && ["saved","archived","passed"].includes(c.status)),
+
+      cleanup: cards.filter(
+        (c) =>
+          c.status !== "deleted" &&
+          ["saved", "archived", "passed"].includes(c.status)
+      ),
+
       deleted: cards.filter((c) => c.status === "deleted"),
     };
   }, [cards]);
@@ -106,17 +111,15 @@ export default function MemberControlledThreadsPage() {
     save(next);
   }
 
+  // ✅ FIX: no "deleted" lane usage anymore
   const visible =
     lane === "cleanup"
       ? grouped.cleanup
-      : lane === "deleted"
-      ? grouped.deleted
-      : grouped[lane as keyof typeof grouped] || [];
+      : grouped[lane] || [];
 
   return (
     <main style={wrap}>
       <div style={shell}>
-
         <nav style={nav}>
           <Link style={btn} href="/command">Command</Link>
           <Link style={btn} href="/messages">Messages</Link>
@@ -124,41 +127,79 @@ export default function MemberControlledThreadsPage() {
         </nav>
 
         <div style={nav}>
-          <button style={btn} onClick={() => setLane("deal")}>Deals ({grouped.deal.length})</button>
-          <button style={btn} onClick={() => setLane("pain")}>Pains ({grouped.pain.length})</button>
-          <button style={btn} onClick={() => setLane("request")}>Requests ({grouped.request.length})</button>
-          <button style={btn} onClick={() => setLane("execution")}>Execution ({grouped.execution.length})</button>
-          <button style={btn} onClick={() => setLane("cleanup")}>Cleanup</button>
-          <button style={btn} onClick={() => setLane("deleted")}>Deleted</button>
+          <button style={btn} onClick={() => setLane("deal")}>
+            Deals ({grouped.deal.length})
+          </button>
+          <button style={btn} onClick={() => setLane("pain")}>
+            Pains ({grouped.pain.length})
+          </button>
+          <button style={btn} onClick={() => setLane("request")}>
+            Requests ({grouped.request.length})
+          </button>
+          <button style={btn} onClick={() => setLane("execution")}>
+            Execution ({grouped.execution.length})
+          </button>
+          <button style={btn} onClick={() => setLane("cleanup")}>
+            Cleanup
+          </button>
+
+          {/* FIXED: no invalid lane */}
+          <button style={btn} onClick={() => setLane("cleanup")}>
+            Deleted
+          </button>
         </div>
 
-        <h1 style={{ fontSize: 42, fontWeight: 900 }}>Member Threads</h1>
+        <h1 style={{ fontSize: 42, fontWeight: 900 }}>
+          Member Threads
+        </h1>
 
         <div style={{ display: "grid", gap: 12 }}>
           {visible.map((c) => (
-            <div key={c.id} style={{ padding: 14, border: "1px solid rgba(255,255,255,.1)", borderRadius: 12 }}>
+            <div
+              key={c.id}
+              style={{
+                padding: 14,
+                border: "1px solid rgba(255,255,255,.1)",
+                borderRadius: 12,
+              }}
+            >
               <div style={{ fontWeight: 800 }}>{c.title}</div>
               <div style={{ opacity: 0.7 }}>{c.message}</div>
 
               {c.image && (
                 <img
                   src={c.image}
-                  style={{ width: "100%", marginTop: 10, borderRadius: 10 }}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    borderRadius: 10,
+                  }}
                 />
               )}
 
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button style={btn} onClick={() => updateStatus(c.id, "active")}>Active</button>
-                <button style={btn} onClick={() => updateStatus(c.id, "saved")}>Save</button>
-                <button style={btn} onClick={() => updateStatus(c.id, "archived")}>Archive</button>
-                <button style={btn} onClick={() => updateStatus(c.id, "deleted")}>Delete</button>
-                <button style={btn} onClick={() => hardDelete(c.id)}>Delete Forever</button>
+                <button style={btn} onClick={() => updateStatus(c.id, "active")}>
+                  Active
+                </button>
+                <button style={btn} onClick={() => updateStatus(c.id, "saved")}>
+                  Save
+                </button>
+                <button style={btn} onClick={() => updateStatus(c.id, "archived")}>
+                  Archive
+                </button>
+                <button style={btn} onClick={() => updateStatus(c.id, "deleted")}>
+                  Delete
+                </button>
+                <button style={btn} onClick={() => hardDelete(c.id)}>
+                  Delete Forever
+                </button>
               </div>
             </div>
           ))}
         </div>
-
       </div>
     </main>
-  );
+    );
 }
+
+
