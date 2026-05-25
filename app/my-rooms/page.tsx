@@ -570,7 +570,6 @@ export default function MyRoomsPage() {
         <nav style={nav}>
           <div style={brand}>VAULTFORGE</div>
           <Link href="/command" style={btn}>Command</Link>
-          <Link href="/member-controlled-threads" style={btn}>Request Desk</Link>
           <Link href="/messages" style={btn}>Messages</Link>
           <Link href="/network" style={btn}>Network</Link>
           <Link href="/profile" style={btn}>Profile</Link>
