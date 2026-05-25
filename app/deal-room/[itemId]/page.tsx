@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCanonicalRoom } from "../../lib/vaultforgeCanonicalRooms";
+import DealActions from "./DealActions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,6 +39,12 @@ export default async function DealRoomDetailPage({ params }: { params: Params })
         .vf-nav{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
         .vf-nav a{color:#f8fafc;text-decoration:none;border:1px solid rgba(245,197,91,.25);background:rgba(245,197,91,.07);border-radius:999px;padding:10px 13px;font-weight:900;font-size:13px}
         .vf-nav a.primary{background:linear-gradient(135deg,#fde68a,#e8c46b);color:#111827;border:0}
+        .vf-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+        .vf-btn{border:1px solid rgba(245,197,91,.25);background:rgba(245,197,91,.07);color:#f8fafc;border-radius:12px;padding:10px 16px;font-weight:900;font-size:14px;cursor:pointer}
+        .vf-btn-danger{background:#dc2626;border-color:#dc2626;color:#fff}
+        .vf-btn-danger:hover{background:#b91c1c}
+        .vf-btn:hover{filter:brightness(1.1)}
+        .vf-btn:disabled{opacity:0.5;cursor:not-allowed}
       `}</style>
 
       <div className="vf-wrap">
@@ -45,6 +52,9 @@ export default async function DealRoomDetailPage({ params }: { params: Params })
           <div className="vf-kicker">Deal Room</div>
           <h1>{room?.title || "Deal room not loaded"}</h1>
           <p>{room?.summary || "This id did not match a live deal room. Open a room from /deal-rooms so the current canonical id is used."}</p>
+          
+          {room?.id && <DealActions dealId={room.id} />}
+
           <div className="vf-nav">
             <Link href="/deal-rooms">Back to Deal Rooms</Link>
             <Link href="/dashboard">Command</Link>
@@ -63,24 +73,6 @@ export default async function DealRoomDetailPage({ params }: { params: Params })
             <div className="vf-metric"><span>Repairs</span><strong>{money(room?.repairs || "")}</strong></div>
             <div className="vf-metric"><span>Fit Score</span><strong>{room?.score || "84"}</strong></div>
             <div className="vf-metric"><span>Source</span><strong>{room?.source_table || "not-found"}</strong></div>
-          </div>
-        </section>
-
-        <section className="vf-card">
-          <div className="vf-kicker">Opportunity AI</div>
-          <div className="vf-box-grid">
-            <div className="vf-box"><h3 style={{color:"#86efac"}}>What looks good</h3><p>This room can support buyer fit, underwriting, capital routing, and execution review once the submitted numbers are complete.</p></div>
-            <div className="vf-box"><h3 style={{color:"#fca5a5"}}>What needs caution</h3><p>Verify title, documents, repairs, occupancy, capital assumptions, and exit path before routing heavily.</p></div>
-            <div className="vf-box"><h3 style={{color:"#93c5fd"}}>Next steps</h3><p>Confirm economics, attach docs/photos, route matched buyers, capital, and operators, then move toward review or archive.</p></div>
-          </div>
-        </section>
-
-        <section className="vf-card">
-          <div className="vf-kicker">Matched Profiles</div>
-          <div className="vf-box-grid">
-            <div className="vf-box"><h3>Buyer Match</h3><p>Southeast buyer fit based on market, asset, and strategy.</p></div>
-            <div className="vf-box"><h3>Capital Match</h3><p>Bridge/JV capital fit if the room needs acquisition funding.</p></div>
-            <div className="vf-box"><h3>Operator Match</h3><p>Operator match for local execution, PM, rehab, or turnaround work.</p></div>
           </div>
         </section>
       </div>
