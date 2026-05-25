@@ -425,7 +425,7 @@ export default function InvestorRoomPage() {
             <button type="button" style={goldButton} onClick={() => setLane("deals")}>Open Deal Signals</button>
             <button type="button" style={button} onClick={() => setLane("pain")}>Open Pain Signals</button>
             <button type="button" style={button} onClick={refreshRooms}>Refresh Canonical Rooms</button>
-            <Link href={messageHref(selected)} style={goldButton}>Message Owner</Link>
+            <span style={{ ...muted, color: "#ffda5e", fontWeight: 900 }}>Open a deal first, then message owner inside the deal.</span>
           </div>
         </section>
 
@@ -476,8 +476,7 @@ export default function InvestorRoomPage() {
               <button type="button" style={button} onClick={() => moveRoom(selected.id, "archived")}>Archive</button>
               <button type="button" style={redButton} onClick={() => moveRoom(selected.id, "deleted")}>Delete</button>
               {selected.status === "deleted" ? <button type="button" style={redButton} onClick={() => deleteForever(selected.id)}>Delete Forever</button> : null}
-              <Link href={messageHref(selected)} style={goldButton}>Message Owner</Link>
-              <button type="button" style={button} onClick={() => setSelected(null)}>Close</button>
+                <button type="button" style={button} onClick={() => setSelected(null)}>Close</button>
             </div>
           </section>
         ) : null}
