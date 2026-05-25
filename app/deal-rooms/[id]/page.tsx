@@ -107,7 +107,16 @@ type MemberProfile = {
   [key: string]: unknown;
 };
 
-const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const DEAL_KEYS = [
+  "vaultforge_canonical_deal_rooms_v1",
+  "vaultforge_my_rooms_clean_v2",
+  "vaultforge_command_deal_rooms_v1",
+  "vaultforge_member_rooms_v1",
+  "vaultforge_clean_deal_rooms",
+  "vaultforge_deal_rooms",
+  "vaultforge_rooms_deals",
+  "vf_deal_rooms",
+];
 const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
@@ -138,6 +147,69 @@ function list(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
   if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
   return [];
+}
+
+function cleanImage(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const parsed = j<string | null>(raw, null);
+  const text = String(parsed || raw).trim().replace(/^"|"$/g, "");
+
+  if (
+    text.startsWith("data:image") ||
+    text.startsWith("http") ||
+    text.startsWith("/") ||
+    text.startsWith("blob:")
+  ) {
+    return text;
+  }
+
+  return "";
+}
+
+function imageList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(cleanImage).filter(Boolean);
+  const one = cleanImage(value);
+  return one ? [one] : [];
+}
+
+function bestImageFrom(row: any) {
+  const candidates = [
+    cleanImage(row?.coverPhoto),
+    cleanImage(row?.photoUrl),
+    cleanImage(row?.imageUrl),
+    ...imageList(row?.photos),
+    ...imageList(row?.photoUrls),
+  ];
+
+  return candidates.find(Boolean) || "";
+}
+
+async function compressImage(file: File, maxWidth = 780, quality = 0.45): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve("");
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve("");
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxWidth / img.width);
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve("");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch {
+          resolve("");
+        }
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function moneyNum(value: unknown) {
@@ -174,8 +246,9 @@ function keysFor(kind: RoomKind) {
 
 function normalizeRoom(row: any, kind: RoomKind): Room {
   const id = txt(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId);
-  const photos = list(row?.photos || row?.photoUrls);
-  const cover = txt(row?.coverPhoto || row?.photoUrl || row?.imageUrl || photos[0]);
+  const photos = Array.from(new Set([...imageList(row?.photos), ...imageList(row?.photoUrls)]));
+  const cover = bestImageFrom({ ...row, photos, photoUrls: photos });
+
   return {
     ...row,
     id,
@@ -354,8 +427,7 @@ function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
 }
 
 function firstPhoto(room: Room) {
-  const possible = [txt(room.coverPhoto), txt(room.photoUrl), txt(room.imageUrl), ...list(room.photos), ...list(room.photoUrls)].filter(Boolean);
-  return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
+  return bestImageFrom(room);
 }
 
 function profileId(profile: MemberProfile) {
@@ -754,6 +826,7 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
   const [panelKey, setPanelKey] = useState<"intel" | "numbers" | "execution" | "matches" | "routing" | "activity" | "messages" | "notes">("intel");
   const [watched, setWatched] = useState(false);
   const [watchCount, setWatchCount] = useState(0);
+  const [photoStatus, setPhotoStatus] = useState("");
 
   useEffect(() => {
     const found = getRoom("deal", id);
@@ -797,13 +870,53 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
     setWatchCount(watchingCount("deal", id));
   }
 
+  async function replaceRoomPhoto(files: FileList | null) {
+    const file = files?.[0];
+    if (!file || !room) return;
+
+    setPhotoStatus("Saving photo...");
+    const image = await compressImage(file);
+
+    if (!image) {
+      setPhotoStatus("Photo could not be read. Try a different image.");
+      return;
+    }
+
+    const existingPhotos = imageList(room.photos).filter(Boolean);
+    const nextPhotos = Array.from(new Set([image, ...existingPhotos])).slice(0, 6);
+
+    const nextRoom = normalizeRoom(
+      {
+        ...room,
+        photos: nextPhotos,
+        photoUrls: nextPhotos,
+        coverPhoto: image,
+        photoUrl: image,
+        imageUrl: image,
+        updatedAt: new Date().toISOString(),
+      },
+      "deal"
+    );
+
+    saveRoom("deal", nextRoom);
+    setRoom(nextRoom);
+    setPhotoStatus("Photo saved to this deal room.");
+  }
+
   return (
     <main style={page}>
       <div style={wrap}>
         <Nav active="deal" />
 
         <section style={intel.risk >= 75 ? dangerHero : hero}>
-          {img ? <img src={img} alt={titleFor(room, "deal")} style={photoStyle} /> : null}
+          {img ? (
+            <img src={img} alt={titleFor(room, "deal")} style={photoStyle} />
+          ) : (
+            <div style={{ ...panel, marginBottom: 16 }}>
+              <div style={eyebrow}>No Saved Photo Found</div>
+              <p style={muted}>Use Room Actions → Room Photo to attach a photo to this exact deal.</p>
+            </div>
+          )}
           <div style={eyebrow}>Opportunity Room • {roomState(room)}</div>
           <h1 style={h1}>{titleFor(room, "deal")}</h1>
           <p style={sub}>{loc(room)}</p>
@@ -819,6 +932,18 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
             <button type="button" style={btn} onClick={() => move("archived")}>Archive</button>
             <button type="button" style={redBtn} onClick={() => move("deleted")}>Delete</button>
             <Link href="/deal-rooms" style={btn}>Back</Link>
+          </div>
+
+          <div style={{ ...panel, marginTop: 18 }}>
+            <div style={eyebrow}>Room Photo</div>
+            <p style={muted}>Add or replace the saved photo for this exact deal room. This writes coverPhoto, photoUrl, imageUrl, photos[0], and photoUrls[0].</p>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => replaceRoomPhoto(event.target.files)}
+              style={{ marginTop: 14, color: "#f7f7fb" }}
+            />
+            {photoStatus ? <p style={{ ...muted, color: photoStatus.includes("saved") ? "#7dff9b" : "#ffd45a", fontWeight: 900 }}>{photoStatus}</p> : null}
           </div>
         </Section>
 
