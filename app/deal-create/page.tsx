@@ -175,6 +175,69 @@ function readArray(key: string) {
   return [];
 }
 
+function stripRoomImages(row: any) {
+  if (!row || typeof row !== "object") return row;
+  return {
+    ...row,
+    photos: [],
+    photoUrls: [],
+    coverPhoto: "",
+    photoUrl: "",
+    imageUrl: "",
+  };
+}
+
+function cleanupBloatedPhotoCopies() {
+  if (!browserReady()) return;
+
+  const duplicateStores = [
+    LEGACY_STORE_KEY,
+    MY_ROOMS_STORE_KEY,
+    COMMAND_DEAL_STORE_KEY,
+    MEMBER_ROOMS_STORE_KEY,
+    DEAL_ALERTS_STORE_KEY,
+    ALERTS_FEED_STORE_KEY,
+  ];
+
+  for (const key of duplicateStores) {
+    const rows = readArray(key);
+    if (rows.length) writeJson(key, rows.map(stripRoomImages));
+  }
+
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index) || "";
+    const lower = key.toLowerCase();
+    if (
+      lower.includes("old") ||
+      lower.includes("test") ||
+      lower.includes("backup") ||
+      lower.includes("debug")
+    ) {
+      continue;
+    }
+
+    if (
+      lower.startsWith("vaultforge_deal_room_") ||
+      lower.startsWith("vaultforge_clean_deal_room_") ||
+      lower.startsWith("vf_deal_room_")
+    ) {
+      const room = parseJson<any | null>(window.localStorage.getItem(key), null);
+      if (room && typeof room === "object") writeJson(key, stripRoomImages(room));
+    }
+  }
+}
+
+function saveCriticalRoomImage(id: string, image: string) {
+  if (!browserReady() || !id || !image) return;
+
+  const key = `vaultforge_room_image_${id}`;
+  try {
+    window.localStorage.setItem(key, image);
+  } catch {
+    // If even the tiny compressed image cannot save, keep the deal text alive.
+  }
+}
+
 function propertyTypesFor(assetClass: string) {
   if (assetClass === "Commercial") return COM_TYPES;
   if (assetClass === "Land") return LAND_TYPES;
@@ -382,22 +445,30 @@ function dealIntel(room: DealRoom) {
 }
 
 function saveEverywhere(next: DealRoom) {
-  const stores = [
-    CANONICAL_STORE_KEY,
+  const photo = next.coverPhoto || next.photoUrl || next.imageUrl || next.photos[0] || "";
+  const slim = stripRoomImages(next);
+
+  cleanupBloatedPhotoCopies();
+
+  const canonicalExisting = readDealsFrom(CANONICAL_STORE_KEY).filter((item) => item.id !== next.id);
+  if (!writeJson(CANONICAL_STORE_KEY, [next, ...canonicalExisting])) return false;
+
+  const duplicateStores = [
     LEGACY_STORE_KEY,
     MY_ROOMS_STORE_KEY,
     COMMAND_DEAL_STORE_KEY,
     MEMBER_ROOMS_STORE_KEY,
   ];
 
-  for (const key of stores) {
+  for (const key of duplicateStores) {
     const existing = readDealsFrom(key).filter((item) => item.id !== next.id);
-    if (!writeJson(key, [next, ...existing])) return false;
+    if (!writeJson(key, [slim, ...existing])) return false;
   }
 
   writeJson(`vaultforge_deal_room_${next.id}`, next);
-  writeJson(`vaultforge_clean_deal_room_${next.id}`, next);
-  writeJson(`vf_deal_room_${next.id}`, next);
+  writeJson(`vaultforge_clean_deal_room_${next.id}`, slim);
+  writeJson(`vf_deal_room_${next.id}`, slim);
+  saveCriticalRoomImage(next.id, photo);
 
   const states = parseJson<Record<string, RoomState>>(window.localStorage.getItem(STATE_KEY), {});
   states[next.id] = "active";
@@ -430,11 +501,7 @@ function saveDealAlert(next: DealRoom) {
     ownerEmail: next.ownerEmail,
     ownerName: next.ownerName,
     createdByEmail: next.createdByEmail,
-    coverPhoto: next.coverPhoto,
-    photoUrl: next.photoUrl,
-    imageUrl: next.imageUrl,
-    photos: next.photos,
-    photoUrls: next.photoUrls,
+    imageKey: `vaultforge_room_image_${next.id}`,
     summary: next.summary,
     analyzer: next.analyzer,
     href: `/deal-rooms/${encodeURIComponent(next.id)}`,
@@ -495,19 +562,19 @@ function saveDeal(room: DealRoom) {
   if (!next.title) return { ok: false, id: "", message: "Add a deal title before saving." };
 
   if (!saveEverywhere(next)) {
-    const slimPhotos = photos.slice(0, 1);
-    const slimCover = safeText(slimPhotos[0]);
-    const slim = normalizeDeal({
+    cleanupBloatedPhotoCopies();
+
+    const textOnly = normalizeDeal({
       ...next,
-      photos: slimPhotos,
-      photoUrls: slimPhotos,
-      coverPhoto: slimCover,
-      photoUrl: slimCover,
-      imageUrl: slimCover,
+      photos: [],
+      photoUrls: [],
+      coverPhoto: "",
+      photoUrl: "",
+      imageUrl: "",
     });
 
-    if (!saveEverywhere(slim)) {
-      return { ok: false, id: "", message: "Browser storage is full. Delete old test rooms/photos, then save again." };
+    if (!saveEverywhere(textOnly)) {
+      return { ok: false, id: "", message: "Browser storage is still full. Clear Safari website data for this site or delete old test rooms, then save again." };
     }
   }
 
@@ -521,7 +588,7 @@ function saveDeal(room: DealRoom) {
   return { ok: true, id, message: "Deal room saved with canonical photo fields." };
 }
 
-async function compressImage(file: File, maxWidth = 520, quality = 0.34): Promise<string> {
+async function compressImage(file: File, maxWidth = 360, quality = 0.18): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onerror = () => resolve("");
@@ -550,7 +617,7 @@ async function compressImage(file: File, maxWidth = 520, quality = 0.34): Promis
 
 async function photosFromFiles(files: FileList | null) {
   const out: string[] = [];
-  for (const file of Array.from(files || []).slice(0, 6)) {
+  for (const file of Array.from(files || []).slice(0, 1)) {
     const img = await compressImage(file);
     if (img) out.push(img);
   }
@@ -658,7 +725,7 @@ export default function DealCreatePage() {
 
   async function addPhotos(files: FileList | null) {
     const next = await photosFromFiles(files);
-    const merged = [...form.photos, ...next].slice(0, 6);
+    const merged = [...next].slice(0, 1);
     setForm({
       ...form,
       photos: merged,
@@ -695,7 +762,7 @@ export default function DealCreatePage() {
       }
 
       setSavedId(result.id);
-      setBanner("Deal room saved with photos. Members will see the same room photo and deal info.");
+      setBanner("Deal room saved. The cover photo is compressed and linked to the room without duplicating huge image blobs.");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSaving(false);
@@ -733,7 +800,7 @@ export default function DealCreatePage() {
         <section style={hero}>
           <div style={eyebrow}>Smart Deal Intake</div>
           <h1 style={h1}>Adaptive opportunity form.</h1>
-          <p style={sub}>Upload photos here when creating the deal. They save with the deal room and travel to Command, My Rooms, Deal Room, and member alerts.</p>
+          <p style={sub}>Upload one cover photo here when creating the deal. It is compressed and saved once so it can appear in the deal room and alerts without filling browser storage.</p>
         </section>
 
         <Section title="AI Deal Preview">
@@ -835,7 +902,7 @@ export default function DealCreatePage() {
 
         <Section title="Photos">
           <input type="file" multiple accept="image/*" onChange={(e) => addPhotos(e.target.files)} />
-          <p style={muted}>{form.photos.length}/6 selected. First photo becomes cover and saves into canonical room fields.</p>
+          <p style={muted}>{form.photos.length}/1 selected. One compressed cover photo travels with the deal room without filling browser storage.</p>
           {form.photos.length ? (
             <div style={grid}>
               {form.photos.map((p, i) => (
