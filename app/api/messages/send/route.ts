@@ -27,6 +27,9 @@ type ThreadPayload = {
   recipientProfile?: Record<string, unknown>;
   roomSnapshot?: Record<string, unknown>;
   folder?: string;
+  origin?: string;
+  senderWorkspace?: string;
+  recipientWorkspace?: string;
 };
 
 function supabase() {
@@ -151,6 +154,9 @@ export async function POST(request: Request) {
         },
       messages: [...oldMessages, entry],
       message: messageText,
+      origin: clean(body.origin || oldThread.origin || ""),
+      senderWorkspace: clean(body.senderWorkspace || oldThread.senderWorkspace || ""),
+      recipientWorkspace: clean(body.recipientWorkspace || oldThread.recipientWorkspace || ""),
     };
 
     const row = {
@@ -165,6 +171,9 @@ export async function POST(request: Request) {
       room_kind: clean(body.roomKind || thread.roomSnapshot?.kind || thread.lane || ""),
       folder: thread.folder,
       unread: true,
+      origin: clean(body.origin || thread.origin || ""),
+      sender_workspace: clean(body.senderWorkspace || thread.senderWorkspace || ""),
+      recipient_workspace: clean(body.recipientWorkspace || thread.recipientWorkspace || ""),
       updated_at: now,
       created_at: existing?.created_at || now,
     };
