@@ -466,10 +466,10 @@ export default function InvestorRoomPage() {
               <p style={sub}>{selected.summary}</p>
             </div>
 
-            <details style={{ marginTop: 16 }}>
-              <summary style={{ ...muted, color: "#ffda5e", cursor: "pointer", fontWeight: 900 }}>Show canonical stored data</summary>
-              <pre style={{ whiteSpace: "pre-wrap", overflowX: "auto", background: "rgba(0,0,0,.35)", border: "1px solid rgba(207,216,230,.14)", borderRadius: 16, padding: 16, marginTop: 12, color: "rgba(235,240,255,.82)", fontSize: 12 }}>{JSON.stringify(selected.raw, null, 2)}</pre>
-            </details>
+            <div style={{ ...tile, marginTop: 14 }}>
+              <div style={eyebrow}>Investor Action</div>
+              <p style={sub}>Review the opportunity, save it for later, archive it, or message the owner directly from this room.</p>
+            </div>
 
             <div style={{ ...row, marginTop: 18 }}>
               <button type="button" style={goldButton} onClick={() => moveRoom(selected.id, "active")}>Active / Restore</button>
