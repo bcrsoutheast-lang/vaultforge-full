@@ -3,29 +3,50 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+type View = "active" | "deal" | "pain" | "messages" | "saved" | "archived" | "deleted";
 type RoomKind = "deal" | "pain";
 type RoomStatus = "active" | "saved" | "archived" | "deleted";
-type MessageFolder = "active" | "unread" | "saved" | "archived" | "deleted";
 
 type ProfileSnapshot = {
   id: string;
   name: string;
   company: string;
   email: string;
-  phone: string;
-  title: string;
   memberType: string;
   basedState: string;
   basedCity: string;
   basedCounty: string;
-  verifiedStatus: string;
-  contactPreference: string;
-  responseSpeed: string;
   profilePhoto: string;
-  companyLogo: string;
 };
 
-type MessageThread = {
+type CanonicalMemberRoom = {
+  id: string;
+  roomId: string;
+  kind: RoomKind;
+  roomType: RoomKind;
+  workspace: "member-command";
+  visibility: "member";
+  title: string;
+  status: RoomStatus;
+  roomStatus: RoomStatus;
+  city: string;
+  county: string;
+  state: string;
+  assetClass: string;
+  propertyType: string;
+  strategy: string[];
+  message: string;
+  summary: string;
+  ownerId: string;
+  ownerEmail: string;
+  createdBy: string;
+  createdByEmail: string;
+  source: string;
+  updatedAt: string;
+  raw: Record<string, any>;
+};
+
+type CanonicalMessage = {
   id: string;
   lane?: string;
   from: string;
@@ -33,39 +54,38 @@ type MessageThread = {
   title: string;
   room: string;
   message: string;
-  folder: MessageFolder;
+  folder: "active" | "saved" | "archived" | "deleted" | "unread";
   unread: boolean;
   createdAt: string;
+  senderWorkspace?: string;
+  recipientWorkspace?: string;
+  origin?: string;
   senderProfile?: Partial<ProfileSnapshot>;
   recipientProfile?: Partial<ProfileSnapshot>;
-  roomSnapshot?: { id: string; kind: string; title: string; owner: string; source: string };
-  messages?: Array<{ id: string; from: string; recipient: string; message: string; createdAt: string; senderProfile?: Partial<ProfileSnapshot> }>;
+  roomSnapshot?: Record<string, any>;
 };
 
-type RoomCard = {
-  id: string;
-  kind: RoomKind;
-  title: string;
-  city: string;
-  county: string;
-  state: string;
-  asset: string;
-  strategy: string;
-  status: RoomStatus;
-  message: string;
-  updatedAt: string;
-  source: string;
-};
+const MEMBER_ROOMS_KEY = "vaultforge_member_rooms_v1";
+const MEMBER_COMMAND_DEAL_ROOMS_KEY = "vaultforge_command_deal_rooms_v1";
+const MEMBER_COMMAND_PAIN_ROOMS_KEY = "vaultforge_command_pain_rooms_v1";
+const MEMBER_STATUS_KEY = "vf_member_command_room_status_v1";
+const MEMBER_DELETED_FOREVER_KEY = "vf_member_command_deleted_forever_v1";
 
-const COMMAND_ROOMS_KEY = "vaultforge_command_rooms_v1";
-const COMMAND_DELETED_FOREVER_KEY = "vaultforge_command_deleted_forever_v1";
 const THREADS_KEY = "vf_message_center_threads_v1";
-const FOREVER_KEY = "vf_message_center_deleted_forever_v1";
+const MESSAGE_DELETED_FOREVER_KEY = "vf_message_center_deleted_forever_v1";
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const PROFILE_PHOTO_BACKUP_KEY = "vaultforge_member_profile_photo_v1";
-const COMPANY_LOGO_BACKUP_KEY = "vaultforge_member_company_logo_v1";
 
-const page: React.CSSProperties = { minHeight: "100vh", background: "radial-gradient(circle at 16% 10%, rgba(245,197,66,.12), transparent 30%), radial-gradient(circle at 88% 8%, rgba(120,0,30,.18), transparent 34%), #05070b", color: "#f7f8ff", padding: "26px 20px 90px", fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' };
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at 16% 10%, rgba(245,197,66,.12), transparent 30%), radial-gradient(circle at 88% 8%, rgba(120,0,30,.18), transparent 34%), #05070b",
+  color: "#f7f8ff",
+  padding: "26px 20px 90px",
+  fontFamily:
+    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+};
+
 const shell: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
 const nav: React.CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 20 };
 const brand: React.CSSProperties = { color: "#ffda5e", fontWeight: 1000, fontSize: 28, letterSpacing: "-.04em", marginRight: 10 };
@@ -86,187 +106,310 @@ const sub: React.CSSProperties = { color: "rgba(235,240,255,.78)", fontSize: 20,
 const muted: React.CSSProperties = { color: "rgba(235,240,255,.68)", fontSize: 15, lineHeight: 1.45, margin: "6px 0" };
 const avatar: React.CSSProperties = { width: 64, height: 64, objectFit: "cover", borderRadius: 999, border: "1px solid rgba(245,197,66,.45)", background: "rgba(0,0,0,.35)" };
 
-function parse<T>(raw: string | null, fallback: T): T {
+function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
-  try { return JSON.parse(raw) as T; } catch { return fallback; }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
-function clean(value: unknown, fallback = "Not listed") {
-  const text = String(value || "").trim();
+function clean(value: unknown, fallback = "") {
+  const text = String(value || "")
+    .replace(/\\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
   return text || fallback;
+}
+
+function cleanLower(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function isBadText(value: unknown) {
+  const text = cleanLower(value);
+  return !text || text === "na" || text === "n/a" || text === "not listed" || text === "untitled" || text === "untitled room" || text === "undefined" || text === "null";
+}
+
+function list(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
 }
 
 function currentEmail() {
   if (typeof window === "undefined") return "";
-  return window.localStorage.getItem("vf_email") || window.localStorage.getItem("vaultforge_email") || window.localStorage.getItem("email") || window.localStorage.getItem("vf_member_email") || window.localStorage.getItem("vf_current_email") || "";
-}
-
-function normalizeProfile(row: any): ProfileSnapshot {
-  const backupPhoto = typeof window !== "undefined" ? clean(window.localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY), "") : "";
-  const backupLogo = typeof window !== "undefined" ? clean(window.localStorage.getItem(COMPANY_LOGO_BACKUP_KEY), "") : "";
-  const email = clean(row?.email || currentEmail(), currentEmail());
-  return {
-    id: clean(row?.id || email || "local_member", "local_member"),
-    name: clean(row?.name || row?.fullName || row?.full_name || "VaultForge Member", "VaultForge Member"),
-    company: clean(row?.company || row?.companyName || "Company not listed", "Company not listed"),
-    email,
-    phone: clean(row?.phone || row?.phoneNumber || "", ""),
-    title: clean(row?.title || row?.roleTitle || "", ""),
-    memberType: clean(row?.memberType || row?.member_type || "Member", "Member"),
-    basedState: clean(row?.basedState || row?.state || row?.homeState || "", ""),
-    basedCity: clean(row?.basedCity || row?.city || "", ""),
-    basedCounty: clean(row?.basedCounty || row?.county || "", ""),
-    verifiedStatus: clean(row?.verifiedStatus || "Unverified", "Unverified"),
-    contactPreference: clean(row?.contactPreference || "VaultForge Message", "VaultForge Message"),
-    responseSpeed: clean(row?.responseSpeed || "24 Hours", "24 Hours"),
-    profilePhoto: clean(row?.profilePhoto || row?.photoUrl || row?.avatar || backupPhoto, ""),
-    companyLogo: clean(row?.companyLogo || row?.logoUrl || backupLogo, ""),
-  };
+  return (
+    window.localStorage.getItem("vf_email") ||
+    window.localStorage.getItem("vaultforge_email") ||
+    window.localStorage.getItem("email") ||
+    window.localStorage.getItem("vf_member_email") ||
+    window.localStorage.getItem("vf_current_email") ||
+    ""
+  );
 }
 
 function readProfile(): ProfileSnapshot {
-  if (typeof window === "undefined") return normalizeProfile({});
+  const fallback: ProfileSnapshot = {
+    id: currentEmail() || "local_member",
+    name: "VaultForge Member",
+    company: "Company not listed",
+    email: currentEmail(),
+    memberType: "Member",
+    basedState: "",
+    basedCity: "",
+    basedCounty: "",
+    profilePhoto: "",
+  };
+
+  if (typeof window === "undefined") return fallback;
+
+  const backupPhoto = clean(window.localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY));
   for (const key of PROFILE_KEYS) {
-    const found = parse<any | null>(window.localStorage.getItem(key), null);
-    if (found && typeof found === "object") return normalizeProfile(found);
+    const profile = parseJson<any | null>(window.localStorage.getItem(key), null);
+    if (profile && typeof profile === "object") {
+      const email = clean(profile.email || fallback.email);
+      return {
+        id: clean(profile.id || email || fallback.id, fallback.id),
+        name: clean(profile.name || profile.fullName || profile.full_name || fallback.name, fallback.name),
+        company: clean(profile.company || profile.companyName || fallback.company, fallback.company),
+        email,
+        memberType: clean(profile.memberType || profile.member_type || fallback.memberType, fallback.memberType),
+        basedState: clean(profile.basedState || profile.state || profile.homeState),
+        basedCity: clean(profile.basedCity || profile.city),
+        basedCounty: clean(profile.basedCounty || profile.county),
+        profilePhoto: clean(profile.profilePhoto || profile.photoUrl || profile.avatar || backupPhoto),
+      };
+    }
   }
-  return normalizeProfile({});
+
+  return { ...fallback, profilePhoto: backupPhoto };
 }
 
-function collect(value: unknown): any[] {
-  if (Array.isArray(value)) return value;
-  if (!value || typeof value !== "object") return [];
-  const obj = value as Record<string, unknown>;
-  const rows: any[] = [];
-  Object.values(obj).forEach((item) => { if (Array.isArray(item)) rows.push(...item); });
-  if (obj.id || obj.title || obj.name || obj.subject || obj.propertyName) rows.push(obj);
-  return rows;
+function statusOverrides(): Record<string, RoomStatus> {
+  if (typeof window === "undefined") return {};
+  return parseJson<Record<string, RoomStatus>>(window.localStorage.getItem(MEMBER_STATUS_KEY), {});
 }
 
-function statusFrom(value: unknown): RoomStatus {
-  const raw = String(value || "active").toLowerCase();
-  if (raw.includes("save")) return "saved";
-  if (raw.includes("archive")) return "archived";
+function writeStatus(id: string, status: RoomStatus) {
+  if (typeof window === "undefined") return;
+  const current = statusOverrides();
+  current[id] = status;
+  window.localStorage.setItem(MEMBER_STATUS_KEY, JSON.stringify(current));
+}
+
+function deletedForeverIds() {
+  if (typeof window === "undefined") return [] as string[];
+  return parseJson<string[]>(window.localStorage.getItem(MEMBER_DELETED_FOREVER_KEY), []);
+}
+
+function writeDeletedForever(id: string) {
+  if (typeof window === "undefined") return;
+  const ids = Array.from(new Set([...deletedForeverIds(), id]));
+  window.localStorage.setItem(MEMBER_DELETED_FOREVER_KEY, JSON.stringify(ids));
+}
+
+function statusFrom(row: any): RoomStatus {
+  const raw = cleanLower(row?.roomStatus || row?.status || row?.folder || "active");
   if (raw.includes("delete") || raw.includes("trash")) return "deleted";
+  if (raw.includes("archive")) return "archived";
+  if (raw.includes("save")) return "saved";
   return "active";
 }
 
-function kindFrom(key: string, item: any): RoomKind {
-  const text = `${key} ${JSON.stringify(item || {})}`.toLowerCase();
-  if (text.includes("pain") || text.includes("problem") || text.includes("pressure") || text.includes("distress")) return "pain";
-  return "deal";
+function kindFrom(row: any): RoomKind {
+  const raw = `${row?.kind || ""} ${row?.roomType || ""} ${row?.source || ""} ${row?.problemType || ""}`.toLowerCase();
+  return raw.includes("pain") ? "pain" : "deal";
 }
 
-function foreverIds() {
-  if (typeof window === "undefined") return [];
-  return parse<string[]>(window.localStorage.getItem(COMMAND_DELETED_FOREVER_KEY), []);
+function validMemberRoom(row: any) {
+  if (!row || typeof row !== "object") return false;
+
+  const id = clean(row.id || row.roomId);
+  const title = clean(row.title || row.dealTitle || row.painTitle || row.propertyName || row.address);
+  const workspace = cleanLower(row.workspace);
+  const visibility = cleanLower(row.visibility);
+  const source = cleanLower(row.source);
+  const ownerEmail = clean(row.ownerEmail || row.createdByEmail || row.memberEmail);
+  const summary = clean(row.message || row.summary || row.analyzer || row.notes || row.problem || row.description);
+
+  if (!id) return false;
+  if (isBadText(title)) return false;
+  if (!ownerEmail && !summary) return false;
+
+  return (
+    workspace === "member-command" ||
+    visibility === "member" ||
+    source === "deal-create" ||
+    source === "pain-intake"
+  );
 }
 
-function saveForeverIds(ids: string[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(COMMAND_DELETED_FOREVER_KEY, JSON.stringify(Array.from(new Set(ids))));
-}
+function normalizeMemberRoom(row: any, overrides: Record<string, RoomStatus>): CanonicalMemberRoom | null {
+  if (!validMemberRoom(row)) return null;
 
-function loadRooms(): RoomCard[] {
-  if (typeof window === "undefined") return [];
-  const deletedForever = new Set(foreverIds());
-  const keys = new Set<string>([
-    COMMAND_ROOMS_KEY,
-    "vaultforge_member_rooms_v1",
-    "vaultforge_my_rooms_clean_v2",
-    "vaultforge_command_deal_rooms_v1",
-    "vaultforge_command_pain_rooms_v1",
-    "vaultforge_owned_rooms_v1",
-    "vaultforge_owned_deal_rooms_v1",
-    "vaultforge_owned_pain_rooms_v1"
-  ]);
+  const id = clean(row.id || row.roomId);
+  const kind = kindFrom(row);
+  const status = overrides[id] || statusFrom(row);
 
-  // Member Command is not Investor Room. Do not scan every deal/property/project key.
-  // Investor/public opportunity pools belong only in /investor-room.
-  // Command should stay focused on member-owned/command-owned workspace records.
-
-  const rooms: RoomCard[] = [];
-  Array.from(keys).forEach((key) => {
-    if (key === COMMAND_DELETED_FOREVER_KEY) return;
-    const parsed = parse<any>(window.localStorage.getItem(key), null);
-    collect(parsed).forEach((item, index) => {
-      if (!item || typeof item !== "object") return;
-      const text = `${key} ${JSON.stringify(item)}`.toLowerCase();
-      if (!text.includes("deal") && !text.includes("room") && !text.includes("pain") && !text.includes("project") && !text.includes("property") && !text.includes("title")) return;
-      const id = clean(item.id || item.roomId || item.slug || `${key}-${index}`, `${key}-${index}`);
-      if (deletedForever.has(id)) return;
-      rooms.push({
-        id,
-        kind: kindFrom(key, item),
-        title: clean(item.title || item.name || item.projectName || item.propertyName || item.subject || "Untitled Room", "Untitled Room"),
-        city: clean(item.city || item.market || item.propertyCity || "NA", "NA"),
-        county: clean(item.county || item.propertyCounty || "", ""),
-        state: clean(item.state || item.propertyState || item.marketState || "NA", "NA"),
-        asset: clean(item.asset || item.assetType || item.propertyType || item.category || "Not listed", "Not listed"),
-        strategy: clean(item.strategy || item.dealStrategy || item.need || item.problemType || "Not listed", "Not listed"),
-        status: statusFrom(item.status || item.folder || item.roomStatus || item.workspaceStatus),
-        message: clean(item.message || item.summary || item.notes || item.description || "Review numbers, photos, routing, and next action.", "Review numbers, photos, routing, and next action."),
-        updatedAt: clean(item.updatedAt || item.updated_at || item.createdAt || item.created_at || new Date().toISOString(), new Date().toISOString()),
-        source: key,
-      });
-    });
-  });
-  const unique = new Map<string, RoomCard>();
-  rooms.forEach((room) => unique.set(room.id, room));
-  return Array.from(unique.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-}
-
-function saveRooms(rooms: RoomCard[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(COMMAND_ROOMS_KEY, JSON.stringify(rooms));
-}
-
-function deletedMessageForeverIds(): string[] {
-  if (typeof window === "undefined") return [];
-  return parse<string[]>(window.localStorage.getItem(FOREVER_KEY), []);
-}
-
-function normalizeThread(thread: any): MessageThread {
-  const messages = Array.isArray(thread?.messages) ? thread.messages : [];
   return {
-    ...thread,
-    id: clean(thread?.id || `thread-${Date.now()}`, `thread-${Date.now()}`),
-    from: clean(thread?.from || thread?.senderProfile?.email || thread?.senderProfile?.name || "Not listed", "Not listed"),
-    recipient: clean(thread?.recipient || "VaultForge Owner", "VaultForge Owner"),
-    title: clean(thread?.title || "Untitled Message", "Untitled Message"),
-    room: clean(thread?.room || thread?.roomSnapshot?.title || "General", "General"),
-    message: clean(thread?.message || messages[messages.length - 1]?.message || "No message entered.", "No message entered."),
-    folder: thread?.folder || "active",
-    unread: Boolean(thread?.unread),
-    createdAt: clean(thread?.createdAt || "", ""),
-    messages,
+    id,
+    roomId: id,
+    kind,
+    roomType: kind,
+    workspace: "member-command",
+    visibility: "member",
+    title: clean(row.title || row.dealTitle || row.painTitle || row.propertyName || row.address),
+    status,
+    roomStatus: status,
+    city: clean(row.city || row.propertyCity || row.marketCity),
+    county: clean(row.county || row.propertyCounty || row.marketCounty),
+    state: clean(row.state || row.propertyState || row.marketState),
+    assetClass: clean(row.assetClass || row.asset || row.problemType),
+    propertyType: clean(row.propertyType || row.category),
+    strategy: list(row.strategy || row.strategies),
+    message: clean(row.message || row.summary || row.analyzer || row.notes || row.problem || row.description, "No room notes listed."),
+    summary: clean(row.summary || row.message || row.analyzer || row.notes || row.problem || row.description),
+    ownerId: clean(row.ownerId || row.createdBy || row.memberId),
+    ownerEmail: clean(row.ownerEmail || row.createdByEmail || row.memberEmail),
+    createdBy: clean(row.createdBy || row.ownerId),
+    createdByEmail: clean(row.createdByEmail || row.ownerEmail),
+    source: clean(row.source || MEMBER_ROOMS_KEY),
+    updatedAt: clean(row.updatedAt || row.updated_at || row.createdAt || row.created_at || new Date().toISOString()),
+    raw: row,
   };
 }
 
-function loadLocalMessages(): MessageThread[] {
-  if (typeof window === "undefined") return [];
-  const forever = new Set(deletedMessageForeverIds());
-  const rows = parse<any[]>(window.localStorage.getItem(THREADS_KEY), []);
-  if (!Array.isArray(rows)) return [];
-  return rows.filter((thread) => thread && typeof thread === "object" && !forever.has(String(thread.id || ""))).map(normalizeThread);
+function readRoomRows(key: string) {
+  if (typeof window === "undefined") return [] as any[];
+  const rows = parseJson<any[]>(window.localStorage.getItem(key), []);
+  return Array.isArray(rows) ? rows : [];
 }
 
-function saveLocalMessages(threads: MessageThread[]) {
+function writeCleanRows(key: string, rows: any[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(THREADS_KEY, JSON.stringify(threads));
-  window.dispatchEvent(new Event("vaultforge-message-change"));
+  window.localStorage.setItem(key, JSON.stringify(rows));
 }
 
-function isProfileRelated(thread: MessageThread, profile: ProfileSnapshot) {
+function loadMemberRooms() {
+  if (typeof window === "undefined") return [] as CanonicalMemberRoom[];
+
+  const keys = [MEMBER_ROOMS_KEY, MEMBER_COMMAND_DEAL_ROOMS_KEY, MEMBER_COMMAND_PAIN_ROOMS_KEY];
+  const deleted = new Set(deletedForeverIds());
+  const overrides = statusOverrides();
+  const rooms: CanonicalMemberRoom[] = [];
+
+  keys.forEach((key) => {
+    const rows = readRoomRows(key);
+    const cleanRows = rows.filter((row) => {
+      const id = clean(row?.id || row?.roomId);
+      return id && !deleted.has(id) && validMemberRoom(row);
+    });
+
+    if (cleanRows.length !== rows.length) writeCleanRows(key, cleanRows);
+
+    cleanRows.forEach((row) => {
+      const normalized = normalizeMemberRoom(row, overrides);
+      if (normalized) rooms.push(normalized);
+    });
+  });
+
+  const map = new Map<string, CanonicalMemberRoom>();
+  rooms.forEach((room) => {
+    const old = map.get(room.id);
+    if (!old || old.updatedAt < room.updatedAt) map.set(room.id, room);
+  });
+
+  return Array.from(map.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function saveRoomBack(room: CanonicalMemberRoom) {
+  if (typeof window === "undefined") return;
+
+  [MEMBER_ROOMS_KEY, MEMBER_COMMAND_DEAL_ROOMS_KEY, MEMBER_COMMAND_PAIN_ROOMS_KEY].forEach((key) => {
+    const rows = readRoomRows(key);
+    const next = rows.map((row) => {
+      const id = clean(row?.id || row?.roomId);
+      if (id !== room.id) return row;
+      return { ...row, status: room.status, roomStatus: room.status, updatedAt: new Date().toISOString() };
+    });
+    writeCleanRows(key, next);
+  });
+}
+
+function deletedMessageIds() {
+  if (typeof window === "undefined") return [] as string[];
+  return parseJson<string[]>(window.localStorage.getItem(MESSAGE_DELETED_FOREVER_KEY), []);
+}
+
+function isCanonicalMemberMessage(row: any, profile: ProfileSnapshot) {
+  if (!row || typeof row !== "object") return false;
+
+  const senderWorkspace = cleanLower(row.senderWorkspace || row.thread?.senderWorkspace);
+  const recipientWorkspace = cleanLower(row.recipientWorkspace || row.thread?.recipientWorkspace);
+  const origin = cleanLower(row.origin || row.thread?.origin);
+  const blob = JSON.stringify(row).toLowerCase();
   const email = profile.email.toLowerCase();
-  const name = profile.name.toLowerCase();
-  const blob = JSON.stringify(thread).toLowerCase();
-  if (!email && !name) return true;
-  return Boolean((email && blob.includes(email)) || (name && blob.includes(name)) || blob.includes("vaultforge owner") || blob.includes("bcrsoutheast@gmail.com"));
+
+  const canonicalWorkspace =
+    senderWorkspace === "member" ||
+    senderWorkspace === "member-command" ||
+    senderWorkspace === "investor" ||
+    recipientWorkspace === "member-owner" ||
+    recipientWorkspace === "member" ||
+    recipientWorkspace === "member-command" ||
+    origin === "investor-room" ||
+    origin === "message-center";
+
+  if (!canonicalWorkspace) return false;
+  if (!email) return blob.includes("member-owner") || blob.includes("bcrsoutheast@gmail.com");
+  return blob.includes(email) || blob.includes("member-owner") || blob.includes("bcrsoutheast@gmail.com");
 }
 
-async function loadMessagesForProfile(profile: ProfileSnapshot) {
-  const local = loadLocalMessages();
+function normalizeMessage(row: any): CanonicalMessage {
+  const thread = row.thread && typeof row.thread === "object" ? row.thread : row;
+  const messages = Array.isArray(thread.messages) ? thread.messages : Array.isArray(row.messages) ? row.messages : [];
+  const last = messages[messages.length - 1];
+
+  return {
+    id: clean(thread.id || row.id || `thread-${Date.now()}`),
+    lane: clean(thread.lane || "Message"),
+    from: clean(thread.from || thread.senderProfile?.email || thread.senderProfile?.name || last?.from || "Not listed", "Not listed"),
+    recipient: clean(thread.recipient || last?.recipient || "VaultForge Owner", "VaultForge Owner"),
+    title: clean(thread.title || row.title || "Untitled Message", "Untitled Message"),
+    room: clean(thread.room || thread.roomSnapshot?.title || row.room || "General", "General"),
+    message: clean(thread.message || last?.message || "No message entered.", "No message entered."),
+    folder: clean(thread.folder || row.folder || "active", "active") as CanonicalMessage["folder"],
+    unread: Boolean(thread.unread ?? row.unread),
+    createdAt: clean(thread.createdAt || row.created_at || ""),
+    senderWorkspace: clean(thread.senderWorkspace || row.sender_workspace),
+    recipientWorkspace: clean(thread.recipientWorkspace || row.recipient_workspace),
+    origin: clean(thread.origin || row.origin),
+    senderProfile: thread.senderProfile,
+    recipientProfile: thread.recipientProfile,
+    roomSnapshot: thread.roomSnapshot,
+  };
+}
+
+function loadLocalCanonicalMessages(profile: ProfileSnapshot) {
+  if (typeof window === "undefined") return [] as CanonicalMessage[];
+
+  const deleted = new Set(deletedMessageIds());
+  const rows = parseJson<any[]>(window.localStorage.getItem(THREADS_KEY), []);
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .filter((row) => {
+      const id = clean(row?.id || row?.thread?.id);
+      return id && !deleted.has(id) && isCanonicalMemberMessage(row, profile);
+    })
+    .map(normalizeMessage);
+}
+
+async function loadMessages(profile: ProfileSnapshot) {
+  const local = loadLocalCanonicalMessages(profile);
 
   try {
     const params = new URLSearchParams();
@@ -276,20 +419,29 @@ async function loadMessagesForProfile(profile: ProfileSnapshot) {
     const response = await fetch(`/api/messages/list?${params.toString()}`, { cache: "no-store" });
     const data = await response.json();
 
-    if (!data?.ok) return local;
+    if (!data?.ok || !Array.isArray(data.threads)) return local;
 
-    const remote = Array.isArray(data.threads) ? data.threads.map(normalizeThread) : [];
-    const merged = new Map<string, MessageThread>();
-    [...remote, ...local].forEach((thread) => {
-      if (!merged.has(thread.id)) merged.set(thread.id, thread);
+    const remote = data.threads
+      .filter((row: any) => isCanonicalMemberMessage(row, profile))
+      .map(normalizeMessage);
+
+    const map = new Map<string, CanonicalMessage>();
+    [...remote, ...local].forEach((message) => {
+      if (!map.has(message.id)) map.set(message.id, message);
     });
 
-    const next = Array.from(merged.values());
-    saveLocalMessages(next);
-    return next;
+    return Array.from(map.values());
   } catch {
     return local;
   }
+}
+
+function locationLine(room: CanonicalMemberRoom) {
+  return [room.city, room.county, room.state].filter(Boolean).join(", ") || "Location not listed";
+}
+
+function assetLine(room: CanonicalMemberRoom) {
+  return [room.assetClass, room.propertyType, ...room.strategy].filter(Boolean).join(" • ") || "Details not listed";
 }
 
 function profileLine(profile: ProfileSnapshot) {
@@ -307,13 +459,12 @@ function AlertTile({ label, count, note, active, onClick }: { label: string; cou
   );
 }
 
-function MessageCard({ thread }: { thread: MessageThread }) {
+function MessageCard({ thread }: { thread: CanonicalMessage }) {
   return (
     <article style={{ ...panel, borderColor: thread.unread ? "rgba(245,197,66,.72)" : "rgba(207,216,230,.15)" }}>
       <div style={eyebrow}>{thread.lane || "Message"} • {thread.folder}</div>
       <h3 style={h3}>{thread.title}</h3>
       <p style={muted}><strong style={{ color: "#f7f8ff" }}>From:</strong> {thread.senderProfile?.name || thread.from}</p>
-      <p style={muted}><strong style={{ color: "#f7f8ff" }}>Company:</strong> {thread.senderProfile?.company || "Not attached"}</p>
       <p style={muted}><strong style={{ color: "#f7f8ff" }}>Recipient:</strong> {thread.recipient}</p>
       <p style={muted}><strong style={{ color: "#f7f8ff" }}>Room:</strong> {thread.room}</p>
       <p style={muted}>{thread.message}</p>
@@ -322,22 +473,24 @@ function MessageCard({ thread }: { thread: MessageThread }) {
   );
 }
 
-function Room({ room, moveRoom, deleteForever }: { room: RoomCard; moveRoom: (id: string, status: RoomStatus) => void; deleteForever: (id: string) => void }) {
-  const location = [room.city, room.county, room.state].filter(Boolean).join(", ");
+function RoomCard({ room, moveRoom, deleteForever }: { room: CanonicalMemberRoom; moveRoom: (id: string, status: RoomStatus) => void; deleteForever: (id: string) => void }) {
   return (
     <article style={{ ...panel, borderColor: room.status === "deleted" ? "rgba(255,65,65,.56)" : "rgba(245,197,66,.42)" }}>
       <div style={eyebrow}>{room.kind === "deal" ? "Deal Room" : "Pain Room"} • {room.status}</div>
       <h3 style={h3}>{room.title}</h3>
-      <p style={sub}>{location}</p>
-      <p style={muted}>{room.asset} • {room.strategy}</p>
+      <p style={sub}>{locationLine(room)}</p>
+      <p style={muted}>{assetLine(room)}</p>
+
       <div style={{ margin: "16px 0" }}>
         <div style={eyebrow}>{room.kind === "deal" ? "Deal Momentum" : "Pain Pressure"} • {room.status}</div>
         <div style={{ height: 12, background: "rgba(0,0,0,.45)", borderRadius: 999, overflow: "hidden", marginTop: 10 }}>
           <div style={{ width: room.status === "active" ? "68%" : room.status === "saved" ? "42%" : "18%", height: "100%", background: room.kind === "pain" ? "linear-gradient(90deg,#ff365d,#ff9f43)" : "linear-gradient(90deg,#ffe16a,#1e90ff)" }} />
         </div>
       </div>
+
       <p style={muted}>{room.message}</p>
       <p style={muted}>Last updated: {room.updatedAt}</p>
+
       <div style={{ ...row, marginTop: 14 }}>
         <button type="button" style={goldBtn} onClick={() => moveRoom(room.id, "active")}>Restore Active</button>
         <button type="button" style={btn} onClick={() => moveRoom(room.id, "saved")}>Save</button>
@@ -350,31 +503,34 @@ function Room({ room, moveRoom, deleteForever }: { room: RoomCard; moveRoom: (id
 }
 
 export default function CommandPage() {
-  const [rooms, setRooms] = useState<RoomCard[]>([]);
-  const [messages, setMessages] = useState<MessageThread[]>([]);
-  const [profile, setProfile] = useState<ProfileSnapshot>(() => normalizeProfile({}));
-  const [view, setView] = useState<"active" | "deal" | "pain" | "messages" | "saved" | "archived" | "deleted">("active");
+  const [rooms, setRooms] = useState<CanonicalMemberRoom[]>([]);
+  const [messages, setMessages] = useState<CanonicalMessage[]>([]);
+  const [profile, setProfile] = useState<ProfileSnapshot>(() => readProfile());
+  const [view, setView] = useState<View>("active");
 
   useEffect(() => {
-    const loaded = loadRooms();
-    const loadedProfile = readProfile();
-    setRooms(loaded);
-    setProfile(loadedProfile);
-    saveRooms(loaded);
-
-    loadMessagesForProfile(loadedProfile).then(setMessages);
+    const nextProfile = readProfile();
+    setProfile(nextProfile);
+    setRooms(loadMemberRooms());
+    loadMessages(nextProfile).then(setMessages);
 
     function refresh() {
-      const nextProfile = readProfile();
-      setProfile(nextProfile);
-      loadMessagesForProfile(nextProfile).then(setMessages);
+      const refreshedProfile = readProfile();
+      setProfile(refreshedProfile);
+      setRooms(loadMemberRooms());
+      loadMessages(refreshedProfile).then(setMessages);
     }
 
     window.addEventListener("storage", refresh);
+    window.addEventListener("vaultforge-command-room-change", refresh);
+    window.addEventListener("vaultforge-room-state-change", refresh);
     window.addEventListener("vaultforge-message-change", refresh);
     window.addEventListener("vaultforge-profile-change", refresh);
+
     return () => {
       window.removeEventListener("storage", refresh);
+      window.removeEventListener("vaultforge-command-room-change", refresh);
+      window.removeEventListener("vaultforge-room-state-change", refresh);
       window.removeEventListener("vaultforge-message-change", refresh);
       window.removeEventListener("vaultforge-profile-change", refresh);
     };
@@ -389,23 +545,27 @@ export default function CommandPage() {
     deleted: rooms.filter((room) => room.status === "deleted"),
   }), [rooms]);
 
-  const profileMessages = useMemo(() => messages.filter((thread) => isProfileRelated(thread, profile)), [messages, profile]);
-  const activeMessages = profileMessages.filter((thread) => thread.folder === "active");
-  const unreadMessages = profileMessages.filter((thread) => thread.unread && thread.folder !== "deleted");
+  const activeMessages = messages.filter((message) => message.folder === "active");
+  const unreadMessages = messages.filter((message) => message.unread && message.folder !== "deleted");
   const visible = view === "messages" ? [] : grouped[view];
 
   function moveRoom(id: string, status: RoomStatus) {
-    const next = rooms.map((room) => room.id === id ? { ...room, status, updatedAt: new Date().toISOString() } : room);
+    writeStatus(id, status);
+
+    const next = rooms.map((room) => {
+      if (room.id !== id) return room;
+      const updated = { ...room, status, roomStatus: status, updatedAt: new Date().toISOString() };
+      saveRoomBack(updated);
+      return updated;
+    });
+
     setRooms(next);
-    saveRooms(next);
     setView(status);
   }
 
   function deleteForever(id: string) {
-    saveForeverIds([...foreverIds(), id]);
-    const next = rooms.filter((room) => room.id !== id);
-    setRooms(next);
-    saveRooms(next);
+    writeDeletedForever(id);
+    setRooms((current) => current.filter((room) => room.id !== id));
     setView("deleted");
   }
 
@@ -415,11 +575,12 @@ export default function CommandPage() {
         <nav style={nav}>
           <div style={brand}>VAULTFORGE</div>
           <Link href="/command" style={goldBtn}>Command</Link>
+          <Link href="/investor-room" style={btn}>Investor Room</Link>
           <Link href="/my-rooms" style={btn}>My Rooms</Link>
           <Link href="/members" style={btn}>Members</Link>
           <Link href="/network" style={btn}>Network</Link>
           <Link href="/messages" style={btn}>Messages</Link>
-          <Link href="/create" style={btn}>Create</Link>
+          <Link href="/deal-create" style={btn}>Create Deal</Link>
           <Link href="/profile" style={btn}>Profile</Link>
           <Link href="/logout" style={redBtn}>Logout</Link>
         </nav>
@@ -427,22 +588,25 @@ export default function CommandPage() {
         <section style={card}>
           <div style={eyebrow}>Member Alerts • {grouped.active.length} Active • {activeMessages.length} Messages</div>
           <div style={{ ...grid, marginTop: 16 }}>
-            <AlertTile label="Deals" count={grouped.deal.length} note="active deal rooms" active={view === "deal"} onClick={() => setView("deal")} />
-            <AlertTile label="Pain" count={grouped.pain.length} note="active pain rooms" active={view === "pain"} onClick={() => setView("pain")} />
-            <AlertTile label="Messages" count={activeMessages.length} note={`${unreadMessages.length} unread synced thread(s)`} active={view === "messages"} onClick={() => setView("messages")} />
-            <AlertTile label="Saved" count={grouped.saved.length} note="saved room cards" active={view === "saved"} onClick={() => setView("saved")} />
-            <AlertTile label="Deleted" count={grouped.deleted.length} note="delete / delete forever" active={view === "deleted"} onClick={() => setView("deleted")} />
+            <AlertTile label="Deals" count={grouped.deal.length} note="canonical member deal rooms" active={view === "deal"} onClick={() => setView("deal")} />
+            <AlertTile label="Pain" count={grouped.pain.length} note="canonical member pain rooms" active={view === "pain"} onClick={() => setView("pain")} />
+            <AlertTile label="Messages" count={activeMessages.length} note={`${unreadMessages.length} unread canonical thread(s)`} active={view === "messages"} onClick={() => setView("messages")} />
+            <AlertTile label="Saved" count={grouped.saved.length} note="saved member rooms" active={view === "saved"} onClick={() => setView("saved")} />
+            <AlertTile label="Archived" count={grouped.archived.length} note="hidden but preserved" active={view === "archived"} onClick={() => setView("archived")} />
+            <AlertTile label="Deleted" count={grouped.deleted.length} note="restore or delete forever" active={view === "deleted"} onClick={() => setView("deleted")} />
           </div>
         </section>
 
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Member Command</div>
-          <h1 style={h1}>Execution intelligence desk.</h1>
-          <p style={sub}>Member Command is now separated from Investor Room. It reads member-owned command rooms plus synced message threads, not investor opportunity cards.</p>
+          <h1 style={h1}>Canonical member workspace only.</h1>
+          <p style={sub}>
+            Member Command now ignores legacy room/message pollution. It reads only canonical member-owned rooms and canonical member message threads.
+          </p>
           <div style={{ ...row, marginTop: 16 }}>
             <button type="button" style={goldBtn} onClick={() => setView("active")}>Open Active Rooms</button>
             <button type="button" style={view === "messages" ? goldBtn : btn} onClick={() => setView("messages")}>Messages ({activeMessages.length})</button>
-            <Link href="/create" style={goldBtn}>Create</Link>
+            <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
             <Link href="/messages" style={btn}>Open Message Center</Link>
           </div>
         </section>
@@ -462,7 +626,7 @@ export default function CommandPage() {
 
         <section style={card}>
           <div style={eyebrow}>Room Folders</div>
-          <h2 style={h2}>Deal, Pain, and Message cards.</h2>
+          <h2 style={h2}>Canonical Deal, Pain, and Message cards.</h2>
           <div style={{ ...row, marginTop: 14 }}>
             <button type="button" style={view === "active" ? goldBtn : btn} onClick={() => setView("active")}>Active ({grouped.active.length})</button>
             <button type="button" style={view === "deal" ? goldBtn : btn} onClick={() => setView("deal")}>Deals ({grouped.deal.length})</button>
@@ -476,22 +640,22 @@ export default function CommandPage() {
 
         {view === "messages" ? (
           <section style={card}>
-            <div style={eyebrow}>Profile Messages</div>
-            <h2 style={h2}>Message threads attached to this member profile.</h2>
-            {profileMessages.length ? (
-              <div style={roomGrid}>{profileMessages.map((thread) => <MessageCard key={thread.id} thread={thread} />)}</div>
+            <div style={eyebrow}>Canonical Member Messages</div>
+            <h2 style={h2}>Message threads attached to this member workspace.</h2>
+            {messages.length ? (
+              <div style={roomGrid}>{messages.map((thread) => <MessageCard key={thread.id} thread={thread} />)}</div>
             ) : (
-              <div style={panel}><h2 style={h2}>No messages for this profile yet.</h2><p style={sub}>Messages sent from Investor Room or Message Center will show here after they are created.</p></div>
+              <div style={panel}><h2 style={h2}>No canonical messages yet.</h2><p style={sub}>Old legacy message records are ignored. New investor/member messages tied to canonical workspaces will show here.</p></div>
             )}
           </section>
         ) : (
           <section style={card}>
             <div style={eyebrow}>Selected Cards • {view}</div>
-            <h2 style={h2}>{view === "deal" ? "Active Deal Rooms" : view === "pain" ? "Active Pain Rooms" : view === "deleted" ? "Deleted Rooms" : `${view.charAt(0).toUpperCase()}${view.slice(1)} Rooms`}</h2>
+            <h2 style={h2}>{view === "deal" ? "Canonical Deal Rooms" : view === "pain" ? "Canonical Pain Rooms" : view === "deleted" ? "Deleted Rooms" : `${view.charAt(0).toUpperCase()}${view.slice(1)} Rooms`}</h2>
             {visible.length ? (
-              <div style={roomGrid}>{visible.map((room) => <Room key={room.id} room={room} moveRoom={moveRoom} deleteForever={deleteForever} />)}</div>
+              <div style={roomGrid}>{visible.map((room) => <RoomCard key={room.id} room={room} moveRoom={moveRoom} deleteForever={deleteForever} />)}</div>
             ) : (
-              <div style={panel}><h2 style={h2}>No cards in this folder.</h2><p style={sub}>Create or restore a Deal/Pain room and it will show here.</p></div>
+              <div style={panel}><h2 style={h2}>No canonical cards in this folder.</h2><p style={sub}>Legacy Untitled/NA rooms are ignored. Create a new canonical room and it will appear here.</p></div>
             )}
           </section>
         )}
