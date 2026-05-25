@@ -1,4 +1,4 @@
-"use client";
+use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -45,22 +45,34 @@ const BLOCKED_KEY_PARTS = [
   "mock",
   "session",
   "cookie",
+  "command",
+  "member_room",
+  "member_rooms",
+  "my_rooms",
+  "my-rooms",
+  "member_controlled",
+  "member-controlled",
 ];
 
-const STRONG_ROOM_KEYS = [
-  "vaultforge_command_rooms_v1",
-  "vaultforge_rooms_v1",
+const INVESTOR_ROOM_KEYS = [
+  "vaultforge_investor_rooms_v1",
+  "vaultforge_investor_deal_rooms_v1",
+  "vaultforge_investor_pain_rooms_v1",
+  "vaultforge_public_rooms_v1",
+  "vaultforge_public_deal_rooms_v1",
+  "vaultforge_public_pain_rooms_v1",
   "vaultforge_deal_rooms_v1",
   "vaultforge_pain_rooms_v1",
-  "vaultforge_member_rooms_v1",
   "vaultforge_property_cards_v1",
   "vaultforge_projects_v1",
   "vaultforge_deals_v1",
   "vaultforge_pain_requests_v1",
-  "vaultforge_my_rooms_clean_v2",
+  "vf_investor_rooms",
+  "vf_investor_deals",
+  "vf_investor_pain",
+  "vf_public_rooms",
   "vf_deals",
   "vf_pain",
-  "vf_rooms",
   "vf_projects",
   "vf_property_cards",
 ];
@@ -134,7 +146,11 @@ function isBlockedKey(key: string) {
 function shouldReadKey(key: string) {
   const lower = key.toLowerCase();
   if (isBlockedKey(lower)) return false;
-  return STRONG_ROOM_KEYS.some((strong) => lower === strong || lower.includes(strong)) || lower.includes("deal") || lower.includes("pain") || lower.includes("project") || lower.includes("property") || lower.includes("room");
+
+  // Investor Room is not Member Command. It only reads investor/public opportunity sources.
+  // This stops member command rooms, member profile state, messages, and my-room folders
+  // from leaking into the investor-facing opportunity board.
+  return INVESTOR_ROOM_KEYS.some((strong) => lower === strong || lower.includes(strong));
 }
 
 function kindFrom(source: string, item: any): Kind {
@@ -196,7 +212,7 @@ function loadCards(): InvestorCard[] {
   const forever = new Set<string>(parse(window.localStorage.getItem(DELETED_FOREVER_KEY)) || []);
   const keys = new Set<string>();
 
-  STRONG_ROOM_KEYS.forEach((key) => keys.add(key));
+  INVESTOR_ROOM_KEYS.forEach((key) => keys.add(key));
   for (let i = 0; i < window.localStorage.length; i += 1) {
     const key = window.localStorage.key(i) || "";
     if (shouldReadKey(key)) keys.add(key);
@@ -262,6 +278,9 @@ function messageHref(card?: InvestorCard | null) {
   params.set("recipient", card.ownerEmail || card.ownerName || OWNER_EMAIL);
   params.set("owner", card.ownerName || OWNER_NAME);
   params.set("roomId", card.id);
+  params.set("origin", "investor-room");
+  params.set("senderWorkspace", "investor");
+  params.set("recipientWorkspace", "member-owner");
   return `/messages?${params.toString()}`;
 }
 
@@ -338,7 +357,7 @@ export default function InvestorRoomPage() {
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Investor Command Room</div>
           <h1 style={h1}>Signals → Requests → Threads → Execution.</h1>
-          <p style={sub}>Deal and Pain cards are now filtered to real room records only. Empty Untitled Room / NA placeholder rows are suppressed.</p>
+          <p style={sub}>Investor Room is now separated from Member Command. It only reads investor/public opportunity records and will not merge member command rooms into this board.</p>
           <div style={{ ...row, marginTop: 18 }}>
             <button type="button" style={goldButton} onClick={() => setLane("deals")}>Open Deal Signals</button>
             <button type="button" style={button} onClick={() => setLane("pain")}>Open Pain Signals</button>
