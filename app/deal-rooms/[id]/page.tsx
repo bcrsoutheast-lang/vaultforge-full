@@ -76,6 +76,9 @@ type Room = {
   coverPhoto?: string;
   photoUrl?: string;
   imageUrl?: string;
+  watchers?: string[] | string;
+  watcherIds?: string[] | string;
+  watcherEmails?: string[] | string;
   roomState?: RoomState;
   cleanupState?: RoomState;
   stateStatus?: RoomState;
@@ -104,26 +107,8 @@ type MemberProfile = {
   [key: string]: unknown;
 };
 
-const DEAL_KEYS = [
-  "vaultforge_canonical_deal_rooms_v1",
-  "vaultforge_my_rooms_clean_v2",
-  "vaultforge_command_deal_rooms_v1",
-  "vaultforge_member_rooms_v1",
-  "vaultforge_clean_deal_rooms",
-  "vaultforge_deal_rooms",
-  "vaultforge_rooms_deals",
-  "vf_deal_rooms",
-];
-
-const PAIN_KEYS = [
-  "vaultforge_canonical_pain_rooms_v1",
-  "vaultforge_clean_pain_rooms_v2",
-  "vaultforge_clean_pain_rooms_v1",
-  "vaultforge_clean_pain_rooms",
-  "vaultforge_pain_rooms",
-  "vaultforge_rooms_pain",
-  "vf_pain_rooms",
-];
+const DEAL_KEYS = ["vaultforge_clean_deal_rooms", "vaultforge_deal_rooms", "vaultforge_rooms_deals", "vf_deal_rooms"];
+const PAIN_KEYS = ["vaultforge_clean_pain_rooms_v2", "vaultforge_clean_pain_rooms_v1", "vaultforge_clean_pain_rooms", "vaultforge_pain_rooms", "vaultforge_rooms_pain", "vf_pain_rooms"];
 const STATE_KEYS = ["vaultforge_deal_room_state_v2", "vaultforge_pain_room_state_v2", "vaultforge_clean_room_states", "vaultforge_room_states", "vaultforge_deal_room_states", "vaultforge_pain_room_states"];
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const MEMBER_DIRECTORY_KEY = "vaultforge_member_directory_v1";
@@ -153,43 +138,6 @@ function list(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
   if (typeof value === "string" && value.trim()) return value.split(",").map((x) => x.trim()).filter(Boolean);
   return [];
-}
-
-function cleanImage(value: unknown) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-
-  const parsed = j<string | null>(raw, null);
-  const text = String(parsed || raw).trim().replace(/^"|"$/g, "");
-
-  if (
-    text.startsWith("data:image") ||
-    text.startsWith("http") ||
-    text.startsWith("/") ||
-    text.startsWith("blob:")
-  ) {
-    return text;
-  }
-
-  return "";
-}
-
-function imageList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(cleanImage).filter(Boolean);
-  const one = cleanImage(value);
-  return one ? [one] : [];
-}
-
-function bestImageFrom(row: any) {
-  const candidates = [
-    cleanImage(row?.coverPhoto),
-    cleanImage(row?.photoUrl),
-    cleanImage(row?.imageUrl),
-    ...imageList(row?.photos),
-    ...imageList(row?.photoUrls),
-  ];
-
-  return candidates.find(Boolean) || "";
 }
 
 function moneyNum(value: unknown) {
@@ -226,9 +174,8 @@ function keysFor(kind: RoomKind) {
 
 function normalizeRoom(row: any, kind: RoomKind): Room {
   const id = txt(row?.id || row?.roomId || row?.dealId || row?.painId || row?.signalId);
-  const photos = Array.from(new Set([...imageList(row?.photos), ...imageList(row?.photoUrls)]));
-  const cover = bestImageFrom({ ...row, photos, photoUrls: photos });
-
+  const photos = list(row?.photos || row?.photoUrls);
+  const cover = txt(row?.coverPhoto || row?.photoUrl || row?.imageUrl || photos[0]);
   return {
     ...row,
     id,
@@ -332,44 +279,17 @@ function getRoom(kind: RoomKind, id: string) {
   if (!ok()) return null as Room | null;
 
   const states = stateMap();
-  const copies: Room[] = [];
 
   for (const key of directKeys(kind, id)) {
     const found = j<any | null>(localStorage.getItem(key), null);
-    if (found && typeof found === "object") copies.push(normalizeRoom(found, kind));
+    if (found) {
+      const room = normalizeRoom(found, kind);
+      const state = states[id] || states[`${kind}:${id}`] || roomState(room);
+      return { ...room, roomState: state, cleanupState: state, stateStatus: state };
+    }
   }
 
-  allRooms(kind)
-    .filter((room) => rid(room) === id)
-    .forEach((room) => copies.push(normalizeRoom(room, kind)));
-
-  if (!copies.length) return null;
-
-  const merged = copies.reduce((acc, item) => {
-    const accPhotos = imageList(acc.photos).length ? imageList(acc.photos) : imageList(acc.photoUrls);
-    const itemPhotos = imageList(item.photos).length ? imageList(item.photos) : imageList(item.photoUrls);
-    const photos = Array.from(new Set([...accPhotos, ...itemPhotos]));
-    const cover = bestImageFrom({ ...acc, ...item, photos, photoUrls: photos });
-
-    return normalizeRoom(
-      {
-        ...acc,
-        ...item,
-        photos,
-        photoUrls: photos,
-        coverPhoto: cover,
-        photoUrl: cover,
-        imageUrl: cover,
-      },
-      kind
-    );
-  }, copies[0]);
-
-  const state = states[id] || states[`${kind}:${id}`] || roomState(merged);
-  const next = { ...merged, roomState: state, cleanupState: state, stateStatus: state };
-
-  saveRoom(kind, next);
-  return next;
+  return allRooms(kind).find((room) => rid(room) === id) || null;
 }
 
 function writeJson(key: string, value: unknown) {
@@ -434,7 +354,8 @@ function setRoomState(kind: RoomKind, room: Room, state: RoomState) {
 }
 
 function firstPhoto(room: Room) {
-  return bestImageFrom(room);
+  const possible = [txt(room.coverPhoto), txt(room.photoUrl), txt(room.imageUrl), ...list(room.photos), ...list(room.photoUrls)].filter(Boolean);
+  return possible.find((src) => src.startsWith("data:image") || src.startsWith("http") || src.startsWith("/") || src.startsWith("blob:")) || "";
 }
 
 function profileId(profile: MemberProfile) {
@@ -882,14 +803,7 @@ export default function DealRoomPage({ params }: { params: { id: string } }) {
         <Nav active="deal" />
 
         <section style={intel.risk >= 75 ? dangerHero : hero}>
-          {img ? (
-            <img src={img} alt={titleFor(room, "deal")} style={photoStyle} />
-          ) : (
-            <div style={{ ...panel, marginBottom: 16 }}>
-              <div style={eyebrow}>No Saved Photo Found</div>
-              <p style={muted}>This room has no readable coverPhoto, photoUrl, imageUrl, photos[0], or photoUrls[0]. Add a photo in Create Deal and save again.</p>
-            </div>
-          )}
+          {img ? <img src={img} alt={titleFor(room, "deal")} style={photoStyle} /> : null}
           <div style={eyebrow}>Opportunity Room • {roomState(room)}</div>
           <h1 style={h1}>{titleFor(room, "deal")}</h1>
           <p style={sub}>{loc(room)}</p>
