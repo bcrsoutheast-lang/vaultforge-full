@@ -24,9 +24,14 @@ type RoomSnapshot = {
   kind: string;
   title: string;
   city: string;
+  county: string;
   state: string;
   ownerName: string;
   ownerEmail: string;
+  photoUrl: string;
+  assetClass: string;
+  propertyType: string;
+  strategy: string;
 };
 
 type ThreadMessage = {
@@ -95,6 +100,7 @@ const h3: React.CSSProperties = { fontSize: 28, lineHeight: 1, letterSpacing: "-
 const sub: React.CSSProperties = { color: "rgba(235,240,255,.78)", fontSize: 20, lineHeight: 1.45, margin: "8px 0" };
 const muted: React.CSSProperties = { color: "rgba(235,240,255,.68)", fontSize: 15, lineHeight: 1.45, margin: "6px 0" };
 const avatar: React.CSSProperties = { width: 54, height: 54, objectFit: "cover", borderRadius: 999, border: "1px solid rgba(245,197,66,.45)", background: "rgba(0,0,0,.35)" };
+const roomImageStyle: React.CSSProperties = { width: "100%", height: 180, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.25)", background: "rgba(0,0,0,.35)", marginBottom: 12 };
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -162,6 +168,8 @@ function readProfile(): ProfileSnapshot {
 }
 
 const ROOM_LOOKUP_KEYS = [
+  "vaultforge_canonical_deal_rooms_v1",
+  "vaultforge_canonical_pain_rooms_v1",
   "vaultforge_my_rooms_clean_v2",
   "vaultforge_member_rooms_v1",
   "vaultforge_command_rooms_v1",
@@ -170,9 +178,11 @@ const ROOM_LOOKUP_KEYS = [
   "vaultforge_owned_rooms_v1",
   "vaultforge_owned_deal_rooms_v1",
   "vaultforge_owned_pain_rooms_v1",
-  "vaultforge_investor_deal_rooms_v1",
-  "vaultforge_investor_pain_rooms_v1",
   "vaultforge_clean_deal_rooms",
+  "vaultforge_clean_pain_rooms_v2",
+  "vaultforge_clean_pain_rooms_v1",
+  "vaultforge_deal_rooms",
+  "vaultforge_pain_rooms",
 ];
 
 function collectRows(value: any): any[] {
@@ -223,13 +233,48 @@ function roomTitle(row: any) {
   );
 }
 
+function isRoomIdLike(value: string) {
+  const text = clean(value).toLowerCase();
+  return (
+    text.startsWith("deal_") ||
+    text.startsWith("pain_") ||
+    text.startsWith("room_") ||
+    text.startsWith("project_") ||
+    text.includes("_")
+  );
+}
+
+function list(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean);
+  if (typeof value === "string" && value.trim()) return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function roomPhoto(row: any) {
+  const photos = list(row?.photos || row?.photoUrls);
+  return clean(row?.coverPhoto || row?.photoUrl || row?.imageUrl || photos[0]);
+}
+
+function roomStrategy(row: any) {
+  return list(row?.strategy || row?.strategies).join(" • ");
+}
+
 function findRoomById(roomId: string, roomName = "") {
   if (typeof window === "undefined") return null;
-  const targetId = clean(roomId);
-  const targetName = clean(roomName).toLowerCase();
+
+  const targetId = clean(roomId || (isRoomIdLike(roomName) ? roomName : ""));
+  const targetName = isRoomIdLike(roomName) ? "" : clean(roomName).toLowerCase();
 
   const directKeys = targetId
-    ? [`vaultforge_deal_room_${targetId}`, `vaultforge_pain_room_${targetId}`, `vaultforge_room_${targetId}`]
+    ? [
+        `vaultforge_deal_room_${targetId}`,
+        `vaultforge_clean_deal_room_${targetId}`,
+        `vf_deal_room_${targetId}`,
+        `vaultforge_pain_room_${targetId}`,
+        `vaultforge_clean_pain_room_${targetId}`,
+        `vf_pain_room_${targetId}`,
+        `vaultforge_room_${targetId}`,
+      ]
     : [];
 
   for (const key of directKeys) {
@@ -241,7 +286,24 @@ function findRoomById(roomId: string, roomName = "") {
     const parsed = parseJson<any>(window.localStorage.getItem(key), []);
     const rows = collectRows(parsed);
     const found = rows.find((row) => {
-      const id = clean(row?.id || row?.roomId || row?.slug);
+      const id = clean(row?.id || row?.roomId || row?.slug || row?.dealId || row?.painId);
+      const title = roomTitle(row).toLowerCase();
+      return (targetId && id === targetId) || (targetName && title === targetName);
+    });
+
+    if (found) return found;
+  }
+
+  // Last resort: scan localStorage keys that are obviously room stores only.
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index) || "";
+    const lower = key.toLowerCase();
+    if (!lower.includes("room") && !lower.includes("deal") && !lower.includes("pain")) continue;
+
+    const parsed = parseJson<any>(window.localStorage.getItem(key), null);
+    const rows = collectRows(parsed);
+    const found = rows.find((row) => {
+      const id = clean(row?.id || row?.roomId || row?.slug || row?.dealId || row?.painId);
       const title = roomTitle(row).toLowerCase();
       return (targetId && id === targetId) || (targetName && title === targetName);
     });
@@ -264,9 +326,14 @@ function snapshotFromRoom(row: any, fallbackRoomId = ""): RoomSnapshot | undefin
     kind: clean(row.kind || row.roomType || row.problemType || "Room"),
     title: title || id,
     city: clean(row.city || row.propertyCity || row.marketCity),
+    county: clean(row.county || row.propertyCounty || row.marketCounty),
     state: clean(row.state || row.propertyState || row.marketState),
     ownerName: roomOwnerName(row),
     ownerEmail: roomOwnerEmail(row),
+    photoUrl: roomPhoto(row),
+    assetClass: clean(row.assetClass || row.asset || row.assetType),
+    propertyType: clean(row.propertyType || row.category),
+    strategy: roomStrategy(row),
   };
 }
 
@@ -466,6 +533,7 @@ export default function MessagesPage() {
   const [title, setTitle] = useState("");
   const [room, setRoom] = useState("");
   const [roomId, setRoomId] = useState("");
+  const [targetRoomSnapshot, setTargetRoomSnapshot] = useState<RoomSnapshot | undefined>(undefined);
   const [message, setMessage] = useState("");
   const [reply, setReply] = useState("");
 
@@ -487,10 +555,12 @@ export default function MessagesPage() {
       clean(params.get("owner")) ||
       clean(params.get("ownerName")) ||
       (incomingRecipient === ADMIN_EMAIL ? ADMIN_NAME : incomingRecipient);
-    const incomingRoom = clean(params.get("room")) || clean(params.get("project")) || clean(params.get("title"));
-    const incomingTitle = clean(params.get("title")) || (incomingRoom ? `Message about ${incomingRoom}` : "");
-    const incomingKind = clean(params.get("kind")) || clean(params.get("lane"));
-    const incomingRoomId = clean(params.get("roomId")) || clean(params.get("projectId")) || clean(params.get("id"));
+    const incomingRoomParam = clean(params.get("room")) || clean(params.get("project"));
+    const incomingTitleParam = clean(params.get("title")) || clean(params.get("subject"));
+    const incomingRoom = isRoomIdLike(incomingRoomParam) ? "" : incomingRoomParam || incomingTitleParam;
+    const incomingTitle = incomingTitleParam || (incomingRoom ? `Message about ${incomingRoom}` : "");
+    const incomingKind = clean(params.get("kind")) || clean(params.get("lane")) || clean(params.get("type"));
+    const incomingRoomId = clean(params.get("roomId")) || clean(params.get("projectId")) || clean(params.get("id")) || (isRoomIdLike(incomingRoomParam) ? incomingRoomParam : "");
     const attachedRoom = findRoomById(incomingRoomId, incomingRoom);
     const attachedSnapshot = snapshotFromRoom(attachedRoom, incomingRoomId);
 
@@ -499,6 +569,7 @@ export default function MessagesPage() {
     const resolvedRecipientName = attachedSnapshot?.ownerName || incomingName;
     const resolvedTitle = titleFromRoom(attachedRoom, incomingTitle || (resolvedRoomTitle ? `Message about ${resolvedRoomTitle}` : ""));
 
+    if (attachedSnapshot) setTargetRoomSnapshot(attachedSnapshot);
     if (resolvedRecipient) setRecipient(resolvedRecipient);
     if (resolvedTitle) setTitle(resolvedTitle);
     if (resolvedRoomTitle) setRoom(resolvedRoomTitle);
@@ -566,7 +637,7 @@ export default function MessagesPage() {
     const now = new Date().toISOString();
     const senderProfile = readProfile();
     const attachedRoom = findRoomById(roomId, room);
-    const attachedSnapshot = snapshotFromRoom(attachedRoom, roomId);
+    const attachedSnapshot = snapshotFromRoom(attachedRoom, roomId) || targetRoomSnapshot;
 
     const finalRecipient = recipientFromRoom(attachedRoom, recipient.trim() || ADMIN_EMAIL);
     const finalRoom = attachedSnapshot?.title || room.trim() || (lane === "Admin" ? "Admin" : "General");
@@ -588,7 +659,7 @@ export default function MessagesPage() {
       recipient: finalRecipient,
       title: finalTitle,
       room: finalRoom,
-      roomId,
+      roomId: attachedSnapshot?.id || roomId,
       message: entry.message,
       folder: "active",
       unread: true,
@@ -703,7 +774,7 @@ export default function MessagesPage() {
 
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Message Center</div>
-          <h1 style={h1}>Messages for admin, members, and rooms.</h1>
+          <h1 style={h1}>Room-bound messages.</h1>
           <p style={sub}>
             Send Admin messages, message members from Network profiles, and keep Deal/Pain/Project conversations tied to the right room with sender and recipient profiles attached.
           </p>
@@ -732,6 +803,25 @@ export default function MessagesPage() {
             <StatCard label="Deleted" count={grouped.deleted.length} active={folder === "deleted"} onClick={() => setFolder("deleted")} />
           </div>
         </section>
+
+        {targetRoomSnapshot ? (
+          <section style={card}>
+            <div style={eyebrow}>Attached Room</div>
+            <div style={{ ...grid, marginTop: 14 }}>
+              <div style={tile}>
+                {targetRoomSnapshot.photoUrl ? <img src={targetRoomSnapshot.photoUrl} alt={targetRoomSnapshot.title} style={roomImageStyle} /> : null}
+                <h3 style={h3}>{targetRoomSnapshot.title}</h3>
+                <p style={muted}>{[targetRoomSnapshot.city, targetRoomSnapshot.county, targetRoomSnapshot.state].filter(Boolean).join(", ") || "Location not listed"}</p>
+                <p style={muted}>{[targetRoomSnapshot.assetClass, targetRoomSnapshot.propertyType, targetRoomSnapshot.strategy].filter(Boolean).join(" • ") || "Room details attached"}</p>
+              </div>
+              <div style={tile}>
+                <div style={eyebrow}>Message Recipient</div>
+                <p style={sub}>{targetRoomSnapshot.ownerName || targetRoomSnapshot.ownerEmail || "Room owner"}</p>
+                <p style={muted}>{targetRoomSnapshot.ownerEmail || "Owner email not listed"}</p>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section style={card}>
           <div style={eyebrow}>Create Message</div>
@@ -805,7 +895,9 @@ export default function MessagesPage() {
 
               <div style={tile}>
                 <div style={eyebrow}>Room / Project</div>
+                {selected.roomSnapshot?.photoUrl ? <img src={selected.roomSnapshot.photoUrl} alt={selected.room} style={roomImageStyle} /> : null}
                 <p style={sub}>{selected.room}</p>
+                <p style={muted}>{selected.roomSnapshot ? [selected.roomSnapshot.city, selected.roomSnapshot.county, selected.roomSnapshot.state].filter(Boolean).join(", ") : ""}</p>
                 <p style={muted}>{selected.roomId ? `Room ID: ${selected.roomId}` : "No room ID attached"}</p>
               </div>
             </div>
