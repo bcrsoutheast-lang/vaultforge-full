@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type AlertKind = "deals" | "pain" | "messages" | "owner";
+type ItemKind = "deal" | "pain" | "message" | "owner";
+
 type Item = {
   id: string;
-  kind: "deal" | "pain" | "message" | "owner";
+  kind: ItemKind;
   title: string;
   body: string;
   state: string;
@@ -25,8 +27,21 @@ const wrap: React.CSSProperties = {
 };
 
 const shell: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
-const nav: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 20 };
-const brand: React.CSSProperties = { color: "#ffda5e", fontWeight: 1000, fontSize: 28, letterSpacing: "-.04em" };
+
+const nav: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+  alignItems: "center",
+  marginBottom: 20,
+};
+
+const brand: React.CSSProperties = {
+  color: "#ffda5e",
+  fontWeight: 1000,
+  fontSize: 28,
+  letterSpacing: "-.04em",
+};
 
 const btn: React.CSSProperties = {
   border: "1px solid rgba(207,216,230,.18)",
@@ -154,7 +169,9 @@ function collect(value: unknown): any[] {
     if (Array.isArray(item)) rows.push(...item);
   });
 
-  if (obj.id || obj.title || obj.name || obj.subject || obj.message) rows.push(obj);
+  if (obj.id || obj.title || obj.name || obj.subject || obj.message || obj.propertyName) {
+    rows.push(obj);
+  }
 
   return rows;
 }
@@ -164,14 +181,85 @@ function clean(value: unknown, fallback = "Not listed") {
   return text || fallback;
 }
 
-function kindFrom(key: string, item: any): Item["kind"] {
+function keyLooksLikeActivityOrNoise(key: string) {
+  const lower = key.toLowerCase();
+
+  return (
+    lower.includes("activity") ||
+    lower.includes("viewed") ||
+    lower.includes("history") ||
+    lower.includes("audit") ||
+    lower.includes("log") ||
+    lower.includes("analytics") ||
+    lower.includes("deleted_forever") ||
+    lower.includes("draft")
+  );
+}
+
+function keyLooksLikeUsefulSource(key: string) {
+  const lower = key.toLowerCase();
+
+  if (keyLooksLikeActivityOrNoise(lower)) return false;
+
+  return (
+    lower.includes("room") ||
+    lower.includes("deal") ||
+    lower.includes("pain") ||
+    lower.includes("project") ||
+    lower.includes("property") ||
+    lower.includes("message") ||
+    lower.includes("request")
+  );
+}
+
+function isActive(item: any) {
+  const raw = String(
+    item?.status ||
+      item?.folder ||
+      item?.roomStatus ||
+      item?.workspaceStatus ||
+      item?.routeStatus ||
+      "active"
+  ).toLowerCase();
+
+  return (
+    !raw.includes("archive") &&
+    !raw.includes("archived") &&
+    !raw.includes("delete") &&
+    !raw.includes("deleted") &&
+    !raw.includes("save") &&
+    !raw.includes("saved") &&
+    !raw.includes("trash") &&
+    !raw.includes("hidden")
+  );
+}
+
+function hasRealTitle(item: any) {
+  return Boolean(
+    clean(
+      item?.title ||
+        item?.name ||
+        item?.projectName ||
+        item?.propertyName ||
+        item?.dealTitle ||
+        item?.painTitle ||
+        item?.subject ||
+        "",
+      ""
+    )
+  );
+}
+
+function kindFrom(key: string, item: any): ItemKind {
   const text = `${key} ${JSON.stringify(item || {})}`.toLowerCase();
 
   if (
     text.includes("pain") ||
     text.includes("problem") ||
     text.includes("distress") ||
-    text.includes("pressure")
+    text.includes("pressure") ||
+    text.includes("funding gap") ||
+    text.includes("foreclosure")
   ) {
     return "pain";
   }
@@ -187,15 +275,100 @@ function kindFrom(key: string, item: any): Item["kind"] {
   return "deal";
 }
 
-function isActive(item: any) {
-  const raw = String(item?.status || item?.folder || item?.roomStatus || item?.workspaceStatus || "active").toLowerCase();
+function usableItem(key: string, item: any) {
+  if (!item || typeof item !== "object") return false;
+  if (keyLooksLikeActivityOrNoise(key)) return false;
+  if (!isActive(item)) return false;
+
+  const text = `${key} ${JSON.stringify(item)}`.toLowerCase();
+
+  if (
+    text.includes("room opened") ||
+    text.includes("status change") ||
+    text.includes("viewed:") ||
+    text.includes("viewed room")
+  ) {
+    return false;
+  }
+
+  const hasContent =
+    hasRealTitle(item) ||
+    Boolean(item?.city || item?.state || item?.propertyState || item?.market || item?.message);
+
+  if (!hasContent) return false;
 
   return (
-    !raw.includes("archive") &&
-    !raw.includes("delete") &&
-    !raw.includes("save") &&
-    !raw.includes("trash")
+    text.includes("deal") ||
+    text.includes("room") ||
+    text.includes("pain") ||
+    text.includes("project") ||
+    text.includes("property") ||
+    text.includes("message") ||
+    text.includes("request") ||
+    text.includes("investor")
   );
+}
+
+function canonicalId(kind: ItemKind, item: any, index: number, key: string) {
+  const rawId = clean(item?.id || item?.roomId || item?.slug || item?.threadId || "", "");
+  if (rawId) return `${kind}:${rawId}`;
+
+  const title = clean(
+    item?.title || item?.name || item?.projectName || item?.propertyName || item?.dealTitle || item?.painTitle || item?.subject || "request",
+    "request"
+  )
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+
+  const state = clean(item?.state || item?.propertyState || item?.marketState || item?.market || "na", "na")
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+
+  return `${kind}:${title}:${state}:${key.includes("message") ? index : "room"}`;
+}
+
+function titleFor(item: any, kind: ItemKind) {
+  const title = clean(
+    item?.title ||
+      item?.name ||
+      item?.projectName ||
+      item?.propertyName ||
+      item?.dealTitle ||
+      item?.painTitle ||
+      item?.subject ||
+      "",
+    ""
+  );
+
+  if (title) return title;
+
+  if (kind === "pain") return "Pain Signal";
+  if (kind === "message") return "Message Request";
+  if (kind === "owner") return "Owner Reply";
+
+  return "Deal Signal";
+}
+
+function bodyFor(item: any, kind: ItemKind) {
+  const body = clean(
+    item?.message ||
+      item?.summary ||
+      item?.notes ||
+      item?.description ||
+      item?.body ||
+      item?.need ||
+      item?.problem ||
+      "",
+    ""
+  );
+
+  if (body) return body;
+
+  if (kind === "pain") return "Member submitted a problem/pain signal for investor review.";
+  if (kind === "message") return "Message thread connected to an investor request.";
+  if (kind === "owner") return "Owner reply connected to an investor request.";
+
+  return "Member submitted a deal opportunity signal for investor review.";
 }
 
 function loadInvestorItems(): Item[] {
@@ -220,64 +393,44 @@ function loadInvestorItems(): Item[] {
 
   for (let i = 0; i < window.localStorage.length; i += 1) {
     const key = window.localStorage.key(i) || "";
-    const lower = key.toLowerCase();
-
-    if (
-      lower.includes("room") ||
-      lower.includes("deal") ||
-      lower.includes("pain") ||
-      lower.includes("project") ||
-      lower.includes("property") ||
-      lower.includes("message") ||
-      lower.includes("request")
-    ) {
-      keys.add(key);
-    }
+    if (keyLooksLikeUsefulSource(key)) keys.add(key);
   }
 
-  const items: Item[] = [];
+  const itemMap = new Map<string, Item>();
 
   Array.from(keys).forEach((key) => {
+    if (keyLooksLikeActivityOrNoise(key)) return;
+
     const parsed = safeParse<any>(window.localStorage.getItem(key), null);
 
     collect(parsed).forEach((item, index) => {
-      if (!item || typeof item !== "object") return;
-
-      const text = `${key} ${JSON.stringify(item)}`.toLowerCase();
-
-      if (
-        !text.includes("deal") &&
-        !text.includes("room") &&
-        !text.includes("pain") &&
-        !text.includes("project") &&
-        !text.includes("property") &&
-        !text.includes("message") &&
-        !text.includes("request")
-      ) {
-        return;
-      }
-
-      if (!isActive(item)) return;
+      if (!usableItem(key, item)) return;
 
       const kind = kindFrom(key, item);
-      const id = clean(item.id || item.roomId || item.slug || item.threadId || `${key}-${index}`, `${key}-${index}`);
+      const id = canonicalId(kind, item, index, key);
 
-      items.push({
+      const record: Item = {
         id,
         kind,
-        title: clean(item.title || item.name || item.projectName || item.propertyName || item.subject || "Request", "Request"),
-        body: clean(item.message || item.summary || item.notes || item.description || item.body || "Open this signal to review details.", "Open this signal to review details."),
-        state: clean(item.state || item.propertyState || item.marketState || item.market || "NA", "NA"),
-        status: clean(item.status || item.folder || "active", "active"),
+        title: titleFor(item, kind),
+        body: bodyFor(item, kind),
+        state: clean(item?.state || item?.propertyState || item?.marketState || item?.market || "NA", "NA"),
+        status: clean(item?.status || item?.folder || "active", "active"),
         source: key,
-      });
+      };
+
+      const existing = itemMap.get(id);
+
+      if (!existing || existing.title === "Deal Signal" || existing.title === "Pain Signal") {
+        itemMap.set(id, record);
+      }
     });
   });
 
-  const unique = new Map<string, Item>();
-  items.forEach((item) => unique.set(`${item.kind}-${item.id}`, item));
-
-  return Array.from(unique.values());
+  return Array.from(itemMap.values()).sort((a, b) => {
+    const rank: Record<ItemKind, number> = { deal: 1, pain: 2, message: 3, owner: 4 };
+    return rank[a.kind] - rank[b.kind] || a.title.localeCompare(b.title);
+  });
 }
 
 function AlertTile({
@@ -338,21 +491,57 @@ export default function InvestorRoomPage() {
         <section style={card}>
           <div style={eyebrow}>Investor Alerts • {items.length} Active</div>
           <div style={{ ...grid, marginTop: 16 }}>
-            <AlertTile title="Deals" count={grouped.deals.length} note="deal opportunity cards" active={lane === "deals"} onClick={() => setLane("deals")} />
-            <AlertTile title="Pain" count={grouped.pain.length} note="problem/pain signals" active={lane === "pain"} onClick={() => setLane("pain")} />
-            <AlertTile title="Messages" count={grouped.messages.length} note="owner/member/investor requests" active={lane === "messages"} onClick={() => setLane("messages")} />
-            <AlertTile title="Owner Replies" count={grouped.owner.length} note="owner replies to requests" active={lane === "owner"} onClick={() => setLane("owner")} />
+            <AlertTile
+              title="Deals"
+              count={grouped.deals.length}
+              note="deal opportunity cards"
+              active={lane === "deals"}
+              onClick={() => setLane("deals")}
+            />
+            <AlertTile
+              title="Pain"
+              count={grouped.pain.length}
+              note="problem/pain signals"
+              active={lane === "pain"}
+              onClick={() => setLane("pain")}
+            />
+            <AlertTile
+              title="Messages"
+              count={grouped.messages.length}
+              note="owner/member/investor requests"
+              active={lane === "messages"}
+              onClick={() => setLane("messages")}
+            />
+            <AlertTile
+              title="Owner Replies"
+              count={grouped.owner.length}
+              note="owner replies to requests"
+              active={lane === "owner"}
+              onClick={() => setLane("owner")}
+            />
           </div>
         </section>
 
         <nav style={nav}>
           <div style={brand}>VAULTFORGE</div>
-          <Link href="/" style={btn}>Home</Link>
-          <Link href="/investor-room" style={goldBtn}>Investor Access</Link>
-          <Link href="/payment" style={btn}>Payment</Link>
-          <Link href="/messages" style={goldBtn}>Message Owner</Link>
-          <Link href="/logout" style={btn}>Logout</Link>
-          <Link href="/admin" style={redBtn}>Owner</Link>
+          <Link href="/" style={btn}>
+            Home
+          </Link>
+          <Link href="/investor-room" style={goldBtn}>
+            Investor Access
+          </Link>
+          <Link href="/payment" style={btn}>
+            Payment
+          </Link>
+          <Link href="/messages" style={goldBtn}>
+            Message Owner
+          </Link>
+          <Link href="/logout" style={btn}>
+            Logout
+          </Link>
+          <Link href="/admin" style={redBtn}>
+            Owner
+          </Link>
         </nav>
 
         <section style={goldCard}>
@@ -362,9 +551,15 @@ export default function InvestorRoomPage() {
             Start with Deal/Pain signals, request controlled information, track replies, then request execution help from the private member network.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 18 }}>
-            <button type="button" onClick={() => setLane("deals")} style={goldBtn}>Open Deal Signals</button>
-            <button type="button" onClick={() => setLane("pain")} style={btn}>Open Pain Signals</button>
-            <Link href="/messages" style={goldBtn}>Message Owner</Link>
+            <button type="button" onClick={() => setLane("deals")} style={goldBtn}>
+              Open Deal Signals
+            </button>
+            <button type="button" onClick={() => setLane("pain")} style={btn}>
+              Open Pain Signals
+            </button>
+            <Link href="/messages" style={goldBtn}>
+              Message Owner
+            </Link>
           </div>
         </section>
 
@@ -375,8 +570,10 @@ export default function InvestorRoomPage() {
           {visible.length ? (
             <div style={roomGrid}>
               {visible.map((item) => (
-                <article key={`${item.kind}-${item.id}`} style={panel}>
-                  <div style={eyebrow}>{item.kind} • {item.state} • {item.status}</div>
+                <article key={item.id} style={panel}>
+                  <div style={eyebrow}>
+                    {item.kind} • {item.state} • {item.status}
+                  </div>
                   <h3 style={h3}>{item.title}</h3>
                   <p style={muted}>{item.body}</p>
                   <p style={muted}>Source: {item.source}</p>
