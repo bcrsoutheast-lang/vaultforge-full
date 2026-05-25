@@ -39,6 +39,7 @@ type MessageThread = {
   senderProfile?: Partial<ProfileSnapshot>;
   recipientProfile?: Partial<ProfileSnapshot>;
   roomSnapshot?: { id: string; kind: string; title: string; owner: string; source: string };
+  messages?: Array<{ id: string; from: string; recipient: string; message: string; createdAt: string; senderProfile?: Partial<ProfileSnapshot> }>;
 };
 
 type RoomCard = {
@@ -64,13 +65,7 @@ const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultf
 const PROFILE_PHOTO_BACKUP_KEY = "vaultforge_member_profile_photo_v1";
 const COMPANY_LOGO_BACKUP_KEY = "vaultforge_member_company_logo_v1";
 
-const page: React.CSSProperties = {
-  minHeight: "100vh",
-  background: "radial-gradient(circle at 16% 10%, rgba(245,197,66,.12), transparent 30%), radial-gradient(circle at 88% 8%, rgba(120,0,30,.18), transparent 34%), #05070b",
-  color: "#f7f8ff",
-  padding: "26px 20px 90px",
-  fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-};
+const page: React.CSSProperties = { minHeight: "100vh", background: "radial-gradient(circle at 16% 10%, rgba(245,197,66,.12), transparent 30%), radial-gradient(circle at 88% 8%, rgba(120,0,30,.18), transparent 34%), #05070b", color: "#f7f8ff", padding: "26px 20px 90px", fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' };
 const shell: React.CSSProperties = { maxWidth: 1180, margin: "0 auto" };
 const nav: React.CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 20 };
 const brand: React.CSSProperties = { color: "#ffda5e", fontWeight: 1000, fontSize: 28, letterSpacing: "-.04em", marginRight: 10 };
@@ -224,33 +219,70 @@ function deletedMessageForeverIds(): string[] {
   return parse<string[]>(window.localStorage.getItem(FOREVER_KEY), []);
 }
 
-function loadMessages(): MessageThread[] {
+function normalizeThread(thread: any): MessageThread {
+  const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+  return {
+    ...thread,
+    id: clean(thread?.id || `thread-${Date.now()}`, `thread-${Date.now()}`),
+    from: clean(thread?.from || thread?.senderProfile?.email || thread?.senderProfile?.name || "Not listed", "Not listed"),
+    recipient: clean(thread?.recipient || "VaultForge Owner", "VaultForge Owner"),
+    title: clean(thread?.title || "Untitled Message", "Untitled Message"),
+    room: clean(thread?.room || thread?.roomSnapshot?.title || "General", "General"),
+    message: clean(thread?.message || messages[messages.length - 1]?.message || "No message entered.", "No message entered."),
+    folder: thread?.folder || "active",
+    unread: Boolean(thread?.unread),
+    createdAt: clean(thread?.createdAt || "", ""),
+    messages,
+  };
+}
+
+function loadLocalMessages(): MessageThread[] {
   if (typeof window === "undefined") return [];
   const forever = new Set(deletedMessageForeverIds());
   const rows = parse<any[]>(window.localStorage.getItem(THREADS_KEY), []);
   if (!Array.isArray(rows)) return [];
-  return rows
-    .filter((thread) => thread && typeof thread === "object" && !forever.has(String(thread.id || "")))
-    .map((thread) => ({
-      ...thread,
-      id: clean(thread.id || `thread-${Date.now()}`, `thread-${Date.now()}`),
-      from: clean(thread.from || thread.senderProfile?.email || thread.senderProfile?.name || "Not listed", "Not listed"),
-      recipient: clean(thread.recipient || "VaultForge Owner", "VaultForge Owner"),
-      title: clean(thread.title || "Untitled Message", "Untitled Message"),
-      room: clean(thread.room || thread.roomSnapshot?.title || "General", "General"),
-      message: clean(thread.message || "No message entered.", "No message entered."),
-      folder: thread.folder || "active",
-      unread: Boolean(thread.unread),
-      createdAt: clean(thread.createdAt || "", ""),
-    }));
+  return rows.filter((thread) => thread && typeof thread === "object" && !forever.has(String(thread.id || ""))).map(normalizeThread);
+}
+
+function saveLocalMessages(threads: MessageThread[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(THREADS_KEY, JSON.stringify(threads));
+  window.dispatchEvent(new Event("vaultforge-message-change"));
 }
 
 function isProfileRelated(thread: MessageThread, profile: ProfileSnapshot) {
   const email = profile.email.toLowerCase();
   const name = profile.name.toLowerCase();
-  const blob = `${thread.from} ${thread.recipient} ${thread.senderProfile?.email || ""} ${thread.senderProfile?.name || ""} ${thread.recipientProfile?.email || ""} ${thread.recipientProfile?.name || ""}`.toLowerCase();
+  const blob = JSON.stringify(thread).toLowerCase();
   if (!email && !name) return true;
-  return Boolean((email && blob.includes(email)) || (name && blob.includes(name)) || blob.includes("vaultforge owner"));
+  return Boolean((email && blob.includes(email)) || (name && blob.includes(name)) || blob.includes("vaultforge owner") || blob.includes("bcrsoutheast@gmail.com"));
+}
+
+async function loadMessagesForProfile(profile: ProfileSnapshot) {
+  const local = loadLocalMessages();
+
+  try {
+    const params = new URLSearchParams();
+    if (profile.email) params.set("email", profile.email);
+    if (profile.name) params.set("name", profile.name);
+
+    const response = await fetch(`/api/messages/list?${params.toString()}`, { cache: "no-store" });
+    const data = await response.json();
+
+    if (!data?.ok) return local;
+
+    const remote = Array.isArray(data.threads) ? data.threads.map(normalizeThread) : [];
+    const merged = new Map<string, MessageThread>();
+    [...remote, ...local].forEach((thread) => {
+      if (!merged.has(thread.id)) merged.set(thread.id, thread);
+    });
+
+    const next = Array.from(merged.values());
+    saveLocalMessages(next);
+    return next;
+  } catch {
+    return local;
+  }
 }
 
 function profileLine(profile: ProfileSnapshot) {
@@ -278,7 +310,7 @@ function MessageCard({ thread }: { thread: MessageThread }) {
       <p style={muted}><strong style={{ color: "#f7f8ff" }}>Recipient:</strong> {thread.recipient}</p>
       <p style={muted}><strong style={{ color: "#f7f8ff" }}>Room:</strong> {thread.room}</p>
       <p style={muted}>{thread.message}</p>
-      <div style={{ ...row, marginTop: 12 }}><Link href="/messages" style={goldBtn}>Open Messages</Link></div>
+      <div style={{ ...row, marginTop: 12 }}><Link href={`/messages?thread=${encodeURIComponent(thread.id)}`} style={goldBtn}>Open / Reply</Link></div>
     </article>
   );
 }
@@ -320,13 +352,15 @@ export default function CommandPage() {
     const loaded = loadRooms();
     const loadedProfile = readProfile();
     setRooms(loaded);
-    setMessages(loadMessages());
     setProfile(loadedProfile);
     saveRooms(loaded);
 
+    loadMessagesForProfile(loadedProfile).then(setMessages);
+
     function refresh() {
-      setMessages(loadMessages());
-      setProfile(readProfile());
+      const nextProfile = readProfile();
+      setProfile(nextProfile);
+      loadMessagesForProfile(nextProfile).then(setMessages);
     }
 
     window.addEventListener("storage", refresh);
@@ -388,21 +422,16 @@ export default function CommandPage() {
           <div style={{ ...grid, marginTop: 16 }}>
             <AlertTile label="Deals" count={grouped.deal.length} note="active deal rooms" active={view === "deal"} onClick={() => setView("deal")} />
             <AlertTile label="Pain" count={grouped.pain.length} note="active pain rooms" active={view === "pain"} onClick={() => setView("pain")} />
-            <AlertTile label="Messages" count={activeMessages.length} note={`${unreadMessages.length} unread profile-attached thread(s)`} active={view === "messages"} onClick={() => setView("messages")} />
+            <AlertTile label="Messages" count={activeMessages.length} note={`${unreadMessages.length} unread synced thread(s)`} active={view === "messages"} onClick={() => setView("messages")} />
             <AlertTile label="Saved" count={grouped.saved.length} note="saved room cards" active={view === "saved"} onClick={() => setView("saved")} />
             <AlertTile label="Deleted" count={grouped.deleted.length} note="delete / delete forever" active={view === "deleted"} onClick={() => setView("deleted")} />
           </div>
         </section>
 
-        <section style={{ ...card, maxWidth: 860, marginLeft: "auto", marginRight: "auto", textAlign: "center", borderColor: "rgba(245,197,66,.35)" }}>
-          <div style={{ width: "min(340px, 80%)", minHeight: 130, margin: "0 auto 14px", borderRadius: 18, border: "1px solid rgba(245,197,66,.28)", background: "rgba(0,0,0,.35)", display: "grid", placeItems: "center", color: "#ffda5e", fontWeight: 1000, letterSpacing: ".2em" }}>VAULTFORGE</div>
-          <p style={muted}>Private real estate execution intelligence network</p>
-        </section>
-
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Member Command</div>
           <h1 style={h1}>Execution intelligence desk.</h1>
-          <p style={sub}>Your member command center now reads profile-attached message threads plus Deal rooms, Pain rooms, saved cards, archived cards, and deleted cards.</p>
+          <p style={sub}>Command now reads synced message threads plus local fallback, so owner/member replies can appear after Supabase is connected.</p>
           <div style={{ ...row, marginTop: 16 }}>
             <button type="button" style={goldBtn} onClick={() => setView("active")}>Open Active Rooms</button>
             <button type="button" style={view === "messages" ? goldBtn : btn} onClick={() => setView("messages")}>Messages ({activeMessages.length})</button>
