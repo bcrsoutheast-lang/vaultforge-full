@@ -170,13 +170,20 @@ function saveForeverIds(ids: string[]) {
 function loadRooms(): RoomCard[] {
   if (typeof window === "undefined") return [];
   const deletedForever = new Set(foreverIds());
-  const keys = new Set<string>([COMMAND_ROOMS_KEY, "vaultforge_rooms_v1", "vaultforge_deal_rooms_v1", "vaultforge_pain_rooms_v1", "vaultforge_member_rooms_v1", "vaultforge_property_cards_v1", "vaultforge_projects_v1", "vaultforge_deals_v1", "vaultforge_pain_requests_v1", "vaultforge_my_rooms_clean_v2"]);
+  const keys = new Set<string>([
+    COMMAND_ROOMS_KEY,
+    "vaultforge_member_rooms_v1",
+    "vaultforge_my_rooms_clean_v2",
+    "vaultforge_command_deal_rooms_v1",
+    "vaultforge_command_pain_rooms_v1",
+    "vaultforge_owned_rooms_v1",
+    "vaultforge_owned_deal_rooms_v1",
+    "vaultforge_owned_pain_rooms_v1"
+  ]);
 
-  for (let i = 0; i < window.localStorage.length; i += 1) {
-    const key = window.localStorage.key(i) || "";
-    const lower = key.toLowerCase();
-    if (lower.includes("room") || lower.includes("deal") || lower.includes("pain") || lower.includes("project") || lower.includes("property")) keys.add(key);
-  }
+  // Member Command is not Investor Room. Do not scan every deal/property/project key.
+  // Investor/public opportunity pools belong only in /investor-room.
+  // Command should stay focused on member-owned/command-owned workspace records.
 
   const rooms: RoomCard[] = [];
   Array.from(keys).forEach((key) => {
@@ -431,7 +438,7 @@ export default function CommandPage() {
         <section style={goldCard}>
           <div style={eyebrow}>VaultForge Member Command</div>
           <h1 style={h1}>Execution intelligence desk.</h1>
-          <p style={sub}>Command now reads synced message threads plus local fallback, so owner/member replies can appear after Supabase is connected.</p>
+          <p style={sub}>Member Command is now separated from Investor Room. It reads member-owned command rooms plus synced message threads, not investor opportunity cards.</p>
           <div style={{ ...row, marginTop: 16 }}>
             <button type="button" style={goldBtn} onClick={() => setView("active")}>Open Active Rooms</button>
             <button type="button" style={view === "messages" ? goldBtn : btn} onClick={() => setView("messages")}>Messages ({activeMessages.length})</button>
