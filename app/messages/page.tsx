@@ -226,8 +226,25 @@ function currentEmail() {
     window.localStorage.getItem("vf_email") ||
     window.localStorage.getItem("vaultforge_email") ||
     window.localStorage.getItem("email") ||
+    window.localStorage.getItem("vf_member_email") ||
+    window.localStorage.getItem("vf_current_email") ||
     ""
   );
+}
+
+function cleanParam(value: string | null) {
+  return String(value || "").trim();
+}
+
+function laneFromParam(value: string | null): Lane {
+  const text = cleanParam(value).toLowerCase();
+
+  if (text === "deal" || text === "deals" || text === "deal room") return "Deal Room";
+  if (text === "pain" || text === "pain room") return "Pain Room";
+  if (text === "investor") return "Investor";
+  if (text === "member") return "Member";
+  if (text === "general") return "General";
+  return "Owner";
 }
 
 function folderTitle(folder: Folder) {
@@ -286,8 +303,21 @@ export default function MessagesPage() {
 
     setThreads(loaded);
 
+    const params = new URLSearchParams(window.location.search);
     const email = currentEmail();
-    if (email) setFrom(email);
+    const incomingFrom = cleanParam(params.get("from")) || email;
+    const incomingRecipient = cleanParam(params.get("recipient")) || cleanParam(params.get("owner"));
+    const incomingTitle = cleanParam(params.get("title"));
+    const incomingRoom = cleanParam(params.get("room"));
+    const incomingKind = cleanParam(params.get("kind"));
+
+    if (incomingKind) setLane(laneFromParam(incomingKind));
+    if (incomingFrom) setFrom(incomingFrom);
+    if (incomingRecipient) setRecipient(incomingRecipient);
+    if (incomingTitle) setTitle(incomingTitle);
+    if (incomingRoom) setRoom(incomingRoom);
+
+    setMessage("");
   }, []);
 
   const grouped = useMemo(() => {
@@ -387,7 +417,7 @@ export default function MessagesPage() {
           <div style={eyebrow}>VaultForge Message Command</div>
           <h1 style={h1}>Messages by room, sender, recipient, and title.</h1>
           <p style={sub}>
-            This is the clean message center. It is separate from member area. Every thread should show From, Recipient, Title, Room, and Message.
+            This is the clean message center. Investor Room can now open this page with From, Recipient, Title, and Room prefilled.
           </p>
         </section>
 
