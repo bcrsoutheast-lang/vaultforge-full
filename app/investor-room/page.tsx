@@ -7,21 +7,171 @@ type Lane = "deals" | "pain" | "saved" | "archived" | "deleted";
 type Status = "active" | "saved" | "archived" | "deleted";
 type Kind = "deal" | "pain";
 
-type Card = {
+type InvestorCard = {
   id: string;
-  title: string;
   kind: Kind;
+  title: string;
   status: Status;
   city: string;
   county: string;
   state: string;
   summary: string;
   source: string;
+  raw: Record<string, any>;
 };
 
-const STORAGE = "vf_investor_status_v2";
+const STATUS_KEY = "vf_investor_room_status_v3";
+const DELETED_FOREVER_KEY = "vf_investor_deleted_forever_v3";
 
-function parse(raw: string | null) {
+const page: React.CSSProperties = {
+  minHeight: "100vh",
+  background:
+    "radial-gradient(circle at 18% 10%, rgba(245,197,66,.12), transparent 32%), radial-gradient(circle at 86% 8%, rgba(120,0,30,.18), transparent 34%), #05070b",
+  color: "#f7f8ff",
+  padding: "28px 20px 90px",
+  fontFamily:
+    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+};
+
+const shell: React.CSSProperties = {
+  maxWidth: 1180,
+  margin: "0 auto",
+};
+
+const nav: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+  alignItems: "center",
+  marginBottom: 20,
+};
+
+const button: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.18)",
+  background: "rgba(18,24,38,.92)",
+  color: "#f7f8ff",
+  borderRadius: 999,
+  padding: "12px 18px",
+  fontWeight: 900,
+  textDecoration: "none",
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const goldButton: React.CSSProperties = {
+  ...button,
+  background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
+  color: "#080a10",
+  border: "1px solid rgba(255,220,90,.65)",
+};
+
+const redButton: React.CSSProperties = {
+  ...button,
+  background: "rgba(90,10,18,.72)",
+  color: "#ffb2b2",
+  border: "1px solid rgba(255,65,65,.65)",
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid rgba(207,216,230,.16)",
+  borderRadius: 26,
+  background: "rgba(15,21,34,.88)",
+  padding: 24,
+  marginBottom: 20,
+};
+
+const goldCard: React.CSSProperties = {
+  ...card,
+  borderColor: "rgba(245,197,66,.42)",
+  background:
+    "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))",
+};
+
+const tile: React.CSSProperties = {
+  border: "1px solid rgba(245,197,66,.35)",
+  borderRadius: 22,
+  background: "rgba(17,23,36,.78)",
+  padding: 20,
+  color: "#f7f8ff",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gap: 14,
+};
+
+const feedGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+  gap: 14,
+};
+
+const row: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+  alignItems: "center",
+};
+
+const brand: React.CSSProperties = {
+  color: "#ffda5e",
+  fontWeight: 1000,
+  fontSize: 28,
+  letterSpacing: "-.04em",
+};
+
+const eyebrow: React.CSSProperties = {
+  color: "#ffda5e",
+  textTransform: "uppercase",
+  letterSpacing: ".34em",
+  fontSize: 12,
+  fontWeight: 1000,
+};
+
+const h1: React.CSSProperties = {
+  fontSize: "clamp(42px,7vw,82px)",
+  lineHeight: ".92",
+  letterSpacing: "-.08em",
+  margin: "12px 0",
+  fontWeight: 1000,
+};
+
+const h2: React.CSSProperties = {
+  fontSize: "clamp(30px,4.5vw,54px)",
+  lineHeight: ".95",
+  letterSpacing: "-.065em",
+  margin: "10px 0",
+  fontWeight: 1000,
+};
+
+const h3: React.CSSProperties = {
+  fontSize: 28,
+  lineHeight: 1,
+  letterSpacing: "-.05em",
+  margin: "8px 0",
+  fontWeight: 1000,
+};
+
+const sub: React.CSSProperties = {
+  color: "rgba(235,240,255,.78)",
+  fontSize: 20,
+  lineHeight: 1.45,
+  margin: "8px 0",
+};
+
+const muted: React.CSSProperties = {
+  color: "rgba(235,240,255,.68)",
+  fontSize: 15,
+  lineHeight: 1.45,
+  margin: "6px 0",
+};
+
+function parse(raw: string | null): any {
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -30,121 +180,284 @@ function parse(raw: string | null) {
   }
 }
 
-function text(v: any, fallback = "") {
-  const s = String(v || "").trim();
-  return s || fallback;
+function clean(value: unknown, fallback = "") {
+  const text = String(value || "")
+    .replace(/\\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text || fallback;
 }
 
 function getStatus(item: any): Status {
-  const s = String(
+  const raw = clean(
     item?.investorStatus ||
       item?.workspaceStatus ||
       item?.roomStatus ||
       item?.folder ||
       item?.status ||
-      "active"
+      "active",
+    "active"
   ).toLowerCase();
 
-  if (s.includes("delete")) return "deleted";
-  if (s.includes("archive")) return "archived";
-  if (s.includes("save")) return "saved";
+  if (raw.includes("delete") || raw.includes("trash")) return "deleted";
+  if (raw.includes("archive")) return "archived";
+  if (raw.includes("save")) return "saved";
   return "active";
 }
 
-function loadCards(): Card[] {
-  if (typeof window === "undefined") return [];
+function collectRows(data: any): any[] {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== "object") return [];
 
-  const overrides = parse(window.localStorage.getItem(STORAGE)) || {};
+  const rows: any[] = [];
 
-  const keys: string[] = [];
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const key = window.localStorage.key(i) || "";
-    const lower = key.toLowerCase();
+  Object.values(data).forEach((value) => {
+    if (Array.isArray(value)) rows.push(...value);
+  });
 
-    if (
-      lower.includes("deal") ||
-      lower.includes("pain") ||
-      lower.includes("room") ||
-      lower.includes("project")
-    ) {
-      if (
-        !lower.includes("activity") &&
-        !lower.includes("history") &&
-        !lower.includes("log")
-      ) {
-        keys.push(key);
-      }
-    }
+  if (
+    data.id ||
+    data.roomId ||
+    data.title ||
+    data.name ||
+    data.projectName ||
+    data.propertyName ||
+    data.painTitle ||
+    data.dealTitle ||
+    data.message ||
+    data.summary
+  ) {
+    rows.push(data);
   }
 
-  const map = new Map<string, Card>();
+  return rows;
+}
 
-  keys.forEach((key) => {
-    const data = parse(window.localStorage.getItem(key));
+function isNoiseKey(key: string) {
+  const lower = key.toLowerCase();
 
-    const rows = Array.isArray(data)
-      ? data
-      : data && typeof data === "object"
-      ? Object.values(data).flat()
-      : [];
+  return (
+    lower.includes("activity") ||
+    lower.includes("history") ||
+    lower.includes("analytics") ||
+    lower.includes("viewed") ||
+    lower.includes("audit") ||
+    lower.includes("log") ||
+    lower.includes("deleted_forever")
+  );
+}
 
-    rows.forEach((item: any, idx: number) => {
-      if (!item || typeof item !== "object") return;
+function shouldReadKey(key: string) {
+  const lower = key.toLowerCase();
 
-      const blob = JSON.stringify(item).toLowerCase();
+  if (isNoiseKey(lower)) return false;
 
-      const kind: Kind =
-        blob.includes("pain") ||
-        blob.includes("problem") ||
-        blob.includes("distress")
-          ? "pain"
-          : "deal";
+  return (
+    lower.includes("deal") ||
+    lower.includes("pain") ||
+    lower.includes("room") ||
+    lower.includes("project") ||
+    lower.includes("property")
+  );
+}
 
-      const title =
-        text(
-          item.title ||
-            item.projectName ||
-            item.propertyName ||
-            item.dealTitle ||
-            item.name
-        ) || (kind === "pain" ? "Pain Signal" : "Deal Signal");
+function kindFrom(source: string, item: any): Kind {
+  const blob = `${source} ${JSON.stringify(item || {})}`.toLowerCase();
 
-      const id =
-        text(item.id || item.roomId || item.slug) ||
-        `${kind}-${title}-${idx}`;
+  if (
+    blob.includes("pain") ||
+    blob.includes("problem") ||
+    blob.includes("distress") ||
+    blob.includes("foreclosure") ||
+    blob.includes("funding gap") ||
+    blob.includes("pressure")
+  ) {
+    return "pain";
+  }
 
-      const card: Card = {
+  return "deal";
+}
+
+function titleFrom(item: any, kind: Kind) {
+  return (
+    clean(
+      item?.title ||
+        item?.propertyName ||
+        item?.projectName ||
+        item?.dealTitle ||
+        item?.painTitle ||
+        item?.name ||
+        item?.subject ||
+        ""
+    ) || (kind === "pain" ? "Pain Signal" : "Deal Opportunity")
+  );
+}
+
+function summaryFrom(item: any, kind: Kind) {
+  return (
+    clean(
+      item?.summary ||
+        item?.message ||
+        item?.notes ||
+        item?.description ||
+        item?.body ||
+        item?.need ||
+        item?.problem ||
+        ""
+    ) ||
+    (kind === "pain"
+      ? "Pain/problem submitted for investor review."
+      : "Deal opportunity submitted for investor review.")
+  );
+}
+
+function stableId(source: string, item: any, kind: Kind, index: number) {
+  const directId = clean(item?.id || item?.roomId || item?.slug || item?.uuid || "");
+  if (directId) return `${kind}:${directId}`;
+
+  const title = titleFrom(item, kind).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const state = clean(item?.state || item?.propertyState || item?.marketState || "na")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-");
+
+  return `${kind}:${title}:${state}:${source}:${index}`;
+}
+
+function isUsable(item: any, source: string) {
+  if (!item || typeof item !== "object") return false;
+  if (isNoiseKey(source)) return false;
+
+  const blob = `${source} ${JSON.stringify(item)}`.toLowerCase();
+
+  if (
+    blob.includes("room opened") ||
+    blob.includes("viewed room") ||
+    blob.includes("status change")
+  ) {
+    return false;
+  }
+
+  return Boolean(
+    item.title ||
+      item.name ||
+      item.projectName ||
+      item.propertyName ||
+      item.dealTitle ||
+      item.painTitle ||
+      item.message ||
+      item.summary ||
+      item.notes ||
+      item.description
+  );
+}
+
+function loadCards(): InvestorCard[] {
+  if (typeof window === "undefined") return [];
+
+  const overrides = parse(window.localStorage.getItem(STATUS_KEY)) || {};
+  const forever = new Set<string>(parse(window.localStorage.getItem(DELETED_FOREVER_KEY)) || []);
+  const keys = new Set<string>();
+
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i) || "";
+    if (shouldReadKey(key)) keys.add(key);
+  }
+
+  const map = new Map<string, InvestorCard>();
+
+  Array.from(keys).forEach((source) => {
+    const data = parse(window.localStorage.getItem(source));
+
+    collectRows(data).forEach((item, index) => {
+      if (!isUsable(item, source)) return;
+
+      const kind = kindFrom(source, item);
+      const id = stableId(source, item, kind, index);
+
+      if (forever.has(id)) return;
+
+      const card: InvestorCard = {
         id,
-        title,
         kind,
+        title: titleFrom(item, kind),
         status: overrides[id] || getStatus(item),
-        city: text(item.city),
-        county: text(item.county),
-        state: text(item.state || item.market || item.propertyState, "NA"),
-        summary:
-          text(
-            item.summary ||
-              item.notes ||
-              item.description ||
-              item.message
-          ) ||
-          (kind === "pain"
-            ? "Pain/problem submitted for review."
-            : "Deal opportunity submitted for review."),
-        source: key,
+        city: clean(item?.city || item?.propertyCity || item?.marketCity || ""),
+        county: clean(item?.county || item?.propertyCounty || ""),
+        state: clean(item?.state || item?.propertyState || item?.marketState || item?.market || "NA", "NA"),
+        summary: summaryFrom(item, kind),
+        source,
+        raw: item,
       };
 
-      map.set(id, card);
+      const old = map.get(id);
+      if (!old || old.summary.length < card.summary.length) {
+        map.set(id, card);
+      }
     });
   });
 
-  return Array.from(map.values());
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+    return a.title.localeCompare(b.title);
+  });
+}
+
+function saveStatus(id: string, status: Status) {
+  const overrides = parse(window.localStorage.getItem(STATUS_KEY)) || {};
+  overrides[id] = status;
+  window.localStorage.setItem(STATUS_KEY, JSON.stringify(overrides));
+}
+
+function saveDeletedForever(id: string) {
+  const current = parse(window.localStorage.getItem(DELETED_FOREVER_KEY)) || [];
+  window.localStorage.setItem(DELETED_FOREVER_KEY, JSON.stringify(Array.from(new Set([...current, id]))));
+}
+
+function StatCard({
+  label,
+  count,
+  help,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  help: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...tile,
+        borderColor: active ? "rgba(245,197,66,.75)" : "rgba(245,197,66,.35)",
+      }}
+    >
+      <div style={eyebrow}>{label}</div>
+      <div style={{ color: "#1e90ff", fontSize: 44, fontWeight: 1000, margin: "8px 0" }}>{count}</div>
+      <p style={muted}>{help}</p>
+      <p style={{ ...muted, color: "#ffda5e", fontWeight: 950 }}>Tap to open</p>
+    </button>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+  if (!value) return null;
+
+  return (
+    <p style={muted}>
+      <strong style={{ color: "#f7f8ff" }}>{label}:</strong> {value}
+    </p>
+  );
 }
 
 export default function InvestorRoomPage() {
-  const [cards, setCards] = useState<Card[]>([]);
+  const [cards, setCards] = useState<InvestorCard[]>([]);
   const [lane, setLane] = useState<Lane>("deals");
-  const [openCard, setOpenCard] = useState<Card | null>(null);
+  const [selected, setSelected] = useState<InvestorCard | null>(null);
 
   useEffect(() => {
     setCards(loadCards());
@@ -152,321 +465,174 @@ export default function InvestorRoomPage() {
 
   const grouped = useMemo(() => {
     return {
-      deals: cards.filter(
-        (c) => c.kind === "deal" && c.status !== "deleted"
-      ),
-      pain: cards.filter(
-        (c) => c.kind === "pain" && c.status !== "deleted"
-      ),
-      saved: cards.filter((c) => c.status === "saved"),
-      archived: cards.filter((c) => c.status === "archived"),
-      deleted: cards.filter((c) => c.status === "deleted"),
+      deals: cards.filter((card) => card.kind === "deal" && card.status === "active"),
+      pain: cards.filter((card) => card.kind === "pain" && card.status === "active"),
+      saved: cards.filter((card) => card.status === "saved"),
+      archived: cards.filter((card) => card.status === "archived"),
+      deleted: cards.filter((card) => card.status === "deleted"),
     };
   }, [cards]);
 
-  const visible =
-    lane === "deals"
-      ? grouped.deals
-      : lane === "pain"
-      ? grouped.pain
-      : lane === "saved"
-      ? grouped.saved
-      : lane === "archived"
-      ? grouped.archived
-      : grouped.deleted;
+  const visible = grouped[lane];
 
-  function updateStatus(id: string, status: Status) {
-    const overrides = parse(window.localStorage.getItem(STORAGE)) || {};
-    overrides[id] = status;
-    window.localStorage.setItem(STORAGE, JSON.stringify(overrides));
+  function moveCard(id: string, status: Status) {
+    saveStatus(id, status);
 
-    setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status } : c))
+    setCards((current) =>
+      current.map((card) => (card.id === id ? { ...card, status } : card))
     );
 
-    if (openCard?.id === id) {
-      setOpenCard({ ...openCard, status });
+    setSelected((current) => (current && current.id === id ? { ...current, status } : current));
+
+    if (status === "active") {
+      const found = cards.find((card) => card.id === id);
+      setLane(found?.kind === "pain" ? "pain" : "deals");
+    } else {
+      setLane(status);
     }
   }
 
   function deleteForever(id: string) {
-    setCards((prev) => prev.filter((c) => c.id !== id));
-    setOpenCard(null);
+    saveDeletedForever(id);
+    setCards((current) => current.filter((card) => card.id !== id));
+    setSelected(null);
+    setLane("deleted");
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#05070b",
-        color: "#fff",
-        padding: 24,
-        fontFamily: "sans-serif",
-      }}
-    >
-      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            marginBottom: 20,
-          }}
-        >
-          <Link href="/" style={btn()}>
-            Home
-          </Link>
-          <Link href="/investor-room" style={gold()}>
-            Investor Room
-          </Link>
-          <Link href="/messages" style={btn()}>
-            Messages
-          </Link>
-        </div>
+    <main style={page}>
+      <div style={shell}>
+        <nav style={nav}>
+          <Link href="/" style={button}>Home</Link>
+          <Link href="/investor-room" style={goldButton}>Investor Room</Link>
+          <Link href="/messages" style={button}>Messages</Link>
+        </nav>
 
-        <section style={section()}>
-          <div style={eyebrow()}>Investor Alerts</div>
-
-          <div style={grid()}>
-            <button style={tile()} onClick={() => setLane("deals")}>
-              <div style={eyebrow()}>Deals</div>
-              <div style={count()}>{grouped.deals.length}</div>
-              <div>Deal opportunity cards</div>
-            </button>
-
-            <button style={tile()} onClick={() => setLane("pain")}>
-              <div style={eyebrow()}>Pain</div>
-              <div style={count()}>{grouped.pain.length}</div>
-              <div>Pain/problem cards</div>
-            </button>
-
-            <button style={tile()} onClick={() => setLane("saved")}>
-              <div style={eyebrow()}>Saved</div>
-              <div style={count()}>{grouped.saved.length}</div>
-              <div>Saved cards</div>
-            </button>
-
-            <button style={tile()} onClick={() => setLane("archived")}>
-              <div style={eyebrow()}>Archived</div>
-              <div style={count()}>{grouped.archived.length}</div>
-              <div>Archived cards</div>
-            </button>
-
-            <button style={tile()} onClick={() => setLane("deleted")}>
-              <div style={eyebrow()}>Deleted</div>
-              <div style={count()}>{grouped.deleted.length}</div>
-              <div>Delete forever support</div>
-            </button>
+        <section style={card}>
+          <div style={eyebrow}>Investor Alerts</div>
+          <div style={{ ...grid, marginTop: 16 }}>
+            <StatCard label="Deals" count={grouped.deals.length} help="active deal opportunities" active={lane === "deals"} onClick={() => setLane("deals")} />
+            <StatCard label="Pain" count={grouped.pain.length} help="active pain/problem cards" active={lane === "pain"} onClick={() => setLane("pain")} />
+            <StatCard label="Saved" count={grouped.saved.length} help="saved deal and pain cards" active={lane === "saved"} onClick={() => setLane("saved")} />
+            <StatCard label="Archived" count={grouped.archived.length} help="hidden but preserved cards" active={lane === "archived"} onClick={() => setLane("archived")} />
+            <StatCard label="Deleted" count={grouped.deleted.length} help="restore or delete forever" active={lane === "deleted"} onClick={() => setLane("deleted")} />
           </div>
         </section>
 
-        {openCard ? (
-          <section style={section()}>
-            <div style={eyebrow()}>
-              {openCard.kind} • {openCard.status}
+        <section style={goldCard}>
+          <div style={eyebrow}>VaultForge Investor Command Room</div>
+          <h1 style={h1}>Signals → Requests → Threads → Execution.</h1>
+          <p style={sub}>
+            Deal and Pain cards are grouped cleanly. Open a card to see details, message owner, save, archive, delete, restore, or delete forever.
+          </p>
+          <div style={{ ...row, marginTop: 18 }}>
+            <button type="button" style={goldButton} onClick={() => setLane("deals")}>Open Deal Signals</button>
+            <button type="button" style={button} onClick={() => setLane("pain")}>Open Pain Signals</button>
+            <Link href="/messages" style={goldButton}>Message Owner</Link>
+          </div>
+        </section>
+
+        {selected ? (
+          <section style={card}>
+            <div style={eyebrow}>
+              {selected.kind} detail • {selected.status}
+            </div>
+            <h2 style={h2}>{selected.title}</h2>
+            <p style={sub}>{[selected.city, selected.county, selected.state].filter(Boolean).join(", ")}</p>
+            <p style={sub}>{selected.summary}</p>
+
+            <div style={{ ...feedGrid, marginTop: 14 }}>
+              <div style={tile}>
+                <div style={eyebrow}>Location</div>
+                <InfoLine label="City" value={selected.city} />
+                <InfoLine label="County" value={selected.county} />
+                <InfoLine label="State" value={selected.state} />
+              </div>
+
+              <div style={tile}>
+                <div style={eyebrow}>Source</div>
+                <InfoLine label="Storage" value={selected.source} />
+                <InfoLine label="Kind" value={selected.kind} />
+                <InfoLine label="Status" value={selected.status} />
+              </div>
             </div>
 
-            <h2 style={{ fontSize: 42, margin: "10px 0" }}>
-              {openCard.title}
-            </h2>
-
-            <div style={{ opacity: 0.8, marginBottom: 12 }}>
-              {[openCard.city, openCard.county, openCard.state]
-                .filter(Boolean)
-                .join(", ")}
-            </div>
-
-            <p style={{ lineHeight: 1.6 }}>{openCard.summary}</p>
-
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 12,
-                marginTop: 20,
-              }}
-            >
-              <button
-                style={gold()}
-                onClick={() => updateStatus(openCard.id, "active")}
+            <details style={{ marginTop: 16 }}>
+              <summary style={{ ...muted, color: "#ffda5e", cursor: "pointer", fontWeight: 900 }}>
+                Show full stored card data
+              </summary>
+              <pre
+                style={{
+                  whiteSpace: "pre-wrap",
+                  overflowX: "auto",
+                  background: "rgba(0,0,0,.35)",
+                  border: "1px solid rgba(207,216,230,.14)",
+                  borderRadius: 16,
+                  padding: 16,
+                  marginTop: 12,
+                  color: "rgba(235,240,255,.82)",
+                  fontSize: 12,
+                }}
               >
-                Active
-              </button>
+                {JSON.stringify(selected.raw, null, 2)}
+              </pre>
+            </details>
 
-              <button
-                style={btn()}
-                onClick={() => updateStatus(openCard.id, "saved")}
-              >
-                Save
-              </button>
-
-              <button
-                style={btn()}
-                onClick={() => updateStatus(openCard.id, "archived")}
-              >
-                Archive
-              </button>
-
-              <button
-                style={danger()}
-                onClick={() => updateStatus(openCard.id, "deleted")}
-              >
-                Delete
-              </button>
-
-              {openCard.status === "deleted" ? (
-                <button
-                  style={danger()}
-                  onClick={() => deleteForever(openCard.id)}
-                >
-                  Delete Forever
-                </button>
+            <div style={{ ...row, marginTop: 18 }}>
+              <button type="button" style={goldButton} onClick={() => moveCard(selected.id, "active")}>Active / Restore</button>
+              <button type="button" style={button} onClick={() => moveCard(selected.id, "saved")}>Save</button>
+              <button type="button" style={button} onClick={() => moveCard(selected.id, "archived")}>Archive</button>
+              <button type="button" style={redButton} onClick={() => moveCard(selected.id, "deleted")}>Delete</button>
+              {selected.status === "deleted" ? (
+                <button type="button" style={redButton} onClick={() => deleteForever(selected.id)}>Delete Forever</button>
               ) : null}
-
-              <button style={btn()} onClick={() => setOpenCard(null)}>
-                Close
-              </button>
+              <Link href="/messages" style={goldButton}>Message Owner</Link>
+              <button type="button" style={button} onClick={() => setSelected(null)}>Close</button>
             </div>
           </section>
         ) : null}
 
-        <section style={section()}>
-          <div style={eyebrow()}>{lane}</div>
+        <section style={card}>
+          <div style={eyebrow}>{lane}</div>
+          <h2 style={h2}>
+            {lane === "deals"
+              ? "Deal Opportunity Cards"
+              : lane === "pain"
+                ? "Pain Intake Cards"
+                : `${lane.charAt(0).toUpperCase()}${lane.slice(1)} Cards`}
+          </h2>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit,minmax(280px,1fr))",
-              gap: 14,
-            }}
-          >
-            {visible.map((card) => (
-              <button
-                key={card.id}
-                onClick={() => setOpenCard(card)}
-                style={{
-                  textAlign: "left",
-                  border: "1px solid rgba(245,197,66,.35)",
-                  background: "rgba(17,23,36,.78)",
-                  borderRadius: 22,
-                  padding: 20,
-                  cursor: "pointer",
-                  color: "#fff",
-                }}
-              >
-                <div style={eyebrow()}>
-                  {card.kind} • {card.state}
-                </div>
-
-                <h3 style={{ fontSize: 28, color: "#1e90ff" }}>
-                  {card.title}
-                </h3>
-
-                <div style={{ opacity: 0.8, marginBottom: 10 }}>
-                  {[card.city, card.county, card.state]
-                    .filter(Boolean)
-                    .join(", ")}
-                </div>
-
-                <div style={{ lineHeight: 1.5 }}>
-                  {card.summary}
-                </div>
-
-                <div
+          {visible.length ? (
+            <div style={feedGrid}>
+              {visible.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() => setSelected(item)}
                   style={{
-                    marginTop: 14,
-                    color: "#ffda5e",
-                    fontWeight: 700,
+                    ...tile,
+                    minHeight: 230,
+                    borderColor: item.status === "deleted" ? "rgba(255,65,65,.58)" : "rgba(245,197,66,.38)",
                   }}
                 >
-                  Open Details
-                </div>
-              </button>
-            ))}
-          </div>
+                  <div style={eyebrow}>
+                    {item.kind} • {item.state} • {item.status}
+                  </div>
+                  <h3 style={{ ...h3, color: "#1e90ff" }}>{item.title}</h3>
+                  <p style={muted}>{[item.city, item.county, item.state].filter(Boolean).join(", ")}</p>
+                  <p style={muted}>{item.summary}</p>
+                  <p style={{ ...muted, color: "#ffda5e", fontWeight: 950 }}>Open Details</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={tile}>
+              <h3 style={h3}>No cards in this folder.</h3>
+              <p style={sub}>Deal and Pain cards will show here when available.</p>
+            </div>
+          )}
         </section>
       </div>
     </main>
   );
-}
-
-function section(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(207,216,230,.16)",
-    borderRadius: 24,
-    background: "rgba(15,21,34,.88)",
-    padding: 24,
-    marginBottom: 20,
-  };
-}
-
-function grid(): React.CSSProperties {
-  return {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-    gap: 14,
-    marginTop: 16,
-  };
-}
-
-function tile(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(245,197,66,.35)",
-    borderRadius: 22,
-    background: "rgba(17,23,36,.78)",
-    padding: 20,
-    color: "#fff",
-    textAlign: "left",
-    cursor: "pointer",
-  };
-}
-
-function count(): React.CSSProperties {
-  return {
-    fontSize: 42,
-    fontWeight: 900,
-    color: "#1e90ff",
-    margin: "8px 0",
-  };
-}
-
-function eyebrow(): React.CSSProperties {
-  return {
-    color: "#ffda5e",
-    textTransform: "uppercase",
-    letterSpacing: ".34em",
-    fontSize: 12,
-    fontWeight: 900,
-  };
-}
-
-function btn(): React.CSSProperties {
-  return {
-    border: "1px solid rgba(207,216,230,.18)",
-    background: "rgba(18,24,38,.92)",
-    color: "#fff",
-    borderRadius: 999,
-    padding: "12px 18px",
-    fontWeight: 800,
-    textDecoration: "none",
-    cursor: "pointer",
-  };
-}
-
-function gold(): React.CSSProperties {
-  return {
-    ...btn(),
-    background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
-    color: "#080a10",
-  };
-}
-
-function danger(): React.CSSProperties {
-  return {
-    ...btn(),
-    background: "rgba(90,10,18,.72)",
-    color: "#ffb2b2",
-    border: "1px solid rgba(255,65,65,.65)",
-  };
 }
