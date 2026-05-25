@@ -17,6 +17,7 @@ type ProfileSnapshot = {
   basedCity: string;
   basedCounty: string;
   profilePhoto: string;
+  companyLogo: string;
 };
 
 type CanonicalMemberRoom = {
@@ -79,6 +80,7 @@ const THREADS_KEY = "vf_message_center_threads_v1";
 const MESSAGE_DELETED_FOREVER_KEY = "vf_message_center_deleted_forever_v1";
 const PROFILE_KEYS = ["vaultforge_profile", "vaultforge_member_profile", "vaultforge_clean_profile"];
 const PROFILE_PHOTO_BACKUP_KEY = "vaultforge_member_profile_photo_v1";
+const COMPANY_LOGO_BACKUP_KEY = "vaultforge_member_company_logo_v1";
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -110,6 +112,7 @@ const sub: React.CSSProperties = { color: "rgba(235,240,255,.78)", fontSize: 20,
 const muted: React.CSSProperties = { color: "rgba(235,240,255,.68)", fontSize: 15, lineHeight: 1.45, margin: "6px 0" };
 const avatar: React.CSSProperties = { width: 64, height: 64, objectFit: "cover", borderRadius: 999, border: "1px solid rgba(245,197,66,.45)", background: "rgba(0,0,0,.35)" };
 const imageStyle: React.CSSProperties = { width: "100%", height: 190, objectFit: "cover", borderRadius: 18, border: "1px solid rgba(245,197,66,.22)", marginBottom: 12, background: "rgba(0,0,0,.35)" };
+const brandLogoStyle: React.CSSProperties = { width: "100%", maxWidth: 420, height: 210, objectFit: "contain", borderRadius: 22, border: "1px solid rgba(245,197,66,.28)", background: "rgba(0,0,0,.35)", padding: 18 };
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -118,6 +121,14 @@ function parseJson<T>(raw: string | null, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function readImageBackup(key: string) {
+  if (typeof window === "undefined") return "";
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return "";
+  const parsed = parseJson<string | null>(raw, null);
+  return String(parsed || raw).trim().replace(/^"|"$/g, "");
 }
 
 function clean(value: unknown, fallback = "") {
@@ -171,11 +182,13 @@ function readProfile(): ProfileSnapshot {
     basedCity: "",
     basedCounty: "",
     profilePhoto: "",
+    companyLogo: "",
   };
 
   if (typeof window === "undefined") return fallback;
 
-  const backupPhoto = clean(window.localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY));
+  const backupPhoto = readImageBackup(PROFILE_PHOTO_BACKUP_KEY);
+  const backupLogo = readImageBackup(COMPANY_LOGO_BACKUP_KEY);
   for (const key of PROFILE_KEYS) {
     const profile = parseJson<any | null>(window.localStorage.getItem(key), null);
     if (profile && typeof profile === "object") {
@@ -190,11 +203,12 @@ function readProfile(): ProfileSnapshot {
         basedCity: clean(profile.basedCity || profile.city),
         basedCounty: clean(profile.basedCounty || profile.county),
         profilePhoto: clean(profile.profilePhoto || profile.photoUrl || profile.avatar || backupPhoto),
+        companyLogo: clean(profile.companyLogo || profile.logoUrl || backupLogo),
       };
     }
   }
 
-  return { ...fallback, profilePhoto: backupPhoto };
+  return { ...fallback, profilePhoto: backupPhoto, companyLogo: backupLogo };
 }
 
 function statusOverrides(): Record<string, RoomStatus> {
@@ -643,6 +657,24 @@ export default function CommandPage() {
             <Link href="/deal-create" style={goldBtn}>Create Deal</Link>
             <Link href="/messages" style={btn}>Open Message Center</Link>
           </div>
+        </section>
+
+        <section style={card}>
+          <div style={eyebrow}>Member Brand Center</div>
+          <div style={{ display: "flex", justifyContent: "center", textAlign: "center" }}>
+            {profile.companyLogo ? (
+              <img src={profile.companyLogo} alt={`${profile.company || profile.name || "Member"} company logo`} style={brandLogoStyle} />
+            ) : profile.profilePhoto ? (
+              <img src={profile.profilePhoto} alt={`${profile.name || "Member"} profile`} style={brandLogoStyle} />
+            ) : (
+              <div style={{ ...brandLogoStyle, display: "flex", alignItems: "center", justifyContent: "center", color: "#ffda5e", fontSize: 36, fontWeight: 1000, letterSpacing: "-.06em" }}>
+                VAULTFORGE
+              </div>
+            )}
+          </div>
+          <p style={{ ...muted, textAlign: "center", marginTop: 12 }}>
+            {profile.companyLogo ? "Company logo active." : "Upload a company logo in Profile to replace this member center logo."}
+          </p>
         </section>
 
         <section style={card}>
