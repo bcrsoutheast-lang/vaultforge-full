@@ -121,6 +121,25 @@ function writeJson(key: string, value: unknown) {
   }
 }
 
+function readImageBackup(key: string) {
+  if (!ok()) return "";
+  const raw = localStorage.getItem(key);
+  if (!raw) return "";
+  const parsed = j<string | null>(raw, null);
+  return txt(parsed || raw).replace(/^"|"$/g, "");
+}
+
+function writeImageBackup(key: string, value: string) {
+  if (!ok()) return false;
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function countyFromCity(city: string) {
   return CITY_COUNTY[city.trim().toLowerCase().replace(/\s+/g, " ")] || "";
 }
@@ -204,8 +223,8 @@ function normalizeProfile(row: any): MemberProfile {
 function readProfile() {
   if (!ok()) return defaultProfile();
 
-  const backupPhoto = txt(localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY));
-  const backupLogo = txt(localStorage.getItem(COMPANY_LOGO_BACKUP_KEY));
+  const backupPhoto = readImageBackup(PROFILE_PHOTO_BACKUP_KEY);
+  const backupLogo = readImageBackup(COMPANY_LOGO_BACKUP_KEY);
 
   for (const key of PROFILE_KEYS) {
     const found = j<any | null>(localStorage.getItem(key), null);
@@ -279,13 +298,16 @@ function saveProfile(profile: MemberProfile) {
   const photo = txt(profile.profilePhoto || localStorage.getItem(PROFILE_PHOTO_BACKUP_KEY));
   const logo = txt(profile.companyLogo || localStorage.getItem(COMPANY_LOGO_BACKUP_KEY));
 
-  if (photo) writeJson(PROFILE_PHOTO_BACKUP_KEY, photo);
-  if (logo) writeJson(COMPANY_LOGO_BACKUP_KEY, logo);
+  if (photo) writeImageBackup(PROFILE_PHOTO_BACKUP_KEY, photo);
+  if (logo) writeImageBackup(COMPANY_LOGO_BACKUP_KEY, logo);
 
   const next = normalizeProfile({
     ...profile,
     profilePhoto: photo,
+    photoUrl: photo,
+    avatar: photo,
     companyLogo: logo,
+    logoUrl: logo,
     updatedAt: now,
     createdAt: profile.createdAt || now,
   });
@@ -486,14 +508,23 @@ export default function ProfilePage() {
     }
 
     const backupKey = key === "profilePhoto" ? PROFILE_PHOTO_BACKUP_KEY : COMPANY_LOGO_BACKUP_KEY;
-    const backupSaved = writeJson(backupKey, image);
+    const backupSaved = writeImageBackup(backupKey, image);
 
     const next = { ...profile, [key]: image, updatedAt: new Date().toISOString() } as MemberProfile;
     setProfile(next);
 
     for (const storageKey of PROFILE_KEYS) {
       const current = j<any | null>(localStorage.getItem(storageKey), null);
-      if (current && typeof current === "object") writeJson(storageKey, { ...current, [key]: image, updatedAt: next.updatedAt });
+      if (current && typeof current === "object") {
+        writeJson(storageKey, {
+          ...current,
+          [key]: image,
+          photoUrl: key === "profilePhoto" ? image : current.photoUrl,
+          avatar: key === "profilePhoto" ? image : current.avatar,
+          logoUrl: key === "companyLogo" ? image : current.logoUrl,
+          updatedAt: next.updatedAt,
+        });
+      }
     }
 
     if (!backupSaved) {
@@ -553,7 +584,7 @@ export default function ProfilePage() {
         <Section title="Profile Preview">
           <div style={grid}>
             <div style={activePanel}>
-              {profile.profilePhoto ? <img src={profile.profilePhoto} alt="Profile" style={imageStyle} /> : null}
+              {profile.companyLogo ? <img src={profile.companyLogo} alt="Company logo" style={imageStyle} /> : profile.profilePhoto ? <img src={profile.profilePhoto} alt="Profile" style={imageStyle} /> : null}
               <div style={eyebrow}>{profile.memberType}</div>
               <h2 style={h2}>{txt(profile.name, "VaultForge Member")}</h2>
               <p style={sub}>{txt(profile.company, "Company not listed")}</p>
@@ -574,7 +605,20 @@ export default function ProfilePage() {
               <div style={eyebrow}>Profile Photo</div>
               <input type="file" accept="image/*" onChange={(event) => setImage("profilePhoto", event.target.files)} />
               <div style={{ ...row, marginTop: 12 }}>
-                <button type="button" style={redBtn} onClick={() => { localStorage.removeItem(PROFILE_PHOTO_BACKUP_KEY); update("profilePhoto", ""); }}>Delete Photo</button>
+                <button
+                  type="button"
+                  style={redBtn}
+                  onClick={() => {
+                    writeImageBackup(PROFILE_PHOTO_BACKUP_KEY, "");
+                    update("profilePhoto", "");
+                    for (const storageKey of PROFILE_KEYS) {
+                      const current = j<any | null>(localStorage.getItem(storageKey), null);
+                      if (current && typeof current === "object") writeJson(storageKey, { ...current, profilePhoto: "", photoUrl: "", avatar: "", updatedAt: new Date().toISOString() });
+                    }
+                  }}
+                >
+                  Delete Photo
+                </button>
               </div>
             </div>
             <div style={panel}>
@@ -582,7 +626,20 @@ export default function ProfilePage() {
               <div style={eyebrow}>Company Logo</div>
               <input type="file" accept="image/*" onChange={(event) => setImage("companyLogo", event.target.files)} />
               <div style={{ ...row, marginTop: 12 }}>
-                <button type="button" style={redBtn} onClick={() => { localStorage.removeItem(COMPANY_LOGO_BACKUP_KEY); update("companyLogo", ""); }}>Delete Logo</button>
+                <button
+                  type="button"
+                  style={redBtn}
+                  onClick={() => {
+                    writeImageBackup(COMPANY_LOGO_BACKUP_KEY, "");
+                    update("companyLogo", "");
+                    for (const storageKey of PROFILE_KEYS) {
+                      const current = j<any | null>(localStorage.getItem(storageKey), null);
+                      if (current && typeof current === "object") writeJson(storageKey, { ...current, companyLogo: "", logoUrl: "", updatedAt: new Date().toISOString() });
+                    }
+                  }}
+                >
+                  Delete Logo
+                </button>
               </div>
             </div>
           </div>
