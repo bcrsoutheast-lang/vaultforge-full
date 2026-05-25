@@ -16,6 +16,7 @@ type InvestorCard = {
   county: string;
   state: string;
   summary: string;
+  owner: string;
   source: string;
   raw: Record<string, any>;
 };
@@ -189,6 +190,19 @@ function clean(value: unknown, fallback = "") {
   return text || fallback;
 }
 
+function currentEmail() {
+  if (typeof window === "undefined") return "";
+
+  return (
+    window.localStorage.getItem("vf_email") ||
+    window.localStorage.getItem("vaultforge_email") ||
+    window.localStorage.getItem("email") ||
+    window.localStorage.getItem("vf_member_email") ||
+    window.localStorage.getItem("vf_current_email") ||
+    ""
+  );
+}
+
 function getStatus(item: any): Status {
   const raw = clean(
     item?.investorStatus ||
@@ -244,6 +258,8 @@ function isNoiseKey(key: string) {
     lower.includes("viewed") ||
     lower.includes("audit") ||
     lower.includes("log") ||
+    lower.includes("message") ||
+    lower.includes("thread") ||
     lower.includes("deleted_forever")
   );
 }
@@ -309,6 +325,28 @@ function summaryFrom(item: any, kind: Kind) {
     (kind === "pain"
       ? "Pain/problem submitted for investor review."
       : "Deal opportunity submitted for investor review.")
+  );
+}
+
+function ownerFrom(item: any) {
+  return (
+    clean(
+      item?.owner ||
+        item?.ownerName ||
+        item?.ownerEmail ||
+        item?.createdBy ||
+        item?.createdByEmail ||
+        item?.sellerName ||
+        item?.sellerEmail ||
+        item?.contactName ||
+        item?.contactEmail ||
+        item?.submittedBy ||
+        item?.submittedByEmail ||
+        item?.memberName ||
+        item?.memberEmail ||
+        item?.email ||
+        ""
+    ) || "VaultForge Owner"
   );
 }
 
@@ -386,6 +424,7 @@ function loadCards(): InvestorCard[] {
         county: clean(item?.county || item?.propertyCounty || ""),
         state: clean(item?.state || item?.propertyState || item?.marketState || item?.market || "NA", "NA"),
         summary: summaryFrom(item, kind),
+        owner: ownerFrom(item),
         source,
         raw: item,
       };
@@ -412,6 +451,22 @@ function saveStatus(id: string, status: Status) {
 function saveDeletedForever(id: string) {
   const current = parse(window.localStorage.getItem(DELETED_FOREVER_KEY)) || [];
   window.localStorage.setItem(DELETED_FOREVER_KEY, JSON.stringify(Array.from(new Set([...current, id]))));
+}
+
+function messageHref(card: InvestorCard | null) {
+  if (!card) return "/messages";
+
+  const params = new URLSearchParams();
+  const from = currentEmail();
+
+  params.set("kind", card.kind);
+  params.set("title", card.title);
+  params.set("room", card.title);
+  params.set("recipient", card.owner || "VaultForge Owner");
+
+  if (from) params.set("from", from);
+
+  return `/messages?${params.toString()}`;
 }
 
 function StatCard({
@@ -503,6 +558,7 @@ export default function InvestorRoomPage() {
     <main style={page}>
       <div style={shell}>
         <nav style={nav}>
+          <div style={brand}>VAULTFORGE</div>
           <Link href="/" style={button}>Home</Link>
           <Link href="/investor-room" style={goldButton}>Investor Room</Link>
           <Link href="/messages" style={button}>Messages</Link>
@@ -528,7 +584,7 @@ export default function InvestorRoomPage() {
           <div style={{ ...row, marginTop: 18 }}>
             <button type="button" style={goldButton} onClick={() => setLane("deals")}>Open Deal Signals</button>
             <button type="button" style={button} onClick={() => setLane("pain")}>Open Pain Signals</button>
-            <Link href="/messages" style={goldButton}>Message Owner</Link>
+            <Link href={messageHref(selected)} style={goldButton}>Message Owner</Link>
           </div>
         </section>
 
@@ -550,7 +606,8 @@ export default function InvestorRoomPage() {
               </div>
 
               <div style={tile}>
-                <div style={eyebrow}>Source</div>
+                <div style={eyebrow}>Owner / Source</div>
+                <InfoLine label="Owner" value={selected.owner} />
                 <InfoLine label="Storage" value={selected.source} />
                 <InfoLine label="Kind" value={selected.kind} />
                 <InfoLine label="Status" value={selected.status} />
@@ -586,7 +643,7 @@ export default function InvestorRoomPage() {
               {selected.status === "deleted" ? (
                 <button type="button" style={redButton} onClick={() => deleteForever(selected.id)}>Delete Forever</button>
               ) : null}
-              <Link href="/messages" style={goldButton}>Message Owner</Link>
+              <Link href={messageHref(selected)} style={goldButton}>Message Owner</Link>
               <button type="button" style={button} onClick={() => setSelected(null)}>Close</button>
             </div>
           </section>
