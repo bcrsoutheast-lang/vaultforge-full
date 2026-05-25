@@ -355,6 +355,12 @@ export default function MessagesPage() {
   }), [threads]);
 
   const visible = folder === "unread" ? grouped.unread : grouped[folder];
+  const isInvestorRoomMessage = origin === "investor-room" || senderWorkspace === "investor";
+  const pageEyebrow = isInvestorRoomMessage ? "VaultForge Investor Message Room" : "VaultForge Message Command";
+  const pageTitle = isInvestorRoomMessage ? "Message the room owner." : "Real room messaging with profile context.";
+  const pageSubtitle = isInvestorRoomMessage
+    ? "This message started from Investor Room. It stays investor → owner/member and is tied to the selected opportunity."
+    : "Messages now carry workspace separation: investor-room messages stay investor → owner/member, while member-command messages stay member workspace.";
 
   function persist(next: Thread[]) {
     setThreads(next);
@@ -496,22 +502,22 @@ export default function MessagesPage() {
         <nav style={nav}>
           <div style={brand}>VAULTFORGE</div>
           <Link href="/" style={button}>Home</Link>
-          <Link href="/investor-room" style={button}>Investor Room</Link>
-          <Link href="/command" style={button}>Command</Link>
+          <Link href="/investor-room" style={isInvestorRoomMessage ? goldButton : button}>Investor Room</Link>
+          {!isInvestorRoomMessage ? <Link href="/command" style={button}>Command</Link> : null}
           <Link href="/messages" style={goldButton}>Messages</Link>
-          <Link href="/profile" style={button}>Profile</Link>
+          {!isInvestorRoomMessage ? <Link href="/profile" style={button}>Profile</Link> : null}
           <Link href="/logout" style={redButton}>Logout</Link>
         </nav>
 
         <section style={goldCard}>
-          <div style={eyebrow}>VaultForge Message Command</div>
-          <h1 style={h1}>Real room messaging with profile context.</h1>
-          <p style={sub}>Messages now carry workspace separation: investor-room messages stay investor → owner/member, while member-command messages stay member workspace.</p>
+          <div style={eyebrow}>{pageEyebrow}</div>
+          <h1 style={h1}>{pageTitle}</h1>
+          <p style={sub}>{pageSubtitle}</p>
           <p style={{ ...muted, color: syncStatus.includes("active") || syncStatus.includes("saved") ? "#7dff9b" : "#ffda5e", fontWeight: 900 }}>{syncStatus}</p>
         </section>
 
         <section style={card}>
-          <div style={eyebrow}>Current Sender Profile</div>
+          <div style={eyebrow}>{isInvestorRoomMessage ? "Investor Sender Profile" : "Current Sender Profile"}</div>
           <div style={{ ...row, marginTop: 14 }}>
             {profile.profilePhoto ? <img src={profile.profilePhoto} alt="Profile" style={avatar} /> : null}
             <div>
@@ -533,8 +539,28 @@ export default function MessagesPage() {
           </div>
         </section>
 
+        {isInvestorRoomMessage ? (
+          <section style={card}>
+            <div style={eyebrow}>Investor Room Context</div>
+            <div style={{ ...grid, marginTop: 14 }}>
+              <div style={tile}>
+                <div style={eyebrow}>Room</div>
+                <p style={sub}>{room || "Room not selected"}</p>
+              </div>
+              <div style={tile}>
+                <div style={eyebrow}>Owner / Recipient</div>
+                <p style={sub}>{recipient || "Owner not listed"}</p>
+              </div>
+              <div style={tile}>
+                <div style={eyebrow}>Workspace</div>
+                <p style={sub}>Investor → Owner/Member</p>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <section style={card}>
-          <div style={eyebrow}>Create Command Thread</div>
+          <div style={eyebrow}>{isInvestorRoomMessage ? "Send Investor Message To Owner" : "Create Command Thread"}</div>
           <div style={{ ...grid, marginTop: 16 }}>
             <label><span style={label}>Lane</span><select value={lane} onChange={(event) => setLane(event.target.value as Lane)} style={input}><option>Owner</option><option>Investor</option><option>Member</option><option>Deal Room</option><option>Pain Room</option><option>General</option></select></label>
             <label><span style={label}>From</span><input value={from} onChange={(event) => setFrom(event.target.value)} placeholder="sender email/name" style={input} /></label>
@@ -548,7 +574,7 @@ export default function MessagesPage() {
             <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write the message here" rows={5} style={{ ...input, resize: "vertical" }} />
           </label>
 
-          <div style={{ ...row, marginTop: 16 }}><button type="button" onClick={createThread} style={goldButton}>Send / Create Message Thread</button></div>
+          <div style={{ ...row, marginTop: 16 }}><button type="button" onClick={createThread} style={goldButton}>{isInvestorRoomMessage ? "Send Message To Owner" : "Send / Create Message Thread"}</button></div>
         </section>
 
         {selected ? (
