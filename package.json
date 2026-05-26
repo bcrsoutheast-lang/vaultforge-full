@@ -1,4 +1,3 @@
-Code
 {
   "name": "vaultforge-full",
   "version": "0.1.0",
@@ -25,3 +24,4 @@ Code
     "typescript": "^5"
   }
 }
+
