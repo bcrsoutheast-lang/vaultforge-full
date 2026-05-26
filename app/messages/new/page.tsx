@@ -460,7 +460,6 @@ export default function NewMessagePage() {
   }
 
   useEffect(() => {
-    const viewer = getEmail();
     setToEmail(initial.to || "bcrsoutheast@gmail.com");
 
     const startingTitle = clean(initial.title);
