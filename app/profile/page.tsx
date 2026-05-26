@@ -75,18 +75,31 @@ function defaultProfile(): MemberProfile {
 function normalizeProfile(row: any): MemberProfile {
   const base = defaultProfile(); const email = txt(row?.email || base.email);
   const id = txt(row?.id || email.toLowerCase() || "local_member");
+  
+  const statesOperated = Array.isArray(row?.statesOperated) ? list(row.statesOperated) 
+    : Array.isArray(row?.states_served) ? list(row.states_served)
+    : Array.isArray(row?.operatingStates) ? list(row.operatingStates)
+    : base.statesOperated;
+    
+  const assetClasses = Array.isArray(row?.assetClasses) ? list(row.assetClasses)
+    : Array.isArray(row?.asset_classes) ? list(row.asset_classes)
+    : base.assetClasses;
+    
+  const strategies = Array.isArray(row?.strategies) ? list(row.strategies) : base.strategies;
+  const canProvide = Array.isArray(row?.canProvide) ? list(row.canProvide)
+    : Array.isArray(row?.provides) ? list(row.provides)
+    : base.canProvide;
+  const needs = Array.isArray(row?.needs) ? list(row.needs) : base.needs;
+
   return {
     ...base, ...row, id, name: txt(row?.name || row?.fullName || row?.full_name, base.name),
     company: txt(row?.company || row?.companyName, base.company), email, phone: txt(row?.phone || row?.phoneNumber, base.phone),
     title: txt(row?.title || row?.roleTitle, base.title), memberType: txt(row?.memberType || row?.member_type, base.memberType),
     basedState: txt(row?.basedState || row?.state || row?.homeState, base.basedState),
     basedCity: txt(row?.basedCity || row?.city, base.basedCity), basedCounty: txt(row?.basedCounty || row?.county, base.basedCounty),
-    statesOperated: list(row?.statesOperated || row?.states_served || row?.operatingStates).length ? list(row?.statesOperated || row?.states_served || row?.operatingStates) : base.statesOperated,
-    countiesServed: list(row?.countiesServed || row?.counties_served),
-    assetClasses: list(row?.assetClasses || row?.asset_classes).length ? list(row?.assetClasses || row?.asset_classes) : base.assetClasses,
-    strategies: list(row?.strategies).length ? list(row?.strategies) : base.strategies, specialties: list(row?.specialties),
-    canProvide: list(row?.canProvide || row?.provides).length ? list(row?.canProvide || row?.provides) : base.canProvide,
-    needs: list(row?.needs).length ? list(row?.needs) : base.needs, fundingRange: txt(row?.fundingRange || row?.capitalRange, base.fundingRange),
+    statesOperated, countiesServed: list(row?.countiesServed || row?.counties_served),
+    assetClasses, strategies, specialties: list(row?.specialties),
+    canProvide, needs, fundingRange: txt(row?.fundingRange || row?.capitalRange, base.fundingRange),
     capitalPosition: txt(row?.capitalPosition, base.capitalPosition), buyBox: list(row?.buyBox || row?.buy_box),
     priceRange: txt(row?.priceRange, base.priceRange), dealSize: txt(row?.dealSize, base.dealSize),
     responseSpeed: txt(row?.responseSpeed, base.responseSpeed), verifiedStatus: txt(row?.verifiedStatus, base.verifiedStatus),
