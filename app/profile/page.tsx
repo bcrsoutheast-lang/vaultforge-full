@@ -550,7 +550,7 @@ export default function ProfilePage() {
     }
 
     routeProfileToAdmin(profile);
-    const message = "Profile saved and routed to admin for approval. After approval, the payment button will light up.";
+    const message = "Profile saved and routed to admin for approval.";
     setBanner(message);
     window.alert(message);
     window.scrollTo({ top: 0, behavior: "smooth" });
