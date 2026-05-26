@@ -199,50 +199,48 @@ async function compressImage(file: File, maxWidth = 300, quality = 0.25): Promis
 }
 
 async function setImage(key: "profilePhoto" | "companyLogo", files: FileList | null) {
-  const file = Array.from(files || [])[0];
-  if (!file) return;
-  setError("");
-  setBanner("Compressing image...");
+    const file = Array.from(files || [])[0];
+    if (!file) return;
+    setError("");
+    setBanner("Compressing image...");
 
-  const image = await compressImage(file, 300, 0.25);
-  if (!image) {
-    setError("Image could not be loaded. Try a smaller JPG/PNG under 1MB.");
-    setBanner("");
-    return;
-  }
-
-  const backupKey = key === "profilePhoto" ? PROFILE_PHOTO_BACKUP_KEY : COMPANY_LOGO_BACKUP_KEY;
-  const backupSaved = writeImageBackup(backupKey, image);
-
-  if (!backupSaved) {
-    setError("Storage full. Delete old saved items before uploading photos.");
-    setBanner("");
-    return;
-  }
-
-  // Update UI state only - don't touch main profile storage
-  setProfile({ ...profile, [key]: image, updatedAt: new Date().toISOString() });
-
-  // Update directory placeholders so Network/Members shows photo
-  const directory = readDirectory();
-  const email = txt(profile.email).toLowerCase();
-  const id = txt(profile.id);
-
-  const updatedDirectory = directory.map((member) => {
-    if (member.id === id || member.email === email) {
-      return {
-        ...member,
-        profilePhoto: key === "profilePhoto" ? "__vaultforge_member_profile_photo_v1__" : member.profilePhoto,
-        companyLogo: key === "companyLogo" ? "__vaultforge_member_company_logo_v1__" : member.companyLogo,
-      };
+    const image = await compressImage(file, 300, 0.25);
+    if (!image) {
+      setError("Image could not be loaded. Try a smaller JPG/PNG under 1MB.");
+      setBanner("");
+      return;
     }
-    return member;
-  });
 
-  writeJson(DIRECTORY_KEY, updatedDirectory);
-  window.dispatchEvent(new Event("vaultforge-member-change"));
-  setBanner(key === "profilePhoto" ? "Profile photo saved." : "Company logo saved.");
-}
+    const backupKey = key === "profilePhoto"? PROFILE_PHOTO_BACKUP_KEY : COMPANY_LOGO_BACKUP_KEY;
+    const backupSaved = writeImageBackup(backupKey, image);
+
+    if (!backupSaved) {
+      setError("Storage full. Delete old saved items before uploading photos.");
+      setBanner("");
+      return;
+    }
+
+    setProfile({...profile, [key]: image, updatedAt: new Date().toISOString() });
+
+    const directory = readDirectory();
+    const email = txt(profile.email).toLowerCase();
+    const id = txt(profile.id);
+
+    const updatedDirectory = directory.map((member) => {
+      if (member.id === id || member.email === email) {
+        return {
+         ...member,
+          profilePhoto: key === "profilePhoto"? "__vaultforge_member_profile_photo_v1__" : member.profilePhoto,
+          companyLogo: key === "companyLogo"? "__vaultforge_member_company_logo_v1__" : member.companyLogo,
+        };
+      }
+      return member;
+    });
+
+    writeJson(DIRECTORY_KEY, updatedDirectory);
+    window.dispatchEvent(new Event("vaultforge-member-change"));
+    setBanner(key === "profilePhoto"? "Profile photo saved." : "Company logo saved.");
+  }
 
 const page: React.CSSProperties = { minHeight: "100vh", background: "#05070d", color: "#f7f7fb", padding: 18, fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" };
 const wrap: React.CSSProperties = { maxWidth: 1280, margin: "0 auto", paddingBottom: 120 };
