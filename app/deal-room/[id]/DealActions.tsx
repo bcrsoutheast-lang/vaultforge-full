@@ -1,10 +1,14 @@
+// app/deal-room/[id]/DealActions.tsx
 'use client'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 export default function DealActions({ dealId }: { dealId: string }) {
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
   const router = useRouter()
   const [loading, setLoading] = useState('')
   const [currentStatus, setCurrentStatus] = useState('active')
@@ -12,10 +16,10 @@ export default function DealActions({ dealId }: { dealId: string }) {
   useEffect(() => {
     async function loadStatus() {
       const { data } = await supabase
-        .from('vf_deal_actions')
-        .select('status')
-        .eq('deal_id', dealId)
-        .single()
+       .from('vf_deal_actions')
+       .select('status')
+       .eq('deal_id', dealId)
+       .single()
       if (data) setCurrentStatus(data.status)
     }
     loadStatus()
@@ -24,8 +28,8 @@ export default function DealActions({ dealId }: { dealId: string }) {
   async function updateStatus(status: 'active' | 'saved' | 'archived') {
     setLoading(status)
     const { error } = await supabase
-      .from('vf_deal_actions')
-      .upsert({ deal_id: dealId, status, updated_at: new Date().toISOString() }, { onConflict: 'deal_id' })
+     .from('vf_deal_actions')
+     .upsert({ deal_id: dealId, status, updated_at: new Date().toISOString() }, { onConflict: 'deal_id' })
     
     setLoading('')
     if (error) return alert('Failed: ' + error.message)
@@ -38,9 +42,9 @@ export default function DealActions({ dealId }: { dealId: string }) {
     
     setLoading('delete')
     const { error } = await supabase
-      .from('vf_deal_actions')
-      .delete()
-      .eq('deal_id', dealId)
+     .from('vf_deal_actions')
+     .delete()
+     .eq('deal_id', dealId)
     
     setLoading('')
     if (error) return alert('Delete failed: ' + error.message)
@@ -54,24 +58,24 @@ export default function DealActions({ dealId }: { dealId: string }) {
         disabled={!!loading || currentStatus === 'saved'} 
         className="vf-btn"
       >
-        {loading === 'saved' ? 'Saving...' : currentStatus === 'saved' ? 'Saved ✓' : 'Save'}
+        {loading === 'saved'? 'Saving...' : currentStatus === 'saved'? 'Saved ✓' : 'Save'}
       </button>
       <button 
         onClick={() => updateStatus('archived')} 
         disabled={!!loading || currentStatus === 'archived'} 
         className="vf-btn"
       >
-        {loading === 'archived' ? 'Archiving...' : currentStatus === 'archived' ? 'Archived ✓' : 'Archive'}
+        {loading === 'archived'? 'Archiving...' : currentStatus === 'archived'? 'Archived ✓' : 'Archive'}
       </button>
       <button 
         onClick={() => updateStatus('active')} 
         disabled={!!loading || currentStatus === 'active'} 
         className="vf-btn"
       >
-        {loading === 'active' ? 'Restoring...' : 'Restore Active'}
+        {loading === 'active'? 'Restoring...' : 'Restore Active'}
       </button>
       <button onClick={hardDelete} disabled={!!loading} className="vf-btn vf-btn-danger">
-        {loading === 'delete' ? 'Removing...' : 'Remove from View'}
+        {loading === 'delete'? 'Removing...' : 'Remove from View'}
       </button>
     </div>
   )
