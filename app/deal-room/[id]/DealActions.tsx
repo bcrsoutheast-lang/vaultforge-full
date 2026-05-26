@@ -1,4 +1,3 @@
-// app/deal-room/[id]/DealActions.tsx
 'use client'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
@@ -58,24 +57,24 @@ export default function DealActions({ dealId }: { dealId: string }) {
         disabled={!!loading || currentStatus === 'saved'} 
         className="vf-btn"
       >
-        {loading === 'saved'? 'Saving...' : currentStatus === 'saved'? 'Saved ✓' : 'Save'}
+        {loading === 'saved' ? 'Saving...' : currentStatus === 'saved' ? 'Saved ✓' : 'Save'}
       </button>
       <button 
         onClick={() => updateStatus('archived')} 
         disabled={!!loading || currentStatus === 'archived'} 
         className="vf-btn"
       >
-        {loading === 'archived'? 'Archiving...' : currentStatus === 'archived'? 'Archived ✓' : 'Archive'}
+        {loading === 'archived' ? 'Archiving...' : currentStatus === 'archived' ? 'Archived ✓' : 'Archive'}
       </button>
       <button 
         onClick={() => updateStatus('active')} 
         disabled={!!loading || currentStatus === 'active'} 
         className="vf-btn"
       >
-        {loading === 'active'? 'Restoring...' : 'Restore Active'}
+        {loading === 'active' ? 'Restoring...' : 'Restore Active'}
       </button>
       <button onClick={hardDelete} disabled={!!loading} className="vf-btn vf-btn-danger">
-        {loading === 'delete'? 'Removing...' : 'Remove from View'}
+        {loading === 'delete' ? 'Removing...' : 'Remove from View'}
       </button>
     </div>
   )
