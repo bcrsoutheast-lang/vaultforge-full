@@ -2,10 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
 
 type Thread = Record<string, any>;
 type Message = Record<string, any>;
 type Toast = { type: "success" | "error" | "info"; text: string };
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const page: React.CSSProperties = {
   minHeight: "100vh",
@@ -28,11 +34,6 @@ const activeThread: React.CSSProperties = { ...threadCard, borderColor: "rgba(15
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", borderRadius: 18, border: "1px solid rgba(255,255,255,.16)", background: "linear-gradient(135deg, rgba(181,92,255,.13), rgba(255,255,255,.06))", color: "white", padding: 14, fontSize: 16 };
 const eyebrow: React.CSSProperties = { color: "#e8c46b", letterSpacing: 5, fontWeight: 900, fontSize: 12, marginBottom: 12, textTransform: "uppercase" };
 const muted: React.CSSProperties = { color: "rgba(255,255,255,.68)", lineHeight: 1.5 };
-
-function getEmail() {
-  if (typeof window === "undefined") return "";
-  return (localStorage.getItem("vf_email") || sessionStorage.getItem("vf_email") || "text@text.com").trim().toLowerCase();
-}
 
 function money(value: any) {
   const n = Number(value || 0);
@@ -65,8 +66,13 @@ export default function MessagesClient() {
   const [status, setStatus] = useState("Loading messages...");
   const [threadStatus, setThreadStatus] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
+  const [email, setEmail] = useState("");
 
-  const email = useMemo(() => getEmail(), []);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setEmail(user?.email?.toLowerCase() || "");
+    });
+  }, []);
 
   function showToast(next: Toast) {
     setToast(next);
@@ -74,9 +80,10 @@ export default function MessagesClient() {
   }
 
   async function loadThreads() {
+    if (!email) return;
     setStatus("Loading messages...");
     try {
-      const res = await fetch("/api/messages/list", { cache: "no-store", headers: { "x-vf-email": getEmail() } });
+      const res = await fetch("/api/messages/list", { cache: "no-store", headers: { "x-vf-email": email } });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || data?.details || "Could not load messages.");
       setThreads(data?.threads || []);
@@ -94,7 +101,7 @@ export default function MessagesClient() {
     setDeal(thread.deal || null);
 
     try {
-      const res = await fetch(`/api/messages/thread?thread_key=${encodeURIComponent(thread.thread_key)}`, { cache: "no-store", headers: { "x-vf-email": getEmail() } });
+      const res = await fetch(`/api/messages/thread?thread_key=${encodeURIComponent(thread.thread_key)}`, { cache: "no-store", headers: { "x-vf-email": email } });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || data?.details || "Could not load thread.");
       setMessages(data?.messages || []);
@@ -115,7 +122,7 @@ export default function MessagesClient() {
       const other = messages.find((m) => m.sender_email !== email)?.sender_email || messages.find((m) => m.recipient_email !== email)?.recipient_email || selected.latest_message?.sender_email || selected.latest_message?.recipient_email;
       const res = await fetch("/api/messages/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-vf-email": getEmail() },
+        headers: { "Content-Type": "application/json", "x-vf-email": email },
         body: JSON.stringify({ deal_id: selected.deal_id, thread_key: selected.thread_key, recipient_email: other, subject: `RE: ${selected.latest_message?.subject || "VaultForge Deal Inquiry"}`, body: reply.trim(), message: reply.trim() }),
       });
 
@@ -137,7 +144,7 @@ export default function MessagesClient() {
     if (!yes) return;
 
     try {
-      const res = await fetch("/api/messages/thread", { method: "PATCH", headers: { "Content-Type": "application/json", "x-vf-email": getEmail() }, body: JSON.stringify({ thread_key: selected.thread_key, archived: true }) });
+      const res = await fetch("/api/messages/thread", { method: "PATCH", headers: { "Content-Type": "application/json", "x-vf-email": email }, body: JSON.stringify({ thread_key: selected.thread_key, archived: true }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || data?.details || "Could not archive thread.");
       setSelected(null);
@@ -151,7 +158,9 @@ export default function MessagesClient() {
     }
   }
 
-  useEffect(() => { loadThreads(); }, []);
+  useEffect(() => { 
+    if (email) loadThreads(); 
+  }, [email]);
 
   return (
     <main style={page}>
