@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 type RoomContext = {
   to: string;
@@ -16,6 +17,11 @@ type RoomContext = {
   sourceRoute: string;
   matchReason: string;
 };
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 function clean(value: unknown) {
   return String(value || "").trim();
@@ -352,12 +358,18 @@ const textarea: React.CSSProperties = {
 export default function NewMessagePage() {
   const initial = useMemo(readQueryContext, []);
   const [context, setContext] = useState<RoomContext>(initial);
-  const [fromEmail, setFromEmail] = useState(initial.from);
+  const [fromEmail, setFromEmail] = useState("");
   const [toEmail, setToEmail] = useState(initial.to);
   const [subject, setSubject] = useState(initial.subject);
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("");
   const [sentThread, setSentThread] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setFromEmail(user?.email || getEmail() || "Owner");
+    });
+  }, []);
 
   async function resolveRoomTitle(ctx: RoomContext) {
     if (!ctx.roomId) return;
@@ -449,7 +461,6 @@ export default function NewMessagePage() {
 
   useEffect(() => {
     const viewer = getEmail();
-    setFromEmail(viewer || initial.from);
     setToEmail(initial.to || "bcrsoutheast@gmail.com");
 
     const startingTitle = clean(initial.title);
@@ -605,7 +616,7 @@ export default function NewMessagePage() {
           <div style={label}>Send Message</div>
 
           <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
-            <input style={input} value={fromEmail} onChange={(event) => setFromEmail(event.target.value)} placeholder="From email" />
+            <input style={input} value={fromEmail} readOnly placeholder="From email" />
             <input style={input} value={toEmail} onChange={(event) => setToEmail(event.target.value)} placeholder="To email" />
             <input style={input} value={displaySubject} onChange={(event) => setSubject(event.target.value)} placeholder="Subject" />
             <textarea style={textarea} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Message" />
