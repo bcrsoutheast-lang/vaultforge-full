@@ -1,57 +1,76 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-function clean(value: unknown) {
-  return String(value || "").trim();
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 type Props = {
-  children?: React.ReactNode;
-  to?: string;
-  title?: string;
-  roomId?: string;
-  roomType?: string;
-  folder?: string;
-  sourceRoute?: string;
-  kind?: string;
-  style?: React.CSSProperties;
+  email?: string;
+  name?: string;
+  userId?: string;
 };
 
-export default function VaultForgeRoomMessageLink({
-  children = "Request Info / Intro",
-  to = "bcrsoutheast@gmail.com",
-  title = "VaultForge Room",
-  roomId = "",
-  roomType = "VaultForge Room",
-  folder = "general",
-  sourceRoute = "",
-  kind = "room",
-  style,
-}: Props) {
-  const safeTitle = clean(title) || "VaultForge Room";
-  const safeRoomId = clean(roomId);
-  const safeRoomType = clean(roomType) || "VaultForge Room";
-  const safeFolder = clean(folder) || "general";
-  const safeSourceRoute = clean(sourceRoute);
+export default function VaultForgeRoomMessageLink({ email, name, userId }: Props) {
+  const [displayName, setDisplayName] = useState("");
+  const [displayEmail, setDisplayEmail] = useState("");
 
-  const href =
-    `/messages/new?to=${encodeURIComponent(to)}` +
-    `&subject=${encodeURIComponent(safeTitle)}` +
-    `&room_title=${encodeURIComponent(safeTitle)}` +
-    `&title=${encodeURIComponent(safeTitle)}` +
-    `&room_type=${encodeURIComponent(safeRoomType)}` +
-    `&room_id=${encodeURIComponent(safeRoomId)}` +
-    `&item_id=${encodeURIComponent(safeRoomId)}` +
-    `&signal_id=${encodeURIComponent(safeRoomId)}` +
-    `&source=${encodeURIComponent(`${kind}-room`)}` +
-    `&type=${encodeURIComponent(kind)}` +
-    `&folder=${encodeURIComponent(safeFolder)}` +
-    `&source_route=${encodeURIComponent(safeSourceRoute)}`;
+  useEffect(() => {
+    async function loadUser() {
+      // 1. Use passed-in props first
+      if (email || name) {
+        setDisplayName(name || email?.split('@')[0] || "Owner");
+        setDisplayEmail(email || "Email not listed");
+        return;
+      }
+
+      // 2. Try Supabase auth
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        setDisplayName(
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          user.email.split('@')[0] ||
+          "Owner"
+        );
+        setDisplayEmail(user.email);
+        return;
+      }
+
+      // 3. Last resort - no hardcoded "VaultForge Member" bullshit
+      setDisplayName("Owner");
+      setDisplayEmail("Email not listed");
+    }
+
+    loadUser();
+  }, [email, name, userId]);
 
   return (
-    <Link href={href} style={style}>
-      {children}
-    </Link>
+    <div style={{
+      border: "1px solid rgba(245, 200, 76,.22)",
+      borderRadius: 20,
+      padding: 16,
+      background: "rgba(2, 6, 23,.6)",
+    }}>
+      <div style={{
+        color: "#f5c84c",
+        fontSize: 11,
+        fontWeight: 950,
+        letterSpacing: ".18em",
+        textTransform: "uppercase",
+        marginBottom: 8,
+      }}>
+        MESSAGE RECIPIENT
+      </div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+        {displayName}
+      </div>
+      <div style={{ color: "#94a3b8", fontSize: 14 }}>
+        {displayEmail}
+      </div>
+    </div>
   );
 }
