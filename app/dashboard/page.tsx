@@ -19,18 +19,21 @@ export default function Dashboard() {
       <div style={{maxWidth:1200,margin:"0 auto"}}>
         
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
-          <span style={{color:"#FFD700",fontWeight:900}}>VAULTFORGE</span>
-          <button>Command</button>
-          <button>My Rooms</button>
-          <button>Members</button>
-          <button>Network</button>
-          <button>State Map</button>
-          <button>Deal Rooms</button>
-          <button>Pain Rooms</button>
-          <button>Messages</button>
-          <button style={{background:"#FFD700",color:"#000"}}>Profile</button>
-          <button onClick={logout} style={{background:"#8B0000"}}>Logout</button>
-        </div>
+  <span style={{color:"#FFD700",fontWeight:900}}>VAULTFORGE</span>
+  <button onClick={()=>alert("Command Center - Coming Soon")}>Command</button>
+  <button onClick={()=>alert("My Rooms - Coming Soon")}>My Rooms</button>
+  <button onClick={()=>alert("Members - Coming Soon")}>Members</button>
+  <button onClick={()=>alert("Network - Coming Soon")}>Network</button>
+  <button onClick={()=>alert("State Map - Coming Soon")}>State Map</button>
+  <button onClick={()=>alert("Deal Rooms - Coming Soon")}>Deal Rooms</button>
+  <button onClick={()=>alert("Pain Rooms - Coming Soon")}>Pain Rooms</button>
+  <button onClick={()=>alert("Messages - Coming Soon")}>Messages</button>
+  <button 
+    onClick={()=>window.location.href="/profile"} 
+    style={{background:"#FFD700",color:"#000"}}
+  >Profile</button>
+  <button onClick={logout} style={{background:"#8B0000"}}>Logout</button>
+</div>
 
         <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
           <button style={{background:"#FFD700",color:"#000",marginRight:8}}>Submit Profile for Approval</button>
