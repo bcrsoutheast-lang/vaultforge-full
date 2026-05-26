@@ -1,5 +1,12 @@
-import { redirect } from "next/navigation";
-export const dynamic = "force-dynamic"; export const revalidate = 0;
-function clean(v:unknown){return String(v||"").trim()} function fp(p:Record<string,string|string[]|undefined>,names:string[]){for(const n of names){const r=p[n];const v=Array.isArray(r)?r[0]:r;const t=clean(v);if(t)return t}return""} function safe(v:string){return clean(v).replace(/[^a-zA-Z0-9:_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,160)}
-function source(v:string,p:Record<string,string|string[]|undefined>){const j=[v,fp(p,["source","type","context","folder","folder_key"]),fp(p,["subject","title"])].join(" ").toLowerCase();if(j.includes("alert"))return"alert";if(j.includes("pain"))return"pain";if(j.includes("signal"))return"signal";if(j.includes("routing")||j.includes("route"))return"routing";if(j.includes("intro"))return"introduction";if(j.includes("project")||j.includes("deal")||j.includes("property"))return"project";if(j.includes("member"))return"member";return clean(v).toLowerCase()||"signal"}
-export default function ConnectPage({params,searchParams}:{params:{signalId:string};searchParams?:Record<string,string|string[]|undefined>}){const sp=searchParams||{};const signalId=decodeURIComponent(params.signalId||"");const s=source(fp(sp,["source","type","context"])||"signal",sp);const explicit=fp(sp,["thread_key","threadKey"]);const item=fp(sp,["item_id","itemId","deal_id","project_id","pain_id"]);const title=fp(sp,["title","subject"]);const identity=explicit||signalId||item||"general";const key=explicit||`${s}:${safe(identity.replace(`${s}:`,""))||"general"}`;const next=new URLSearchParams();if(title)next.set("title",title);redirect(`/message-command/${encodeURIComponent(key)}${next.toString()?`?${next.toString()}`:""}`)}
+import { Suspense } from 'react'
+import ConnectClient from './connect-client'
+
+export const dynamic = 'force-dynamic'
+
+export default function ConnectPage({ params }: { params: { signalId: string } }) {
+  return (
+    <Suspense fallback={<div style={{padding:'20px',color:'#fff'}}>Loading...</div>}>
+      <ConnectClient signalId={params.signalId} />
+    </Suspense>
+  )
+}
