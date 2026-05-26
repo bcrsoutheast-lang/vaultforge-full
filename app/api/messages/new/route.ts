@@ -31,53 +31,8 @@ function cleanEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
-function readCookie(cookieHeader: string, name: string) {
-  const parts = cookieHeader.split(";").map((part) => part.trim());
-  for (const part of parts) {
-    if (!part.startsWith(`${name}=`)) continue;
-    try {
-      return decodeURIComponent(part.slice(name.length + 1));
-    } catch {
-      return part.slice(name.length + 1);
-    }
-  }
-  return "";
-}
-
-function requestEmail(request: Request, body: AnyRow) {
-  const url = new URL(request.url);
-  const cookie = request.headers.get("cookie") || "";
-  return cleanEmail(
-    request.headers.get("x-vf-email") ||
-      body.from_email ||
-      body.sender_email ||
-      body.member_email ||
-      body.email ||
-      url.searchParams.get("email") ||
-      readCookie(cookie, "vf_email") ||
-      readCookie(cookie, "vf_member_email") ||
-      readCookie(cookie, "vf_admin_email")
-  );
-}
-
 function makeId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-async function tryInsert(supabase: any, table: string, payloads: AnyRow[]) {
-  const errors: string[] = [];
-
-  for (const payload of payloads) {
-    try {
-      const { data, error } = await supabase.from(table).insert(payload).select("*").single();
-      if (!error) return { table, data, payload };
-      errors.push(`${table}: ${error.message}`);
-    } catch (error: any) {
-      errors.push(`${table}: ${error?.message || String(error)}`);
-    }
-  }
-
-  return { table, error: errors.join(" | ") };
 }
 
 export async function POST(request: Request) {
@@ -85,109 +40,65 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as AnyRow;
     const supabase = supabaseClient();
 
-    // Get authenticated user from Supabase
     const { data: { user } } = await supabase.auth.getUser();
-    const authEmail = cleanEmail(user?.email);
-    const authName = clean(user?.user_metadata?.full_name || user?.user_metadata?.name || authEmail.split('@')[0] || "Owner");
+    const fromEmail = cleanEmail(user?.email);
+    const fromName = clean(user?.user_metadata?.full_name || user?.user_metadata?.name || fromEmail.split('@')[0] || "Owner");
 
-    const fromEmail = authEmail || requestEmail(request, body);
-    const toEmail = cleanEmail(body.to_email || body.recipient_email || body.target_email || body.owner_email || OWNER_EMAIL);
+    if (!fromEmail) {
+      return NextResponse.json({ ok: false, error: "Not authenticated." }, { status: 401 });
+    }
+
+    const toEmail = cleanEmail(body.to_email || body.recipient_email || OWNER_EMAIL);
     const subject = clean(body.subject || body.title || "VaultForge connection request");
-    const messageBody = clean(body.body || body.message || body.note || body.notes || "I need more information about this VaultForge signal/opportunity.");
-    const signalId = clean(body.signal_id || body.related_signal_id || "");
-    const itemId = clean(body.item_id || body.related_item_id || body.pain_id || body.deal_id || "");
-    const threadId = clean(body.thread_id || body.threadId || signalId || itemId || makeId("thread"));
+    const messageBody = clean(body.body || body.message || "I need more information about this VaultForge signal/opportunity.");
+    const threadId = clean(body.thread_id || makeId("thread"));
     const messageId = makeId("msg");
     const now = new Date().toISOString();
 
-    if (!fromEmail) {
-      return NextResponse.json({ ok: false, error: "Sender email required." }, { status: 400 });
-    }
-
-    const metadata = {
-      source: "api/messages/new",
-      from_email: fromEmail,
-      to_email: toEmail,
-      subject,
-      body: messageBody,
-      signal_id: signalId,
-      item_id: itemId,
-      thread_id: threadId,
-      raw: body,
-    };
-
-    const fullPayload = {
+    const payload = {
       id: messageId,
       thread_id: threadId,
       from_email: fromEmail,
       to_email: toEmail,
       sender_email: fromEmail,
-      sender_name: authName, // <-- FIXED: Uses real user name/email
+      sender_name: fromName,
       recipient_email: toEmail,
-      recipient_name: clean(body.recipient_name || body.to_name || "Member"),
-      member_email: fromEmail,
-      owner_email: toEmail,
       subject,
       body: messageBody,
       message: messageBody,
-      note: messageBody,
-      signal_id: signalId,
-      item_id: itemId,
       status: "open",
       created_at: now,
       updated_at: now,
-      metadata,
+      metadata: {
+        source: "api/messages/new",
+        from_email: fromEmail,
+        from_name: fromName,
+        to_email: toEmail,
+        subject,
+        body: messageBody,
+        thread_id: threadId,
+      },
     };
 
-    const safePayload = {
-      thread_id: threadId,
-      from_email: fromEmail,
-      to_email: toEmail,
-      sender_name: authName, // <-- FIXED
-      subject,
-      body: messageBody,
-      signal_id: signalId,
-      item_id: itemId,
-      status: "open",
-      metadata,
-      created_at: now,
-      updated_at: now,
-    };
+    const { data, error } = await supabase.from("vf_messages").insert(payload).select("*").single();
 
-    const simplePayload = {
-      email: fromEmail,
-      sender_name: authName, // <-- FIXED
-      subject,
-      message: messageBody,
-      metadata,
-      created_at: now,
-    };
-
-    const tables = ["vf_messages", "messages", "member_messages", "deal_messages"];
-    const attempts: AnyRow[] = [];
-
-    for (const table of tables) {
-      const result = await tryInsert(supabase, table, [fullPayload, safePayload, simplePayload]);
-      attempts.push(result);
-      if (result.data) {
-        return NextResponse.json({
-          ok: true,
-          message: result.data,
-          table: result.table,
-          thread_id: threadId,
-          message_id: result.data.id || messageId,
-          links: {
-            inbox: "/messages",
-            thread: `/messages/${encodeURIComponent(threadId)}`,
-          },
-        });
-      }
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: "Message could not be saved.", details: error.message },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json(
-      { ok: false, error: "Message could not be saved.", attempts },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      ok: true,
+      message: data,
+      thread_id: threadId,
+      message_id: data.id,
+      links: {
+        inbox: "/messages",
+        thread: `/messages/${encodeURIComponent(threadId)}`,
+      },
+    });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: "Message request failed.", details: error?.message || String(error) },
