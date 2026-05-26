@@ -12,7 +12,7 @@ export default function LoginPage() {
       localStorage.setItem("vaultforge_logged_in", "true");
     } catch {}
 
-    window.location.href = "/command";
+    window.location.href = "/profile";
   }
 
   return (
