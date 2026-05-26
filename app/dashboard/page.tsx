@@ -11,7 +11,7 @@ export default function Dashboard() {
 
   function logout() {
     localStorage.clear();
-    window.location.href = "/dashboard";
+    window.location.href = "/login";
   }
 
   return (
