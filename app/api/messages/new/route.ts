@@ -16,7 +16,7 @@ function supabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     "";
 
-  if (!url || !key) throw new Error("Missing Supabase environment values.");
+  if (!url ||!key) throw new Error("Missing Supabase environment values.");
 
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
@@ -83,7 +83,14 @@ async function tryInsert(supabase: any, table: string, payloads: AnyRow[]) {
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as AnyRow;
-    const fromEmail = requestEmail(request, body);
+    const supabase = supabaseClient();
+
+    // Get authenticated user from Supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const authEmail = cleanEmail(user?.email);
+    const authName = clean(user?.user_metadata?.full_name || user?.user_metadata?.name || authEmail.split('@')[0] || "Owner");
+
+    const fromEmail = authEmail || requestEmail(request, body);
     const toEmail = cleanEmail(body.to_email || body.recipient_email || body.target_email || body.owner_email || OWNER_EMAIL);
     const subject = clean(body.subject || body.title || "VaultForge connection request");
     const messageBody = clean(body.body || body.message || body.note || body.notes || "I need more information about this VaultForge signal/opportunity.");
@@ -115,7 +122,9 @@ export async function POST(request: Request) {
       from_email: fromEmail,
       to_email: toEmail,
       sender_email: fromEmail,
+      sender_name: authName, // <-- FIXED: Uses real user name/email
       recipient_email: toEmail,
+      recipient_name: clean(body.recipient_name || body.to_name || "Member"),
       member_email: fromEmail,
       owner_email: toEmail,
       subject,
@@ -134,6 +143,7 @@ export async function POST(request: Request) {
       thread_id: threadId,
       from_email: fromEmail,
       to_email: toEmail,
+      sender_name: authName, // <-- FIXED
       subject,
       body: messageBody,
       signal_id: signalId,
@@ -146,13 +156,13 @@ export async function POST(request: Request) {
 
     const simplePayload = {
       email: fromEmail,
+      sender_name: authName, // <-- FIXED
       subject,
       message: messageBody,
       metadata,
       created_at: now,
     };
 
-    const supabase = supabaseClient();
     const tables = ["vf_messages", "messages", "member_messages", "deal_messages"];
     const attempts: AnyRow[] = [];
 
