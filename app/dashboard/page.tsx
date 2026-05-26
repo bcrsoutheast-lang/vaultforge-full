@@ -22,7 +22,7 @@ export default function Dashboard() {
   <span style={{color:"#FFD700",fontWeight:900}}>VAULTFORGE</span>
   <button onClick={()=>alert("Command Center - Coming Soon")}>Command</button>
   <button onClick={()=>alert("My Rooms - Coming Soon")}>My Rooms</button>
-  <button onClick={()=>alert("Members - Coming Soon")}>Members</button>
+  <button onClick={()=>window.location.href="/members"}>Members</button>
   <button onClick={()=>alert("Network - Coming Soon")}>Network</button>
   <button onClick={()=>alert("State Map - Coming Soon")}>State Map</button>
   <button onClick={()=>alert("Deal Rooms - Coming Soon")}>Deal Rooms</button>
