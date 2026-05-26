@@ -33,12 +33,6 @@ export default async function DealRoomDetailPage({ params }: { params: Params })
         .vf-metric{border:1px solid rgba(148,163,184,.16);background:rgba(2,6,23,.38);border-radius:16px;padding:12px}
         .vf-metric span{display:block;color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:900}
         .vf-metric strong{display:block;color:#fff;font-size:17px;margin-top:5px;overflow-wrap:anywhere}
-        .vf-box-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-        .vf-box{border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.78);border-radius:20px;padding:16px}
-        .vf-box h3{margin:0 0 10px}
-        .vf-nav{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
-        .vf-nav a{color:#f8fafc;text-decoration:none;border:1px solid rgba(245,197,91,.25);background:rgba(245,197,91,.07);border-radius:999px;padding:10px 13px;font-weight:900;font-size:13px}
-        .vf-nav a.primary{background:linear-gradient(135deg,#fde68a,#e8c46b);color:#111827;border:0}
         .vf-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
         .vf-btn{border:1px solid rgba(245,197,91,.25);background:rgba(245,197,91,.07);color:#f8fafc;border-radius:12px;padding:10px 16px;font-weight:900;font-size:14px;cursor:pointer}
         .vf-btn-danger{background:#dc2626;border-color:#dc2626;color:#fff}
@@ -55,10 +49,10 @@ export default async function DealRoomDetailPage({ params }: { params: Params })
           
           {room?.id && <DealActions dealId={room.id} />}
 
-          <div className="vf-nav">
-            <Link href="/deal-rooms">Back to Deal Rooms</Link>
-            <Link href="/dashboard">Command</Link>
-            <Link href={`/message-command/${encodeURIComponent("deal:" + id)}`} className="primary">Room Thread</Link>
+          <div className="vf-nav" style={{display:"flex",gap:"9px",flexWrap:"wrap",marginTop:"16px"}}>
+            <Link href="/deal-rooms" style={{color:"#f8fafc",textDecoration:"none",border:"1px solid rgba(245,197,91,.25)",background:"rgba(245,197,91,.07)",borderRadius:"999px",padding:"10px 13px",fontWeight:900,fontSize:"13px"}}>Back to Deal Rooms</Link>
+            <Link href="/dashboard" style={{color:"#f8fafc",textDecoration:"none",border:"1px solid rgba(245,197,91,.25)",background:"rgba(245,197,91,.07)",borderRadius:"999px",padding:"10px 13px",fontWeight:900,fontSize:"13px"}}>Command</Link>
+            <Link href={`/message-command/${encodeURIComponent("deal:" + id)}`} style={{color:"#111827",textDecoration:"none",background:"linear-gradient(135deg,#fde68a,#e8c46b)",borderRadius:"999px",padding:"10px 13px",fontWeight:900,fontSize:"13px",border:0}}>Room Thread</Link>
           </div>
         </section>
 
