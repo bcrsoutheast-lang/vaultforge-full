@@ -25,7 +25,7 @@ export default function PainRooms() {
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h1 style={{color:"#FFD700",fontWeight:900}}>PAIN ROOMS</h1>
+          <h1 style={{color:"#FFD700",fontWeight:900}}>PAIN INTAKE</h1>
           <a href="/dashboard" style={{color:"#FFD700"}}>Back to Dashboard</a>
         </div>
 
