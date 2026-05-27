@@ -8,7 +8,7 @@ export default function DealRoom() {
   const [form, setForm] = useState({
     title: "",
     state: "",
-    propertyType: "Residential", // Updated default
+    propertyType: "Residential",
     dealType: "Wholesale",
     askPrice: "",
     arv: "",
@@ -65,6 +65,13 @@ export default function DealRoom() {
         .single();
 
       if (error) throw error;
+
+      // 3. Route to matching buyers
+      await fetch("/api/vaultforge/route-post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId: deal.id, type: "deal" })
+      });
       
       alert(`Deal posted! AI Score: ${analysis.score}/100. Routing to buyers now.`);
       window.location.href = "/my-work/deals/drafts";
