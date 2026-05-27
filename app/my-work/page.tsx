@@ -2,125 +2,154 @@
 
 import { useEffect, useState } from "react";
 
-export default function MyWorkCommand() {
-  const [activeTab, setActiveTab] = useState<"deals"|"pains">("deals");
-  const [dealStats, setDealStats] = useState({saved:0,archived:0,deleted:0,underContract:0,sold:0,drafts:0});
-  const [painStats, setPainStats] = useState({saved:0,archived:0,deleted:0,assigned:0,resolved:0,monitoring:0});
+export default function MyWork() {
+  const [stats, setStats] = useState({
+    draftDeals: 0,
+    savedDeals: 0,
+    underContract: 0,
+    sold: 0,
+    draftPains: 0,
+    savedPains: 0,
+    assignedPains: 0,
+    resolved: 0,
+    alerts: 0
+  });
+
   const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
+  const currentName = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_name") || "Member" : "Member";
 
   useEffect(() => {
     const deals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
     const pains = JSON.parse(localStorage.getItem("vaultforge_pains") || "[]");
-    
-    // Deal stats - YOUR workspace only
-    const myDeals = deals.filter((d:any) => d.postedBy === currentEmail);
-    setDealStats({
-      saved: deals.filter((d:any) => d.savedBy?.includes(currentEmail)).length,
-      archived: myDeals.filter((d:any) => d.status === "archived").length,
-      deleted: myDeals.filter((d:any) => d.status === "deleted").length,
-      underContract: myDeals.filter((d:any) => d.status === "under_contract").length,
-      sold: myDeals.filter((d:any) => d.status === "sold").length,
-      drafts: myDeals.filter((d:any) => d.status === "draft").length
-    });
+    const alerts = JSON.parse(localStorage.getItem("vaultforge_alerts") || "[]");
 
-    // Pain stats - YOUR workspace only
-    const myPains = pains.filter((p:any) => p.postedBy === currentEmail);
-    setPainStats({
-      saved: pains.filter((p:any) => p.savedBy?.includes(currentEmail)).length,
-      archived: myPains.filter((p:any) => p.status === "archived").length,
-      deleted: myPains.filter((p:any) => p.status === "deleted").length,
-      assigned: myPains.filter((p:any) => p.status === "assigned").length,
+    const myDeals = deals.filter((d:any) => d.postedBy === currentEmail || d.savedBy?.includes(currentEmail) || d.assignedTo === currentEmail);
+    const myPains = pains.filter((p:any) => p.postedBy === currentEmail || p.savedBy?.includes(currentEmail) || p.assignedTo === currentEmail);
+    const myAlerts = alerts.filter((a:any) => a.for === currentEmail &&!a.read);
+
+    setStats({
+      draftDeals: myDeals.filter((d:any) => d.status === "draft" && d.postedBy === currentEmail).length,
+      savedDeals: myDeals.filter((d:any) => d.status === "saved").length,
+      underContract: myDeals.filter((d:any) => d.status === "under-contract").length,
+      sold: myDeals.filter((d:any) => d.status === "sold").length,
+      draftPains: myPains.filter((p:any) => p.status === "draft" && p.postedBy === currentEmail).length,
+      savedPains: myPains.filter((p:any) => p.status === "saved").length,
+      assignedPains: myPains.filter((p:any) => p.status === "assigned").length,
       resolved: myPains.filter((p:any) => p.status === "resolved").length,
-      monitoring: myPains.filter((p:any) => p.status === "monitoring").length
+      alerts: myAlerts.length
     });
   }, [currentEmail]);
 
   const dealCards = [
-    {label:"Saved Deals",val:dealStats.saved,color:"#FFD700",route:"/my-work/deals/saved",desc:"Deals you saved from marketplace"},
-    {label:"Under Contract",val:dealStats.underContract,color:"#00ff00",route:"/my-work/deals/under-contract",desc:"Deals locked, closing soon"},
-    {label:"Sold",val:dealStats.sold,color:"#00ff00",route:"/my-work/deals/sold",desc:"Closed deals, money made"},
-    {label:"Archived",val:dealStats.archived,color:"#666",route:"/my-work/deals/archived",desc:"Old deals, keep for records"},
-    {label:"Deleted",val:dealStats.deleted,color:"#ff4444",route:"/my-work/deals/deleted",desc:"Trash - auto-delete 30 days"},
-    {label:"Drafts",val:dealStats.drafts,color:"#FFA500",route:"/my-work/deals/drafts",desc:"Unfinished deals"}
+    { title: "DEAL ROOM", desc: "Create deal projects", href: "/my-work/deal-room", count: stats.draftDeals, color: "#FFD700", icon: "🏢" },
+    { title: "Saved", desc: "Deals from Opportunities", href: "/my-work/deals/saved", count: stats.savedDeals, color: "#FFD700", icon: "⭐" },
+    { title: "Under Contract", desc: "Your pipeline", href: "/my-work/deals/under-contract", count: stats.underContract, color: "#00ff00", icon: "📝" },
+    { title: "Sold", desc: "Closed deals", href: "/my-work/deals/sold", count: stats.sold, color: "#00ff00", icon: "💰" },
   ];
 
   const painCards = [
-    {label:"Saved Pains",val:painStats.saved,color:"#FFD700",route:"/my-work/pains/saved",desc:"Pain points you saved to monitor"},
-    {label:"Assigned",val:painStats.assigned,color:"#00ff00",route:"/my-work/pains/assigned",desc:"Contractor assigned, in progress"},
-    {label:"Resolved",val:painStats.resolved,color:"#00ff00",route:"/my-work/pains/resolved",desc:"Fixed, problem closed"},
-    {label:"Monitoring",val:painStats.monitoring,color:"#FFA500",route:"/my-work/pains/monitoring",desc:"Watching for recurrence"},
-    {label:"Archived",val:painStats.archived,color:"#666",route:"/my-work/pains/archived",desc:"Old pains, keep for records"},
-    {label:"Deleted",val:painStats.deleted,color:"#ff4444",route:"/my-work/pains/deleted",desc:"Trash - auto-delete 30 days"}
+    { title: "PAIN INTAKE", desc: "Create pain projects", href: "/my-work/pain-intake", count: stats.draftPains, color: "#00ccff", icon: "🔧" },
+    { title: "Saved", desc: "Pains from Pain Room", href: "/my-work/pains/saved", count: stats.savedPains, color: "#00ccff", icon: "⭐" },
+    { title: "Assigned", desc: "Jobs you're working", href: "/my-work/pains/assigned", count: stats.assignedPains, color: "#FFA500", icon: "🔨" },
+    { title: "Resolved", desc: "Completed jobs", href: "/my-work/pains/resolved", count: stats.resolved, color: "#00ff00", icon: "✅" },
   ];
-
-  const cards = activeTab === "deals"? dealCards : painCards;
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-          <div>
-            <h1 style={{color:"#FFD700",fontWeight:900}}>MY WORK COMMAND CENTER</h1>
-            <div style={{fontSize:11,opacity:0.7}}>Private workspace. Your deals. Your pains. Your money.</div>
+        <div style={{marginBottom:24}}>
+          <h1 style={{color:"#FFD700",fontWeight:900,fontSize:32,marginBottom:4}}>MY WORK</h1>
+          <div style={{fontSize:14,opacity:0.7}}>Command Center for {currentName}</div>
+        </div>
+
+        {stats.alerts > 0 && (
+          <div 
+            onClick={()=>window.location.href="/my-work/alerts"} 
+            style={{background:"#0a0f1a",border:"1px solid #ff4444",color:"#ff4444",padding:"12px 16px",borderRadius:8,marginBottom:24,fontSize:14,fontWeight:900,cursor:"pointer"}}
+          >
+            🔔 {stats.alerts} NEW ALERT{stats.alerts>1?"S":""} - AI found matches for you →
           </div>
-          <a href="/dashboard" style={{padding:"8px 16px",border:"1px solid #FFD700",borderRadius:8,color:"#FFD700",fontSize:12}}>← Dashboard</a>
-        </div>
+        )}
 
-        {/* Alert Banner - Private */}
-        <div style={{background:"#0a0f1a",border:"1px solid #FFD700",color:"#FFD700",padding:"12px 16px",borderRadius:8,marginBottom:16,fontSize:12,fontWeight:900}}>
-          🔒 PRIVATE WORKSPACE: Actions here do NOT affect public marketplace. This is your command center.
-        </div>
-
-        {/* Tab Switcher */}
-        <div style={{display:"flex",gap:8,marginBottom:24}}>
-          <button 
-            onClick={()=>setActiveTab("deals")} 
-            style={{padding:"12px 24px",borderRadius:8,fontWeight:900,background:activeTab==="deals"?"#FFD700":"#222",color:activeTab==="deals"?"#000":"#fff",border:"none"}}
-          >
-            DEAL WORKSPACE
-          </button>
-          <button 
-            onClick={()=>setActiveTab("pains")} 
-            style={{padding:"12px 24px",borderRadius:8,fontWeight:900,background:activeTab==="pains"?"#FFD700":"#222",color:activeTab==="pains"?"#000":"#fff",border:"none"}}
-          >
-            PAIN WORKSPACE
-          </button>
-        </div>
-
-        {/* 6 Cards Grid */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
-          {cards.map(card => (
-            <div 
-              key={card.label}
-              onClick={()=>window.location.href=card.route}
-              style={{
-                border:`1px solid ${card.color}`,
-                borderRadius:12,
-                padding:20,
-                background:"#0a0f1a",
-                cursor:"pointer",
-                transition:"all 0.2s",
-              }}
-              onMouseEnter={e=>e.currentTarget.style.boxShadow=`0 0 20px ${card.color}40`}
-              onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}
-            >
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:12}}>
-                <div style={{fontWeight:900,fontSize:16,color:card.color}}>{card.label}</div>
-                <div style={{fontSize:32,fontWeight:900,color:card.color}}>{card.val}</div>
+        <div style={{marginBottom:32}}>
+          <div style={{fontSize:18,fontWeight:900,marginBottom:12,color:"#FFD700"}}>DEALS</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12}}>
+            {dealCards.map(card => (
+              <div 
+                key={card.title}
+                onClick={()=>window.location.href=card.href}
+                style={{border:`1px solid ${card.color}`,borderRadius:12,padding:16,background:"#0a0f1a",cursor:"pointer",transition:"all 0.2s"}}
+                onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+                onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
+              >
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:8}}>
+                  <div style={{fontSize:24}}>{card.icon}</div>
+                  <div style={{fontSize:28,fontWeight:900,color:card.color}}>{card.count}</div>
+                </div>
+                <div style={{fontWeight:900,fontSize:16,color:card.color}}>{card.title}</div>
+                <div style={{fontSize:11,opacity:0.7,marginTop:4}}>{card.desc}</div>
               </div>
-              <div style={{fontSize:11,opacity:0.7}}>{card.desc}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        {/* Quick Actions */}
-        <div style={{marginTop:32,border:"1px solid #222",borderRadius:12,padding:20,background:"#0a0f1a"}}>
-          <div style={{fontWeight:900,marginBottom:16,color:"#FFD700"}}>QUICK ACTIONS</div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <a href="/deal-rooms/create" style={{padding:"8px 16px",background:"#FFD700",color:"#000",borderRadius:6,fontSize:12,fontWeight:900}}>+ New Deal</a>
-            <a href="/pain-rooms/create" style={{padding:"8px 16px",background:"#FFD700",color:"#000",borderRadius:6,fontSize:12,fontWeight:900}}>+ New Pain</a>
-            <a href="/deal-rooms" style={{padding:"8px 16px",border:"1px solid #FFD700",color:"#FFD700",borderRadius:6,fontSize:12}}>Browse Deals</a>
-            <a href="/pain-rooms" style={{padding:"8px 16px",border:"1px solid #FFD700",color:"#FFD700",borderRadius:6,fontSize:12}}>Browse Pains</a>
+        <div style={{marginBottom:32}}>
+          <div style={{fontSize:18,fontWeight:900,marginBottom:12,color:"#00ccff"}}>PAINS</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12}}>
+            {painCards.map(card => (
+              <div 
+                key={card.title}
+                onClick={()=>window.location.href=card.href}
+                style={{border:`1px solid ${card.color}`,borderRadius:12,padding:16,background:"#0a0f1a",cursor:"pointer",transition:"all 0.2s"}}
+                onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+                onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
+              >
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:8}}>
+                  <div style={{fontSize:24}}>{card.icon}</div>
+                  <div style={{fontSize:28,fontWeight:900,color:card.color}}>{card.count}</div>
+                </div>
+                <div style={{fontWeight:900,fontSize:16,color:card.color}}>{card.title}</div>
+                <div style={{fontSize:11,opacity:0.7,marginTop:4}}>{card.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:12}}>
+          <div 
+            onClick={()=>window.location.href="/deal-opportunities"}
+            style={{border:"1px solid #FFD700",borderRadius:12,padding:16,background:"#0a0f1a",cursor:"pointer"}}
+          >
+            <div style={{fontSize:24,marginBottom:8}}>📈</div>
+            <div style={{fontWeight:900,fontSize:16,color:"#FFD700"}}>DEAL OPPORTUNITIES</div>
+            <div style={{fontSize:11,opacity:0.7,marginTop:4}}>Browse member deals</div>
+          </div>
+          
+          <div 
+            onClick={()=>window.location.href="/pain-room"}
+            style={{border:"1px solid #00ccff",borderRadius:12,padding:16,background:"#0a0f1a",cursor:"pointer"}}
+          >
+            <div style={{fontSize:24,marginBottom:8}}>🏠</div>
+            <div style={{fontWeight:900,fontSize:16,color:"#00ccff"}}>PAIN ROOM</div>
+            <div style={{fontSize:11,opacity:0.7,marginTop:4}}>Browse member pains</div>
+          </div>
+
+          <div 
+            onClick={()=>window.location.href="/my-work/messages"}
+            style={{border:"1px solid #666",borderRadius:12,padding:16,background:"#0a0f1a",cursor:"pointer"}}
+          >
+            <div style={{fontSize:24,marginBottom:8}}>💬</div>
+            <div style={{fontWeight:900,fontSize:16}}>MESSAGES</div>
+            <div style={{fontSize:11,opacity:0.7,marginTop:4}}>Member DMs</div>
+          </div>
+
+          <div 
+            onClick={()=>window.location.href="/my-work/profile"}
+            style={{border:"1px solid #666",borderRadius:12,padding:16,background:"#0a0f1a",cursor:"pointer"}}
+          >
+            <div style={{fontSize:24,marginBottom:8}}>👤</div>
+            <div style={{fontWeight:900,fontSize:16}}>PROFILE</div>
+            <div style={{fontSize:11,opacity:0.7,marginTop:4}}>Feeds AI routing</div>
           </div>
         </div>
       </div>
