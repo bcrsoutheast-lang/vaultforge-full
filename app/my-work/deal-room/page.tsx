@@ -1,11 +1,10 @@
-use client";
+'use client';
 import { useState } from "react";
 
 export default function DealRoom() {
   const [propertyType, setPropertyType] = useState("Residential");
   const [loading, setLoading] = useState(false);
   
-  // Core fields
   const [city, setCity] = useState("");
   const [state, setState] = useState("GA");
   const [address, setAddress] = useState("");
@@ -15,33 +14,28 @@ export default function DealRoom() {
   const [dealType, setDealType] = useState("Wholesale");
   const [description, setDescription] = useState("");
   
-  // Residential specific
   const [beds, setBeds] = useState("");
   const [baths, setBaths] = useState("");
   const [sqft, setSqft] = useState("");
   const [yearBuilt, setYearBuilt] = useState("");
   const [repairEstimate, setRepairEstimate] = useState("");
   
-  // Commercial specific
   const [units, setUnits] = useState("");
   const [capRate, setCapRate] = useState("");
   const [noi, setNoi] = useState("");
   const [tenantType, setTenantType] = useState("");
   
-  // Land specific
   const [acreage, setAcreage] = useState("");
   const [zoning, setZoning] = useState("");
   const [utilities, setUtilities] = useState("");
   
-  // Buyer Box
   const [targetBuyer, setTargetBuyer] = useState("");
   const [minCashRequired, setMinCashRequired] = useState("");
   const [timeline, setTimeline] = useState("30 Days");
   const [assignmentFee, setAssignmentFee] = useState("");
   
-  // Lender/Seller Terms
   const [sellerFinancing, setSellerFinancing] = useState("No");
-  const [existingMortgage, setExistingMortgage] = useState("");
+  const [existingMortgage, setExistingMortgage] = useState("No");
   const [mortgageBalance, setMortgageBalance] = useState("");
 
   async function submitDeal() {
@@ -62,7 +56,6 @@ export default function DealRoom() {
       arv: Number(arv),
       deal_type: dealType,
       description,
-      // Type specific
       beds: beds ? Number(beds) : null,
       baths: baths ? Number(baths) : null,
       sqft: sqft ? Number(sqft) : null,
@@ -74,11 +67,9 @@ export default function DealRoom() {
       tenant_type: tenantType,
       acreage: acreage ? Number(acreage) : null,
       zoning, utilities,
-      // Buyer box
       target_buyer: targetBuyer,
       min_cash_required: minCashRequired ? Number(minCashRequired) : null,
       timeline, assignment_fee: assignmentFee ? Number(assignmentFee) : null,
-      // Lender terms
       seller_financing: sellerFinancing,
       existing_mortgage: existingMortgage,
       mortgage_balance: mortgageBalance ? Number(mortgageBalance) : null
