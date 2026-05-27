@@ -1,0 +1,89 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+const TYPES = ["Legal", "Financial", "Partnership", "Operations", "Marketing", "Other"];
+
+export default function StatePains({ params }: { params: { state: string } }) {
+  const state = params.state.toUpperCase();
+  const [pains, setPains] = useState<any[]>([]);
+  const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
+  const [activeType, setActiveType] = useState<string | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("vaultforge_pains");
+    const allPains = stored? JSON.parse(stored) : [];
+    const statePains = allPains.filter((p:any) => p.state === state);
+    setPains(statePains);
+
+    const counts: Record<string, number> = {};
+    TYPES.forEach(t => counts[t] = 0);
+    statePains.forEach((p:any) => {
+      if (counts[p.type]!== undefined) counts[p.type]++;
+    });
+    setTypeCounts(counts);
+  }, [state]);
+
+  const filteredPains = activeType? pains.filter(p => p.type === activeType) : pains;
+
+  return (
+    <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
+      <div style={{maxWidth:1200,margin:"0 auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h1 style={{color:"#FFD700",fontWeight:900}}>{state} PAIN ROOMS</h1>
+          <a href="/pain-rooms" style={{color:"#FFD700"}}>Back to States</a>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:16,marginBottom:24}}>
+          {TYPES.map(type => (
+            <button
+              key={type}
+              onClick={()=>setActiveType(activeType === type? null : type)}
+              style={{
+                border:"1px solid #222",
+                borderRadius:12,
+                padding:16,
+                background: activeType === type? "#FFD700" : "#0a0f1a",
+                color: activeType === type? "#000" : "#fff",
+                textAlign:"left"
+              }}
+            >
+              <div style={{fontSize:16,fontWeight:900}}>{type}</div>
+              <div style={{fontSize:28,fontWeight:900,margin:"8px 0"}}>{typeCounts[type] || 0}</div>
+              <div style={{opacity:0.7,fontSize:11}}>active pains</div>
+            </button>
+          ))}
+        </div>
+
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h2 style={{fontWeight:900}}>
+            {activeType? `${activeType} Issues in ${state}` : `All ${state} Issues`}
+          </h2>
+          <button
+            onClick={()=>window.location.href="/pain-rooms/create"}
+            style={{padding:"10px 16px",borderRadius:8,background:"#FFD700",color:"#000",fontWeight:900}}
+          >
+            + New Pain Point
+          </button>
+        </div>
+
+        {filteredPains.length === 0? (
+          <div style={{opacity:0.7}}>No {activeType || ""} issues in {state} yet.</div>
+        ) : (
+          <div style={{display:"grid",gap:12}}>
+            {filteredPains.map((p:any, i:number) => (
+              <div key={i} style={{border:"1px solid #222",borderRadius:12,padding:16}}>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
+                  <div style={{fontWeight:900}}>{p.title}</div>
+                  <div style={{fontSize:12,padding:"2px 8px",borderRadius:999,background:"#222",color:"#FFD700"}}>{p.type}</div>
+                </div>
+                <div style={{opacity:0.7,fontSize:12}}>Posted by: {p.postedBy}</div>
+                <div style={{opacity:0.7,fontSize:12,marginTop:8}}>{p.description}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
