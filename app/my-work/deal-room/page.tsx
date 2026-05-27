@@ -70,17 +70,16 @@ export default function DealRoom() {
     const email = localStorage.getItem("vaultforge_current_email");
     const imageUrls: string[] = [];
     
-    // Upload images first
     for (const file of images) {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
       const { data, error } = await supabase.storage
-        .from('deal-images')
+        .from('vaultforge-deal-photos')
         .upload(fileName, file);
       
       if (!error && data) {
         const { data: { publicUrl } } = supabase.storage
-          .from('deal-images')
+          .from('vaultforge-deal-photos')
           .getPublicUrl(data.path);
         imageUrls.push(publicUrl);
       }
@@ -305,3 +304,4 @@ export default function DealRoom() {
     </main>
   );
 }
+              
