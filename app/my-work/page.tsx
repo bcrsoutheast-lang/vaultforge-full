@@ -11,7 +11,9 @@ export default function MyWork() {
     assignedJobs: 0,
     completedJobs: 0,
     unreadMessages: 0,
-    unreadAlerts: 0
+    unreadAlerts: 0,
+    availableDeals: 0,
+    availablePains: 0
   });
   
   const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
@@ -42,6 +44,10 @@ export default function MyWork() {
     const unreadMessages = messages.filter((m:any) => m.to === currentEmail &&!m.read).length;
     const unreadAlerts = alerts.filter((a:any) => a.for === currentEmail &&!a.read).length;
 
+    // NEW: Count available deals/pains pushed to you
+    const availableDeals = deals.filter((d:any) => d.status === "active" && d.postedBy!== currentEmail).length;
+    const availablePains = pains.filter((p:any) => p.status === "active" && p.postedBy!== currentEmail).length;
+
     setStats({
       savedDeals,
       underContract,
@@ -50,7 +56,9 @@ export default function MyWork() {
       assignedJobs,
       completedJobs,
       unreadMessages,
-      unreadAlerts
+      unreadAlerts,
+      availableDeals,
+      availablePains
     });
   }
 
@@ -59,7 +67,8 @@ export default function MyWork() {
       section: "DEAL FLOW",
       color: "#FFD700",
       items: [
-        { name: "Deal Room", desc: "Create private deals", path: "/my-work/deal-room", icon: "🏠" },
+        { name: "Deal Opportunities", desc: `${stats.availableDeals} deals available`, path: "/deal-opportunities", icon: "🏠", highlight: true },
+        { name: "Deal Room", desc: "Create private deals", path: "/my-work/deal-room", icon: "🏗️" },
         { name: "Saved Deals", desc: `${stats.savedDeals} deals saved`, path: "/my-work/deals/saved", icon: "⭐" },
         { name: "Under Contract", desc: `${stats.underContract} in pipeline`, path: "/my-work/deals/under-contract", icon: "📝" },
         { name: "Sold Deals", desc: `${stats.soldDeals} closed | $${stats.totalProfit.toLocaleString()}`, path: "/my-work/deals/sold", icon: "💰" }
@@ -69,7 +78,8 @@ export default function MyWork() {
       section: "PAIN FLOW",
       color: "#00ccff",
       items: [
-        { name: "Pain Intake", desc: "Create private pains", path: "/my-work/pain-intake", icon: "🔧" },
+        { name: "Pain Room", desc: `${stats.availablePains} pains available`, path: "/pain-room", icon: "🔧", highlight: true },
+        { name: "Pain Intake", desc: "Create private pains", path: "/my-work/pain-intake", icon: "📋" },
         { name: "Assigned Jobs", desc: `${stats.assignedJobs} active jobs`, path: "/my-work/pains/assigned", icon: "🔨" },
         { name: "Completed Jobs", desc: `${stats.completedJobs} completed`, path: "/my-work/pains/completed", icon: "✅" }
       ]
@@ -95,7 +105,7 @@ export default function MyWork() {
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
       <div style={{maxWidth:1400,margin:"0 auto"}}>
-        {/* LOGO FRONT AND CENTER - THIS IS WHAT YOU'RE MISSING */}
+        {/* LOGO FRONT AND CENTER */}
         <div style={{textAlign:"center",marginBottom:32,padding:"24px 0",borderBottom:"2px solid #FFD700"}}>
           <img 
             src="/vaultforge-logo.png" 
@@ -143,22 +153,23 @@ export default function MyWork() {
                     border:`1px solid ${section.color}`,
                     borderRadius:12,
                     padding:20,
-                    background:"#0a0f1a",
+                    background: item.highlight? "#1a1f2a" : "#0a0f1a",
                     color:"#fff",
                     textAlign:"left",
                     cursor:"pointer",
                     transition:"all 0.2s",
-                    position:"relative"
+                    position:"relative",
+                    boxShadow: item.highlight? `0 0 12px ${section.color}40` : "none"
                   }}
                   onMouseEnter={e=>{
                     e.currentTarget.style.background="#1a1f2a";
                     e.currentTarget.style.transform="translateY(-2px)";
-                    e.currentTarget.style.boxShadow=`0 4px 12px ${section.color}40`;
+                    e.currentTarget.style.boxShadow=`0 4px 12px ${section.color}60`;
                   }}
                   onMouseLeave={e=>{
-                    e.currentTarget.style.background="#0a0f1a";
+                    e.currentTarget.style.background= item.highlight? "#1a1f2a" : "#0a0f1a";
                     e.currentTarget.style.transform="translateY(0)";
-                    e.currentTarget.style.boxShadow="none";
+                    e.currentTarget.style.boxShadow= item.highlight? `0 0 12px ${section.color}40` : "none";
                   }}
                 >
                   {item.badge > 0 && (
