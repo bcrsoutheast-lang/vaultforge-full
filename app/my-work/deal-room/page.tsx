@@ -7,6 +7,16 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+const BUYER_TYPES = [
+  "Cash Buyer",
+  "Fix & Flip Investor", 
+  "Buy & Hold Investor",
+  "End User",
+  "Developer",
+  "Landlord",
+  "Airbnb Investor"
+];
+
 export default function DealRoom() {
   const [propertyType, setPropertyType] = useState("Residential");
   const [loading, setLoading] = useState(false);
@@ -37,7 +47,7 @@ export default function DealRoom() {
   const [zoning, setZoning] = useState("");
   const [utilities, setUtilities] = useState("");
   
-  const [targetBuyer, setTargetBuyer] = useState("");
+  const [targetBuyers, setTargetBuyers] = useState<string[]>(["Cash Buyer"]);
   const [minCashRequired, setMinCashRequired] = useState("");
   const [timeline, setTimeline] = useState("30 Days");
   const [assignmentFee, setAssignmentFee] = useState("");
@@ -53,6 +63,14 @@ export default function DealRoom() {
     }
   };
 
+  const toggleBuyer = (buyer: string) => {
+    setTargetBuyers(prev => 
+      prev.includes(buyer) 
+        ? prev.filter(b => b !== buyer)
+        : [...prev, buyer]
+    );
+  };
+
   const stripCommas = (val: string) => val.replace(/,/g, "");
 
   async function submitDeal() {
@@ -61,6 +79,11 @@ export default function DealRoom() {
     
     if (!city || !cleanAsking || !description) {
       alert("City, Asking Price, and Description required");
+      return;
+    }
+    
+    if (targetBuyers.length === 0) {
+      alert("Select at least one target buyer type");
       return;
     }
     
@@ -86,8 +109,12 @@ export default function DealRoom() {
     }
     setUploading(false);
     
+    // Auto-generate title so we never hit NULL constraint
+    const title = `${beds}bd ${baths}ba ${propertyType} in ${city}, ${state} - $${Number(cleanAsking).toLocaleString()}`;
+    
     const payload = {
       post_type: "deal",
+      title,
       user_email: email,
       property_type: propertyType,
       city, state, address, zipcode,
@@ -106,7 +133,7 @@ export default function DealRoom() {
       tenant_type: tenantType,
       acreage: acreage ? Number(acreage) : null,
       zoning, utilities,
-      target_buyer: targetBuyer,
+      target_buyer: targetBuyers, // Now sends array
       min_cash_required: minCashRequired ? Number(stripCommas(minCashRequired)) : null,
       timeline, assignment_fee: assignmentFee ? Number(stripCommas(assignmentFee)) : null,
       seller_financing: sellerFinancing,
@@ -134,6 +161,7 @@ export default function DealRoom() {
   const label = {color:"#FFD700",fontSize:"11px",fontWeight:"700",marginBottom:"4px",display:"block",letterSpacing:"0.5px"};
   const section = {borderTop:"1px solid #222",paddingTop:"20px",marginTop:"20px"};
   const sectionTitle = {color:"#00ccff",fontSize:"14px",fontWeight:"800",marginBottom:"16px"};
+  const checkboxLabel = {display:"flex",alignItems:"center",gap:"8px",color:"#fff",fontSize:"14px",marginBottom:"10px",cursor:"pointer"};
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:"16px"}}>
@@ -243,15 +271,20 @@ export default function DealRoom() {
 
         <div style={section}>
           <div style={sectionTitle}>BUYER BOX / TERMS</div>
-          <label style={label}>TARGET BUYER</label>
-          <select style={input} value={targetBuyer} onChange={e=>setTargetBuyer(e.target.value)}>
-            <option value="">Select Buyer Type</option>
-            <option>Cash Buyer</option>
-            <option>Fix & Flip Investor</option>
-            <option>Buy & Hold Investor</option>
-            <option>End User</option>
-            <option>Developer</option>
-          </select>
+          <label style={label}>TARGET BUYER TYPES - SELECT ALL THAT APPLY</label>
+          <div style={{background:"#0a0f1a",border:"2px solid #FFD700",borderRadius:"8px",padding:"16px",marginBottom:"14px"}}>
+            {BUYER_TYPES.map(buyer => (
+              <label key={buyer} style={checkboxLabel}>
+                <input 
+                  type="checkbox" 
+                  checked={targetBuyers.includes(buyer)}
+                  onChange={() => toggleBuyer(buyer)}
+                  style={{width:"18px",height:"18px"}}
+                />
+                {buyer}
+              </label>
+            ))}
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"12px"}}>
             <div><label style={label}>MIN CASH REQUIRED</label><input style={input} type="text" inputMode="numeric" value={minCashRequired} onChange={e=>setMinCashRequired(e.target.value)} placeholder="50000" /></div>
             <div><label style={label}>TIMELINE</label><select style={input} value={timeline} onChange={e=>setTimeline(e.target.value)}><option>7 Days</option><option>14 Days</option><option>30 Days</option><option>60 Days</option></select></div>
@@ -303,5 +336,6 @@ export default function DealRoom() {
       </div>
     </main>
   );
-}
+}  
+                    
               
