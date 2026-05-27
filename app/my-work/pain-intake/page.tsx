@@ -1,85 +1,178 @@
 "use client";
 
 import { useState } from "react";
-import { publishPainWithRouting } from "@/lib/vaultforge-ai";
+import { supabase } from "@/lib/supabase";
 
 export default function PainIntake() {
-  const [title, setTitle] = useState("");
-  const [state, setState] = useState("GA");
-  const [propertyType, setPropertyType] = useState("Single Family");
-  const [painType, setPainType] = useState("Foundation");
-  const [urgency, setUrgency] = useState("medium");
-  const [budget, setBudget] = useState("");
-  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    title: "",
+    state: "",
+    propertyType: "SFR",
+    painType: "Roof",
+    urgency: "medium",
+    description: "",
+    budget: "1k-5k"
+  });
 
-  const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
+  const currentEmail = typeof window !== "undefined" ? localStorage.getItem("vaultforge_current_email") || "" : "";
 
-  function handlePublish() {
-    if (!title ||!description) {
-      alert("Title and Description are required");
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currentEmail) {
+      alert("Please log in first");
       return;
     }
-    const result = publishPainWithRouting({
-      title, state, propertyType, painType, urgency, budget, description,
-      status: "active",
-      postedBy: currentEmail
-    });
-    alert(`Pain published! VaultForge AI routed to ${result.matchCount} matching contractors.`);
-    window.location.href = "/my-work";
+    
+    setLoading(true);
+    
+    try {
+      // 1. Run AI analysis
+      const aiRes = await fetch("/api/vaultforge/ai-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "pain",
+          data: form
+        })
+      });
+      
+      const { analysis } = await aiRes.json();
+
+      // 2. Insert pain into Supabase
+      const { data: pain, error } = await supabase
+        .from("pains")
+        .insert({
+          title: form.title,
+          state: form.state,
+          property_type: form.propertyType,
+          pain_type: form.painType,
+          urgency: form.urgency,
+          description: form.description,
+          budget: form.budget,
+          status: "active",
+          posted_by: currentEmail
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // 3. TODO: Create alerts for matching contractors
+      // This is where routing logic will go
+      
+      alert(`Pain posted! Priority: ${analysis.priority}. Routing to contractors now.`);
+      window.location.href = "/my-work/jobs/assigned";
+      
+    } catch (err: any) {
+      console.error(err);
+      alert("Error posting pain: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const inputStyle = {
+    width: "100%",
+    padding: 12,
+    background: "#0a0f1a",
+    border: "1px solid #00ccff",
+    borderRadius: 8,
+    color: "#fff",
+    fontSize: 14
+  };
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
-      <div style={{maxWidth:800,margin:"0 auto"}}>
-        <div style={{textAlign:"center",marginBottom:24,padding:"20px 0",borderBottom:"2px solid #00ccff"}}>
-          <img 
-            src="/vaultforge-logo.png" 
-            alt="VaultForge" 
-            style={{height:60,margin:"0 auto 12px",filter:"drop-shadow(0 0 15px #00ccff)"}}
-            onError={(e:any)=>{e.target.style.display='none'}}
+      <div style={{maxWidth:600,margin:"0 auto"}}>
+        <div style={{marginBottom:24}}>
+          <button onClick={()=>window.location.href="/my-work"} style={{background:"none",border:"none",color:"#00ccff",cursor:"pointer"}}>
+            ← Back to My Work
+          </button>
+        </div>
+
+        <h1 style={{color:"#00ccff",fontWeight:900,fontSize:24,marginBottom:8}}>POST PAIN</h1>
+        <div style={{fontSize:12,opacity:0.7,marginBottom:24}}>AI will match you with qualified contractors instantly</div>
+
+        <form onSubmit={handleSubmit} style={{display:"flex",flexDirection:"column",gap:16}}>
+          <input
+            placeholder="Job Title - Roof Leak 123 Main St"
+            value={form.title}
+            onChange={e=>setForm({...form,title:e.target.value})}
+            style={inputStyle}
+            required
           />
-          <h1 style={{color:"#00ccff",fontWeight:900,fontSize:24,letterSpacing:1}}>PAIN INTAKE</h1>
-          <div style={{fontSize:11,opacity:0.6,marginTop:4}}>Create private pains. AI routes to matching contractors.</div>
-        </div>
+          
+          <select value={form.state} onChange={e=>setForm({...form,state:e.target.value})} style={inputStyle} required>
+            <option value="">Select State</option>
+            <option value="GA">Georgia</option>
+            <option value="FL">Florida</option>
+            <option value="TX">Texas</option>
+            <option value="NC">North Carolina</option>
+            <option value="SC">South Carolina</option>
+            <option value="TN">Tennessee</option>
+            <option value="AL">Alabama</option>
+          </select>
 
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
-          <button onClick={()=>window.location.href="/my-work"} style={{padding:"8px 16px",border:"1px solid #FFD700",borderRadius:8,color:"#FFD700",background:"none",fontSize:12}}>← My Work</button>
-        </div>
-
-        <div style={{border:"1px solid #00ccff",borderRadius:12,padding:24,background:"#0a0f1a"}}>
-          <div style={{display:"grid",gap:16}}>
-            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Pain Title - e.g. 'Foundation crack needs repair'" style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
-            
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <select value={state} onChange={e=>setState(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
-                {["GA","FL","TN","AL","NC","SC","TX","CA","NY"].map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
-              <select value={propertyType} onChange={e=>setPropertyType(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
-                {["Single Family","Multi-Family","Condo","Land","Commercial"].map(p=><option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <select value={painType} onChange={e=>setPainType(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
-                {["Foundation","Roof","HVAC","Plumbing","Electrical","Framing","Drywall","Flooring","Paint","Landscaping","General"].map(p=><option key={p} value={p}>{p}</option>)}
-              </select>
-              <select value={urgency} onChange={e=>setUrgency(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
-                <option value="low">Low Priority</option>
-                <option value="medium">Medium Priority</option>
-                <option value="high">High Priority</option>
-                <option value="emergency">Emergency</option>
-              </select>
-            </div>
-
-            <input value={budget} onChange={e=>setBudget(e.target.value)} placeholder="Budget range - e.g. '$5k-10k' or 'Open'" style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
-
-            <textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Describe the pain, scope of work, timeline, materials needed..." rows={6} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
-
-            <button onClick={handlePublish} style={{padding:16,borderRadius:8,background:"#00ccff",color:"#000",border:"none",fontWeight:900,fontSize:16}}>
-              PUBLISH PAIN + ROUTE WITH AI
-            </button>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <select value={form.propertyType} onChange={e=>setForm({...form,propertyType:e.target.value})} style={inputStyle}>
+              <option value="SFR">Single Family</option>
+              <option value="MF">Multi-Family</option>
+              <option value="Commercial">Commercial</option>
+              <option value="Land">Land</option>
+            </select>
+            <select value={form.painType} onChange={e=>setForm({...form,painType:e.target.value})} style={inputStyle}>
+              <option value="Roof">Roof</option>
+              <option value="HVAC">HVAC</option>
+              <option value="Plumbing">Plumbing</option>
+              <option value="Electrical">Electrical</option>
+              <option value="Foundation">Foundation</option>
+              <option value="General">General Contractor</option>
+              <option value="Landscaping">Landscaping</option>
+              <option value="Paint">Paint</option>
+            </select>
           </div>
-        </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <select value={form.urgency} onChange={e=>setForm({...form,urgency:e.target.value})} style={inputStyle}>
+              <option value="emergency">Emergency - ASAP</option>
+              <option value="high">High - This Week</option>
+              <option value="medium">Medium - 2 Weeks</option>
+              <option value="low">Low - 30+ Days</option>
+            </select>
+            <select value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})} style={inputStyle}>
+              <option value="<1k">Under $1k</option>
+              <option value="1k-5k">$1k - $5k</option>
+              <option value="5k-15k">$5k - $15k</option>
+              <option value="15k+">$15k+</option>
+            </select>
+          </div>
+
+          <textarea
+            placeholder="Describe the problem, access details, timeline..."
+            value={form.description}
+            onChange={e=>setForm({...form,description:e.target.value})}
+            style={{...inputStyle,minHeight:100}}
+            required
+          />
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              padding:16,
+              background: loading ? "#333" : "#00ccff",
+              color:"#000",
+              border:"none",
+              borderRadius:8,
+              fontWeight:900,
+              fontSize:16,
+              cursor: loading ? "not-allowed" : "pointer"
+            }}
+          >
+            {loading ? "ANALYZING WITH AI..." : "POST JOB TO VAULTFORGE"}
+          </button>
+        </form>
       </div>
     </main>
   );
