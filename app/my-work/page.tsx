@@ -40,9 +40,21 @@ export default function MyWork() {
 
   if (!email) return null;
 
+  const buttonStyle = {
+    padding: 16,
+    background: "#0a0f1a",
+    border: "1px solid #333",
+    borderRadius: 12,
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: "pointer",
+    textAlign: "left" as const
+  };
+
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff"}}>
-      {/* LOGGED IN HEADER - ONLY ON THIS PAGE */}
+      {/* LOGGED IN HEADER */}
       <div style={{
         background: "#0a0f1a",
         borderBottom: "1px solid #FFD700",
@@ -107,11 +119,12 @@ export default function MyWork() {
         </button>
       </div>
 
-      {/* YOUR EXISTING MY WORK CONTENT */}
+      {/* MY WORK DASHBOARD */}
       <div style={{padding:16}}>
         <h1 style={{color:"#FFD700",fontWeight:900,fontSize:28,marginBottom:24}}>MY WORK</h1>
         
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+        {/* POST BUTTONS */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
           <button 
             onClick={()=>window.location.href="/my-work/deal-room"}
             style={{
@@ -144,18 +157,41 @@ export default function MyWork() {
           </button>
         </div>
 
-        <div style={{marginTop:32,display:"flex",flexDirection:"column",gap:12}}>
-          <button 
-            onClick={()=>window.location.href="/my-work/deals/drafts"}
-            style={{padding:12,background:"#1a1a1a",border:"1px solid #333",borderRadius:8,color:"#fff",cursor:"pointer",textAlign:"left"}}
-          >
-            My Deals
+        {/* DASHBOARD SECTIONS */}
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <button onClick={()=>window.location.href="/my-work/notifications"} style={buttonStyle}>
+            <div style={{fontSize:16,fontWeight:900}}>🔔 Notifications</div>
+            <div style={{fontSize:12,opacity:0.6,marginTop:4}}>New matches from AI routing</div>
           </button>
-          <button 
-            onClick={()=>window.location.href="/my-work/jobs/assigned"}
-            style={{padding:12,background:"#1a1a1a",border:"1px solid #333",borderRadius:8,color:"#fff",cursor:"pointer",textAlign:"left"}}
-          >
-            My Jobs
+
+          <button onClick={()=>window.location.href="/my-work/deals/drafts"} style={buttonStyle}>
+            <div style={{fontSize:16,fontWeight:900}}>💰 My Deals</div>
+            <div style={{fontSize:12,opacity:0.6,marginTop:4}}>Active, pending, closed deals</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/my-work/jobs/assigned"} style={buttonStyle}>
+            <div style={{fontSize:16,fontWeight:900}}>🔧 My Jobs</div>
+            <div style={{fontSize:12,opacity:0.6,marginTop:4}}>Assigned pains & completed work</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/my-work/alerts"} style={buttonStyle}>
+            <div style={{fontSize:16,fontWeight:900}}>⚡ My Alerts</div>
+            <div style={{fontSize:12,opacity:0.6,marginTop:4}}>Set buy boxes & contractor filters</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/my-work/earnings"} style={buttonStyle}>
+            <div style={{fontSize:16,fontWeight:900}}>📊 Earnings</div>
+            <div style={{fontSize:12,opacity:0.6,marginTop:4}}>Commission & job payouts</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/my-work/analytics"} style={buttonStyle}>
+            <div style={{fontSize:16,fontWeight:900}}>📈 Analytics</div>
+            <div style={{fontSize:12,opacity:0.6,marginTop:4}}>AI scores, win rates, response time</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/settings/profile"} style={buttonStyle}>
+            <div style={{fontSize:16,fontWeight:900}}>⚙️ Settings</div>
+            <div style={{fontSize:12,opacity:0.6,marginTop:4}}>Company logo, info, preferences</div>
           </button>
         </div>
       </div>
