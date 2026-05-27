@@ -84,7 +84,10 @@ export default function ArchivedDeals() {
                     onChange={()=>toggleSelect(d.id)}
                     style={{marginTop:4}}
                   />
-                  <div style={{flex:1}} onClick={()=>window.location.href=`/deal-rooms/view/${d.id}`} style={{cursor:"pointer"}}>
+                  <div 
+                    style={{flex:1,cursor:"pointer"}} 
+                    onClick={()=>window.location.href=`/deal-rooms/view/${d.id}`}
+                  >
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                       <div style={{fontWeight:900,fontSize:16}}>{d.title}</div>
                       <div style={{fontSize:10,padding:"2px 8px",borderRadius:999,background:"#666",color:"#fff"}}>ARCHIVED</div>
