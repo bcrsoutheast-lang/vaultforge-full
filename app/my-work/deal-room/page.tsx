@@ -25,9 +25,10 @@ export default function DealRoom() {
     const ask = parseFloat(askPrice.replace(/,/g,'') || "0");
     const arvNum = parseFloat(arv.replace(/,/g,'') || "0");
     const repairNum = parseFloat(repair.replace(/,/g,'') || "0");
+    if (!ask ||!arvNum) return null;
     const profit = arvNum - ask - repairNum;
     const roi = ask > 0? ((profit / ask) * 100).toFixed(1) : "0";
-    return { profit: profit.toLocaleString(), roi: roi + "%" };
+    return { profit, roi, arv: arvNum, ask, repair: repairNum };
   }
 
   function handleSaveDraft() {
@@ -39,17 +40,17 @@ export default function DealRoom() {
       postedBy: currentEmail,
       status: "draft",
       createdAt: Date.now(),
-      updatedAt: Date.now(),
-      vaultForgeAnalysis: calculateProfit()
+      updatedAt: Date.now()
     };
     deals.push(newDeal);
     localStorage.setItem("vaultforge_deals", JSON.stringify(deals));
     alert("Draft saved to My Work → Drafts");
-    window.location.href = "/my-work/deals/drafts";
+    window.location.reload();
   }
 
   function handlePushToOpportunities() {
     if (!title ||!askPrice ||!arv) return alert("Title, Ask Price, and ARV required to publish");
+    
     const deals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
     const newDeal = {
       id: Date.now(),
@@ -62,11 +63,66 @@ export default function DealRoom() {
     };
     deals.push(newDeal);
     localStorage.setItem("vaultforge_deals", JSON.stringify(deals));
-    alert("Deal pushed to Deal Opportunities! Members with matching buy boxes will be alerted.");
+    
+    // 🤖 VAULTFORGE AI: Generate alerts for matching members
+    generateAlertsForDeal(newDeal);
+    
+    alert("Deal pushed to Deal Opportunities! VaultForge AI is alerting matching members now.");
     window.location.href = "/deal-opportunities";
   }
 
-  const { profit, roi } = calculateProfit();
+  function generateAlertsForDeal(deal: any) {
+    const profiles = JSON.parse(localStorage.getItem("vaultforge_profiles") || "[]");
+    const alerts = JSON.parse(localStorage.getItem("vaultforge_alerts") || "[]");
+    const askPriceNum = parseFloat(deal.askPrice.replace(/,/g,'') || "0");
+    
+    profiles.forEach((profile: any) => {
+      if (profile.email === deal.postedBy) return;
+      
+      let matchScore = 0;
+      let matchReasons = [];
+      
+      if (profile.states?.includes(deal.state) || profile.states?.includes("NATIONAL")) {
+        matchScore += 40;
+        matchReasons.push(deal.state);
+      } else {
+        return;
+      }
+      
+      if (profile.propertyTypes?.includes(deal.propertyType)) {
+        matchScore += 20;
+        matchReasons.push(deal.propertyType);
+      }
+      
+      const min = parseFloat(profile.buyBoxMin?.replace(/,/g,'') || "0");
+      const max = parseFloat(profile.buyBoxMax?.replace(/,/g,'') || "999999999");
+      if (askPriceNum >= min && askPriceNum <= max) {
+        matchScore += 30;
+        matchReasons.push(`$${askPriceNum.toLocaleString()}`);
+      }
+      
+      if (profile.investorType === "wholesaler" && deal.dealType === "wholesale") matchScore += 10;
+      if (profile.investorType === "flipper" && deal.dealType === "flip") matchScore += 10;
+      if (profile.investorType === "buy-hold" && deal.dealType === "buy-hold") matchScore += 10;
+      
+      if (matchScore >= 60) {
+        const newAlert = {
+          id: Date.now() + Math.random(),
+          for: profile.email,
+          type: "deal",
+          title: `New Deal Match: ${deal.title}`,
+          message: `Matches your buy box: ${matchReasons.join(", ")}`,
+          dealId: deal.id,
+          createdAt: Date.now(),
+          read: false,
+          matchScore: matchScore
+        };
+        alerts.push(newAlert);
+      }
+    });
+    
+    localStorage.setItem("vaultforge_alerts", JSON.stringify(alerts));
+  }
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
@@ -84,7 +140,7 @@ export default function DealRoom() {
         </div>
 
         <div style={{border:"1px solid #FFD700",borderRadius:12,padding:24,background:"#0a0f1a",marginBottom:24}}>
-          <div style={{fontSize:18,fontWeight:900,marginBottom:16}}>Create New Deal Project</div>
+          <div style={{fontSize:18,fontWeight:900,marginBottom:16}}>Create New Deal</div>
           
           <div style={{display:"grid",gap:12}}>
             <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Deal Title (e.g. 123 Main St Flip)" style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
@@ -97,7 +153,7 @@ export default function DealRoom() {
                 {["SFH","Multi-Family","Land","Commercial","Mobile"].map(p=><option key={p} value={p}>{p}</option>)}
               </select>
               <select value={dealType} onChange={e=>setDealType(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
-                {["wholesale","flip","buy-hold","creative","note"].map(d=><option key={d} value={d}>{d}</option>)}
+                {["wholesale","flip","buy-hold","seller-finance"].map(d=><option key={d} value={d}>{d}</option>)}
               </select>
             </div>
 
@@ -107,25 +163,20 @@ export default function DealRoom() {
               <input value={repair} onChange={e=>setRepair(e.target.value)} placeholder="Repair Est" style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
             </div>
 
-            <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Notes, comps, access info, etc..." rows={4} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
-
-            <div style={{border:"1px solid #00ff00",borderRadius:8,padding:16,background:"#05070d"}}>
-              <div style={{fontSize:10,opacity:0.7,marginBottom:4}}>VAULTFORGE ANALYSIS</div>
-              <div style={{display:"flex",gap:24}}>
-                <div>
-                  <div style={{fontSize:10,opacity:0.7}}>Est. Profit</div>
-                  <div style={{fontSize:24,fontWeight:900,color:"#00ff00"}}>${profit}</div>
-                </div>
-                <div>
-                  <div style={{fontSize:10,opacity:0.7}}>Est. ROI</div>
-                  <div style={{fontSize:24,fontWeight:900,color:"#FFD700"}}>{roi}</div>
+            {calculateProfit() && (
+              <div style={{border:"1px solid #00ff00",borderRadius:8,padding:16,background:"#05070d"}}>
+                <div style={{fontSize:10,opacity:0.7,marginBottom:4}}>VAULTFORGE ANALYSIS</div>
+                <div style={{fontSize:18,fontWeight:900,color:"#00ff00"}}>
+                  ${calculateProfit()!.profit.toLocaleString()} PROFIT | {calculateProfit()!.roi}% ROI
                 </div>
               </div>
-            </div>
+            )}
+
+            <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Deal notes, exit strategy, terms..." rows={3} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
 
             <div style={{display:"flex",gap:8}}>
               <button onClick={handleSaveDraft} style={{flex:1,padding:12,borderRadius:8,background:"#222",color:"#fff",border:"1px solid #666",fontWeight:900}}>Save Draft</button>
-              <button onClick={handlePushToOpportunities} style={{flex:1,padding:12,borderRadius:8,background:"#00ff00",color:"#000",border:"none",fontWeight:900}}>Push to Deal Opportunities →</button>
+              <button onClick={handlePushToOpportunities} style={{flex:1,padding:12,borderRadius:8,background:"#FFD700",color:"#000",border:"none",fontWeight:900}}>Push to Deal Opportunities →</button>
             </div>
           </div>
         </div>
