@@ -25,7 +25,7 @@ export default function Dashboard() {
   <button onClick={()=>window.location.href="/members"}>Members</button>
   <button onClick={()=>alert("Network - Coming Soon")}>Network</button>
   <button onClick={()=>alert("State Map - Coming Soon")}>State Map</button>
-  <button onClick={()=>alert("Deal Rooms - Coming Soon")}>Deal Rooms</button>
+  <button onClick={()=>window.location.href="/deal-rooms"}>Deal Rooms</button>
   <button onClick={()=>alert("Pain Rooms - Coming Soon")}>Pain Rooms</button>
   <button onClick={()=>alert("Messages - Coming Soon")}>Messages</button>
   <button 
