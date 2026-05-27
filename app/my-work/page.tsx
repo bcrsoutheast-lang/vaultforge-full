@@ -44,7 +44,6 @@ export default function MyWork() {
     const unreadMessages = messages.filter((m:any) => m.to === currentEmail &&!m.read).length;
     const unreadAlerts = alerts.filter((a:any) => a.for === currentEmail &&!a.read).length;
 
-    // NEW: Count available deals/pains pushed to you
     const availableDeals = deals.filter((d:any) => d.status === "active" && d.postedBy!== currentEmail).length;
     const availablePains = pains.filter((p:any) => p.status === "active" && p.postedBy!== currentEmail).length;
 
@@ -96,6 +95,7 @@ export default function MyWork() {
       section: "ACCOUNT",
       color: "#999",
       items: [
+        { name: "Members", desc: "Find members by state", path: "/members", icon: "👥" },
         { name: "Profile", desc: "Buy box, settings, pic", path: "/my-work/profile", icon: "👤" },
         { name: "Drafts", desc: "Unpublished work", path: "/my-work/drafts", icon: "📄" }
       ]
@@ -105,7 +105,6 @@ export default function MyWork() {
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
       <div style={{maxWidth:1400,margin:"0 auto"}}>
-        {/* LOGO FRONT AND CENTER */}
         <div style={{textAlign:"center",marginBottom:32,padding:"24px 0",borderBottom:"2px solid #FFD700"}}>
           <img 
             src="/vaultforge-logo.png" 
@@ -118,7 +117,6 @@ export default function MyWork() {
           <div style={{fontSize:11,opacity:0.6,marginTop:4}}>Your private workspace. Build deals. Solve pains. Close wins.</div>
         </div>
 
-        {/* QUICK STATS BAR */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:32}}>
           <div style={{border:"1px solid #FFD700",borderRadius:12,padding:16,background:"#0a0f1a",textAlign:"center"}}>
             <div style={{fontSize:11,opacity:0.7,marginBottom:4}}>PIPELINE</div>
@@ -138,7 +136,6 @@ export default function MyWork() {
           </div>
         </div>
 
-        {/* WORKSPACES GRID */}
         {workspaces.map((section:any) => (
           <div key={section.section} style={{marginBottom:32}}>
             <div style={{fontSize:12,fontWeight:900,color:section.color,marginBottom:12,letterSpacing:1}}>
