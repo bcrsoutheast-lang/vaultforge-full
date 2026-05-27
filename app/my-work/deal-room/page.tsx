@@ -11,189 +11,239 @@ export default function DealRoom() {
   const [arv, setArv] = useState("");
   const [repair, setRepair] = useState("");
   const [notes, setNotes] = useState("");
-  const [myDrafts, setMyDrafts] = useState<any[]>([]);
-  
+  const [editingId, setEditingId] = useState<number | null>(null);
+
   const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    if (editId) {
+      loadDraft(parseInt(editId));
+    }
+  }, []);
+
+  function loadDraft(id: number) {
     const deals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
-    const drafts = deals.filter((d:any) => d.postedBy === currentEmail && d.status === "draft");
-    setMyDrafts(drafts);
-  }, [currentEmail]);
+    const draft = deals.find((d:any) => d.id === id);
+    if (draft) {
+      setEditingId(id);
+      setTitle(draft.title);
+      setState(draft.state);
+      setPropertyType(draft.propertyType);
+      setDealType(draft.dealType);
+      setAskPrice(draft.askPrice);
+      setArv(draft.arv);
+      setRepair(draft.repair || "");
+      setNotes(draft.notes || "");
+    }
+  }
 
   function calculateProfit() {
-    const ask = parseFloat(askPrice.replace(/,/g,'') || "0");
-    const arvNum = parseFloat(arv.replace(/,/g,'') || "0");
-    const repairNum = parseFloat(repair.replace(/,/g,'') || "0");
-    if (!ask ||!arvNum) return null;
+    const ask = parseFloat(askPrice) || 0;
+    const arvNum = parseFloat(arv) || 0;
+    const repairNum = parseFloat(repair) || 0;
     const profit = arvNum - ask - repairNum;
     const roi = ask > 0? ((profit / ask) * 100).toFixed(1) : "0";
-    return { profit, roi, arv: arvNum, ask, repair: repairNum };
+    return { profit, roi };
   }
 
   function handleSaveDraft() {
-    if (!title) return alert("Title required");
+    if (!title ||!askPrice ||!arv) {
+      alert("Title, Ask Price, and ARV are required");
+      return;
+    }
+
     const deals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
-    const newDeal = {
-      id: Date.now(),
-      title, state, propertyType, dealType, askPrice, arv, repair, notes,
-      postedBy: currentEmail,
-      status: "draft",
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    deals.push(newDeal);
-    localStorage.setItem("vaultforge_deals", JSON.stringify(deals));
-    alert("Draft saved to My Work → Drafts");
-    window.location.reload();
+    const { profit, roi } = calculateProfit();
+
+    if (editingId) {
+      const updated = deals.map((d:any) => {
+        if (d.id === editingId) {
+          return {
+        ...d,
+            title, state, propertyType, dealType, askPrice, arv, repair, notes,
+            vaultForgeAnalysis: { profit, roi },
+            updatedAt: Date.now()
+          };
+        }
+        return d;
+      });
+      localStorage.setItem("vaultforge_deals", JSON.stringify(updated));
+      alert("Draft updated");
+    } else {
+      const newDeal = {
+        id: Date.now(),
+        title, state, propertyType, dealType, askPrice, arv, repair, notes,
+        status: "draft",
+        postedBy: currentEmail,
+        postedAt: Date.now(),
+        updatedAt: Date.now(),
+        vaultForgeAnalysis: { profit, roi },
+        savedBy: []
+      };
+      deals.push(newDeal);
+      localStorage.setItem("vaultforge_deals", JSON.stringify(deals));
+      alert("Draft saved");
+      setEditingId(newDeal.id);
+    }
   }
 
-  function handlePushToOpportunities() {
-    if (!title ||!askPrice ||!arv) return alert("Title, Ask Price, and ARV required to publish");
-    
+  function handlePublish() {
+    if (!title ||!askPrice ||!arv) {
+      alert("Title, Ask Price, and ARV are required");
+      return;
+    }
+
     const deals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
-    const newDeal = {
-      id: Date.now(),
-      title, state, propertyType, dealType, askPrice, arv, repair, notes,
-      postedBy: currentEmail,
-      status: "active", // active = published to internal Deal Opportunities
-      createdAt: Date.now(),
-      postedAt: Date.now(),
-      vaultForgeAnalysis: calculateProfit()
-    };
-    deals.push(newDeal);
-    localStorage.setItem("vaultforge_deals", JSON.stringify(deals));
-    
-    // 🤖 VAULTFORGE AI: Generate alerts for matching members
-    generateAlertsForDeal(newDeal);
-    
-    alert("Deal pushed to Deal Opportunities! VaultForge AI is alerting matching members now.");
-    window.location.href = "/deal-opportunities";
+    const { profit, roi } = calculateProfit();
+
+    if (editingId) {
+      const updated = deals.map((d:any) => {
+        if (d.id === editingId) {
+          return {
+        ...d,
+            title, state, propertyType, dealType, askPrice, arv, repair, notes,
+            status: "active",
+            vaultForgeAnalysis: { profit, roi },
+            updatedAt: Date.now()
+          };
+        }
+        return d;
+      });
+      localStorage.setItem("vaultforge_deals", JSON.stringify(updated));
+    } else {
+      const newDeal = {
+        id: Date.now(),
+        title, state, propertyType, dealType, askPrice, arv, repair, notes,
+        status: "active",
+        postedBy: currentEmail,
+        postedAt: Date.now(),
+        updatedAt: Date.now(),
+        vaultForgeAnalysis: { profit, roi },
+        savedBy: []
+      };
+      deals.push(newDeal);
+      localStorage.setItem("vaultforge_deals", JSON.stringify(deals));
+    }
+
+    alert("Deal published! VaultForge AI will route to matching members.");
+    window.location.href = "/my-work";
   }
 
-  function generateAlertsForDeal(deal: any) {
-    const profiles = JSON.parse(localStorage.getItem("vaultforge_profiles") || "[]");
-    const alerts = JSON.parse(localStorage.getItem("vaultforge_alerts") || "[]");
-    const askPriceNum = parseFloat(deal.askPrice.replace(/,/g,'') || "0");
-    
-    profiles.forEach((profile: any) => {
-      if (profile.email === deal.postedBy) return;
-      
-      let matchScore = 0;
-      let matchReasons = [];
-      
-      if (profile.states?.includes(deal.state) || profile.states?.includes("NATIONAL")) {
-        matchScore += 40;
-        matchReasons.push(deal.state);
-      } else {
-        return;
-      }
-      
-      if (profile.propertyTypes?.includes(deal.propertyType)) {
-        matchScore += 20;
-        matchReasons.push(deal.propertyType);
-      }
-      
-      const min = parseFloat(profile.buyBoxMin?.replace(/,/g,'') || "0");
-      const max = parseFloat(profile.buyBoxMax?.replace(/,/g,'') || "999999999");
-      if (askPriceNum >= min && askPriceNum <= max) {
-        matchScore += 30;
-        matchReasons.push(`$${askPriceNum.toLocaleString()}`);
-      }
-      
-      if (profile.investorType === "wholesaler" && deal.dealType === "wholesale") matchScore += 10;
-      if (profile.investorType === "flipper" && deal.dealType === "flip") matchScore += 10;
-      if (profile.investorType === "buy-hold" && deal.dealType === "buy-hold") matchScore += 10;
-      
-      if (matchScore >= 60) {
-        const newAlert = {
-          id: Date.now() + Math.random(),
-          for: profile.email,
-          type: "deal",
-          title: `New Deal Match: ${deal.title}`,
-          message: `Matches your buy box: ${matchReasons.join(", ")}`,
-          dealId: deal.id,
-          createdAt: Date.now(),
-          read: false,
-          matchScore: matchScore
-        };
-        alerts.push(newAlert);
-      }
-    });
-    
-    localStorage.setItem("vaultforge_alerts", JSON.stringify(alerts));
-  }
+  const { profit, roi } = calculateProfit();
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
       <div style={{maxWidth:800,margin:"0 auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <div>
-            <h1 style={{color:"#FFD700",fontWeight:900}}>DEAL ROOM</h1>
-            <div style={{fontSize:11,opacity:0.7}}>Private studio. Build deals here. Push to Deal Opportunities when ready.</div>
-          </div>
+        {/* LOGO LOCKED AT TOP */}
+        <div style={{textAlign:"center",marginBottom:24,padding:"20px 0",borderBottom:"2px solid #FFD700"}}>
+          <img 
+            src="/vaultforge-logo.png" 
+            alt="VaultForge" 
+            style={{height:60,margin:"0 auto 12px",filter:"drop-shadow(0 0 15px #FFD700)"}}
+            onError={(e:any)=>{e.target.style.display='none'}}
+          />
+          <h1 style={{color:"#FFD700",fontWeight:900,fontSize:24,letterSpacing:1}}>DEAL ROOM</h1>
+          <div style={{fontSize:11,opacity:0.6,marginTop:4}}>Create private deals. VaultForge AI matches to buyers.</div>
+        </div>
+
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
           <button onClick={()=>window.location.href="/my-work"} style={{padding:"8px 16px",border:"1px solid #FFD700",borderRadius:8,color:"#FFD700",background:"none",fontSize:12}}>← My Work</button>
         </div>
 
-        <div style={{background:"#0a0f1a",border:"1px solid #FFD700",color:"#FFD700",padding:"12px 16px",borderRadius:8,marginBottom:16,fontSize:12,fontWeight:900}}>
-          🔒 PRIVATE: Deals created here are NOT visible to other members until you "Push to Deal Opportunities"
-        </div>
-
-        <div style={{border:"1px solid #FFD700",borderRadius:12,padding:24,background:"#0a0f1a",marginBottom:24}}>
-          <div style={{fontSize:18,fontWeight:900,marginBottom:16}}>Create New Deal</div>
+        <div style={{border:"1px solid #FFD700",borderRadius:12,padding:24,background:"#0a0f1a"}}>
+          <div style={{fontSize:14,fontWeight:900,marginBottom:16,color:"#FFD700"}}>DEAL DETAILS</div>
           
-          <div style={{display:"grid",gap:12}}>
-            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Deal Title (e.g. 123 Main St Flip)" style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
-            
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gap:16}}>
+            <input 
+              value={title} 
+              onChange={e=>setTitle(e.target.value)} 
+              placeholder="Deal Title - e.g. '3BR/2BA Fixer in Atlanta'" 
+              style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff",fontSize:14}} 
+            />
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               <select value={state} onChange={e=>setState(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
                 {["GA","FL","TN","AL","NC","SC","TX"].map(s=><option key={s} value={s}>{s}</option>)}
               </select>
               <select value={propertyType} onChange={e=>setPropertyType(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
                 {["SFH","Multi-Family","Land","Commercial","Mobile"].map(p=><option key={p} value={p}>{p}</option>)}
               </select>
-              <select value={dealType} onChange={e=>setDealType(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
-                {["wholesale","flip","buy-hold","seller-finance"].map(d=><option key={d} value={d}>{d}</option>)}
-              </select>
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              <input value={askPrice} onChange={e=>setAskPrice(e.target.value)} placeholder="Ask Price" style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
-              <input value={arv} onChange={e=>setArv(e.target.value)} placeholder="ARV" style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
-              <input value={repair} onChange={e=>setRepair(e.target.value)} placeholder="Repair Est" style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
+            <select value={dealType} onChange={e=>setDealType(e.target.value)} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}}>
+              {["wholesale","flip","buy-hold","creative"].map(d=><option key={d} value={d}>{d.toUpperCase()}</option>)}
+            </select>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+              <input 
+                type="number" 
+                value={askPrice} 
+                onChange={e=>setAskPrice(e.target.value)} 
+                placeholder="Ask Price" 
+                style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} 
+              />
+              <input 
+                type="number" 
+                value={arv} 
+                onChange={e=>setArv(e.target.value)} 
+                placeholder="ARV" 
+                style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} 
+              />
+              <input 
+                type="number" 
+                value={repair} 
+                onChange={e=>setRepair(e.target.value)} 
+                placeholder="Repair Est" 
+                style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} 
+              />
             </div>
 
-            {calculateProfit() && (
-              <div style={{border:"1px solid #00ff00",borderRadius:8,padding:16,background:"#05070d"}}>
-                <div style={{fontSize:10,opacity:0.7,marginBottom:4}}>VAULTFORGE ANALYSIS</div>
+            {askPrice && arv && (
+              <div style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #00ff00"}}>
+                <div style={{fontSize:12,opacity:0.7,marginBottom:4}}>VAULTFORGE ANALYSIS</div>
                 <div style={{fontSize:18,fontWeight:900,color:"#00ff00"}}>
-                  ${calculateProfit()!.profit.toLocaleString()} PROFIT | {calculateProfit()!.roi}% ROI
+                  ${profit.toLocaleString()} PROFIT | {roi}% ROI
                 </div>
               </div>
             )}
 
-            <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Deal notes, exit strategy, terms..." rows={3} style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} />
+            <textarea 
+              value={notes} 
+              onChange={e=>setNotes(e.target.value)} 
+              placeholder="Deal notes - property condition, motivation, terms, etc." 
+              rows={4} 
+              style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} 
+            />
 
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={handleSaveDraft} style={{flex:1,padding:12,borderRadius:8,background:"#222",color:"#fff",border:"1px solid #666",fontWeight:900}}>Save Draft</button>
-              <button onClick={handlePushToOpportunities} style={{flex:1,padding:12,borderRadius:8,background:"#FFD700",color:"#000",border:"none",fontWeight:900}}>Push to Deal Opportunities →</button>
+            <div style={{display:"flex",gap:12}}>
+              <button 
+                onClick={handleSaveDraft} 
+                style={{flex:1,padding:14,borderRadius:8,background:"#222",border:"1px solid #FFD700",color:"#FFD700",fontWeight:900}}
+              >
+                Save Draft
+              </button>
+              <button 
+                onClick={handlePublish} 
+                style={{flex:1,padding:14,borderRadius:8,background:"#FFD700",color:"#000",border:"none",fontWeight:900}}
+              >
+                Publish to VaultForge
+              </button>
             </div>
           </div>
         </div>
 
-        {myDrafts.length > 0 && (
-          <div>
-            <div style={{fontSize:14,fontWeight:900,marginBottom:12}}>Your Drafts ({myDrafts.length})</div>
-            <div style={{display:"grid",gap:8}}>
-              {myDrafts.map((d:any) => (
-                <div key={d.id} onClick={()=>window.location.href=`/my-work/deals/drafts`} style={{border:"1px solid #666",borderRadius:8,padding:12,background:"#0a0f1a",cursor:"pointer"}}>
-                  <div style={{fontWeight:900}}>{d.title}</div>
-                  <div style={{fontSize:11,opacity:0.7}}>{d.state} • {d.propertyType} • Ask: {d.askPrice}</div>
-                </div>
-              ))}
-            </div>
+        <div style={{marginTop:16,padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #FFD700",fontSize:12}}>
+          <div style={{fontWeight:900,color:"#FFD700",marginBottom:4}}>HOW IT WORKS</div>
+          <div style={{opacity:0.8,lineHeight:1.6}}>
+            1. Create deal with full details<br/>
+            2. VaultForge AI analyzes profit/ROI<br/>
+            3. Publish → AI matches to members with matching buy box<br/>
+            4. Members see it in Deal Opportunities<br/>
+            5. They save + message you directly
           </div>
-        )}
+        </div>
       </div>
     </main>
   );
