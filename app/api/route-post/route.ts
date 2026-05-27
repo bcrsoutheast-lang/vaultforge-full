@@ -12,9 +12,8 @@ export async function POST(req: NextRequest) {
   try {
     if (b.post_type === "deal") {
       const { error } = await supabase.from("deals").insert({
-        posted_by: b.user_email, // legacy column, now populated
         title: b.title,
-        user_email: b.user_email,
+        user_email: b.user_email, // This is the only email column now
         property_type: b.property_type,
         city: b.city,
         state: b.state,
@@ -36,7 +35,7 @@ export async function POST(req: NextRequest) {
         acreage: b.acreage,
         zoning: b.zoning,
         utilities: b.utilities,
-        target_buyer: b.target_buyer, // array of strings
+        target_buyer: b.target_buyer,
         min_cash_required: b.min_cash_required,
         timeline: b.timeline,
         assignment_fee: b.assignment_fee,
@@ -98,4 +97,4 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
-}
+}        
