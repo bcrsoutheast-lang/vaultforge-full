@@ -12,24 +12,20 @@ export default function CreateDeal() {
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   
-  // Owner info
   const [ownerName, setOwnerName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerPhone, setOwnerPhone] = useState("");
   
-  // Residential fields
   const [beds, setBeds] = useState("");
   const [baths, setBaths] = useState("");
   const [sqft, setSqft] = useState("");
   const [yearBuilt, setYearBuilt] = useState("");
   
-  // Commercial fields
   const [units, setUnits] = useState("");
   const [noi, setNoi] = useState("");
   const [capRate, setCapRate] = useState("");
   const [buildingSqft, setBuildingSqft] = useState("");
   
-  // Land fields
   const [acres, setAcres] = useState("");
   const [zoning, setZoning] = useState("");
   const [utilities, setUtilities] = useState("");
@@ -42,11 +38,11 @@ export default function CreateDeal() {
       return;
     }
     const newPhotos = files.map(file => URL.createObjectURL(file));
-    setPhotos([...photos, ...newPhotos]);
+    setPhotos([...photos,...newPhotos]);
   }
 
   function removePhoto(index: number) {
-    setPhotos(photos.filter((_, i) => i !== index));
+    setPhotos(photos.filter((_, i) => i!== index));
   }
 
   function analyzeDeal() {
@@ -75,7 +71,6 @@ export default function CreateDeal() {
       archivedBy: []
     };
 
-    // Add type-specific fields
     if (type === "Residential") {
       dealData.residential = { beds, baths, sqft, yearBuilt };
     } else if (type === "Commercial") {
@@ -95,43 +90,26 @@ export default function CreateDeal() {
       <div style={{maxWidth:800,margin:"0 auto"}}>
         <h1 style={{color:"#FFD700",fontWeight:900,marginBottom:16}}>POST DEAL OPPORTUNITY</h1>
 
-        {/* Basic Info */}
         <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
           <h3 style={{fontWeight:900,marginBottom:12}}>Basic Info</h3>
-          
           <label style={{display:"block",marginBottom:8}}>Deal Title</label>
-          <input
-            value={title}
-            onChange={e=>setTitle(e.target.value)}
-            placeholder="Ex: 50-unit multifamily off-market"
-            style={{width:"100%",padding:12,marginBottom:16,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
-          />
-
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: 50-unit multifamily off-market" style={{width:"100%",padding:12,marginBottom:16,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div>
               <label style={{display:"block",marginBottom:8}}>State</label>
-              <select
-                value={state}
-                onChange={e=>setState(e.target.value)}
-                style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
-              >
+              <select value={state} onChange={e=>setState(e.target.value)} style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}>
                 {STATES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label style={{display:"block",marginBottom:8}}>Deal Type</label>
-              <select
-                value={type}
-                onChange={e=>setType(e.target.value)}
-                style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
-              >
+              <select value={type} onChange={e=>setType(e.target.value)} style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}>
                 {DEAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
           </div>
         </div>
 
-        {/* Dynamic Fields */}
         {type === "Residential" && (
           <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
             <h3 style={{fontWeight:900,marginBottom:12}}>Residential Details</h3>
@@ -168,7 +146,6 @@ export default function CreateDeal() {
           </div>
         )}
 
-        {/* Owner Info */}
         <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
           <h3 style={{fontWeight:900,marginBottom:12}}>Owner/Contact Info</h3>
           <input value={ownerName} onChange={e=>setOwnerName(e.target.value)} placeholder="Owner Name" style={{width:"100%",padding:12,marginBottom:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
@@ -178,7 +155,6 @@ export default function CreateDeal() {
           </div>
         </div>
 
-        {/* Photos */}
         <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
           <h3 style={{fontWeight:900,marginBottom:12}}>Photos ({photos.length}/10)</h3>
           <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} style={{marginBottom:12}} />
@@ -192,19 +168,11 @@ export default function CreateDeal() {
           </div>
         </div>
 
-        {/* Description */}
         <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
           <h3 style={{fontWeight:900,marginBottom:12}}>Description</h3>
-          <textarea
-            value={description}
-            onChange={e=>setDescription(e.target.value)}
-            placeholder="Deal details, terms, what you're looking for..."
-            rows={4}
-            style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
-          />
+          <textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Deal details, terms, what you're looking for..." rows={4} style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
         </div>
 
-        {/* VaultForge Intelligence */}
         <div style={{border:"1px solid #FFD700",borderRadius:12,padding:16,marginBottom:24,background:"#0a0f1a"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
@@ -217,13 +185,9 @@ export default function CreateDeal() {
           </div>
         </div>
 
-        <button
-          onClick={saveDeal}
-          style={{padding:"14px 22px",borderRadius:999,fontWeight:900,background:"#FFD700",color:"#000",width:"100%",marginBottom:12}}
-        >
+        <button onClick={saveDeal} style={{padding:"14px 22px",borderRadius:999,fontWeight:900,background:"#FFD700",color:"#000",width:"100%",marginBottom:12}}>
           Post Deal
         </button>
-
         <a href="/deal-rooms" style={{display:"block",textAlign:"center",color:"#FFD700"}}>Cancel</a>
       </div>
     </main>
