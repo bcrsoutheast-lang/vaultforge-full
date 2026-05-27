@@ -3,185 +3,164 @@
 import { useEffect, useState } from "react";
 
 export default function MyWork() {
-  const [stats, setStats] = useState({
-    savedDeals: 0,
-    underContract: 0,
-    soldDeals: 0,
-    totalProfit: 0,
-    assignedJobs: 0,
-    completedJobs: 0,
-    unreadMessages: 0,
-    unreadAlerts: 0,
-    availableDeals: 0,
-    availablePains: 0
-  });
-  
+  const [name, setName] = useState("");
+  const [alertCount, setAlertCount] = useState(0);
+  const [dealCounts, setDealCounts] = useState({drafts: 0, saved: 0, contract: 0, sold: 0});
+  const [jobCounts, setJobCounts] = useState({assigned: 0, completed: 0});
+
   const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
-  const currentName = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_name") || "Member" : "Member";
 
   useEffect(() => {
-    loadStats();
+    setName(localStorage.getItem("vaultforge_current_name") || "Investor");
+    
+    // Load alert count
+    const alerts = JSON.parse(localStorage.getItem("vaultforge_alerts") || "[]");
+    setAlertCount(alerts.filter((a:any) => a.for === currentEmail &&!a.read).length);
+    
+    // Load deal counts
+    const deals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
+    setDealCounts({
+      drafts: deals.filter((d:any) => d.postedBy === currentEmail && d.status === "draft").length,
+      saved: deals.filter((d:any) => d.savedBy?.includes(currentEmail)).length,
+      contract: deals.filter((d:any) => d.underContractBy === currentEmail && d.status === "under-contract").length,
+      sold: deals.filter((d:any) => d.underContractBy === currentEmail && d.status === "sold").length
+    });
+
+    // Load job counts 
+    const pains = JSON.parse(localStorage.getItem("vaultforge_pains") || "[]");
+    setJobCounts({
+      assigned: pains.filter((p:any) => p.assignedTo === currentEmail && p.status === "assigned").length,
+      completed: pains.filter((p:any) => p.assignedTo === currentEmail && p.status === "completed").length
+    });
   }, [currentEmail]);
 
-  function loadStats() {
-    const deals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
-    const pains = JSON.parse(localStorage.getItem("vaultforge_pains") || "[]");
-    const messages = JSON.parse(localStorage.getItem("vaultforge_messages") || "[]");
-    const alerts = JSON.parse(localStorage.getItem("vaultforge_alerts") || "[]");
+  const cardStyle = {
+    border: "1px solid #FFD700",
+    borderRadius: 12,
+    padding: 20,
+    background: "#0a0f1a",
+    cursor: "pointer",
+    transition: "all 0.2s"
+  };
 
-    const savedDeals = deals.filter((d:any) => d.savedBy?.includes(currentEmail) && d.status === "active").length;
-    const underContract = deals.filter((d:any) => d.status === "under-contract" && (d.assignedTo === currentEmail || d.postedBy === currentEmail)).length;
-    const soldDeals = deals.filter((d:any) => d.status === "sold" && (d.assignedTo === currentEmail || d.postedBy === currentEmail));
-    
-    let totalProfit = 0;
-    soldDeals.forEach((d:any) => {
-      if (d.vaultForgeAnalysis?.profit) totalProfit += d.vaultForgeAnalysis.profit;
-    });
-
-    const assignedJobs = pains.filter((p:any) => p.assignedTo === currentEmail && p.status!== "completed").length;
-    const completedJobs = pains.filter((p:any) => p.assignedTo === currentEmail && p.status === "completed").length;
-    
-    const unreadMessages = messages.filter((m:any) => m.to === currentEmail &&!m.read).length;
-    const unreadAlerts = alerts.filter((a:any) => a.for === currentEmail &&!a.read).length;
-
-    const availableDeals = deals.filter((d:any) => d.status === "active" && d.postedBy!== currentEmail).length;
-    const availablePains = pains.filter((p:any) => p.status === "active" && p.postedBy!== currentEmail).length;
-
-    setStats({
-      savedDeals,
-      underContract,
-      soldDeals: soldDeals.length,
-      totalProfit,
-      assignedJobs,
-      completedJobs,
-      unreadMessages,
-      unreadAlerts,
-      availableDeals,
-      availablePains
-    });
-  }
-
-  const workspaces = [
-    {
-      section: "DEAL FLOW",
-      color: "#FFD700",
-      items: [
-        { name: "Deal Opportunities", desc: `${stats.availableDeals} deals available`, path: "/deal-opportunities", icon: "🏠", highlight: true },
-        { name: "Deal Room", desc: "Create private deals", path: "/my-work/deal-room", icon: "🏗️" },
-        { name: "Saved Deals", desc: `${stats.savedDeals} deals saved`, path: "/my-work/deals/saved", icon: "⭐" },
-        { name: "Under Contract", desc: `${stats.underContract} in pipeline`, path: "/my-work/deals/under-contract", icon: "📝" },
-        { name: "Sold Deals", desc: `${stats.soldDeals} closed | $${stats.totalProfit.toLocaleString()}`, path: "/my-work/deals/sold", icon: "💰" }
-      ]
-    },
-    {
-      section: "PAIN FLOW",
-      color: "#00ccff",
-      items: [
-        { name: "Pain Room", desc: `${stats.availablePains} pains available`, path: "/pain-room", icon: "🔧", highlight: true },
-        { name: "Pain Intake", desc: "Create private pains", path: "/my-work/pain-intake", icon: "📋" },
-        { name: "Assigned Jobs", desc: `${stats.assignedJobs} active jobs`, path: "/my-work/pains/assigned", icon: "🔨" },
-        { name: "Completed Jobs", desc: `${stats.completedJobs} completed`, path: "/my-work/pains/completed", icon: "✅" }
-      ]
-    },
-    {
-      section: "COMMUNICATION",
-      color: "#FF00FF",
-      items: [
-        { name: "Messages", desc: `${stats.unreadMessages} unread`, path: "/my-work/messages", icon: "💬", badge: stats.unreadMessages },
-        { name: "Alerts", desc: `${stats.unreadAlerts} new matches`, path: "/my-work/alerts", icon: "🔔", badge: stats.unreadAlerts }
-      ]
-    },
-    {
-      section: "ACCOUNT",
-      color: "#999",
-      items: [
-        { name: "Members", desc: "Find members by state", path: "/members", icon: "👥" },
-        { name: "Profile", desc: "Buy box, settings, pic", path: "/my-work/profile", icon: "👤" },
-        { name: "Drafts", desc: "Unpublished work", path: "/my-work/drafts", icon: "📄" }
-      ]
-    }
-  ];
+  const countStyle = {
+    fontSize: 32,
+    fontWeight: 900,
+    color: "#FFD700",
+    marginBottom: 8
+  };
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
-      <div style={{maxWidth:1400,margin:"0 auto"}}>
-        <div style={{textAlign:"center",marginBottom:32,padding:"24px 0",borderBottom:"2px solid #FFD700"}}>
+      <div style={{maxWidth:1200,margin:"0 auto"}}>
+        <div style={{textAlign:"center",marginBottom:32,padding:"20px 0",borderBottom:"2px solid #FFD700"}}>
           <img 
             src="/vaultforge-logo.png" 
             alt="VaultForge" 
             style={{height:80,margin:"0 auto 16px",filter:"drop-shadow(0 0 20px #FFD700)"}}
             onError={(e:any)=>{e.target.style.display='none'}}
           />
-          <h1 style={{color:"#FFD700",fontWeight:900,fontSize:32,letterSpacing:2,marginBottom:8}}>COMMAND CENTER</h1>
-          <div style={{fontSize:14,opacity:0.8}}>Welcome back, <span style={{color:"#FFD700",fontWeight:900}}>{currentName}</span></div>
-          <div style={{fontSize:11,opacity:0.6,marginTop:4}}>Your private workspace. Build deals. Solve pains. Close wins.</div>
+          <h1 style={{color:"#FFD700",fontWeight:900,fontSize:28,letterSpacing:2}}>MY WORK</h1>
+          <div style={{fontSize:14,opacity:0.7,marginTop:8}}>Welcome back, {name}</div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:32}}>
-          <div style={{border:"1px solid #FFD700",borderRadius:12,padding:16,background:"#0a0f1a",textAlign:"center"}}>
-            <div style={{fontSize:11,opacity:0.7,marginBottom:4}}>PIPELINE</div>
-            <div style={{fontSize:24,fontWeight:900,color:"#FFD700"}}>{stats.underContract}</div>
-          </div>
-          <div style={{border:"1px solid #00ff00",borderRadius:12,padding:16,background:"#0a0f1a",textAlign:"center"}}>
-            <div style={{fontSize:11,opacity:0.7,marginBottom:4}}>LIFETIME PROFIT</div>
-            <div style={{fontSize:24,fontWeight:900,color:"#00ff00"}}>${stats.totalProfit.toLocaleString()}</div>
-          </div>
-          <div style={{border:"1px solid #00ccff",borderRadius:12,padding:16,background:"#0a0f1a",textAlign:"center"}}>
-            <div style={{fontSize:11,opacity:0.7,marginBottom:4}}>ACTIVE JOBS</div>
-            <div style={{fontSize:24,fontWeight:900,color:"#00ccff"}}>{stats.assignedJobs}</div>
-          </div>
-          <div style={{border:"1px solid #FF00FF",borderRadius:12,padding:16,background:"#0a0f1a",textAlign:"center"}}>
-            <div style={{fontSize:11,opacity:0.7,marginBottom:4}}>UNREAD</div>
-            <div style={{fontSize:24,fontWeight:900,color:"#FF00FF"}}>{stats.unreadMessages + stats.unreadAlerts}</div>
+        {/* QUICK ACTIONS */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:16,marginBottom:32}}>
+          <button onClick={()=>window.location.href="/my-work/deal-room"} style={{...cardStyle,background:"#FFD70020"}}>
+            <div style={{fontSize:36,marginBottom:12}}>💰</div>
+            <div style={{fontWeight:900,fontSize:16,marginBottom:4}}>POST DEAL</div>
+            <div style={{fontSize:11,opacity:0.7}}>Submit new property to AI routing</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/my-work/pain-intake"} style={{...cardStyle,background:"#00ccff20",border:"1px solid #00ccff"}}>
+            <div style={{fontSize:36,marginBottom:12}}>🔨</div>
+            <div style={{fontWeight:900,fontSize:16,marginBottom:4}}>POST PAIN</div>
+            <div style={{fontSize:11,opacity:0.7}}>Request contractor help with AI matching</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/my-work/alerts"} style={{...cardStyle,position:"relative"}}>
+            {alertCount > 0 && (
+              <div style={{position:"absolute",top:12,right:12,background:"#ff0000",color:"#fff",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900}}>
+                {alertCount}
+              </div>
+            )}
+            <div style={{fontSize:36,marginBottom:12}}>🔔</div>
+            <div style={{fontWeight:900,fontSize:16,marginBottom:4}}>ALERTS</div>
+            <div style={{fontSize:11,opacity:0.7}}>{alertCount} unread AI matches</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/deal-opportunities"} style={{...cardStyle}}>
+            <div style={{fontSize:36,marginBottom:12}}>🎯</div>
+            <div style={{fontWeight:900,fontSize:16,marginBottom:4}}>OPPORTUNITIES</div>
+            <div style={{fontSize:11,opacity:0.7}}>Browse AI-matched deals</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/pain-room"} style={{...cardStyle}}>
+            <div style={{fontSize:36,marginBottom:12}}>⚡</div>
+            <div style={{fontWeight:900,fontSize:16,marginBottom:4}}>PAIN ROOM</div>
+            <div style={{fontSize:11,opacity:0.7}}>Browse AI-matched jobs</div>
+          </button>
+
+          <button onClick={()=>window.location.href="/my-work/members"} style={{...cardStyle}}>
+            <div style={{fontSize:36,marginBottom:12}}>👥</div>
+            <div style={{fontWeight:900,fontSize:16,marginBottom:4}}>MEMBERS</div>
+            <div style={{fontSize:11,opacity:0.7}}>Find investors & contractors</div>
+          </button>
+        </div>
+
+        {/* DEALS PIPELINE */}
+        <div style={{marginBottom:32}}>
+          <div style={{fontSize:14,fontWeight:900,color:"#FFD700",marginBottom:16,letterSpacing:1}}>DEALS PIPELINE</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+            <button onClick={()=>window.location.href="/my-work/deals/drafts"} style={cardStyle}>
+              <div style={countStyle}>{dealCounts.drafts}</div>
+              <div style={{fontSize:12,fontWeight:900}}>DRAFTS</div>
+              <div style={{fontSize:10,opacity:0.6,marginTop:4}}>Unpublished</div>
+            </button>
+            <button onClick={()=>window.location.href="/my-work/deals/saved"} style={cardStyle}>
+              <div style={countStyle}>{dealCounts.saved}</div>
+              <div style={{fontSize:12,fontWeight:900}}>SAVED</div>
+              <div style={{fontSize:10,opacity:0.6,marginTop:4}}>From opportunities</div>
+            </button>
+            <button onClick={()=>window.location.href="/my-work/deals/under-contract"} style={{...cardStyle,border:"1px solid #00ff00"}}>
+              <div style={{...countStyle,color:"#00ff00"}}>{dealCounts.contract}</div>
+              <div style={{fontSize:12,fontWeight:900}}>UNDER CONTRACT</div>
+              <div style={{fontSize:10,opacity:0.6,marginTop:4}}>Closing soon</div>
+            </button>
+            <button onClick={()=>window.location.href="/my-work/deals/sold"} style={cardStyle}>
+              <div style={countStyle}>{dealCounts.sold}</div>
+              <div style={{fontSize:12,fontWeight:900}}>SOLD</div>
+              <div style={{fontSize:10,opacity:0.6,marginTop:4}}>Closed deals</div>
+            </button>
           </div>
         </div>
 
-        {workspaces.map((section:any) => (
-          <div key={section.section} style={{marginBottom:32}}>
-            <div style={{fontSize:12,fontWeight:900,color:section.color,marginBottom:12,letterSpacing:1}}>
-              {section.section}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-              {section.items.map((item:any) => (
-                <button
-                  key={item.path}
-                  onClick={()=>window.location.href=item.path}
-                  style={{
-                    border:`1px solid ${section.color}`,
-                    borderRadius:12,
-                    padding:20,
-                    background: item.highlight? "#1a1f2a" : "#0a0f1a",
-                    color:"#fff",
-                    textAlign:"left",
-                    cursor:"pointer",
-                    transition:"all 0.2s",
-                    position:"relative",
-                    boxShadow: item.highlight? `0 0 12px ${section.color}40` : "none"
-                  }}
-                  onMouseEnter={e=>{
-                    e.currentTarget.style.background="#1a1f2a";
-                    e.currentTarget.style.transform="translateY(-2px)";
-                    e.currentTarget.style.boxShadow=`0 4px 12px ${section.color}60`;
-                  }}
-                  onMouseLeave={e=>{
-                    e.currentTarget.style.background= item.highlight? "#1a1f2a" : "#0a0f1a";
-                    e.currentTarget.style.transform="translateY(0)";
-                    e.currentTarget.style.boxShadow= item.highlight? `0 0 12px ${section.color}40` : "none";
-                  }}
-                >
-                  {item.badge > 0 && (
-                    <div style={{position:"absolute",top:12,right:12,background:"#ff4444",color:"#fff",borderRadius:999,padding:"2px 8px",fontSize:10,fontWeight:900}}>
-                      {item.badge}
-                    </div>
-                  )}
-                  <div style={{fontSize:32,marginBottom:8}}>{item.icon}</div>
-                  <div style={{fontWeight:900,fontSize:16,marginBottom:4,color:section.color}}>{item.name}</div>
-                  <div style={{fontSize:12,opacity:0.7}}>{item.desc}</div>
-                </button>
-              ))}
-            </div>
+        {/* JOBS PIPELINE */}
+        <div style={{marginBottom:32}}>
+          <div style={{fontSize:14,fontWeight:900,color:"#00ccff",marginBottom:16,letterSpacing:1}}>JOBS PIPELINE</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+            <button onClick={()=>window.location.href="/my-work/jobs/assigned"} style={{...cardStyle,border:"1px solid #00ccff"}}>
+              <div style={{...countStyle,color:"#00ccff"}}>{jobCounts.assigned}</div>
+              <div style={{fontSize:12,fontWeight:900}}>ASSIGNED</div>
+              <div style={{fontSize:10,opacity:0.6,marginTop:4}}>Active jobs</div>
+            </button>
+            <button onClick={()=>window.location.href="/my-work/jobs/completed"} style={{...cardStyle,border:"1px solid #00ff00"}}>
+              <div style={{...countStyle,color:"#00ff00"}}>{jobCounts.completed}</div>
+              <div style={{fontSize:12,fontWeight:900}}>COMPLETED</div>
+              <div style={{fontSize:10,opacity:0.6,marginTop:4}}>Finished work</div>
+            </button>
           </div>
-        ))}
+        </div>
+
+        {/* QUICK LINKS */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+          <button onClick={()=>window.location.href="/my-work/profile"} style={{padding:16,borderRadius:8,border:"1px solid #333",background:"none",color:"#fff",fontSize:12}}>
+            ⚙️ PROFILE SETTINGS
+          </button>
+          <button onClick={()=>window.location.href="/my-work/messages"} style={{padding:16,borderRadius:8,border:"1px solid #333",background:"none",color:"#fff",fontSize:12}}>
+            💬 MESSAGES
+          </button>
+        </div>
       </div>
     </main>
   );
