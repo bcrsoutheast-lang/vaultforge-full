@@ -28,11 +28,33 @@ export default function StatePains({ params }: { params: { state: string } }) {
   const filteredPains = activeType? pains.filter(p => p.propertyType === activeType) : pains;
 
   function handleSave(id: number) {
-    alert("Save pain - Coming next build");
+    const stored = localStorage.getItem("vaultforge_pains");
+    const allPains = stored? JSON.parse(stored) : [];
+    const updated = allPains.map((p:any) => {
+      if (p.id === id) {
+        const saved = p.savedBy || [];
+        if (!saved.includes(currentEmail)) saved.push(currentEmail);
+        return {...p, savedBy: saved};
+      }
+      return p;
+    });
+    localStorage.setItem("vaultforge_pains", JSON.stringify(updated));
+    alert("Pain saved");
   }
 
   function handleArchive(id: number) {
-    alert("Archive pain - Coming next build");
+    const stored = localStorage.getItem("vaultforge_pains");
+    const allPains = stored? JSON.parse(stored) : [];
+    const updated = allPains.map((p:any) => {
+      if (p.id === id) {
+        const archived = p.archivedBy || [];
+        if (!archived.includes(currentEmail)) archived.push(currentEmail);
+        return {...p, archivedBy: archived};
+      }
+      return p;
+    });
+    localStorage.setItem("vaultforge_pains", JSON.stringify(updated));
+    alert("Pain archived");
   }
 
   function handleDelete(id: number) {
@@ -45,7 +67,20 @@ export default function StatePains({ params }: { params: { state: string } }) {
   }
 
   function handleMessage(email: string) {
-    alert(`Message ${email} - Chat coming next build`);
+    const text = prompt(`Message to ${email}:`);
+    if (!text) return;
+    
+    const stored = localStorage.getItem("vaultforge_messages");
+    const msgs = stored? JSON.parse(stored) : [];
+    msgs.push({
+      id: Date.now(),
+      from: currentEmail,
+      to: email,
+      text,
+      timestamp: Date.now()
+    });
+    localStorage.setItem("vaultforge_messages", JSON.stringify(msgs));
+    window.location.href = `/messages/${encodeURIComponent(email)}`;
   }
 
   return (
