@@ -133,13 +133,16 @@ export default function StateDeals({ params }: { params: { state: string } }) {
                 )}
 
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <button onClick={()=>window.location.href=`/deal-rooms/analyze/${d.id}`} style={{padding:"6px 12px",borderRadius:6,background:"#FFD700",color:"#000",fontSize:12,fontWeight:900}}>
+                    Analyze
+                  </button>
                   <button onClick={()=>handleSave(d.id)} style={{padding:"6px 12px",borderRadius:6,background:"#0a0f1a",border:"1px solid #222",fontSize:12,color:"#fff"}}>
                     Save
                   </button>
                   <button onClick={()=>handleArchive(d.id)} style={{padding:"6px 12px",borderRadius:6,background:"#0a0f1a",border:"1px solid #222",fontSize:12,color:"#fff"}}>
                     Archive
                   </button>
-                  <button onClick={()=>handleMessage(d.postedBy)} style={{padding:"6px 12px",borderRadius:6,background:"#FFD700",color:"#000",fontSize:12,fontWeight:900}}>
+                  <button onClick={()=>handleMessage(d.postedBy)} style={{padding:"6px 12px",borderRadius:6,background:"#0a0f1a",border:"1px solid #222",fontSize:12,color:"#fff"}}>
                     Message
                   </button>
                   {d.postedBy === currentEmail && (
