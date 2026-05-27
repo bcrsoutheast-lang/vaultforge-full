@@ -42,7 +42,7 @@ export default function SoldDeals() {
     setStats({
       total,
       totalProfit,
-      avgROI: roiCount > 0? (totalROI / roiCount).toFixed(1) : 0
+      avgROI: roiCount > 0? Number((totalROI / roiCount).toFixed(1)) : 0
     });
   }
 
@@ -59,7 +59,7 @@ export default function SoldDeals() {
     const updated = deals.map((d:any) => {
       if (d.id === dealId) {
         return {
-     ...d,
+    ...d,
           status: "under-contract",
           soldDate: null
         };
