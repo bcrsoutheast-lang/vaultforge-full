@@ -8,8 +8,8 @@ export default function PainIntake() {
   const [form, setForm] = useState({
     title: "",
     state: "",
-    propertyType: "SFR",
-    painType: "Roof",
+    propertyType: "Residential", // Default to Residential
+    painType: "HVAC",
     urgency: "medium",
     description: "",
     budget: "1k-5k"
@@ -57,9 +57,6 @@ export default function PainIntake() {
         .single();
 
       if (error) throw error;
-
-      // 3. TODO: Create alerts for matching contractors
-      // This is where routing logic will go
       
       alert(`Pain posted! Priority: ${analysis.priority}. Routing to contractors now.`);
       window.location.href = "/my-work/jobs/assigned";
@@ -87,16 +84,16 @@ export default function PainIntake() {
       <div style={{maxWidth:600,margin:"0 auto"}}>
         <div style={{marginBottom:24}}>
           <button onClick={()=>window.location.href="/my-work"} style={{background:"none",border:"none",color:"#00ccff",cursor:"pointer"}}>
-            ← Back to My Work
+            ← My Work
           </button>
         </div>
 
-        <h1 style={{color:"#00ccff",fontWeight:900,fontSize:24,marginBottom:8}}>POST PAIN</h1>
-        <div style={{fontSize:12,opacity:0.7,marginBottom:24}}>AI will match you with qualified contractors instantly</div>
+        <h1 style={{color:"#00ccff",fontWeight:900,fontSize:24,marginBottom:8}}>PAIN INTAKE</h1>
+        <div style={{fontSize:12,opacity:0.7,marginBottom:24}}>Create private pains. VaultForge AI matches to contractors.</div>
 
         <form onSubmit={handleSubmit} style={{display:"flex",flexDirection:"column",gap:16}}>
           <input
-            placeholder="Job Title - Roof Leak 123 Main St"
+            placeholder="Pain Title - e.g. 'AC Not Cooling in Rental Property'"
             value={form.title}
             onChange={e=>setForm({...form,title:e.target.value})}
             style={inputStyle}
@@ -116,20 +113,25 @@ export default function PainIntake() {
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <select value={form.propertyType} onChange={e=>setForm({...form,propertyType:e.target.value})} style={inputStyle}>
-              <option value="SFR">Single Family</option>
-              <option value="MF">Multi-Family</option>
+              <option value="Residential">Residential</option>
               <option value="Commercial">Commercial</option>
               <option value="Land">Land</option>
+              <option value="Multi-Family">Multi-Family</option>
+              <option value="Industrial">Industrial</option>
             </select>
             <select value={form.painType} onChange={e=>setForm({...form,painType:e.target.value})} style={inputStyle}>
-              <option value="Roof">Roof</option>
               <option value="HVAC">HVAC</option>
+              <option value="Roof">Roof</option>
               <option value="Plumbing">Plumbing</option>
               <option value="Electrical">Electrical</option>
               <option value="Foundation">Foundation</option>
               <option value="General">General Contractor</option>
               <option value="Landscaping">Landscaping</option>
               <option value="Paint">Paint</option>
+              <option value="Flooring">Flooring</option>
+              <option value="Windows">Windows/Doors</option>
+              <option value="Demolition">Demolition</option>
+              <option value="Concrete">Concrete/Asphalt</option>
             </select>
           </div>
 
@@ -149,7 +151,7 @@ export default function PainIntake() {
           </div>
 
           <textarea
-            placeholder="Describe the problem, access details, timeline..."
+            placeholder="Detailed description - What's broken? When did it start? Any diagnostics done? Access instructions?"
             value={form.description}
             onChange={e=>setForm({...form,description:e.target.value})}
             style={{...inputStyle,minHeight:100}}
@@ -170,7 +172,7 @@ export default function PainIntake() {
               cursor: loading ? "not-allowed" : "pointer"
             }}
           >
-            {loading ? "ANALYZING WITH AI..." : "POST JOB TO VAULTFORGE"}
+            {loading ? "ANALYZING WITH AI..." : "Publish to VaultForge"}
           </button>
         </form>
       </div>
