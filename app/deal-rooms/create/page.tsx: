@@ -3,10 +3,12 @@
 import { useState } from "react";
 
 const STATES = ["GA", "FL", "TN", "AL", "NC", "SC", "TX"];
+const TYPES = ["Residential", "Commercial", "Land"];
 
 export default function CreateDeal() {
   const [title, setTitle] = useState("");
   const [state, setState] = useState("GA");
+  const [type, setType] = useState("Residential"); // <-- NEW
   const [description, setDescription] = useState("");
 
   function saveDeal() {
@@ -19,6 +21,7 @@ export default function CreateDeal() {
     deals.push({
       title,
       state,
+      type, // <-- NEW
       description,
       postedBy: email,
       createdAt: Date.now()
@@ -49,6 +52,15 @@ export default function CreateDeal() {
           style={{width:"100%",padding:12,marginBottom:16,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
         >
           {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+
+        <label style={{display:"block",marginBottom:8}}>Deal Type</label>
+        <select
+          value={type}
+          onChange={e=>setType(e.target.value)}
+          style={{width:"100%",padding:12,marginBottom:16,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
+        >
+          {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
 
         <label style={{display:"block",marginBottom:8}}>Description</label>
