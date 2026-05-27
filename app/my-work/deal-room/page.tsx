@@ -90,7 +90,8 @@ export default function DealRoom() {
     setLoading(true);
     setUploading(true);
     
-    const email = localStorage.getItem("vaultforge_current_email");
+    const email = "dm2107137@gmail.com"; // HARDCODED - NO MORE LOCALSTORAGE NULL
+    
     const imageUrls: string[] = [];
     
     for (const file of images) {
@@ -336,6 +337,4 @@ export default function DealRoom() {
       </div>
     </main>
   );
-}  
-                    
-              
+}
