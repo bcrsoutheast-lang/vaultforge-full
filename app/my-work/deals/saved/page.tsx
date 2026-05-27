@@ -69,7 +69,6 @@ export default function SavedDeals() {
           <button onClick={()=>window.location.href="/my-work"} style={{padding:"8px 16px",border:"1px solid #FFD700",borderRadius:8,color:"#FFD700",background:"none",fontSize:12}}>← My Work</button>
         </div>
 
-        {/* Bulk Actions */}
         {selected.length > 0 && (
           <div style={{background:"#0a0f1a",border:"1px solid #FFD700",borderRadius:8,padding:12,marginBottom:16,display:"flex",gap:8,alignItems:"center"}}>
             <div style={{fontSize:12,fontWeight:900}}>{selected.length} selected</div>
@@ -79,7 +78,6 @@ export default function SavedDeals() {
           </div>
         )}
 
-        {/* Filters */}
         <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
           <button onClick={()=>setFilter("all")} style={{padding:"6px 12px",borderRadius:6,background:filter==="all"?"#FFD700":"#222",color:filter==="all"?"#000":"#fff",fontSize:12,border:"none"}}>All States</button>
           {["GA","FL","TN","AL","NC","SC","TX"].map(s=>(
@@ -104,7 +102,10 @@ export default function SavedDeals() {
                     onChange={()=>toggleSelect(d.id)}
                     style={{marginTop:4}}
                   />
-                  <div style={{flex:1}} onClick={()=>window.location.href=`/deal-rooms/view/${d.id}`} style={{cursor:"pointer"}}>
+                  <div 
+                    style={{flex:1,cursor:"pointer"}} 
+                    onClick={()=>window.location.href=`/deal-rooms/view/${d.id}`}
+                  >
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                       <div style={{fontWeight:900,fontSize:18}}>{d.title}</div>
                       <div style={{fontSize:11,padding:"2px 8px",borderRadius:999,background:d.vaultForgeRating?.includes("A")?"#00ff00":d.vaultForgeRating?.includes("B")?"#FFD700":"#ff4444",color:"#000"}}>{d.vaultForgeRating||"Unrated"}</div>
@@ -119,7 +120,6 @@ export default function SavedDeals() {
                   </div>
                 </div>
                 
-                {/* Private Notes */}
                 <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #222"}}>
                   <div style={{fontSize:10,opacity:0.7,marginBottom:4}}>PRIVATE NOTES (only you see this)</div>
                   <textarea 
