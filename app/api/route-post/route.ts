@@ -7,42 +7,26 @@ const supabase = createClient(
 );
 
 export async function POST(req: NextRequest) {
+  const b = await req.json();
   try {
-    const body = await req.json();
-    const { post_type, user_email, ...data } = body;
-
-    if (post_type === "deal") {
+    if (b.post_type === "deal") {
       const { error } = await supabase.from("deals").insert({
-        user_email,
-        city: data.city,
-        state: data.state,
-        property_type: data.property_type,
-        asking_price: data.asking_price,
-        arv: data.arv,
-        description: data.description,
-        ai_score: 75,
-        status: "active"
+        user_email: b.user_email, city: b.city, state: b.state,
+        property_type: b.property_type, asking_price: b.asking_price,
+        arv: b.arv, description: b.description, ai_score: 78, status: "active"
       });
       if (error) throw error;
     }
-
-    if (post_type === "job") {
+    if (b.post_type === "job") {
       const { error } = await supabase.from("jobs").insert({
-        user_email,
-        city: data.city,
-        state: data.state,
-        property_type: data.property_type,
-        pain_type: data.pain_type,
-        urgency: data.urgency,
-        budget_range: data.budget_range,
-        description: data.description,
-        ai_score: 75,
-        status: "active"
+        user_email: b.user_email, city: b.city, state: b.state,
+        property_type: b.property_type, pain_type: b.pain_type,
+        urgency: b.urgency, budget_range: b.budget_range,
+        description: b.description, ai_score: 82, status: "active"
       });
       if (error) throw error;
     }
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
