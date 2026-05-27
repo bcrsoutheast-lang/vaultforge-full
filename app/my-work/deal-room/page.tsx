@@ -8,7 +8,7 @@ export default function DealRoom() {
   const [form, setForm] = useState({
     title: "",
     state: "",
-    propertyType: "SFR",
+    propertyType: "Residential", // Updated default
     dealType: "Wholesale",
     askPrice: "",
     arv: "",
@@ -65,9 +65,6 @@ export default function DealRoom() {
         .single();
 
       if (error) throw error;
-
-      // 3. Create AI alerts for matching users - placeholder for now
-      // TODO: Run matching logic and insert into alerts table
       
       alert(`Deal posted! AI Score: ${analysis.score}/100. Routing to buyers now.`);
       window.location.href = "/my-work/deals/drafts";
@@ -124,16 +121,19 @@ export default function DealRoom() {
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <select value={form.propertyType} onChange={e=>setForm({...form,propertyType:e.target.value})} style={inputStyle}>
-              <option value="SFR">Single Family</option>
-              <option value="MF">Multi-Family</option>
-              <option value="Land">Land</option>
+              <option value="Residential">Residential</option>
               <option value="Commercial">Commercial</option>
+              <option value="Land">Land</option>
+              <option value="Multi-Family">Multi-Family</option>
+              <option value="Industrial">Industrial</option>
             </select>
             <select value={form.dealType} onChange={e=>setForm({...form,dealType:e.target.value})} style={inputStyle}>
               <option value="Wholesale">Wholesale</option>
               <option value="Flip">Fix & Flip</option>
               <option value="Rental">Buy & Hold</option>
               <option value="Subject-To">Subject-To</option>
+              <option value="Owner-Finance">Owner Finance</option>
+              <option value="New-Construction">New Construction</option>
             </select>
           </div>
 
