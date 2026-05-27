@@ -1,235 +1,371 @@
-"use client";
+use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function AnalyzeDeal({ params }: { params: { id: string } }) {
-  const dealId = Number(params.id);
-  const [deal, setDeal] = useState<any>(null);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+const STATES = ["GA", "FL", "TN", "AL", "NC", "SC", "TX"];
+const PROPERTY_TYPES = ["Single Family", "Multi-Family 2-4", "Multi-Family 5+", "Commercial Retail", "Commercial Office", "Industrial", "Land", "Mixed Use"];
+const DEAL_TYPES = ["Wholesale", "Fix & Flip", "Buy & Hold", "Subject-To", "Seller Finance", "Lease Option", "Note Deal", "Joint Venture"];
+const EXIT_STRATEGIES = ["Assign Contract", "Double Close", "Wholetail", "Rehab & Retail", "Rent & Hold", "Creative Finance"];
+const RATINGS = ["A+ Deal", "B+ Solid", "C Needs Work", "D+ Pass"];
+
+export default function CreateDealVaultForge() {
+  const [form, setForm] = useState({
+    title: "",
+    state: "",
+    propertyType: "",
+    dealType: "",
+    exitStrategy: "",
+    askPrice: "",
+    arv: "",
+    repairEst: "",
+    address: "",
+    description: "",
+    photos: [] as string[],
+    vaultForgeRating: ""
+  });
+
+  const [profile, setProfile] = useState<any>({});
+  const [aiRating, setAiRating] = useState<any>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("vaultforge_deals");
-    const deals = stored? JSON.parse(stored) : [];
-    const found = deals.find((d:any) => d.id === dealId);
-    setDeal(found);
+    const email = localStorage.getItem("vaultforge_current_email") || "";
+    const profiles = JSON.parse(localStorage.getItem("vaultforge_profiles") || "{}");
+    setProfile(profiles[email] || { email });
+  }, []);
+
+  function handlePhotoUpload(e: any) {
+    const files = Array.from(e.target.files) as File[];
+    if (form.photos.length + files.length > 10) {
+      alert("Max 10 photos");
+      return;
+    }
     
-    if (found) {
-      runAnalysis(found);
-    }
-    setLoading(false);
-  }, [dealId]);
-
-  function runAnalysis(d: any) {
-    let riskScore = 50;
-    let riskLevel = "Medium";
-    let flags: string[] = [];
-    let insights: string[] = [];
-    
-    if (d.type === "Residential") {
-      const beds = Number(d.residential?.beds) || 0;
-      const baths = Number(d.residential?.baths) || 0;
-      const sqft = Number(d.residential?.sqft) || 0;
-      const year = Number(d.residential?.yearBuilt) || 0;
-      
-      if (year && year < 1980) {
-        riskScore += 15;
-        flags.push("Pre-1980 build: check for lead/asbestos");
-      }
-      if (sqft && beds && sqft/beds < 200) {
-        riskScore += 10;
-        flags.push("Tight sqft/bedroom ratio");
-      }
-      if (baths === 1 && beds >= 3) {
-        riskScore += 10;
-        flags.push("Under-bathed for bedroom count");
-      }
-      if (sqft > 2500 && year > 2000) {
-        riskScore -= 15;
-        insights.push("Newer large home: strong resale pool");
-      }
-      
-    } else if (d.type === "Commercial") {
-      const units = Number(d.commercial?.units) || 0;
-      const noi = Number(d.commercial?.noi) || 0;
-      const cap = Number(d.commercial?.capRate) || 0;
-      const sqft = Number(d.commercial?.buildingSqft) || 0;
-      
-      if (cap < 5) {
-        riskScore += 20;
-        flags.push("Sub-5% cap: thin margin, rate sensitive");
-      }
-      if (cap > 8) {
-        riskScore -= 10;
-        insights.push("Above-market cap: value opportunity or distress");
-      }
-      if (units > 0 && noi/units < 4000) {
-        riskScore += 15;
-        flags.push("Low NOI/unit: verify expense load");
-      }
-      if (sqft > 20000 && units < 10) {
-        riskScore += 10;
-        flags.push("Large footprint, low unit density: check occupancy");
-      }
-      
-    } else if (d.type === "Land") {
-      const acres = Number(d.land?.acres) || 0;
-      const zoning = d.land?.zoning || "";
-      const utilities = d.land?.utilities || "";
-      
-      if (!utilities || utilities.toLowerCase().includes("none")) {
-        riskScore += 25;
-        flags.push("No utilities: add $30k-80k for development");
-      }
-      if (zoning.toLowerCase().includes("ag") || zoning.toLowerCase().includes("farm")) {
-        riskScore += 15;
-        flags.push("Ag zoning: rezoning timeline 6-18 months");
-      }
-      if (acres > 50) {
-        riskScore -= 10;
-        insights.push("Large parcel: subdivision or assemblage play");
-      }
-    }
-
-    if (!d.ownerInfo?.phone &&!d.ownerInfo?.email) {
-      riskScore += 20;
-      flags.push("No direct owner contact: deal control risk");
-    }
-
-    if (!d.photos || d.photos.length === 0) {
-      riskScore += 10;
-      flags.push("No photos: sight-unseen risk");
-    } else if (d.photos.length >= 5) {
-      riskScore -= 5;
-      insights.push("Photo coverage strong");
-    }
-
-    riskScore = Math.max(0, Math.min(100, riskScore));
-    if (riskScore >= 70) riskLevel = "High";
-    else if (riskScore >= 40) riskLevel = "Medium";
-    else riskLevel = "Low";
-
-    let arvLow = 0;
-    let arvHigh = 0;
-    let roiLow = 0;
-    let roiHigh = 0;
-    
-    if (d.type === "Residential") {
-      const sqft = Number(d.residential?.sqft) || 1500;
-      const stateMult: Record<string, number> = {GA: 150, FL: 180, TN: 140, AL: 120, NC: 160, SC: 155, TX: 165};
-      const ppsf = stateMult[d.state] || 150;
-      arvLow = Math.round(sqft * ppsf * 0.85);
-      arvHigh = Math.round(sqft * ppsf * 1.15);
-      roiLow = 8;
-      roiHigh = 18;
-    } else if (d.type === "Commercial") {
-      const noi = Number(d.commercial?.noi) || 50000;
-      arvLow = Math.round(noi / 0.08);
-      arvHigh = Math.round(noi / 0.06);
-      roiLow = 6;
-      roiHigh = 14;
-    } else if (d.type === "Land") {
-      const acres = Number(d.land?.acres) || 1;
-      const statePerAcre: Record<string, number> = {GA: 8000, FL: 12000, TN: 7000, AL: 5000, NC: 9000, SC: 8500, TX: 10000};
-      const perAcre = statePerAcre[d.state] || 8000;
-      arvLow = Math.round(acres * perAcre * 0.7);
-      arvHigh = Math.round(acres * perAcre * 1.3);
-      roiLow = 15;
-      roiHigh = 40;
-    }
-
-    setAnalysis({
-      riskScore,
-      riskLevel,
-      flags,
-      insights,
-      arvLow,
-      arvHigh,
-      roiLow,
-      roiHigh,
-      comps: `3 recent ${d.type} sales in ${d.state} pending API`,
-      recommendation: riskScore < 40? "Strong Buy" : riskScore < 70? "Proceed with Diligence" : "High Risk - Pass or Renegotiate"
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setForm(prev => ({
+        ...prev,
+          photos: [...prev.photos, event.target?.result as string]
+        }));
+      };
+      reader.readAsDataURL(file);
     });
   }
 
-  if (loading) return <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>Loading...</main>;
-  if (!deal) return <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>Deal not found</main>;
+  function removePhoto(index: number) {
+    setForm(prev => ({
+    ...prev,
+      photos: prev.photos.filter((_, i) => i!== index)
+    }));
+  }
+
+  function runVaultForgeRating() {
+    if (!form.askPrice ||!form.arv ||!form.repairEst ||!form.dealType) {
+      alert("Enter Ask Price, ARV, Repair Est, and Deal Type first");
+      return;
+    }
+
+    setAnalyzing(true);
+    
+    setTimeout(() => {
+      const ask = parseFloat(form.askPrice.replace(/[^0-9.]/g, ''));
+      const arv = parseFloat(form.arv.replace(/[^0-9.]/g, ''));
+      const repair = parseFloat(form.repairEst.replace(/[^0-9.]/g, ''));
+      
+      const totalCost = ask + repair;
+      const profit = arv - totalCost;
+      const roi = (profit / totalCost * 100).toFixed(1);
+      const margin = (profit / arv * 100).toFixed(1);
+      
+      let rating = "";
+      let feedback = "";
+      
+      if (parseFloat(margin) > 25 && parseFloat(roi) > 30) {
+        rating = "A+ Deal";
+        feedback = "Strong margins. Green light. This is a VaultForge certified deal.";
+      } else if (parseFloat(margin) > 15 && parseFloat(roi) > 20) {
+        rating = "B+ Solid";
+        feedback = "Good fundamentals. Verify repair scope. Worth pursuing.";
+      } else if (parseFloat(margin) > 8) {
+        rating = "C Needs Work";
+        feedback = "Thin margins. Negotiate price down or pass. High risk.";
+      } else {
+        rating = "D+ Pass";
+        feedback = "No profit. Deal killer. Move to next opportunity.";
+      }
+
+      const analysis = {
+        profit: profit.toLocaleString(),
+        roi: roi + "%",
+        margin: margin + "%",
+        rating,
+        feedback,
+        nextStep: profit > 0? "Run comps → Lock contract → Find buyer" : "Pass or renegotiate"
+      };
+      
+      setAiRating(analysis);
+      setForm(prev => ({...prev, vaultForgeRating: rating}));
+      setAnalyzing(false);
+    }, 1200);
+  }
+
+  function handleSubmit() {
+    const currentEmail = localStorage.getItem("vaultforge_current_email") || "";
+    if (!currentEmail) {
+      alert("Login required");
+      return;
+    }
+
+    if (!form.title ||!form.state ||!form.dealType ||!form.askPrice) {
+      alert("Title, State, Deal Type, and Ask Price required");
+      return;
+    }
+
+    const stored = localStorage.getItem("vaultforge_deals");
+    const deals = stored? JSON.parse(stored) : [];
+    
+    const newDeal = {
+      id: Date.now(),
+    ...form,
+      postedBy: currentEmail,
+      posterProfile: profile,
+      status: "active",
+      timestamp: Date.now(),
+      savedBy: [],
+      archivedBy: [],
+      vaultForgeAnalysis: aiRating
+    };
+
+    deals.push(newDeal);
+    localStorage.setItem("vaultforge_deals", JSON.stringify(deals));
+    alert("Deal posted with VaultForge rating!");
+    window.location.href = `/deal-rooms/${form.state}`;
+  }
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
-      <div style={{maxWidth:1000,margin:"0 auto"}}>
+      <div style={{maxWidth:800,margin:"0 auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
           <div>
-            <h1 style={{color:"#FFD700",fontWeight:900,marginBottom:4}}>VAULTFORGE INTELLIGENCE</h1>
-            <div style={{opacity:0.7}}>Analysis for: {deal.title}</div>
+            <h1 style={{color:"#FFD700",fontWeight:900,fontSize:28}}>VAULTFORGE DEAL INTAKE</h1>
+            <div style={{fontSize:12,opacity:0.7}}>Fast. Clean. Profitable.</div>
           </div>
-          <a href={`/deal-rooms/${deal.state.toLowerCase()}`} style={{color:"#FFD700"}}>Back to {deal.state}</a>
+          <a href="/deal-rooms" style={{color:"#FFD700"}}>Cancel</a>
         </div>
 
-        {analysis && (
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
-            
-            <div style={{border:"1px solid #222",borderRadius:12,padding:20,background:"#0a0f1a"}}>
-              <div style={{opacity:0.7,fontSize:12,marginBottom:8}}>RISK ASSESSMENT</div>
-              <div style={{fontSize:48,fontWeight:900,color:analysis.riskLevel==="Low"?"#00ff00":analysis.riskLevel==="Medium"?"#FFD700":"#ff4444"}}>
-                {analysis.riskScore}
-              </div>
-              <div style={{fontWeight:900,fontSize:18,marginBottom:12}}>{analysis.riskLevel} Risk</div>
-              <div style={{fontSize:14,opacity:0.8}}>{analysis.recommendation}</div>
-            </div>
-
-            <div style={{border:"1px solid #222",borderRadius:12,padding:20,background:"#0a0f1a"}}>
-              <div style={{opacity:0.7,fontSize:12,marginBottom:8}}>ESTIMATED VALUE</div>
-              <div style={{fontSize:32,fontWeight:900,color:"#FFD700",marginBottom:4}}>
-                ${analysis.arvLow.toLocaleString()} - ${analysis.arvHigh.toLocaleString()}
-              </div>
-              <div style={{fontSize:14,opacity:0.7,marginBottom:12}}>Projected ARV Range</div>
-              <div style={{fontSize:14}}>ROI: <span style={{color:"#FFD700",fontWeight:900}}>{analysis.roiLow}% - {analysis.roiHigh}%</span></div>
-            </div>
-
-            <div style={{border:"1px solid #ff4444",borderRadius:12,padding:20,background:"#0a0f1a"}}>
-              <div style={{opacity:0.7,fontSize:12,marginBottom:8,color:"#ff4444"}}>RED FLAGS</div>
-              {analysis.flags.length === 0? (
-                <div style={{opacity:0.7}}>No major flags detected</div>
-              ) : (
-                <ul style={{margin:0,paddingLeft:16}}>
-                  {analysis.flags.map((f:string,i:number) => (
-                    <li key={i} style={{marginBottom:8,fontSize:14}}>{f}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div style={{border:"1px solid #00ff00",borderRadius:12,padding:20,background:"#0a0f1a"}}>
-              <div style={{opacity:0.7,fontSize:12,marginBottom:8,color:"#00ff00"}}>POSITIVE SIGNALS</div>
-              {analysis.insights.length === 0? (
-                <div style={{opacity:0.7}}>No strong positives flagged</div>
-              ) : (
-                <ul style={{margin:0,paddingLeft:16}}>
-                  {analysis.insights.map((ins:string,i:number) => (
-                    <li key={i} style={{marginBottom:8,fontSize:14}}>{ins}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div style={{border:"1px solid #222",borderRadius:12,padding:20,background:"#0a0f1a",gridColumn:"1/-1"}}>
-              <div style={{opacity:0.7,fontSize:12,marginBottom:8}}>MARKET COMPS</div>
-              <div style={{fontSize:14}}>{analysis.comps}</div>
-              <div style={{opacity:0.5,fontSize:11,marginTop:8}}>Live comps API integration coming next</div>
-            </div>
-
-          </div>
-        )}
-
-        <div style={{marginTop:24,padding:16,border:"1px solid #222",borderRadius:12,background:"#0a0f1a"}}>
-          <div style={{fontWeight:900,marginBottom:8}}>Deal Summary</div>
-          <div style={{opacity:0.7,fontSize:14}}>{deal.description || "No description provided"}</div>
-          <div style={{marginTop:12,fontSize:12,opacity:0.5}}>
-            Posted by: {deal.postedBy} | Type: {deal.type} | State: {deal.state}
+        {/* Profile Auto-Attached */}
+        <div style={{border:"1px solid #FFD700",borderRadius:12,padding:12,background:"#0a0f1a",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
+          {profile.photo? (
+            <img src={profile.photo} style={{width:40,height:40,borderRadius:"50%",objectFit:"cover"}} />
+          ) : (
+            <div style={{width:40,height:40,borderRadius:"50%",background:"#222",display:"flex",alignItems:"center",justifyContent:"center"}}>👤</div>
+          )}
+          <div>
+            <div style={{fontWeight:900,fontSize:14}}>{profile.email}</div>
+            <div style={{fontSize:11,opacity:0.7}}>Based: {profile.based_state || "N/A"} | Serving: {(profile.states_served || []).join(", ")}</div>
           </div>
         </div>
 
+        <div style={{border:"1px solid #222",borderRadius:12,padding:24,background:"#0a0f1a",marginBottom:16}}>
+          <div style={{fontWeight:900,marginBottom:16,color:"#FFD700"}}>DEAL BASICS</div>
+          
+          <div style={{marginBottom:16}}>
+            <label style={{display:"block",marginBottom:8,fontWeight:900}}>Deal Title *</label>
+            <input 
+              value={form.title}
+              onChange={e=>setForm({...form,title:e.target.value})}
+              placeholder="3BR/2BA SFH - Assignment"
+              style={{width:"100%",padding:12,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff"}}
+            />
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16}}>
+            <div>
+              <label style={{display:"block",marginBottom:8,fontWeight:900,fontSize:12}}>State *</label>
+              <select value={form.state} onChange={e=>setForm({...form,state:e.target.value})} style={{width:"100%",padding:10,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff",fontSize:14}}>
+                <option value="">Select</option>
+                {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{display:"block",marginBottom:8,fontWeight:900,fontSize:12}}>Property *</label>
+              <select value={form.propertyType} onChange={e=>setForm({...form,propertyType:e.target.value})} style={{width:"100%",padding:10,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff",fontSize:14}}>
+                <option value="">Select</option>
+                {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{display:"block",marginBottom:8,fontWeight:900,fontSize:12}}>Deal Type *</label>
+              <select value={form.dealType} onChange={e=>setForm({...form,dealType:e.target.value})} style={{width:"100%",padding:10,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff",fontSize:14}}>
+                <option value="">Select</option>
+                {DEAL_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16}}>
+            <div>
+              <label style={{display:"block",marginBottom:8,fontWeight:900,fontSize:12}}>Ask Price *</label>
+              <input 
+                value={form.askPrice}
+                onChange={e=>setForm({...form,askPrice:e.target.value})}
+                placeholder="$150,000"
+                style={{width:"100%",padding:10,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff",fontSize:14}}
+              />
+            </div>
+            <div>
+              <label style={{display:"block",marginBottom:8,fontWeight:900,fontSize:12}}>ARV</label>
+              <input 
+                value={form.arv}
+                onChange={e=>setForm({...form,arv:e.target.value})}
+                placeholder="$220,000"
+                style={{width:"100%",padding:10,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff",fontSize:14}}
+              />
+            </div>
+            <div>
+              <label style={{display:"block",marginBottom:8,fontWeight:900,fontSize:12}}>Repair Est</label>
+              <input 
+                value={form.repairEst}
+                onChange={e=>setForm({...form,repairEst:e.target.value})}
+                placeholder="$25,000"
+                style={{width:"100%",padding:10,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff",fontSize:14}}
+              />
+            </div>
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <label style={{display:"block",marginBottom:8,fontWeight:900,fontSize:12}}>Exit Strategy</label>
+            <select value={form.exitStrategy} onChange={e=>setForm({...form,exitStrategy:e.target.value})} style={{width:"100%",padding:10,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff",fontSize:14}}>
+              <option value="">Select</option>
+              {EXIT_STRATEGIES.map(e => <option key={e} value={e}>{e}</option>)}
+            </select>
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <label style={{display:"block",marginBottom:8,fontWeight:900}}>Address/City</label>
+            <input 
+              value={form.address}
+              onChange={e=>setForm({...form,address:e.target.value})}
+              placeholder="123 Main St, Atlanta, GA"
+              style={{width:"100%",padding:12,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff"}}
+            />
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <label style={{display:"block",marginBottom:8,fontWeight:900}}>Quick Notes</label>
+            <textarea 
+              value={form.description}
+              onChange={e=>setForm({...form,description:e.target.value})}
+              placeholder="Motivated seller, vacant, needs roof..."
+              rows={3}
+              style={{width:"100%",padding:12,borderRadius:8,background:"#05070d",border:"1px solid #222",color:"#fff",resize:"none"}}
+            />
+          </div>
+
+          {/* Photo Upload */}
+          <div style={{marginBottom:16}}>
+            <label style={{display:"block",marginBottom:8,fontWeight:900}}>Photos ({form.photos.length}/10)</label>
+            <input 
+              type="file" 
+              accept="image/*" 
+              multiple
+              onChange={handlePhotoUpload}
+              style={{marginBottom:12,fontSize:12}}
+            />
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:8}}>
+              {form.photos.map((photo, idx) => (
+                <div key={idx} style={{position:"relative"}}>
+                  <img src={photo} style={{width:"100%",height:80,objectFit:"cover",borderRadius:8}} />
+                  <button 
+                    onClick={()=>removePhoto(idx)}
+                    style={{position:"absolute",top:4,right:4,width:20,height:20,borderRadius:"50%",background:"#ff4444",color:"#fff",fontSize:12,border:"none"}}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* VaultForge AI Rating Button */}
+          <button
+            onClick={runVaultForgeRating}
+            disabled={analyzing}
+            style={{
+              width:"100%",
+              padding:"12px",
+              borderRadius:8,
+              fontWeight:900,
+              background: analyzing? "#333" : "linear-gradient(90deg,#FFD700,#FFA500)",
+              color:"#000",
+              marginBottom:16,
+              border:"none"
+            }}
+          >
+            {analyzing? "Analyzing..." : "⚡ VAULTFORGE DEAL RATING"}
+          </button>
+
+          {/* AI Results */}
+          {aiRating && (
+            <div style={{border:`2px solid ${aiRating.rating.includes("A")? "#00ff00" : aiRating.rating.includes("B")? "#FFD700" : "#ff4444"}`,borderRadius:12,padding:16,background:"#0a0f1a",marginBottom:16}}>
+              <div style={{fontWeight:900,marginBottom:12,color:"#FFD700",fontSize:18}}>{aiRating.rating}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:11,opacity:0.7}}>Profit</div>
+                  <div style={{fontWeight:900,color:"#00ff00"}}>${aiRating.profit}</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:11,opacity:0.7}}>ROI</div>
+                  <div style={{fontWeight:900,color:"#FFD700"}}>{aiRating.roi}</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:11,opacity:0.7}}>Margin</div>
+                  <div style={{fontWeight:900,color:"#FFD700"}}>{aiRating.margin}</div>
+                </div>
+              </div>
+              <div style={{fontSize:12,marginBottom:8}}><strong>Feedback:</strong> {aiRating.feedback}</div>
+              <div style={{fontSize:12}}border:"none"
+            }}
+          >
+            {analyzing? "Analyzing..." : "⚡ VAULTFORGE DEAL RATING"}
+          </button>
+
+          {/* AI Results */}
+          {aiRating && (
+            <div style={{border:`2px solid ${aiRating.rating.includes("A")? "#00ff00" : aiRating.rating.includes("B")? "#FFD700" : "#ff4444"}`,borderRadius:12,padding:16,background:"#0a0f1a",marginBottom:16}}>
+              <div style={{fontWeight:900,marginBottom:12,color:"#FFD700",fontSize:18}}>{aiRating.rating}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:11,opacity:0.7}}>Profit</div>
+                  <div style={{fontWeight:900,color:"#00ff00"}}>${aiRating.profit}</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:11,opacity:0.7}}>ROI</div>
+                  <div style={{fontWeight:900,color:"#FFD700"}}>{aiRating.roi}</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:11,opacity:0.7}}>Margin</div>
+                  <div style={{fontWeight:900,color:"#FFD700"}}>{aiRating.margin}</div>
+                </div>
+              </div>
+              <div style={{fontSize:12,marginBottom:8}}><strong>Feedback:</strong> {aiRating.feedback}</div>
+              <div style={{fontSize:12}}><strong>Next Step:</strong> {aiRating.nextStep}</div>
+            </div>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            style={{
+              width:"100%",
+              padding:"14px 22px",
+              borderRadius:999,
+              fontWeight:900,
+              background:"#FFD700",
+              color:"#000"
+            }}
+          >
+            Post Deal to VaultForge
+          </button>
+        </div>
       </div>
     </main>
   );
