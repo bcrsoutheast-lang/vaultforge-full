@@ -4,54 +4,78 @@ import { useEffect, useState } from "react";
 
 export default function DealOpportunities() {
   const [deals, setDeals] = useState<any[]>([]);
-  const [savedIds, setSavedIds] = useState<number[]>([]);
   const [filter, setFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  
   const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
 
   useEffect(() => {
-    const allDeals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
-    // Only show deals with status: "active" = published to Deal Opportunities
-    const published = allDeals.filter((d:any) => d.status === "active");
-    setDeals(published);
-    
-    // Get which deals YOU already saved to My Work
-    const mySaved = allDeals.filter((d:any) => d.savedBy?.includes(currentEmail));
-    setSavedIds(mySaved.map((d:any) => d.id));
+    loadDeals();
   }, [currentEmail]);
+
+  function loadDeals() {
+    const allDeals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
+    const activeDeals = allDeals.filter((d:any) => 
+      d.status === "active" && 
+      d.postedBy!== currentEmail
+    ).sort((a:any,b:any) => b.postedAt - a.postedAt);
+    setDeals(activeDeals);
+  }
 
   function handleSaveDeal(dealId: number) {
     const allDeals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
-    const deal = allDeals.find((d:any) => d.id === dealId);
-    if (!deal) return;
-
-    // Create YOUR copy in My Work → Saved
-    const myCopy = {
-     ...deal,
-      id: Date.now(), // New ID for your copy
-      originalDealId: deal.id, // Link back to original
-      status: "saved",
-      savedBy: [currentEmail],
-      savedAt: Date.now(),
-      // Your copy is isolated - your actions don't affect original
-    };
-    
-    allDeals.push(myCopy);
-    localStorage.setItem("vaultforge_deals", JSON.stringify(allDeals));
-    setSavedIds(prev => [...prev, dealId]);
-    alert("Saved to My Work → Deals → Saved");
+    const updated = allDeals.map((d:any) => {
+      if (d.id === dealId) {
+        const savedBy = d.savedBy || [];
+        if (!savedBy.includes(currentEmail)) {
+          savedBy.push(currentEmail);
+        }
+        return {...d, savedBy};
+      }
+      return d;
+    });
+    localStorage.setItem("vaultforge_deals", JSON.stringify(updated));
+    loadDeals();
   }
 
-  function handleMessagePoster(posterEmail: string) {
-    window.location.href = `/my-work/messages?to=${posterEmail}`;
+  function handleUnsaveDeal(dealId: number) {
+    const allDeals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
+    const updated = allDeals.map((d:any) => {
+      if (d.id === dealId) {
+        return {
+    ...d,
+          savedBy: d.savedBy?.filter((email:string) => email!== currentEmail) || []
+        };
+      }
+      return d;
+    });
+    localStorage.setItem("vaultforge_deals", JSON.stringify(updated));
+    loadDeals();
+  }
+
+  function handleMessagePoster(deal: any) {
+    window.location.href = `/my-work/messages?to=${deal.postedBy}`;
+  }
+
+  function isSaved(deal: any) {
+    return deal.savedBy?.includes(currentEmail) || false;
   }
 
   const filteredDeals = deals.filter(d => {
-    if (filter === "all") return true;
-    if (filter === "my-state") return d.state === "GA"; // TODO: Use member profile state
-    if (filter === "wholesale") return d.dealType === "wholesale";
-    if (filter === "flip") return d.dealType === "flip";
-    return true;
+    const matchesFilter = filter === "all" || d.dealType === filter;
+    const matchesSearch = searchTerm === "" || 
+      d.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.state.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.propertyType.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
   });
+
+  const counts = {
+    all: deals.length,
+    wholesale: deals.filter(d=>d.dealType==="wholesale").length,
+    flip: deals.filter(d=>d.dealType==="flip").length,
+    "buy-hold": deals.filter(d=>d.dealType==="buy-hold").length
+  };
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
@@ -59,17 +83,26 @@ export default function DealOpportunities() {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div>
             <h1 style={{color:"#FFD700",fontWeight:900}}>DEAL OPPORTUNITIES</h1>
-            <div style={{fontSize:11,opacity:0.7}}>Internal member feed. {deals.length} deals from members. Save to your workspace.</div>
+            <div style={{fontSize:11,opacity:0.7}}>Internal feed. AI-matched deals from VaultForge members. {deals.length} active</div>
           </div>
           <button onClick={()=>window.location.href="/my-work"} style={{padding:"8px 16px",border:"1px solid #FFD700",borderRadius:8,color:"#FFD700",background:"none",fontSize:12}}>← My Work</button>
         </div>
 
         <div style={{background:"#0a0f1a",border:"1px solid #FFD700",color:"#FFD700",padding:"12px 16px",borderRadius:8,marginBottom:16,fontSize:12,fontWeight:900}}>
-          🔒 MEMBERS ONLY: Deals here are posted by members for members. Save to My Work to add to your pipeline. Your actions here don't affect other members.
+          🤖 AI-MATCHED: These deals were pushed from private Deal Rooms. VaultForge alerts you only to deals matching your buy box.
+        </div>
+
+        <div style={{marginBottom:16}}>
+          <input 
+            value={searchTerm}
+            onChange={e=>setSearchTerm(e.target.value)}
+            placeholder="Search by title, state, property type..."
+            style={{width:"100%",padding:"12px 16px",borderRadius:8,background:"#0a0f1a",border:"1px solid #333",color:"#fff",fontSize:14}}
+          />
         </div>
 
         <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-          {["all","my-state","wholesale","flip"].map(f => (
+          {["all","wholesale","flip","buy-hold"].map(f => (
             <button 
               key={f}
               onClick={()=>setFilter(f)} 
@@ -83,88 +116,88 @@ export default function DealOpportunities() {
                 fontWeight:900
               }}
             >
-              {f === "all"? "All Deals" : f === "my-state"? "My State" : f.toUpperCase()}
+              {f.toUpperCase()} ({counts[f as keyof typeof counts]})
             </button>
           ))}
         </div>
 
         {filteredDeals.length === 0? (
-          <div style={{textAlign:"center",padding:40,opacity:0.7}}>
+          <div style={{textAlign:"center",padding:60,opacity:0.7}}>
             <div style={{fontSize:48,marginBottom:16}}>📭</div>
-            <div>No deals in Deal Opportunities yet.</div>
-            <div style={{fontSize:12,marginTop:8}}>Members push deals here from their Deal Room. Check back soon or post your own.</div>
-            <button onClick={()=>window.location.href="/my-work/deal-room"} style={{marginTop:16,padding:"8px 16px",background:"#FFD700",color:"#000",borderRadius:6,fontSize:12,fontWeight:900,border:"none"}}>Go to Deal Room</button>
+            <div style={{fontSize:16,fontWeight:900}}>No deals available</div>
+            <div style={{fontSize:12,marginTop:8}}>
+              {searchTerm? "No deals match your search" : "VaultForge AI will alert you when deals match your buy box"}
+            </div>
           </div>
         ) : (
           <div style={{display:"grid",gap:12}}>
-            {filteredDeals.map((d:any) => {
-              const isSaved = savedIds.includes(d.id);
-              const isMine = d.postedBy === currentEmail;
-              return (
-                <div key={d.id} style={{border:"1px solid #333",borderRadius:12,padding:16,background:"#0a0f1a"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                    <div style={{fontWeight:900,fontSize:16}}>{d.title}</div>
-                    <div style={{fontSize:10,padding:"2px 8px",borderRadius:999,background:"#222",color:"#FFD700"}}>
-                      {isMine? "YOUR POST" : "MEMBER DEAL"}
+            {filteredDeals.map((deal:any) => (
+              <div 
+                key={deal.id} 
+                style={{
+                  border:"1px solid #FFD700",
+                  borderRadius:12,
+                  padding:16,
+                  background:"#0a0f1a"
+                }}
+              >
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:12}}>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                      <div style={{fontWeight:900,fontSize:16,color:"#FFD700"}}>{deal.title}</div>
+                      <div style={{fontSize:10,padding:"2px 8px",borderRadius:999,background:"#1a1f2a",border:"1px solid #FFD700",fontWeight:900}}>
+                        {deal.dealType.toUpperCase()}
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-                    <div style={{fontSize:11,padding:"2px 8px",borderRadius:999,background:"#222",color:"#999"}}>{d.state} - {d.propertyType}</div>
-                    <div style={{fontSize:11,padding:"2px 8px",borderRadius:999,background:"#05070d",border:"1px solid #333"}}>Ask: {d.askPrice}</div>
-                    <div style={{fontSize:11,padding:"2px 8px",borderRadius:999,background:"#05070d",border:"1px solid #333"}}>ARV: {d.arv}</div>
-                    {d.vaultForgeAnalysis && (
-                      <div style={{fontSize:11,padding:"2px 8px",borderRadius:999,background:"#05070d",border:"1px solid #00ff00",color:"#00ff00"}}>
-                        Profit: ${d.vaultForgeAnalysis.profit} | ROI: {d.vaultForgeAnalysis.roi}
+                    <div style={{fontSize:11,opacity:0.7,marginBottom:8}}>
+                      {deal.state} • {deal.propertyType} • Posted by {deal.postedBy} • {new Date(deal.postedAt).toLocaleDateString()}
+                    </div>
+                    <div style={{display:"flex",gap:16,fontSize:13}}>
+                      <div><span style={{opacity:0.7}}>Ask:</span> <span style={{fontWeight:900}}>${parseFloat(deal.askPrice).toLocaleString()}</span></div>
+                      <div><span style={{opacity:0.7}}>ARV:</span> <span style={{fontWeight:900}}>${parseFloat(deal.arv).toLocaleString()}</span></div>
+                      {deal.repair && <div><span style={{opacity:0.7}}>Repair:</span> <span style={{fontWeight:900}}>${parseFloat(deal.repair).toLocaleString()}</span></div>}
+                    </div>
+                    {deal.vaultForgeAnalysis && (
+                      <div style={{marginTop:8,padding:"6px 12px",borderRadius:6,background:"#05070d",border:"1px solid #00ff00",fontSize:12}}>
+                        <span style={{color:"#00ff00",fontWeight:900}}>
+                          ${deal.vaultForgeAnalysis.profit.toLocaleString()} PROFIT | {deal.vaultForgeAnalysis.roi}% ROI
+                        </span>
                       </div>
                     )}
                   </div>
-
-                  <div style={{opacity:0.8,fontSize:12,marginBottom:12}}>{d.notes?.slice(0,120)}...</div>
-                  
-                  <div style={{opacity:0.6,fontSize:11,marginBottom:12}}>
-                    Posted by: {isMine? "You" : d.postedBy} • {d.postedAt? new Date(d.postedAt).toLocaleDateString() : "Recently"}
-                  </div>
-
-                  <div style={{display:"flex",gap:8}}>
-                    {!isMine && (
-                      <>
-                        <button 
-                          onClick={()=>handleSaveDeal(d.id)} 
-                          disabled={isSaved}
-                          style={{
-                            padding:"8px 16px",
-                            borderRadius:6,
-                            background:isSaved?"#333":"#FFD700",
-                            color:isSaved?"#666":"#000",
-                            border:"none",
-                            fontSize:12,
-                            fontWeight:900,
-                            cursor:isSaved?"not-allowed":"pointer"
-                          }}
-                        >
-                          {isSaved?"✓ Saved to My Work" : "Save to My Work"}
-                        </button>
-                        <button 
-                          onClick={()=>handleMessagePoster(d.postedBy)} 
-                          style={{padding:"8px 16px",borderRadius:6,background:"#222",color:"#fff",border:"1px solid #666",fontSize:12}}
-                        >
-                          Message Poster
-                        </button>
-                      </>
-                    )}
-                    {isMine && (
-                      <button 
-                        onClick={()=>window.location.href="/my-work/deal-room"} 
-                        style={{padding:"8px 16px",borderRadius:6,background:"#222",color:"#FFD700",border:"1px solid #FFD700",fontSize:12}}
-                      >
-                        Manage in Deal Room
-                      </button>
-                    )}
-                  </div>
                 </div>
-              );
-            })}
+
+                {deal.notes && (
+                  <div style={{fontSize:12,opacity:0.8,marginBottom:12,padding:12,background:"#05070d",borderRadius:6,border:"1px solid #1a1f2a"}}>
+                    {deal.notes}
+                  </div>
+                )}
+
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {isSaved(deal)? (
+                    <button 
+                      onClick={()=>handleUnsaveDeal(deal.id)} 
+                      style={{flex:1,minWidth:120,padding:"10px",borderRadius:8,background:"#222",color:"#FFD700",border:"1px solid #FFD700",fontSize:12,fontWeight:900}}
+                    >
+                      ★ Saved
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={()=>handleSaveDeal(deal.id)} 
+                      style={{flex:1,minWidth:120,padding:"10px",borderRadius:8,background:"#FFD700",color:"#000",border:"none",fontSize:12,fontWeight:900}}
+                    >
+                      Save Deal
+                    </button>
+                  )}
+                  <button 
+                    onClick={()=>handleMessagePoster(deal)} 
+                    style={{flex:1,minWidth:120,padding:"10px",borderRadius:8,background:"#222",color:"#00ccff",border:"1px solid #00ccff",fontSize:12,fontWeight:900}}
+                  >
+                    Message Poster
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
