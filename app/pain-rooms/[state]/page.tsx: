@@ -1,36 +1,58 @@
-"use client";
+use client";
 
 import { useEffect, useState } from "react";
 
-const TYPES = ["Legal", "Financial", "Partnership", "Operations", "Marketing", "Other"];
+const TYPES = ["Residential", "Commercial", "Land"];
 
 export default function StatePains({ params }: { params: { state: string } }) {
   const state = params.state.toUpperCase();
   const [pains, setPains] = useState<any[]>([]);
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({});
   const [activeType, setActiveType] = useState<string | null>(null);
+  const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
 
   useEffect(() => {
     const stored = localStorage.getItem("vaultforge_pains");
     const allPains = stored? JSON.parse(stored) : [];
-    const statePains = allPains.filter((p:any) => p.state === state);
+    const statePains = allPains.filter((p:any) => p.state === state && p.status === "active");
     setPains(statePains);
 
     const counts: Record<string, number> = {};
     TYPES.forEach(t => counts[t] = 0);
     statePains.forEach((p:any) => {
-      if (counts[p.type]!== undefined) counts[p.type]++;
+      if (counts[p.propertyType]!== undefined) counts[p.propertyType]++;
     });
     setTypeCounts(counts);
   }, [state]);
 
-  const filteredPains = activeType? pains.filter(p => p.type === activeType) : pains;
+  const filteredPains = activeType? pains.filter(p => p.propertyType === activeType) : pains;
+
+  function handleSave(id: number) {
+    alert("Save pain - Coming next build");
+  }
+
+  function handleArchive(id: number) {
+    alert("Archive pain - Coming next build");
+  }
+
+  function handleDelete(id: number) {
+    if (!confirm("Delete this pain point forever?")) return;
+    const stored = localStorage.getItem("vaultforge_pains");
+    const allPains = stored? JSON.parse(stored) : [];
+    const updated = allPains.filter((p:any) => p.id!== id);
+    localStorage.setItem("vaultforge_pains", JSON.stringify(updated));
+    window.location.reload();
+  }
+
+  function handleMessage(email: string) {
+    alert(`Message ${email} - Chat coming next build`);
+  }
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h1 style={{color:"#FFD700",fontWeight:900}}>{state} PAIN ROOMS</h1>
+          <h1 style={{color:"#FFD700",fontWeight:900}}>{state} PAIN INTAKE</h1>
           <a href="/pain-rooms" style={{color:"#FFD700"}}>Back to States</a>
         </div>
 
@@ -71,14 +93,35 @@ export default function StatePains({ params }: { params: { state: string } }) {
           <div style={{opacity:0.7}}>No {activeType || ""} issues in {state} yet.</div>
         ) : (
           <div style={{display:"grid",gap:12}}>
-            {filteredPains.map((p:any, i:number) => (
-              <div key={i} style={{border:"1px solid #222",borderRadius:12,padding:16}}>
-                <div style={{display:"flex",justifyContent:"space-between"}}>
-                  <div style={{fontWeight:900}}>{p.title}</div>
-                  <div style={{fontSize:12,padding:"2px 8px",borderRadius:999,background:"#222",color:"#FFD700"}}>{p.type}</div>
+            {filteredPains.map((p:any) => (
+              <div key={p.id} style={{border:"1px solid #222",borderRadius:12,padding:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                  <div style={{fontWeight:900,fontSize:18}}>{p.title}</div>
+                  <div style={{fontSize:12,padding:"2px 8px",borderRadius:999,background:"#222",color:"#FFD700"}}>{p.propertyType}</div>
                 </div>
-                <div style={{opacity:0.7,fontSize:12}}>Posted by: {p.postedBy}</div>
-                <div style={{opacity:0.7,fontSize:12,marginTop:8}}>{p.description}</div>
+                <div style={{display:"flex",gap:8,marginBottom:8}}>
+                  <div style={{fontSize:11,padding:"2px 8px",borderRadius:999,background:"#0a0f1a",border:"1px solid #333"}}>{p.painCategory}</div>
+                  <div style={{fontSize:11,padding:"2px 8px",borderRadius:999,background:p.urgency==="Critical"?"#ff4444":p.urgency==="High"?"#FFD700":"#0a0f1a",color:p.urgency==="High"?"#000":"#fff"}}>{p.urgency}</div>
+                </div>
+                <div style={{opacity:0.7,fontSize:12,marginBottom:8}}>Posted by: {p.postedBy}</div>
+                <div style={{opacity:0.7,fontSize:14,marginBottom:12}}>{p.description}</div>
+
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <button onClick={()=>handleSave(p.id)} style={{padding:"6px 12px",borderRadius:6,background:"#0a0f1a",border:"1px solid #222",fontSize:12,color:"#fff"}}>
+                    Save
+                  </button>
+                  <button onClick={()=>handleArchive(p.id)} style={{padding:"6px 12px",borderRadius:6,background:"#0a0f1a",border:"1px solid #222",fontSize:12,color:"#fff"}}>
+                    Archive
+                  </button>
+                  <button onClick={()=>handleMessage(p.postedBy)} style={{padding:"6px 12px",borderRadius:6,background:"#FFD700",color:"#000",fontSize:12,fontWeight:900}}>
+                    Message
+                  </button>
+                  {p.postedBy === currentEmail && (
+                    <button onClick={()=>handleDelete(p.id)} style={{padding:"6px 12px",borderRadius:6,background:"#ff4444",color:"#fff",fontSize:12}}>
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
