@@ -3,30 +3,88 @@
 import { useState } from "react";
 
 const STATES = ["GA", "FL", "TN", "AL", "NC", "SC", "TX"];
-const TYPES = ["Residential", "Commercial", "Land"];
+const DEAL_TYPES = ["Residential", "Commercial", "Land"];
 
 export default function CreateDeal() {
   const [title, setTitle] = useState("");
   const [state, setState] = useState("GA");
-  const [type, setType] = useState("Residential"); // <-- NEW
+  const [type, setType] = useState("Residential");
   const [description, setDescription] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  
+  // Owner info
+  const [ownerName, setOwnerName] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
+  
+  // Residential fields
+  const [beds, setBeds] = useState("");
+  const [baths, setBaths] = useState("");
+  const [sqft, setSqft] = useState("");
+  const [yearBuilt, setYearBuilt] = useState("");
+  
+  // Commercial fields
+  const [units, setUnits] = useState("");
+  const [noi, setNoi] = useState("");
+  const [capRate, setCapRate] = useState("");
+  const [buildingSqft, setBuildingSqft] = useState("");
+  
+  // Land fields
+  const [acres, setAcres] = useState("");
+  const [zoning, setZoning] = useState("");
+  const [utilities, setUtilities] = useState("");
+  const [roadAccess, setRoadAccess] = useState("");
+
+  function handlePhotoUpload(e: any) {
+    const files = Array.from(e.target.files);
+    if (photos.length + files.length > 10) {
+      alert("Max 10 photos");
+      return;
+    }
+    const newPhotos = files.map(file => URL.createObjectURL(file));
+    setPhotos([...photos, ...newPhotos]);
+  }
+
+  function removePhoto(index: number) {
+    setPhotos(photos.filter((_, i) => i !== index));
+  }
+
+  function analyzeDeal() {
+    alert("VaultForge Intelligence: Analyzing deal... Coming next build");
+  }
 
   function saveDeal() {
     if (!title.trim()) return alert("Enter a deal title");
-
+    
     const email = localStorage.getItem("vaultforge_current_email") || "unknown";
     const stored = localStorage.getItem("vaultforge_deals");
     const deals = stored? JSON.parse(stored) : [];
 
-    deals.push({
+    const dealData: any = {
+      id: Date.now(),
       title,
       state,
-      type, // <-- NEW
+      type,
       description,
+      photos,
+      ownerInfo: { name: ownerName, email: ownerEmail, phone: ownerPhone },
       postedBy: email,
-      createdAt: Date.now()
-    });
+      createdAt: Date.now(),
+      status: "active",
+      savedBy: [],
+      archivedBy: []
+    };
 
+    // Add type-specific fields
+    if (type === "Residential") {
+      dealData.residential = { beds, baths, sqft, yearBuilt };
+    } else if (type === "Commercial") {
+      dealData.commercial = { units, noi, capRate, buildingSqft };
+    } else if (type === "Land") {
+      dealData.land = { acres, zoning, utilities, roadAccess };
+    }
+
+    deals.push(dealData);
     localStorage.setItem("vaultforge_deals", JSON.stringify(deals));
     alert("Deal posted!");
     window.location.href = `/deal-rooms/${state.toLowerCase()}`;
@@ -34,52 +92,139 @@ export default function CreateDeal() {
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
-      <div style={{maxWidth:600,margin:"0 auto"}}>
+      <div style={{maxWidth:800,margin:"0 auto"}}>
         <h1 style={{color:"#FFD700",fontWeight:900,marginBottom:16}}>POST DEAL OPPORTUNITY</h1>
 
-        <label style={{display:"block",marginBottom:8}}>Deal Title</label>
-        <input
-          value={title}
-          onChange={e=>setTitle(e.target.value)}
-          placeholder="Ex: 50-unit multifamily off-market"
-          style={{width:"100%",padding:12,marginBottom:16,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
-        />
+        {/* Basic Info */}
+        <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
+          <h3 style={{fontWeight:900,marginBottom:12}}>Basic Info</h3>
+          
+          <label style={{display:"block",marginBottom:8}}>Deal Title</label>
+          <input
+            value={title}
+            onChange={e=>setTitle(e.target.value)}
+            placeholder="Ex: 50-unit multifamily off-market"
+            style={{width:"100%",padding:12,marginBottom:16,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
+          />
 
-        <label style={{display:"block",marginBottom:8}}>State</label>
-        <select
-          value={state}
-          onChange={e=>setState(e.target.value)}
-          style={{width:"100%",padding:12,marginBottom:16,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
-        >
-          {STATES.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <label style={{display:"block",marginBottom:8}}>State</label>
+              <select
+                value={state}
+                onChange={e=>setState(e.target.value)}
+                style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
+              >
+                {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{display:"block",marginBottom:8}}>Deal Type</label>
+              <select
+                value={type}
+                onChange={e=>setType(e.target.value)}
+                style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
+              >
+                {DEAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
 
-        <label style={{display:"block",marginBottom:8}}>Deal Type</label>
-        <select
-          value={type}
-          onChange={e=>setType(e.target.value)}
-          style={{width:"100%",padding:12,marginBottom:16,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
-        >
-          {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
+        {/* Dynamic Fields */}
+        {type === "Residential" && (
+          <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
+            <h3 style={{fontWeight:900,marginBottom:12}}>Residential Details</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <input value={beds} onChange={e=>setBeds(e.target.value)} placeholder="Beds" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={baths} onChange={e=>setBaths(e.target.value)} placeholder="Baths" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={sqft} onChange={e=>setSqft(e.target.value)} placeholder="Sq Ft" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={yearBuilt} onChange={e=>setYearBuilt(e.target.value)} placeholder="Year Built" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+            </div>
+          </div>
+        )}
 
-        <label style={{display:"block",marginBottom:8}}>Description</label>
-        <textarea
-          value={description}
-          onChange={e=>setDescription(e.target.value)}
-          placeholder="Deal details, terms, what you're looking for..."
-          rows={4}
-          style={{width:"100%",padding:12,marginBottom:24,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
-        />
+        {type === "Commercial" && (
+          <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
+            <h3 style={{fontWeight:900,marginBottom:12}}>Commercial Details</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <input value={units} onChange={e=>setUnits(e.target.value)} placeholder="Total Units" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={noi} onChange={e=>setNoi(e.target.value)} placeholder="NOI $" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={capRate} onChange={e=>setCapRate(e.target.value)} placeholder="Cap Rate %" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={buildingSqft} onChange={e=>setBuildingSqft(e.target.value)} placeholder="Building Sq Ft" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+            </div>
+          </div>
+        )}
+
+        {type === "Land" && (
+          <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
+            <h3 style={{fontWeight:900,marginBottom:12}}>Land Details</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <input value={acres} onChange={e=>setAcres(e.target.value)} placeholder="Acres" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={zoning} onChange={e=>setZoning(e.target.value)} placeholder="Zoning" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={utilities} onChange={e=>setUtilities(e.target.value)} placeholder="Utilities" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+              <input value={roadAccess} onChange={e=>setRoadAccess(e.target.value)} placeholder="Road Access" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+            </div>
+          </div>
+        )}
+
+        {/* Owner Info */}
+        <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
+          <h3 style={{fontWeight:900,marginBottom:12}}>Owner/Contact Info</h3>
+          <input value={ownerName} onChange={e=>setOwnerName(e.target.value)} placeholder="Owner Name" style={{width:"100%",padding:12,marginBottom:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <input value={ownerEmail} onChange={e=>setOwnerEmail(e.target.value)} placeholder="Email" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+            <input value={ownerPhone} onChange={e=>setOwnerPhone(e.target.value)} placeholder="Phone" style={{padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}} />
+          </div>
+        </div>
+
+        {/* Photos */}
+        <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
+          <h3 style={{fontWeight:900,marginBottom:12}}>Photos ({photos.length}/10)</h3>
+          <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} style={{marginBottom:12}} />
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:8}}>
+            {photos.map((photo, i) => (
+              <div key={i} style={{position:"relative"}}>
+                <img src={photo} style={{width:"100%",height:100,objectFit:"cover",borderRadius:8}} />
+                <button onClick={()=>removePhoto(i)} style={{position:"absolute",top:4,right:4,background:"red",color:"#fff",border:"none",borderRadius:4,padding:"2px 6px"}}>X</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Description */}
+        <div style={{border:"1px solid #222",borderRadius:12,padding:16,marginBottom:16}}>
+          <h3 style={{fontWeight:900,marginBottom:12}}>Description</h3>
+          <textarea
+            value={description}
+            onChange={e=>setDescription(e.target.value)}
+            placeholder="Deal details, terms, what you're looking for..."
+            rows={4}
+            style={{width:"100%",padding:12,borderRadius:8,background:"#0a0f1a",border:"1px solid #222",color:"#fff"}}
+          />
+        </div>
+
+        {/* VaultForge Intelligence */}
+        <div style={{border:"1px solid #FFD700",borderRadius:12,padding:16,marginBottom:24,background:"#0a0f1a"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <h3 style={{fontWeight:900,color:"#FFD700"}}>VaultForge Intelligence</h3>
+              <p style={{opacity:0.7,fontSize:12}}>AI analysis of your deal</p>
+            </div>
+            <button onClick={analyzeDeal} style={{padding:"10px 16px",borderRadius:8,background:"#FFD700",color:"#000",fontWeight:900}}>
+              Analyze Deal
+            </button>
+          </div>
+        </div>
 
         <button
           onClick={saveDeal}
-          style={{padding:"14px 22px",borderRadius:999,fontWeight:900,background:"#FFD700",color:"#000",width:"100%"}}
+          style={{padding:"14px 22px",borderRadius:999,fontWeight:900,background:"#FFD700",color:"#000",width:"100%",marginBottom:12}}
         >
           Post Deal
         </button>
 
-        <a href="/deal-rooms" style={{display:"block",marginTop:16,textAlign:"center",color:"#FFD700"}}>Cancel</a>
+        <a href="/deal-rooms" style={{display:"block",textAlign:"center",color:"#FFD700"}}>Cancel</a>
       </div>
     </main>
   );
