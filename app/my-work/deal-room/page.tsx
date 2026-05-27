@@ -1,9 +1,17 @@
 'use client';
 import { useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function DealRoom() {
   const [propertyType, setPropertyType] = useState("Residential");
   const [loading, setLoading] = useState(false);
+  const [images, setImages] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
   
   const [city, setCity] = useState("");
   const [state, setState] = useState("GA");
@@ -38,29 +46,61 @@ export default function DealRoom() {
   const [existingMortgage, setExistingMortgage] = useState("No");
   const [mortgageBalance, setMortgageBalance] = useState("");
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files).slice(0, 10);
+      setImages(files);
+    }
+  };
+
+  const stripCommas = (val: string) => val.replace(/,/g, "");
+
   async function submitDeal() {
-    if (!city || !askingPrice || !description) {
+    const cleanAsking = stripCommas(askingPrice);
+    const cleanArv = stripCommas(arv);
+    
+    if (!city || !cleanAsking || !description) {
       alert("City, Asking Price, and Description required");
       return;
     }
     
     setLoading(true);
+    setUploading(true);
+    
     const email = localStorage.getItem("vaultforge_current_email");
+    const imageUrls: string[] = [];
+    
+    // Upload images first
+    for (const file of images) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+      const { data, error } = await supabase.storage
+        .from('deal-images')
+        .upload(fileName, file);
+      
+      if (!error && data) {
+        const { data: { publicUrl } } = supabase.storage
+          .from('deal-images')
+          .getPublicUrl(data.path);
+        imageUrls.push(publicUrl);
+      }
+    }
+    setUploading(false);
     
     const payload = {
       post_type: "deal",
       user_email: email,
       property_type: propertyType,
       city, state, address, zipcode,
-      asking_price: Number(askingPrice),
-      arv: Number(arv),
+      asking_price: Number(cleanAsking),
+      arv: cleanArv ? Number(cleanArv) : null,
       deal_type: dealType,
       description,
       beds: beds ? Number(beds) : null,
       baths: baths ? Number(baths) : null,
       sqft: sqft ? Number(sqft) : null,
       year_built: yearBuilt ? Number(yearBuilt) : null,
-      repair_estimate: repairEstimate ? Number(repairEstimate) : null,
+      repair_estimate: repairEstimate ? Number(stripCommas(repairEstimate)) : null,
       units: units ? Number(units) : null,
       cap_rate: capRate ? Number(capRate) : null,
       noi: noi ? Number(noi) : null,
@@ -68,11 +108,12 @@ export default function DealRoom() {
       acreage: acreage ? Number(acreage) : null,
       zoning, utilities,
       target_buyer: targetBuyer,
-      min_cash_required: minCashRequired ? Number(minCashRequired) : null,
-      timeline, assignment_fee: assignmentFee ? Number(assignmentFee) : null,
+      min_cash_required: minCashRequired ? Number(stripCommas(minCashRequired)) : null,
+      timeline, assignment_fee: assignmentFee ? Number(stripCommas(assignmentFee)) : null,
       seller_financing: sellerFinancing,
       existing_mortgage: existingMortgage,
-      mortgage_balance: mortgageBalance ? Number(mortgageBalance) : null
+      mortgage_balance: mortgageBalance ? Number(stripCommas(mortgageBalance)) : null,
+      image_urls: imageUrls
     };
 
     const res = await fetch("/api/route-post", {
@@ -134,11 +175,11 @@ export default function DealRoom() {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"12px"}}>
           <div>
             <label style={label}>ASKING PRICE *</label>
-            <input style={input} type="number" value={askingPrice} onChange={e=>setAskingPrice(e.target.value)} placeholder="125000" />
+            <input style={input} type="text" inputMode="numeric" value={askingPrice} onChange={e=>setAskingPrice(e.target.value)} placeholder="125000" />
           </div>
           <div>
             <label style={label}>ARV</label>
-            <input style={input} type="number" value={arv} onChange={e=>setArv(e.target.value)} placeholder="206000" />
+            <input style={input} type="text" inputMode="numeric" value={arv} onChange={e=>setArv(e.target.value)} placeholder="206000" />
           </div>
           <div>
             <label style={label}>DEAL TYPE</label>
@@ -152,13 +193,13 @@ export default function DealRoom() {
           <div style={section}>
             <div style={sectionTitle}>RESIDENTIAL DETAILS</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:"12px"}}>
-              <div><label style={label}>BEDS</label><input style={input} type="number" value={beds} onChange={e=>setBeds(e.target.value)} placeholder="3" /></div>
-              <div><label style={label}>BATHS</label><input style={input} type="number" step="0.5" value={baths} onChange={e=>setBaths(e.target.value)} placeholder="2" /></div>
-              <div><label style={label}>SQFT</label><input style={input} type="number" value={sqft} onChange={e=>setSqft(e.target.value)} placeholder="1800" /></div>
-              <div><label style={label}>YEAR BUILT</label><input style={input} type="number" value={yearBuilt} onChange={e=>setYearBuilt(e.target.value)} placeholder="1995" /></div>
+              <div><label style={label}>BEDS</label><input style={input} type="text" inputMode="numeric" value={beds} onChange={e=>setBeds(e.target.value)} placeholder="3" /></div>
+              <div><label style={label}>BATHS</label><input style={input} type="text" inputMode="decimal" value={baths} onChange={e=>setBaths(e.target.value)} placeholder="2" /></div>
+              <div><label style={label}>SQFT</label><input style={input} type="text" inputMode="numeric" value={sqft} onChange={e=>setSqft(e.target.value)} placeholder="1800" /></div>
+              <div><label style={label}>YEAR BUILT</label><input style={input} type="text" inputMode="numeric" value={yearBuilt} onChange={e=>setYearBuilt(e.target.value)} placeholder="1995" /></div>
             </div>
             <label style={label}>REPAIR ESTIMATE</label>
-            <input style={input} type="number" value={repairEstimate} onChange={e=>setRepairEstimate(e.target.value)} placeholder="25000" />
+            <input style={input} type="text" inputMode="numeric" value={repairEstimate} onChange={e=>setRepairEstimate(e.target.value)} placeholder="25000" />
           </div>
         )}
 
@@ -166,11 +207,11 @@ export default function DealRoom() {
           <div style={section}>
             <div style={sectionTitle}>COMMERCIAL DETAILS</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
-              <div><label style={label}>TOTAL UNITS</label><input style={input} type="number" value={units} onChange={e=>setUnits(e.target.value)} placeholder="12" /></div>
-              <div><label style={label}>CAP RATE %</label><input style={input} type="number" step="0.1" value={capRate} onChange={e=>setCapRate(e.target.value)} placeholder="8.5" /></div>
+              <div><label style={label}>TOTAL UNITS</label><input style={input} type="text" inputMode="numeric" value={units} onChange={e=>setUnits(e.target.value)} placeholder="12" /></div>
+              <div><label style={label}>CAP RATE %</label><input style={input} type="text" inputMode="decimal" value={capRate} onChange={e=>setCapRate(e.target.value)} placeholder="8.5" /></div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
-              <div><label style={label}>NOI (Annual)</label><input style={input} type="number" value={noi} onChange={e=>setNoi(e.target.value)} placeholder="85000" /></div>
+              <div><label style={label}>NOI (Annual)</label><input style={input} type="text" inputMode="numeric" value={noi} onChange={e=>setNoi(e.target.value)} placeholder="85000" /></div>
               <div><label style={label}>TENANT TYPE</label><input style={input} value={tenantType} onChange={e=>setTenantType(e.target.value)} placeholder="Retail/Office/Industrial" /></div>
             </div>
           </div>
@@ -180,13 +221,26 @@ export default function DealRoom() {
           <div style={section}>
             <div style={sectionTitle}>LAND DETAILS</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
-              <div><label style={label}>ACREAGE</label><input style={input} type="number" step="0.01" value={acreage} onChange={e=>setAcreage(e.target.value)} placeholder="2.5" /></div>
+              <div><label style={label}>ACREAGE</label><input style={input} type="text" inputMode="decimal" value={acreage} onChange={e=>setAcreage(e.target.value)} placeholder="2.5" /></div>
               <div><label style={label}>ZONING</label><input style={input} value={zoning} onChange={e=>setZoning(e.target.value)} placeholder="R1, C2, Agricultural" /></div>
             </div>
             <label style={label}>UTILITIES</label>
             <input style={input} value={utilities} onChange={e=>setUtilities(e.target.value)} placeholder="Water, Sewer, Electric on site" />
           </div>
         )}
+
+        <div style={section}>
+          <div style={sectionTitle}>PROPERTY IMAGES</div>
+          <label style={label}>UPLOAD UP TO 10 PHOTOS</label>
+          <input 
+            type="file" 
+            multiple 
+            accept="image/*" 
+            onChange={handleImageChange}
+            style={{...input,padding:"10px",border:"2px dashed #FFD700"}}
+          />
+          {images.length > 0 && <p style={{color:"#00ccff",fontSize:"12px",marginTop:"-8px"}}>{images.length} image(s) selected</p>}
+        </div>
 
         <div style={section}>
           <div style={sectionTitle}>BUYER BOX / TERMS</div>
@@ -200,9 +254,9 @@ export default function DealRoom() {
             <option>Developer</option>
           </select>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"12px"}}>
-            <div><label style={label}>MIN CASH REQUIRED</label><input style={input} type="number" value={minCashRequired} onChange={e=>setMinCashRequired(e.target.value)} placeholder="50000" /></div>
+            <div><label style={label}>MIN CASH REQUIRED</label><input style={input} type="text" inputMode="numeric" value={minCashRequired} onChange={e=>setMinCashRequired(e.target.value)} placeholder="50000" /></div>
             <div><label style={label}>TIMELINE</label><select style={input} value={timeline} onChange={e=>setTimeline(e.target.value)}><option>7 Days</option><option>14 Days</option><option>30 Days</option><option>60 Days</option></select></div>
-            <div><label style={label}>ASSIGNMENT FEE</label><input style={input} type="number" value={assignmentFee} onChange={e=>setAssignmentFee(e.target.value)} placeholder="10000" /></div>
+            <div><label style={label}>ASSIGNMENT FEE</label><input style={input} type="text" inputMode="numeric" value={assignmentFee} onChange={e=>setAssignmentFee(e.target.value)} placeholder="10000" /></div>
           </div>
         </div>
 
@@ -225,7 +279,7 @@ export default function DealRoom() {
           {existingMortgage !== "No" && (
             <div>
               <label style={label}>MORTGAGE BALANCE</label>
-              <input style={input} type="number" value={mortgageBalance} onChange={e=>setMortgageBalance(e.target.value)} placeholder="85000" />
+              <input style={input} type="text" inputMode="numeric" value={mortgageBalance} onChange={e=>setMortgageBalance(e.target.value)} placeholder="85000" />
             </div>
           )}
         </div>
@@ -245,7 +299,7 @@ export default function DealRoom() {
           disabled={loading}
           style={{width:"100%",padding:"18px",background:loading?"#333":"#FFD700",color:"#000",fontWeight:"900",fontSize:"18px",borderRadius:"8px",border:"none",cursor:loading?"not-allowed":"pointer",marginTop:"8px"}}
         >
-          {loading ? "POSTING TO VAULTFORGE..." : "POST DEAL TO VAULTFORGE"}
+          {uploading ? "UPLOADING IMAGES..." : loading ? "POSTING TO VAULTFORGE..." : "POST DEAL TO VAULTFORGE"}
         </button>
       </div>
     </main>
