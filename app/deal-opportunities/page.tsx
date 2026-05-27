@@ -1,173 +1,148 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+
+type Deal = {
+  id: number;
+  title: string;
+  state: string;
+  property_type: string;
+  deal_type: string;
+  ask_price: number;
+  arv: number;
+  repair: number;
+  description: string;
+  posted_by: string;
+  created_at: string;
+  vaultforge_analysis: any;
+};
 
 export default function DealOpportunities() {
-  const [deals, setDeals] = useState<any[]>([]);
-  const [filterState, setFilterState] = useState("all");
-  const [filterType, setFilterType] = useState("all");
-  
-  const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState({ state: "", type: "" });
 
   useEffect(() => {
     loadDeals();
-  }, []);
+  }, [filter]);
 
-  function loadDeals() {
-    const allDeals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
-    // Show active deals not posted by current user
-    const publicDeals = allDeals.filter((d:any) => d.status === "active" && d.postedBy!== currentEmail);
-    setDeals(publicDeals.sort((a:any,b:any) => b.postedAt - a.postedAt));
+  async function loadDeals() {
+    setLoading(true);
+    try {
+      let query = supabase
+       .from("deals")
+       .select("*")
+       .eq("status", "active")
+       .order("created_at", { ascending: false });
+
+      if (filter.state) query = query.eq("state", filter.state);
+      if (filter.type) query = query.eq("property_type", filter.type);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setDeals(data || []);
+    } catch (err) {
+      console.error("Error loading deals:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleSaveDeal(dealId: number) {
-    const allDeals = JSON.parse(localStorage.getItem("vaultforge_deals") || "[]");
-    const updated = allDeals.map((d:any) => {
-      if (d.id === dealId) {
-        const savedBy = d.savedBy || [];
-        if (!savedBy.includes(currentEmail)) {
-          savedBy.push(currentEmail);
-        }
-        return {...d, savedBy};
-      }
-      return d;
-    });
-    localStorage.setItem("vaultforge_deals", JSON.stringify(updated));
-    loadDeals();
-    alert("Deal saved to My Work");
+  function getScoreColor(score: number) {
+    if (score >= 80) return "#00ff88";
+    if (score >= 60) return "#FFD700";
+    return "#ff4444";
   }
-
-  function handleMessagePoster(posterEmail: string) {
-    window.location.href = `/my-work/messages?to=${posterEmail}`;
-  }
-
-  const filteredDeals = deals.filter(d => {
-    const stateMatch = filterState === "all" || d.state === filterState;
-    const typeMatch = filterType === "all" || d.dealType === filterType;
-    return stateMatch && typeMatch;
-  });
-
-  const states = ["all",...Array.from(new Set(deals.map(d=>d.state)))];
-  const dealTypes = ["all",...Array.from(new Set(deals.map(d=>d.dealType)))];
 
   return (
     <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
-        <div style={{textAlign:"center",marginBottom:24,padding:"20px 0",borderBottom:"2px solid #FFD700"}}>
-          <img 
-            src="/vaultforge-logo.png" 
-            alt="VaultForge" 
-            style={{height:60,margin:"0 auto 12px",filter:"drop-shadow(0 0 15px #FFD700)"}}
-            onError={(e:any)=>{e.target.style.display='none'}}
-          />
-          <h1 style={{color:"#FFD700",fontWeight:900,fontSize:24,letterSpacing:1}}>DEAL OPPORTUNITIES</h1>
-          <div style={{fontSize:11,opacity:0.6,marginTop:4}}>AI-matched deals from VaultForge network. Save or DM to lock up.</div>
-        </div>
-
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:12}}>
-          <button onClick={()=>window.location.href="/my-work"} style={{padding:"8px 16px",border:"1px solid #FFD700",borderRadius:8,color:"#FFD700",background:"none",fontSize:12}}>← My Work</button>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <select value={filterState} onChange={e=>setFilterState(e.target.value)} style={{padding:"8px 12px",borderRadius:8,background:"#0a0f1a",border:"1px solid #333",color:"#fff",fontSize:12}}>
-              {states.map(s=><option key={s} value={s}>{s.toUpperCase()}</option>)}
-            </select>
-            <select value={filterType} onChange={e=>setFilterType(e.target.value)} style={{padding:"8px 12px",borderRadius:8,background:"#0a0f1a",border:"1px solid #333",color:"#fff",fontSize:12}}>
-              {dealTypes.map(t=><option key={t} value={t}>{t.toUpperCase()}</option>)}
-            </select>
+        <div style={{marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <h1 style={{color:"#FFD700",fontWeight:900,fontSize:28,marginBottom:4}}>DEAL OPPORTUNITIES</h1>
+            <div style={{fontSize:12,opacity:0.7}}>Live deals routed by VaultForge AI</div>
           </div>
+          <button onClick={()=>window.location.href="/my-work"} style={{background:"none",border:"1px solid #FFD700",color:"#FFD700",padding:"8px 16px",borderRadius:8,cursor:"pointer"}}>
+            My Work
+          </button>
         </div>
 
-        <div style={{background:"#0a0f1a",border:"1px solid #FFD700",color:"#FFD700",padding:"12px 16px",borderRadius:8,marginBottom:16,fontSize:12,fontWeight:900}}>
-          🔥 {filteredDeals.length} ACTIVE DEALS | AI routes deals to your buy box. Save to move to Under Contract.
+        <div style={{display:"flex",gap:12,marginBottom:24}}>
+          <select value={filter.state} onChange={e=>setFilter({...filter,state:e.target.value})} style={{padding:10,background:"#0a0f1a",border:"1px solid #FFD700",borderRadius:8,color:"#fff"}}>
+            <option value="">All States</option>
+            <option value="GA">Georgia</option>
+            <option value="FL">Florida</option>
+            <option value="TX">Texas</option>
+            <option value="NC">North Carolina</option>
+          </select>
+          <select value={filter.type} onChange={e=>setFilter({...filter,type:e.target.value})} style={{padding:10,background:"#0a0f1a",border:"1px solid #FFD700",borderRadius:8,color:"#fff"}}>
+            <option value="">All Types</option>
+            <option value="Residential">Residential</option>
+            <option value="Commercial">Commercial</option>
+            <option value="Land">Land</option>
+            <option value="Multi-Family">Multi-Family</option>
+          </select>
         </div>
 
-        {filteredDeals.length === 0? (
-          <div style={{textAlign:"center",padding:60,opacity:0.7}}>
-            <div style={{fontSize:48,marginBottom:16}}>🏠</div>
-            <div style={{fontSize:16,fontWeight:900}}>No deals match your filters</div>
-            <div style={{fontSize:12,marginTop:8}}>Update your buy box in Profile or check back soon</div>
-          </div>
+        {loading? (
+          <div style={{textAlign:"center",padding:40,opacity:0.5}}>Loading deals...</div>
+        ) : deals.length === 0? (
+          <div style={{textAlign:"center",padding:40,opacity:0.5}}>No deals found. Check back soon.</div>
         ) : (
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(350px,1fr))",gap:16}}>
-            {filteredDeals.map((deal:any) => {
-              const isSaved = deal.savedBy?.includes(currentEmail);
+          <div style={{display:"grid",gap:16}}>
+            {deals.map(deal => {
+              const analysis = deal.vaultforge_analysis || {};
+              const profit = analysis.profit || 0;
+              const score = analysis.score || 0;
+              
               return (
-                <div 
-                  key={deal.id} 
-                  style={{
-                    border:"1px solid #FFD700",
-                    borderRadius:12,
-                    padding:20,
-                    background:"#0a0f1a",
-                    boxShadow:"0 0 12px #FFD70020"
-                  }}
-                >
+                <div key={deal.id} style={{background:"#0a0f1a",border:"1px solid #FFD700",borderRadius:12,padding:16}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:12}}>
-                    <div style={{fontWeight:900,fontSize:18,color:"#FFD700",flex:1}}>{deal.title}</div>
-                    <div style={{fontSize:10,padding:"4px 8px",borderRadius:999,background:"#1a1f2a",border:"1px solid #FFD700",fontWeight:900}}>
-                      {deal.state}
+                    <div>
+                      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>{deal.title}</div>
+                      <div style={{fontSize:12,opacity:0.7}}>{deal.state} • {deal.property_type} • {deal.deal_type}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:24,fontWeight:900,color:getScoreColor(score)}}>{score}</div>
+                      <div style={{fontSize:10,opacity:0.7}}>AI SCORE</div>
                     </div>
                   </div>
-
-                  <div style={{fontSize:11,opacity:0.7,marginBottom:12}}>
-                    {deal.propertyType} | {deal.dealType}
-                  </div>
-
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12,textAlign:"center"}}>
+                  
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:12,fontSize:14}}>
                     <div>
-                      <div style={{fontSize:10,opacity:0.6}}>ASK</div>
-                      <div style={{fontSize:16,fontWeight:900}}>${parseInt(deal.askPrice).toLocaleString()}</div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:10,opacity:0.6}}>ARV</div>
-                      <div style={{fontSize:16,fontWeight:900,color:"#00ff00"}}>${parseInt(deal.arv).toLocaleString()}</div>
+                      <div style={{opacity:0.7,fontSize:11}}>ASK</div>
+                      <div style={{fontWeight:700}}>${deal.ask_price.toLocaleString()}</div>
                     </div>
                     <div>
-                      <div style={{fontSize:10,opacity:0.6}}>REPAIR</div>
-                      <div style={{fontSize:16,fontWeight:900}}>${parseInt(deal.repair||0).toLocaleString()}</div>
+                      <div style={{opacity:0.7,fontSize:11}}>ARV</div>
+                      <div style={{fontWeight:700}}>${deal.arv.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div style={{opacity:0.7,fontSize:11}}>REPAIR</div>
+                      <div style={{fontWeight:700}}>${deal.repair.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div style={{opacity:0.7,fontSize:11}}>PROFIT</div>
+                      <div style={{fontWeight:700,color:"#00ff88"}}>${profit.toLocaleString()}</div>
                     </div>
                   </div>
 
-                  <div style={{border:"1px solid #00ff00",borderRadius:8,padding:12,background:"#05070d",marginBottom:12,textAlign:"center"}}>
-                    <div style={{fontSize:10,opacity:0.7,marginBottom:2}}>VAULTFORGE ANALYSIS</div>
-                    <div style={{fontSize:18,fontWeight:900,color:"#00ff00"}}>
-                      ${deal.vaultForgeAnalysis.profit.toLocaleString()} PROFIT | {deal.vaultForgeAnalysis.roi}% ROI
-                    </div>
-                  </div>
-
-                  {deal.notes && (
-                    <div style={{fontSize:12,opacity:0.8,marginBottom:12,lineHeight:1.5,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
-                      {deal.notes}
+                  <div style={{fontSize:13,opacity:0.8,marginBottom:12,lineHeight:1.5}}>{deal.description}</div>
+                  
+                  {analysis.flags && analysis.flags.length > 0 && (
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                      {analysis.flags.map((flag: string) => (
+                        <span key={flag} style={{fontSize:10,background:"#FFD700",color:"#000",padding:"4px 8px",borderRadius:4,fontWeight:700}}>
+                          {flag.replace(/_/g," ")}
+                        </span>
+                      ))}
                     </div>
                   )}
 
-                  <div style={{fontSize:10,opacity:0.5,marginBottom:12}}>
-                    Posted {new Date(deal.postedAt).toLocaleDateString()}
-                  </div>
-
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <button 
-                      onClick={()=>handleSaveDeal(deal.id)} 
-                      disabled={isSaved}
-                      style={{
-                        padding:"12px",
-                        borderRadius:8,
-                        background: isSaved? "#333" : "#FFD700",
-                        color: isSaved? "#666" : "#000",
-                        border:"none",
-                        fontSize:12,
-                        fontWeight:900,
-                        cursor: isSaved? "not-allowed" : "pointer"
-                      }}
-                    >
-                      {isSaved? "✓ SAVED" : "⭐ SAVE DEAL"}
-                    </button>
-                    <button 
-                      onClick={()=>handleMessagePoster(deal.postedBy)} 
-                      style={{padding:"12px",borderRadius:8,background:"none",color:"#FFD700",border:"1px solid #FFD700",fontSize:12,fontWeight:900}}
-                    >
-                      💬 DM POSTER
-                    </button>
-                  </div>
+                  <button style={{width:"100%",padding:12,background:"#FFD700",color:"#000",border:"none",borderRadius:8,fontWeight:900,cursor:"pointer"}}>
+                    VIEW DEAL + CONTACT SELLER
+                  </button>
                 </div>
               );
             })}
