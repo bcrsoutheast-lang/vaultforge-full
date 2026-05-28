@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { submitOffer } from '@/app/actions/offers'
 
 type Deal = {
-  id: string
+  id: number // Changed from string to number to match BIGINT
   address: string
   asking_price: number
   arv: number
@@ -26,7 +26,7 @@ export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose:
     setError('')
     
     const formData = new FormData(e.currentTarget)
-    formData.append('deal_id', deal.id)
+    formData.append('deal_id', String(deal.id)) // Convert number to string for FormData
     formData.append('deal_address', `${deal.address}, ${deal.city}, ${deal.state}`)
     
     const res = await submitOffer(formData)
