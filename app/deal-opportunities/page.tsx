@@ -11,13 +11,11 @@ export default async function Page() {
   
   const currentUser = 'dm2107137@gmail.com'
   
-  // Get all deals
   const { data: deals } = await supabase
     .from('deals')
     .select('*')
     .order('created_at', { ascending: false })
 
-  // Get saved deal IDs for this user
   const { data: savedRows } = await supabase
     .from('saved_deals')
     .select('deal_id')
