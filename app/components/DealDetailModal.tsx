@@ -1,6 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 type Deal = {
   id: number
@@ -49,6 +55,7 @@ export default function DealDetailModal({
   const [message, setMessage] = useState('')
   const [offerAmount, setOfferAmount] = useState('')
   const [offerNotes, setOfferNotes] = useState('')
+  const [closingDate, setClosingDate] = useState('')
 
   if (!deal) return null
 
@@ -96,6 +103,7 @@ export default function DealDetailModal({
         deal_id: deal.id,
         offer_amount: Number(offerAmount),
         notes: offerNotes,
+        closing_date: closingDate,
         buyer_email: currentUser?.email,
         buyer_name: currentUser?.name
       })
@@ -105,9 +113,27 @@ export default function DealDetailModal({
       setShowMakeOffer(false)
       setOfferAmount('')
       setOfferNotes('')
+      setClosingDate('')
     } else {
-      alert('Failed to submit offer')
+      alert('Failed to submit offer. Connect /api/make-offer route.')
     }
+  }
+
+  async function handleArchive() {
+    if (!deal) return
+    await supabase.from('deals').update({ status: 'archived' }).eq('id', deal.id)
+    alert('Deal archived')
+    onClose()
+    window.location.reload()
+  }
+
+  async function handleDelete() {
+    if (!deal) return
+    if (!confirm('Delete this deal permanently?')) return
+    await supabase.from('deals').delete().eq('id', deal.id)
+    alert('Deal deleted')
+    onClose()
+    window.location.reload()
   }
 
   return (
@@ -295,6 +321,21 @@ export default function DealDetailModal({
                 onClick={onSave}
                 style={{ 
                   flex: 1, 
+                  backgroundColor: isSaved ? '#14532d' : '#27272a', 
+                  padding: '8px', 
+                  borderRadius: '4px', 
+                  border: 'none',
+                  fontSize: '14px',
+                  color: isSaved ? '#4ade80' : '#fff',
+                  cursor: 'pointer'
+                }}
+              >
+                {isSaved? 'SAVED' : 'SAVE'}
+              </button>
+              <button 
+                onClick={handleArchive}
+                style={{ 
+                  flex: 1, 
                   backgroundColor: '#27272a', 
                   padding: '8px', 
                   borderRadius: '4px', 
@@ -304,28 +345,23 @@ export default function DealDetailModal({
                   cursor: 'pointer'
                 }}
               >
-                {isSaved? 'SAVED' : 'SAVE'}
+                ARCHIVE
               </button>
-              <button style={{ 
-                flex: 1, 
-                backgroundColor: '#27272a', 
-                padding: '8px', 
-                borderRadius: '4px', 
-                border: 'none',
-                fontSize: '14px',
-                color: '#fff',
-                cursor: 'pointer'
-              }}>ARCHIVE</button>
-              <button style={{ 
-                flex: 1, 
-                backgroundColor: 'rgba(127, 29, 29, 0.5)', 
-                color: '#f87171', 
-                padding: '8px', 
-                borderRadius: '4px', 
-                border: 'none',
-                fontSize: '14px',
-                cursor: 'pointer'
-              }}>DELETE</button>
+              <button 
+                onClick={handleDelete}
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: 'rgba(127, 29, 29, 0.5)', 
+                  color: '#f87171', 
+                  padding: '8px', 
+                  borderRadius: '4px', 
+                  border: 'none',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                DELETE
+              </button>
             </div>
 
             <div style={{ fontSize: '12px', color: '#52525b', marginTop: '16px', textAlign: 'center' }}>
@@ -375,14 +411,15 @@ export default function DealDetailModal({
             <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Make Offer</h3>
             
             <div style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a' }}>
-              <div style={{ fontSize: '12px', color: '#71717a' }}>MAO: ${mao?.toLocaleString()} | ASKING: ${deal.asking_price?.toLocaleString()}</div>
+              <div style={{ fontSize: '12px', color: '#71717a' }}>ASKING: ${deal.asking_price?.toLocaleString()} | MAO: ${mao?.toLocaleString()}</div>
             </div>
 
+            <label style={{ fontSize: '12px', color: '#a1a1aa', marginBottom: '4px', display: 'block' }}>OFFER AMOUNT</label>
             <input 
               type="number"
               value={offerAmount}
               onChange={(e) => setOfferAmount(e.target.value)}
-              placeholder="Your offer amount"
+              placeholder={`Suggested: $${mao?.toLocaleString()}`}
               style={{ 
                 width: '100%', 
                 backgroundColor: '#18181b', 
@@ -395,10 +432,28 @@ export default function DealDetailModal({
               }}
             />
             
+            <label style={{ fontSize: '12px', color: '#a1a1aa', marginBottom: '4px', display: 'block' }}>CLOSING DATE</label>
+            <input 
+              type="date"
+              value={closingDate}
+              onChange={(e) => setClosingDate(e.target.value)}
+              style={{ 
+                width: '100%', 
+                backgroundColor: '#18181b', 
+                border: '1px solid #27272a', 
+                borderRadius: '4px', 
+                padding: '16px', 
+                color: '#fff', 
+                marginBottom: '12px',
+                fontSize: '16px'
+              }}
+            />
+            
+            <label style={{ fontSize: '12px', color: '#a1a1aa', marginBottom: '4px', display: 'block' }}>TERMS / NOTES</label>
             <textarea 
               value={offerNotes}
               onChange={(e) => setOfferNotes(e.target.value)}
-              placeholder="Add notes... Cash buyer, quick close, as-is, etc."
+              placeholder="Cash buyer, as-is, 7 day close, etc."
               style={{ 
                 width: '100%', 
                 backgroundColor: '#18181b', 
