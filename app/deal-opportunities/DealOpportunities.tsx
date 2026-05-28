@@ -116,7 +116,6 @@ export default function DealOpportunities({ deals: initialDeals, initialSavedIds
     cursor: 'pointer'
   })
 
-  // Filter deals based on tab
   const filteredDeals = deals.filter(d => {
     if (filter === 'all') return d.status === 'active'
     if (filter === 'saved') return savedIds.has(d.id) && d.status === 'active'
