@@ -15,8 +15,9 @@ export default function DealArchive() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) router.push('/login')
-      else {
+      if (!data.user || !data.user.email) {
+        router.push('/login')
+      } else {
         setUser(data.user)
         fetchDeals(data.user.email)
       }
@@ -35,52 +36,19 @@ export default function DealArchive() {
 
   const restoreDeal = async (id: number) => {
     await supabase.from('deals').update({ status: 'saved', closed_at: null }).eq('id', id)
-    fetchDeals(user.email)
+    if (user?.email) fetchDeals(user.email)
   }
 
   if (!user) return null
 
   return (
     <div style={{ background: '#000', minHeight: '100vh', color: '#E5E5E5', padding: '24px' }}>
-      <header style={{ 
-        borderBottom: '1px solid #FFD700', 
-        paddingBottom: '16px', 
-        marginBottom: '24px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center' 
-      }}>
+      <header style={{ borderBottom: '1px solid #FFD700', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div style={{ color: '#FFD700', fontSize: '24px', fontWeight: '900', letterSpacing: '2px' }}>
-            DEAL ARCHIVE
-          </div>
-          <div style={{ color: '#666', fontSize: '11px', letterSpacing: '2px' }}>
-            CLOSED & COMPLETED TRANSACTIONS. READ-ONLY VAULT.
-          </div>
+          <div style={{ color: '#FFD700', fontSize: '24px', fontWeight: '900', letterSpacing: '2px' }}>DEAL ARCHIVE</div>
+          <div style={{ color: '#666', fontSize: '11px', letterSpacing: '2px' }}>CLOSED & COMPLETED TRANSACTIONS. READ-ONLY VAULT.</div>
         </div>
-        <button 
-          onClick={() => router.push('/dashboard')} 
-          style={{ 
-            border: '1px solid #FFD700', 
-            background: 'transparent', 
-            color: '#FFD700', 
-            padding: '10px 20px', 
-            fontSize: '12px', 
-            fontWeight: '700', 
-            cursor: 'pointer',
-            letterSpacing: '1px'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#FFD700'
-            e.currentTarget.style.color = '#000'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = '#FFD700'
-          }}
-        >
-          ← COMMAND CENTER
-        </button>
+        <button onClick={() => router.push('/dashboard')} style={{ border: '1px solid #FFD700', background: 'transparent', color: '#FFD700', padding: '10px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', letterSpacing: '1px' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#FFD700'; e.currentTarget.style.color = '#000' }} onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#FFD700' }}>← COMMAND CENTER</button>
       </header>
 
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -100,45 +68,16 @@ export default function DealArchive() {
               <td style={{ padding: '16px', fontSize: '14px', fontWeight: '600' }}>{deal.title}</td>
               <td style={{ padding: '16px', color: '#888', fontSize: '14px' }}>{deal.city}</td>
               <td style={{ padding: '16px', color: '#888', fontSize: '14px' }}>{deal.property_type}</td>
-              <td style={{ padding: '16px', color: '#888', fontSize: '14px' }}>
-                {deal.closed_at ? new Date(deal.closed_at).toLocaleDateString() : '-'}
-              </td>
-              <td style={{ padding: '16px', color: '#FFD700', fontSize: '14px', fontWeight: '700' }}>
-                ${deal.commission_earned?.toLocaleString() || '0'}
-              </td>
+              <td style={{ padding: '16px', color: '#888', fontSize: '14px' }}>{deal.closed_at ? new Date(deal.closed_at).toLocaleDateString() : '-'}</td>
+              <td style={{ padding: '16px', color: '#FFD700', fontSize: '14px', fontWeight: '700' }}>${deal.commission_earned?.toLocaleString() || '0'}</td>
               <td style={{ padding: '16px' }}>
-                <button 
-                  onClick={() => restoreDeal(deal.id)} 
-                  style={{ 
-                    border: '1px solid #444', 
-                    background: 'transparent', 
-                    color: '#888', 
-                    padding: '6px 12px', 
-                    fontSize: '10px', 
-                    cursor: 'pointer',
-                    letterSpacing: '1px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.border = '1px solid #FFD700'
-                    e.currentTarget.style.color = '#FFD700'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.border = '1px solid #444'
-                    e.currentTarget.style.color = '#888'
-                  }}
-                >
-                  RESTORE
-                </button>
+                <button onClick={() => restoreDeal(deal.id)} style={{ border: '1px solid #444', background: 'transparent', color: '#888', padding: '6px 12px', fontSize: '10px', cursor: 'pointer', letterSpacing: '1px' }} onMouseEnter={(e) => { e.currentTarget.style.border = '1px solid #FFD700'; e.currentTarget.style.color = '#FFD700' }} onMouseLeave={(e) => { e.currentTarget.style.border = '1px solid #444'; e.currentTarget.style.color = '#888' }}>RESTORE</button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {deals.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#666', padding: '60px', fontSize: '12px', letterSpacing: '2px' }}>
-          NO ARCHIVED DEALS
-        </div>
-      )}
+      {deals.length === 0 && <div style={{ textAlign: 'center', color: '#666', padding: '60px', fontSize: '12px', letterSpacing: '2px' }}>NO ARCHIVED DEALS</div>}
     </div>
   )
 }
