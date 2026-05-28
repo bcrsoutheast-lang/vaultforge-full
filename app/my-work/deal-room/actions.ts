@@ -5,9 +5,31 @@ import { revalidatePath } from 'next/cache'
 
 export async function createDeal(formData: FormData) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY! // Use service role to bypass RLS
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  
+  let photo_url = ''
+  const photo = formData.get('photo') as File | null
+  
+  if (photo && photo.size > 0) {
+    const fileExt = photo.name.split('.').pop()
+    const fileName = `${Date.now()}.${fileExt}`
+    
+    const { data, error: uploadError } = await supabase.storage
+     .from('deal-photos')
+     .upload(fileName, photo)
+    
+    if (uploadError) {
+      return { error: 'Photo upload failed: ' + uploadError.message }
+    }
+    
+    const { data: { publicUrl } } = supabase.storage
+     .from('deal-photos')
+     .getPublicUrl(fileName)
+    
+    photo_url = publicUrl
+  }
 
   const data = {
     user_email: 'dm2107137@gmail.com',
@@ -21,6 +43,7 @@ export async function createDeal(formData: FormData) {
     baths: Number(formData.get('baths')) || null,
     sqft: Number(formData.get('sqft')) || null,
     description: formData.get('description') as string,
+    photo_url,
     title: `${formData.get('beds') || '?'}bd ${formData.get('baths') || '?'}ba ${formData.get('city')}`,
     created_at: new Date().toISOString()
   }
