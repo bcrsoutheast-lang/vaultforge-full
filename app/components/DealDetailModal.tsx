@@ -350,44 +350,45 @@ export default function DealDetailModal({
           zIndex: 60, 
           padding: '16px' 
         }}>
-          <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '448px', border: '1px solid #27272a' }}>
-            <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Message Owner</h3>
+          <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '600px', border: '1px solid #27272a' }}>
+            <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Message Owner</h3>
             
-            <div style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a', display: 'flex', gap: '12px' }}>
-              <img src={deal.photo_url || 'https://via.placeholder.com/80'} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} />
+            <div style={{ backgroundColor: '#18181b', padding: '16px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a', display: 'flex', gap: '12px' }}>
+              <img src={deal.photo_url || 'https://via.placeholder.com/100'} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '4px' }} />
               <div>
-                <div style={{ fontWeight: 'bold', color: '#facc15' }}>{deal.city}, {deal.state}</div>
-                <div style={{ fontSize: '14px', color: '#a1a1aa' }}>${deal.asking_price?.toLocaleString()}</div>
-                <div style={{ fontSize: '12px', color: '#71717a' }}>{deal.beds}bd • {deal.baths}ba • {deal.sqft?.toLocaleString()}sqft</div>
+                <div style={{ fontWeight: 'bold', color: '#facc15', fontSize: '18px' }}>{deal.city}, {deal.state}</div>
+                <div style={{ fontSize: '16px', color: '#a1a1aa' }}>${deal.asking_price?.toLocaleString()}</div>
+                <div style={{ fontSize: '14px', color: '#71717a' }}>{deal.beds}bd • {deal.baths}ba • {deal.sqft?.toLocaleString()}sqft</div>
               </div>
             </div>
 
             <textarea 
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Write your message..."
+              placeholder="Write your message... Is this still available? What's the motivation?"
               style={{ 
                 width: '100%', 
                 backgroundColor: '#18181b', 
                 border: '1px solid #27272a', 
                 borderRadius: '4px', 
-                padding: '12px', 
+                padding: '16px', 
                 color: '#fff', 
-                minHeight: '100px',
-                marginBottom: '12px',
-                fontFamily: 'inherit'
+                minHeight: '200px',
+                marginBottom: '16px',
+                fontFamily: 'inherit',
+                fontSize: '16px'
               }}
             />
             <div style={{ display: 'flex', gap: '8px' }}>
               <button 
                 onClick={sendMessage}
-                style={{ flex: 1, backgroundColor: '#facc15', color: '#000', fontWeight: 'bold', padding: '12px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+                style={{ flex: 1, backgroundColor: '#facc15', color: '#000', fontWeight: 'bold', padding: '16px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '16px' }}
               >
                 SEND
               </button>
               <button 
                 onClick={() => { setShowMessage(false); setMessage('') }}
-                style={{ flex: 1, backgroundColor: '#3f3f46', padding: '12px', borderRadius: '4px', border: 'none', color: '#fff', cursor: 'pointer' }}
+                style={{ flex: 1, backgroundColor: '#3f3f46', padding: '16px', borderRadius: '4px', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '16px' }}
               >
                 CANCEL
               </button>
