@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import MessageOwner from './MessageOwner'
 
 type Deal = {
   id: number
@@ -46,133 +45,264 @@ export default function DealDetailModal({
   onSave?: () => void
 }) {
   const [showMakeOffer, setShowMakeOffer] = useState(false)
+  const [showMessage, setShowMessage] = useState(false)
+  const [message, setMessage] = useState('')
 
   if (!deal) return null
 
   const profit = deal.arv - deal.asking_price - (deal.repairs || 0)
   const mao = deal.arv * 0.7 - (deal.repairs || 0)
 
+  async function sendMessage() {
+    if (!message.trim()) return
+    const res = await fetch('/api/send-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deal_id: deal.id,
+        recipient_email: deal.user_email,
+        message: message,
+        current_user_email: currentUser?.email,
+        current_user_name: currentUser?.name,
+        current_user_avatar: currentUser?.avatar,
+        deal_snapshot: {
+          image_url: deal.photo_url,
+          title: `${deal.city}, ${deal.state}`,
+          price: deal.asking_price,
+          beds: deal.beds,
+          baths: deal.baths,
+          sqft: deal.sqft
+        }
+      })
+    })
+    if (res.ok) {
+      alert('Message sent!')
+      setShowMessage(false)
+      setMessage('')
+    } else {
+      alert('Failed to send message')
+    }
+  }
+
   return (
     <>
-      <div className="fixed inset-0 bg-black/90 flex items-start justify-center z-50 p-4 overflow-y-auto">
-        <div className="bg-zinc-950 rounded-lg w-full max-w-2xl border border-zinc-800 my-8">
+      <div style={{ 
+        position: 'fixed', 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        bottom: 0, 
+        backgroundColor: 'rgba(0,0,0,0.9)', 
+        display: 'flex', 
+        alignItems: 'flex-start', 
+        justifyContent: 'center', 
+        zIndex: 50, 
+        padding: '16px', 
+        overflowY: 'auto' 
+      }}>
+        <div style={{ 
+          backgroundColor: '#09090b', 
+          borderRadius: '8px', 
+          width: '100%', 
+          maxWidth: '672px', 
+          border: '1px solid #27272a', 
+          margin: '32px 0' 
+        }}>
           
-          <div className="relative">
+          <div style={{ position: 'relative' }}>
             <img 
               src={deal.photo_url || 'https://via.placeholder.com/800x400?text=No+Image'} 
               alt={deal.address}
-              className="w-full h-64 md:h-80 object-cover rounded-t-lg"
+              style={{ width: '100%', height: '320px', objectFit: 'cover', borderTopLeftRadius: '8px', borderTopRightRadius: '8px' }}
             />
             <button 
               onClick={onClose}
-              className="absolute top-4 right-4 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/80 text-lg z-10"
+              style={{ 
+                position: 'absolute', 
+                top: '16px', 
+                right: '16px', 
+                backgroundColor: 'rgba(0,0,0,0.6)', 
+                color: '#fff', 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '50%', 
+                border: 'none',
+                fontSize: '18px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             >
               ✕
             </button>
           </div>
 
-          <div className="p-4 md:p-6">
-            <h2 className="text-xl md:text-2xl font-bold text-yellow-400 mb-1">
+          <div style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#facc15', marginBottom: '4px' }}>
               {deal.city}, {deal.state} {deal.zipcode}
             </h2>
-            <p className="text-zinc-400 mb-4 text-sm md:text-base">
+            <p style={{ color: '#a1a1aa', marginBottom: '16px', fontSize: '14px' }}>
               {deal.beds} Beds • {deal.baths} Baths • {deal.sqft?.toLocaleString()} Sqft
             </p>
 
-            <div className="grid grid-cols-3 gap-2 md:gap-3 mb-4">
-              <div className="bg-zinc-900 p-2 md:p-3 rounded border border-zinc-800">
-                <div className="text-xs text-zinc-500">ASKING</div>
-                <div className="text-base md:text-lg font-bold text-blue-400">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '4px', border: '1px solid #27272a' }}>
+                <div style={{ fontSize: '12px', color: '#71717a' }}>ASKING</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#60a5fa' }}>
                   ${deal.asking_price?.toLocaleString()}
                 </div>
               </div>
-              <div className="bg-zinc-900 p-2 md:p-3 rounded border border-zinc-800">
-                <div className="text-xs text-zinc-500">ARV</div>
-                <div className="text-base md:text-lg font-bold text-green-400">
+              <div style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '4px', border: '1px solid #27272a' }}>
+                <div style={{ fontSize: '12px', color: '#71717a' }}>ARV</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4ade80' }}>
                   ${deal.arv?.toLocaleString()}
                 </div>
               </div>
-              <div className="bg-zinc-900 p-2 md:p-3 rounded border border-zinc-800">
-                <div className="text-xs text-zinc-500">REPAIRS</div>
-                <div className="text-base md:text-lg font-bold text-yellow-400">
+              <div style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '4px', border: '1px solid #27272a' }}>
+                <div style={{ fontSize: '12px', color: '#71717a' }}>REPAIRS</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#facc15' }}>
                   ${(deal.repairs || 0)?.toLocaleString()}
                 </div>
               </div>
             </div>
 
-            <div className="bg-zinc-900 border border-red-900/50 rounded p-3 md:p-4 mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <div className="text-xs text-zinc-500">SMART AI ANALYZER</div>
-                <div className={`text-xs px-2 py-1 rounded ${profit > 0? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
+            <div style={{ backgroundColor: '#18181b', border: '1px solid #7f1d1d', borderRadius: '4px', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', color: '#71717a' }}>SMART AI ANALYZER</div>
+                <div style={{ 
+                  fontSize: '12px', 
+                  padding: '4px 8px', 
+                  borderRadius: '4px',
+                  backgroundColor: profit > 0? '#14532d' : '#7f1d1d',
+                  color: profit > 0? '#4ade80' : '#f87171'
+                }}>
                   {profit > 0? 'BUY' : 'PASS'}
                 </div>
               </div>
-              <div className={`text-lg md:text-xl font-bold mb-1 ${profit > 0? 'text-green-400' : 'text-red-400'}`}>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '4px', color: profit > 0? '#4ade80' : '#f87171' }}>
                 Est. Profit: ${profit?.toLocaleString()}
               </div>
-              <div className="text-xs md:text-sm text-zinc-400">
+              <div style={{ fontSize: '14px', color: '#a1a1aa' }}>
                 {profit > 0 
                  ? `Good deal. Potential profit of $${profit.toLocaleString()}.` 
                   : `Overpriced. You'd lose $${Math.abs(profit).toLocaleString()}. Walk away.`}
               </div>
-              <div className="text-xs md:text-sm text-zinc-500 mt-1">
+              <div style={{ fontSize: '14px', color: '#71717a', marginTop: '4px' }}>
                 Max Allowable Offer: ${mao?.toLocaleString()}
               </div>
             </div>
 
-            <div className="bg-zinc-900 p-3 md:p-4 rounded mb-4 border border-zinc-800">
-              <div className="text-xs text-zinc-500 mb-2">PROPERTY DETAILS</div>
-              <div className="text-sm text-zinc-300 mb-2">{deal.description || 'No description provided'}</div>
-              <div className="text-sm text-zinc-400">
+            <div style={{ backgroundColor: '#18181b', padding: '16px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a' }}>
+              <div style={{ fontSize: '12px', color: '#71717a', marginBottom: '8px' }}>PROPERTY DETAILS</div>
+              <div style={{ fontSize: '14px', color: '#d4d4d8', marginBottom: '8px' }}>{deal.description || 'No description provided'}</div>
+              <div style={{ fontSize: '14px', color: '#a1a1aa' }}>
                 Location: {deal.address || deal.city}, {deal.state} {deal.zipcode}
               </div>
               {deal.property_type && (
-                <div className="text-sm text-zinc-400">Type: {deal.property_type}</div>
+                <div style={{ fontSize: '14px', color: '#a1a1aa' }}>Type: {deal.property_type}</div>
               )}
             </div>
 
-            <div className="bg-zinc-900 p-3 md:p-4 rounded mb-4 border border-zinc-800">
-              <div className="text-xs text-zinc-500 mb-2">OWNER CONTACT</div>
-              <div className="text-sm text-zinc-300">{deal.user_email}</div>
+            <div style={{ backgroundColor: '#18181b', padding: '16px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a' }}>
+              <div style={{ fontSize: '12px', color: '#71717a', marginBottom: '8px' }}>OWNER CONTACT</div>
+              <div style={{ fontSize: '14px', color: '#d4d4d8' }}>{deal.user_email}</div>
               {deal.owner_phone && (
-                <div className="text-sm text-zinc-300">{deal.owner_phone}</div>
+                <div style={{ fontSize: '14px', color: '#d4d4d8' }}>{deal.owner_phone}</div>
               )}
             </div>
 
-            <div className="flex gap-2 mb-2">
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
               <button 
                 onClick={() => setShowMakeOffer(true)}
-                className="flex-1 bg-yellow-400 text-black font-bold py-3 rounded hover:bg-yellow-300 text-sm md:text-base"
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: '#facc15', 
+                  color: '#000', 
+                  fontWeight: 'bold', 
+                  padding: '12px', 
+                  borderRadius: '4px', 
+                  border: 'none',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
               >
                 MAKE OFFER
               </button>
               <button 
                 onClick={onClose}
-                className="flex-1 bg-zinc-700 py-3 rounded hover:bg-zinc-600 text-sm md:text-base"
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: '#3f3f46', 
+                  padding: '12px', 
+                  borderRadius: '4px', 
+                  border: 'none',
+                  fontSize: '14px',
+                  color: '#fff',
+                  cursor: 'pointer'
+                }}
               >
                 EXIT
               </button>
             </div>
 
-            <div className="mb-2">
-              <MessageOwner 
-                deal={deal} 
-                currentUser={currentUser || { email: 'guest@vaultforge.app', name: 'Guest' }} 
-              />
-            </div>
+            <button 
+              onClick={() => setShowMessage(true)}
+              style={{ 
+                width: '100%', 
+                backgroundColor: '#facc15', 
+                color: '#000', 
+                fontWeight: 'bold', 
+                padding: '12px', 
+                borderRadius: '4px', 
+                border: 'none',
+                fontSize: '14px',
+                cursor: 'pointer',
+                marginBottom: '8px'
+              }}
+            >
+              MESSAGE OWNER
+            </button>
 
-            <div className="flex gap-2">
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button 
                 onClick={onSave}
-                className="flex-1 bg-zinc-800 py-2 rounded hover:bg-zinc-700 text-sm"
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: '#27272a', 
+                  padding: '8px', 
+                  borderRadius: '4px', 
+                  border: 'none',
+                  fontSize: '14px',
+                  color: '#fff',
+                  cursor: 'pointer'
+                }}
               >
                 {isSaved? 'SAVED' : 'SAVE'}
               </button>
-              <button className="flex-1 bg-zinc-800 py-2 rounded hover:bg-zinc-700 text-sm">ARCHIVE</button>
-              <button className="flex-1 bg-red-900/50 text-red-400 py-2 rounded hover:bg-red-900 text-sm">DELETE</button>
+              <button style={{ 
+                flex: 1, 
+                backgroundColor: '#27272a', 
+                padding: '8px', 
+                borderRadius: '4px', 
+                border: 'none',
+                fontSize: '14px',
+                color: '#fff',
+                cursor: 'pointer'
+              }}>ARCHIVE</button>
+              <button style={{ 
+                flex: 1, 
+                backgroundColor: 'rgba(127, 29, 29, 0.5)', 
+                color: '#f87171', 
+                padding: '8px', 
+                borderRadius: '4px', 
+                border: 'none',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}>DELETE</button>
             </div>
 
-            <div className="text-xs text-zinc-600 mt-4 text-center">
+            <div style={{ fontSize: '12px', color: '#52525b', marginTop: '16px', textAlign: 'center' }}>
               Posted by: {deal.user_email} • {new Date(deal.created_at).toLocaleDateString()}
             </div>
           </div>
@@ -180,16 +310,88 @@ export default function DealDetailModal({
       </div>
 
       {showMakeOffer && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4">
-          <div className="bg-zinc-950 p-6 rounded-lg w-full max-w-md border border-zinc-800">
-            <h3 className="text-xl font-bold mb-4 text-yellow-400">Make Offer</h3>
-            <p className="text-zinc-400 mb-4">Coming soon - connect to escrow flow</p>
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          backgroundColor: 'rgba(0,0,0,0.9)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 60, 
+          padding: '16px' 
+        }}>
+          <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '448px', border: '1px solid #27272a' }}>
+            <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Make Offer</h3>
+            <p style={{ color: '#a1a1aa', marginBottom: '16px' }}>Coming soon - connect to escrow flow</p>
             <button 
               onClick={() => setShowMakeOffer(false)}
-              className="w-full bg-zinc-700 py-3 rounded hover:bg-zinc-600"
+              style={{ width: '100%', backgroundColor: '#3f3f46', padding: '12px', borderRadius: '4px', border: 'none', color: '#fff', cursor: 'pointer' }}
             >
               CLOSE
             </button>
+          </div>
+        </div>
+      )}
+
+      {showMessage && (
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          backgroundColor: 'rgba(0,0,0,0.9)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 60, 
+          padding: '16px' 
+        }}>
+          <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '448px', border: '1px solid #27272a' }}>
+            <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Message Owner</h3>
+            
+            <div style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a', display: 'flex', gap: '12px' }}>
+              <img src={deal.photo_url || 'https://via.placeholder.com/80'} style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} />
+              <div>
+                <div style={{ fontWeight: 'bold', color: '#facc15' }}>{deal.city}, {deal.state}</div>
+                <div style={{ fontSize: '14px', color: '#a1a1aa' }}>${deal.asking_price?.toLocaleString()}</div>
+                <div style={{ fontSize: '12px', color: '#71717a' }}>{deal.beds}bd • {deal.baths}ba • {deal.sqft?.toLocaleString()}sqft</div>
+              </div>
+            </div>
+
+            <textarea 
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Write your message..."
+              style={{ 
+                width: '100%', 
+                backgroundColor: '#18181b', 
+                border: '1px solid #27272a', 
+                borderRadius: '4px', 
+                padding: '12px', 
+                color: '#fff', 
+                minHeight: '100px',
+                marginBottom: '12px',
+                fontFamily: 'inherit'
+              }}
+            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={sendMessage}
+                style={{ flex: 1, backgroundColor: '#facc15', color: '#000', fontWeight: 'bold', padding: '12px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+              >
+                SEND
+              </button>
+              <button 
+                onClick={() => { setShowMessage(false); setMessage('') }}
+                style={{ flex: 1, backgroundColor: '#3f3f46', padding: '12px', borderRadius: '4px', border: 'none', color: '#fff', cursor: 'pointer' }}
+              >
+                CANCEL
+              </button>
+            </div>
           </div>
         </div>
       )}
