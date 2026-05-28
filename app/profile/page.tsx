@@ -1,245 +1,708 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createBrowserClient } from '@supabase/ssr'
 
-export default function Profile() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [states, setStates] = useState<string[]>([]);
-  const [propertyTypes, setPropertyTypes] = useState<string[]>([]);
-  const [dealTypes, setDealTypes] = useState<string[]>([]);
-  const [dmaicSkills, setDmaicSkills] = useState<string[]>([]);
-  const [investorType, setInvestorType] = useState("wholesaler");
-  const [profilePic, setProfilePic] = useState("");
-  const [bio, setBio] = useState("");
-  
-  const currentEmail = typeof window!== "undefined"? localStorage.getItem("vaultforge_current_email") || "" : "";
-  const isAdmin = currentEmail === "admin@vaultforge.com"; // Change to your admin email
+interface ProfileData {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  company_name: string
+  avatar_url: string
+  investor_types: string[]
+  strategies: string[]
+  capital_range: string
+  funding_sources: string[]
+  min_purchase: number
+  max_purchase: number
+  close_timeline: string
+  risk_tolerance: string
+  states: string[]
+  asset_types: string[]
+  property_conditions: string[]
+  deal_breakers: string[]
+  must_haves: string[]
+  special_fields: string
+  deals_closed_12mo: number
+  pof_url: string
+  veteran_owned: boolean
+  member_type: string
+}
+
+export default function ProfilePage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<Partial<ProfileData>>({
+    investor_types: [],
+    strategies: [],
+    funding_sources: [],
+    states: [],
+    asset_types: [],
+    property_conditions: [],
+    deal_breakers: [],
+    must_haves: [],
+    veteran_owned: false
+  })
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  const INVESTOR_TYPES = ['CASH BUYER', 'HARD MONEY', 'PRIVATE LENDER', 'WHOLESALER', 'FLIPPER', 'BUY & HOLD', 'DEVELOPER', 'SYNDICATOR', 'FUND', 'INSTITUTIONAL']
+  const STRATEGIES = ['FIX & FLIP', 'BRRRR', 'LONG TERM RENTAL', 'SHORT TERM RENTAL', 'LAND BANK', 'NEW CONSTRUCTION', 'VALUE ADD', 'NOTE BUYING']
+  const CAPITAL_RANGES = ['$0-50K', '$50-250K', '$250-1M', '$1M-5M', '$5M+']
+  const FUNDING_SOURCES = ['CASH', 'LINE OF CREDIT', 'PRIVATE MONEY', 'HARD MONEY', 'BANK', 'IRA/401K', 'JV PARTNER']
+  const TIMELINES = ['CLOSE IN 7 DAYS', 'CLOSE IN 30 DAYS', '60+ DAYS OK']
+  const RISK_LEVELS = ['TURNKEY ONLY', 'LIGHT REHAB', 'HEAVY REHAB', 'TEARDOWN', 'LEGAL ISSUES OK']
+  const STATES = ['GA', 'TN', 'AL', 'NC', 'SC', 'FL', 'TX']
+  const ASSET_TYPES = ['RESIDENTIAL', 'COMMERCIAL', 'MULTI-FAMILY', 'LAND', 'MOBILE HOMES', 'NOTES']
+  const CONDITIONS = ['RETAIL READY', 'COSMETIC', 'FULL GUT', 'FIRE DAMAGE', 'FOUNDATION ISSUES', 'HOARDER']
+  const DEAL_BREAKERS = ['HOA', 'FLOOD ZONE', 'RURAL', 'SEPTIC', 'WELL WATER', 'LIENS']
+  const MEMBER_TYPES = ['BUYER', 'SELLER', 'BOTH']
 
   useEffect(() => {
-    loadProfile();
-  }, [currentEmail]);
+    loadProfile()
+  }, [])
 
-  function loadProfile() {
-    const profiles = JSON.parse(localStorage.getItem("vaultforge_profiles") || "[]");
-    const profile = profiles.find((p:any) => p.email === currentEmail);
-    if (profile) {
-      setName(profile.name || "");
-      setEmail(profile.email || "");
-      setPhone(profile.phone || "");
-      setStates(profile.states || []);
-      setPropertyTypes(profile.propertyTypes || []);
-      setDealTypes(profile.dealTypes || []);
-      setDmaicSkills(profile.dmaicSkills || []);
-      setInvestorType(profile.investorType || "wholesaler");
-      setProfilePic(profile.profilePic || "");
-      setBio(profile.bio || "");
+  const loadProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
     }
-  }
+    setUser(user)
 
-  function handleSave() {
-    const profiles = JSON.parse(localStorage.getItem("vaultforge_profiles") || "[]");
-    const existingIdx = profiles.findIndex((p:any) => p.email === currentEmail);
-    
-    const updatedProfile = {
-      email: currentEmail,
-      name,
-      phone,
-      states,
-      propertyTypes,
-      dealTypes,
-      dmaicSkills,
-      investorType,
-      profilePic,
-      bio,
-      updatedAt: Date.now()
-    };
+    const { data, error } = await supabase
+     .from('profiles')
+     .select('*')
+     .eq('id', user.id)
+     .single()
 
-    if (existingIdx >= 0) {
-      profiles[existingIdx] = {...profiles[existingIdx],...updatedProfile};
+    if (data) {
+      setProfile(data)
     } else {
-      profiles.push(updatedProfile);
+      setProfile(prev => ({...prev, id: user.id, email: user.email || '' }))
     }
-    
-    localStorage.setItem("vaultforge_profiles", JSON.stringify(profiles));
-    alert("Profile saved");
+    setLoading(false)
   }
 
-  function handlePicUpload(e: any) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event:any) => {
-      setProfilePic(event.target.result);
-    };
-    reader.readAsDataURL(file);
+  const toggleArrayItem = (key: keyof ProfileData, value: string) => {
+    setProfile(prev => {
+      const arr = (prev[key] as string[]) || []
+      const newArr = arr.includes(value)? arr.filter(v => v!== value) : [...arr, value]
+      return {...prev, [key]: newArr }
+    })
   }
 
-  function toggleArrayItem(arr: string[], setArr: any, item: string) {
-    if (arr.includes(item)) {
-      setArr(arr.filter(i => i!== item));
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files ||!e.target.files[0]) return
+    setUploading(true)
+    const file = e.target.files[0]
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${user.id}-${Math.random()}.${fileExt}`
+    const filePath = `avatars/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+     .from('profiles')
+     .upload(filePath, file)
+
+    if (uploadError) {
+      alert('Upload failed')
+      setUploading(false)
+      return
+    }
+
+    const { data } = supabase.storage.from('profiles').getPublicUrl(filePath)
+    setProfile(prev => ({...prev, avatar_url: data.publicUrl }))
+    setUploading(false)
+  }
+
+  const handlePOFUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files ||!e.target.files[0]) return
+    setUploading(true)
+    const file = e.target.files[0]
+    const fileExt = file.name.split('.').pop()
+    const fileName = `pof-${user.id}-${Math.random()}.${fileExt}`
+    const filePath = `pof/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+     .from('profiles')
+     .upload(filePath, file)
+
+    if (uploadError) {
+      alert('Upload failed')
+      setUploading(false)
+      return
+    }
+
+    const { data } = supabase.storage.from('profiles').getPublicUrl(filePath)
+    setProfile(prev => ({...prev, pof_url: data.publicUrl }))
+    setUploading(false)
+  }
+
+  const saveProfile = async () => {
+    setSaving(true)
+    const { error } = await supabase
+     .from('profiles')
+     .upsert({
+        id: user.id,
+       ...profile,
+        updated_at: new Date().toISOString()
+      })
+
+    if (error) {
+      alert('Save failed: ' + error.message)
     } else {
-      setArr([...arr, item]);
+      alert('Profile saved. AI routing activated.')
+      router.push('/dashboard')
     }
+    setSaving(false)
   }
+
+  if (loading) {
+    return (
+      <div style={{
+        backgroundColor: '#000000',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#FFD700',
+        fontFamily: 'system-ui'
+      }}>
+        <div style={{ fontSize: '18px', fontWeight: 'bold' }}>LOADING OPERATOR DATA...</div>
+      </div>
+    )
+  }
+
+  const ChipGroup = ({ label, options, selected, onToggle }: any) => (
+    <div style={{ marginBottom: '32px' }}>
+      <div style={{
+        fontSize: '12px',
+        color: '#888888',
+        letterSpacing: '2px',
+        marginBottom: '12px',
+        fontWeight: 'bold'
+      }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        {options.map((opt: string) => {
+          const isActive = selected.includes(opt)
+          return (
+            <button
+              key={opt}
+              onClick={() => onToggle(opt)}
+              style={{
+                backgroundColor: isActive? '#FFD700' : 'transparent',
+                border: `1px solid ${isActive? '#FFD700' : '#333333'}`,
+                color: isActive? '#000000' : '#FFD700',
+                padding: '8px 16px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                letterSpacing: '1px',
+                cursor: 'pointer',
+                transition: 'all 0.15s'
+              }}
+            >
+              {opt}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 
   return (
-    <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
-      <div style={{maxWidth:800,margin:"0 auto"}}>
-        {/* VAULTFORGE LOGO LOCKED FRONT AND CENTER - NEVER REMOVED */}
-        <div style={{textAlign:"center",marginBottom:24,padding:"20px 0",borderBottom:"2px solid #FFD700"}}>
-          <img 
-            src="/vaultforge-logo.png" 
-            alt="VaultForge" 
-            style={{height:60,margin:"0 auto 12px",filter:"drop-shadow(0 0 15px #FFD700)"}}
-            onError={(e:any)=>{e.target.style.display='none'}}
-          />
-          <h1 style={{color:"#FFD700",fontWeight:900,fontSize:24,letterSpacing:1}}>MEMBER PROFILE</h1>
-          <div style={{fontSize:11,opacity:0.6,marginTop:4}}>Your buy box. Your skills. Your network.</div>
+    <div style={{
+      backgroundColor: '#0A0A0A',
+      minHeight: '100vh',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      color: '#FFFFFF'
+    }}>
+      {/* Header */}
+      <div style={{
+        backgroundColor: '#000000',
+        borderBottom: '2px solid #FFD700',
+        padding: '16px 24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            backgroundColor: '#FFD700',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            fontWeight: '900',
+            color: '#000000',
+            clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)'
+          }}>
+            VF
+          </div>
+          <div>
+            <div style={{
+              fontSize: '20px',
+              fontWeight: '900',
+              letterSpacing: '2px',
+              color: '#FFD700'
+            }}>
+              OPERATOR DATA
+            </div>
+            <div style={{
+              fontSize: '10px',
+              color: '#888888',
+              letterSpacing: '1px'
+            }}>
+              AI ROUTING CONFIGURATION
+            </div>
+          </div>
         </div>
+        <button
+          onClick={() => router.push('/dashboard')}
+          style={{
+            backgroundColor: 'transparent',
+            border: '1px solid #FFD700',
+            color: '#FFD700',
+            padding: '8px 20px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            letterSpacing: '1px',
+            cursor: 'pointer'
+          }}
+        >
+          ← COMMAND CENTER
+        </button>
+      </div>
 
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
-          <button onClick={()=>window.location.href="/my-work"} style={{padding:"8px 16px",border:"1px solid #FFD700",borderRadius:8,color:"#FFD700",background:"none",fontSize:12}}>← My Work</button>
-        </div>
+      {/* Form */}
+      <div style={{ padding: '32px 24px', maxWidth: '1200px', margin: '0 auto' }}>
 
-        {/* MEMBER PROFILE PIC UPLOAD - BELOW LOGO */}
-        <div style={{border:"1px solid #FFD700",borderRadius:12,padding:24,background:"#0a0f1a",marginBottom:24}}>
-          <div style={{fontSize:14,fontWeight:900,marginBottom:16,color:"#FFD700"}}>YOUR PROFILE</div>
-          
-          <div style={{display:"flex",gap:24,alignItems:"start",marginBottom:24}}>
-            <div style={{textAlign:"center"}}>
-              {profilePic? (
-                <img src={profilePic} alt="Profile" style={{width:120,height:120,borderRadius:"50%",border:"3px solid #FFD700",objectFit:"cover"}} />
-              ) : (
-                <div style={{width:120,height:120,borderRadius:"50%",border:"3px dashed #666",display:"flex",alignItems:"center",justifyContent:"center",fontSize:48,opacity:0.5}}>
-                  👤
-                </div>
-              )}
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handlePicUpload} 
-                style={{display:"none"}} 
-                id="picUpload" 
-              />
-              <label 
-                htmlFor="picUpload" 
-                style={{display:"block",marginTop:12,padding:"8px 16px",background:"#222",border:"1px solid #FFD700",borderRadius:8,color:"#FFD700",fontSize:11,fontWeight:900,cursor:"pointer"}}
-              >
-                Upload Photo
+        {/* Section 1: Identity */}
+        <div style={{
+          backgroundColor: '#111111',
+          border: '1px solid #222222',
+          borderTop: '2px solid #FFD700',
+          padding: '24px',
+          marginBottom: '24px'
+        }}>
+          <div style={{
+            fontSize: '14px',
+            color: '#FFD700',
+            letterSpacing: '2px',
+            marginBottom: '20px',
+            fontWeight: 'bold'
+          }}>
+            OPERATOR IDENTITY
+          </div>
+
+          <div style={{ display: 'flex', gap: '24px', marginBottom: '20px', alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                width: '100px',
+                height: '100px',
+                borderRadius: '50%',
+                backgroundColor: '#000000',
+                border: '2px solid #FFD700',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '32px',
+                color: '#FFD700',
+                overflow: 'hidden'
+              }}>
+                {profile.avatar_url? (
+                  <img src={profile.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  profile.first_name?.[0] || 'OP'
+                )}
+              </div>
+              <label style={{
+                position: 'absolute',
+                bottom: '0',
+                right: '0',
+                backgroundColor: '#FFD700',
+                color: '#000000',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                padding: '4px 8px',
+                cursor: 'pointer'
+              }}>
+                {uploading? '...' : 'UPLOAD'}
+                <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
               </label>
             </div>
 
-            <div style={{flex:1,display:"grid",gap:12}}>
-              <input 
-                value={name} 
-                onChange={e=>setName(e.target.value)} 
-                placeholder="Full Name" 
-                style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} 
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <input
+                placeholder="First Name"
+                value={profile.first_name || ''}
+                onChange={(e) => setProfile(prev => ({...prev, first_name: e.target.value }))}
+                style={inputStyle}
               />
-              <input 
-                value={email} 
-                disabled 
-                style={{padding:12,borderRadius:8,background:"#1a1f2a",border:"1px solid #333",color:"#999"}} 
+              <input
+                placeholder="Last Name"
+                value={profile.last_name || ''}
+                onChange={(e) => setProfile(prev => ({...prev, last_name: e.target.value }))}
+                style={inputStyle}
               />
-              <input 
-                value={phone} 
-                onChange={e=>setPhone(e.target.value)} 
-                placeholder="Phone (optional)" 
-                style={{padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff"}} 
+              <input
+                placeholder="Email"
+                value={profile.email || ''}
+                onChange={(e) => setProfile(prev => ({...prev, email: e.target.value }))}
+                style={inputStyle}
+              />
+              <input
+                placeholder="Phone"
+                value={profile.phone || ''}
+                onChange={(e) => setProfile(prev => ({...prev, phone: e.target.value }))}
+                style={inputStyle}
               />
             </div>
           </div>
 
-          <textarea 
-            value={bio} 
-            onChange={e=>setBio(e.target.value)} 
-            placeholder="Bio - Tell members about your experience, what you bring to deals..." 
-            rows={3} 
-            style={{width:"100%",padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff",marginBottom:16}} 
+          <input
+            placeholder="Company Name"
+            value={profile.company_name || ''}
+            onChange={(e) => setProfile(prev => ({...prev, company_name: e.target.value }))}
+            style={{...inputStyle, width: '100%' }}
           />
+        </div>
 
-          <div style={{fontSize:12,fontWeight:900,marginBottom:8,color:"#FFD700"}}>INVESTOR TYPE</div>
-          <select 
-            value={investorType} 
-            onChange={e=>setInvestorType(e.target.value)} 
-            style={{width:"100%",padding:12,borderRadius:8,background:"#05070d",border:"1px solid #333",color:"#fff",marginBottom:16}}
+        {/* Section 2: Investor Classification */}
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>INVESTOR CLASSIFICATION</div>
+          <ChipGroup label="INVESTOR TYPE" options={INVESTOR_TYPES} selected={profile.investor_types || []} onToggle={(v: string) => toggleArrayItem('investor_types', v)} />
+          <ChipGroup label="STRATEGY FOCUS" options={STRATEGIES} selected={profile.strategies || []} onToggle={(v: string) => toggleArrayItem('strategies', v)} />
+        </div>
+
+        {/* Section 3: Capital & Capacity */}
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>CAPITAL & CAPACITY</div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <div style={labelStyle}>AVAILABLE CAPITAL</div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {CAPITAL_RANGES.map(range => (
+                <button
+                  key={range}
+                  onClick={() => setProfile(prev => ({...prev, capital_range: range }))}
+                  style={{
+                   ...chipStyle,
+                    backgroundColor: profile.capital_range === range? '#FFD700' : 'transparent',
+                    color: profile.capital_range === range? '#000000' : '#FFD700'
+                  }}
+                >
+                  {range}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <ChipGroup label="FUNDING SOURCES" options={FUNDING_SOURCES} selected={profile.funding_sources || []} onToggle={(v: string) => toggleArrayItem('funding_sources', v)} />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+            <div>
+              <div style={labelStyle}>MIN PURCHASE $</div>
+              <input
+                type="number"
+                placeholder="50000"
+                value={profile.min_purchase || ''}
+                onChange={(e) => setProfile(prev => ({...prev, min_purchase: Number(e.target.value) }))}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <div style={labelStyle}>MAX PURCHASE $</div>
+              <input
+                type="number"
+                placeholder="500000"
+                value={profile.max_purchase || ''}
+                onChange={(e) => setProfile(prev => ({...prev, max_purchase: Number(e.target.value) }))}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <div style={labelStyle}>CLOSE TIMELINE</div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {TIMELINES.map(t => (
+                <button
+                  key={t}
+                  onClick={() => setProfile(prev => ({...prev, close_timeline: t }))}
+                  style={{
+                   ...chipStyle,
+                    backgroundColor: profile.close_timeline === t? '#FFD700' : 'transparent',
+                    color: profile.close_timeline === t? '#000000' : '#FFD700'
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <div style={labelStyle}>RISK TOLERANCE</div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {RISK_LEVELS.map(r => (
+                <button
+                  key={r}
+                  onClick={() => setProfile(prev => ({...prev, risk_tolerance: r }))}
+                  style={{
+                   ...chipStyle,
+                    backgroundColor: profile.risk_tolerance === r? '#FFD700' : 'transparent',
+                    color: profile.risk_tolerance === r? '#000000' : '#FFD700'
+                  }}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Territory & Asset Matrix */}
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>TERRITORY & ASSET MATRIX</div>
+          <ChipGroup label="STATES OPERATED IN" options={STATES} selected={profile.states || []} onToggle={(v: string) => toggleArrayItem('states', v)} />
+          <ChipGroup label="BUY BOX ASSET TYPES" options={ASSET_TYPES} selected={profile.asset_types || []} onToggle={(v: string) => toggleArrayItem('asset_types', v)} />
+          <ChipGroup label="PROPERTY CONDITIONS ACCEPTED" options={CONDITIONS} selected={profile.property_conditions || []} onToggle={(v: string) => toggleArrayItem('property_conditions', v)} />
+        </div>
+
+        {/* Section 5: Deal DNA */}
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>DEAL DNA - AI ROUTING LOGIC</div>
+          <ChipGroup label="DEAL BREAKERS" options={DEAL_BREAKERS} selected={profile.deal_breakers || []} onToggle={(v: string) => toggleArrayItem('deal_breakers', v)} />
+
+          <div style={{ marginBottom: '24px' }}>
+            <div style={labelStyle}>MUST HAVES - ADD KEYWORDS</div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              {(profile.must_haves || []).map((tag, i) => (
+                <div key={i} style={{
+                  backgroundColor: '#FFD700',
+                  color: '#000000',
+                  padding: '6px 12px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  {tag}
+                  <span
+                    onClick={() => setProfile(prev => ({...prev, must_haves: prev.must_haves?.filter((_, idx) => idx!== i) }))}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    ×
+                  </span>
+                </div>
+              ))}
+            </div>
+            <input
+              placeholder="Type and press Enter: BASEMENT, GARAGE, ACREAGE..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.currentTarget.value) {
+                  e.preventDefault()
+                  setProfile(prev => ({...prev, must_haves: [...(prev.must_haves || []), e.currentTarget.value.toUpperCase()] }))
+                  e.currentTarget.value = ''
+                }
+              }}
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <div style={labelStyle}>SPECIAL FIELDS FOR AI ROUTING</div>
+            <textarea
+              placeholder="Only send me deals with 70% ARV or less, minimum 15K spread, within 45 min of Atlanta, seller finance preferred..."
+              value={profile.special_fields || ''}
+              onChange={(e) => setProfile(prev => ({...prev, special_fields: e.target.value }))}
+              style={{
+               ...inputStyle,
+                minHeight: '100px',
+                fontFamily: 'inherit',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Section 6: Experience & Proof */}
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>EXPERIENCE & VERIFICATION</div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+            <div>
+              <div style={labelStyle}>DEALS CLOSED LAST 12 MO</div>
+              <input
+                type="number"
+                placeholder="12"
+                value={profile.deals_closed_12mo || ''}
+                onChange={(e) => setProfile(prev => ({...prev, deals_closed_12mo: Number(e.target.value) }))}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <div style={labelStyle}>MEMBER TYPE</div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {MEMBER_TYPES.map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setProfile(prev => ({...prev, member_type: type }))}
+                    style={{
+                     ...chipStyle,
+                      backgroundColor: profile.member_type === type? '#FFD700' : 'transparent',
+                      color: profile.member_type === type? '#000000' : '#FFD700'
+                    }}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <div style={labelStyle}>PROOF OF FUNDS</div>
+            <label style={{
+             ...chipStyle,
+              display: 'inline-block',
+              cursor: 'pointer',
+              backgroundColor: profile.pof_url? '#00FF88' : 'transparent',
+              borderColor: profile.pof_url? '#00FF88' : '#FFD700',
+              color: profile.pof_url? '#000000' : '#FFD700'
+            }}>
+              {uploading? 'UPLOADING...' : profile.pof_url? 'POF UPLOADED ✓' : 'UPLOAD POF'}
+              <input type="file" accept=".pdf,.jpg,.png" onChange={handlePOFUpload} style={{ display: 'none' }} />
+            </label>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
+              <div
+                onClick={() => setProfile(prev => ({...prev, veteran_owned:!prev.veteran_owned }))}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  border: '2px solid #FFD700',
+                  backgroundColor: profile.veteran_owned? '#FFD700' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#000000',
+                  fontWeight: '900'
+                }}
+              >
+                {profile.veteran_owned && '✓'}
+              </div>
+              <div style={{ fontSize: '12px', color: '#FFD700', letterSpacing: '1px', fontWeight: 'bold' }}>
+                VETERAN OWNED - VAULTFORGE PRIORITY ROUTING
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div style={{
+          display: 'flex',
+          gap: '16px',
+          justifyContent: 'flex-end',
+          marginTop: '32px'
+        }}>
+          <button
+            onClick={() => router.push('/dashboard')}
+            style={{
+              backgroundColor: 'transparent',
+              border: '1px solid #666666',
+              color: '#666666',
+              padding: '16px 32px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              letterSpacing: '2px',
+              cursor: 'pointer'
+            }}
           >
-            {["wholesaler","fix-flip","buy-hold","contractor","lender","realtor","other"].map(t=><option key={t} value={t}>{t.toUpperCase()}</option>)}
-          </select>
-
-          <div style={{fontSize:12,fontWeight:900,marginBottom:8,color:"#FFD700"}}>STATES YOU WORK</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16}}>
-            {["GA","FL","TN","AL","NC","SC","TX","NATIONAL"].map(s=>(
-              <button 
-                key={s} 
-                onClick={()=>toggleArrayItem(states,setStates,s)} 
-                style={{
-                  padding:"6px 12px",
-                  borderRadius:6,
-                  border:"1px solid #333",
-                  background:states.includes(s)?"#FFD700":"#05070d",
-                  color:states.includes(s)?"#000":"#fff",
-                  fontSize:11,
-                  fontWeight:900
-                }}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-
-          <div style={{fontSize:12,fontWeight:900,marginBottom:8,color:"#FFD700"}}>PROPERTY TYPES</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16}}>
-            {["SFH","Multi-Family","Land","Commercial","Mobile"].map(p=>(
-              <button 
-                key={p} 
-                onClick={()=>toggleArrayItem(propertyTypes,setPropertyTypes,p)} 
-                style={{
-                  padding:"6px 12px",
-                  borderRadius:6,
-                  border:"1px solid #333",
-                  background:propertyTypes.includes(p)?"#FFD700":"#05070d",
-                  color:propertyTypes.includes(p)?"#000":"#fff",
-                  fontSize:11,
-                  fontWeight:900
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-
-          <div style={{fontSize:12,fontWeight:900,marginBottom:8,color:"#00ccff"}}>DMAIC SKILLS (For Pain Room Matching)</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:24}}>
-            {["HVAC","Plumbing","Electrical","Roof","Foundation","Pest","Cosmetic","Other"].map(p=>(
-              <button 
-                key={p} 
-                onClick={()=>toggleArrayItem(dmaicSkills,setDmaicSkills,p)} 
-                style={{
-                  padding:"6px 12px",
-                  borderRadius:6,
-                  border:"1px solid #333",
-                  background:dmaicSkills.includes(p)?"#00ccff":"#05070d",
-                  color:dmaicSkills.includes(p)?"#000":"#fff",
-                  fontSize:11,
-                  fontWeight:900
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-
-          <button 
-            onClick={handleSave} 
-            style={{width:"100%",padding:14,borderRadius:8,background:"#FFD700",color:"#000",border:"none",fontWeight:900,fontSize:14}}
+            CANCEL
+          </button>
+          <button
+            onClick={saveProfile}
+            disabled={saving}
+            style={{
+              backgroundColor: saving? '#666666' : '#FFD700',
+              border: 'none',
+              color: '#000000',
+              padding: '16px 48px',
+              fontSize: '14px',
+              fontWeight: '900',
+              letterSpacing: '2px',
+              cursor: saving? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 20px rgba(255, 215, 0, 0.3)'
+            }}
           >
-            SAVE PROFILE
+            {saving? 'SAVING...' : 'SAVE PROFILE + ACTIVATE ROUTING'}
           </button>
         </div>
       </div>
-    </main>
-  );
+    </div>
+  )
+}
+
+const inputStyle: React.CSSProperties = {
+  backgroundColor: '#000000',
+  border: '1px solid #333333',
+  color: '#FFFFFF',
+  padding: '12px 16px',
+  fontSize: '14px',
+  fontFamily: 'inherit',
+  outline: 'none',
+  width: '100%',
+  boxSizing: 'border-box'
+}
+
+const sectionStyle: React.CSSProperties = {
+  backgroundColor: '#111111',
+  border: '1px solid #222222',
+  borderTop: '2px solid #FFD700',
+  padding: '24px',
+  marginBottom: '24px'
+}
+
+const sectionTitle: React.CSSProperties = {
+  fontSize: '14px',
+  color: '#FFD700',
+  letterSpacing: '2px',
+  marginBottom: '20px',
+  fontWeight: 'bold'
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: '11px',
+  color: '#888888',
+  letterSpacing: '1px',
+  marginBottom: '8px',
+  fontWeight: 'bold',
+  textTransform: 'uppercase'
+}
+
+const chipStyle: React.CSSProperties = {
+  border: '1px solid #FFD700',
+  padding: '8px 16px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  letterSpacing: '1px',
+  cursor: 'pointer',
+  transition: 'all 0.15s'
 }
