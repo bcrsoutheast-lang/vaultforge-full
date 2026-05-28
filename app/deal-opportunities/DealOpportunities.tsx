@@ -93,88 +93,100 @@ export default function DealOpportunities() {
 
   if (loading) {
     return (
-      <div className="bg-black min-h-screen text-white p-4">
-        <div className="text-center mt-20">Loading deals...</div>
+      <div style={{ backgroundColor: '#000', minHeight: '100vh', color: '#fff', padding: '16px' }}>
+        <div style={{ textAlign: 'center', marginTop: '80px' }}>Loading deals...</div>
       </div>
     )
   }
 
   return (
-    <div className="bg-black min-h-screen text-white">
-      <div className="border-b border-zinc-800 p-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-4">
+    <div style={{ backgroundColor: '#000', minHeight: '100vh', color: '#fff' }}>
+      <div style={{ borderBottom: '1px solid #27272a', padding: '16px' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <button 
               onClick={() => router.push('/')}
-              className="text-zinc-400 text-sm hover:text-white"
+              style={{ color: '#a1a1aa', fontSize: '14px', background: 'none', border: 'none', cursor: 'pointer' }}
             >
               ← Back to Home
             </button>
             <button 
               onClick={() => router.push('/post-deal')}
-              className="border border-yellow-400 text-yellow-400 px-4 py-2 rounded text-sm hover:bg-yellow-400 hover:text-black"
+              style={{ border: '1px solid #facc15', color: '#facc15', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', background: 'none', cursor: 'pointer' }}
             >
               + POST DEAL
             </button>
           </div>
           
-          <h1 className="text-3xl font-bold text-yellow-400 mb-4">DEAL OPPORTUNITIES</h1>
+          <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#facc15', marginBottom: '16px' }}>DEAL OPPORTUNITIES</h1>
           
-          <div className="flex gap-2">
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-4 py-2 rounded text-sm font-bold ${activeTab === 'all' ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-400'}`}
+              style={{ 
+                padding: '8px 16px', 
+                borderRadius: '4px', 
+                fontSize: '14px', 
+                fontWeight: 'bold',
+                backgroundColor: activeTab === 'all'? '#facc15' : '#27272a',
+                color: activeTab === 'all'? '#000' : '#a1a1aa',
+                border: 'none',
+                cursor: 'pointer'
+              }}
             >
               ALL DEALS ({deals.length})
             </button>
             <button
               onClick={() => setActiveTab('saved')}
-              className={`px-4 py-2 rounded text-sm font-bold ${activeTab === 'saved' ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-400'}`}
+              style={{ 
+                padding: '8px 16px', 
+                borderRadius: '4px', 
+                fontSize: '14px', 
+                fontWeight: 'bold',
+                backgroundColor: activeTab === 'saved'? '#facc15' : '#27272a',
+                color: activeTab === 'saved'? '#000' : '#a1a1aa',
+                border: 'none',
+                cursor: 'pointer'
+              }}
             >
               SAVED ({savedIds.size})
-            </button>
-            <button
-              onClick={() => setActiveTab('archived')}
-              className={`px-4 py-2 rounded text-sm font-bold ${activeTab === 'archived' ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-400'}`}
-            >
-              ARCHIVED (0)
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-4">
-        {filteredDeals.length === 0 ? (
-          <div className="text-center text-zinc-500 mt-20">
-            {activeTab === 'saved' ? 'No saved deals yet' : 'No deals available'}
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '16px' }}>
+        {filteredDeals.length === 0? (
+          <div style={{ textAlign: 'center', color: '#71717a', marginTop: '80px' }}>
+            {activeTab === 'saved'? 'No saved deals yet' : 'No deals available'}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
             {filteredDeals.map((deal) => (
-              <div key={deal.id} className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
+              <div key={deal.id} style={{ backgroundColor: '#18181b', borderRadius: '8px', border: '1px solid #27272a', overflow: 'hidden' }}>
                 <img 
                   src={deal.photo_url || 'https://via.placeholder.com/400x300?text=No+Image'} 
-                  className="w-full h-48 object-cover"
+                  style={{ width: '100%', height: '192px', objectFit: 'cover' }}
                   alt={deal.address}
                 />
                 
-                <div className="p-4">
-                  <h3 className="text-yellow-400 font-bold text-lg mb-2">
+                <div style={{ padding: '16px' }}>
+                  <h3 style={{ color: '#facc15', fontWeight: 'bold', fontSize: '18px', marginBottom: '8px' }}>
                     {deal.city}, {deal.state} • {deal.beds}bd {deal.baths}ba
                   </h3>
                   
-                  <div className="grid grid-cols-3 gap-2 mb-3 text-sm">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '12px', fontSize: '14px' }}>
                     <div>
-                      <div className="text-xs text-zinc-500">ASKING</div>
-                      <div className="text-blue-400 font-bold">${deal.asking_price?.toLocaleString()}</div>
+                      <div style={{ fontSize: '12px', color: '#71717a' }}>ASKING</div>
+                      <div style={{ color: '#60a5fa', fontWeight: 'bold' }}>${deal.asking_price?.toLocaleString()}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-zinc-500">ARV</div>
-                      <div className="text-green-400 font-bold">${deal.arv?.toLocaleString()}</div>
+                      <div style={{ fontSize: '12px', color: '#71717a' }}>ARV</div>
+                      <div style={{ color: '#4ade80', fontWeight: 'bold' }}>${deal.arv?.toLocaleString()}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-zinc-500">REPAIRS</div>
-                      <div className="text-yellow-400 font-bold">${(deal.repairs || 0)?.toLocaleString()}</div>
+                      <div style={{ fontSize: '12px', color: '#71717a' }}>REPAIRS</div>
+                      <div style={{ color: '#facc15', fontWeight: 'bold' }}>${(deal.repairs || 0)?.toLocaleString()}</div>
                     </div>
                   </div>
 
@@ -183,10 +195,19 @@ export default function DealOpportunities() {
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      console.log('OPEN DEAL CLICKED:', deal.id)
                       setSelectedDeal(deal)
                     }}
-                    className="w-full bg-yellow-400 text-black font-black py-3 rounded-lg hover:bg-yellow-300 active:bg-yellow-500 text-sm relative z-10"
+                    style={{ 
+                      width: '100%', 
+                      backgroundColor: '#facc15', 
+                      color: '#000', 
+                      fontWeight: '900', 
+                      padding: '12px', 
+                      borderRadius: '8px', 
+                      border: 'none',
+                      fontSize: '14px',
+                      cursor: 'pointer'
+                    }}
                   >
                     OPEN DEAL
                   </button>
