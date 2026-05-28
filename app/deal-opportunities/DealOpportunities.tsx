@@ -50,7 +50,7 @@ function analyzeDeal(deal: Deal) {
 export default function DealOpportunities({ deals: initialDeals }: { deals: Deal[] }) {
   const [deals, setDeals] = useState(initialDeals)
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
-  const currentUser = 'dm2107137@gmail.com' // Replace with auth session later
+  const currentUser = 'dm2107137@gmail.com'
 
   async function handleArchive(dealId: number) {
     if (!confirm('Archive this deal? It will be hidden from public view but saved in your account.')) return
@@ -85,6 +85,13 @@ export default function DealOpportunities({ deals: initialDeals }: { deals: Deal
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: 20, color: '#fff', background: '#0a0a0a', minHeight: '100vh' }}>
+      <a href="/" style={{ 
+        fontSize: 12, color: '#666', textDecoration: 'none', 
+        display: 'inline-block', marginBottom: 12 
+      }}>
+        ← Back to Home
+      </a>
+      
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h1 style={{ fontSize: 24, fontWeight: 900, fontFamily: 'serif', color: '#FFD700' }}>DEAL OPPORTUNITIES</h1>
         <a href="/my-work/deal-room" style={{ 
