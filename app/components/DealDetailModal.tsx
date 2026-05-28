@@ -47,11 +47,14 @@ export default function DealDetailModal({
   const [showMakeOffer, setShowMakeOffer] = useState(false)
   const [showMessage, setShowMessage] = useState(false)
   const [message, setMessage] = useState('')
+  const [offerAmount, setOfferAmount] = useState('')
+  const [offerNotes, setOfferNotes] = useState('')
 
   if (!deal) return null
 
-  const profit = deal.arv - deal.asking_price - (deal.repairs || 0)
-  const mao = deal.arv * 0.7 - (deal.repairs || 0)
+  const repairs = deal.repairs ?? 0
+  const profit = deal.arv - deal.asking_price - repairs
+  const mao = deal.arv * 0.7 - repairs
 
   async function sendMessage() {
     if (!message.trim() || !deal) return
@@ -81,6 +84,29 @@ export default function DealDetailModal({
       setMessage('')
     } else {
       alert('Failed to send message')
+    }
+  }
+
+  async function submitOffer() {
+    if (!offerAmount || !deal) return
+    const res = await fetch('/api/make-offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deal_id: deal.id,
+        offer_amount: Number(offerAmount),
+        notes: offerNotes,
+        buyer_email: currentUser?.email,
+        buyer_name: currentUser?.name
+      })
+    })
+    if (res.ok) {
+      alert('Offer submitted!')
+      setShowMakeOffer(false)
+      setOfferAmount('')
+      setOfferNotes('')
+    } else {
+      alert('Failed to submit offer')
     }
   }
 
@@ -162,7 +188,7 @@ export default function DealDetailModal({
               <div style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '4px', border: '1px solid #27272a' }}>
                 <div style={{ fontSize: '12px', color: '#71717a' }}>REPAIRS</div>
                 <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#facc15' }}>
-                  ${(deal.repairs || 0)?.toLocaleString()}
+                  {repairs > 0 ? `$${repairs.toLocaleString()}` : 'TBD'}
                 </div>
               </div>
             </div>
@@ -323,15 +349,84 @@ export default function DealDetailModal({
           zIndex: 60, 
           padding: '16px' 
         }}>
-          <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '448px', border: '1px solid #27272a' }}>
-            <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Make Offer</h3>
-            <p style={{ color: '#a1a1aa', marginBottom: '16px' }}>Coming soon - connect to escrow flow</p>
+          <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '600px', border: '1px solid #27272a', position: 'relative' }}>
             <button 
               onClick={() => setShowMakeOffer(false)}
-              style={{ width: '100%', backgroundColor: '#3f3f46', padding: '12px', borderRadius: '4px', border: 'none', color: '#fff', cursor: 'pointer' }}
+              style={{ 
+                position: 'absolute', 
+                top: '16px', 
+                right: '16px', 
+                backgroundColor: 'rgba(0,0,0,0.6)', 
+                color: '#fff', 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '50%', 
+                border: 'none',
+                fontSize: '18px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             >
-              CLOSE
+              ✕
             </button>
+            
+            <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Make Offer</h3>
+            
+            <div style={{ backgroundColor: '#18181b', padding: '12px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a' }}>
+              <div style={{ fontSize: '12px', color: '#71717a' }}>MAO: ${mao?.toLocaleString()} | ASKING: ${deal.asking_price?.toLocaleString()}</div>
+            </div>
+
+            <input 
+              type="number"
+              value={offerAmount}
+              onChange={(e) => setOfferAmount(e.target.value)}
+              placeholder="Your offer amount"
+              style={{ 
+                width: '100%', 
+                backgroundColor: '#18181b', 
+                border: '1px solid #27272a', 
+                borderRadius: '4px', 
+                padding: '16px', 
+                color: '#fff', 
+                marginBottom: '12px',
+                fontSize: '18px'
+              }}
+            />
+            
+            <textarea 
+              value={offerNotes}
+              onChange={(e) => setOfferNotes(e.target.value)}
+              placeholder="Add notes... Cash buyer, quick close, as-is, etc."
+              style={{ 
+                width: '100%', 
+                backgroundColor: '#18181b', 
+                border: '1px solid #27272a', 
+                borderRadius: '4px', 
+                padding: '16px', 
+                color: '#fff', 
+                minHeight: '120px',
+                marginBottom: '16px',
+                fontFamily: 'inherit',
+                fontSize: '16px'
+              }}
+            />
+            
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={submitOffer}
+                style={{ flex: 1, backgroundColor: '#facc15', color: '#000', fontWeight: 'bold', padding: '16px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+              >
+                SUBMIT OFFER
+              </button>
+              <button 
+                onClick={() => setShowMakeOffer(false)}
+                style={{ flex: 1, backgroundColor: '#3f3f46', padding: '16px', borderRadius: '4px', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '16px' }}
+              >
+                CANCEL
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -350,7 +445,29 @@ export default function DealDetailModal({
           zIndex: 60, 
           padding: '16px' 
         }}>
-          <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '600px', border: '1px solid #27272a' }}>
+          <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '600px', border: '1px solid #27272a', position: 'relative' }}>
+            <button 
+              onClick={() => { setShowMessage(false); setMessage('') }}
+              style={{ 
+                position: 'absolute', 
+                top: '16px', 
+                right: '16px', 
+                backgroundColor: 'rgba(0,0,0,0.6)', 
+                color: '#fff', 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '50%', 
+                border: 'none',
+                fontSize: '18px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ✕
+            </button>
+
             <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Message Owner</h3>
             
             <div style={{ backgroundColor: '#18181b', padding: '16px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a', display: 'flex', gap: '12px' }}>
