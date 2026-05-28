@@ -3,37 +3,42 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 export default function PostDeal() {
-  const [form, setForm] = useState({
-    address:'', city:'', state:'GA', zipcode:'',
-    asking_price:'', arv:'', beds:'', baths:'', sqft:'',
-    description:''
-  })
+  const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('GA')
+  const [zipcode, setZipcode] = useState('')
+  const [asking_price, setAskingPrice] = useState('')
+  const [arv, setArv] = useState('')
+  const [beds, setBeds] = useState('')
+  const [baths, setBaths] = useState('')
+  const [sqft, setSqft] = useState('')
+  const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
 
   // Deal Analyzer math
-  const ask = Number(form.asking_price) || 0
-  const arv = Number(form.arv) || 0
-  const repairEst = 25000 // we can make this an input later
-  const mao = arv * 0.7 - repairEst
-  const profit = arv - ask - repairEst
-  const status = ask <= mao? 'DEAL' : ask <= arv * 0.8? 'MAYBE' : 'PASS'
+  const ask = Number(asking_price) || 0
+  const arvNum = Number(arv) || 0
+  const repairEst = 25000
+  const mao = arvNum * 0.7 - repairEst
+  const profit = arvNum - ask - repairEst
+  const status = ask <= mao? 'DEAL' : ask <= arvNum * 0.8? 'MAYBE' : 'PASS'
   const color = status==='DEAL'? '#22c55e' : status==='MAYBE'? '#eab308' : '#ef4444'
 
   async function submitDeal() {
     setSaving(true)
     const { error } = await supabase.from('deals').insert({
-      user_email: 'dm2107137@gmail.com', // replace with auth user later
-      address: form.address,
-      city: form.city,
-      state: form.state,
-      zipcode: form.zipcode,
+      user_email: 'dm2107137@gmail.com',
+      address,
+      city,
+      state,
+      zipcode,
       asking_price: ask,
-      arv: arv,
-      beds: Number(form.beds),
-      baths: Number(form.baths),
-      sqft: Number(form.sqft),
-      description: form.description,
-      title: `${form.beds}bd ${form.baths}ba ${form.city}`
+      arv: arvNum,
+      beds: Number(beds),
+      baths: Number(baths),
+      sqft: Number(sqft),
+      description,
+      title: `${beds}bd ${baths}ba ${city}`
     })
     setSaving(false)
     if(error) alert('Error: ' + error.message)
@@ -41,6 +46,11 @@ export default function PostDeal() {
       alert('Deal posted!')
       window.location.href = '/deal-opportunities'
     }
+  }
+
+  const inputStyle = {
+    width:'100%', padding:12, marginBottom:10, background:'#000', 
+    border:'1px solid #333', borderRadius:8, color:'#fff'
   }
 
   return (
@@ -59,19 +69,17 @@ export default function PostDeal() {
         </div>
       </div>
 
-      {/* Form */}
-      {['address','city','zipcode','asking_price','arv','beds','baths','sqft'].map(k => (
-        <input key={k} placeholder={k.replace('_',' ')} 
-          value={form[k]} 
-          onChange={e=>setForm({...form,[k]:e.target.value})}
-          style={{width:'100%', padding:12, marginBottom:10, background:'#000', border:'1px solid #333', borderRadius:8, color:'#fff'}}
-        />
-      ))}
-      <textarea placeholder="description / notes" 
-        value={form.description}
-        onChange={e=>setForm({...form,description:e.target.value})}
-        style={{width:'100%', padding:12, marginBottom:10, background:'#000', border:'1px solid #333', borderRadius:8, color:'#fff'}}
-      />
+      {/* Form - No more TS errors */}
+      <input placeholder="Address" value={address} onChange={e=>setAddress(e.target.value)} style={inputStyle}/>
+      <input placeholder="City" value={city} onChange={e=>setCity(e.target.value)} style={inputStyle}/>
+      <input placeholder="State" value={state} onChange={e=>setState(e.target.value)} style={inputStyle}/>
+      <input placeholder="Zipcode" value={zipcode} onChange={e=>setZipcode(e.target.value)} style={inputStyle}/>
+      <input placeholder="Asking Price" value={asking_price} onChange={e=>setAskingPrice(e.target.value)} style={inputStyle}/>
+      <input placeholder="ARV" value={arv} onChange={e=>setArv(e.target.value)} style={inputStyle}/>
+      <input placeholder="Beds" value={beds} onChange={e=>setBeds(e.target.value)} style={inputStyle}/>
+      <input placeholder="Baths" value={baths} onChange={e=>setBaths(e.target.value)} style={inputStyle}/>
+      <input placeholder="Sqft" value={sqft} onChange={e=>setSqft(e.target.value)} style={inputStyle}/>
+      <textarea placeholder="Description / Notes" value={description} onChange={e=>setDescription(e.target.value)} style={inputStyle}/>
       
       <button onClick={submitDeal} disabled={saving} 
         style={{width:'100%', padding:16, background:'#FFD700', color:'#000', fontWeight:900, borderRadius:12, border:'none'}}>
