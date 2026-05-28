@@ -10,7 +10,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-type Deal = {
+type Deal = { 
   id: number
   title: string | null
   address: string
