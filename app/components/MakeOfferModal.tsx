@@ -1,205 +1,199 @@
 'use client'
 
 import { useState } from 'react'
-import { submitOffer } from '@/app/actions/offers'
+import MakeOfferModal from './MakeOfferModal'
 
 type Deal = {
   id: number
+  title: string | null
   address: string
-  asking_price: number
-  arv: number
   city: string
   state: string
+  zipcode: string | null
+  asking_price: number
+  arv: number
+  beds: number | null
+  baths: number | null
+  sqft: number | null
+  description: string | null
+  photo_url: string | null
+  user_email: string
+  status: string
+  created_at: string
+  owner_phone?: string | null
+  owner_name?: string | null
+  repair_cost?: number | null
 }
 
-export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose: () => void }) {
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
-  const [showOwnerFinance, setShowOwnerFinance] = useState(false)
+function analyzeDeal(deal: Deal) {
+  const ask = Number(deal.asking_price) || 0
+  const arv = Number(deal.arv) || 0
+  const repairEst = Number(deal.repair_cost) || 25000
+  const mao = arv * 0.7 - repairEst
+  const profit = arv - ask - repairEst
   
-  const repairEst = 25000
-  const mao = deal.arv * 0.7 - repairEst
+  let status = 'PASS'
+  let color = '#ef4444'
+  let aiComment = `Overpriced. You'd lose $${Math.abs(profit).toLocaleString()}. Walk away.`
   
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setSaving(true)
-    setError('')
-    
-    const formData = new FormData(e.currentTarget)
-    formData.append('deal_id', String(deal.id))
-    formData.append('deal_address', `${deal.address}, ${deal.city}, ${deal.state}`)
-    
-    const res = await submitOffer(formData)
-    
-    if (res.error) {
-      setError(res.error)
-      setSaving(false)
-    } else {
-      setSuccess(true)
-      setTimeout(() => {
-        onClose()
-        window.location.href = '/deal-opportunities'
-      }, 2000)
-    }
+  if (ask <= mao && profit > 0) {
+    status = 'DEAL'
+    color = '#22c55e'
+    aiComment = `Strong deal. $${profit.toLocaleString()} est. profit. MAO: $${mao.toLocaleString()}.`
+  } else if (ask <= arv * 0.8 && profit > 0) {
+    status = 'MAYBE'
+    color = '#eab308'
+    aiComment = `$${profit.toLocaleString()} est. profit. Negotiate $${(ask - mao).toLocaleString()} off to hit MAO.`
+  }
+  
+  return { status, color, profit, mao, repairEst, aiComment }
+}
+
+export default function DealDetailModal({ 
+  deal, 
+  currentUser, 
+  isSaved, 
+  onClose, 
+  onSave,
+  onArchive,
+  onDelete 
+}: { 
+  deal: Deal
+  currentUser: string
+  isSaved: boolean
+  onClose: () => void
+  onSave: () => void
+  onArchive: () => void
+  onDelete: () => void
+}) {
+  const [showOfferForm, setShowOfferForm] = useState(false)
+  const { status, color, profit, mao, repairEst, aiComment } = analyzeDeal(deal)
+  const isOwner = deal.user_email === currentUser
+
+  if (showOfferForm) {
+    return <MakeOfferModal deal={deal} onClose={() => setShowOfferForm(false)} />
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', 
-    padding: '12px', 
-    marginBottom: '10px', 
-    background: '#000',
-    border: '1px solid #333', 
-    borderRadius: '8px', 
-    color: '#fff', 
-    fontSize: '16px',
-    boxSizing: 'border-box'
-  }
-
-  if (success) {
-    return (
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-        <div style={{ background: '#111', padding: 32, borderRadius: 16, textAlign: 'center', border: '2px solid #22c55e' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#22c55e' }}>Offer Sent!</div>
-          <div style={{ color: '#999', marginTop: 8 }}>Redirecting to deals...</div>
-        </div>
-      </div>
-    )
+  const buttonStyle: React.CSSProperties = {
+    padding: '12px 16px',
+    borderRadius: 8,
+    border: '1px solid #333',
+    background: '#111',
+    color: '#999',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    flex: 1
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
-      <div style={{ background: '#0a0a0a', border: '1px solid #333', borderRadius: 16, maxWidth: 500, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ padding: 20, borderBottom: '1px solid #222' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 20 }}>
+      <div style={{ background: '#0a0a0a', border: '1px solid #333', borderRadius: 16, maxWidth: 600, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+        
+        {deal.photo_url && (
+          <img src={deal.photo_url} alt={deal.city} style={{ width: '100%', height: 300, objectFit: 'cover' }} />
+        )}
+        
+        <div style={{ padding: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 12, color: '#999' }}>MAKE OFFER ON</div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>{deal.address}</div>
-              <div style={{ fontSize: 14, color: '#00bfff' }}>Asking: ${deal.asking_price.toLocaleString()}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#FFD700' }}>
+                {deal.city}, {deal.state} {deal.zipcode}
+              </div>
+              <div style={{ fontSize: 14, color: '#999', marginTop: 4 }}>
+                {deal.beds || '?'} Beds • {deal.baths || '?'} Baths • {deal.sqft?.toLocaleString() || '?'} Sqft
+              </div>
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#999', fontSize: 24, cursor: 'pointer', padding: 0 }}>×</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#999', fontSize: 28, cursor: 'pointer', padding: 0 }}>×</button>
           </div>
-          
-          <div style={{ background: '#111', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #22c55e' }}>
-            <div style={{ fontSize: 11, color: '#999', letterSpacing: '1px' }}>AI HINT</div>
-            <div style={{ fontSize: 13, color: '#ccc', marginTop: 4 }}>
-              Max Allowable Offer: ${mao.toLocaleString()}. Offers near MAO close fastest. 
-              <span style={{ color: '#eab308' }}> 3 buyers viewed this today.</span>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+            <div style={{ background: '#111', padding: 12, borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#666' }}>ASKING</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: '#00bfff' }}>${deal.asking_price.toLocaleString()}</div>
             </div>
+            <div style={{ background: '#111', padding: 12, borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#666' }}>ARV</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: '#22c55e' }}>${deal.arv.toLocaleString()}</div>
+            </div>
+            <div style={{ background: '#111', padding: 12, borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: '#666' }}>REPAIRS</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: '#eab308' }}>${repairEst.toLocaleString()}</div>
+            </div>
+          </div>
+
+          <div style={{ background: '#0a0a0a', border: `2px solid ${color}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: '#999', letterSpacing: '1px' }}>SMART AI ANALYZER</div>
+              <div style={{ background: color, color: '#000', fontSize: 12, fontWeight: 900, padding: '4px 12px', borderRadius: 6 }}>
+                {status}
+              </div>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: profit > 0 ? '#22c55e' : '#ef4444', marginBottom: 8 }}>
+              Est. Profit: ${profit.toLocaleString()}
+            </div>
+            <div style={{ fontSize: 13, color: '#ccc', marginBottom: 8 }}>{aiComment}</div>
+            <div style={{ fontSize: 12, color: '#999' }}>
+              Max Allowable Offer: ${mao.toLocaleString()}
+            </div>
+          </div>
+
+          <div style={{ background: '#111', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>PROPERTY DETAILS</div>
+            {deal.description && <div style={{ fontSize: 13, color: '#999', marginBottom: 8 }}>{deal.description}</div>}
+            <div style={{ fontSize: 14, color: '#ddd' }}>
+              Location: {deal.city}, {deal.state} {deal.zipcode}
+            </div>
+          </div>
+
+          <div style={{ background: '#111', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>OWNER CONTACT</div>
+            <div style={{ fontSize: 14, color: '#ddd' }}>
+              {deal.owner_name || deal.user_email}
+            </div>
+            {deal.owner_phone && <div style={{ fontSize: 14, color: '#00bfff', marginTop: 4 }}>{deal.owner_phone}</div>}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button 
+              onClick={() => setShowOfferForm(true)}
+              style={{ ...buttonStyle, background: '#FFD700', color: '#000', border: 'none', flex: 2 }}
+            >
+              MAKE OFFER
+            </button>
+            <button onClick={onClose} style={buttonStyle}>
+              EXIT
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button 
+              onClick={onSave}
+              style={{ 
+                ...buttonStyle, 
+                background: isSaved ? '#22c55e' : '#111',
+                color: isSaved ? '#000' : '#999',
+                borderColor: isSaved ? '#22c55e' : '#333'
+              }}
+            >
+              {isSaved ? 'SAVED ✓' : 'SAVE'}
+            </button>
+            {isOwner && (
+              <>
+                <button onClick={onArchive} style={buttonStyle}>
+                  {deal.status === 'archived' ? 'UNARCHIVE' : 'ARCHIVE'}
+                </button>
+                <button onClick={onDelete} style={{...buttonStyle, color: '#ef4444', borderColor: '#ef4444' }}>
+                  DELETE
+                </button>
+              </>
+            )}
+          </div>
+
+          <div style={{ fontSize: 11, color: '#666', textAlign: 'center', marginTop: 16 }}>
+            Posted by: {deal.user_email} • {new Date(deal.created_at).toLocaleDateString()}
           </div>
         </div>
-
-        <form onSubmit={handleSubmit} style={{ padding: 20 }}>
-          <input name="name" placeholder="Full Name *" required style={inputStyle} />
-          <input name="phone" placeholder="Phone *" type="tel" required style={inputStyle} />
-          <input name="email" placeholder="Email *" type="email" required style={inputStyle} />
-          
-          <select name="buyer_type" required style={inputStyle} defaultValue="">
-            <option value="" disabled>Buyer Type *</option>
-            <option value="Cash Buyer">Cash Buyer</option>
-            <option value="Owner Finance Buyer">Owner Finance Buyer</option>
-            <option value="Landlord">Landlord</option>
-            <option value="Wholesaler">Wholesaler</option>
-            <option value="Agent">Agent</option>
-          </select>
-
-          <select name="property_type" required style={inputStyle} defaultValue="">
-            <option value="" disabled>Property Type *</option>
-            <option value="Residential">Residential</option>
-            <option value="Commercial">Commercial</option>
-            <option value="Land">Land</option>
-            <option value="Multi-Family">Multi-Family</option>
-          </select>
-          
-          <input 
-            name="offer_price" 
-            placeholder={`Offer Price * / Monthly Payment if Owner Finance`} 
-            type="text" 
-            required 
-            style={inputStyle} 
-          />
-
-          <label style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
-            <input 
-              type="checkbox" 
-              name="owner_finance" 
-              style={{ marginRight: 8 }} 
-              onChange={(e) => setShowOwnerFinance(e.target.checked)}
-            />
-            Request Owner Financing
-          </label>
-
-          {showOwnerFinance && (
-            <div style={{ background: '#111', padding: 12, borderRadius: 8, marginBottom: 10, border: '1px solid #333' }}>
-              <input 
-                name="down_payment" 
-                placeholder="Down Payment (e.g. $20k or 10%)" 
-                style={inputStyle} 
-              />
-              <textarea 
-                name="owner_finance_terms" 
-                placeholder="Proposed Terms: Interest rate, length, balloon, etc" 
-                rows={3}
-                style={{...inputStyle, height: 'auto', resize: 'vertical', marginBottom: 0}} 
-              />
-            </div>
-          )}
-          
-          <input name="close_date" placeholder="Desired Close Date * (e.g. 30 days)" required style={inputStyle} />
-          
-          <select name="contingencies" style={inputStyle} defaultValue="None - Cash">
-            <option>None - Cash</option>
-            <option>Inspection Only</option>
-            <option>Financing</option>
-            <option>Appraisal</option>
-            <option>Subject To</option>
-          </select>
-          
-          <textarea 
-            name="message" 
-            placeholder="Message to owner (optional)" 
-            rows={3}
-            style={{...inputStyle, height: 'auto', resize: 'vertical'}} 
-          />
-          
-          <label style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', marginBottom: 12, cursor: 'pointer' }}>
-            <input type="checkbox" name="has_pof" style={{ marginRight: 8 }} />
-            I have Proof of Funds ready
-          </label>
-          
-          {error && <div style={{ color: '#ef4444', marginBottom: 10, fontSize: 14, textAlign: 'center' }}>{error}</div>}
-          
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <button 
-              type="button"
-              onClick={onClose}
-              style={{ 
-                flex: 1, padding: 16, background: '#222', 
-                color: '#999', fontWeight: 700, borderRadius: 12, 
-                border: '1px solid #333', fontSize: 16, cursor: 'pointer'
-              }}
-            >
-              CANCEL
-            </button>
-            
-            <button 
-              type="submit"
-              disabled={saving}
-              style={{ 
-                flex: 2, padding: 16, background: saving ? '#555' : '#FFD700', 
-                color: '#000', fontWeight: 900, borderRadius: 12, border: 'none',
-                fontSize: 16, cursor: saving ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {saving ? 'SENDING...' : 'SEND OFFER'}
-            </button>
-          </div>
-          
-          <div style={{ fontSize: 11, color: '#666', textAlign: 'center', marginTop: 12 }}>
-            Your info is sent directly to the property owner
-          </div>
-        </form>
       </div>
     </div>
   )
