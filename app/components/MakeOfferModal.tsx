@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { submitOffer } from '@/app/actions/offers'
 
 type Deal = {
-  id: number // Changed from string to number to match BIGINT
+  id: number
   address: string
   asking_price: number
   arv: number
@@ -16,6 +16,7 @@ export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose:
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [showOwnerFinance, setShowOwnerFinance] = useState(false)
   
   const repairEst = 25000
   const mao = deal.arv * 0.7 - repairEst
@@ -26,7 +27,7 @@ export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose:
     setError('')
     
     const formData = new FormData(e.currentTarget)
-    formData.append('deal_id', String(deal.id)) // Convert number to string for FormData
+    formData.append('deal_id', String(deal.id))
     formData.append('deal_address', `${deal.address}, ${deal.city}, ${deal.state}`)
     
     const res = await submitOffer(formData)
@@ -91,21 +92,56 @@ export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose:
           <input name="phone" placeholder="Phone *" type="tel" required style={inputStyle} />
           <input name="email" placeholder="Email *" type="email" required style={inputStyle} />
           
-          <input 
-            name="offer_price" 
-            placeholder={`Your Offer Price *`} 
-            type="number" 
-            required 
-            style={inputStyle} 
-          />
-          
           <select name="buyer_type" required style={inputStyle} defaultValue="">
             <option value="" disabled>Buyer Type *</option>
             <option value="Cash Buyer">Cash Buyer</option>
+            <option value="Owner Finance Buyer">Owner Finance Buyer</option>
             <option value="Landlord">Landlord</option>
             <option value="Wholesaler">Wholesaler</option>
             <option value="Agent">Agent</option>
           </select>
+
+          <select name="property_type" required style={inputStyle} defaultValue="">
+            <option value="" disabled>Property Type *</option>
+            <option value="Residential">Residential</option>
+            <option value="Commercial">Commercial</option>
+            <option value="Land">Land</option>
+            <option value="Multi-Family">Multi-Family</option>
+          </select>
+          
+          <input 
+            name="offer_price" 
+            placeholder={`Offer Price * / Monthly Payment if Owner Finance`} 
+            type="text" 
+            required 
+            style={inputStyle} 
+          />
+
+          <label style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              name="owner_finance" 
+              style={{ marginRight: 8 }} 
+              onChange={(e) => setShowOwnerFinance(e.target.checked)}
+            />
+            Request Owner Financing
+          </label>
+
+          {showOwnerFinance && (
+            <div style={{ background: '#111', padding: 12, borderRadius: 8, marginBottom: 10, border: '1px solid #333' }}>
+              <input 
+                name="down_payment" 
+                placeholder="Down Payment (e.g. $20k or 10%)" 
+                style={inputStyle} 
+              />
+              <textarea 
+                name="owner_finance_terms" 
+                placeholder="Proposed Terms: Interest rate, length, balloon, etc" 
+                rows={3}
+                style={{...inputStyle, height: 'auto', resize: 'vertical', marginBottom: 0}} 
+              />
+            </div>
+          )}
           
           <input name="close_date" placeholder="Desired Close Date * (e.g. 30 days)" required style={inputStyle} />
           
@@ -114,6 +150,7 @@ export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose:
             <option>Inspection Only</option>
             <option>Financing</option>
             <option>Appraisal</option>
+            <option>Subject To</option>
           </select>
           
           <textarea 
