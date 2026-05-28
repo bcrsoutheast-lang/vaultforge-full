@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 
 export default function CommandCenter() {
   const router = useRouter()
-  const supabase = createClientComponentClient()
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState({
     totalDeals: 0,
@@ -14,6 +13,11 @@ export default function CommandCenter() {
     painCases: 0,
     membersOnline: 0
   })
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   useEffect(() => {
     const getUser = async () => {
@@ -30,17 +34,17 @@ export default function CommandCenter() {
 
   const loadStats = async () => {
     const { count: deals } = await supabase
-  .from('deals')
-  .select('*', { count: 'exact', head: true })
+ .from('deals')
+ .select('*', { count: 'exact', head: true })
 
     const { count: active } = await supabase
-  .from('deals')
-  .select('*', { count: 'exact', head: true })
-  .neq('status', 'archived')
+ .from('deals')
+ .select('*', { count: 'exact', head: true })
+ .neq('status', 'archived')
 
     const { count: pain } = await supabase
-  .from('pain_intake')
-  .select('*', { count: 'exact', head: true })
+ .from('pain_intake')
+ .select('*', { count: 'exact', head: true })
 
     setStats({
       totalDeals: deals || 0,
