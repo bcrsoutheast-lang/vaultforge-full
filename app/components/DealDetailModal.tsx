@@ -54,7 +54,7 @@ export default function DealDetailModal({
   const mao = deal.arv * 0.7 - (deal.repairs || 0)
 
   async function sendMessage() {
-    if (!message.trim()) return
+    if (!message.trim() || !deal) return
     const res = await fetch('/api/send-message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
