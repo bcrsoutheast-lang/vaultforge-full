@@ -15,8 +15,9 @@ export default function SavedDeals() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) router.push('/login')
-      else {
+      if (!data.user || !data.user.email) {
+        router.push('/login')
+      } else {
         setUser(data.user)
         fetchDeals(data.user.email)
       }
@@ -35,12 +36,12 @@ export default function SavedDeals() {
 
   const moveToArchive = async (id: number) => {
     await supabase.from('deals').update({ status: 'archived', closed_at: new Date().toISOString() }).eq('id', id)
-    fetchDeals(user.email)
+    if (user?.email) fetchDeals(user.email)
   }
 
   const moveToTrash = async (id: number) => {
     await supabase.from('deals').update({ status: 'deleted', deleted_at: new Date().toISOString() }).eq('id', id)
-    fetchDeals(user.email)
+    if (user?.email) fetchDeals(user.email)
   }
 
   if (!user) return null
