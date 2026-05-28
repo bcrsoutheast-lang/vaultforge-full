@@ -1,79 +1,82 @@
-'use client';
-import { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+'use client'
+import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-export default function DealRoom() {
+export default function PostDeal() {
   const [form, setForm] = useState({
-    title: "", city: "", state: "GA", address: "", zipcode: "",
-    asking_price: "", arv: "", deal_type: "Wholesale", description: "",
-    beds: "", baths: "", sqft: "", repair_estimate: ""
-  });
-  const [loading, setLoading] = useState(false);
+    address:'', city:'', state:'GA', zipcode:'',
+    asking_price:'', arv:'', beds:'', baths:'', sqft:'',
+    description:''
+  })
+  const [saving, setSaving] = useState(false)
+
+  // Deal Analyzer math
+  const ask = Number(form.asking_price) || 0
+  const arv = Number(form.arv) || 0
+  const repairEst = 25000 // we can make this an input later
+  const mao = arv * 0.7 - repairEst
+  const profit = arv - ask - repairEst
+  const status = ask <= mao? 'DEAL' : ask <= arv * 0.8? 'MAYBE' : 'PASS'
+  const color = status==='DEAL'? '#22c55e' : status==='MAYBE'? '#eab308' : '#ef4444'
 
   async function submitDeal() {
-    if (!form.city || !form.asking_price || !form.description) {
-      alert("City, Asking Price, and Description are required");
-      return;
-    }
-    
-    setLoading(true);
-    const { error } = await supabase.from("deals").insert({
-      title: form.title || `${form.beds || '?'}bd ${form.baths || '?'}ba ${form.city} - $${Number(form.asking_price).toLocaleString()}`,
-      user_email: "dm2107137@gmail.com", // matches your existing rows
-      property_type: "Residential",
+    setSaving(true)
+    const { error } = await supabase.from('deals').insert({
+      user_email: 'dm2107137@gmail.com', // replace with auth user later
+      address: form.address,
       city: form.city,
       state: form.state,
-      address: form.address,
       zipcode: form.zipcode,
-      asking_price: Number(form.asking_price) || 0,
-      arv: Number(form.arv) || 0,
-      deal_type: form.deal_type,
+      asking_price: ask,
+      arv: arv,
+      beds: Number(form.beds),
+      baths: Number(form.baths),
+      sqft: Number(form.sqft),
       description: form.description,
-      beds: Number(form.beds) || null,
-      baths: Number(form.baths) || null,
-      sqft: Number(form.sqft) || null,
-      repair_estimate: Number(form.repair_estimate) || null,
-      status: 'active',
-      ai_score: 0,
-      target_buyer: ["Cash Buyer", "Fix & Flip Investor"],
-      timeline: "30 Days"
-    });
-    
-    setLoading(false);
-    if (error) alert("Error: " + error.message);
-    else window.location.href = "/deal-opportunities";
+      title: `${form.beds}bd ${form.baths}ba ${form.city}`
+    })
+    setSaving(false)
+    if(error) alert('Error: ' + error.message)
+    else {
+      alert('Deal posted!')
+      window.location.href = '/deal-opportunities'
+    }
   }
 
-  const I = {width:"100%",padding:"12px",background:"#0a0f1a",border:"2px solid #FFD700",borderRadius:"8px",color:"#fff",fontSize:"15px",marginBottom:"14px"};
-  const L = {color:"#FFD700",fontSize:"11px",fontWeight:"700",marginBottom:"4px",display:"block"};
-
   return (
-    <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:"16px"}}>
-      <a href="/my-work" style={{color:"#00ccff",fontSize:"14px"}}>← Back to My Work</a>
-      <h1 style={{color:"#FFD700",fontWeight:"900",fontSize:"28px",margin:"16px 0 24px"}}>POST DEAL</h1>
+    <div style={{maxWidth:600, margin:'0 auto', padding:20, color:'#fff'}}>
+      <h1 style={{fontSize:24, fontWeight:900, marginBottom:16}}>POST DEAL</h1>
       
-      <div style={{maxWidth:"700px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-        <div><label style={L}>CITY *</label><input style={I} value={form.city} onChange={e=>setForm({...form,city:e.target.value})} /></div>
-        <div><label style={L}>STATE</label><select style={I} value={form.state} onChange={e=>setForm({...form,state:e.target.value})}><option>GA</option><option>FL</option><option>TX</option><option>CA</option></select></div>
-        <div><label style={L}>ASKING PRICE *</label><input style={I} type="number" value={form.asking_price} onChange={e=>setForm({...form,asking_price:e.target.value})} /></div>
-        <div><label style={L}>ARV</label><input style={I} type="number" value={form.arv} onChange={e=>setForm({...form,arv:e.target.value})} /></div>
-        <div><label style={L}>BEDS</label><input style={I} type="number" value={form.beds} onChange={e=>setForm({...form,beds:e.target.value})} /></div>
-        <div><label style={L}>BATHS</label><input style={I} type="number" value={form.baths} onChange={e=>setForm({...form,baths:e.target.value})} /></div>
-        <div><label style={L}>SQFT</label><input style={I} type="number" value={form.sqft} onChange={e=>setForm({...form,sqft:e.target.value})} /></div>
-        <div><label style={L}>REPAIR ESTIMATE</label><input style={I} type="number" value={form.repair_estimate} onChange={e=>setForm({...form,repair_estimate:e.target.value})} /></div>
-        <div style={{gridColumn:"1 / -1"}}><label style={L}>ADDRESS</label><input style={I} value={form.address} onChange={e=>setForm({...form,address:e.target.value})} placeholder="123 main" /></div>
-        <div style={{gridColumn:"1 / -1"}}><label style={L}>DEAL DESCRIPTION *</label><textarea style={{...I,height:"100px",resize:"none"}} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} /></div>
-        <div style={{gridColumn:"1 / -1"}}>
-          <button onClick={submitDeal} disabled={loading} style={{width:"100%",padding:"18px",background:loading?"#333":"#FFD700",color:"#000",fontWeight:"900",fontSize:"18px",borderRadius:"8px",border:"none",cursor:loading?"not-allowed":"pointer",marginTop:"8px"}}>
-            {loading ? "POSTING..." : "POST DEAL"}
-          </button>
+      {/* Analyzer Box */}
+      <div style={{background:'#111', padding:16, borderRadius:12, marginBottom:20, border:`2px solid ${color}`}}>
+        <div style={{fontSize:12, opacity:.7}}>DEAL ANALYZER</div>
+        <div style={{fontSize:28, fontWeight:900, color}}>{status}</div>
+        <div>Max Offer: ${mao.toLocaleString()} | Est. Profit: ${profit.toLocaleString()}</div>
+        <div style={{fontSize:12, marginTop:8, opacity:.8}}>
+          {status==='DEAL' && 'This looks like a deal. Post it.'}
+          {status==='MAYBE' && 'Tight margins. Negotiate harder or add value.'}
+          {status==='PASS' && 'You’ll lose money at this price.'}
         </div>
       </div>
-    </main>
-  );
+
+      {/* Form */}
+      {['address','city','zipcode','asking_price','arv','beds','baths','sqft'].map(k => (
+        <input key={k} placeholder={k.replace('_',' ')} 
+          value={form[k]} 
+          onChange={e=>setForm({...form,[k]:e.target.value})}
+          style={{width:'100%', padding:12, marginBottom:10, background:'#000', border:'1px solid #333', borderRadius:8, color:'#fff'}}
+        />
+      ))}
+      <textarea placeholder="description / notes" 
+        value={form.description}
+        onChange={e=>setForm({...form,description:e.target.value})}
+        style={{width:'100%', padding:12, marginBottom:10, background:'#000', border:'1px solid #333', borderRadius:8, color:'#fff'}}
+      />
+      
+      <button onClick={submitDeal} disabled={saving} 
+        style={{width:'100%', padding:16, background:'#FFD700', color:'#000', fontWeight:900, borderRadius:12, border:'none'}}>
+        {saving? 'POSTING...' : 'POST THIS DEAL'}
+      </button>
+    </div>
+  )
 }
