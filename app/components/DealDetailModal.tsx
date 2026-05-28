@@ -56,84 +56,106 @@ export default function DealDetailModal({
   const [offerAmount, setOfferAmount] = useState('')
   const [offerNotes, setOfferNotes] = useState('')
   const [closingDate, setClosingDate] = useState('')
+  const [showSuccess, setShowSuccess] = useState('')
+  const [imgError, setImgError] = useState(false)
 
   if (!deal) return null
 
   const repairs = deal.repairs ?? 0
   const profit = deal.arv - deal.asking_price - repairs
-  const mao = deal.arv * 0.7 - repairs
+  const mao = Math.round(deal.arv * 0.7 - repairs)
 
   async function sendMessage() {
     if (!message.trim() || !deal) return
-    const res = await fetch('/api/send-message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deal_id: deal.id,
-        recipient_email: deal.user_email,
-        message: message,
-        current_user_email: currentUser?.email,
-        current_user_name: currentUser?.name,
-        current_user_avatar: currentUser?.avatar,
-        deal_snapshot: {
-          image_url: deal.photo_url,
-          title: `${deal.city}, ${deal.state}`,
-          price: deal.asking_price,
-          beds: deal.beds,
-          baths: deal.baths,
-          sqft: deal.sqft
-        }
+    try {
+      const res = await fetch('/api/send-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deal_id: deal.id,
+          recipient_email: deal.user_email,
+          message: message,
+          current_user_email: currentUser?.email,
+          current_user_name: currentUser?.name,
+          current_user_avatar: currentUser?.avatar,
+          deal_snapshot: {
+            image_url: deal.photo_url,
+            title: `${deal.city}, ${deal.state}`,
+            price: deal.asking_price,
+            beds: deal.beds,
+            baths: deal.baths,
+            sqft: deal.sqft
+          }
+        })
       })
-    })
-    if (res.ok) {
-      alert('Message sent!')
-      setShowMessage(false)
-      setMessage('')
-    } else {
-      alert('Failed to send message')
+      if (res.ok) {
+        setShowSuccess('Message sent to owner!')
+        setShowMessage(false)
+        setMessage('')
+        setTimeout(() => setShowSuccess(''), 3000)
+      } else {
+        setShowSuccess('Failed to send. Try again.')
+        setTimeout(() => setShowSuccess(''), 3000)
+      }
+    } catch (err) {
+      setShowSuccess('Error sending message.')
+      setTimeout(() => setShowSuccess(''), 3000)
     }
   }
 
   async function submitOffer() {
     if (!offerAmount || !deal) return
-    const res = await fetch('/api/make-offer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deal_id: deal.id,
-        offer_amount: Number(offerAmount),
-        notes: offerNotes,
-        closing_date: closingDate,
-        buyer_email: currentUser?.email,
-        buyer_name: currentUser?.name
+    try {
+      const res = await fetch('/api/make-offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deal_id: deal.id,
+          offer_amount: Number(offerAmount),
+          notes: offerNotes,
+          closing_date: closingDate,
+          buyer_email: currentUser?.email,
+          buyer_name: currentUser?.name
+        })
       })
-    })
-    if (res.ok) {
-      alert('Offer submitted!')
-      setShowMakeOffer(false)
-      setOfferAmount('')
-      setOfferNotes('')
-      setClosingDate('')
-    } else {
-      alert('Failed to submit offer. Connect /api/make-offer route.')
+      if (res.ok) {
+        setShowSuccess(`Offer of $${Number(offerAmount).toLocaleString()} submitted!`)
+        setShowMakeOffer(false)
+        setOfferAmount('')
+        setOfferNotes('')
+        setClosingDate('')
+        setTimeout(() => setShowSuccess(''), 3000)
+      } else {
+        setShowSuccess('Failed to submit offer. API route missing.')
+        setTimeout(() => setShowSuccess(''), 3000)
+      }
+    } catch (err) {
+      setShowSuccess('Error submitting offer.')
+      setTimeout(() => setShowSuccess(''), 3000)
     }
   }
 
   async function handleArchive() {
     if (!deal) return
     await supabase.from('deals').update({ status: 'archived' }).eq('id', deal.id)
-    alert('Deal archived')
-    onClose()
-    window.location.reload()
+    setShowSuccess('Deal archived')
+    setTimeout(() => {
+      setShowSuccess('')
+      onClose()
+      window.location.reload()
+    }, 1500)
   }
 
   async function handleDelete() {
     if (!deal) return
     if (!confirm('Delete this deal permanently?')) return
     await supabase.from('deals').delete().eq('id', deal.id)
-    alert('Deal deleted')
-    onClose()
-    window.location.reload()
+    setShowSuccess('Deal deleted')
+    setTimeout(() => {
+      setShowSuccess('')
+      onClose()
+      window.location.reload()
+    }, 1500)
   }
 
   return (
@@ -163,8 +185,9 @@ export default function DealDetailModal({
           
           <div style={{ position: 'relative' }}>
             <img 
-              src={deal.photo_url || 'https://via.placeholder.com/800x400?text=No+Image'} 
+              src={imgError ? 'https://via.placeholder.com/800x400?text=No+Image' : (deal.photo_url || 'https://via.placeholder.com/800x400?text=No+Image')} 
               alt={deal.address}
+              onError={() => setImgError(true)}
               style={{ width: '100%', height: '320px', objectFit: 'cover', borderTopLeftRadius: '8px', borderTopRightRadius: '8px' }}
             />
             <button 
@@ -191,9 +214,42 @@ export default function DealDetailModal({
           </div>
 
           <div style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#facc15', marginBottom: '4px' }}>
-              {deal.city}, {deal.state} {deal.zipcode}
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '4px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#facc15' }}>
+                {deal.city}, {deal.state} {deal.zipcode}
+              </h2>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  onClick={handleArchive}
+                  style={{ 
+                    backgroundColor: '#27272a', 
+                    padding: '6px 12px', 
+                    borderRadius: '4px', 
+                    border: 'none',
+                    fontSize: '12px',
+                    color: '#fff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ARCHIVE
+                </button>
+                <button 
+                  onClick={handleDelete}
+                  style={{ 
+                    backgroundColor: 'rgba(127, 29, 29, 0.5)', 
+                    color: '#f87171', 
+                    padding: '6px 12px', 
+                    borderRadius: '4px', 
+                    border: 'none',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  DELETE
+                </button>
+              </div>
+            </div>
+            
             <p style={{ color: '#a1a1aa', marginBottom: '16px', fontSize: '14px' }}>
               {deal.beds} Beds • {deal.baths} Baths • {deal.sqft?.toLocaleString()} Sqft
             </p>
@@ -219,7 +275,7 @@ export default function DealDetailModal({
               </div>
             </div>
 
-            <div style={{ backgroundColor: '#18181b', border: '1px solid #7f1d1d', borderRadius: '4px', padding: '16px', marginBottom: '16px' }}>
+            <div style={{ backgroundColor: '#18181b', border: `1px solid ${profit > 0? '#14532d' : '#7f1d1d'}`, borderRadius: '4px', padding: '16px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <div style={{ fontSize: '12px', color: '#71717a' }}>SMART AI ANALYZER</div>
                 <div style={{ 
@@ -387,7 +443,7 @@ export default function DealDetailModal({
         }}>
           <div style={{ backgroundColor: '#09090b', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '600px', border: '1px solid #27272a', position: 'relative' }}>
             <button 
-              onClick={() => setShowMakeOffer(false)}
+              onClick={() => {setShowMakeOffer(false); setOfferAmount(''); setOfferNotes(''); setClosingDate('')}}
               style={{ 
                 position: 'absolute', 
                 top: '16px', 
@@ -476,7 +532,7 @@ export default function DealDetailModal({
                 SUBMIT OFFER
               </button>
               <button 
-                onClick={() => setShowMakeOffer(false)}
+                onClick={() => {setShowMakeOffer(false); setOfferAmount(''); setOfferNotes(''); setClosingDate('')}}
                 style={{ flex: 1, backgroundColor: '#3f3f46', padding: '16px', borderRadius: '4px', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '16px' }}
               >
                 CANCEL
@@ -526,7 +582,7 @@ export default function DealDetailModal({
             <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '16px', color: '#facc15' }}>Message Owner</h3>
             
             <div style={{ backgroundColor: '#18181b', padding: '16px', borderRadius: '4px', marginBottom: '16px', border: '1px solid #27272a', display: 'flex', gap: '12px' }}>
-              <img src={deal.photo_url || 'https://via.placeholder.com/100'} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '4px' }} />
+              <img src={imgError ? 'https://via.placeholder.com/100' : (deal.photo_url || 'https://via.placeholder.com/100')} onError={() => setImgError(true)} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '4px' }} />
               <div>
                 <div style={{ fontWeight: 'bold', color: '#facc15', fontSize: '18px' }}>{deal.city}, {deal.state}</div>
                 <div style={{ fontSize: '16px', color: '#a1a1aa' }}>${deal.asking_price?.toLocaleString()}</div>
@@ -566,6 +622,26 @@ export default function DealDetailModal({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showSuccess && (
+        <div style={{ 
+          position: 'fixed', 
+          top: '20px', 
+          left: '50%', 
+          transform: 'translateX(-50%)', 
+          backgroundColor: '#14532d', 
+          color: '#4ade80', 
+          padding: '16px 24px', 
+          borderRadius: '8px', 
+          border: '1px solid #4ade80',
+          zIndex: 100,
+          fontSize: '16px',
+          fontWeight: 'bold',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+        }}>
+          {showSuccess}
         </div>
       )}
     </>
