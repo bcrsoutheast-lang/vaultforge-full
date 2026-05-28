@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import MakeOfferModal from './MakeOfferModal'
+import MessageOwner from './MessageOwner'
 
 type Deal = {
   id: number
@@ -9,7 +10,7 @@ type Deal = {
   address: string
   city: string
   state: string
-  zipcode: string | null 
+  zipcode: string | null
   asking_price: number
   arv: number
   beds: number | null
@@ -22,179 +23,162 @@ type Deal = {
   created_at: string
   owner_phone?: string | null
   owner_name?: string | null
-  repair_cost?: number | null
-}
-
-function analyzeDeal(deal: Deal) {
-  const ask = Number(deal.asking_price) || 0
-  const arv = Number(deal.arv) || 0
-  const repairEst = Number(deal.repair_cost) || 25000
-  const mao = arv * 0.7 - repairEst
-  const profit = arv - ask - repairEst
-  
-  let status = 'PASS'
-  let color = '#ef4444'
-  let aiComment = `Overpriced. You'd lose $${Math.abs(profit).toLocaleString()}. Walk away.`
-  
-  if (ask <= mao && profit > 0) {
-    status = 'DEAL'
-    color = '#22c55e'
-    aiComment = `Strong deal. $${profit.toLocaleString()} est. profit. MAO: $${mao.toLocaleString()}.`
-  } else if (ask <= arv * 0.8 && profit > 0) {
-    status = 'MAYBE'
-    color = '#eab308'
-    aiComment = `$${profit.toLocaleString()} est. profit. Negotiate $${(ask - mao).toLocaleString()} off to hit MAO.`
-  }
-  
-  return { status, color, profit, mao, repairEst, aiComment }
+  repairs?: number | null
+  property_type?: string | null
 }
 
 export default function DealDetailModal({ 
   deal, 
-  currentUser, 
-  isSaved, 
-  onClose, 
-  onSave,
-  onArchive,
-  onDelete 
+  onClose 
 }: { 
-  deal: Deal
-  currentUser: string
-  isSaved: boolean
-  onClose: () => void
-  onSave: () => void
-  onArchive: () => void
-  onDelete: () => void
+  deal: Deal | null
+  onClose: () => void 
 }) {
-  const [showOfferForm, setShowOfferForm] = useState(false)
-  const { status, color, profit, mao, repairEst, aiComment } = analyzeDeal(deal)
-  const isOwner = deal.user_email === currentUser
+  const [showMakeOffer, setShowMakeOffer] = useState(false)
 
-  if (showOfferForm) {
-    return <MakeOfferModal deal={deal} onClose={() => setShowOfferForm(false)} />
+  if (!deal) return null
+
+  // TODO: Replace with real logged in user from Supabase Auth
+  const currentUser = {
+    email: 'dm2107137@gmail.com',
+    name: 'Deeve Moneyy',
+    avatar: null
   }
 
-  const buttonStyle: React.CSSProperties = {
-    padding: '12px 16px',
-    borderRadius: 8,
-    border: '1px solid #333',
-    background: '#111',
-    color: '#999',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-    flex: 1
-  }
+  const profit = deal.arv - deal.asking_price - (deal.repairs || 0)
+  const mao = deal.arv * 0.7 - (deal.repairs || 0)
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 20 }}>
-      <div style={{ background: '#0a0a0a', border: '1px solid #333', borderRadius: 16, maxWidth: 600, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-        
-        {deal.photo_url && (
-          <img src={deal.photo_url} alt={deal.city} style={{ width: '100%', height: 300, objectFit: 'cover' }} />
-        )}
-        
-        <div style={{ padding: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: '#FFD700' }}>
-                {deal.city}, {deal.state} {deal.zipcode}
-              </div>
-              <div style={{ fontSize: 14, color: '#999', marginTop: 4 }}>
-                {deal.beds || '?'} Beds • {deal.baths || '?'} Baths • {deal.sqft?.toLocaleString() || '?'} Sqft
-              </div>
-            </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#999', fontSize: 28, cursor: 'pointer', padding: 0 }}>×</button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-            <div style={{ background: '#111', padding: 12, borderRadius: 8, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#666' }}>ASKING</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: '#00bfff' }}>${deal.asking_price.toLocaleString()}</div>
-            </div>
-            <div style={{ background: '#111', padding: 12, borderRadius: 8, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#666' }}>ARV</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: '#22c55e' }}>${deal.arv.toLocaleString()}</div>
-            </div>
-            <div style={{ background: '#111', padding: 12, borderRadius: 8, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#666' }}>REPAIRS</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: '#eab308' }}>${repairEst.toLocaleString()}</div>
-            </div>
-          </div>
-
-          <div style={{ background: '#0a0a0a', border: `2px solid ${color}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontSize: 11, color: '#999', letterSpacing: '1px' }}>SMART AI ANALYZER</div>
-              <div style={{ background: color, color: '#000', fontSize: 12, fontWeight: 900, padding: '4px 12px', borderRadius: 6 }}>
-                {status}
-              </div>
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: profit > 0 ? '#22c55e' : '#ef4444', marginBottom: 8 }}>
-              Est. Profit: ${profit.toLocaleString()}
-            </div>
-            <div style={{ fontSize: 13, color: '#ccc', marginBottom: 8 }}>{aiComment}</div>
-            <div style={{ fontSize: 12, color: '#999' }}>
-              Max Allowable Offer: ${mao.toLocaleString()}
-            </div>
-          </div>
-
-          <div style={{ background: '#111', borderRadius: 8, padding: 16, marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>PROPERTY DETAILS</div>
-            {deal.description && <div style={{ fontSize: 13, color: '#999', marginBottom: 8 }}>{deal.description}</div>}
-            <div style={{ fontSize: 14, color: '#ddd' }}>
-              Location: {deal.city}, {deal.state} {deal.zipcode}
-            </div>
-          </div>
-
-          <div style={{ background: '#111', borderRadius: 8, padding: 16, marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>OWNER CONTACT</div>
-            <div style={{ fontSize: 14, color: '#ddd' }}>
-              {deal.owner_name || deal.user_email}
-            </div>
-            {deal.owner_phone && <div style={{ fontSize: 14, color: '#00bfff', marginTop: 4 }}>{deal.owner_phone}</div>}
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+    <>
+      <div className="fixed inset-0 bg-black/90 flex items-start justify-center z-50 p-4 overflow-y-auto">
+        <div className="bg-zinc-950 rounded-lg w-full max-w-2xl border border-zinc-800 my-8">
+          
+          {/* Image */}
+          <div className="relative">
+            <img 
+              src={deal.photo_url || '/placeholder-house.jpg'} 
+              alt={deal.address}
+              className="w-full h-64 object-cover rounded-t-lg"
+            />
             <button 
-              onClick={() => setShowOfferForm(true)}
-              style={{ ...buttonStyle, background: '#FFD700', color: '#000', border: 'none', flex: 2 }}
+              onClick={onClose}
+              className="absolute top-4 right-4 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/80"
             >
-              MAKE OFFER
-            </button>
-            <button onClick={onClose} style={buttonStyle}>
-              EXIT
+              ✕
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button 
-              onClick={onSave}
-              style={{ 
-                ...buttonStyle, 
-                background: isSaved ? '#22c55e' : '#111',
-                color: isSaved ? '#000' : '#999',
-                borderColor: isSaved ? '#22c55e' : '#333'
-              }}
-            >
-              {isSaved ? 'SAVED ✓' : 'SAVE'}
-            </button>
-            {isOwner && (
-              <>
-                <button onClick={onArchive} style={buttonStyle}>
-                  {deal.status === 'archived' ? 'UNARCHIVE' : 'ARCHIVE'}
-                </button>
-                <button onClick={onDelete} style={{...buttonStyle, color: '#ef4444', borderColor: '#ef4444' }}>
-                  DELETE
-                </button>
-              </>
-            )}
-          </div>
+          <div className="p-6">
+            {/* Header */}
+            <h2 className="text-2xl font-bold text-yellow-400 mb-1">
+              {deal.city}, {deal.state} {deal.zipcode}
+            </h2>
+            <p className="text-zinc-400 mb-4">
+              {deal.beds} Beds • {deal.baths} Baths • {deal.sqft?.toLocaleString()} Sqft
+            </p>
 
-          <div style={{ fontSize: 11, color: '#666', textAlign: 'center', marginTop: 16 }}>
-            Posted by: {deal.user_email} • {new Date(deal.created_at).toLocaleDateString()}
+            {/* Price Boxes */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="bg-zinc-900 p-3 rounded border border-zinc-800">
+                <div className="text-xs text-zinc-500">ASKING</div>
+                <div className="text-lg font-bold text-blue-400">
+                  ${deal.asking_price?.toLocaleString()}
+                </div>
+              </div>
+              <div className="bg-zinc-900 p-3 rounded border border-zinc-800">
+                <div className="text-xs text-zinc-500">ARV</div>
+                <div className="text-lg font-bold text-green-400">
+                  ${deal.arv?.toLocaleString()}
+                </div>
+              </div>
+              <div className="bg-zinc-900 p-3 rounded border border-zinc-800">
+                <div className="text-xs text-zinc-500">REPAIRS</div>
+                <div className="text-lg font-bold text-yellow-400">
+                  ${(deal.repairs || 0)?.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* Smart AI Analyzer */}
+            <div className="bg-zinc-900 border border-red-900/50 rounded p-4 mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <div className="text-xs text-zinc-500">SMART AI ANALYZER</div>
+                <div className={`text-xs px-2 py-1 rounded ${profit > 0 ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
+                  {profit > 0 ? 'BUY' : 'PASS'}
+                </div>
+              </div>
+              <div className={`text-xl font-bold mb-1 ${profit > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                Est. Profit: ${profit?.toLocaleString()}
+              </div>
+              <div className="text-sm text-zinc-400">
+                {profit > 0 
+                  ? `Good deal. Potential profit of $${profit.toLocaleString()}.` 
+                  : `Overpriced. You'd lose $${Math.abs(profit).toLocaleString()}. Walk away.`}
+              </div>
+              <div className="text-sm text-zinc-500 mt-1">
+                Max Allowable Offer: ${mao?.toLocaleString()}
+              </div>
+            </div>
+
+            {/* Property Details */}
+            <div className="bg-zinc-900 p-4 rounded mb-4 border border-zinc-800">
+              <div className="text-xs text-zinc-500 mb-2">PROPERTY DETAILS</div>
+              <div className="text-sm text-zinc-300 mb-2">{deal.description || 'Motivated'}</div>
+              <div className="text-sm text-zinc-400">
+                Location: {deal.address || deal.city}, {deal.state} {deal.zipcode}
+              </div>
+              {deal.property_type && (
+                <div className="text-sm text-zinc-400">Type: {deal.property_type}</div>
+              )}
+            </div>
+
+            {/* Owner Contact */}
+            <div className="bg-zinc-900 p-4 rounded mb-4 border border-zinc-800">
+              <div className="text-xs text-zinc-500 mb-2">OWNER CONTACT</div>
+              <div className="text-sm text-zinc-300">{deal.user_email}</div>
+              {deal.owner_phone && (
+                <div className="text-sm text-zinc-300">{deal.owner_phone}</div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 mb-2">
+              <button 
+                onClick={() => setShowMakeOffer(true)}
+                className="flex-1 bg-yellow-400 text-black font-bold py-3 rounded hover:bg-yellow-300"
+              >
+                MAKE OFFER
+              </button>
+              <button 
+                onClick={onClose}
+                className="flex-1 bg-zinc-700 py-3 rounded hover:bg-zinc-600"
+              >
+                EXIT
+              </button>
+            </div>
+
+            {/* Message Owner Button */}
+            <div className="mb-2">
+              <MessageOwner deal={deal} currentUser={currentUser} />
+            </div>
+
+            {/* Other Actions */}
+            <div className="flex gap-2">
+              <button className="flex-1 bg-zinc-800 py-2 rounded hover:bg-zinc-700 text-sm">SAVE</button>
+              <button className="flex-1 bg-zinc-800 py-2 rounded hover:bg-zinc-700 text-sm">ARCHIVE</button>
+              <button className="flex-1 bg-red-900/50 text-red-400 py-2 rounded hover:bg-red-900 text-sm">DELETE</button>
+            </div>
+
+            <div className="text-xs text-zinc-600 mt-4 text-center">
+              Posted by: {deal.user_email} • {new Date(deal.created_at).toLocaleDateString()}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {showMakeOffer && (
+        <MakeOfferModal deal={deal} onClose={() => setShowMakeOffer(false)} />
+      )}
+    </>
   )
 }
