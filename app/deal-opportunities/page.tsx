@@ -1,26 +1,29 @@
 import { createClient } from '@supabase/supabase-js'
 import DealOpportunities from './DealOpportunities'
 
-export const revalidate = 0 // Always fetch fresh data, no caching
+export const revalidate = 0
 
 export default async function Page() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! // Server-only key, safe here
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
   
-  // Only grab active deals, newest first
-  const { data: deals, error } = await supabase
+  const currentUser = 'dm2107137@gmail.com'
+  
+  // Get all deals
+  const { data: deals } = await supabase
     .from('deals')
     .select('*')
-    .eq('status', 'active')
     .order('created_at', { ascending: false })
 
-  if (error) {
-    console.error('Error fetching deals:', error)
-    return <div style={{ color: '#ef4444', padding: 20 }}>Failed to load deals.</div>
-  }
+  // Get saved deal IDs for this user
+  const { data: savedRows } = await supabase
+    .from('saved_deals')
+    .select('deal_id')
+    .eq('user_email', currentUser)
 
-  // Pass deals to client component
-  return <DealOpportunities deals={deals || []} />
+  const savedIds = savedRows?.map(r => r.deal_id) || []
+
+  return <DealOpportunities deals={deals || []} initialSavedIds={savedIds} currentUser={currentUser} />
 }
