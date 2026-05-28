@@ -37,7 +37,10 @@ export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose:
       setSaving(false)
     } else {
       setSuccess(true)
-      setTimeout(() => onClose(), 2000)
+      setTimeout(() => {
+        onClose()
+        window.location.href = '/deal-opportunities'
+      }, 2000)
     }
   }
 
@@ -59,7 +62,7 @@ export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose:
         <div style={{ background: '#111', padding: 32, borderRadius: 16, textAlign: 'center', border: '2px solid #22c55e' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
           <div style={{ fontSize: 20, fontWeight: 900, color: '#22c55e' }}>Offer Sent!</div>
-          <div style={{ color: '#999', marginTop: 8 }}>The owner will contact you soon.</div>
+          <div style={{ color: '#999', marginTop: 8 }}>Redirecting to deals...</div>
         </div>
       </div>
     )
@@ -167,17 +170,31 @@ export default function MakeOfferModal({ deal, onClose }: { deal: Deal, onClose:
           
           {error && <div style={{ color: '#ef4444', marginBottom: 10, fontSize: 14, textAlign: 'center' }}>{error}</div>}
           
-          <button 
-            type="submit"
-            disabled={saving}
-            style={{ 
-              width: '100%', padding: 16, background: saving ? '#555' : '#FFD700', 
-              color: '#000', fontWeight: 900, borderRadius: 12, border: 'none',
-              fontSize: 16, cursor: saving ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {saving ? 'SENDING...' : 'SEND OFFER'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button 
+              type="button"
+              onClick={onClose}
+              style={{ 
+                flex: 1, padding: 16, background: '#222', 
+                color: '#999', fontWeight: 700, borderRadius: 12, 
+                border: '1px solid #333', fontSize: 16, cursor: 'pointer'
+              }}
+            >
+              CANCEL
+            </button>
+            
+            <button 
+              type="submit"
+              disabled={saving}
+              style={{ 
+                flex: 2, padding: 16, background: saving ? '#555' : '#FFD700', 
+                color: '#000', fontWeight: 900, borderRadius: 12, border: 'none',
+                fontSize: 16, cursor: saving ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {saving ? 'SENDING...' : 'SEND OFFER'}
+            </button>
+          </div>
           
           <div style={{ fontSize: 11, color: '#666', textAlign: 'center', marginTop: 12 }}>
             Your info is sent directly to the property owner
