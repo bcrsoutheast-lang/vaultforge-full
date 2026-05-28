@@ -17,6 +17,7 @@ type Deal = {
   baths: number | null
   sqft: number | null
   description: string
+  photo_url: string | null
   user_email: string
   created_at: string
 }
@@ -28,19 +29,17 @@ function analyzeDeal(deal: Deal) {
   const mao = arv * 0.7 - repairEst
   const profit = arv - ask - repairEst
   
-  let status = 'MAYBE'
-  let color = '#eab308'
-  let aiComment = 'Tight margins. Negotiate harder.'
+  let status = 'PASS'
+  let color = '#ef4444'
+  let aiComment = `Overpriced. You'd lose $${Math.abs(profit).toLocaleString()}. Walk away.`
   
-  if (ask <= mao) {
+  if (ask <= mao && profit > 0) {
     status = 'DEAL'
     color = '#22c55e'
     aiComment = `Strong deal. $${profit.toLocaleString()} est. profit. MAO: $${mao.toLocaleString()}.`
-  } else if (ask > arv * 0.9) {
-    status = 'PASS'
-    color = '#ef4444'
-    aiComment = `Overpriced. You'd lose $${Math.abs(profit).toLocaleString()}. Walk away.`
-  } else {
+  } else if (ask <= arv * 0.8 && profit > 0) {
+    status = 'MAYBE'
+    color = '#eab308'
     aiComment = `$${profit.toLocaleString()} est. profit. Negotiate $${(ask - mao).toLocaleString()} off to hit MAO.`
   }
   
@@ -61,8 +60,8 @@ export default async function DealOpportunities() {
     background: '#111',
     border: '1px solid #222',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16
+    marginBottom: 16,
+    overflow: 'hidden'
   }
 
   const pillStyle = (bg: string): React.CSSProperties => ({
@@ -103,45 +102,55 @@ export default async function DealOpportunities() {
         
         return (
           <div key={deal.id} style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>
-                  {deal.title || `${deal.beds}bd ${deal.baths}ba ${deal.city}`}
-                </div>
-                <div style={{ fontSize: 13, color: '#999' }}>
-                  {deal.city}, {deal.state} • {deal.beds || '?'}bd {deal.baths || '?'}ba • {deal.sqft?.toLocaleString() || '?'} sqft
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: '#00bfff' }}>
-                  ${Number(deal.asking_price).toLocaleString()}
-                </div>
-                <div style={pillStyle(color)}>{status}</div>
-              </div>
-            </div>
-
-            <div style={{ 
-              background: '#0a0a0a', 
-              border: '1px solid #222', 
-              borderRadius: 8, 
-              padding: 12, 
-              margin: '12px 0' 
-            }}>
-              <div style={{ fontSize: 11, color: '#999', letterSpacing: '1px', marginBottom: 4 }}>AI ANALYZER</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: profit > 0 ? '#22c55e' : '#ef4444' }}>
-                Est. Profit: ${profit.toLocaleString()}
-              </div>
-              <div style={{ fontSize: 13, color: '#ccc', marginTop: 4 }}>{aiComment}</div>
-            </div>
-
-            {deal.description && (
-              <div style={{ fontSize: 14, color: '#ddd', marginBottom: 8 }}>
-                {deal.description}
-              </div>
+            {deal.photo_url && (
+              <img 
+                src={deal.photo_url} 
+                alt={deal.title}
+                style={{ width: '100%', height: 200, objectFit: 'cover' }} 
+              />
             )}
+            
+            <div style={{ padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: '#FFD700' }}>
+                    {deal.title || `${deal.beds}bd ${deal.baths}ba ${deal.city}`}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#999' }}>
+                    {deal.city}, {deal.state} • {deal.beds || '?'}bd {deal.baths || '?'}ba • {deal.sqft?.toLocaleString() || '?'} sqft
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: '#00bfff' }}>
+                    ${Number(deal.asking_price).toLocaleString()}
+                  </div>
+                  <div style={pillStyle(color)}>{status}</div>
+                </div>
+              </div>
 
-            <div style={{ fontSize: 11, color: '#666' }}>
-              Posted by: {deal.user_email}
+              <div style={{ 
+                background: '#0a0a0a', 
+                border: '1px solid #222', 
+                borderRadius: 8, 
+                padding: 12, 
+                margin: '12px 0' 
+              }}>
+                <div style={{ fontSize: 11, color: '#999', letterSpacing: '1px', marginBottom: 4 }}>AI ANALYZER</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: profit > 0 ? '#22c55e' : '#ef4444' }}>
+                  Est. Profit: ${profit.toLocaleString()}
+                </div>
+                <div style={{ fontSize: 13, color: '#ccc', marginTop: 4 }}>{aiComment}</div>
+              </div>
+
+              {deal.description && (
+                <div style={{ fontSize: 14, color: '#ddd', marginBottom: 8 }}>
+                  {deal.description}
+                </div>
+              )}
+
+              <div style={{ fontSize: 11, color: '#666' }}>
+                Posted by: {deal.user_email}
+              </div>
             </div>
           </div>
         )
