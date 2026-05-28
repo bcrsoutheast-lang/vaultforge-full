@@ -30,17 +30,17 @@ export default function CommandCenter() {
 
   const loadStats = async () => {
     const { count: deals } = await supabase
-    .from('deals')
-    .select('*', { count: 'exact', head: true })
+  .from('deals')
+  .select('*', { count: 'exact', head: true })
 
     const { count: active } = await supabase
-    .from('deals')
-    .select('*', { count: 'exact', head: true })
-    .neq('status', 'archived')
+  .from('deals')
+  .select('*', { count: 'exact', head: true })
+  .neq('status', 'archived')
 
     const { count: pain } = await supabase
-    .from('pain_intake')
-    .select('*', { count: 'exact', head: true })
+  .from('pain_intake')
+  .select('*', { count: 'exact', head: true })
 
     setStats({
       totalDeals: deals || 0,
@@ -157,13 +157,39 @@ export default function CommandCenter() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-          <div style={{ textAlign: 'right' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ textAlign: 'right', marginRight: '12px' }}>
             <div style={{ fontSize: '12px', color: '#888888' }}>OPERATOR</div>
             <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#FFD700' }}>
               {user?.email?.split('@')[0]?.toUpperCase() || 'OPERATOR'}
             </div>
           </div>
+
+          <button
+            onClick={() => router.push('/profile')}
+            style={{
+              backgroundColor: 'transparent',
+              border: '1px solid #FFD700',
+              color: '#FFD700',
+              padding: '8px 16px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              letterSpacing: '1px',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#FFD700'
+              e.currentTarget.style.color = '#000000'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent'
+              e.currentTarget.style.color = '#FFD700'
+            }}
+          >
+            PROFILE
+          </button>
+
           <button
             onClick={handleLogout}
             style={{
