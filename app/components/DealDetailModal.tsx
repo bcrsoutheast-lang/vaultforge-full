@@ -9,7 +9,7 @@ type Deal = {
   address: string
   city: string
   state: string
-  zipcode: string | null
+  zipcode: string | null 
   asking_price: number
   arv: number
   beds: number | null
