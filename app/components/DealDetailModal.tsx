@@ -27,23 +27,28 @@ type Deal = {
   property_type?: string | null
 }
 
+type CurrentUser = {
+  email: string
+  name?: string | null
+  avatar?: string | null
+}
+
 export default function DealDetailModal({ 
   deal, 
-  onClose 
+  currentUser, // ✅ ADDED THIS PROP
+  isSaved,
+  onClose,
+  onSave
 }: { 
   deal: Deal | null
-  onClose: () => void 
+  currentUser?: CurrentUser | null // ✅ ADDED THIS TYPE
+  isSaved?: boolean
+  onClose: () => void
+  onSave?: () => void
 }) {
   const [showMakeOffer, setShowMakeOffer] = useState(false)
 
   if (!deal) return null
-
-  // TODO: Replace with real logged in user from Supabase Auth
-  const currentUser = {
-    email: 'dm2107137@gmail.com',
-    name: 'Deeve Moneyy',
-    avatar: null
-  }
 
   const profit = deal.arv - deal.asking_price - (deal.repairs || 0)
   const mao = deal.arv * 0.7 - (deal.repairs || 0)
@@ -157,14 +162,22 @@ export default function DealDetailModal({
               </button>
             </div>
 
-            {/* Message Owner Button */}
+            {/* Message Owner Button */} 
             <div className="mb-2">
-              <MessageOwner deal={deal} currentUser={currentUser} />
+              <MessageOwner 
+                deal={deal} 
+                currentUser={currentUser || { email: 'guest@vaultforge.app', name: 'Guest' }} 
+              />
             </div>
 
             {/* Other Actions */}
             <div className="flex gap-2">
-              <button className="flex-1 bg-zinc-800 py-2 rounded hover:bg-zinc-700 text-sm">SAVE</button>
+              <button 
+                onClick={onSave}
+                className="flex-1 bg-zinc-800 py-2 rounded hover:bg-zinc-700 text-sm"
+              >
+                {isSaved ? 'SAVED' : 'SAVE'}
+              </button>
               <button className="flex-1 bg-zinc-800 py-2 rounded hover:bg-zinc-700 text-sm">ARCHIVE</button>
               <button className="flex-1 bg-red-900/50 text-red-400 py-2 rounded hover:bg-red-900 text-sm">DELETE</button>
             </div>
