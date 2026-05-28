@@ -171,15 +171,17 @@ export default function DealOpportunities({ deals: initialDeals, initialSavedIds
       })}
       
       {selectedDeal && (
-        <DealDetailModal 
-          deal={selectedDeal} 
-          currentUser={currentUser}
-          isSaved={savedIds.has(selectedDeal.id)}
-          onClose={() => setSelectedDeal(null)}
-          onSave={() => handleSave(selectedDeal.id)}
-          onArchive={() => handleArchive(selectedDeal.id)}
-          onDelete={() => handleDelete(selectedDeal.id)}
-        />
+        <DealDetailModal
+  deal={selectedDeal}
+  currentUser={{ 
+    email: currentUser || 'guest@vaultforge.app',
+    name: 'Deeve Moneyy',
+    avatar: null 
+  }}  // ✅ Now it's an object
+  isSaved={savedIds.has(selectedDeal.id)}
+  onClose={() => setSelectedDeal(null)}
+  onSave={() => handleSave(selectedDeal.id)}
+/>
       )}
     </div>
   )
