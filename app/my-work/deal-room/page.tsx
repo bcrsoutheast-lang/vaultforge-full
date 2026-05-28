@@ -1,4 +1,4 @@
-'use client'
+use client'
 
 import { useState } from 'react'
 import { createDeal } from './actions'
@@ -15,6 +15,8 @@ export default function PostDeal() {
   const [baths, setBaths] = useState('')
   const [sqft, setSqft] = useState('')
   const [description, setDescription] = useState('')
+  const [photo, setPhoto] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -45,10 +47,18 @@ export default function PostDeal() {
     }
   }
 
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) {
+      setPhoto(file)
+      setPhotoPreview(URL.createObjectURL(file))
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (saving) return
-    if (!address || !city || !asking_price || !arv) {
+    if (!address ||!city ||!asking_price ||!arv) {
       setError('Address, City, Asking Price, and ARV are required')
       return
     }
@@ -67,6 +77,7 @@ export default function PostDeal() {
     formData.append('baths', baths)
     formData.append('sqft', sqft)
     formData.append('description', description)
+    if (photo) formData.append('photo', photo)
 
     const res = await createDeal(formData)
     
@@ -108,6 +119,17 @@ export default function PostDeal() {
       </div>
 
       <form onSubmit={handleSubmit}>
+        <label style={labelStyle}>Property Photo</label>
+        <input 
+          type="file" 
+          accept="image/*" 
+          onChange={handlePhotoChange}
+          style={{...inputStyle, padding: 8 }} 
+        />
+        {photoPreview && (
+          <img src={photoPreview} alt="Preview" style={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />
+        )}
+
         <label style={labelStyle}>Property Address *</label>
         <input placeholder="123 Main St" value={address} onChange={e => setAddress(e.target.value)} style={inputStyle} />
         
@@ -154,7 +176,7 @@ export default function PostDeal() {
           placeholder="3BR/2BA solid rental area, needs roof and kitchen" 
           value={description} 
           onChange={e => setDescription(e.target.value)} 
-          style={{ ...inputStyle, height: 80, resize: 'vertical' }} 
+          style={{...inputStyle, height: 80, resize: 'vertical' }} 
         />
         
         {error && <div style={{ color: '#ef4444', marginBottom: 10, fontSize: 14 }}>{error}</div>}
@@ -165,16 +187,16 @@ export default function PostDeal() {
           style={{ 
             width: '100%', 
             padding: 16, 
-            background: saving ? '#555' : '#FFD700', 
+            background: saving? '#555' : '#FFD700', 
             color: '#000', 
             fontWeight: 900, 
             borderRadius: 12, 
             border: 'none',
             fontSize: 16,
-            cursor: saving ? 'not-allowed' : 'pointer'
+            cursor: saving? 'not-allowed' : 'pointer'
           }}
         >
-          {saving ? 'POSTING...' : 'POST THIS DEAL'}
+          {saving? 'POSTING...' : 'POST THIS DEAL'}
         </button>
       </form>
       
