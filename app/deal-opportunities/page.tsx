@@ -24,7 +24,7 @@ type Deal = {
 function analyzeDeal(deal: Deal) {
   const ask = Number(deal.asking_price) || 0
   const arv = Number(deal.arv) || 0
-  const repairEst = 25000 // default repair estimate
+  const repairEst = 25000
   const mao = arv * 0.7 - repairEst
   const profit = arv - ask - repairEst
   
@@ -148,3 +148,4 @@ export default async function DealOpportunities() {
       })}
     </div>
   )
+}
