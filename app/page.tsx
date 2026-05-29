@@ -1,13 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 export default function CommandCenter() {
   const [counts, setCounts] = useState({opportunity: 0, saved: 0, archive: 0, deleted: 0})
   const [user, setUser] = useState<any>(null)
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
   const router = useRouter()
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function CommandCenter() {
           className="bg-amber-600 text-black px-6 py-3 font-bold tracking-wider hover:bg-amber-500">
           + ADD DEAL
         </button>
-        <button onClick={() => supabase.auth.signOut()} 
+        <button onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} 
           className="border border-red-700 text-red-500 px-6 py-3 font-bold tracking-wider hover:bg-red-950">
           EXIT VAULT
         </button>
