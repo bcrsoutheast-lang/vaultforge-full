@@ -1,126 +1,118 @@
 'use client'
 import { createBrowserClient } from '@supabase/ssr'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-
-type Deal = {
-  id: string
-  address: string
-  price: number
-  status: string
-  bedrooms: number
-  bathrooms: number
-}
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function VaultDashboard() {
-  const [user, setUser] = useState<any>(null)
-  const [deals, setDeals] = useState<Deal[]>([])
-  const [stats, setStats] = useState({ saved: 0, archived: 0, recycled: 0 })
+  const router = useRouter()
+  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
   
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const [stats, setStats] = useState({
+    totalDeals: 0,
+    totalPainDeals: 0,
+    hotLeads: 0,
+    foreclosureLeads: 0
+  })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-      
-      const { data: dealData } = await supabase
-        .from('deals')
-        .select('*')
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(6)
-      
-      if (dealData) setDeals(dealData)
-      
-      const { count: savedCount } = await supabase.from('deals').select('*', { count: 'exact', head: true }).eq('status', 'active')
-      const { count: archiveCount } = await supabase.from('deals').select('*', { count: 'exact', head: true }).eq('status', 'archived')
-      setStats({ saved: savedCount || 0, archived: archiveCount || 0, recycled: 0 })
-    }
-    loadData()
+    fetchStats()
   }, [])
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    window.location.href = '/'
+  const fetchStats = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const [dealsRes, painRes, hotRes, foreclosureRes] = await Promise.all([
+      supabase.from('deals').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'saved'),
+      supabase.from('pain_deals').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'active'),
+      supabase.from('pain_deals').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'active').gte('motivation_level', 8),
+      supabase.from('pain_deals').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'active').eq('facing_foreclosure', true)
+    ])
+
+    setStats({
+      totalDeals: dealsRes.count || 0,
+      totalPainDeals: painRes.count || 0,
+      hotLeads: hotRes.count || 0,
+      foreclosureLeads: foreclosureRes.count || 0
+    })
+    setLoading(false)
   }
 
+  if (loading) return <div className="min-h-screen bg-black text-white p-4">Loading Dashboard...</div>
+
   return (
-    <div className="bg-black min-h-screen text-white">
-      <div className="border-b border-yellow-500/30">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-yellow-500" />
+    <div className="min-h-screen bg-black text-white p-4 pb-20">
+      <h1 className="text-3xl font-bold text-yellow-500 mb-8">VAULT DASHBOARD</h1>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-zinc-900 p-4 rounded border border-zinc-800">
+          <p className="text-zinc-400 text-xs mb-1">TOTAL DEALS</p>
+          <p className="text-3xl font-bold text-white">{stats.totalDeals}</p>
+        </div>
+        <div className="bg-zinc-900 p-4 rounded border border-red-900">
+          <p className="text-zinc-400 text-xs mb-1">PAIN DEALS</p>
+          <p className="text-3xl font-bold text-red-500">{stats.totalPainDeals}</p>
+        </div>
+        <div className="bg-zinc-900 p-4 rounded border border-orange-900">
+          <p className="text-zinc-400 text-xs mb-1">HOT LEADS 8+</p>
+          <p className="text-3xl font-bold text-orange-500">{stats.hotLeads}</p>
+        </div>
+        <div className="bg-zinc-900 p-4 rounded border border-red-900">
+          <p className="text-zinc-400 text-xs mb-1">FORECLOSURE</p>
+          <p className="text-3xl font-bold text-red-600">{stats.foreclosureLeads}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div 
+          onClick={() => router.push('/vault/opportunities')}
+          className="bg-zinc-900 p-6 rounded border border-yellow-600 cursor-pointer hover:bg-zinc-800 transition"
+        >
+          <div className="flex justify-between items-start mb-4">
             <div>
-              <h1 className="text-yellow-500 text-lg font-bold tracking-wider">COMMAND CENTER</h1>
-              <p className="text-zinc-500 text-xs">PRIVATE INVESTOR ARCHITECTURE</p>
+              <h2 className="text-2xl font-bold text-yellow-500">DEAL OPPORTUNITIES</h2>
+              <p className="text-zinc-400 text-sm mt-1">Regular property deals</p>
             </div>
+            <div className="text-4xl">📊</div>
           </div>
-          <button onClick={handleLogout} className="border border-red-500 text-red-500 px-4 py-2 text-xs hover:bg-red-500/10">
-            EXIT VAULT
+          <p className="text-3xl font-bold text-white mb-4">{stats.totalDeals} Active</p>
+          <button className="w-full bg-yellow-500 text-black font-bold py-3 rounded">
+            ENTER DEAL ROOM
+          </button>
+        </div>
+
+        <div 
+          onClick={() => router.push('/vault/pain')}
+          className="bg-zinc-900 p-6 rounded border border-red-600 cursor-pointer hover:bg-zinc-800 transition"
+        >
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h2 className="text-2xl font-bold text-red-500">PAIN HELP</h2>
+              <p className="text-zinc-400 text-sm mt-1">Motivated seller leads</p>
+            </div>
+            <div className="text-4xl">🔥</div>
+          </div>
+          <p className="text-3xl font-bold text-white mb-4">{stats.totalPainDeals} Active</p>
+          <button className="w-full bg-red-600 text-white font-bold py-3 rounded">
+            ENTER PAIN ROOM
           </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        {/* Stat Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
-          <Link href="/vault/saved" className="border border-yellow-500 p-8 text-center hover:bg-yellow-500/5 transition">
-            <p className="text-5xl text-yellow-500 font-light mb-2">{stats.saved}</p>
-            <p className="text-zinc-400 text-xs tracking-widest">SAVED DEALS</p>
-          </Link>
-          <Link href="/vault/archive" className="border border-yellow-500 p-8 text-center hover:bg-yellow-500/5 transition">
-            <p className="text-5xl text-yellow-500 font-light mb-2">{stats.archived}</p>
-            <p className="text-zinc-400 text-xs tracking-widest">DEAL ARCHIVE</p>
-          </Link>
-          <div className="border border-yellow-500 p-8 text-center">
-            <p className="text-5xl text-yellow-500 font-light mb-2">{stats.recycled}</p>
-            <p className="text-zinc-400 text-xs tracking-widest">RECYCLE BIN</p>
-          </div>
-        </div>
-
-        {/* Deal Cards - The "pain cards" you wanted */}
-        <div className="mb-6 flex justify-between items-center">
-          <h3 className="text-xl text-yellow-500 tracking-wider">ACTIVE DEALS</h3>
-          <Link href="/vault/new" className="bg-yellow-500 text-black px-6 py-2 text-sm font-bold hover:bg-yellow-400">
-            + ADD DEAL
-          </Link>
-        </div>
-        
-        {deals.length === 0 ? (
-          <div className="border border-zinc-800 p-12 text-center">
-            <p className="text-zinc-500">NO DEALS IN VAULT. ADD ONE.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {deals.map(deal => (
-              <div key={deal.id} className="bg-zinc-900 border border-zinc-800 overflow-hidden group hover:border-yellow-500/50 transition">
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="text-lg font-light">{deal.address || 'New Deal'}</h4>
-                    <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1">{deal.status?.toUpperCase()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm mb-6">
-                    <div>
-                      <p className="text-zinc-500 text-xs">PRICE</p>
-                      <p className="text-yellow-500">${deal.price?.toLocaleString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-zinc-500 text-xs">BDS / BA</p>
-                      <p className="text-white">{deal.bedrooms} / {deal.bathrooms}</p>
-                    </div>
-                  </div>
-                  <button className="w-full border border-yellow-500 text-yellow-500 py-3 text-sm hover:bg-yellow-500 hover:text-black transition">
-                    VIEW DEAL
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <button 
+          onClick={() => router.push('/vault/new')}
+          className="bg-zinc-800 border border-zinc-700 text-white font-bold py-4 rounded hover:bg-zinc-700"
+        >
+          + ADD NEW DEAL
+        </button>
+        <button 
+          onClick={() => router.push('/vault/pain/new')}
+          className="bg-zinc-800 border border-red-900 text-red-500 font-bold py-4 rounded hover:bg-zinc-700"
+        >
+          + ADD NEW PAIN DEAL
+        </button>
       </div>
     </div>
   )
