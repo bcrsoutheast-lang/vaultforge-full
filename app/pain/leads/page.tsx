@@ -8,6 +8,9 @@ export default function PainLeads() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [leads, setLeads] = useState<any[]>([])
+  const [unreadMessages, setUnreadMessages] = useState(0)
+  const [showMessageModal, setShowMessageModal] = useState<any>(null)
+  const [messageBody, setMessageBody] = useState('')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,21 +19,54 @@ export default function PainLeads() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user || !data.user.email) router.push('/login')
+      if (!data.user) router.push('/login')
       else {
         setUser(data.user)
-        fetchLeads(data.user.email)
+        fetchLeads(data.user.id)
+        fetchUnreadCount(data.user.id)
       }
     })
   }, [])
 
-  const fetchLeads = async (email: string) => {
+  const fetchLeads = async (userId: string) => {
     const { data } = await supabase
-     .from('pain_intake')
-     .select('*')
-     .eq('user_email', email)
-     .order('pain_score', { ascending: false })
+    .from('pain_intake')
+    .select('*')
+    .eq('user_id', userId)
+    .order('pain_score', { ascending: false })
     if (data) setLeads(data)
+  }
+
+  const fetchUnreadCount = async (userId: string) => {
+    const { count } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('receiver_id', userId)
+    .eq('read', false)
+    setUnreadMessages(count || 0)
+  }
+
+  const markPainViewed = async (painId: string) => {
+    await supabase.from('pain_intake').update({ viewed: true }).eq('id', painId)
+    router.push(`/pain/${painId}`)
+  }
+
+  const sendMessage = async () => {
+    if (!messageBody ||!showMessageModal ||!user) return
+
+    await supabase.from('messages').insert({
+      sender_id: user.id,
+      sender_name: user.user_metadata?.full_name || user.email,
+      receiver_id: showMessageModal.user_id || user.id,
+      receiver_name: showMessageModal.user_email || 'Owner',
+      pain_id: showMessageModal.id,
+      subject: `Re: ${showMessageModal.address}`,
+      body: messageBody,
+      read: false
+    })
+
+    setMessageBody('')
+    setShowMessageModal(null)
   }
 
   const getScoreColor = (score: number) => {
@@ -43,6 +79,19 @@ export default function PainLeads() {
 
   return (
     <div style={{ background: '#000', minHeight: '100vh', color: '#E5E5E5', padding: '24px' }}>
+      <style jsx>{`
+        @keyframes pulse-gold {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+          50% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
+        }
+        @keyframes pulse-red {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+          50% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+        }
+      .pulse-new { animation: pulse-gold 2s infinite; }
+      .pulse-msg { animation: pulse-red 2s infinite; }
+      `}</style>
+
       <header style={{ borderBottom: '1px solid #FFD700', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <Image src="/IMG_4751.png" alt="VaultForge" width={40} height={40} style={{ objectFit: 'contain' }} />
@@ -52,19 +101,41 @@ export default function PainLeads() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={() => router.push('/messages')}
+            className={unreadMessages > 0? 'pulse-msg' : ''}
+            style={{
+              position: 'relative',
+              border: '1px solid #FF6B6B',
+              background: 'transparent',
+              color: '#FF6B6B',
+              padding: '10px 20px',
+              fontSize: '12px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}>
+            MESSAGES {unreadMessages > 0 && `(${unreadMessages})`}
+          </button>
           <button onClick={() => router.push('/pain/new')} style={{ border: '1px solid #FFD700', background: '#FFD700', color: '#000', padding: '10px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>+ NEW INTAKE</button>
           <button onClick={() => router.push('/dashboard')} style={{ border: '1px solid #FFD700', background: 'transparent', color: '#FFD700', padding: '10px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>← COMMAND CENTER</button>
         </div>
       </header>
 
-      {leads.length === 0 ? (
+      {leads.length === 0? (
         <div style={{ textAlign: 'center', padding: '60px', color: '#666' }}>NO PAIN LEADS. START INTAKE.</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
           {leads.map(l => (
-            <div key={l.id} onClick={() => router.push(`/pain/${l.id}`)} style={{ border: '1px solid #333', background: '#111', cursor: 'pointer', transition: 'border 0.2s' }} onMouseEnter={e => e.currentTarget.style.border = '1px solid #FFD700'} onMouseLeave={e => e.currentTarget.style.border = '1px solid #333'}>
+            <div
+              key={l.id}
+              className={!l.viewed? 'pulse-new' : ''}
+              style={{
+                border: `1px solid ${!l.viewed? '#FFD700' : '#333'}`,
+                background: '#111',
+                transition: 'border 0.2s'
+              }}>
               <div style={{ position: 'relative', width: '100%', height: '200px', background: '#000' }}>
-                {l.photos?.[0] ? (
+                {l.photos?.[0]? (
                   <img src={l.photos[0]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: '48px' }}>⚡</div>
@@ -75,25 +146,60 @@ export default function PainLeads() {
                 <div style={{ position: 'absolute', top: '12px', right: '12px', background: getScoreColor(l.pain_score || 0), color: '#000', padding: '4px 12px', fontSize: '14px', fontWeight: '900' }}>
                   {l.pain_score || '—'}
                 </div>
+                {!l.viewed && (
+                  <div style={{ position: 'absolute', bottom: '12px', left: '12px', background: '#FFD700', color: '#000', padding: '4px 12px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px' }}>
+                    NEW
+                  </div>
+                )}
               </div>
               <div style={{ padding: '16px' }}>
                 <div style={{ color: '#FFD700', fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>
-                  {l.asking_price ? `$${Number(l.asking_price).toLocaleString()}` : 'ASK TBD'}
+                  {l.asking_price? `$${Number(l.asking_price).toLocaleString()}` : 'ASK TBD'}
                 </div>
                 <div style={{ color: '#E5E5E5', fontSize: '14px', marginBottom: '12px' }}>
-                  {l.city}{l.state ? `, ${l.state}` : ''} {l.address && `| ${l.address}`}
+                  {l.city}{l.state? `, ${l.state}` : ''} {l.address && `| ${l.address}`}
                 </div>
                 <div style={{ fontSize: '12px', color: '#888', marginBottom: '12px', borderTop: '1px solid #222', paddingTop: '12px' }}>
                   <b style={{ color: '#E5E5E5' }}>ROOT:</b> {l.root_cause || l.why1 || 'Unknown'}
                 </div>
-                {l.ai_analysis?.strategy && (
-                  <div style={{ fontSize: '11px', color: '#666' }}>
-                    STRATEGY: <span style={{ color: '#FFD700' }}>{l.ai_analysis.strategy}</span>
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => markPainViewed(l.id)}
+                    style={{ flex: 1, border: '1px solid #FFD700', background: 'transparent', color: '#FFD700', padding: '8px', fontSize: '10px', cursor: 'pointer', fontWeight: '700' }}>
+                    VIEW
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowMessageModal(l); }}
+                    style={{ flex: 1, border: '1px solid #666', background: 'transparent', color: '#E5E5E5', padding: '8px', fontSize: '10px', cursor: 'pointer', fontWeight: '700' }}>
+                    MESSAGE OWNER
+                  </button>
+                </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {showMessageModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#111', border: '1px solid #FFD700', padding: '24px', width: '90%', maxWidth: '500px' }}>
+            <div style={{ color: '#FFD700', fontSize: '16px', fontWeight: '900', marginBottom: '16px', letterSpacing: '2px' }}>
+              MESSAGE OWNER
+            </div>
+            <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>TO: {showMessageModal.user_email || 'Owner'}</div>
+            <div style={{ fontSize: '12px', color: '#888', marginBottom: '16px' }}>RE: {showMessageModal.address}</div>
+            <textarea
+              value={messageBody}
+              onChange={e => setMessageBody(e.target.value)}
+              placeholder="Your message..."
+              rows={6}
+              style={{ width: '100%', background: '#000', border: '1px solid #333', color: '#E5E5E5', padding: '12px', fontSize: '14px', marginBottom: '16px', resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={sendMessage} style={{ flex: 1, border: '1px solid #FFD700', background: '#FFD700', color: '#000', padding: '12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>SEND</button>
+              <button onClick={() => setShowMessageModal(null)} style={{ flex: 1, border: '1px solid #666', background: 'transparent', color: '#E5E5E5', padding: '12px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>CANCEL</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
