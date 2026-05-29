@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 export default function DealRoomPage() {
   const router = useRouter()
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-  
+
   const [deals, setDeals] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -16,11 +16,11 @@ export default function DealRoomPage() {
 
   const fetchDeals = async () => {
     const { data } = await supabase
-   .from('deals')
-   .select('*')
-   .eq('status', 'saved')
-   .order('created_at', { ascending: false })
-    
+  .from('deals')
+  .select('*')
+  .eq('status', 'saved')
+  .order('created_at', { ascending: false })
+
     setDeals(data || [])
     setLoading(false)
   }
@@ -60,20 +60,27 @@ export default function DealRoomPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {deals.map(deal => (
             <div key={deal.id} className="bg-zinc-900 rounded border border-zinc-800 p-4">
-              <img 
-                src={deal.image_urls?.[0] || 'https://via.placeholder.com/400x200/333/666?text=No+Image'} 
+              <img
+                src={deal.image_urls?.[0] || 'https://via.placeholder.com/400x200/333/666?text=No+Image'}
                 alt="Deal"
                 className="w-full h-40 object-cover rounded mb-3"
               />
               <p className="text-xl font-bold text-green-500">${deal.price?.toLocaleString()}</p>
               <p className="text-sm text-white truncate">{deal.address}</p>
               <p className="text-xs text-zinc-400 mb-3">{deal.city}, {deal.state}</p>
-              
+
               <div className="flex gap-2 text-xs text-zinc-400 mb-3">
                 <span>{deal.bedrooms}bd</span>
                 <span>{deal.bathrooms}ba</span>
                 <span>{deal.sqft?.toLocaleString()} sqft</span>
               </div>
+
+              <button
+                onClick={() => router.push(`/vault/deal/${deal.id}/messages`)}
+                className="w-full bg-yellow-700 text-white py-2 rounded text-sm font-bold mb-2"
+              >
+                MESSAGE {deal.unread_message_count > 0 && `(${deal.unread_message_count})`}
+              </button>
 
               <div className="flex gap-2">
                 <button onClick={() => handleArchive(deal.id)} className="flex-1 bg-blue-600 text-white py-2 rounded text-sm">
