@@ -19,46 +19,46 @@ export default function SavedDeals() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user ||!data.user.email) router.push('/login')
+      if (!data.user) router.push('/login')
       else {
         setUser(data.user)
-        fetchDeals(data.user.email)
-        fetchUnreadCount(data.user.email)
+        fetchDeals(data.user.id)
+        fetchUnreadCount(data.user.id)
       }
     })
   }, [])
 
-  const fetchDeals = async (email: string) => {
+  const fetchDeals = async (userId: string) => {
     const { data } = await supabase
     .from('deals')
     .select('*')
-    .eq('user_email', email)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     if (data) setDeals(data)
   }
 
-  const fetchUnreadCount = async (email: string) => {
+  const fetchUnreadCount = async (userId: string) => {
     const { count } = await supabase
     .from('messages')
     .select('*', { count: 'exact', head: true })
-    .eq('receiver_email', email)
+    .eq('receiver_id', userId)
     .eq('read', false)
     setUnreadMessages(count || 0)
   }
 
-  const markDealViewed = async (dealId: string) => {
+  const markDealViewed = async (dealId: number) => {
     await supabase.from('deals').update({ viewed: true }).eq('id', dealId)
     router.push(`/deals/${dealId}`)
   }
 
   const sendMessage = async () => {
-    if (!messageBody ||!showMessageModal) return
+    if (!messageBody ||!showMessageModal ||!user) return
 
     await supabase.from('messages').insert({
-      sender_email: user.email,
+      sender_id: user.id,
       sender_name: user.user_metadata?.full_name || user.email,
-      receiver_email: showMessageModal.owner_email || user.email, // Default to self if no owner
-      receiver_name: showMessageModal.owner_name || 'Owner',
+      receiver_id: showMessageModal.user_id || user.id,
+      receiver_name: showMessageModal.user_email || 'Owner',
       deal_id: showMessageModal.id,
       subject: `Re: ${showMessageModal.title || showMessageModal.address}`,
       body: messageBody,
@@ -75,15 +75,15 @@ export default function SavedDeals() {
     <div style={{ background: '#000', minHeight: '100vh', color: '#E5E5E5', padding: '24px' }}>
       <style jsx>{`
         @keyframes pulse-gold {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+          0%, 100% { box-shadow: 0 0 rgba(255, 215, 0, 0.7); }
           50% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
         }
         @keyframes pulse-red {
           0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
           50% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
         }
-       .pulse-new { animation: pulse-gold 2s infinite; }
-       .pulse-msg { animation: pulse-red 2s infinite; }
+      .pulse-new { animation: pulse-gold 2s infinite; }
+      .pulse-msg { animation: pulse-red 2s infinite; }
       `}</style>
 
       <header style={{ borderBottom: '1px solid #FFD700', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -162,7 +162,7 @@ export default function SavedDeals() {
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    onClick={(e) => { e.stopPropagation(); markDealViewed(d.id); }}
+                    onClick={() => markDealViewed(d.id)}
                     style={{ flex: 1, border: '1px solid #FFD700', background: 'transparent', color: '#FFD700', padding: '8px', fontSize: '10px', cursor: 'pointer', fontWeight: '700' }}>
                     VIEW
                   </button>
@@ -184,7 +184,7 @@ export default function SavedDeals() {
             <div style={{ color: '#FFD700', fontSize: '16px', fontWeight: '900', marginBottom: '16px', letterSpacing: '2px' }}>
               MESSAGE OWNER
             </div>
-            <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>TO: {showMessageModal.owner_name || 'Owner'}</div>
+            <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>TO: {showMessageModal.user_email || 'Owner'}</div>
             <div style={{ fontSize: '12px', color: '#888', marginBottom: '16px' }}>RE: {showMessageModal.title || showMessageModal.address}</div>
             <textarea
               value={messageBody}
