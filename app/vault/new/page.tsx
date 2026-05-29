@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -14,7 +14,7 @@ export default function NewDeal() {
   const [previews, setPreviews] = useState<string[]>([])
   const [feedback, setFeedback] = useState('')
   const [user, setUser] = useState<any>(null)
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
   const router = useRouter()
 
   useEffect(() => {
@@ -22,9 +22,8 @@ export default function NewDeal() {
       if (!data.user) router.push('/login')
       setUser(data.user)
     })
-  }, [])
+  }, [router, supabase])
 
-  // LIVE ANALYZER MATH
   useEffect(() => {
     const pp = Number(form.purchase_price) || 0
     const ap = Number(form.asking_price) || 0
@@ -33,7 +32,7 @@ export default function NewDeal() {
     
     const wholesale_fee = ap - pp
     const mao_70 = (arv * 0.7) - repairs
-    const flip_profit = arv - pp - repairs - (arv * 0.08) // 8% closing/holding
+    const flip_profit = arv - pp - repairs - (arv * 0.08)
     const equity = arv > 0 ? ((arv - pp) / arv * 100).toFixed(1) : 0
 
     let msg = ''
@@ -57,7 +56,6 @@ export default function NewDeal() {
     if (!user) return
     let image_urls: string[] = []
     
-    // UPLOAD 10 PICS
     for (const pic of pics) {
       const fileName = `${user.id}/${Date.now()}-${pic.name}`
       const { data, error } = await supabase.storage.from('deal-pics').upload(fileName, pic)
@@ -79,7 +77,7 @@ export default function NewDeal() {
     <div className="min-h-screen bg-black text-amber-400 font-mono p-4">
       <header className="flex justify-between items-center border-b border-amber-900 pb-4 mb-6">
         <h1 className="text-xl tracking-widest">NEW DEAL INTAKE // VAULTFORGE</h1>
-        <Image src="/IMG_4751.png" alt="VaultForge" width={60} height={60} />
+        <Image src="/IMG_4751.png" alt="VaultForge" width={60} height={60} priority />
       </header>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -151,7 +149,7 @@ export default function NewDeal() {
             <div className={label}>PROPERTY PICS // MAX 10</div>
             <input type="file" multiple accept="image/*" onChange={handlePic} className={input} />
             <div className="grid grid-cols-5 gap-2 mt-2">
-              {previews.map((p, i) => <img key={i} src={p} className="w-full h-16 object-cover border border-amber-900" />)}
+              {previews.map((p, i) => <img key={i} src={p} className="w-full h-16 object-cover border border-amber-900" alt="Preview" />)}
             </div>
           </div>
 
