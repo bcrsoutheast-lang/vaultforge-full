@@ -27,8 +27,6 @@ export default function DealTicker() {
     }
     
     fetchDeals()
-    
-    // Refresh every 60s for new deals
     const interval = setInterval(fetchDeals, 60000)
     return () => clearInterval(interval)
   }, [])
@@ -37,12 +35,12 @@ export default function DealTicker() {
 
   const tickerText = deals.map(d => 
     `NEW: ${d.title} • $${Number(d.asking_price).toLocaleString()} • ${d.city}, ${d.state}`
-  ).join('   >>>   ')
+  ).join('   ›››   ')
 
   return (
     <div className="w-full bg-blue-600 text-white overflow-hidden py-2 border-b border-blue-500">
       <div className="animate-ticker whitespace-nowrap">
-        <span className="text-sm font-bold mx-8">{tickerText}   >>>   {tickerText}</span>
+        <span className="text-sm font-bold mx-8">{tickerText}   ›››   {tickerText}</span>
       </div>
       <style jsx>{`
         @keyframes ticker {
