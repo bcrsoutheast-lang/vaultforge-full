@@ -1,151 +1,287 @@
 'use client'
 import { createBrowserClient } from '@supabase/ssr'
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-type Deal = {
-  id: number // bigint from DB
-  user_id: string
-  address: string
-  city: string
-  state: string
-  price: number
-  bedrooms: number
-  bathrooms: number
-  sqft: number
-  property_type: string
-  deal_type: string
-  arv: number
-  repair_cost: number
-  asking_price: number
-  notes: string
-  analyzer_pic_url: string
-  image_urls: string[]
-  status: string
-}
-
-type Message = {
-  id: number
-  sender_id: string
-  message: string
-  created_at: string
-}
-
-export default function SavedDeals() {
+export default function SavedDealsPage() {
   const router = useRouter()
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-  const [deals, setDeals] = useState<Deal[]>([])
-  const [activeDeal, setActiveDeal] = useState<Deal | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [newMessage, setNewMessage] = useState('')
-  const [currentUser, setCurrentUser] = useState<string>('')
+  
+  const [deals, setDeals] = useState<any[]>([])
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [messages, setMessages] = useState<{[key: number]: any[]}>({})
+  const [newMessage, setNewMessage] = useState<{[key: number]: string}>({})
+  const [loading, setLoading] = useState(true)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  const load = async () => {
+  useEffect(() => {
+    fetchDeals()
+    getUser()
+  }, [])
+
+  const getUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return router.push('/login')
-    setCurrentUser(user.id)
-    const { data } = await supabase.from('deals').select('*').eq('user_id', user.id).eq('status', 'saved').order('created_at', { ascending: false })
-    if (data) setDeals(data)
+    setCurrentUserId(user?.id || null)
   }
 
-  const loadMessages = async (dealId: number) => {
-    const { data } = await supabase.from('deal_messages').select('*').eq('deal_id', dealId).order('created_at', { ascending: true })
-    if (data) setMessages(data)
-  }
-
-  useEffect(() => { load() }, [])
-
-  const updateStatus = async (id: number, status: string) => {
-    await supabase.from('deals').update({ status }).eq('id', id)
-    load()
-    setActiveDeal(null)
-  }
-
-  const sendMessage = async (deal: Deal) => {
-    if (!newMessage) return
-    await supabase.from('deal_messages').insert({
-      deal_id: deal.id,
-      sender_id: currentUser,
-      recipient_id: deal.user_id,
-      message: newMessage
-    })
-    setNewMessage('')
-    loadMessages(deal.id)
-  }
-
-  const toggleView = (deal: Deal) => {
-    if (activeDeal?.id === deal.id) {
-      setActiveDeal(null)
+  const fetchDeals = async () => {
+    const { data, error } = await supabase
+     .from('deals')
+     .select('*')
+     .eq('status', 'saved')
+     .order('created_at', { ascending: false })
+    
+    if (error) {
+      alert('Failed to load deals: ' + error.message)
     } else {
-      setActiveDeal(deal)
-      loadMessages(deal.id)
+      setDeals(data || [])
+    }
+    setLoading(false)
+  }
+
+  const fetchMessages = async (dealId: number) => {
+    const { data, error } = await supabase
+     .from('deal_messages')
+     .select('*')
+     .eq('deal_id', dealId)
+     .order('created_at', { ascending: true })
+    
+    if (!error && data) {
+      setMessages(prev => ({...prev, [dealId]: data }))
     }
   }
 
+  const handleView = (dealId: number) => {
+    if (expandedId === dealId) {
+      setExpandedId(null)
+    } else {
+      setExpandedId(dealId)
+      fetchMessages(dealId)
+    }
+  }
+
+  const handleArchive = async (dealId: number) => {
+    const { error } = await supabase
+     .from('deals')
+     .update({ status: 'archive' })
+     .eq('id', dealId)
+    
+    if (error) {
+      alert('Archive failed: ' + error.message)
+    } else {
+      setDeals(deals.filter(d => d.id!== dealId))
+      setExpandedId(null)
+    }
+  }
+
+  const handleDelete = async (dealId: number) => {
+    if (!confirm('Move this deal to Recycle Bin?')) return
+    
+    const { error } = await supabase
+     .from('deals')
+     .update({ status: 'deleted' })
+     .eq('id', dealId)
+    
+    if (error) {
+      alert('Delete failed: ' + error.message)
+    } else {
+      setDeals(deals.filter(d => d.id!== dealId))
+      setExpandedId(null)
+    }
+  }
+
+  const sendMessage = async (dealId: number) => {
+    const message = newMessage[dealId]?.trim()
+    if (!message) return
+    
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const deal = deals.find(d => d.id === dealId)
+    if (!deal) return
+
+    const { error } = await supabase.from('deal_messages').insert({
+      deal_id: dealId,
+      sender_id: user.id,
+      recipient_id: deal.user_id,
+      message: message
+    })
+    
+    if (error) {
+      alert('Message failed: ' + error.message)
+    } else {
+      setNewMessage(prev => ({...prev, [dealId]: '' }))
+      fetchMessages(dealId)
+    }
+  }
+
+  if (loading) return (
+    <div className="min-h-screen bg-black text-white p-4 flex items-center justify-center">
+      <div className="text-yellow-500">Loading deals...</div>
+    </div>
+  )
+
   return (
-    <div className="min-h-screen bg-black text-white p-4">
+    <div className="min-h-screen bg-black text-white p-4 pb-20">
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">VAULT</h1>
-          <p className="text-zinc-400 text-sm">{deals.length} ACTIVE DEALS</p>
-        </div>
-        <button onClick={() => router.push('/vault/new')} className="bg-zinc-800 text-blue-400 px-4 py-2 rounded text-sm font-semibold">+ NEW DEAL</button>
+        <h1 className="text-2xl font-bold text-yellow-500">SAVED DEALS</h1>
+        <button 
+          onClick={() => router.push('/')}
+          className="text-zinc-400 text-sm">
+          ← Command Center
+        </button>
       </div>
 
-      <div className="space-y-4">
-        {deals.map((deal) => (
-          <div key={deal.id} className="bg-zinc-900 rounded border border-zinc-800 overflow-hidden">
-            {deal.image_urls?.[0] && <img src={deal.image_urls[0]} alt={deal.address} className="w-full h-48 object-cover"/>}
-            <div className="p-4">
-              <div className="text-2xl font-bold">${deal.price?.toLocaleString()}</div>
-              <div className="text-zinc-300">{deal.address}</div>
-              <div className="text-zinc-400 text-sm">{deal.city}, {deal.state}</div>
-              <div className="text-zinc-400 text-sm mt-1">{deal.bedrooms}BD · {deal.bathrooms}BA · {deal.sqft}SQFT</div>
-              <div className="text-xs text-yellow-500 mt-2">{deal.property_type} | {deal.deal_type}</div>
-              {deal.asking_price && <div className="text-green-500 text-sm mt-1">Asking: ${deal.asking_price.toLocaleString()}</div>}
-              
-              <div className="flex gap-2 mt-4">
-                <button onClick={() => toggleView(deal)} className="border border-blue-400 text-blue-400 px-4 py-1 rounded text-sm">VIEW</button>
-                <button onClick={() => updateStatus(deal.id, 'archive')} className="border border-zinc-600 text-zinc-400 px-3 py-1 rounded text-sm">ARCHIVE</button>
-                <button onClick={() => updateStatus(deal.id, 'deleted')} className="border border-red-600 text-red-500 px-3 py-1 rounded text-sm">DELETE</button>
+      {deals.length === 0? (
+        <div className="text-center text-zinc-500 mt-20">
+          <p className="text-lg mb-2">No saved deals yet</p>
+          <button 
+            onClick={() => router.push('/vault/new')}
+            className="bg-yellow-500 text-black font-bold px-6 py-3 rounded mt-4">
+            + ADD YOUR FIRST DEAL
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {deals.map(deal => (
+            <div key={deal.id} className="bg-zinc-900 rounded border border-zinc-800">
+              <div className="p-4">
+                <div className="flex gap-4">
+                  <img 
+                    src={deal.image_urls?.[0] || 'https://via.placeholder.com/100x100/333/666?text=No+Image'} 
+                    alt="Deal"
+                    className="w-20 h-20 object-cover rounded flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-xl font-bold text-green-500">
+                          ${deal.price?.toLocaleString() || '0'}
+                        </p>
+                        <p className="text-sm text-white truncate">
+                          {deal.address}
+                        </p>
+                        <p className="text-xs text-zinc-400">
+                          {deal.city}, {deal.state} {deal.zip}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 text-xs text-zinc-400 mt-2">
+                      <span>{deal.bedrooms || 0}bd</span>
+                      <span>{deal.bathrooms || 0}ba</span>
+                      <span>{deal.sqft?.toLocaleString() || 0} sqft</span>
+                    </div>
+                    <div className="flex gap-2 text-xs text-yellow-500 mt-1">
+                      <span>{deal.property_type}</span>
+                      <span>•</span>
+                      <span>{deal.deal_type}</span>
+                    </div>
+                    {deal.asking_price && (
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Asking: ${deal.asking_price.toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                  <button 
+                    onClick={() => handleView(deal.id)}
+                    className="bg-zinc-700 text-white px-4 py-2 rounded text-sm flex-1">
+                    {expandedId === deal.id? 'HIDE' : 'VIEW'}
+                  </button>
+                  <button 
+                    onClick={() => router.push(`/vault/deal/${deal.id}/pain`)}
+                    className="bg-red-600 text-white px-4 py-2 rounded text-sm">
+                    PAIN
+                  </button>
+                  <button 
+                    onClick={() => handleArchive(deal.id)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded text-sm">
+                    ARCHIVE
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(deal.id)}
+                    className="bg-red-900 text-white px-4 py-2 rounded text-sm">
+                    DELETE
+                  </button>
+                </div>
               </div>
 
-              {activeDeal?.id === deal.id && (
-                <div className="mt-4 pt-4 border-t border-zinc-700 space-y-3">
-                  {deal.analyzer_pic_url && <img src={deal.analyzer_pic_url} alt="Analyzer" className="w-full rounded"/>}
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {deal.arv && <div>ARV: ${deal.arv.toLocaleString()}</div>}
-                    {deal.repair_cost && <div>Repairs: ${deal.repair_cost.toLocaleString()}</div>}
-                  </div>
-                  {deal.notes && <div className="text-sm text-zinc-300 whitespace-pre-wrap">{deal.notes}</div>}
-                  <div className="grid grid-cols-5 gap-1">
-                    {deal.image_urls?.slice(1).map((url, i) => (
-                      <img key={i} src={url} className="w-full h-16 object-cover rounded" alt=""/>
-                    ))}
-                  </div>
-                  
-                  <div className="bg-zinc-800 p-3 rounded">
-                    <div className="text-xs text-zinc-400 mb-2">MESSAGES</div>
-                    <div className="space-y-2 max-h-32 overflow-y-auto mb-2">
-                      {messages.map(m => (
-                        <div key={m.id} className="text-xs">
-                          <span className={m.sender_id === currentUser? "text-blue-400" : "text-green-400"}>
-                            {m.sender_id === currentUser? "You" : "User"}:
-                          </span> {m.message}
-                        </div>
+              {expandedId === deal.id && (
+                <div className="border-t border-zinc-800 p-4 space-y-4">
+                  {deal.image_urls && deal.image_urls.length > 1 && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {deal.image_urls.slice(1).map((url: string, idx: number) => (
+                        <img key={idx} src={url} alt={`Pic ${idx + 2}`} className="w-full h-24 object-cover rounded" />
                       ))}
                     </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {deal.arv && (
+                      <div>
+                        <p className="text-zinc-500 text-xs">ARV</p>
+                        <p className="text-white">${deal.arv.toLocaleString()}</p>
+                      </div>
+                    )}
+                    {deal.repair_cost && (
+                      <div>
+                        <p className="text-zinc-500 text-xs">Repairs</p>
+                        <p className="text-white">${deal.repair_cost.toLocaleString()}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {deal.notes && (
+                    <div>
+                      <p className="text-zinc-500 text-xs mb-1">Notes</p>
+                      <p className="text-zinc-300 text-sm whitespace-pre-wrap">{deal.notes}</p>
+                    </div>
+                  )}
+
+                  <div className="border-t border-zinc-800 pt-4">
+                    <p className="text-zinc-500 text-xs mb-2">Messages</p>
+                    <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
+                      {messages[deal.id]?.length > 0? (
+                        messages[deal.id].map((msg: any) => (
+                          <div key={msg.id} className={`text-sm p-2 rounded ${
+                            msg.sender_id === currentUserId 
+                             ? 'bg-yellow-900/30 ml-8' 
+                              : 'bg-zinc-800 mr-8'
+                          }`}>
+                            <p className="text-xs text-zinc-500 mb-1">
+                              {msg.sender_id === currentUserId? 'You' : 'User'} • {new Date(msg.created_at).toLocaleDateString()}
+                            </p>
+                            <p className="text-zinc-200">{msg.message}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-zinc-600 text-xs">No messages yet</p>
+                      )}
+                    </div>
                     <div className="flex gap-2">
-                      <input value={newMessage} onChange={e=>setNewMessage(e.target.value)} placeholder="Message..." className="flex-1 bg-zinc-900 p-2 rounded text-sm"/>
-                      <button onClick={()=>sendMessage(deal)} className="bg-blue-600 px-3 rounded text-sm">SEND</button>
+                      <input 
+                        type="text"
+                        placeholder="Type message..."
+                        value={newMessage[deal.id] || ''}
+                        onChange={e => setNewMessage(prev => ({...prev, [deal.id]: e.target.value }))}
+                        onKeyDown={e => e.key === 'Enter' && sendMessage(deal.id)}
+                        className="flex-1 bg-zinc-800 p-2 rounded text-sm border border-zinc-700"
+                      />
+                      <button 
+                        onClick={() => sendMessage(deal.id)}
+                        className="bg-yellow-500 text-black px-4 py-2 rounded text-sm font-bold">
+                        SEND
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
