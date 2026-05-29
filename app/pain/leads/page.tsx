@@ -11,6 +11,7 @@ export default function PainLeads() {
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [showMessageModal, setShowMessageModal] = useState<any>(null)
   const [messageBody, setMessageBody] = useState('')
+  const [viewArchived, setViewArchived] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,28 +23,35 @@ export default function PainLeads() {
       if (!data.user) router.push('/login')
       else {
         setUser(data.user)
-        fetchLeads(data.user.id)
+        fetchLeads(data.user.id, false)
         fetchUnreadCount(data.user.id)
       }
     })
   }, [])
 
-  const fetchLeads = async (userId: string) => {
+  const fetchLeads = async (userId: string, archived: boolean) => {
     const { data } = await supabase
-    .from('pain_intake')
-    .select('*')
-    .eq('user_id', userId)
-    .order('pain_score', { ascending: false })
+   .from('pain_intake')
+   .select('*')
+   .eq('user_id', userId)
+   .eq('archived', archived)
+   .order('pain_score', { ascending: false })
     if (data) setLeads(data)
   }
 
   const fetchUnreadCount = async (userId: string) => {
     const { count } = await supabase
-    .from('messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('receiver_id', userId)
-    .eq('read', false)
+   .from('messages')
+   .select('*', { count: 'exact', head: true })
+   .eq('receiver_id', userId)
+   .eq('read', false)
     setUnreadMessages(count || 0)
+  }
+
+  const toggleArchiveView = () => {
+    const newView =!viewArchived
+    setViewArchived(newView)
+    if (user) fetchLeads(user.id, newView)
   }
 
   const markPainViewed = async (painId: string) => {
@@ -88,19 +96,36 @@ export default function PainLeads() {
           0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
           50% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
         }
-      .pulse-new { animation: pulse-gold 2s infinite; }
-      .pulse-msg { animation: pulse-red 2s infinite; }
+     .pulse-new { animation: pulse-gold 2s infinite; }
+     .pulse-msg { animation: pulse-red 2s infinite; }
       `}</style>
 
       <header style={{ borderBottom: '1px solid #FFD700', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <Image src="/IMG_4751.png" alt="VaultForge" width={40} height={40} style={{ objectFit: 'contain' }} />
           <div>
-            <div style={{ color: '#FFD700', fontSize: '24px', fontWeight: '900', letterSpacing: '2px' }}>PAIN LEADS</div>
-            <div style={{ color: '#666', fontSize: '11px', letterSpacing: '2px' }}>RANKED BY PAIN SCORE. HOTTEST FIRST.</div>
+            <div style={{ color: '#FFD700', fontSize: '24px', fontWeight: '900', letterSpacing: '2px' }}>
+              {viewArchived? 'PAIN ARCHIVE' : 'PAIN LEADS'}
+            </div>
+            <div style={{ color: '#666', fontSize: '11px', letterSpacing: '2px' }}>
+              {viewArchived? 'ARCHIVED INTEL' : 'RANKED BY PAIN SCORE. HOTTEST FIRST.'}
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={toggleArchiveView}
+            style={{
+              border: '1px solid #666',
+              background: 'transparent',
+              color: '#E5E5E5',
+              padding: '10px 20px',
+              fontSize: '12px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}>
+            {viewArchived? 'VIEW ACTIVE' : 'VIEW ARCHIVE'}
+          </button>
           <button
             onClick={() => router.push('/messages')}
             className={unreadMessages > 0? 'pulse-msg' : ''}
@@ -122,17 +147,20 @@ export default function PainLeads() {
       </header>
 
       {leads.length === 0? (
-        <div style={{ textAlign: 'center', padding: '60px', color: '#666' }}>NO PAIN LEADS. START INTAKE.</div>
+        <div style={{ textAlign: 'center', padding: '60px', color: '#666' }}>
+          {viewArchived? 'NO ARCHIVED LEADS.' : 'NO PAIN LEADS. START INTAKE.'}
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
           {leads.map(l => (
             <div
               key={l.id}
-              className={!l.viewed? 'pulse-new' : ''}
+              className={!l.viewed &&!viewArchived? 'pulse-new' : ''}
               style={{
-                border: `1px solid ${!l.viewed? '#FFD700' : '#333'}`,
+                border: `1px solid ${!l.viewed &&!viewArchived? '#FFD700' : '#333'}`,
                 background: '#111',
-                transition: 'border 0.2s'
+                transition: 'border 0.2s',
+                opacity: l.archived? 0.6 : 1
               }}>
               <div style={{ position: 'relative', width: '100%', height: '200px', background: '#000' }}>
                 {l.photos?.[0]? (
@@ -146,9 +174,14 @@ export default function PainLeads() {
                 <div style={{ position: 'absolute', top: '12px', right: '12px', background: getScoreColor(l.pain_score || 0), color: '#000', padding: '4px 12px', fontSize: '14px', fontWeight: '900' }}>
                   {l.pain_score || '—'}
                 </div>
-                {!l.viewed && (
+                {!l.viewed &&!viewArchived && (
                   <div style={{ position: 'absolute', bottom: '12px', left: '12px', background: '#FFD700', color: '#000', padding: '4px 12px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px' }}>
                     NEW
+                  </div>
+                )}
+                {l.archived && (
+                  <div style={{ position: 'absolute', bottom: '12px', left: '12px', background: '#666', color: '#000', padding: '4px 12px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px' }}>
+                    ARCHIVED
                   </div>
                 )}
               </div>
