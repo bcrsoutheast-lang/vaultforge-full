@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 export default function CommandCenter() {
   const router = useRouter()
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-  const [counts, setCounts] = useState({ saved: 0, archive: 0, bin: 0 })
+  const [counts, setCounts] = useState({ saved: 0, archive: 0, deleted: 0 })
 
   useEffect(() => {
     const load = async () => {
@@ -17,12 +17,12 @@ export default function CommandCenter() {
         setCounts({
           saved: data.filter(d => d.status === 'saved').length,
           archive: data.filter(d => d.status === 'archive').length,
-          bin: data.filter(d => d.status === 'bin').length
+          deleted: data.filter(d => d.status === 'deleted').length
         })
       }
     }
     load()
-  }, [])
+  }, [router, supabase])
 
   return (
     <div className="min-h-screen bg-black text-white p-6">
@@ -39,12 +39,12 @@ export default function CommandCenter() {
           <div className="text-5xl font-bold text-yellow-500">{counts.saved}</div>
           <div className="text-zinc-300 mt-2">SAVED DEALS</div>
         </div>
-        <div className="border border-yellow-500 p-8 text-center">
+        <div onClick={() => router.push('/vault/archive')} className="border border-yellow-500 p-8 text-center cursor-pointer">
           <div className="text-5xl font-bold text-yellow-500">{counts.archive}</div>
           <div className="text-zinc-300 mt-2">DEAL ARCHIVE</div>
         </div>
-        <div className="border border-yellow-500 p-8 text-center">
-          <div className="text-5xl font-bold text-yellow-500">{counts.bin}</div>
+        <div onClick={() => router.push('/vault/bin')} className="border border-yellow-500 p-8 text-center cursor-pointer">
+          <div className="text-5xl font-bold text-yellow-500">{counts.deleted}</div>
           <div className="text-zinc-300 mt-2">RECYCLE BIN</div>
         </div>
       </div>
