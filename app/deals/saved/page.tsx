@@ -11,6 +11,7 @@ export default function SavedDeals() {
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [showMessageModal, setShowMessageModal] = useState<any>(null)
   const [messageBody, setMessageBody] = useState('')
+  const [viewArchived, setViewArchived] = useState(false)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,28 +23,35 @@ export default function SavedDeals() {
       if (!data.user) router.push('/login')
       else {
         setUser(data.user)
-        fetchDeals(data.user.id)
+        fetchDeals(data.user.id, false)
         fetchUnreadCount(data.user.id)
       }
     })
   }, [])
 
-  const fetchDeals = async (userId: string) => {
+  const fetchDeals = async (userId: string, archived: boolean) => {
     const { data } = await supabase
-    .from('deals')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+  .from('deals')
+  .select('*')
+  .eq('user_id', userId)
+  .eq('archived', archived)
+  .order('created_at', { ascending: false })
     if (data) setDeals(data)
   }
 
   const fetchUnreadCount = async (userId: string) => {
     const { count } = await supabase
-    .from('messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('receiver_id', userId)
-    .eq('read', false)
+  .from('messages')
+  .select('*', { count: 'exact', head: true })
+  .eq('receiver_id', userId)
+  .eq('read', false)
     setUnreadMessages(count || 0)
+  }
+
+  const toggleArchiveView = () => {
+    const newView =!viewArchived
+    setViewArchived(newView)
+    if (user) fetchDeals(user.id, newView)
   }
 
   const markDealViewed = async (dealId: number) => {
@@ -75,26 +83,43 @@ export default function SavedDeals() {
     <div style={{ background: '#000', minHeight: '100vh', color: '#E5E5E5', padding: '24px' }}>
       <style jsx>{`
         @keyframes pulse-gold {
-          0%, 100% { box-shadow: 0 0 rgba(255, 215, 0, 0.7); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
           50% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
         }
         @keyframes pulse-red {
           0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
           50% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
         }
-      .pulse-new { animation: pulse-gold 2s infinite; }
-      .pulse-msg { animation: pulse-red 2s infinite; }
+    .pulse-new { animation: pulse-gold 2s infinite; }
+    .pulse-msg { animation: pulse-red 2s infinite; }
       `}</style>
 
       <header style={{ borderBottom: '1px solid #FFD700', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <Image src="/IMG_4751.png" alt="VaultForge" width={40} height={40} style={{ objectFit: 'contain' }} />
           <div>
-            <div style={{ color: '#FFD700', fontSize: '24px', fontWeight: '900', letterSpacing: '2px' }}>SAVED DEALS</div>
-            <div style={{ color: '#666', fontSize: '11px', letterSpacing: '2px' }}>VAULT INVENTORY. CLASSIFIED.</div>
+            <div style={{ color: '#FFD700', fontSize: '24px', fontWeight: '900', letterSpacing: '2px' }}>
+              {viewArchived? 'DEAL ARCHIVE' : 'SAVED DEALS'}
+            </div>
+            <div style={{ color: '#666', fontSize: '11px', letterSpacing: '2px' }}>
+              {viewArchived? 'ARCHIVED VAULT' : 'VAULT INVENTORY. CLASSIFIED.'}
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={toggleArchiveView}
+            style={{
+              border: '1px solid #666',
+              background: 'transparent',
+              color: '#E5E5E5',
+              padding: '10px 20px',
+              fontSize: '12px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}>
+            {viewArchived? 'VIEW ACTIVE' : 'VIEW ARCHIVE'}
+          </button>
           <button
             onClick={() => router.push('/messages')}
             className={unreadMessages > 0? 'pulse-msg' : ''}
@@ -116,17 +141,20 @@ export default function SavedDeals() {
       </header>
 
       {deals.length === 0? (
-        <div style={{ textAlign: 'center', padding: '60px', color: '#666' }}>NO DEALS IN VAULT. ADD ONE.</div>
+        <div style={{ textAlign: 'center', padding: '60px', color: '#666' }}>
+          {viewArchived? 'NO ARCHIVED DEALS.' : 'NO DEALS IN VAULT. ADD ONE.'}
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
           {deals.map(d => (
             <div
               key={d.id}
-              className={!d.viewed? 'pulse-new' : ''}
+              className={!d.viewed &&!viewArchived? 'pulse-new' : ''}
               style={{
-                border: `1px solid ${!d.viewed? '#FFD700' : '#333'}`,
+                border: `1px solid ${!d.viewed &&!viewArchived? '#FFD700' : '#333'}`,
                 background: '#111',
-                transition: 'border 0.2s'
+                transition: 'border 0.2s',
+                opacity: d.archived? 0.6 : 1
               }}>
               <div style={{ position: 'relative', width: '100%', height: '200px', background: '#000' }}>
                 {d.photos?.[0]? (
@@ -142,9 +170,14 @@ export default function SavedDeals() {
                     {d.analysis.deal_score}
                   </div>
                 )}
-                {!d.viewed && (
+                {!d.viewed &&!viewArchived && (
                   <div style={{ position: 'absolute', bottom: '12px', left: '12px', background: '#FFD700', color: '#000', padding: '4px 12px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px' }}>
                     NEW
+                  </div>
+                )}
+                {d.archived && (
+                  <div style={{ position: 'absolute', bottom: '12px', left: '12px', background: '#666', color: '#000', padding: '4px 12px', fontSize: '10px', fontWeight: '900', letterSpacing: '1px' }}>
+                    ARCHIVED
                   </div>
                 )}
               </div>
