@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 export default function PainHelpPage() {
   const router = useRouter()
   const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-  
+
   const [painDeals, setPainDeals] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -16,11 +16,11 @@ export default function PainHelpPage() {
 
   const fetchPainDeals = async () => {
     const { data } = await supabase
-   .from('pain_deals')
-   .select('*')
-   .eq('status', 'active')
-   .order('motivation_level', { ascending: false })
-    
+  .from('pain_deals')
+  .select('*')
+  .eq('status', 'active')
+  .order('motivation_level', { ascending: false })
+
     setPainDeals(data || [])
     setLoading(false)
   }
@@ -66,10 +66,10 @@ export default function PainHelpPage() {
                   <span className="bg-red-600 text-white text-xs px-2 py-1 rounded">FORECLOSURE</span>
                 )}
               </div>
-              
+
               <p className="text-sm text-white font-bold">{deal.address}</p>
               <p className="text-xs text-zinc-400 mb-3">{deal.city}, {deal.state}</p>
-              
+
               {deal.seller_name && (
                 <p className="text-xs text-zinc-300">Seller: {deal.seller_name}</p>
               )}
@@ -97,6 +97,13 @@ export default function PainHelpPage() {
                   </div>
                 )}
               </div>
+
+              <button
+                onClick={() => router.push(`/vault/pain/${deal.id}/messages`)}
+                className="w-full bg-red-700 text-white py-2 rounded text-sm font-bold mb-2"
+              >
+                MESSAGE SELLER {deal.unread_message_count > 0 && `(${deal.unread_message_count})`}
+              </button>
 
               <div className="flex gap-2">
                 <button onClick={() => handleArchive(deal.id)} className="flex-1 bg-blue-600 text-white py-2 rounded text-sm">
