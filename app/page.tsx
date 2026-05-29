@@ -24,7 +24,7 @@ export default function CommandCenter() {
       }
     }
     getData()
-  }, [])
+  }, [router, supabase])
 
   const tiles = [
     {title: 'DEAL OPPORTUNITY ROOM', count: counts.opportunity, path: '/vault/opportunity', color: 'border-amber-500'},
@@ -40,7 +40,7 @@ export default function CommandCenter() {
           <h1 className="text-2xl tracking-widest">VAULTFORGE COMMAND CENTER</h1>
           <p className="text-xs text-amber-600">CLASSIFIED ACCESS: {user?.email}</p>
         </div>
-        <Image src="/IMG_4751.png" alt="VaultForge" width={80} height={80} className="opacity-90" />
+        <Image src="/IMG_4751.png" alt="VaultForge" width={80} height={80} className="opacity-90" priority />
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
