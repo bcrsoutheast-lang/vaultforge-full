@@ -1,71 +1,115 @@
-"use client";
+import { createServerClient } from '@supabase/ssr'
+import { cookies, redirect } from 'next/navigation'
 
-import { useEffect, useState } from "react";
+export default async function MembersPage() {
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name: string) => cookieStore.get(name)?.value } }
+  )
 
-const STATES = ["GA", "FL", "TN", "AL", "NC", "SC", "TX"];
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-export default function Members() {
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const { data: member } = await supabase
+    .from('vault_members')
+    .select('*')
+    .eq('user_id', user.id)
+    .single()
 
-  useEffect(() => {
-    // Load member counts by based_state from localStorage
-    // For now we'll use dummy data + your own profile
-    const stored = localStorage.getItem("vaultforge_members");
-    let members = stored? JSON.parse(stored) : [];
+  if (!member || !['active_founder','active_member'].includes(member.status)) {
+    redirect('/profile') // Force to profile/payment if not paid
+  }
 
-    // Add current user if not already in list
-    const currentEmail = localStorage.getItem("vaultforge_current_email");
-    if (currentEmail &&!members.find((m:any) => m.email === currentEmail)) {
-      members.push({
-        email: currentEmail,
-        name: "Dmoney",
-        based_state: "GA", // Your based state from screenshot
-        states_served: ["GA","TN","FL","AL","NC","SC","TX"]
-      });
-      localStorage.setItem("vaultforge_members", JSON.stringify(members));
-    }
+  const { data: deals } = await supabase
+    .from('vault_deals')
+    .select('*')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(10)
 
-    // Count by based_state
-    const newCounts: Record<string, number> = {};
-    STATES.forEach(s => newCounts[s] = 0);
-    members.forEach((m:any) => {
-      if (newCounts[m.based_state]!== undefined) {
-        newCounts[m.based_state]++;
-      }
-    });
-    setCounts(newCounts);
-  }, []);
+  const { data: pains } = await supabase
+    .from('vault_pain_posts')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  const { count: onlineCount } = await supabase
+    .from('vault_members')
+    .select('*', { count: 'exact', head: true })
+    .gte('last_seen', new Date(Date.now() - 5 * 60 * 1000).toISOString())
 
   return (
-    <main style={{minHeight:"100vh",background:"#05070d",color:"#fff",padding:16}}>
-      <div style={{maxWidth:1200,margin:"0 auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h1 style={{color:"#FFD700",fontWeight:900}}>MEMBERS BY STATE</h1>
-          <a href="/dashboard" style={{color:"#FFD700"}}>Back to Dashboard</a>
+    <div className="min-h-screen bg-black text-white">
+      {/* NAV */}
+      <nav className="border-b border-[#1F1F1F] bg-[#0A0A0A] px-4 py-3 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-[#D4AF37]" /> {/* Eagle icon */}
+          <span className="font-bold">VAULTFORGE</span>
+        </div>
+        <div className="flex gap-6 text-sm">
+          <Link href="/members" className="text-[#D4AF37] border-b-2 border-[#D4AF37]">Members</Link>
+          <Link href="/deals" className="text-[#71717A] hover:text-white">Deals</Link>
+          <Link href="/pain" className="text-[#71717A] hover:text-white">Pain Board</Link>
+          <Link href="/profile" className="text-[#71717A] hover:text-white">Profile</Link>
+        </div>
+      </nav>
+
+      {/* TICKER */}
+      <div className="bg-[#D4AF37] text-black py-2 px-4 text-sm font-bold">
+        LIVE VAULT: {onlineCount || 0} MEMBERS ONLINE • {deals?.length || 0} NEW DEALS TODAY • {pains?.length || 0} ACTIVE PAIN POSTS
+      </div>
+
+      {/* DASHBOARD */}
+      <div className="max-w-7xl mx-auto p-4 grid md:grid-cols-3 gap-6">
+        {/* DEALS */}
+        <div className="border border-[#1F1F1F] bg-[#0A0A0A]">
+          <div className="border-b border-[#D4AF37] p-4">
+            <h3 className="font-bold text-[#D4AF37]">VAULT DEALS</h3>
+          </div>
+          <div className="p-4 space-y-4">
+            {deals?.length ? deals.map(d => (
+              <div key={d.id} className="border border-[#1F1F1F] p-3">
+                <p className="font-bold">{d.title}</p>
+                <p className="text-[#71717A] text-sm">{d.city}, {d.state}</p>
+                <p className="text-[#D4AF37]">${d.fee_amount?.toLocaleString()} Fee</p>
+                <button className="w-full bg-[#1F1F1F] hover:bg-[#27272A] mt-2 py-2 text-sm border border-[#D4AF37]">
+                  DM SELLER
+                </button>
+              </div>
+            )) : <p className="text-[#71717A] text-sm">VAULT QUIET — AWAITING FIRST DEAL</p>}
+          </div>
         </div>
 
-        <p style={{opacity:0.7,marginBottom:24}}>Counts by member's based state. Click a state to view profiles.</p>
+        {/* PAIN BOARD */}
+        <div className="border border-[#1F1F1F] bg-[#0A0A0A]">
+          <div className="border-b border-[#DC2626] p-4">
+            <h3 className="font-bold text-[#DC2626]">PAIN BOARD</h3>
+          </div>
+          <div className="p-4 space-y-4">
+            {pains?.length ? pains.map(p => (
+              <div key={p.id} className="border border-[#1F1F1F] p-3">
+                <p className="font-bold">🚨 {p.title}</p>
+                <p className="text-[#71717A] text-sm">{p.city}, {p.state}</p>
+                <button className="w-full bg-[#1F1F1F] hover:bg-[#27272A] mt-2 py-2 text-sm border border-[#DC2626]">
+                  CONTACT POSTER
+                </button>
+              </div>
+            )) : <p className="text-[#71717A] text-sm">NO ACTIVE REQUESTS</p>}
+          </div>
+        </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:16}}>
-          {STATES.map(state => (
-            <button
-              key={state}
-              onClick={()=>window.location.href=`/members/${state.toLowerCase()}`}
-              style={{
-                border:"1px solid #222",
-                borderRadius:12,
-                padding:16,
-                background:"#0a0f1a",
-                textAlign:"left"
-              }}
-            >
-              <div style={{fontSize:24,fontWeight:900,color:"#FFD700"}}>{state}</div>
-              <div style={{fontSize:32,fontWeight:900,margin:"8px 0"}}>{counts[state] || 0}</div>
-              <div style={{opacity:0.7,fontSize:12}}>members</div>
-            </button>
-          ))}
+        {/* INTEL FEED */}
+        <div className="border border-[#1F1F1F] bg-[#0A0A0A]">
+          <div className="border-b border-[#1F1F1F] p-4">
+            <h3 className="font-bold">INTEL FEED</h3>
+          </div>
+          <div className="p-4 text-sm text-[#71717A]">
+            <p>Activity log renders here from vault_activity_log</p>
+          </div>
         </div>
       </div>
-    </main>
-  );
+    </div>
+  )
 }
