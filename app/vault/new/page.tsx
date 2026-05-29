@@ -1,165 +1,240 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { createBrowserClient } from '@supabase/ssr'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 
-export default function NewDeal() {
-  const [form, setForm] = useState<any>({
-    property_type: 'residential', need_buyer: false, image_urls: [],
-    beds: '', baths: '', sqft: '', acres: '',
-    purchase_price: '', asking_price: '', arv: '', repair_cost: ''
-  })
-  const [pics, setPics] = useState<File[]>([])
-  const [previews, setPreviews] = useState<string[]>([])
-  const [feedback, setFeedback] = useState('')
-  const [user, setUser] = useState<any>(null)
-  const supabase = createClient()
+export default function NewDealPage() {
   const router = useRouter()
+  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+  
+  const [form, setForm] = useState({
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
+    price: '',
+    asking_price: '',
+    arv: '',
+    repair_cost: '',
+    bedrooms: '',
+    bathrooms: '',
+    sqft: '',
+    property_type: 'Single Family',
+    deal_type: 'Wholesale',
+    notes: ''
+  })
+  const [dealPics, setDealPics] = useState<File[]>([])
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({data}) => {
-      if (!data.user) router.push('/login')
-      setUser(data.user)
-    })
-  }, [router, supabase])
+  const clean = (val: string) => Number(val.replace(/[^0-9.]/g, '')) || null
+  const cleanInt = (val: string) => parseInt(val.replace(/[^0-9]/g, '')) || null
 
-  useEffect(() => {
-    const pp = Number(form.purchase_price) || 0
-    const ap = Number(form.asking_price) || 0
-    const arv = Number(form.arv) || 0
-    const repairs = Number(form.repair_cost) || 0
-    
-    const wholesale_fee = ap - pp
-    const mao_70 = (arv * 0.7) - repairs
-    const flip_profit = arv - pp - repairs - (arv * 0.08)
-    const equity = arv > 0 ? ((arv - pp) / arv * 100).toFixed(1) : 0
-
-    let msg = ''
-    if (pp && arv) {
-      if (pp <= mao_70) msg = `STRONG DEAL: ${equity}% EQUITY. MAO: $${mao_70.toLocaleString()}`
-      else if (pp <= arv * 0.8) msg = `MARGINAL: ${equity}% EQUITY. MAO: $${mao_70.toLocaleString()}`
-      else msg = `OVERPRICED: ${equity}% EQUITY. MAO: $${mao_70.toLocaleString()}`
-    }
-    
-    setForm((f:any) => ({...f, wholesale_fee, flip_profit, mao_70, analyzer_feedback: msg}))
-    setFeedback(msg)
-  }, [form.purchase_price, form.asking_price, form.arv, form.repair_cost])
-
-  const handlePic = (e: any) => {
-    const files = Array.from(e.target.files).slice(0, 10) as File[]
-    setPics(files)
-    setPreviews(files.map(f => URL.createObjectURL(f)))
+  const wholesaleFee = () => {
+    const purchase = clean(form.price) || 0
+    const asking = clean(form.asking_price) || 0
+    return asking - purchase
   }
 
-  const submit = async () => {
-    if (!user) return
-    let image_urls: string[] = []
-    
-    for (const pic of pics) {
-      const fileName = `${user.id}/${Date.now()}-${pic.name}`
-      const { data, error } = await supabase.storage.from('deal-pics').upload(fileName, pic)
-      if (!error) image_urls.push(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/deal-pics/${fileName}`)
-    }
-
-    const { error } = await supabase.from('deals').insert([{
-      ...form, user_id: user.id, image_urls, status: 'opportunity'
-    }])
-    
-    if (!error) router.push('/vault/opportunity')
-    else alert('Error: ' + error.message)
+  const flipProfit = () => {
+    const purchase = clean(form.price) || 0
+    const arv = clean(form.arv) || 0
+    const repairs = clean(form.repair_cost) || 0
+    const holding = arv * 0.08
+    return arv - purchase - repairs - holding
   }
 
-  const input = "bg-zinc-900 border border-amber-900 text-amber-400 px-3 py-2 w-full font-mono text-sm"
-  const label = "text-xs text-amber-600 tracking-wider mb-1"
+  const mao70 = () => {
+    const arv = clean(form.arv) || 0
+    const repairs = clean(form.repair_cost) || 0
+    return (arv * 0.70) - repairs
+  }
+
+  const handlePics = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files).slice(0, 10)
+      setDealPics(files)
+    }
+  }
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not logged in')
+
+      let imageUrls: string[] = []
+      if (dealPics.length > 0) {
+        for (const pic of dealPics) {
+          const fileName = `${user.id}/${Date.now()}-${pic.name}`
+          const { error: uploadError } = await supabase.storage.from('deal-pics').upload(fileName, pic)
+          if (uploadError) throw uploadError
+          const { data: { publicUrl } } = supabase.storage.from('deal-pics').getPublicUrl(fileName)
+          imageUrls.push(publicUrl)
+        }
+      }
+
+      const payload = {
+        user_id: user.id,
+        address: form.address,
+        city: form.city,
+        state: form.state,
+        zip: form.zip,
+        price: clean(form.price),
+        asking_price: clean(form.asking_price),
+        arv: clean(form.arv),
+        repair_cost: clean(form.repair_cost),
+        bedrooms: cleanInt(form.bedrooms),
+        bathrooms: cleanInt(form.bathrooms),
+        sqft: cleanInt(form.sqft),
+        property_type: form.property_type,
+        deal_type: form.deal_type,
+        notes: form.notes,
+        image_urls: imageUrls,
+        status: 'saved'
+      }
+
+      const { error } = await supabase.from('deals').insert(payload)
+      if (error) throw error
+      
+      router.push('/vault/opportunities')
+    } catch (err: any) {
+      alert('SAVE FAILED: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-black text-amber-400 font-mono p-4">
-      <header className="flex justify-between items-center border-b border-amber-900 pb-4 mb-6">
-        <h1 className="text-xl tracking-widest">NEW DEAL INTAKE // VAULTFORGE</h1>
-        <Image src="/IMG_4751.png" alt="VaultForge" width={60} height={60} priority />
-      </header>
-
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div>
-            <div className={label}>PROPERTY TYPE</div>
-            <select value={form.property_type} onChange={e => setForm({...form, property_type: e.target.value})} className={input}>
-              <option value="residential">RESIDENTIAL</option>
-              <option value="commercial">COMMERCIAL</option>
-              <option value="land">LAND</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div><div className={label}>ADDRESS</div><input className={input} onChange={e => setForm({...form, address: e.target.value})} /></div>
-            <div><div className={label}>CITY</div><input className={input} onChange={e => setForm({...form, city: e.target.value})} /></div>
-            <div><div className={label}>STATE</div><input className={input} onChange={e => setForm({...form, state: e.target.value})} /></div>
-            <div><div className={label}>ZIP</div><input className={input} onChange={e => setForm({...form, zip: e.target.value})} /></div>
-          </div>
-
-          {form.property_type === 'residential' && (
-            <div className="grid grid-cols-3 gap-4">
-              <div><div className={label}>BEDS</div><input type="number" className={input} onChange={e => setForm({...form, beds: e.target.value})} /></div>
-              <div><div className={label}>BATHS</div><input type="number" className={input} onChange={e => setForm({...form, baths: e.target.value})} /></div>
-              <div><div className={label}>SQFT</div><input type="number" className={input} onChange={e => setForm({...form, sqft: e.target.value})} /></div>
-            </div>
-          )}
-
-          {form.property_type === 'land' && (
-            <div><div className={label}>ACRES</div><input type="number" className={input} onChange={e => setForm({...form, acres: e.target.value})} /></div>
-          )}
-
-          {form.property_type === 'commercial' && (
-            <div><div className={label}>SQFT</div><input type="number" className={input} onChange={e => setForm({...form, sqft: e.target.value})} /></div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div><div className={label}>PURCHASE PRICE</div><input type="number" className={input} onChange={e => setForm({...form, purchase_price: e.target.value})} /></div>
-            <div><div className={label}>ASKING PRICE</div><input type="number" className={input} onChange={e => setForm({...form, asking_price: e.target.value})} /></div>
-            <div><div className={label}>ARV</div><input type="number" className={input} onChange={e => setForm({...form, arv: e.target.value})} /></div>
-            <div><div className={label}>REPAIR COST</div><input type="number" className={input} onChange={e => setForm({...form, repair_cost: e.target.value})} /></div>
-          </div>
-
-          <div>
-            <div className={label}>OWNER INFO</div>
-            <input placeholder="NAME" className={input + ' mb-2'} onChange={e => setForm({...form, owner_name: e.target.value})} />
-            <input placeholder="PHONE" className={input + ' mb-2'} onChange={e => setForm({...form, owner_phone: e.target.value})} />
-            <input placeholder="EMAIL" className={input} onChange={e => setForm({...form, owner_email: e.target.value})} />
-          </div>
-
-          <label className="flex items-center gap-2">
-            <input type="checkbox" onChange={e => setForm({...form, need_buyer: e.target.checked})} />
-            <span className="text-xs">NEED BUYER // ASSIGNMENT</span>
-          </label>
-        </div>
-
-        <div className="space-y-4">
-          <div className="border border-amber-900 p-4 bg-zinc-950">
-            <div className="text-xs text-amber-600 mb-2">LIVE ANALYZER FEEDBACK</div>
-            <div className="text-lg font-bold">{feedback || 'ENTER PRICE DATA...'}</div>
-            <div className="grid grid-cols-3 gap-2 mt-4 text-xs">
-              <div>WHOLESALE FEE<br/><span className="text-green-500">${Number(form.wholesale_fee || 0).toLocaleString()}</span></div>
-              <div>FLIP PROFIT<br/><span className="text-green-500">${Number(form.flip_profit || 0).toLocaleString()}</span></div>
-              <div>70% MAO<br/><span className="text-green-500">${Number(form.mao_70 || 0).toLocaleString()}</span></div>
-            </div>
-          </div>
-
-          <div>
-            <div className={label}>PROPERTY PICS // MAX 10</div>
-            <input type="file" multiple accept="image/*" onChange={handlePic} className={input} />
-            <div className="grid grid-cols-5 gap-2 mt-2">
-              {previews.map((p, i) => <img key={i} src={p} className="w-full h-16 object-cover border border-amber-900" alt="Preview" />)}
-            </div>
-          </div>
-
-          <div><div className={label}>NOTES // TERMS</div><textarea className={input} rows={4} onChange={e => setForm({...form, notes: e.target.value})} /></div>
-
-          <button onClick={submit} className="w-full bg-amber-600 text-black py-3 font-bold tracking-wider hover:bg-amber-500">
-            SUBMIT TO OPPORTUNITY ROOM
-          </button>
-        </div>
+    <div className="min-h-screen bg-black text-white p-4 pb-20">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-yellow-500">ADD NEW DEAL</h1>
+        <button onClick={() => router.push('/vault/opportunities')} className="text-zinc-400 text-sm">
+          ← Deal Room
+        </button>
       </div>
+      
+      <form onSubmit={save} className="space-y-4 max-w-2xl">
+        <div className="grid grid-cols-1 gap-3">
+          <input required placeholder="Address" value={form.address} 
+            onChange={e=>setForm({...form,address:e.target.value})} 
+            className="bg-zinc-900 p-3 rounded border border-zinc-700"/>
+          <div className="grid grid-cols-3 gap-2">
+            <input required placeholder="City" value={form.city} 
+              onChange={e=>setForm({...form,city:e.target.value})} 
+              className="bg-zinc-900 p-3 rounded border border-zinc-700"/>
+            <input required placeholder="State" value={form.state} 
+              onChange={e=>setForm({...form,state:e.target.value})} 
+              className="bg-zinc-900 p-3 rounded border border-zinc-700"/>
+            <input required placeholder="Zip" value={form.zip} 
+              onChange={e=>setForm({...form,zip:e.target.value})} 
+              className="bg-zinc-900 p-3 rounded border border-zinc-700"/>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Purchase Price</label>
+            <input placeholder="100,000" value={form.price} 
+              onChange={e=>setForm({...form,price:e.target.value})} 
+              className="w-full bg-zinc-900 p-3 rounded border border-zinc-700"/>
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Asking Price</label>
+            <input placeholder="130,000" value={form.asking_price} 
+              onChange={e=>setForm({...form,asking_price:e.target.value})} 
+              className="w-full bg-zinc-900 p-3 rounded border border-zinc-700"/>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">ARV</label>
+            <input placeholder="200,000" value={form.arv} 
+              onChange={e=>setForm({...form,arv:e.target.value})} 
+              className="w-full bg-zinc-900 p-3 rounded border border-zinc-700"/>
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Repair Cost</label>
+            <input placeholder="25,000" value={form.repair_cost} 
+              onChange={e=>setForm({...form,repair_cost:e.target.value})} 
+              className="w-full bg-zinc-900 p-3 rounded border border-zinc-700"/>
+          </div>
+        </div>
+
+        {(clean(form.arv) || clean(form.asking_price)) && (
+          <div className="bg-zinc-900 p-4 rounded border border-zinc-800 space-y-2">
+            <p className="text-sm text-yellow-500 font-bold">LIVE ANALYZER</p>
+            {clean(form.asking_price) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-400">Wholesale Fee:</span>
+                <span className="text-green-500 font-bold">${wholesaleFee().toLocaleString()}</span>
+              </div>
+            )}
+            {clean(form.arv) > 0 && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-400">Flip Profit:</span>
+                  <span className="text-green-500 font-bold">${flipProfit().toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-400">70% MAO:</span>
+                  <span className="text-green-500 font-bold">${mao70().toLocaleString()}</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-2">
+          <input placeholder="Beds" value={form.bedrooms} 
+            onChange={e=>setForm({...form,bedrooms:e.target.value})} 
+            className="bg-zinc-900 p-3 rounded border border-zinc-700"/>
+          <input placeholder="Baths" value={form.bathrooms} 
+            onChange={e=>setForm({...form,bathrooms:e.target.value})} 
+            className="bg-zinc-900 p-3 rounded border border-zinc-700"/>
+          <input placeholder="Sqft" value={form.sqft} 
+            onChange={e=>setForm({...form,sqft:e.target.value})} 
+            className="bg-zinc-900 p-3 rounded border border-zinc-700"/>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <select value={form.property_type} onChange={e=>setForm({...form,property_type:e.target.value})} 
+            className="bg-zinc-900 p-3 rounded border border-zinc-700">
+            <option>Single Family</option>
+            <option>Multi-Family</option>
+            <option>Condo</option>
+            <option>Townhouse</option>
+            <option>Land</option>
+            <option>Commercial</option>
+          </select>
+          <select value={form.deal_type} onChange={e=>setForm({...form,deal_type:e.target.value})} 
+            className="bg-zinc-900 p-3 rounded border border-zinc-700">
+            <option>Wholesale</option>
+            <option>Flip</option>
+            <option>Buy & Hold</option>
+            <option>Subject-To</option>
+            <option>Seller Finance</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs text-zinc-400 mb-1">Property Pics - up to 10</label>
+          <input type="file" accept="image/*" multiple onChange={handlePics} 
+            className="w-full bg-zinc-900 p-3 rounded border border-zinc-700 text-sm"/>
+          {dealPics.length > 0 && (
+            <p className="text-xs text-green-500 mt-1">{dealPics.length} pics selected</p>
+          )}
+        </div>
+
+        <textarea placeholder="Notes" value={form.notes} 
+          onChange={e=>setForm({...form,notes:e.target.value})} 
+          className="w-full bg-zinc-900 p-3 rounded border border-zinc-700 h-24"/>
+
+        <button type="submit" disabled={loading} className="w-full bg-yellow-500 text-black font-bold p-4 rounded mt-6 disabled:opacity-50">
+          {loading? 'SAVING...' : 'SAVE TO DEAL OPPORTUNITIES'}
+        </button>
+      </form>
     </div>
   )
 }
