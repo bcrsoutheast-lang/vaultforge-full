@@ -7,8 +7,10 @@ type Member = {
   id: string
   full_name: string
   state_from: string
+  states_operated: string[]
   city: string | null
   bio: string | null
+  specialties: string[]
   avatar_url: string | null
   deals_closed: number
   verified: boolean
@@ -35,12 +37,12 @@ export default function MembersDirectory() {
     loadMembers()
 
     const channel = supabase
-      .channel('directory_updates')
-      .on('postgres_changes', 
+     .channel('directory_updates')
+     .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'vault_members' }, 
         () => loadMembers()
       )
-      .subscribe()
+     .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
@@ -56,21 +58,19 @@ export default function MembersDirectory() {
     if (!user) return
     setCurrentUserId(user.id)
 
-    // Check if current user is onboarded
     const { data: myProfile } = await supabase
-      .from('vault_members')
-      .select('id')
-      .eq('id', user.id)
-      .single()
+     .from('vault_members')
+     .select('id')
+     .eq('id', user.id)
+     .single()
     
     setIsOnboarded(!!myProfile)
 
-    // Get all members except current user
     const { data } = await supabase
-      .from('vault_members')
-      .select('*')
-      .neq('id', user.id)
-      .order('deals_closed', { ascending: false })
+     .from('vault_members')
+     .select('*')
+     .neq('id', user.id)
+     .order('deals_closed', { ascending: false })
 
     if (data) setMembers(data)
     setLoading(false)
@@ -79,18 +79,18 @@ export default function MembersDirectory() {
   const filterMembers = () => {
     let filtered = members
 
-    // Filter by state
-    if (selectedState !== 'ALL') {
-      filtered = filtered.filter(m => m.state_from === selectedState)
+    // Filter by states_operated, not state_from
+    if (selectedState!== 'ALL') {
+      filtered = filtered.filter(m => m.states_operated?.includes(selectedState))
     }
 
-    // Filter by search
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(m => 
         m.full_name.toLowerCase().includes(query) ||
         m.city?.toLowerCase().includes(query) ||
-        m.bio?.toLowerCase().includes(query)
+        m.bio?.toLowerCase().includes(query) ||
+        m.specialties?.some(s => s.toLowerCase().includes(query))
       )
     }
 
@@ -130,16 +130,14 @@ export default function MembersDirectory() {
           </div>
         )}
 
-        {/* Search */}
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by name, city, or bio..."
+          placeholder="Search by name, city, bio, or specialty..."
           className="w-full bg-zinc-900 text-white px-4 py-3 rounded border border-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
         />
 
-        {/* State Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
           {US_STATES.map(state => (
             <button
@@ -147,7 +145,7 @@ export default function MembersDirectory() {
               onClick={() => setSelectedState(state)}
               className={`px-4 py-2 rounded whitespace-nowrap text-sm font-bold ${
                 selectedState === state 
-                  ? 'bg-yellow-500 text-black' 
+                 ? 'bg-yellow-500 text-black' 
                   : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
               }`}
             >
@@ -156,11 +154,10 @@ export default function MembersDirectory() {
           ))}
         </div>
 
-        {/* Member Grid */}
-        {filteredMembers.length === 0 ? (
+        {filteredMembers.length === 0? (
           <div className="text-center text-zinc-500 mt-20">
             <p>No members found</p>
-            {selectedState !== 'ALL' && (
+            {selectedState!== 'ALL' && (
               <button 
                 onClick={() => setSelectedState('ALL')}
                 className="text-blue-400 text-sm mt-2"
@@ -189,10 +186,23 @@ export default function MembersDirectory() {
                       {member.verified && <span className="text-blue-400 text-xs">✓</span>}
                     </div>
                     <p className="text-xs text-zinc-400">
-                      {member.city ? `${member.city}, ` : ''}{member.state_from}
+                      {member.city? `${member.city}, ` : ''}{member.state_from}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Operates in: {member.states_operated?.join(', ') || 'N/A'}
                     </p>
                   </div>
                 </div>
+
+                {member.specialties && member.specialties.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {member.specialties.slice(0,3).map(spec => (
+                      <span key={spec} className="bg-zinc-800 text-zinc-300 text-xs px-2 py-1 rounded">
+                        {spec}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {member.bio && (
                   <p className="text-sm text-zinc-300 mb-3 line-clamp-2">{member.bio}</p>
@@ -208,8 +218,8 @@ export default function MembersDirectory() {
         )}
 
         <div className="text-center text-zinc-600 text-xs mt-8">
-          {filteredMembers.length} {filteredMembers.length === 1 ? 'member' : 'members'} 
-          {selectedState !== 'ALL' && ` in ${selectedState}`}
+          {filteredMembers.length} {filteredMembers.length === 1? 'member' : 'members'} 
+          {selectedState!== 'ALL' && ` operating in ${selectedState}`}
         </div>
       </div>
     </div>
