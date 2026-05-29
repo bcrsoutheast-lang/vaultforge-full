@@ -180,7 +180,7 @@ export default function NewDeal() {
 
       <header style={{ borderBottom: '1px solid #FFD700', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Image src="/vaultforge-logo.png" alt="VaultForge" width={40} height={40} style={{ objectFit: 'contain' }} />
+          <Image src="/IMG_4751.png" alt="VaultForge" width={40} height={40} style={{ objectFit: 'contain' }} />
           <div>
             <div style={{ color: '#FFD700', fontSize: '24px', fontWeight: '900', letterSpacing: '2px' }}>NEW DEAL</div>
             <div style={{ color: '#666', fontSize: '11px', letterSpacing: '2px' }}>ADD TO PRIVATE VAULT. AI ANALYZER ACTIVE.</div>
