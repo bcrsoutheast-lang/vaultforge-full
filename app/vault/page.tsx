@@ -20,7 +20,6 @@ export default function VaultDashboard() {
   useEffect(() => {
     fetchCounts()
     
-    // Realtime subscription for new messages
     const channel = supabase
       .channel('dashboard_alerts')
       .on('postgres_changes', 
@@ -50,42 +49,36 @@ export default function VaultDashboard() {
       totalPainRes,
       totalMembersRes
     ] = await Promise.all([
-      // Deal room unread
       supabase
         .from('deals')
         .select('unread_message_count')
         .eq('user_id', user.id)
         .eq('status', 'saved'),
       
-      // Pain room unread
       supabase
         .from('pain_deals')
         .select('unread_message_count')
         .eq('user_id', user.id)
         .eq('status', 'active'),
       
-      // Member DM unread
       supabase
         .from('member_messages')
         .select('id', { count: 'exact', head: true })
         .eq('receiver_id', user.id)
         .eq('is_read', false),
       
-      // Total deals
       supabase
         .from('deals')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('status', 'saved'),
       
-      // Total pain
       supabase
         .from('pain_deals')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('status', 'active'),
       
-      // Total members
       supabase
         .from('vault_members')
         .select('id', { count: 'exact', head: true })
@@ -144,26 +137,26 @@ export default function VaultDashboard() {
           </button>
 
           <button 
-            onClick={() => router.push('/vault/members')}
+            onClick={() => router.push('/vault/messages')}
             className={`relative bg-zinc-900 p-6 rounded border-2 text-left hover:bg-zinc-800 ${
               counts.memberUnread > 0 ? 'border-blue-500 animate-pulse' : 'border-zinc-800'
             }`}
           >
-            <p className="text-sm text-zinc-400">MEMBER DIRECTORY</p>
-            <p className="text-3xl font-bold text-blue-500">{counts.totalMembers}</p>
+            <p className="text-sm text-zinc-400">MESSAGES</p>
+            <p className="text-3xl font-bold text-blue-500">{counts.memberUnread}</p>
             {counts.memberUnread > 0 && (
               <span className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded-full">
-                {counts.memberUnread} MSG
+                {counts.memberUnread} NEW
               </span>
             )}
           </button>
 
           <button 
-            onClick={() => router.push('/vault/members/onboard')}
-            className="bg-zinc-900 p-6 rounded border-2 border-zinc-800 text-left hover:bg-zinc-800"
+            onClick={() => router.push('/vault/members')}
+            className="relative bg-zinc-900 p-6 rounded border-2 border-zinc-800 text-left hover:bg-zinc-800"
           >
-            <p className="text-sm text-zinc-400">NETWORK</p>
-            <p className="text-xl font-bold text-green-500">JOIN DIRECTORY</p>
+            <p className="text-sm text-zinc-400">MEMBER DIRECTORY</p>
+            <p className="text-3xl font-bold text-green-500">{counts.totalMembers}</p>
           </button>
         </div>
 
@@ -180,6 +173,13 @@ export default function VaultDashboard() {
             className="w-full bg-red-600 text-white font-bold py-4 rounded hover:bg-red-500"
           >
             + ADD PAIN DEAL
+          </button>
+
+          <button 
+            onClick={() => router.push('/vault/members/onboard')}
+            className="w-full bg-blue-600 text-white font-bold py-4 rounded hover:bg-blue-700"
+          >
+            JOIN MEMBER DIRECTORY
           </button>
         </div>
 
