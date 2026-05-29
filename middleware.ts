@@ -1,5 +1,7 @@
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
 export async function middleware(request: NextRequest) {
-  // return NextResponse.next() 
-  // just let everything through for now
+  // Temporarily disabled for dev - let everything through
   return NextResponse.next()
 }
