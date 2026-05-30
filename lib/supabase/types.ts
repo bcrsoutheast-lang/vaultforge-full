@@ -1,42 +1,6 @@
 export type Database = {
   public: {
     Tables: {
-      profiles: {
-        Row: {
-          id: string
-          email: string | null
-          full_name: string | null
-          phone: string | null
-          role: string | null
-          city: string | null
-          state: string | null
-          bio: string | null
-          deals_closed: number | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id: string
-          email?: string | null
-          full_name?: string | null
-          phone?: string | null
-          role?: string | null
-          city?: string | null
-          state?: string | null
-          bio?: string | null
-          deals_closed?: number | null
-        }
-        Update: {
-          email?: string | null
-          full_name?: string | null
-          phone?: string | null
-          role?: string | null
-          city?: string | null
-          state?: string | null
-          bio?: string | null
-          deals_closed?: number | null
-        }
-      }
       deals: {
         Row: {
           id: string
@@ -115,6 +79,45 @@ export type Database = {
           user_status?: string | null
         }
       }
+      profiles: {
+        Row: {
+          id: string
+          email: string | null
+          full_name: string | null
+          phone: string | null
+          role: string | null
+          city: string | null
+          state: string | null
+          bio: string | null
+          deals_closed: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email?: string | null
+          full_name?: string | null
+          phone?: string | null
+          role?: string | null
+          city?: string | null
+          state?: string | null
+          bio?: string | null
+          deals_closed?: number | null
+        }
+        Update: {
+          email?: string | null
+          full_name?: string | null
+          phone?: string | null
+          role?: string | null
+          city?: string | null
+          state?: string | null
+          bio?: string | null
+          deals_closed?: number | null
+        }
+      }
     }
+    Views: { [_ in never]: never }
+    Functions: { [_ in never]: never }
+    Enums: { [_ in never]: never }
   }
 }
