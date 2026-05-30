@@ -4,8 +4,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { format, subDays } from 'date-fns'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -28,7 +26,6 @@ export default function DashboardPage() {
     closed: 0
   })
   const [hotDeals, setHotDeals] = useState([])
-  const [chartData, setChartData] = useState([])
 
   useEffect(() => {
     loadDashboard()
@@ -45,37 +42,37 @@ export default function DashboardPage() {
 
       // KPI: Total Deals
       const { count: totalDeals } = await supabase
-       .from('deals')
-       .select('*', { count: 'exact', head: true })
-       .eq('user_id', user.id)
+      .from('deals')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
 
       // KPI: Revenue MTD
       const startOfMonth = new Date()
       startOfMonth.setDate(1)
       startOfMonth.setHours(0, 0, 0, 0)
       const { data: revenueData } = await supabase
-       .from('deals')
-       .select('profit')
-       .eq('user_id', user.id)
-       .eq('status', 'closed')
-       .gte('created_at', startOfMonth.toISOString())
+      .from('deals')
+      .select('profit')
+      .eq('user_id', user.id)
+      .eq('status', 'closed')
+      .gte('created_at', startOfMonth.toISOString())
 
       const revenueMTD = revenueData?.reduce((sum, d) => sum + (Number(d.profit) || 0), 0) || 0
 
       // KPI: Hot Leads = Pain Score 70+
       const { count: hotLeads } = await supabase
-       .from('deals')
-       .select('*', { count: 'exact', head: true })
-       .eq('user_id', user.id)
-       .gte('pain_score', 70)
-       .neq('status', 'closed')
+      .from('deals')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('pain_score', 70)
+      .neq('status', 'closed')
 
       // KPI: Close Rate
       const { count: closedDeals } = await supabase
-       .from('deals')
-       .select('*', { count: 'exact', head: true })
-       .eq('user_id', user.id)
-       .eq('status', 'closed')
+      .from('deals')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('status', 'closed')
 
       const closeRate = totalDeals > 0? Math.round((closedDeals / totalDeals) * 100) : 0
 
@@ -86,47 +83,24 @@ export default function DashboardPage() {
       const pipelineCounts = {}
       for (const status of statuses) {
         const { count } = await supabase
-         .from('deals')
-         .select('*', { count: 'exact', head: true })
-         .eq('user_id', user.id)
-         .eq('status', status)
+        .from('deals')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', status)
         pipelineCounts[status] = count || 0
       }
       setPipeline(pipelineCounts)
 
       // Hot Deals Feed
       const { data: hotDealsData } = await supabase
-       .from('deals')
-       .select('id, address, city, state, pain_score, seller_phone, profit')
-       .eq('user_id', user.id)
-       .gte('pain_score', 70)
-       .neq('status', 'closed')
-       .order('pain_score', { ascending: false })
-       .limit(5)
+      .from('deals')
+      .select('id, address, city, state, pain_score, seller_phone, profit')
+      .eq('user_id', user.id)
+      .gte('pain_score', 70)
+      .neq('status', 'closed')
+      .order('pain_score', { ascending: false })
+      .limit(5)
       setHotDeals(hotDealsData || [])
-
-      // Chart Data: Last 30 days revenue
-      const last30Days = []
-      for (let i = 29; i >= 0; i--) {
-        const date = subDays(new Date(), i)
-        const dateStr = format(date, 'MM/dd')
-        last30Days.push({ date: dateStr, revenue: 0 })
-      }
-
-      const thirtyDaysAgo = subDays(new Date(), 30).toISOString()
-      const { data: chartDeals } = await supabase
-       .from('deals')
-       .select('profit, created_at')
-       .eq('user_id', user.id)
-       .eq('status', 'closed')
-       .gte('created_at', thirtyDaysAgo)
-
-      chartDeals?.forEach(deal => {
-        const dateStr = format(new Date(deal.created_at), 'MM/dd')
-        const dayData = last30Days.find(d => d.date === dateStr)
-        if (dayData) dayData.revenue += Number(deal.profit) || 0
-      })
-      setChartData(last30Days)
 
     } catch (error) {
       console.error('Dashboard load error:', error)
@@ -174,45 +148,24 @@ export default function DashboardPage() {
           <KpiCard title="Close Rate" value={kpis.closeRate} suffix="%" color="text-blue-500" />
         </div>
 
-        {/* Pipeline + Chart */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Pipeline */}
-          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-4 font-mono uppercase tracking-wider text-zinc-400">Pipeline Status</h2>
-            <div className="space-y-3">
-              {Object.entries(pipeline).map(([stage, count]) => (
-                <div key={stage} className="flex items-center justify-between">
-                  <span className="text-zinc-300 capitalize font-mono">{stage}</span>
-                  <div className="flex items-center gap-3">
-                    <div className="w-32 bg-zinc-800 rounded-full h-2">
-                      <div
-                        className="bg-green-600 h-2 rounded-full"
-                        style={{ width: `${kpis.totalDeals > 0? (count / kpis.totalDeals) * 100 : 0}%` }}
-                      />
-                    </div>
-                    <span className="text-white font-mono font-bold w-8 text-right">{count}</span>
+        {/* Pipeline */}
+        <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6">
+          <h2 className="text-lg font-semibold mb-4 font-mono uppercase tracking-wider text-zinc-400">Pipeline Status</h2>
+          <div className="space-y-3">
+            {Object.entries(pipeline).map(([stage, count]) => (
+              <div key={stage} className="flex items-center justify-between">
+                <span className="text-zinc-300 capitalize font-mono">{stage}</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-32 bg-zinc-800 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full"
+                      style={{ width: `${kpis.totalDeals > 0? (count / kpis.totalDeals) * 100 : 0}%` }}
+                    />
                   </div>
+                  <span className="text-white font-mono font-bold w-8 text-right">{count}</span>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Revenue Chart */}
-          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-4 font-mono uppercase tracking-wider text-zinc-400">Revenue - 30 Days</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={chartData}>
-                <XAxis dataKey="date" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v/1000}k`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
-                  labelStyle={{ color: '#a1a1aa' }}
-                  formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Revenue']}
-                />
-                <Bar dataKey="revenue" fill="#16a34a" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+              </div>
+            ))}
           </div>
         </div>
 
