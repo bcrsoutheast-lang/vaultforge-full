@@ -1,167 +1,215 @@
-import Link from "next/link";
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 
-export default function AdminRecoveryPage() {
-  const page = {
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at 18% 10%, rgba(245,197,66,.12), transparent 32%), radial-gradient(circle at 86% 8%, rgba(120,0,30,.18), transparent 34%), #05070b",
-    color: "#f7f8ff",
-    padding: "28px 20px 90px",
-    fontFamily:
-      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-  } as const;
+// Server Actions — these run on the server when buttons are clicked
+async function approveMember(formData: FormData) {
+  'use server'
+  const id = formData.get('id') as string
+  const role = formData.get('role') as string
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name: string) => cookieStore.get(name)?.value } }
+  )
+  
+  // Check if we're still in founders period
+  const { data: founderCount } = await supabase.rpc('get_founders_count')
+  const isFounders = (founderCount || 0) < 100
+  
+  const { data: newFounder } = await supabase.rpc('get_founders_count')
+  const founderNumber = isFounders ? (newFounder || 0) + 1 : null
+  
+  await supabase
+    .from('vault_members')
+    .update({ 
+      status: isFounders ? 'active_founder' : 'active_member',
+      founder_number: founderNumber,
+      role: role
+    })
+    .eq('id', id)
+  
+  revalidatePath('/admin')
+}
 
-  const shell = { maxWidth: 1040, margin: "0 auto" } as const;
+async function denyMember(formData: FormData) {
+  'use server'
+  const id = formData.get('id') as string
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name: string) => cookieStore.get(name)?.value } }
+  )
+  
+  await supabase.from('vault_members').update({ status: 'rejected' }).eq('id', id)
+  revalidatePath('/admin')
+}
 
-  const card = {
-    border: "1px solid rgba(245,197,66,.42)",
-    borderRadius: 26,
-    background:
-      "linear-gradient(135deg,rgba(22,25,37,.96),rgba(33,31,20,.82))",
-    padding: 26,
-    marginBottom: 20,
-  } as const;
+async function deleteMember(formData: FormData) {
+  'use server'
+  const id = formData.get('id') as string
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name: string) => cookieStore.get(name)?.value } }
+  )
+  
+  await supabase.from('vault_members').delete().eq('id', id)
+  revalidatePath('/admin')
+}
 
-  const panel = {
-    border: "1px solid rgba(207,216,230,.16)",
-    borderRadius: 24,
-    background: "rgba(15,21,34,.88)",
-    padding: 22,
-    marginBottom: 18,
-  } as const;
+export default async function AdminPage() {
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (name: string) => cookieStore.get(name)?.value } }
+  )
 
-  const nav = {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 20,
-  };
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  const brand = {
-    color: "#ffda5e",
-    fontWeight: 1000,
-    fontSize: 28,
-    letterSpacing: "-.04em",
-    marginRight: 10,
-  } as const;
+  // Simple admin check — change this to your email
+  const { data: me } = await supabase
+    .from('vault_members')
+    .select('role')
+    .eq('user_id', user.id)
+    .single()
+  
+  if (user.email !== 'your-admin-email@domain.com' && me?.role !== 'admin') {
+    redirect('/members')
+  }
 
-  const button = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 999,
-    border: "1px solid rgba(207,216,230,.18)",
-    background: "rgba(18,24,38,.92)",
-    color: "#f7f8ff",
-    padding: "12px 18px",
-    fontWeight: 900,
-    textDecoration: "none",
-  } as const;
+  // Pull pending members
+  const { data: pending } = await supabase
+    .from('vault_members')
+    .select('*')
+    .eq('status', 'pending_approval')
+    .order('created_at', { ascending: true })
 
-  const goldButton = {
-    ...button,
-    background: "linear-gradient(135deg,#ffe16a,#f4bf37)",
-    color: "#080a10",
-    border: "1px solid rgba(255,220,90,.65)",
-  } as const;
+  // Pull all active members for management
+  const { data: active } = await supabase
+    .from('vault_members')
+    .select('*')
+    .in('status', ['active_founder','active_member'])
+    .order('created_at', { ascending: false })
 
-  const redButton = {
-    ...button,
-    background: "rgba(90,10,18,.72)",
-    color: "#ffb2b2",
-    border: "1px solid rgba(255,65,65,.65)",
-  } as const;
-
-  const eyebrow = {
-    color: "#ffda5e",
-    textTransform: "uppercase" as const,
-    letterSpacing: ".34em",
-    fontSize: 12,
-    fontWeight: 1000,
-  };
-
-  const h1 = {
-    fontSize: "clamp(42px,7vw,82px)",
-    lineHeight: ".92",
-    letterSpacing: "-.08em",
-    margin: "12px 0",
-    fontWeight: 1000,
-  } as const;
-
-  const h2 = {
-    fontSize: "clamp(30px,4.5vw,54px)",
-    lineHeight: ".95",
-    letterSpacing: "-.065em",
-    margin: "10px 0",
-    fontWeight: 1000,
-  } as const;
-
-  const sub = {
-    color: "rgba(235,240,255,.78)",
-    fontSize: 20,
-    lineHeight: 1.45,
-    margin: "8px 0",
-  } as const;
-
-  const muted = {
-    color: "rgba(235,240,255,.68)",
-    fontSize: 15,
-    lineHeight: 1.45,
-    margin: "6px 0",
-  } as const;
-
-  const grid = {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-    gap: 14,
-  } as const;
+  const { data: founderCount } = await supabase.rpc('get_founders_count')
 
   return (
-    <main style={page}>
-      <div style={shell}>
-        <nav style={nav}>
-          <div style={brand}>VAULTFORGE</div>
-          <Link href="/" style={button}>Home</Link>
-          <Link href="/command" style={goldButton}>Command</Link>
-          <Link href="/investor-room" style={button}>Investor Room</Link>
-          <Link href="/my-rooms" style={button}>My Rooms</Link>
-          <Link href="/messages" style={button}>Messages</Link>
-          <Link href="/logout" style={redButton}>Logout</Link>
-        </nav>
-
-        <section style={card}>
-          <div style={eyebrow}>VaultForge Admin Recovery</div>
-          <h1 style={h1}>Admin route restored.</h1>
-          <p style={sub}>
-            This page is a safe recovery version so production can build again. It removes the bad revalidate export that was blocking the whole deployment.
-          </p>
-        </section>
-
-        <section style={panel}>
-          <div style={eyebrow}>Current Safe Links</div>
-          <h2 style={h2}>Use working rooms while admin is rebuilt.</h2>
-          <p style={sub}>
-            Admin controls should be rebuilt later from the real source of truth. This file exists only to stop /admin from killing production deploys.
-          </p>
-
-          <div style={grid}>
-            <Link href="/command" style={goldButton}>Open Command</Link>
-            <Link href="/investor-room" style={button}>Open Investor Room</Link>
-            <Link href="/my-rooms" style={button}>Open My Rooms</Link>
-            <Link href="/member-controlled-threads" style={button}>Open Controlled Threads</Link>
-            <Link href="/messages" style={button}>Open Messages</Link>
-            <Link href="/members" style={button}>Open Members</Link>
-          </div>
-        </section>
-
-        <section style={panel}>
-          <div style={eyebrow}>Do Not Touch During Recovery</div>
-          <p style={muted}>
-            No revalidate export. No dynamic export. No client state. No localStorage. No nested modal. No payment alert experiment. This is intentionally simple so the build turns green.
-          </p>
-        </section>
+    <div className="min-h-screen bg-vault-black text-white">
+      <div className="border-b border-vault-gold bg-vault-bg p-4">
+        <h1 className="text-2xl font-bold text-vault-gold">VAULTFORGE ADMIN</h1>
+        <p className="text-vault-muted text-sm">Founders: {founderCount || 0}/100</p>
       </div>
-    </main>
-  );
+
+      <div className="max-w-7xl mx-auto p-4 space-y-8">
+        
+        {/* PENDING APPROVALS */}
+        <div className="border border-vault-border bg-vault-bg">
+          <div className="border-b border-vault-gold p-4">
+            <h2 className="font-bold text-vault-gold">PENDING APPROVAL — {pending?.length || 0}</h2>
+          </div>
+          <div className="p-4">
+            {!pending?.length && <p className="text-vault-muted">No pending members</p>}
+            {pending?.map(m => (
+              <div key={m.id} className="border border-vault-border p-4 mb-4">
+                <div className="grid md:grid-cols-4 gap-4 mb-4">
+                  <div>
+                    <p className="text-vault-muted text-xs">NAME</p>
+                    <p className="font-bold">{m.full_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-vault-muted text-xs">EMAIL</p>
+                    <p className="text-sm">{m.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-vault-muted text-xs">PHONE</p>
+                    <p className="text-sm">{m.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-vault-muted text-xs">REQUESTED ROLE</p>
+                    <p className="text-vault-gold font-bold">{m.role?.toUpperCase()}</p>
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <p className="text-vault-muted text-xs">STATES</p>
+                  <p className="text-sm">{m.states?.join(', ')}</p>
+                </div>
+                <div className="mb-4">
+                  <p className="text-vault-muted text-xs">BUY BOX / BIO</p>
+                  <p className="text-sm">{m.buy_box}</p>
+                </div>
+                
+                <div className="flex gap-2">
+                  <form action={approveMember}>
+                    <input type="hidden" name="id" value={m.id} />
+                    <input type="hidden" name="role" value={m.role} />
+                    <button className="bg-vault-gold hover:bg-vault-gold-hover text-black font-bold py-2 px-6">
+                      APPROVE
+                    </button>
+                  </form>
+                  <form action={denyMember}>
+                    <input type="hidden" name="id" value={m.id} />
+                    <button className="bg-vault-border hover:bg-[#27272A] text-white font-bold py-2 px-6 border border-vault-red">
+                      DENY
+                    </button>
+                  </form>
+                  <a 
+                    href={`mailto:${m.email}`}
+                    className="bg-vault-border hover:bg-[#27272A] text-white font-bold py-2 px-6 border border-vault-muted"
+                  >
+                    MESSAGE
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ACTIVE MEMBERS */}
+        <div className="border border-vault-border bg-vault-bg">
+          <div className="border-b border-vault-border p-4">
+            <h2 className="font-bold">ACTIVE MEMBERS — {active?.length || 0}</h2>
+          </div>
+          <div className="p-4">
+            <table className="w-full text-sm">
+              <thead className="text-vault-muted text-left">
+                <tr>
+                  <th className="pb-2">NAME</th>
+                  <th className="pb-2">ROLE</th>
+                  <th className="pb-2">STATUS</th>
+                  <th className="pb-2">FOUNDER #</th>
+                  <th className="pb-2">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {active?.map(m => (
+                  <tr key={m.id} className="border-t border-vault-border">
+                    <td className="py-3">{m.full_name}</td>
+                    <td className="py-3 text-vault-gold">{m.role?.toUpperCase()}</td>
+                    <td className="py-3">{m.status === 'active_founder' ? 'FOUNDER' : 'MEMBER'}</td>
+                    <td className="py-3">{m.founder_number || '—'}</td>
+                    <td className="py-3">
+                      <form action={deleteMember} className="inline">
+                        <input type="hidden" name="id" value={m.id} />
+                        <button className="text-vault-red hover:underline text-xs">
+                          DELETE
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
 }
