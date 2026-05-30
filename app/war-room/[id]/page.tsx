@@ -32,16 +32,16 @@ export default function WarRoomPage() {
   useEffect(() => {
     if (!room?.id) return
     const channel = supabase.channel(`war_room_${room.id}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'war_room_bids', filter: `war_room_id=eq.${room.id}` },
+   .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'war_room_bids', filter: `war_room_id=eq.${room.id}` },
         payload => {
           setBids(prev => [...prev, payload.new])
           bidEndRef.current?.scrollIntoView({ behavior: 'smooth' })
         }
       )
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'war_rooms', filter: `id=eq.${room.id}` },
+   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'war_rooms', filter: `id=eq.${room.id}` },
         payload => setRoom(payload.new)
       )
-    .subscribe()
+   .subscribe()
     return () => supabase.removeChannel(channel)
   }, [room?.id])
 
@@ -52,9 +52,9 @@ export default function WarRoomPage() {
 
   const loadRoom = async () => {
     const { data: roomData } = await supabase.from('war_rooms')
-    .select('*, deals(*)').eq('id', id).single()
+   .select('*, deals(*)').eq('id', id).single()
     const { data: bidData } = await supabase.from('war_room_bids')
-    .select('*, users:auth.users(email)').eq('war_room_id', id).order('created_at', { ascending: true })
+   .select('*, users:auth.users(email)').eq('war_room_id', id).order('created_at', { ascending: true })
     const { data: statsData } = await supabase.rpc('get_war_room_stats', { room_id: id })
 
     setRoom(roomData)
@@ -117,6 +117,7 @@ export default function WarRoomPage() {
               <div className={`text-sm font-bold ${isLive? 'text-green-500 animate-pulse' : 'text-zinc-400'}`}>
                 {room.status.toUpperCase()}
               </div>
+            </div>
             <div className="text-right">
               <div className="text-xs text-zinc-500">BIDDERS</div>
               <div className="text-sm font-bold text-amber-500">{stats?.unique_bidders || 0}</div>
