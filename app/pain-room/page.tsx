@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 type PainLead = {
@@ -149,25 +149,12 @@ export default function PainRoom() {
                     <span className="text-zinc-500">Condition:</span>
                     <span>{lead.condition}</span>
                   </div>
-                  {lead.mortgage_balance && (
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Mortgage:</span>
-                      <span>${lead.mortgage_balance}</span>
-                    </div>
-                  )}
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-zinc-800">
                   <div className="text-xs text-zinc-500 mb-1">Motivation:</div>
                   <div className="text-sm text-zinc-300">{lead.motivation}</div>
                 </div>
-
-                {lead.notes && (
-                  <div className="mt-3 pt-3 border-t border-zinc-800">
-                    <div className="text-xs text-zinc-500 mb-1">Notes:</div>
-                    <div className="text-sm text-zinc-300">{lead.notes}</div>
-                  </div>
-                )}
               </div>
 
               <div className="p-4 pt-0 flex gap-2">
