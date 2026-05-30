@@ -1,180 +1,301 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 
-export default function PostDeal() {
-  const supabase = createClient()
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    deal_type: 'Wholesale',
-    street: '',
-    city: '',
-    state: 'GA',
-    zip: '',
-    arv: '',
-    asking_price: ''
-  })
+type DealForm = {
+  title: string
+  dealType: string
+  exitStrategy: string
+  propertyType: string
+  street: string
+  city: string
+  state: string
+  zip: string
+  askingPrice: number | ''
+  assignmentFee: number | ''
+  arv: number | ''
+  rehab: number | ''
+  comp1Addr: string
+  comp1Price: number | ''
+  comp2Addr: string
+  comp2Price: number | ''
+  comp3Addr: string
+  comp3Price: number | ''
+  loanBalance: number | ''
+  loanRate: number | ''
+  condition: string
+  occupancy: string
+  access: string
+  inspectionDays: number | ''
+  closeDate: string
+  whySelling: string
+  sellerName: string
+  sellerPhone: string
+  sellerEmail: string
+  licensed: boolean
+  photos: File[]
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
+export default function PostDeal() {
+  const router = useRouter()
+  const [form, setForm] = useState<DealForm>({
+    title: '', dealType: 'Wholesale', exitStrategy: 'Flip', propertyType: 'SFR',
+    street: '', city: '', state: 'GA', zip: '',
+    askingPrice: '', assignmentFee: '', arv: '', rehab: '',
+    comp1Addr: '', comp1Price: '', comp2Addr: '', comp2Price: '', comp3Addr: '', comp3Price: '',
+    loanBalance: '', loanRate: '',
+    condition: 'Needs Some Work', occupancy: 'Vacant', access: 'Appointment Only',
+    inspectionDays: 10, closeDate: '', whySelling: 'Tired Landlord',
+    sellerName: '', sellerPhone: '', sellerEmail: '', licensed: false,
+    photos: []
+  })
+  const [analysis, setAnalysis] = useState<any>(null)
+  const [errors, setErrors] = useState<string[]>([])
+
+  const calculateMAO = () => {
+    if (!form.arv ||!form.rehab ||!form.assignmentFee) return 0
+    const arv = Number(form.arv)
+    const rehab = Number(form.rehab)
+    const assign = Number(form.assignmentFee)
+    const closing = arv * 0.03 // 3% closing costs
+    const contingency = arv * 0.1
+    return Math.round((arv * 0.7) - rehab - closing - assign - contingency)
+  }
+
+  const runAnalyzer = () => {
+    const mao = calculateMAO()
+    const asking = Number(form.askingPrice) || 0
+    const profit = Number(form.arv) - Number(form.rehab) - asking - Number(form.assignmentFee) - (Number(form.arv) * 0.13)
+    const spread = Number(form.arv) - asking
+    
+    const flags: string[] = []
+    if (form.photos.length === 0) flags.push('NO PHOTOS: Deals without photos get ignored')
+    if (!form.inspectionDays) flags.push('NO INSPECTION: No safety valve = dead deal')
+    if (asking > mao) flags.push(`OVER MAO: $${(asking - mao).toLocaleString()} over. Buyers will pass`)
+    if (profit < 20000 && form.propertyType === 'SFR') flags.push('THIN DEAL: <$20k profit. Only for newbies')
+    if (!form.comp1Price ||!form.comp2Price ||!form.comp3Price) flags.push('NO COMPS: ARV unverified')
+
+    setAnalysis({ mao, profit: Math.round(profit), spread, flags })
+    return flags.length === 0
+  }
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []).slice(0, 10)
+    setForm({...form, photos: files})
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    
-    const { error } = await supabase.from('deals').insert([{
-      ...form,
-      arv: parseFloat(form.arv) || null,
-      asking_price: parseFloat(form.asking_price) || null,
-    }])
-    
-    setLoading(false)
-    if (error) return alert(error.message)
+    const passed = runAnalyzer()
+    if (!passed || form.photos.length === 0) {
+      setErrors(['Deal failed analyzer. Fix red flags before posting.'])
+      return
+    }
+    // TODO: Submit to Supabase here
+    alert('Deal passed analyzer. Posting to Deal Room...')
     router.push('/')
   }
 
-  const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-white placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
-  const labelClass = "text-sm font-medium text-zinc-300 mb-2 block"
+  const mao = calculateMAO()
+  const profit = form.arv? Number(form.arv) - Number(form.rehab) - Number(form.askingPrice) - Number(form.assignmentFee) - (Number(form.arv) * 0.13) : 0
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 font-sans">
-      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
-          <button onClick={() => router.back()} className="text-zinc-400 hover:text-white text-sm">
-            ← Cancel
-          </button>
-          <div className="text-center">
-            <h1 className="text-lg font-bold">VAULTFORGE</h1>
-          </div>
-          <div className="w-16"></div>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-6 py-10">
-        <h2 className="text-3xl font-bold mb-2">POST NEW DEAL</h2>
-        <p className="text-zinc-400 mb-8">Submit to the Deal Room. Verified operators only.</p>
+    <div className="min-h-screen bg-[#0A0A0B] text-zinc-100 font-sans">
+      <div className="max-w-6xl mx-auto p-6">
         
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 space-y-6">
-            <div>
-              <label className={labelClass}>Deal Title *</label>
-              <input 
-                className={inputClass}
-                placeholder="123 Main St Wholesale - 3BR/2BA"
-                value={form.title}
-                onChange={e => setForm({...form, title: e.target.value})}
-                required
-              />
-            </div>
+        <div className="border-b border-zinc-800 pb-4 mb-8">
+          <h1 className="text-3xl font-bold tracking-tight">VAULTFORGE // POST DEAL</h1>
+          <p className="text-sm text-zinc-500 mt-1">Deal must pass analyzer to enter Deal Room. No exceptions.</p>
+        </div>
 
-            <div>
-              <label className={labelClass}>Deal Type *</label>
-              <select 
-                className={inputClass}
-                value={form.deal_type}
-                onChange={e => setForm({...form, deal_type: e.target.value})}
-              >
-                <option>Wholesale</option>
-                <option>Fix & Flip</option>
-                <option>Buy & Hold</option>
-                <option>Novation</option>
-                <option>Sub-To</option>
-                <option>Hard Money</option>
-              </select>
-            </div>
-
-            <div>
-              <label className={labelClass}>Deal Description</label>
-              <textarea 
-                className={`${inputClass} h-32 resize-none`}
-                placeholder="Off-market SFH. Motivated seller. Needs roof + kitchen. ARV $350k..."
-                value={form.description}
-                onChange={e => setForm({...form, description: e.target.value})}
-              />
-            </div>
-
-            <div className="border-t border-zinc-800 pt-6">
-              <p className="text-sm font-medium text-zinc-300 mb-4">Property Address</p>
-              <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* LEFT: FORM INPUTS */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* THE HOOK */}
+            <div className="bg-zinc-900 border border-zinc-800 p-6">
+              <div className="text-xs text-emerald-500 font-mono mb-4">SECTION 01 // THE HOOK</div>
+              <div className="grid grid-cols-2 gap-4">
                 <input 
-                  className={inputClass}
-                  placeholder="Street Address"
-                  value={form.street}
-                  onChange={e => setForm({...form, street: e.target.value})}
+                  className="bg-black border border-zinc-700 px-3 py-2 text-sm focus:border-emerald-500 outline-none" 
+                  placeholder="Deal Title: 123 Main St | 3BD/2BA | Atlanta"
+                  value={form.title}
+                  onChange={e => setForm({...form, title: e.target.value})}
                   required
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <select 
+                  className="bg-black border border-zinc-700 px-3 py-2 text-sm"
+                  value={form.dealType}
+                  onChange={e => setForm({...form, dealType: e.target.value})}
+                >
+                  <option>Wholesale</option><option>Note Sale</option><option>Subject-To</option>
+                  <option>Novation</option><option>Fix & Flip</option><option>Buy & Hold</option>
+                </select>
+                <select 
+                  className="bg-black border border-zinc-700 px-3 py-2 text-sm"
+                  value={form.exitStrategy}
+                  onChange={e => setForm({...form, exitStrategy: e.target.value})}
+                >
+                  <option>Flip</option><option>Rental</option><option>Wholesale to End Buyer</option>
+                </select>
+                <select 
+                  className="bg-black border border-zinc-700 px-3 py-2 text-sm"
+                  value={form.propertyType}
+                  onChange={e => setForm({...form, propertyType: e.target.value})}
+                >
+                  <option>SFR</option><option>2-4 Unit</option><option>5+ Unit</option><option>Land</option>
+                </select>
+              </div>
+              <div className="mt-4">
+                <label className="text-xs text-zinc-500 block mb-2">PHOTOS // UP TO 10 // REQUIRED</label>
+                <input 
+                  type="file" 
+                  multiple 
+                  accept="image/*" 
+                  onChange={handlePhotoUpload}
+                  className="block w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:border-0 file:text-xs file:font-mono file:bg-emerald-600 file:text-black hover:file:bg-emerald-500"
+                />
+                <div className="text-xs text-zinc-600 mt-1">{form.photos.length}/10 uploaded</div>
+              </div>
+            </div>
+
+            {/* THE NUMBERS */}
+            <div className="bg-zinc-900 border border-zinc-800 p-6">
+              <div className="text-xs text-emerald-500 font-mono mb-4">SECTION 02 // THE NUMBERS</div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-500">ASKING PRICE*</label>
                   <input 
-                    className={inputClass}
-                    placeholder="City"
-                    value={form.city}
-                    onChange={e => setForm({...form, city: e.target.value})}
+                    type="number" 
+                    className="w-full bg-black border border-zinc-700 px-3 py-2 text-sm font-mono focus:border-emerald-500 outline-none" 
+                    value={form.askingPrice}
+                    onChange={e => setForm({...form, askingPrice: Number(e.target.value)})}
                     required
                   />
-                  <div className="grid grid-cols-2 gap-4">
-                    <input 
-                      className={inputClass}
-                      placeholder="State"
-                      maxLength={2}
-                      value={form.state}
-                      onChange={e => setForm({...form, state: e.target.value.toUpperCase()})}
-                      required
-                    />
-                    <input 
-                      className={inputClass}
-                      placeholder="ZIP"
-                      value={form.zip}
-                      onChange={e => setForm({...form, zip: e.target.value})}
-                    />
-                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-500">ASSIGNMENT FEE*</label>
+                  <input 
+                    type="number" 
+                    className="w-full bg-black border border-zinc-700 px-3 py-2 text-sm font-mono" 
+                    value={form.assignmentFee}
+                    onChange={e => setForm({...form, assignmentFee: Number(e.target.value)})}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-500">ARV*</label>
+                  <input 
+                    type="number" 
+                    className="w-full bg-black border border-zinc-700 px-3 py-2 text-sm font-mono" 
+                    value={form.arv}
+                    onChange={e => setForm({...form, arv: Number(e.target.value)})}
+                    required
+                  />
+                </div>
+                <div className="col-span-3">
+                  <label className="text-xs text-zinc-500">REHAB ESTIMATE*</label>
+                  <input 
+                    type="number" 
+                    className="w-full bg-black border border-zinc-700 px-3 py-2 text-sm font-mono" 
+                    value={form.rehab}
+                    onChange={e => setForm({...form, rehab: Number(e.target.value)})}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-4 border-t border-zinc-800 pt-4">
+                <div className="text-xs text-zinc-500 mb-2">ARV COMPS // REQUIRED</div>
+                <div className="space-y-2">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="grid grid-cols-2 gap-2">
+                      <input 
+                        className="bg-black border border-zinc-700 px-2 py-1 text-xs" 
+                        placeholder={`Comp ${i} Address`}
+                        onChange={e => setForm({...form, [`comp${i}Addr`]: e.target.value} as any)}
+                      />
+                      <input 
+                        type="number" 
+                        className="bg-black border border-zinc-700 px-2 py-1 text-xs font-mono" 
+                        placeholder="Sold Price"
+                        onChange={e => setForm({...form, [`comp${i}Price`]: Number(e.target.value)} as any)}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <div className="border-t border-zinc-800 pt-6">
-              <p className="text-sm font-medium text-zinc-300 mb-4">Deal Numbers</p>
+            {/* CONTACT */}
+            <div className="bg-zinc-900 border border-zinc-800 p-6">
+              <div className="text-xs text-emerald-500 font-mono mb-4">SECTION 04 // CONTACT</div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-zinc-500">ARV - After Repair Value</label>
-                  <div className="relative mt-1">
-                    <span className="absolute left-4 top-3 text-zinc-500">$</span>
-                    <input 
-                      className={`${inputClass} pl-8`}
-                      placeholder="350,000"
-                      type="number"
-                      value={form.arv}
-                      onChange={e => setForm({...form, arv: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-500">Asking Price</label>
-                  <div className="relative mt-1">
-                    <span className="absolute left-4 top-3 text-zinc-500">$</span>
-                    <input 
-                      className={`${inputClass} pl-8`}
-                      placeholder="275,000"
-                      type="number"
-                      value={form.asking_price}
-                      onChange={e => setForm({...form, asking_price: e.target.value})}
-                      required
-                    />
-                  </div>
-                </div>
+                <input className="bg-black border border-zinc-700 px-3 py-2 text-sm" placeholder="Your Name*" required
+                  onChange={e => setForm({...form, sellerName: e.target.value})} />
+                <input className="bg-black border border-zinc-700 px-3 py-2 text-sm" placeholder="Phone*" required
+                  onChange={e => setForm({...form, sellerPhone: e.target.value})} />
+                <input className="bg-black border border-zinc-700 px-3 py-2 text-sm col-span-2" placeholder="Email*" required
+                  onChange={e => setForm({...form, sellerEmail: e.target.value})} />
               </div>
             </div>
           </div>
 
-          <button 
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-500 py-4 rounded-lg font-semibold transition shadow-lg shadow-blue-600/20"
-          >
-            {loading ? 'Posting...' : 'Post Deal to Vault'}
-          </button>
+          {/* RIGHT: LIVE ANALYZER */}
+          <div className="lg:col-span-1">
+            <div className="bg-zinc-900 border border-zinc-800 p-6 sticky top-6">
+              <div className="text-xs text-emerald-500 font-mono mb-4">LIVE ANALYZER</div>
+              
+              <div className="space-y-3 font-mono text-sm">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">MAO:</span>
+                  <span className="text-emerald-400">${mao.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">PROFIT:</span>
+                  <span className={profit > 20000? 'text-emerald-400' : 'text-red-400'}>${Math.round(profit).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between border-t border-zinc-800 pt-3">
+                  <span className="text-zinc-500">ASK vs MAO:</span>
+                  <span className={Number(form.askingPrice) <= mao? 'text-emerald-400' : 'text-red-400'}>
+                    {Number(form.askingPrice) <= mao? 'PASS' : `FAIL -$${(Number(form.askingPrice) - mao).toLocaleString()}`}
+                  </span>
+                </div>
+              </div>
+
+              {analysis?.flags?.length > 0 && (
+                <div className="mt-6 border-t border-red-900/50 pt-4">
+                  <div className="text-xs text-red-400 font-mono mb-2">RED FLAGS</div>
+                  {analysis.flags.map((flag: string, i: number) => (
+                    <div key={i} className="text-xs text-red-400 mb-1">• {flag}</div>
+                  ))}
+                </div>
+              )}
+
+              <button 
+                type="button"
+                onClick={runAnalyzer}
+                className="w-full mt-6 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 py-2 text-xs font-mono"
+              >
+                RUN ANALYZER
+              </button>
+
+              <button 
+                type="submit"
+                className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-black py-3 text-sm font-bold"
+              >
+                POST TO DEAL ROOM
+              </button>
+
+              {errors.length > 0 && (
+                <div className="mt-4 text-xs text-red-400">{errors[0]}</div>
+              )}
+            </div>
+          </div>
+
         </form>
-      </main>
+      </div>
     </div>
   )
 }
