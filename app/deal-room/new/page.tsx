@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-export default function NewDealPage() {
+export default function NewDealPage() { 
   const router = useRouter()
   const supabase = createClientComponentClient()
   const [loading, setLoading] = useState(false)
