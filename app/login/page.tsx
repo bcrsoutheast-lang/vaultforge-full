@@ -1,92 +1,106 @@
 'use client'
-import { createBrowserClient } from '@supabase/ssr'
+
 import { useState } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function Login() {
-  const router = useRouter()
-  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [isSignUp, setIsSignUp] = useState(false)
+  const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const supabase = createClientComponentClient()
+  const router = useRouter()
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-    
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
 
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-      return
-    }
-
-    router.push('/vault')
-  }
-
-  const handleSignup = async () => {
-    setLoading(true)
-    setError('')
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-
-    if (error) {
-      setError(error.message)
+    if (isSignUp) {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName }
+        }
+      })
+      if (error) setError(error.message)
+      else router.push('/pain-room')
     } else {
-      alert('Check your email to confirm signup')
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+      if (error) setError(error.message)
+      else router.push('/pain-room')
     }
     setLoading(false)
   }
 
+  const inputClass = "w-full p-3 bg-zinc-800 border border-zinc-700 text-white focus:border-red-500 outline-none"
+
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+    <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
       <div className="w-full max-w-md">
-        <h1 className="text-3xl font-bold text-yellow-500 text-center mb-8">VAULT LOGIN</h1>
+        <h1 className="text-3xl font-bold mb-2 text-center">6SIGMA</h1>
+        <p className="text-zinc-500 text-center mb-8 text-sm uppercase">Pain Intake System</p>
         
-        <form onSubmit={handleLogin} className="space-y-4">
-          <input
+        <form onSubmit={handleAuth} className="space-y-4">
+          {isSignUp && (
+            <input 
+              placeholder="Full Name" 
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              className={inputClass}
+              required
+            />
+          )}
+          
+          <input 
+            placeholder="Email" 
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            className="w-full bg-zinc-900 text-white px-4 py-3 rounded border border-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={e => setEmail(e.target.value)}
+            className={inputClass}
             required
           />
-          <input
+
+          <input 
+            placeholder="Password" 
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full bg-zinc-900 text-white px-4 py-3 rounded border border-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={e => setPassword(e.target.value)}
+            className={inputClass}
             required
           />
-          
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          
-          <button
+
+          {error && (
+            <div className="p-3 bg-red-900/30 border border-red-500/50 text-red-500 text-sm">
+              {error}
+            </div>
+          )}
+
+          <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 disabled:bg-zinc-700"
+            className="w-full py-3 bg-red-600 hover:bg-red-700 border border-red-500 text-white uppercase font-bold disabled:opacity-50"
           >
-            {loading? 'Loading...' : 'Login'}
+            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Login'}
           </button>
-          
-          <button
+
+          <button 
             type="button"
-            onClick={handleSignup}
-            disabled={loading}
-            className="w-full bg-zinc-800 text-white py-3 rounded hover:bg-zinc-700 disabled:text-zinc-500"
+            onClick={() => {
+              setIsSignUp(!isSignUp)
+              setError('')
+            }}
+            className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs uppercase"
           >
-            Sign Up
+            {isSignUp ? 'Already have account? Login' : 'Need account? Sign Up'}
           </button>
         </form>
       </div>
