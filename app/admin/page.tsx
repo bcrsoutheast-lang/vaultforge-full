@@ -2,8 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import Link from 'next/link'
 
-// Server Actions — these run on the server when buttons are clicked
+// Server Actions
 async function approveMember(formData: FormData) {
   'use server'
   const id = formData.get('id') as string
@@ -15,12 +16,9 @@ async function approveMember(formData: FormData) {
     { cookies: { get: (name: string) => cookieStore.get(name)?.value } }
   )
   
-  // Check if we're still in founders period
   const { data: founderCount } = await supabase.rpc('get_founders_count')
   const isFounders = (founderCount || 0) < 100
-  
-  const { data: newFounder } = await supabase.rpc('get_founders_count')
-  const founderNumber = isFounders ? (newFounder || 0) + 1 : null
+  const founderNumber = isFounders ? (founderCount || 0) + 1 : null
   
   await supabase
     .from('vault_members')
@@ -73,29 +71,27 @@ export default async function AdminPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Simple admin check — change this to your email
+  // HARD GATE — Admin only. Members get kicked to /members
   const { data: me } = await supabase
     .from('vault_members')
     .select('role')
     .eq('user_id', user.id)
     .single()
   
-  if (user.email !== 'your-admin-email@domain.com' && me?.role !== 'admin') {
+  if (me?.role !== 'admin') {
     redirect('/members')
   }
 
-  // Pull pending members
   const { data: pending } = await supabase
     .from('vault_members')
     .select('*')
     .eq('status', 'pending_approval')
     .order('created_at', { ascending: true })
 
-  // Pull all active members for management
   const { data: active } = await supabase
     .from('vault_members')
     .select('*')
-    .in('status', ['active_founder','active_member'])
+    .in('status', ['active_founder','active_member','admin'])
     .order('created_at', { ascending: false })
 
   const { data: founderCount } = await supabase.rpc('get_founders_count')
@@ -160,8 +156,8 @@ export default async function AdminPage() {
                     </button>
                   </form>
                   <a 
-                    href={`mailto:${m.email}`}
-                    className="bg-vault-border hover:bg-[#27272A] text-white font-bold py-2 px-6 border border-vault-muted"
+                    href={`mailto:${m.email}?subject=VaultForge Membership`}
+                    className="bg-vault-border hover:bg-[#27272A] text-white font-bold py-2 px-6 border border-vault-muted inline-block"
                   >
                     MESSAGE
                   </a>
@@ -176,31 +172,35 @@ export default async function AdminPage() {
           <div className="border-b border-vault-border p-4">
             <h2 className="font-bold">ACTIVE MEMBERS — {active?.length || 0}</h2>
           </div>
-          <div className="p-4">
+          <div className="p-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-vault-muted text-left">
                 <tr>
-                  <th className="pb-2">NAME</th>
-                  <th className="pb-2">ROLE</th>
-                  <th className="pb-2">STATUS</th>
-                  <th className="pb-2">FOUNDER #</th>
+                  <th className="pb-2 pr-4">NAME</th>
+                  <th className="pb-2 pr-4">ROLE</th>
+                  <th className="pb-2 pr-4">STATUS</th>
+                  <th className="pb-2 pr-4">FOUNDER #</th>
                   <th className="pb-2">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {active?.map(m => (
                   <tr key={m.id} className="border-t border-vault-border">
-                    <td className="py-3">{m.full_name}</td>
-                    <td className="py-3 text-vault-gold">{m.role?.toUpperCase()}</td>
-                    <td className="py-3">{m.status === 'active_founder' ? 'FOUNDER' : 'MEMBER'}</td>
-                    <td className="py-3">{m.founder_number || '—'}</td>
+                    <td className="py-3 pr-4">{m.full_name}</td>
+                    <td className="py-3 pr-4 text-vault-gold">{m.role?.toUpperCase()}</td>
+                    <td className="py-3 pr-4">
+                      {m.role === 'admin' ? 'ADMIN' : m.status === 'active_founder' ? 'FOUNDER' : 'MEMBER'}
+                    </td>
+                    <td className="py-3 pr-4">{m.founder_number || '—'}</td>
                     <td className="py-3">
-                      <form action={deleteMember} className="inline">
-                        <input type="hidden" name="id" value={m.id} />
-                        <button className="text-vault-red hover:underline text-xs">
-                          DELETE
-                        </button>
-                      </form>
+                      {m.role !== 'admin' && (
+                        <form action={deleteMember} className="inline">
+                          <input type="hidden" name="id" value={m.id} />
+                          <button className="text-vault-red hover:underline text-xs">
+                            DELETE
+                          </button>
+                        </form>
+                      )}
                     </td>
                   </tr>
                 ))}
