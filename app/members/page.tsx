@@ -1,5 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies, redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
 
 export default async function MembersPage() {
   const cookieStore = cookies()
@@ -19,7 +21,7 @@ export default async function MembersPage() {
     .single()
 
   if (!member || !['active_founder','active_member'].includes(member.status)) {
-    redirect('/profile') // Force to profile/payment if not paid
+    redirect('/profile')
   }
 
   const { data: deals } = await supabase
@@ -41,71 +43,65 @@ export default async function MembersPage() {
     .gte('last_seen', new Date(Date.now() - 5 * 60 * 1000).toISOString())
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* NAV */}
-      <nav className="border-b border-[#1F1F1F] bg-[#0A0A0A] px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-[#D4AF37]" /> {/* Eagle icon */}
-          <span className="font-bold">VAULTFORGE</span>
+    <div className="min-h-screen bg-vault-black text-white">
+      <nav className="border-b border-vault-border bg-vault-bg px-4 py-3 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-vault-gold" />
+          <span className="font-bold tracking-wider">VAULTFORGE</span>
         </div>
-        <div className="flex gap-6 text-sm">
-          <Link href="/members" className="text-[#D4AF37] border-b-2 border-[#D4AF37]">Members</Link>
-          <Link href="/deals" className="text-[#71717A] hover:text-white">Deals</Link>
-          <Link href="/pain" className="text-[#71717A] hover:text-white">Pain Board</Link>
-          <Link href="/profile" className="text-[#71717A] hover:text-white">Profile</Link>
+        <div className="flex gap-6 text-sm font-semibold">
+          <Link href="/members" className="text-vault-gold border-b-2 border-vault-gold pb-1">Members</Link>
+          <Link href="/deals" className="text-vault-muted hover:text-white">Deals</Link>
+          <Link href="/pain" className="text-vault-muted hover:text-white">Pain Board</Link>
+          <Link href="/profile" className="text-vault-muted hover:text-white">Profile</Link>
         </div>
       </nav>
 
-      {/* TICKER */}
-      <div className="bg-[#D4AF37] text-black py-2 px-4 text-sm font-bold">
+      <div className="bg-vault-gold text-black py-2 px-4 text-sm font-bold">
         LIVE VAULT: {onlineCount || 0} MEMBERS ONLINE • {deals?.length || 0} NEW DEALS TODAY • {pains?.length || 0} ACTIVE PAIN POSTS
       </div>
 
-      {/* DASHBOARD */}
       <div className="max-w-7xl mx-auto p-4 grid md:grid-cols-3 gap-6">
-        {/* DEALS */}
-        <div className="border border-[#1F1F1F] bg-[#0A0A0A]">
-          <div className="border-b border-[#D4AF37] p-4">
-            <h3 className="font-bold text-[#D4AF37]">VAULT DEALS</h3>
+        <div className="border border-vault-border bg-vault-bg">
+          <div className="border-b border-vault-gold p-4">
+            <h3 className="font-bold text-vault-gold">VAULT DEALS</h3>
           </div>
           <div className="p-4 space-y-4">
             {deals?.length ? deals.map(d => (
-              <div key={d.id} className="border border-[#1F1F1F] p-3">
+              <div key={d.id} className="border border-vault-border p-3">
                 <p className="font-bold">{d.title}</p>
-                <p className="text-[#71717A] text-sm">{d.city}, {d.state}</p>
-                <p className="text-[#D4AF37]">${d.fee_amount?.toLocaleString()} Fee</p>
-                <button className="w-full bg-[#1F1F1F] hover:bg-[#27272A] mt-2 py-2 text-sm border border-[#D4AF37]">
+                <p className="text-vault-muted text-sm">{d.city}, {d.state}</p>
+                <p className="text-vault-gold">${d.fee_amount?.toLocaleString()} Fee</p>
+                <button className="w-full bg-vault-border hover:bg-[#27272A] mt-2 py-2 text-sm border border-vault-gold">
                   DM SELLER
                 </button>
               </div>
-            )) : <p className="text-[#71717A] text-sm">VAULT QUIET — AWAITING FIRST DEAL</p>}
+            )) : <p className="text-vault-muted text-sm">VAULT QUIET — AWAITING FIRST DEAL</p>}
           </div>
         </div>
 
-        {/* PAIN BOARD */}
-        <div className="border border-[#1F1F1F] bg-[#0A0A0A]">
-          <div className="border-b border-[#DC2626] p-4">
-            <h3 className="font-bold text-[#DC2626]">PAIN BOARD</h3>
+        <div className="border border-vault-border bg-vault-bg">
+          <div className="border-b border-vault-red p-4">
+            <h3 className="font-bold text-vault-red">PAIN BOARD</h3>
           </div>
           <div className="p-4 space-y-4">
             {pains?.length ? pains.map(p => (
-              <div key={p.id} className="border border-[#1F1F1F] p-3">
+              <div key={p.id} className="border border-vault-border p-3">
                 <p className="font-bold">🚨 {p.title}</p>
-                <p className="text-[#71717A] text-sm">{p.city}, {p.state}</p>
-                <button className="w-full bg-[#1F1F1F] hover:bg-[#27272A] mt-2 py-2 text-sm border border-[#DC2626]">
+                <p className="text-vault-muted text-sm">{p.city}, {p.state}</p>
+                <button className="w-full bg-vault-border hover:bg-[#27272A] mt-2 py-2 text-sm border border-vault-red">
                   CONTACT POSTER
                 </button>
               </div>
-            )) : <p className="text-[#71717A] text-sm">NO ACTIVE REQUESTS</p>}
+            )) : <p className="text-vault-muted text-sm">NO ACTIVE REQUESTS</p>}
           </div>
         </div>
 
-        {/* INTEL FEED */}
-        <div className="border border-[#1F1F1F] bg-[#0A0A0A]">
-          <div className="border-b border-[#1F1F1F] p-4">
+        <div className="border border-vault-border bg-vault-bg">
+          <div className="border-b border-vault-border p-4">
             <h3 className="font-bold">INTEL FEED</h3>
           </div>
-          <div className="p-4 text-sm text-[#71717A]">
+          <div className="p-4 text-sm text-vault-muted">
             <p>Activity log renders here from vault_activity_log</p>
           </div>
         </div>
