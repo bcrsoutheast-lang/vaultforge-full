@@ -20,10 +20,11 @@ export default async function MembersPage() {
     .eq('user_id', user.id)
     .single()
 
-  if (!member || !['active_founder','active_member'].includes(member.status)) {
+  if (!member || !['active_founder','active_member','admin'].includes(member.status)) {
     redirect('/profile')
   }
 
+  // RLS ensures these only return YOUR deals/pain, not others
   const { data: deals } = await supabase
     .from('vault_deals')
     .select('*')
@@ -37,11 +38,6 @@ export default async function MembersPage() {
     .order('created_at', { ascending: false })
     .limit(10)
 
-  const { count: onlineCount } = await supabase
-    .from('vault_members')
-    .select('*', { count: 'exact', head: true })
-    .gte('last_seen', new Date(Date.now() - 5 * 60 * 1000).toISOString())
-
   return (
     <div className="min-h-screen bg-vault-black text-white">
       <nav className="border-b border-vault-border bg-vault-bg px-4 py-3 flex justify-between items-center">
@@ -50,59 +46,57 @@ export default async function MembersPage() {
           <span className="font-bold tracking-wider">VAULTFORGE</span>
         </div>
         <div className="flex gap-6 text-sm font-semibold">
-          <Link href="/members" className="text-vault-gold border-b-2 border-vault-gold pb-1">Members</Link>
-          <Link href="/deals" className="text-vault-muted hover:text-white">Deals</Link>
-          <Link href="/pain" className="text-vault-muted hover:text-white">Pain Board</Link>
+          <Link href="/members" className="text-vault-gold border-b-2 border-vault-gold pb-1">Dashboard</Link>
+          <Link href="/deals/new" className="text-vault-muted hover:text-white">Post Deal</Link>
+          <Link href="/pain/new" className="text-vault-muted hover:text-white">Post Request</Link>
           <Link href="/profile" className="text-vault-muted hover:text-white">Profile</Link>
         </div>
       </nav>
 
-      <div className="bg-vault-gold text-black py-2 px-4 text-sm font-bold">
-        LIVE VAULT: {onlineCount || 0} MEMBERS ONLINE • {deals?.length || 0} NEW DEALS TODAY • {pains?.length || 0} ACTIVE PAIN POSTS
-      </div>
-
-      <div className="max-w-7xl mx-auto p-4 grid md:grid-cols-3 gap-6">
-        <div className="border border-vault-border bg-vault-bg">
-          <div className="border-b border-vault-gold p-4">
-            <h3 className="font-bold text-vault-gold">VAULT DEALS</h3>
-          </div>
-          <div className="p-4 space-y-4">
-            {deals?.length ? deals.map(d => (
-              <div key={d.id} className="border border-vault-border p-3">
-                <p className="font-bold">{d.title}</p>
-                <p className="text-vault-muted text-sm">{d.city}, {d.state}</p>
-                <p className="text-vault-gold">${d.fee_amount?.toLocaleString()} Fee</p>
-                <button className="w-full bg-vault-border hover:bg-[#27272A] mt-2 py-2 text-sm border border-vault-gold">
-                  DM SELLER
-                </button>
-              </div>
-            )) : <p className="text-vault-muted text-sm">VAULT QUIET — AWAITING FIRST DEAL</p>}
-          </div>
+      <div className="max-w-4xl mx-auto p-4 space-y-6">
+        <div className="border border-vault-gold bg-vault-bg p-6">
+          <h2 className="text-vault-gold font-bold text-xl mb-2">VAULT SECURED</h2>
+          <p className="text-vault-muted">Welcome, {member.full_name}</p>
+          <p className="text-sm">
+            Role: <span className="text-vault-gold">{member.role?.toUpperCase()}</span> | 
+            Status: <span className="text-vault-gold">{member.status === 'active_founder' ? ` FOUNDER #${member.founder_number}` : member.status === 'admin' ? ' ADMIN' : ' MEMBER'}</span>
+          </p>
         </div>
 
-        <div className="border border-vault-border bg-vault-bg">
-          <div className="border-b border-vault-red p-4">
-            <h3 className="font-bold text-vault-red">PAIN BOARD</h3>
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="border border-vault-border bg-vault-bg">
+            <div className="border-b border-vault-gold p-4">
+              <h3 className="font-bold text-vault-gold">YOUR DEALS</h3>
+            </div>
+            <div className="p-4 space-y-3">
+              {deals?.length ? deals.map(d => (
+                <div key={d.id} className="border border-vault-border p-3">
+                  <p className="font-bold">{d.title}</p>
+                  <p className="text-vault-muted text-sm">{d.city}, {d.state}</p>
+                  <p className="text-vault-gold">${d.fee_amount?.toLocaleString()} Fee</p>
+                </div>
+              )) : <p className="text-vault-muted text-sm">No deals posted yet</p>}
+              <Link href="/deals/new" className="block w-full bg-vault-gold hover:bg-vault-gold-hover text-black font-bold py-2 mt-4 text-center">
+                POST DEAL
+              </Link>
+            </div>
           </div>
-          <div className="p-4 space-y-4">
-            {pains?.length ? pains.map(p => (
-              <div key={p.id} className="border border-vault-border p-3">
-                <p className="font-bold">🚨 {p.title}</p>
-                <p className="text-vault-muted text-sm">{p.city}, {p.state}</p>
-                <button className="w-full bg-vault-border hover:bg-[#27272A] mt-2 py-2 text-sm border border-vault-red">
-                  CONTACT POSTER
-                </button>
-              </div>
-            )) : <p className="text-vault-muted text-sm">NO ACTIVE REQUESTS</p>}
-          </div>
-        </div>
 
-        <div className="border border-vault-border bg-vault-bg">
-          <div className="border-b border-vault-border p-4">
-            <h3 className="font-bold">INTEL FEED</h3>
-          </div>
-          <div className="p-4 text-sm text-vault-muted">
-            <p>Activity log renders here from vault_activity_log</p>
+          <div className="border border-vault-border bg-vault-bg">
+            <div className="border-b border-vault-red p-4">
+              <h3 className="font-bold text-vault-red">YOUR REQUESTS</h3>
+            </div>
+            <div className="p-4 space-y-3">
+              {pains?.length ? pains.map(p => (
+                <div key={p.id} className="border border-vault-border p-3">
+                  <p className="font-bold">🚨 {p.title}</p>
+                  <p className="text-vault-muted text-sm">{p.city}, {p.state}</p>
+                </div>
+              )) : <p className="text-vault-muted text-sm">No requests posted yet</p>}
+              <Link href="/pain/new" className="block w-full bg-vault-red hover:bg-red-700 text-white font-bold py-2 mt-4 text-center">
+                POST REQUEST
+              </Link>
+            </div>
           </div>
         </div>
       </div>
