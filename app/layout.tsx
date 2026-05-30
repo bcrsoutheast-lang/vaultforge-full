@@ -1,27 +1,18 @@
-import type { Metadata } from "next";
+import './globals.css'
 
-export const metadata: Metadata = {
-  title: "VaultForge",
-  description: "Private real estate deal routing network",
-};
+export const metadata = {
+  title: 'VaultForge',
+  description: 'Private routing for off-market deals',
+}
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <html lang="en">
-      <body
-        style={{
-          margin: 0,
-          background: "#0b0f17",
-          color: "#ffffff",
-          minHeight: "100vh",
-        }}
-      >
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
-  );
+  )
 }
