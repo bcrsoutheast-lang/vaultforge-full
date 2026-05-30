@@ -2,285 +2,217 @@
 
 import { useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-
-type PainForm = {
-  address: string
-  phone: string
-  motivation: string[]
-  timeline: string
-  drop_dead_price: string
-  arv: string
-  mortgage_balance: string
-  occupancy: string
-  condition: string
-  pain_level: string
-  notes: string
-}
+import { useRouter } from 'next/navigation'
 
 export default function PainIntake() {
-  const [form, setForm] = useState<PainForm>({
+  const [form, setForm] = useState({
     address: '',
     phone: '',
-    motivation: [],
+    motivation: '',
     timeline: '',
     drop_dead_price: '',
     arv: '',
     mortgage_balance: '',
     occupancy: '',
     condition: '',
-    pain_level: '',
     notes: ''
   })
-  
-  const [score, setScore] = useState<number | null>(null)
-  const [priority, setPriority] = useState<string>('')
+  const [loading, setLoading] = useState(false)
   const supabase = createClientComponentClient()
+  const router = useRouter()
 
-  const handleCheckbox = (value: string) => {
-    setForm(prev => ({
-      ...prev,
-      motivation: prev.motivation.includes(value) 
-        ? prev.motivation.filter(v => v !== value)
-        : [...prev.motivation, value]
-    }))
+  const calculatePainScore = () => {
+    let score = 0
+    const motivationMap: any = {
+      'divorce': 25,
+      'foreclosure': 30,
+      'job_loss': 20,
+      'relocating': 15,
+      'tired_landlord': 15,
+      'inheritance': 10,
+      'downsizing': 10,
+      'other': 5
+    }
+    const timelineMap: any = {
+      'asap': 25,
+      '30_days': 20,
+      '60_days': 15,
+      '90_days': 10,
+      'flexible': 5
+    }
+    const conditionMap: any = {
+      'fire_damage': 15,
+      'major_repairs': 12,
+      'outdated': 8,
+      'light_repairs': 5,
+      'move_in_ready': 0
+    }
+
+    score += motivationMap[form.motivation] || 0
+    score += timelineMap[form.timeline] || 0
+    score += conditionMap[form.condition] || 0
+
+    const arv = parseInt(form.arv) || 0
+    const ddp = parseInt(form.drop_dead_price) || 0
+    if (arv && ddp && ddp < arv * 0.7) score += 15
+    else if (arv && ddp && ddp < arv * 0.8) score += 10
+    else if (arv && ddp && ddp < arv * 0.9) score += 5
+
+    return Math.min(score, 100)
   }
 
-  // 6SIGMA PAIN ANALYZER - DMAIC scoring
-  const analyzePain = () => {
-    let total = 0
-    
-    // DEFINE: Motivation weight
-    const highPain = ['foreclosure', 'bankruptcy', 'divorce', 'behind_taxes']
-    const medPain = ['inherited', 'landlord', 'relocation', 'job_loss']
-    total += form.motivation.filter(m => highPain.includes(m)).length * 25
-    total += form.motivation.filter(m => medPain.includes(m)).length * 15
-    
-    // MEASURE: Timeline urgency
-    if (form.timeline === '7 days') total += 30
-    else if (form.timeline === '14 days') total += 20
-    else if (form.timeline === '30 days') total += 10
-    
-    // ANALYZE: Price delta %
-    const ddp = parseFloat(form.drop_dead_price) || 0
-    const arv = parseFloat(form.arv) || 0
-    if (ddp && arv) {
-      const discount = ((arv - ddp) / arv) * 100
-      if (discount >= 40) total += 25
-      else if (discount >= 30) total += 15
-      else if (discount >= 20) total += 10
-    }
-    
-    // IMPROVE: Condition factor
-    if (form.condition === 'needs_full_rehab') total += 10
-    if (form.occupancy === 'vacant') total += 10
-    if (form.occupancy === 'tenant_not_paying') total += 15
-    
-    // CONTROL: Set priority
-    setScore(total)
-    if (total >= 80) setPriority('CRITICAL - Call Now')
-    else if (total >= 60) setPriority('HOT - Same Day')
-    else if (total >= 40) setPriority('WARM - 48hrs')
-    else setPriority('COLD - Nurture')
-    
-    return total
+  const getPriority = (score: number) => {
+    if (score >= 80) return 'CRITICAL'
+    if (score >= 60) return 'HOT'
+    if (score >= 40) return 'WARM'
+    return 'COLD'
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const painScore = analyzePain()
+    setLoading(true)
     
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('pain_intake').insert({
+    if (!user) return
+
+    const pain_score = calculatePainScore()
+    const priority = getPriority(pain_score)
+
+    const { error } = await supabase.from('pain_intake').insert({
+      user_id: user.id,
       ...form,
-      motivation: form.motivation.join(','),
-      user_id: user?.id,
-      pain_score: painScore,
-      priority,
-      created_at: new Date().toISOString()
+      pain_score,
+      priority
     })
-    
-    alert(`Saved. Pain Score: ${painScore} | Priority: ${priority}`)
+
+    setLoading(false)
+    if (!error) router.push('/pain-room')
   }
+
+  const inputClass = "w-full p-3 bg-zinc-800 border border-zinc-700 text-white focus:border-red-500 outline-none"
 
   return (
     <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2 text-red-500">6SIGMA PAIN INTAKE</h1>
-        <p className="text-zinc-500 mb-8 text-xs uppercase">Define → Measure → Analyze → Improve → Control</p>
-
-        <form onSubmit={handleSubmit} className="bg-zinc-900 border border-zinc-800 p-6">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8">Pain Intake</h1>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input 
+            placeholder="Property Address" 
+            value={form.address}
+            onChange={e => setForm({...form, address: e.target.value})}
+            className={inputClass}
+            required
+          />
           
-          <div className="mb-6">
-            <label className="block text-xs uppercase text-zinc-500 mb-2">Property Address *</label>
-            <input 
-              value={form.address} 
-              onChange={e => setForm({...form, address: e.target.value})}
-              className="w-full p-3 bg-zinc-800 border border-zinc-700 text-white" 
-              required 
-            />
-          </div>
+          <input 
+            placeholder="Phone Number" 
+            value={form.phone}
+            onChange={e => setForm({...form, phone: e.target.value})}
+            className={inputClass}
+            required
+          />
 
-          <div className="mb-6">
-            <label className="block text-xs uppercase text-zinc-500 mb-2">Seller Phone *</label>
-            <input 
-              value={form.phone} 
-              onChange={e => setForm({...form, phone: e.target.value})}
-              className="w-full p-3 bg-zinc-800 border border-zinc-700" 
-              required 
-            />
-          </div>
+          <select 
+            value={form.motivation}
+            onChange={e => setForm({...form, motivation: e.target.value})}
+            className={inputClass}
+            required
+          >
+            <option value="">Seller Motivation</option>
+            <option value="foreclosure">Foreclosure</option>
+            <option value="divorce">Divorce</option>
+            <option value="job_loss">Job Loss</option>
+            <option value="relocating">Relocating</option>
+            <option value="tired_landlord">Tired Landlord</option>
+            <option value="inheritance">Inheritance</option>
+            <option value="downsizing">Downsizing</option>
+            <option value="other">Other</option>
+          </select>
 
-          <div className="mb-6">
-            <label className="block text-xs uppercase text-red-500 mb-3">MOTIVATION FACTORS [DEFINE]</label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ['foreclosure', 'Foreclosure'],
-                ['bankruptcy', 'Bankruptcy'],
-                ['divorce', 'Divorce'],
-                ['behind_taxes', 'Behind on Taxes'],
-                ['inherited', 'Inherited'],
-                ['landlord', 'Tired Landlord'],
-                ['relocation', 'Job Relocation'],
-                ['job_loss', 'Job Loss']
-              ].map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 p-2 bg-zinc-800 border border-zinc-700 hover:border-red-500/50 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={form.motivation.includes(key)}
-                    onChange={() => handleCheckbox(key)}
-                    className="accent-red-500"
-                  />
-                  <span className="text-sm">{label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <select 
+            value={form.timeline}
+            onChange={e => setForm({...form, timeline: e.target.value})}
+            className={inputClass}
+            required
+          >
+            <option value="">Timeline to Close</option>
+            <option value="asap">ASAP</option>
+            <option value="30_days">30 Days</option>
+            <option value="60_days">60 Days</option>
+            <option value="90_days">90 Days</option>
+            <option value="flexible">Flexible</option>
+          </select>
 
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block text-xs uppercase text-zinc-500 mb-2">Timeline [MEASURE]</label>
-              <select 
-                value={form.timeline} 
-                onChange={e => setForm({...form, timeline: e.target.value})}
-                className="w-full p-3 bg-zinc-800 border border-zinc-700"
-                required
-              >
-                <option value="">Select urgency</option>
-                <option value="7 days">7 Days - Critical</option>
-                <option value="14 days">14 Days - Hot</option>
-                <option value="30 days">30 Days - Warm</option>
-                <option value="60+ days">60+ Days - Cold</option>
-              </select>
-            </div>
+          <input 
+            placeholder="Drop Dead Price" 
+            type="number"
+            value={form.drop_dead_price}
+            onChange={e => setForm({...form, drop_dead_price: e.target.value})}
+            className={inputClass}
+            required
+          />
 
-            <div>
-              <label className="block text-xs uppercase text-zinc-500 mb-2">Occupancy</label>
-              <select 
-                value={form.occupancy} 
-                onChange={e => setForm({...form, occupancy: e.target.value})}
-                className="w-full p-3 bg-zinc-800 border border-zinc-700"
-              >
-                <option value="">Select status</option>
-                <option value="owner">Owner Occupied</option>
-                <option value="tenant_paying">Tenant - Paying</option>
-                <option value="tenant_not_paying">Tenant - Not Paying</option>
-                <option value="vacant">Vacant</option>
-              </select>
-            </div>
-          </div>
+          <input 
+            placeholder="ARV" 
+            type="number"
+            value={form.arv}
+            onChange={e => setForm({...form, arv: e.target.value})}
+            className={inputClass}
+            required
+          />
 
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div>
-              <label className="block text-xs uppercase text-zinc-500 mb-2">Drop Dead Price [ANALYZE]</label>
-              <input 
-                type="number"
-                value={form.drop_dead_price} 
-                onChange={e => setForm({...form, drop_dead_price: e.target.value})}
-                className="w-full p-3 bg-zinc-800 border border-zinc-700" 
-                placeholder="Lowest"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs uppercase text-zinc-500 mb-2">ARV</label>
-              <input 
-                type="number"
-                value={form.arv} 
-                onChange={e => setForm({...form, arv: e.target.value})}
-                className="w-full p-3 bg-zinc-800 border border-zinc-700" 
-                placeholder="After Repair"
-              />
-            </div>
-            <div>
-              <label className="block text-xs uppercase text-zinc-500 mb-2">Mortgage Balance</label>
-              <input 
-                type="number"
-                value={form.mortgage_balance} 
-                onChange={e => setForm({...form, mortgage_balance: e.target.value})}
-                className="w-full p-3 bg-zinc-800 border border-zinc-700" 
-                placeholder="Owed"
-              />
-            </div>
-          </div>
+          <input 
+            placeholder="Mortgage Balance" 
+            type="number"
+            value={form.mortgage_balance}
+            onChange={e => setForm({...form, mortgage_balance: e.target.value})}
+            className={inputClass}
+          />
 
-          <div className="mb-6">
-            <label className="block text-xs uppercase text-zinc-500 mb-2">Property Condition [IMPROVE]</label>
-            <select 
-              value={form.condition} 
-              onChange={e => setForm({...form, condition: e.target.value})}
-              className="w-full p-3 bg-zinc-800 border border-zinc-700"
-            >
-              <option value="">Select condition</option>
-              <option value="turnkey">Turnkey</option>
-              <option value="light_rehab">Light Rehab Needed</option>
-              <option value="needs_full_rehab">Full Rehab Needed</option>
-              <option value="tear_down">Tear Down</option>
-            </select>
-          </div>
+          <select 
+            value={form.occupancy}
+            onChange={e => setForm({...form, occupancy: e.target.value})}
+            className={inputClass}
+          >
+            <option value="">Occupancy</option>
+            <option value="owner_occupied">Owner Occupied</option>
+            <option value="tenant_occupied">Tenant Occupied</option>
+            <option value="vacant">Vacant</option>
+          </select>
 
-          <div className="mb-6">
-            <label className="block text-xs uppercase text-zinc-500 mb-2">Notes / Pain Point</label>
-            <textarea 
-              value={form.notes} 
-              onChange={e => setForm({...form, notes: e.target.value})}
-              className="w-full p-3 bg-zinc-800 border border-zinc-700" 
-              rows={3}
-              placeholder="Seller's exact words on why they must sell..."
-            />
-          </div>
+          <select 
+            value={form.condition}
+            onChange={e => setForm({...form, condition: e.target.value})}
+            className={inputClass}
+            required
+          >
+            <option value="">Property Condition</option>
+            <option value="fire_damage">Fire Damage</option>
+            <option value="major_repairs">Major Repairs Needed</option>
+            <option value="outdated">Outdated</option>
+            <option value="light_repairs">Light Repairs</option>
+            <option value="move_in_ready">Move In Ready</option>
+          </select>
 
-          {score !== null && (
-            <div className={`mb-6 p-4 border-2 ${
-              score >= 80 ? 'border-red-500 bg-red-950/30' :
-              score >= 60 ? 'border-amber-500 bg-amber-950/30' :
-              score >= 40 ? 'border-yellow-500 bg-yellow-950/30' :
-              'border-zinc-700 bg-zinc-800'
-            }`}>
-              <div className="flex justify-between items-center">
-                <span className="text-xs uppercase text-zinc-400">6SIGMA ANALYSIS [CONTROL]</span>
-                <span className="text-2xl font-bold">{score}</span>
-              </div>
-              <div className={`text-lg font-bold mt-1 ${
-                score >= 80 ? 'text-red-500' :
-                score >= 60 ? 'text-amber-500' :
-                score >= 40 ? 'text-yellow-500' : 'text-zinc-400'
-              }`}>{priority}</div>
-            </div>
-          )}
+          <textarea 
+            placeholder="Notes" 
+            value={form.notes}
+            onChange={e => setForm({...form, notes: e.target.value})}
+            className={inputClass}
+            rows={3}
+          />
 
-          <div className="flex gap-2">
-            <button 
-              type="button"
-              onClick={analyzePain}
-              className="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs uppercase"
-            >
-              Analyze Pain
-            </button>
+          <div className="pt-4">
+            <div className="text-sm text-zinc-500 mb-2">Calculated Pain Score: <span className="text-red-500 font-bold">{calculatePainScore()}</span></div>
+            <div className="text-sm text-zinc-500 mb-4">Priority: <span className="text-red-500 font-bold">{getPriority(calculatePainScore())}</span></div>
+            
             <button 
               type="submit"
-              className="flex-1 py-3 bg-red-600 hover:bg-red-700 border border-red-500 text-white uppercase text-sm font-bold"
+              disabled={loading}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 border border-red-500 text-white uppercase font-bold disabled:opacity-50"
             >
-              Save to Deal Room
+              {loading ? 'Submitting...' : 'Submit Lead'}
             </button>
           </div>
         </form>
