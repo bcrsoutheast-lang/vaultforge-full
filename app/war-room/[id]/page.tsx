@@ -1,21 +1,17 @@
 // @ts-nocheck
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import Image from 'next/image'
 
-export default function WarRoomPage() {
+export default function RSVPPage() {
   const { id } = useParams()
   const router = useRouter()
+  const [status, setStatus] = useState(null)
   const [room, setRoom] = useState(null)
-  const [bids, setBids] = useState([])
-  const [timeLeft, setTimeLeft] = useState(0)
-  const [bidAmount, setBidAmount] = useState('')
-  const [stats, setStats] = useState(null)
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const bidEndRef = useRef(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,238 +19,117 @@ export default function WarRoomPage() {
   )
 
   useEffect(() => {
-    loadRoom()
-    loadUser()
-    const interval = setInterval(tick, 1000)
-    return () => clearInterval(interval)
+    loadData()
   }, [id])
 
-  useEffect(() => {
-    if (!room?.id) return
-    const channel = supabase.channel(`war_room_${room.id}`)
-   .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'war_room_bids', filter: `war_room_id=eq.${room.id}` },
-        payload => {
-          setBids(prev => [...prev, payload.new])
-          bidEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-        }
-      )
-   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'war_rooms', filter: `id=eq.${room.id}` },
-        payload => setRoom(payload.new)
-      )
-   .subscribe()
-    return () => supabase.removeChannel(channel)
-  }, [room?.id])
-
-  const loadUser = async () => {
+  const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     setUser(user)
-  }
 
-  const loadRoom = async () => {
-    const { data: roomData } = await supabase.from('war_rooms')
-   .select('*, deals(*)').eq('id', id).single()
-    const { data: bidData } = await supabase.from('war_room_bids')
-   .select('*, users:auth.users(email)').eq('war_room_id', id).order('created_at', { ascending: true })
-    const { data: statsData } = await supabase.rpc('get_war_room_stats', { room_id: id })
+    const { data: roomData } = await supabase
+    .from('war_rooms')
+    .select('*, deals(address, scheduled_for)')
+    .eq('id', id)
+    .single()
 
     setRoom(roomData)
-    setBids(bidData || [])
-    setStats(statsData)
     setLoading(false)
   }
 
-  const tick = () => {
-    if (!room?.ends_at) return
-    const remaining = Math.max(0, Math.floor((new Date(room.ends_at).getTime() - Date.now()) / 1000))
-    setTimeLeft(remaining)
-    if (remaining === 0 && room.status === 'live') endAuction()
+  const rsvp = async (answer) => {
+    if (!user) {
+      alert('Please sign in first')
+      return
+    }
+
+    await supabase.from('war_room_invites')
+    .update({
+        status: answer,
+        responded_at: new Date().toISOString(),
+        rsvp_ip: await fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => d.ip)
+      })
+    .eq('war_room_id', id)
+    .eq('user_id', user.id)
+
+    setStatus(answer)
   }
 
-  const placeBid = async () => {
-    if (!user) return alert('Sign in to bid')
-    const amount = parseInt(bidAmount)
-    if (amount <= (room.current_price || room.starting_price)) return alert('Bid must be higher than current')
-
-    await supabase.from('war_room_bids').insert({
-      war_room_id: id,
-      user_id: user.id,
-      amount
-    })
-    setBidAmount('')
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-amber-500 font-mono">LOADING...</div>
+      </div>
+    )
   }
 
-  const endAuction = async () => {
-    await fetch('/api/war-room/end', {
-      method: 'POST',
-      body: JSON.stringify({ war_room_id: id })
-    })
-  }
-
-  if (loading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-amber-500 font-mono">LOADING WAR ROOM...</div>
-  if (!room) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-red-500 font-mono">ROOM NOT FOUND</div>
-
-  const isLive = room.status === 'live'
-  const isEnded = ['completed', 'unsold', 'cancelled'].includes(room.status)
-  const highBid = bids[bids.length - 1]?.amount || room.starting_price
-  const minutes = Math.floor(timeLeft / 60)
-  const seconds = timeLeft % 60
-
-  return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-mono">
-      {/* HEADER - Bloomberg Military */}
-      <div className="border-b border-zinc-800 bg-black">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Image src="/IMG_4751.png" alt="VaultForge" width={40} height={40} className="rounded" />
-            <div>
-              <div className="text-xs text-amber-500 tracking-widest">VAULTFORGE WAR ROOM</div>
-              <div className="text-lg font-bold tracking-tight">{room.deals?.address?.toUpperCase()}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <div className="text-xs text-zinc-500">STATUS</div>
-              <div className={`text-sm font-bold ${isLive? 'text-green-500 animate-pulse' : 'text-zinc-400'}`}>
-                {room.status.toUpperCase()}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-zinc-500">BIDDERS</div>
-              <div className="text-sm font-bold text-amber-500">{stats?.unique_bidders || 0}</div>
-            </div>
+  if (status === 'confirmed') {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4">✅</div>
+          <h1 className="text-2xl font-bold font-mono mb-2">YOU'RE IN</h1>
+          <p className="text-zinc-400 mb-6">War Room: {room?.deals?.address}</p>
+          <div className="bg-black border border-green-800 rounded p-4 text-sm">
+            <div className="text-green-500 font-mono mb-2">CONFIRMED</div>
+            <div className="text-zinc-400">You’ll get a text 10min before start.</div>
+            <div className="text-zinc-600 mt-2 text-xs">Winner pays 15% deposit via Stripe if reserve met.</div>
           </div>
         </div>
       </div>
+    )
+  }
 
-      <div className="max-w-7xl mx-auto p-4 grid grid-cols-12 gap-4">
+  if (status === 'declined') {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4">❌</div>
+          <h1 className="text-2xl font-bold font-mono mb-2">MAYBE NEXT TIME</h1>
+          <p className="text-zinc-400">We’ll hit you for the next one.</p>
+        </div>
+      </div>
+    )
+  }
 
-        {/* LEFT: DEAL INTEL */}
-        <div className="col-span-3 space-y-4">
-          <div className="bg-black border border-zinc-800 rounded p-4">
-            <div className="text-xs text-zinc-500 mb-2">DEAL INTEL</div>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between border-b border-zinc-900 pb-2">
-                <span className="text-zinc-500">ARV</span>
-                <span className="font-bold">${room.deals?.arv?.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between border-b border-zinc-900 pb-2">
-                <span className="text-zinc-500">REPAIRS</span>
-                <span className="font-bold">${room.deals?.repairs?.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between border-b border-zinc-900 pb-2">
-                <span className="text-zinc-500">RESERVE</span>
-                <span className="font-bold text-amber-500">${room.deals?.reserve_price?.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500">MIN ASSIGN</span>
-                <span className="font-bold">${room.deals?.minimum_assignment?.toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-black border border-zinc-800 rounded p-4">
-            <div className="text-xs text-zinc-500 mb-2">AUCTION RULES</div>
-            <div className="text-xs text-zinc-400 space-y-1">
-              <div>• 2% fee if SOLD</div>
-              <div>• $150 fee if UNSOLD</div>
-              <div>• 15% deposit due on win</div>
-              <div>• 2min extension on bid</div>
-            </div>
-          </div>
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-black border border-amber-800 rounded-xl p-8">
+        <div className="text-center mb-6">
+          <Image src="/IMG_4751.png" alt="VaultForge" width={60} height={60} className="mx-auto mb-4 rounded" />
+          <div className="text-amber-500 font-mono text-sm tracking-widest">🔴 WAR ROOM INVITE</div>
+          <h1 className="text-2xl font-bold mt-2">{room?.deals?.address}</h1>
+          <p className="text-zinc-400 mt-1">
+            {room?.scheduled_for? new Date(room.scheduled_for).toLocaleString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit'
+            }) : 'TBD'}
+          </p>
+          <p className="text-zinc-500 text-sm">15 minute live auction</p>
         </div>
 
-        {/* CENTER: BIDDING TERMINAL */}
-        <div className="col-span-6 space-y-4">
-          {/* TIMER */}
-          <div className="bg-black border-2 border-amber-600 rounded p-6 text-center">
-            <div className="text-xs text-zinc-500 mb-1">TIME REMAINING</div>
-            <div className={`text-6xl font-bold tracking-tighter ${timeLeft < 60? 'text-red-500 animate-pulse' : 'text-amber-500'}`}>
-              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-            </div>
-          </div>
-
-          {/* CURRENT BID */}
-          <div className="bg-black border border-zinc-800 rounded p-6 text-center">
-            <div className="text-xs text-zinc-500 mb-1">CURRENT HIGH BID</div>
-            <div className="text-5xl font-bold text-green-500 tracking-tight">
-              ${highBid.toLocaleString()}
-            </div>
-            <div className="text-xs text-zinc-600 mt-2">
-              {bids.length} BIDS | START: ${room.starting_price.toLocaleString()}
-            </div>
-          </div>
-
-          {/* BID INPUT */}
-          {isLive && (
-            <div className="bg-black border border-zinc-800 rounded p-4">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <div className="text-xs text-zinc-500 mb-1">YOUR BID</div>
-                  <input
-                    type="number"
-                    value={bidAmount}
-                    onChange={e => setBidAmount(e.target.value)}
-                    placeholder={String(highBid + 1000)}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 text-2xl font-bold text-green-500 focus:border-amber-500 outline-none"
-                  />
-                </div>
-                <button
-                  onClick={placeBid}
-                  disabled={!bidAmount || parseInt(bidAmount) <= highBid}
-                  className="bg-amber-600 hover:bg-amber-700 disabled:bg-zinc-800 disabled:text-zinc-600 px-8 rounded font-bold text-lg"
-                >
-                  BID
-                </button>
-              </div>
-              <div className="flex gap-2 mt-2">
-                {[1000, 2500, 5000].map(inc => (
-                  <button key={inc} onClick={() => setBidAmount(String(highBid + inc))}
-                    className="flex-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded py-2 text-xs">
-                    +${inc.toLocaleString()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {isEnded && (
-            <div className="bg-black border-2 border-zinc-700 rounded p-8 text-center">
-              <div className="text-2xl font-bold mb-2">
-                {room.status === 'completed'? '🔨 SOLD' : room.status === 'unsold'? '❌ UNSOLD' : 'CANCELLED'}
-              </div>
-              {room.status === 'completed' && (
-                <div className="text-zinc-400">Winner: {bids[bids.length-1]?.users?.email?.split('@')[0]} @ ${room.final_price?.toLocaleString()}</div>
-              )}
-              {room.status === 'unsold' && (
-                <div className="text-zinc-400">Reserve not met. Seller charged $150 listing fee.</div>
-              )}
-            </div>
-          )}
+        <div className="space-y-3">
+          <button
+            onClick={() => rsvp('confirmed')}
+            className="w-full py-4 bg-green-600 hover:bg-green-700 rounded-lg font-bold text-lg font-mono transition-colors"
+          >
+            YES, I'M IN
+          </button>
+          <button
+            onClick={() => rsvp('declined')}
+            className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-mono transition-colors"
+          >
+            Can't make it
+          </button>
         </div>
 
-        {/* RIGHT: BID TAPE */}
-        <div className="col-span-3">
-          <div className="bg-black border border-zinc-800 rounded h-[calc(100vh-140px)] flex flex-col">
-            <div className="border-b border-zinc-800 p-3">
-              <div className="text-xs text-amber-500 tracking-widest">LIVE BID TAPE</div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {bids.slice().reverse().map((bid, i) => (
-                <div key={bid.id} className={`text-xs p-2 rounded ${i === 0? 'bg-green-950 border border-green-800' : 'bg-zinc-950'}`}>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">{new Date(bid.created_at).toLocaleTimeString()}</span>
-                    <span className={`font-bold ${i === 0? 'text-green-500' : 'text-zinc-300'}`}>
-                      ${bid.amount.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="text-zinc-600 truncate">{bid.users?.email?.split('@')[0] || 'Anon'}</div>
-                </div>
-              ))}
-              <div ref={bidEndRef} />
-            </div>
-          </div>
+        <div className="mt-6 pt-6 border-t border-zinc-800">
+          <p className="text-xs text-zinc-600 text-center font-mono">
+            By confirming, you agree to War Room Terms. If you win: 15% non-refundable deposit due instantly. If UNSOLD: seller pays $150 listing fee.
+          </p>
         </div>
-
       </div>
     </div>
   )
