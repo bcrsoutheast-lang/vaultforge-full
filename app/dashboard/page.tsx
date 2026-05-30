@@ -1,76 +1,93 @@
-"use client";
+'use client'
+import { createClient } from '@/utils/supabase/client'
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 
 export default function Dashboard() {
-  const router = useRouter()
   const [user, setUser] = useState<any>(null)
-  const [counts, setCounts] = useState({ saved: 0, archived: 0, deleted: 0 })
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const [stats, setStats] = useState({ deals: 0, pain: 0, members: 0 })
+  const router = useRouter()
+  const supabase = createClient()
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user || !data.user.email) router.push('/login')
-      else {
-        setUser(data.user)
-        fetchCounts(data.user.email)
-      }
-    })
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return router.push('/login')
+      setUser(user)
+      
+      // Get counts for stats
+      const { count: deals } = await supabase.from('deals').select('*', { count: 'exact', head: true })
+      const { count: members } = await supabase.from('vault_members').select('*', { count: 'exact', head: true })
+      setStats({ deals: deals || 0, pain: 0, members: members || 0 })
+    }
+    getUser()
   }, [])
 
-  const fetchCounts = async (email: string) => {
-    const [saved, archived, deleted] = await Promise.all([
-      supabase.from('deals').select('id', { count: 'exact' }).eq('user_email', email).eq('status', 'saved'),
-      supabase.from('deals').select('id', { count: 'exact' }).eq('user_email', email).eq('status', 'archived'),
-      supabase.from('deals').select('id', { count: 'exact' }).eq('user_email', email).eq('status', 'deleted')
-    ])
-    setCounts({
-      saved: saved.count || 0,
-      archived: archived.count || 0,
-      deleted: deleted.count || 0
-    })
-  }
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
-  if (!user) return null
-
-  const cardStyle = { border: '1px solid #FFD700', background: '#111', padding: '24px', cursor: 'pointer', textAlign: 'center' as const }
-
   return (
-    <div style={{ background: '#000', minHeight: '100vh', color: '#E5E5E5', padding: '24px' }}>
-      <header style={{ borderBottom: '1px solid #FFD700', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Image src="/IMG_4751.png" alt="VaultForge" width={40} height={40} style={{ objectFit: 'contain' }} />
+    <div className="min-h-screen bg-zinc-950 text-white">
+      {/* Header */}
+      <div className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
-            <div style={{ color: '#FFD700', fontSize: '24px', fontWeight: '900', letterSpacing: '2px' }}>COMMAND CENTER</div>
-            <div style={{ color: '#666', fontSize: '11px', letterSpacing: '2px' }}>PRIVATE INVESTOR ARCHITECTURE</div>
+            <h1 className="text-2xl font-bold tracking-tight">VAULTFORGE</h1>
+            <p className="text-sm text-zinc-400">Private Deal Network</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-zinc-300">{user?.email}</span>
+            <button 
+              onClick={() => supabase.auth.signOut()}
+              className="px-4 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 rounded-md transition"
+            >
+              Logout
+            </button>
           </div>
         </div>
-        <button onClick={handleSignOut} style={{ border: '1px solid #FF6B6B', background: 'transparent', color: '#FF6B6B', padding: '10px 20px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>EXIT VAULT</button>
-      </header>
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
-        <div onClick={() => router.push('/deals/saved')} style={cardStyle}>
-          <div style={{ color: '#FFD700', fontSize: '36px', fontWeight: '900', marginBottom: '8px' }}>{counts.saved}</div>
-          <div style={{ fontSize: '12px', letterSpacing: '2px' }}>SAVED DEALS</div>
+      {/* Dashboard */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <h2 className="text-3xl font-bold mb-8">VAULT DASHBOARD</h2>
+        
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+            <p className="text-zinc-400 text-sm">DEAL ROOM</p>
+            <p className="text-3xl font-bold mt-2">{stats.deals}</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+            <p className="text-zinc-400 text-sm">PAIN ROOM</p>
+            <p className="text-3xl font-bold mt-2">{stats.pain}</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+            <p className="text-zinc-400 text-sm">MESSAGES</p>
+            <p className="text-3xl font-bold mt-2">0</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+            <p className="text-zinc-400 text-sm">MEMBERS</p>
+            <p className="text-3xl font-bold mt-2">{stats.members}</p>
+          </div>
         </div>
-        <div onClick={() => router.push('/deals/archive')} style={cardStyle}>
-          <div style={{ color: '#FFD700', fontSize: '36px', fontWeight: '900', marginBottom: '8px' }}>{counts.archived}</div>
-          <div style={{ fontSize: '12px', letterSpacing: '2px' }}>DEAL ARCHIVE</div>
-        </div>
-        <div onClick={() => router.push('/deals/deleted')} style={cardStyle}>
-          <div style={{ color: '#FFD700', fontSize: '36px', fontWeight: '900', marginBottom: '8px' }}>{counts.deleted}</div>
-          <div style={{ fontSize: '12px', letterSpacing: '2px' }}>RECYCLE BIN</div>
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-3">
+          <button 
+            onClick={() => router.push('/post-deal')}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-md font-medium transition"
+          >
+            + ADD NEW DEAL
+          </button>
+          <button 
+            onClick={() => router.push('/post-pain')}
+            className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-md font-medium transition"
+          >
+            + ADD PAIN DEAL
+          </button>
+          <button 
+            onClick={() => router.push('/directory')}
+            className="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-md font-medium transition border border-zinc-700"
+          >
+            MEMBER DIRECTORY
+          </button>
         </div>
       </div>
     </div>
