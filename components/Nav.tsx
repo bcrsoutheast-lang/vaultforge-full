@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -71,7 +71,7 @@ export default function Nav() {
                 <Link href="/members" className="text-zinc-400 hover:text-red-500 uppercase">
                   Members
                 </Link>
-                <Link href="/deal-room/new" className="text-zinc-400 hover:text-red-500 uppercase">
+                <Link href="/post-deal" className="text-zinc-400 hover:text-red-500 uppercase">
                   Post Deal
                 </Link>
               </div>
