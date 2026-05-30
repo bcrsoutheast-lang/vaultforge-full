@@ -15,12 +15,14 @@ type Deal = {
   profit: number
   mao: number
   photos: string[]
-  status: 'LIVE' | 'UNDER CONTRACT' | 'CLOSED'
+  status: 'LIVE' | 'UNDER CONTRACT' | 'CLOSED' | 'ARCHIVED'
   postedDate: string
   sellerName: string
   sellerPhone: string
+  sellerEmail: string
   inspectionDays: number
   closeDate: string
+  saved: boolean
 }
 
 export default function DealRoom() {
@@ -28,14 +30,13 @@ export default function DealRoom() {
   const [deals, setDeals] = useState<Deal[]>([])
   const [filterType, setFilterType] = useState('ALL')
   const [filterState, setFilterState] = useState('ALL')
+  const [viewMode, setViewMode] = useState<'LIVE' | 'SAVED' | 'ARCHIVED'>('LIVE')
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
   const [loading, setLoading] = useState(true)
+  const [toast, setToast] = useState('')
 
   useEffect(() => {
     // TODO: Replace with Supabase fetch
-    // const { data } = await supabase.from('deals').select().eq('status', 'LIVE')
-    
-    // MOCK DATA FOR NOW:
     setDeals([
       {
         id: 'VF-A4F9K2',
@@ -54,8 +55,10 @@ export default function DealRoom() {
         postedDate: '2026-05-30',
         sellerName: 'VaultForge Ops',
         sellerPhone: '404-555-0100',
+        sellerEmail: 'ops@vaultforge.com',
         inspectionDays: 10,
-        closeDate: '2026-06-20'
+        closeDate: '2026-06-20',
+        saved: false
       },
       {
         id: 'VF-B7H3L9',
@@ -74,17 +77,51 @@ export default function DealRoom() {
         postedDate: '2026-05-29',
         sellerName: 'VaultForge Ops',
         sellerPhone: '404-555-0100',
+        sellerEmail: 'ops@vaultforge.com',
         inspectionDays: 7,
-        closeDate: '2026-06-15'
+        closeDate: '2026-06-15',
+        saved: true
       }
     ])
     setLoading(false)
   }, [])
 
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  const handleSave = (dealId: string) => {
+    setDeals(deals.map(d => d.id === dealId? {...d, saved:!d.saved} : d))
+    showToast(deals.find(d => d.id === dealId)?.saved? 'DEAL UNSAVED' : 'DEAL SAVED')
+  }
+
+  const handleArchive = (dealId: string) => {
+    setDeals(deals.map(d => d.id === dealId? {...d, status: 'ARCHIVED'} : d))
+    showToast('DEAL ARCHIVED')
+    setSelectedDeal(null)
+  }
+
+  const handleDelete = (dealId: string) => {
+    if (!confirm('DELETE DEAL? This cannot be undone.')) return
+    setDeals(deals.filter(d => d.id!== dealId))
+    showToast('DEAL DELETED')
+    setSelectedDeal(null)
+  }
+
+  const handleMessageSeller = (deal: Deal) => {
+    // TODO: Wire to messaging system
+    window.location.href = `mailto:${deal.sellerEmail}?subject=Re: ${deal.id} - ${deal.title}`
+    showToast('OPENING EMAIL CLIENT')
+  }
+
   const filteredDeals = deals.filter(d => {
-    if (filterType !== 'ALL' && d.dealType !== filterType) return false
-    if (filterState !== 'ALL' && d.state !== filterState) return false
-    return d.status === 'LIVE'
+    if (viewMode === 'LIVE' && d.status!== 'LIVE') return false
+    if (viewMode === 'SAVED' &&!d.saved) return false
+    if (viewMode === 'ARCHIVED' && d.status!== 'ARCHIVED') return false
+    if (filterType!== 'ALL' && d.dealType!== filterType) return false
+    if (filterState!== 'ALL' && d.state!== filterState) return false
+    return true
   })
 
   const dealTypes = ['ALL', 'Wholesale', 'Subject-To', 'Note Sale', 'Novation', 'Fix & Flip']
@@ -92,6 +129,14 @@ export default function DealRoom() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-zinc-100 font-sans">
+      
+      {/* TOAST */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-900/90 border border-emerald-600 px-4 py-2 font-mono text-xs">
+          {toast}
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto p-6">
         
         {/* HEADER */}
@@ -99,15 +144,46 @@ export default function DealRoom() {
           <div className="flex justify-between items-end">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">VAULTFORGE // DEAL ROOM</h1>
-              <p className="text-sm text-zinc-500 mt-1">LIVE DEALS // ANALYZER VERIFIED // {filteredDeals.length} OPPORTUNITIES</p>
+              <p className="text-sm text-zinc-500 mt-1">
+                {viewMode} DEALS // ANALYZER VERIFIED // {filteredDeals.length} OPPORTUNITIES
+              </p>
             </div>
-            <button 
-              onClick={() => router.push('/post-deal')}
-              className="bg-emerald-600 hover:bg-emerald-500 text-black px-4 py-2 text-sm font-bold"
-            >
-              + POST DEAL
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => router.push('/')}
+                className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2 text-xs font-mono"
+              >
+                ← COMMAND CENTER
+              </button>
+              <button 
+                onClick={() => router.push('/post-deal')}
+                className="bg-emerald-600 hover:bg-emerald-500 text-black px-4 py-2 text-sm font-bold"
+              >
+                + POST DEAL
+              </button>
+            </div>
           </div>
+        </div>
+
+        {/* VIEW TABS */}
+        <div className="flex gap-2 mb-4">
+          {(['LIVE', 'SAVED', 'ARCHIVED'] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-4 py-2 text-xs font-mono border ${
+                viewMode === mode 
+                 ? 'bg-emerald-600 text-black border-emerald-600' 
+                  : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700'
+              }`}
+            >
+              {mode} ({deals.filter(d => 
+                mode === 'LIVE'? d.status === 'LIVE' : 
+                mode === 'SAVED'? d.saved : 
+                d.status === 'ARCHIVED'
+              ).length})
+            </button>
+          ))}
         </div>
 
         {/* FILTERS */}
@@ -137,43 +213,45 @@ export default function DealRoom() {
             <div className="ml-auto text-right">
               <div className="text-xs text-zinc-500">AVG PROFIT</div>
               <div className="text-lg font-mono text-emerald-400">
-                ${filteredDeals.length > 0 ? Math.round(filteredDeals.reduce((sum, d) => sum + d.profit, 0) / filteredDeals.length).toLocaleString() : 0}
+                ${filteredDeals.length > 0? Math.round(filteredDeals.reduce((sum, d) => sum + d.profit, 0) / filteredDeals.length).toLocaleString() : 0}
               </div>
             </div>
           </div>
         </div>
 
         {/* DEAL GRID */}
-        {loading ? (
+        {loading? (
           <div className="text-center py-20 text-zinc-500 font-mono text-sm">LOADING DEAL FLOW...</div>
-        ) : filteredDeals.length === 0 ? (
+        ) : filteredDeals.length === 0? (
           <div className="bg-zinc-900 border border-zinc-800 p-12 text-center">
-            <div className="text-zinc-500 text-sm mb-4">NO LIVE DEALS MATCH FILTERS</div>
-            <button 
-              onClick={() => router.push('/post-deal')}
-              className="bg-emerald-600 hover:bg-emerald-500 text-black px-4 py-2 text-xs font-bold"
-            >
-              POST FIRST DEAL
-            </button>
+            <div className="text-zinc-500 text-sm mb-4">NO {viewMode} DEALS</div>
+            {viewMode === 'LIVE' && (
+              <button onClick={() => router.push('/post-deal')}
+                className="bg-emerald-600 hover:bg-emerald-500 text-black px-4 py-2 text-xs font-bold">
+                POST FIRST DEAL
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredDeals.map(deal => (
-              <div 
-                key={deal.id}
-                onClick={() => setSelectedDeal(deal)}
-                className="bg-zinc-900 border border-zinc-800 hover:border-emerald-700 cursor-pointer transition-colors"
-              >
-                <div className="bg-black h-48 flex items-center justify-center text-zinc-700 text-xs">
+              <div key={deal.id} className="bg-zinc-900 border border-zinc-800 hover:border-emerald-700 transition-colors">
+                <div className="bg-black h-48 flex items-center justify-center text-zinc-700 text-xs relative">
                   {deal.photos.length} PHOTOS
+                  <button 
+                    onClick={(e) => {e.stopPropagation(); handleSave(deal.id)}}
+                    className={`absolute top-2 right-2 px-2 py-1 text-xs font-mono ${deal.saved? 'bg-emerald-600 text-black' : 'bg-zinc-800 text-zinc-400'}`}
+                  >
+                    {deal.saved? 'SAVED' : 'SAVE'}
+                  </button>
                 </div>
-                <div className="p-4">
+                <div className="p-4" onClick={() => setSelectedDeal(deal)}>
                   <div className="flex justify-between items-start mb-2">
                     <div className="text-xs font-mono text-emerald-500">{deal.id}</div>
                     <div className="text-xs font-mono bg-emerald-900/30 text-emerald-400 px-2 py-0.5">{deal.status}</div>
                   </div>
                   
-                  <div className="text-sm font-bold mb-3 line-clamp-2">{deal.title}</div>
+                  <div className="text-sm font-bold mb-3 line-clamp-2 cursor-pointer">{deal.title}</div>
                   
                   <div className="grid grid-cols-2 gap-2 text-xs font-mono mb-3">
                     <div>
@@ -202,8 +280,8 @@ export default function DealRoom() {
                       </div>
                       <div className="text-right">
                         <div className="text-xs text-zinc-500">ASK vs MAO</div>
-                        <div className={`text-sm font-mono ${deal.askingPrice <= deal.mao ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {deal.askingPrice <= deal.mao ? 'PASS' : 'OVER'}
+                        <div className={`text-sm font-mono ${deal.askingPrice <= deal.mao? 'text-emerald-400' : 'text-red-400'}`}>
+                          {deal.askingPrice <= deal.mao? 'PASS' : 'OVER'}
                         </div>
                       </div>
                     </div>
@@ -218,14 +296,14 @@ export default function DealRoom() {
           </div>
         )}
 
-        {/* DEAL DETAIL MODAL */}
+        {/* DEAL DETAIL MODAL WITH COMMAND CENTER ACTIONS */}
         {selectedDeal && (
           <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedDeal(null)}>
-            <div className="bg-zinc-900 border border-zinc-700 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 p-6">
+            <div className="bg-zinc-900 border border-zinc-700 max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 p-6 z-10">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="text-xs font-mono text-emerald-500 mb-1">{selectedDeal.id}</div>
+                    <div className="text-xs font-mono text-emerald-500 mb-1">{selectedDeal.id} // {selectedDeal.status}</div>
                     <div className="text-2xl font-bold">{selectedDeal.title}</div>
                     <div className="text-sm text-zinc-400 mt-1">{selectedDeal.dealType} • {selectedDeal.city}, {selectedDeal.state}</div>
                   </div>
@@ -261,16 +339,48 @@ export default function DealRoom() {
                 </div>
 
                 <div className="space-y-4">
+                  {/* COMMAND CENTER ACTIONS */}
+                  <div className="bg-zinc-950 border border-emerald-800 p-4">
+                    <div className="text-xs text-emerald-500 font-mono mb-3">COMMAND CENTER</div>
+                    <div className="space-y-2">
+                      <button 
+                        onClick={() => handleSave(selectedDeal.id)}
+                        className={`w-full py-2 text-xs font-bold ${selectedDeal.saved? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-600 text-black hover:bg-emerald-500'}`}
+                      >
+                        {selectedDeal.saved? 'UNSAVE DEAL' : 'SAVE DEAL'}
+                      </button>
+                      <button 
+                        onClick={() => handleMessageSeller(selectedDeal)}
+                        className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 py-2 text-xs font-mono"
+                      >
+                        MESSAGE SELLER
+                      </button>
+                      <button 
+                        onClick={() => handleArchive(selectedDeal.id)}
+                        className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 py-2 text-xs font-mono"
+                      >
+                        ARCHIVE DEAL
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(selectedDeal.id)}
+                        className="w-full bg-red-900/30 hover:bg-red-900/50 border border-red-800 text-red-400 py-2 text-xs font-mono"
+                      >
+                        DELETE DEAL
+                      </button>
+                      <button 
+                        onClick={() => router.push('/')}
+                        className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 py-2 text-xs font-mono"
+                      >
+                        ← BACK TO COMMAND CENTER
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="bg-zinc-950 border border-zinc-800 p-4">
-                    <div className="text-xs text-emerald-500 font-mono mb-3">CONTACT SELLER</div>
-                    <div className="text-sm mb-2">{selectedDeal.sellerName}</div>
-                    <div className="text-xs font-mono text-zinc-400 mb-4">{selectedDeal.sellerPhone}</div>
-                    <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-black py-2 text-xs font-bold mb-2">
-                      CALL NOW
-                    </button>
-                    <button className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 py-2 text-xs font-mono">
-                      REQUEST DETAILS
-                    </button>
+                    <div className="text-xs text-emerald-500 font-mono mb-3">CONTACT</div>
+                    <div className="text-sm mb-1">{selectedDeal.sellerName}</div>
+                    <div className="text-xs font-mono text-zinc-400 mb-1">{selectedDeal.sellerPhone}</div>
+                    <div className="text-xs font-mono text-zinc-400">{selectedDeal.sellerEmail}</div>
                   </div>
 
                   <div className="bg-zinc-950 border border-zinc-800 p-4 text-xs space-y-2">
