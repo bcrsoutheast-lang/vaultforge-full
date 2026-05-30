@@ -15,6 +15,9 @@ export default function NewDealPage() {
   const [user, setUser] = useState(null)
   const [photos, setPhotos] = useState([])
   const [uploading, setUploading] = useState(false)
+  const [comps, setComps] = useState([])
+  const [suggestedARV, setSuggestedARV] = useState(0)
+  const [pullingComps, setPullingComps] = useState(false)
   const [form, setForm] = useState({
     address: '',
     city: '',
@@ -32,7 +35,10 @@ export default function NewDealPage() {
     occupancy: '',
     condition: '',
     notes: '',
-    status: 'live'
+    status: 'live',
+    beds: '',
+    baths: '',
+    sqft: ''
   })
 
   useEffect(() => {
@@ -67,6 +73,36 @@ export default function NewDealPage() {
   const painScore = calcPainScore()
   const painLabel = painScore >= 70 ? 'HOT' : painScore >= 40 ? 'WARM' : 'COLD'
   const painColor = painScore >= 70 ? 'text-red-500' : painScore >= 40 ? 'text-yellow-500' : 'text-blue-500'
+
+  // Internal Comps Engine - 100% Legal, Your Data
+  const pullInternalComps = async () => {
+    if (!form.city || !form.state) return alert('Enter City and State first')
+    setPullingComps(true)
+    
+    const sixMonthsAgo = new Date()
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+    
+    const { data } = await supabase
+      .from('deals')
+      .select('address, city, state, zip, arv, beds, baths, sqft, created_at')
+      .eq('city', form.city)
+      .eq('state', form.state)
+      .eq('status', 'closed')
+      .not('arv', 'is', null)
+      .gte('created_at', sixMonthsAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(3)
+    
+    if (data && data.length > 0) {
+      setComps(data)
+      const avg = Math.round(data.reduce((sum, d) => sum + Number(d.arv), 0) / data.length)
+      setSuggestedARV(avg)
+      setForm({...form, arv: avg}) // Auto-fill ARV
+    } else {
+      alert('No closed comps in database yet for this city. Enter ARV manually.')
+    }
+    setPullingComps(false)
+  }
 
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files).slice(0, 10)
@@ -119,7 +155,10 @@ export default function NewDealPage() {
           notes: form.notes,
           status: status,
           photos: photos,
-          pain_score: painScore
+          pain_score: painScore,
+          beds: form.beds ? Number(form.beds) : null,
+          baths: form.baths ? Number(form.baths) : null,
+          sqft: form.sqft ? Number(form.sqft) : null
         })
 
       if (error) throw error
@@ -134,16 +173,16 @@ export default function NewDealPage() {
   const zillowUrl = form.address ? `https://www.zillow.com/homes/${encodeURIComponent(`${form.address}-${form.city}-${form.state}-${form.zip}`)}` : ''
   const mapsUrl = form.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${form.address} ${form.city} ${form.state} ${form.zip}`)}` : ''
 
-  if (!user) return <div className="min-h-screen bg-black text-white p-4 flex items-center justify-center">Loading... Please log in.</div>
+  if (!user) return <div className="min-h-screen bg-black text-white p-4 flex items-center justify-center font-mono">LOADING INTEL...</div>
 
   return (
     <div className="min-h-screen bg-black text-white pb-32">
       <div className="sticky top-0 z-10 bg-black/90 backdrop-blur border-b border-zinc-800 p-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <h1 className="text-2xl font-bold">6Sigma Deal Analyzer</h1>
+          <h1 className="text-2xl font-bold tracking-tight">6SIGMA DEAL ANALYZER</h1>
           <div className="text-right">
-            <div className="text-xs text-zinc-500">Pain Score</div>
-            <div className={`text-2xl font-bold ${painColor}`}>{painScore} {painLabel}</div>
+            <div className="text-xs text-zinc-500 font-mono">PAIN SCORE</div>
+            <div className={`text-2xl font-bold font-mono ${painColor}`}>{painScore} {painLabel}</div>
           </div>
         </div>
       </div>
@@ -152,7 +191,7 @@ export default function NewDealPage() {
         <form onSubmit={(e) => handleSubmit(e, 'live')} className="space-y-6">
           
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6">
-            <h2 className="text-xl font-semibold mb-5 text-red-500">Property Details</h2>
+            <h2 className="text-xl font-semibold mb-5 text-red-500 font-mono">PROPERTY DETAILS</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
                 <label className={label}>Property Address *</label>
@@ -180,12 +219,49 @@ export default function NewDealPage() {
                   <label className={label}>Zip</label>
                   <input type="text" value={form.zip} onChange={e => setForm({...form, zip: e.target.value})} className={input} placeholder="30303" />
                 </div>
+              <div>
+                <label className={label}>Beds</label>
+                <input type="number" value={form.beds} onChange={e => setForm({...form, beds: e.target.value})} className={input} placeholder="3" />
+              </div>
+              <div>
+                <label className={label}>Baths</label>
+                <input type="number" step="0.5" value={form.baths} onChange={e => setForm({...form, baths: e.target.value})} className={input} placeholder="2" />
+              </div>
+              <div className="md:col-span-2">
+                <label className={label}>Sqft</label>
+                <input type="number" value={form.sqft} onChange={e => setForm({...form, sqft: e.target.value})} className={input} placeholder="1800" />
               </div>
             </div>
           </div>
 
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6">
-            <h2 className="text-xl font-semibold mb-5 text-red-500">Deal Financials</h2>
+            <h2 className="text-xl font-semibold mb-5 text-red-500 font-mono">DEAL FINANCIALS</h2>
+            
+            {/* Internal Comps Engine */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-5">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-zinc-400 font-mono text-sm uppercase">6Sigma Comps Engine</span>
+                <button type="button" onClick={pullInternalComps} disabled={pullingComps} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold disabled:opacity-50">
+                  {pullingComps ? 'Scanning...' : 'Pull Comps →'}
+                </button>
+              </div>
+              {comps.length > 0 ? (
+                <div className="space-y-1 mt-3">
+                  {comps.map((c, i) => (
+                    <div key={i} className="text-xs font-mono text-zinc-400 flex justify-between">
+                      <span>{c.address}</span>
+                      <span>${Number(c.arv).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  <div className="text-green-500 font-bold font-mono mt-2 pt-2 border-t border-zinc-800">
+                    SUGGESTED ARV: ${suggestedARV.toLocaleString()}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-zinc-600 text-xs font-mono">No closed comps in DB yet. Close deals to build your comp engine.</div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label className={label}>ARV - After Repair Value</label>
@@ -206,19 +282,19 @@ export default function NewDealPage() {
               {mao > 0 && (
                 <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-lg p-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-400">Max Allowable Offer (70% Rule)</span>
-                    <span className={`text-2xl font-bold ${overMAO ? 'text-red-500' : 'text-green-500'}`}>
+                    <span className="text-zinc-400 font-mono text-sm">MAX ALLOWABLE OFFER (70% RULE)</span>
+                    <span className={`text-2xl font-bold font-mono ${overMAO ? 'text-red-500' : 'text-green-500'}`}>
                       ${mao.toLocaleString()}
                     </span>
                   </div>
-                  {overMAO && <p className="text-red-500 text-sm mt-1">Warning: Purchase price is above MAO</p>}
+                  {overMAO && <p className="text-red-500 text-sm mt-1 font-mono">WARNING: PURCHASE ABOVE MAO</p>}
                 </div>
               )}
             </div>
           </div>
 
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6">
-            <h2 className="text-xl font-semibold mb-5 text-red-500">Seller Intel</h2>
+            <h2 className="text-xl font-semibold mb-5 text-red-500 font-mono">SELLER INTEL</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label className={label}>Seller Name</label>
@@ -279,12 +355,12 @@ export default function NewDealPage() {
           </div>
 
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6">
-            <h2 className="text-xl font-semibold mb-5 text-red-500">Photos & Notes</h2>
+            <h2 className="text-xl font-semibold mb-5 text-red-500 font-mono">PHOTOS & NOTES</h2>
             <div className="space-y-5">
               <div>
                 <label className={label}>Property Photos (Max 10)</label>
                 <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="block w-full text-sm text-zinc-400 file:mr-4 file:py-3 file:px-6 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-red-600 file:text-white hover:file:bg-red-700 file:cursor-pointer cursor-pointer" />
-                {uploading && <p className="text-yellow-500 text-sm mt-2">Uploading...</p>}
+                {uploading && <p className="text-yellow-500 text-sm mt-2 font-mono">UPLOADING...</p>}
                 {photos.length > 0 && (
                   <div className="grid grid-cols-3 gap-2 mt-3">
                     {photos.map((url, i) => (
@@ -304,11 +380,11 @@ export default function NewDealPage() {
 
       <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur border-t border-zinc-800 p-4">
         <div className="max-w-4xl mx-auto flex gap-3">
-          <button type="button" onClick={(e) => handleSubmit(e, 'draft')} disabled={loading} className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white font-semibold text-lg transition-colors disabled:opacity-50">
-            {loading ? 'Saving...' : 'Save Draft'}
+          <button type="button" onClick={(e) => handleSubmit(e, 'draft')} disabled={loading} className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white font-semibold text-lg transition-colors disabled:opacity-50 font-mono">
+            {loading ? 'SAVING...' : 'SAVE DRAFT'}
           </button>
-          <button type="button" onClick={(e) => handleSubmit(e, 'live')} disabled={loading} className="flex-1 py-4 bg-red-600 hover:bg-red-700 rounded-lg text-white font-semibold text-lg transition-colors disabled:opacity-50">
-            {loading ? 'Posting...' : 'Post Deal Live'}
+          <button type="button" onClick={(e) => handleSubmit(e, 'live')} disabled={loading} className="flex-1 py-4 bg-green-600 hover:bg-green-700 rounded-lg text-white font-semibold text-lg transition-colors disabled:opacity-50 font-mono">
+            {loading ? 'POSTING...' : 'POST DEAL LIVE'}
           </button>
         </div>
       </div>
