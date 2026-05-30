@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import Link from 'next/link'
 
 type PainLead = {
   id: string
@@ -11,11 +12,14 @@ type PainLead = {
   timeline: string
   drop_dead_price: string
   arv: string
+  mortgage_balance: string
+  occupancy: string
+  condition: string
+  notes: string
   pain_score: number
   priority: 'CRITICAL' | 'HOT' | 'WARM' | 'COLD'
-  notes: string
-  created_at: string
   user_status?: 'CONTACTED' | 'NEGOTIATING' | 'CLOSED'
+  created_at: string
 }
 
 export default function PainRoom() {
@@ -25,6 +29,8 @@ export default function PainRoom() {
   const [user, setUser] = useState<any>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [messageOpen, setMessageOpen] = useState<string | null>(null)
+  const [smsText, setSmsText] = useState('')
+  const [newCritical, setNewCritical] = useState(false)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
@@ -32,21 +38,40 @@ export default function PainRoom() {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
       if (user) {
-        fetchLeads(user.id)
+        fetchLeads(user.id, 'CRITICAL')
         fetchCounts(user.id)
+
+        const channel = supabase
+          .channel('pain_intake_changes')
+          .on('postgres_changes', 
+            { event: 'INSERT', schema: 'public', table: 'pain_intake', filter: `user_id=eq.${user.id}` }, 
+            (payload) => {
+              if (payload.new.priority === 'CRITICAL') {
+                setNewCritical(true)
+                fetchCounts(user.id)
+                if (activeTab === 'CRITICAL') fetchLeads(user.id, 'CRITICAL')
+                setTimeout(() => setNewCritical(false), 5000)
+              } else {
+                fetchCounts(user.id)
+              }
+            }
+          )
+          .subscribe()
+
+        return () => { supabase.removeChannel(channel) }
       }
     }
     init()
-  }, [])
+  }, [activeTab])
 
-  const fetchLeads = async (userId: string) => {
+  const fetchLeads = async (userId: string, tab: string) => {
     const { data } = await supabase
       .from('pain_intake')
       .select('*')
       .eq('user_id', userId)
-      .eq('priority', activeTab)
+      .eq('priority', tab)
+      .is('user_status', null)
       .order('pain_score', { ascending: false })
-    
     setLeads(data || [])
   }
 
@@ -55,6 +80,7 @@ export default function PainRoom() {
       .from('pain_intake')
       .select('priority')
       .eq('user_id', userId)
+      .is('user_status', null)
 
     setCounts({
       critical: data?.filter(d => d.priority === 'CRITICAL').length || 0,
@@ -66,12 +92,14 @@ export default function PainRoom() {
 
   const handleAction = async (leadId: string, newStatus: 'CONTACTED' | 'NEGOTIATING' | 'CLOSED') => {
     await supabase.from('pain_intake').update({ user_status: newStatus }).eq('id', leadId)
-    setLeads(leads.filter(l => l.id !== leadId))
-    if (user) fetchCounts(user.id)
+    if (user) {
+      fetchLeads(user.id, activeTab)
+      fetchCounts(user.id)
+    }
+    setConfirmDelete(null)
   }
 
   const handleCleanup = async () => {
-    // Delete all COLD leads older than 30 days
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     
@@ -82,14 +110,20 @@ export default function PainRoom() {
       .lt('created_at', thirtyDaysAgo.toISOString())
     
     if (user) {
-      fetchLeads(user.id)
+      fetchLeads(user.id, activeTab)
       fetchCounts(user.id)
     }
   }
 
   const handleTabChange = (tab: 'CRITICAL' | 'HOT' | 'WARM' | 'COLD') => {
     setActiveTab(tab)
-    if (user) fetchLeads(user.id)
+    if (tab === 'CRITICAL') setNewCritical(false)
+    if (user) fetchLeads(user.id, tab)
+  }
+
+  const openMessage = (lead: PainLead) => {
+    setSmsText(`Hey, saw your property at ${lead.address}. Still looking to sell? I can close in ${lead.timeline}.`)
+    setMessageOpen(lead.id)
   }
 
   const MessageModal = ({ lead }: { lead: PainLead }) => (
@@ -100,12 +134,21 @@ export default function PainRoom() {
           <p className="text-sm text-zinc-400 mb-2">{lead.address}</p>
           <p className="text-sm text-zinc-400 mb-4">{lead.phone}</p>
           <textarea 
-            className="w-full p-3 bg-zinc-800 border border-zinc-700 mb-4" 
+            value={smsText}
+            onChange={e => setSmsText(e.target.value)}
+            className="w-full p-3 bg-zinc-800 border border-zinc-700 mb-4 text-white" 
             rows={4}
-            defaultValue={`Hey, saw your property at ${lead.address}. Still looking to sell? I can close in ${lead.timeline}.`}
           />
           <div className="flex gap-2">
-            <button className="flex-1 py-2 bg-red-600 hover:bg-red-700 border border-red-500 text-white uppercase text-xs">Send SMS</button>
+            <button 
+              onClick={() => {
+                handleAction(lead.id, 'CONTACTED')
+                setMessageOpen(null)
+              }}
+              className="flex-1 py-2 bg-red-600 hover:bg-red-700 border border-red-500 text-white uppercase text-xs"
+            >
+              Send & Mark Contacted
+            </button>
             <button onClick={() => setMessageOpen(null)} className="px-4 py-2 bg-zinc-800 border border-zinc-700 text-xs">Exit</button>
           </div>
         </div>
@@ -117,7 +160,12 @@ export default function PainRoom() {
     <div className="min-h-screen bg-black text-white p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Pain Room</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold">Pain Room</h1>
+            <Link href="/pain-intake" className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border border-red-500/30 text-red-500 text-xs uppercase">
+              + Pain Intake
+            </Link>
+          </div>
           <button 
             onClick={handleCleanup}
             className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs uppercase"
@@ -129,9 +177,15 @@ export default function PainRoom() {
         <div className="flex gap-2 mb-6 border-b border-zinc-800">
           <button 
             onClick={() => handleTabChange('CRITICAL')}
-            className={`px-4 py-2 text-sm uppercase ${activeTab === 'CRITICAL' ? 'border-b-2 border-red-500 text-red-500' : 'text-zinc-500 hover:text-white'}`}
+            className={`px-4 py-2 text-sm uppercase relative ${activeTab === 'CRITICAL' ? 'border-b-2 border-red-500 text-red-500' : 'text-zinc-500 hover:text-white'}`}
           >
             Critical ({counts.critical})
+            {newCritical && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+              </span>
+            )}
           </button>
           <button 
             onClick={() => handleTabChange('HOT')}
@@ -216,13 +270,13 @@ export default function PainRoom() {
 
                   <div className="p-4 pt-0 flex gap-2">
                     <button 
-                      onClick={() => setMessageOpen(lead.id)}
+                      onClick={() => openMessage(lead)}
                       className="flex-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs uppercase"
                     >
                       Message
                     </button>
                     <button 
-                      onClick={() => handleAction(lead.id, 'CONTACTED')}
+                      onClick={() => handleAction(lead.id, 'NEGOTIATING')}
                       className="px-3 py-2 bg-green-900/30 hover:bg-green-900/50 border border-green-500/30 text-green-500 text-xs"
                     >
                       ✓
