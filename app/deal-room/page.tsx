@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 type PainLead = {
@@ -30,7 +30,7 @@ export default function PainRoom() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [messageOpen, setMessageOpen] = useState<string | null>(null)
   const [smsText, setSmsText] = useState('')
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
 
   useEffect(() => {
     const init = async () => {
