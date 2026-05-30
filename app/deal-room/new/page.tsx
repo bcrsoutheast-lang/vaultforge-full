@@ -51,11 +51,9 @@ export default function NewDealPage() {
   const input = "w-full px-4 py-3.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-colors"
   const select = input
 
-  // MAO Calculator: 70% Rule
   const mao = form.arv && form.rehab_cost ? Math.round(Number(form.arv) * 0.7 - Number(form.rehab_cost) - 10000) : 0
   const overMAO = form.purchase_price && mao > 0 && Number(form.purchase_price) > mao
 
-  // Pain Score Calculator: 0-100
   const calcPainScore = () => {
     let score = 0
     const weights = {
@@ -74,7 +72,6 @@ export default function NewDealPage() {
   const painLabel = painScore >= 70 ? 'HOT' : painScore >= 40 ? 'WARM' : 'COLD'
   const painColor = painScore >= 70 ? 'text-red-500' : painScore >= 40 ? 'text-yellow-500' : 'text-blue-500'
 
-  // Internal Comps Engine - 100% Legal, Your Data
   const pullInternalComps = async () => {
     if (!form.city || !form.state) return alert('Enter City and State first')
     setPullingComps(true)
@@ -97,7 +94,7 @@ export default function NewDealPage() {
       setComps(data)
       const avg = Math.round(data.reduce((sum, d) => sum + Number(d.arv), 0) / data.length)
       setSuggestedARV(avg)
-      setForm({...form, arv: avg}) // Auto-fill ARV
+      setForm({...form, arv: avg})
     } else {
       alert('No closed comps in database yet for this city. Enter ARV manually.')
     }
@@ -173,7 +170,7 @@ export default function NewDealPage() {
   const zillowUrl = form.address ? `https://www.zillow.com/homes/${encodeURIComponent(`${form.address}-${form.city}-${form.state}-${form.zip}`)}` : ''
   const mapsUrl = form.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${form.address} ${form.city} ${form.state} ${form.zip}`)}` : ''
 
-  if (!user) return <div className="min-h-screen bg-black text-white p-4 flex items-center justify-center font-mono">LOADING INTEL...</div>
+  if (!user) return (<div className="min-h-screen bg-black text-white p-4 flex items-center justify-center font-mono">LOADING INTEL...</div>)
 
   return (
     <div className="min-h-screen bg-black text-white pb-32">
@@ -237,7 +234,6 @@ export default function NewDealPage() {
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6">
             <h2 className="text-xl font-semibold mb-5 text-red-500 font-mono">DEAL FINANCIALS</h2>
             
-            {/* Internal Comps Engine */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-5">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-zinc-400 font-mono text-sm uppercase">6Sigma Comps Engine</span>
