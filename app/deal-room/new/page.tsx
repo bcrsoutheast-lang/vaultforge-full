@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 
-export default function NewDealRoomPage() {
+export default function NewDealRoomPage() { 
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
