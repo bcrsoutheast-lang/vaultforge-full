@@ -3,37 +3,380 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VaultForge VIP</title>
+    <title>VaultForge | Command Center</title>
     <style>
-        body { 
-            background: #0a0e1a; 
-            color: #fff; 
-            font-family: Arial, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0;
-            text-align: center;
+        :root {
+            --bg: #0a0a0a;
+            --panel: #111111;
+            --panel-2: #1a1a1a;
+            --border: #2a2a2a;
+            --text: #e5e5e5;
+            --text-dim: #888888;
+            --accent: #ff6a00;
+            --green: #00ff88;
+            --red: #ff3366;
+            --blue: #0099ff;
         }
-        .btn { 
-            background: #00d4ff; 
-            color: #000; 
-            padding: 20px 40px; 
-            font-size: 20px; 
-            font-weight: bold;
-            text-decoration: none; 
-            border-radius: 8px; 
-            display: inline-block;
-            margin-top: 20px;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            overflow-x: hidden;
         }
+        
+        /* TOP BAR */
+        .header {
+            background: var(--panel);
+            border-bottom: 2px solid var(--accent);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .logo {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--accent);
+        }
+        .logo span { color: var(--text); }
+        .status {
+            display: flex;
+            gap: 20px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .status-item { color: var(--text-dim); }
+        .status-item .val { color: var(--green); margin-left: 6px; }
+        
+        /* MAIN LAYOUT */
+        .container {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            height: calc(100vh - 41px);
+        }
+        
+        /* SIDEBAR NAV */
+        .sidebar {
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        .nav-section { margin-bottom: 24px; }
+        .nav-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0 16px 8px;
+        }
+        .nav-btn {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-left: 3px solid transparent;
+            color: var(--text);
+            text-align: left;
+            padding: 12px 16px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.15s;
+        }
+        .nav-btn:hover {
+            background: var(--panel-2);
+            border-left-color: var(--accent);
+        }
+        .nav-btn.active {
+            background: var(--panel-2);
+            border-left-color: var(--accent);
+            color: var(--accent);
+        }
+        .nav-btn .icon { width: 16px; text-align: center; }
+        .nav-btn.logout { margin-top: 24px; color: var(--red); }
+        .nav-btn.logout:hover { border-left-color: var(--red); }
+        
+        /* MAIN CONTENT */
+        .main {
+            background: var(--bg);
+            padding: 16px;
+            overflow-y: auto;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+        }
+        .panel-header {
+            background: var(--panel-2);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-body { padding: 12px; }
+        
+        /* METRICS */
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .metric:last-child { border-bottom: none; }
+        .metric-label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; }
+        .metric-val { color: var(--green); font-weight: 700; }
+        .metric-val.red { color: var(--red); }
+        .metric-val.blue { color: var(--blue); }
+        
+        /* DEAL LIST */
+        .deal {
+            padding: 10px;
+            border: 1px solid var(--border);
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .deal:hover { border-color: var(--accent); background: var(--panel-2); }
+        .deal-id { color: var(--accent); font-size: 10px; }
+        .deal-title { margin: 4px 0; }
+        .deal-meta { font-size: 10px; color: var(--text-dim); display: flex; gap: 12px; }
+        .badge { 
+            background: var(--panel-2); 
+            padding: 2px 6px; 
+            border-radius: 2px; 
+            font-size: 9px;
+            text-transform: uppercase;
+        }
+        .badge.hot { background: var(--red); color: #000; }
+        .badge.new { background: var(--green); color: #000; }
+        
+        /* COMMAND LINE */
+        .cmd {
+            background: #000;
+            border: 1px solid var(--accent);
+            padding: 12px;
+            font-family: inherit;
+            margin-top: 16px;
+        }
+        .cmd-prompt { color: var(--accent); }
+        .cmd-input {
+            background: transparent;
+            border: none;
+            color: var(--green);
+            font-family: inherit;
+            font-size: 13px;
+            width: 100%;
+            outline: none;
+        }
+        
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <div>
-        <h1>VAULTFORGE VIP AUCTION</h1>
-        <p>Military Surplus • Bloomberg Verified • ITAR Restricted</p>
-        <a href="/member_rsvp_component.html" class="btn">$500 RSVP - SECURE YOUR LOT</a>
+    <div class="header">
+        <div class="logo">VAULT<span>FORGE</span></div>
+        <div class="status">
+            <div class="status-item">NETWORK<span class="val">LIVE</span></div>
+            <div class="status-item">OPERATORS<span class="val">1,247</span></div>
+            <div class="status-item">ACTIVE DEALS<span class="val">83</span></div>
+            <div class="status-item">TRUST SCORE<span class="val">98.7</span></div>
+        </div>
     </div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <div class="nav-section">
+                <div class="nav-label">Core</div>
+                <button class="nav-btn active" data-view="dashboard">
+                    <span class="icon">▣</span> Command Center
+                </button>
+                <button class="nav-btn" data-view="dealroom">
+                    <span class="icon">⛃</span> Deal Room
+                </button>
+                <button class="nav-btn" data-view="opportunities">
+                    <span class="icon">◈</span> Deal Opportunities
+                </button>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-label">Intelligence</div>
+                <button class="nav-btn" data-view="painintake">
+                    <span class="icon">⊖</span> Pain Intake
+                </button>
+                <button class="nav-btn" data-view="painhelp">
+                    <span class="icon">⊕</span> Pain Help
+                </button>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-label">Network</div>
+                <button class="nav-btn" data-view="members">
+                    <span class="icon">⛉</span> Members Network
+                </button>
+                <button class="nav-btn" data-view="profile">
+                    <span class="icon">⛊</span> Profile
+                </button>
+            </div>
+            
+            <button class="nav-btn logout" data-view="logout">
+                <span class="icon">⏻</span> Logout
+            </button>
+        </div>
+        
+        <div class="main" id="main">
+            <!-- DASHBOARD VIEW -->
+            <div class="view" id="view-dashboard">
+                <div class="grid">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <span>NETWORK METRICS</span>
+                            <span>LIVE</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="metric">
+                                <span class="metric-label">Deals Routed 24H</span>
+                                <span class="metric-val">47</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Capital Deployed MTD</span>
+                                <span class="metric-val">$18.4M</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Avg Close Time</span>
+                                <span class="metric-val blue">12.3 Days</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Operator Match Rate</span>
+                                <span class="metric-val">94.2%</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Failed Routes</span>
+                                <span class="metric-val red">3</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <div class="panel-header">
+                            <span>HOT OPPORTUNITIES</span>
+                            <span>5 NEW</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="deal">
+                                <div class="deal-id">VF-2026-0847</div>
+                                <div class="deal-title">18-Unit Multifamily | Atlanta West End</div>
+                                <div class="deal-meta">
+                                    <span class="badge hot">HOT</span>
+                                    <span>ARV $2.1M</span>
+                                    <span>87% Match</span>
+                                </div>
+                            </div>
+                            <div class="deal">
+                                <div class="deal-id">VF-2026-0846</div>
+                                <div class="deal-title">Industrial Land | I-85 Corridor</div>
+                                <div class="deal-meta">
+                                    <span class="badge new">NEW</span>
+                                    <span>12 Acres</span>
+                                    <span>91% Match</span>
+                                </div>
+                            </div>
+                            <div class="deal">
+                                <div class="deal-id">VF-2026-0844</div>
+                                <div class="deal-title">Value-Add Retail | Marietta Square</div>
+                                <div class="deal-meta">
+                                    <span>Off-Market</span>
+                                    <span>$890K</span>
+                                    <span>76% Match</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <div class="panel-header">
+                            <span>TRUST GRAPH ACTIVITY</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="metric">
+                                <span class="metric-label">Deals Closed This Q</span>
+                                <span class="metric-val">31</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Avg Operator Score</span>
+                                <span class="metric-val">8.9/10</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Capital Partner Rating</span>
+                                <span class="metric-val">9.4/10</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Routing Accuracy</span>
+                                <span class="metric-val">96.8%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="cmd">
+                    <span class="cmd-prompt">VAULTFORGE://</span>
+                    <input class="cmd-input" type="text" placeholder="Enter command: route, match, intel, operators" />
+                </div>
+            </div>
+            
+            <!-- PLACEHOLDER VIEWS -->
+            <div class="view hidden" id="view-dealroom"><div class="panel"><div class="panel-header">DEAL ROOM</div><div class="panel-body">Permissioned deal packets load here. Routing engine active.</div></div></div>
+            <div class="view hidden" id="view-opportunities"><div class="panel"><div class="panel-header">DEAL OPPORTUNITIES</div><div class="panel-body">Intelligence layer matching deals to your operator profile.</div></div></div>
+            <div class="view hidden" id="view-painintake"><div class="panel"><div class="panel-header">PAIN INTAKE</div><div class="panel-body">Submit operator bottlenecks. Network solves.</div></div></div>
+            <div class="view hidden" id="view-painhelp"><div class="panel"><div class="panel-header">PAIN HELP</div><div class="panel-body">View network requests. Deploy solutions.</div></div></div>
+            <div class="view hidden" id="view-members"><div class="panel"><div class="panel-header">MEMBERS NETWORK</div><div class="panel-body">Trust graph visualization. 1,247 verified operators.</div></div></div>
+            <div class="view hidden" id="view-profile"><div class="panel"><div class="panel-header">OPERATOR PROFILE</div><div class="panel-body">Capability, geography, asset class, execution history.</div></div></div>
+        </div>
+    </div>
+    
+    <script>
+        // Simple view router
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (this.dataset.view === 'logout') {
+                    if (confirm('Terminate session?')) location.reload();
+                    return;
+                }
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+                document.getElementById('view-' + this.dataset.view).classList.remove('hidden');
+            });
+        });
+        
+        // Cmd input
+        document.querySelector('.cmd-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                this.value = '';
+                alert('Command routing engine online. Full CLI coming Stage 2.');
+            }
+        });
+    </script>
 </body>
 </html>
