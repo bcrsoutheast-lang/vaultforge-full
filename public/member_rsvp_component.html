@@ -1,0 +1,93 @@
+<div id="rsvpModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999;">
+  <div style="background:#1e293b; max-width:500px; margin:5% auto; padding:24px; border-radius:12px; border:1px solid #334155; color:#fff;">
+    <h3>VAULTFORGE AUCTION RSVP - BINDING COMMITMENT</h3>
+    <p style="color:#94a3b8; font-size:14px;" id="propertyAddr">123 Main St, Atlanta GA</p>
+
+    <div style="background:#0f172a; padding:16px; border-radius:8px; margin:16px 0; font-size:14px; line-height:1.6;">
+      <strong>BY RSVP'ING YOU LEGALLY AGREE TO ALL TERMS BELOW:</strong><br><br>
+
+      <strong>1. COMMITMENT TO BID</strong><br>
+      You agree to place at least ONE bid at or above the reserve of <span id="reserveAmt">$180,000</span>.<br>
+      No bid = Strike. 2 Strikes = 30 day ban.<br><br>
+
+      <strong>2. EARNEST DEPOSIT IF YOU WIN</strong><br>
+      If you are the winning bidder, you agree to pay a NON-REFUNDABLE earnest deposit of 15% = <span id="depositAmt">$27,000</span> within 24 hours of gavel.<br><br>
+
+      <strong>DEPOSIT FORFEITURE:</strong> If you win and fail to close for any reason within your control, you forfeit the full deposit to Seller as liquidated damages. No refunds for buyer's remorse, financing issues, or failure to perform.<br><br>
+
+      <strong>3. AS-IS PURCHASE</strong><br>
+      You confirm you have access to the State Seller Disclosure and are bidding AS-IS, WHERE-IS with no contingencies.<br><br>
+
+      <strong>4. ELECTRONIC SIGNATURE</strong><br>
+      Checking below constitutes your legal signature agreeing to VaultForge Auction Terms and Earnest Deposit Agreement.
+    </div>
+
+    <div class="checkbox-row">
+      <input type="checkbox" id="check1">
+      <label for="check1">I understand I must bid at least once.</label>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="check2">
+      <label for="check2">I understand I must pay <span id="depositAmt2">$27,000</span> NON-REFUNDABLE deposit if I win.</label>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="check3">
+      <label for="check3">I have read and agree to all terms above.</label>
+    </div>
+
+    <button id="confirmRSVP" disabled style="width:100%; padding:16px; background:#475569; color:#94a3b8; border:none; border-radius:8px; font-size:16px; font-weight:bold; margin-top:16px;">CONFIRM RSVP & COMMIT TO BID</button>
+    <button onclick="closeRSVP()" style="width:100%; padding:12px; background:transparent; color:#94a3b8; border:1px solid #475569; border-radius:8px; margin-top:8px;">CANCEL</button>
+  </div>
+</div>
+
+<script>
+let currentAuction = {};
+
+function openRSVP(propertyAddr, reserve, deposit) {
+  currentAuction = { propertyAddr, reserve, deposit };
+  document.getElementById('propertyAddr').textContent = propertyAddr;
+  document.getElementById('reserveAmt').textContent = '$' + reserve.toLocaleString();
+  document.getElementById('depositAmt').textContent = '$' + deposit.toLocaleString();
+  document.getElementById('depositAmt2').textContent = '$' + deposit.toLocaleString();
+  document.getElementById('rsvpModal').style.display = 'block';
+}
+
+function closeRSVP() {
+  document.getElementById('rsvpModal').style.display = 'none';
+  document.querySelectorAll('#rsvpModal input[type=checkbox]').forEach(cb => cb.checked = false);
+  document.getElementById('confirmRSVP').disabled = true;
+}
+
+// Enable button only when all 3 checked
+document.querySelectorAll('#rsvpModal input[type=checkbox]').forEach(cb => {
+  cb.addEventListener('change', () => {
+    const allChecked = Array.from(document.querySelectorAll('#rsvpModal input[type=checkbox]')).every(c => c.checked);
+    const btn = document.getElementById('confirmRSVP');
+    btn.disabled =!allChecked;
+    btn.style.background = allChecked? '#22c55e' : '#475569';
+    btn.style.color = allChecked? '#000' : '#94a3b8';
+  });
+});
+
+// Submit RSVP
+document.getElementById('confirmRSVP').addEventListener('click', async () => {
+  const rsvpData = {
+    auctionId: currentAuction.id,
+    userId: JSON.parse(localStorage.getItem('vaultforge_user')).id,
+    timestamp: new Date().toISOString(),
+    ip: 'auto-captured',
+    agreedDeposit: currentAuction.deposit,
+    termsVersion: 'v1.0'
+  };
+
+  // POST to your backend: /api/rsvp
+  // await fetch('/api/rsvp', {method:'POST', body:JSON.stringify(rsvpData)});
+
+  localStorage.setItem('rsvp_' + currentAuction.id, JSON.stringify(rsvpData));
+  alert('RSVP Confirmed. You are legally committed to bid. War Room opens 15min before start.');
+  closeRSVP();
+  location.reload();
+});
+
+// Example usage: openRSVP('123 Main St, Atlanta GA', 180000, 27000);
+</script>
