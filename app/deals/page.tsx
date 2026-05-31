@@ -25,6 +25,7 @@ type Deal = {
   status: string
   created_at: string
   repairs?: number | null
+  property_type?: string
 }
 
 export default function DealsPage() {
@@ -51,7 +52,7 @@ export default function DealsPage() {
   if (loading) {
     return (
       <div style={{ backgroundColor: '#000', minHeight: '100vh', color: '#fff', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div>Loading VaultForge deals...</div>
+        <div>Loading VaultForge Intelligence...</div>
       </div>
     )
   }
@@ -60,15 +61,15 @@ export default function DealsPage() {
     <div style={{ backgroundColor: '#000', minHeight: '100vh', color: '#fff' }}>
       <div style={{ borderBottom: '1px solid #27272a', padding: '16px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-          <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#facc15', marginBottom: '8px' }}>DEAL OPPORTUNITIES</h1>
-          <p style={{ color: '#a1a1aa', fontSize: '14px' }}>Veteran Pride Exterior Services - We Fight Dirt. We Fight Bad Deals.</p>
+          <h1 style={{ fontSize: '30px', fontWeight: 'bold', color: '#facc15', marginBottom: '8px' }}>DEAL ROOM</h1>
+          <p style={{ color: '#a1a1aa', fontSize: '14px' }}>Private members only. Residential • Commercial • Land</p>
         </div>
       </div>
 
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '16px' }}>
         {deals.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#71717a', marginTop: '80px' }}>
-            No deals available. Post your first deal.
+            No active deals. Check your profile states or submit a pain deal.
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
@@ -82,9 +83,20 @@ export default function DealsPage() {
                 />
                 
                 <div style={{ padding: '16px' }}>
-                  <h3 style={{ color: '#facc15', fontWeight: 'bold', fontSize: '18px', marginBottom: '8px' }}>
-                    {deal.city}, {deal.state} • {deal.beds}bd {deal.baths}ba
-                  </h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
+                    <h3 style={{ color: '#facc15', fontWeight: 'bold', fontSize: '18px' }}>
+                      {deal.city}, {deal.state}
+                    </h3>
+                    <span style={{ fontSize: '12px', color: '#71717a', backgroundColor: '#27272a', padding: '4px 8px', borderRadius: '4px' }}>
+                      {deal.property_type || 'RESIDENTIAL'}
+                    </span>
+                  </div>
+                  
+                  {deal.beds && deal.baths && (
+                    <p style={{ color: '#a1a1aa', fontSize: '14px', marginBottom: '12px' }}>
+                      {deal.beds}bd {deal.baths}ba {deal.sqft ? `• ${deal.sqft.toLocaleString()} sqft` : ''}
+                    </p>
+                  )}
                   
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '12px', fontSize: '14px' }}>
                     <div>
@@ -107,18 +119,17 @@ export default function DealsPage() {
                     type="button"
                     style={{ 
                       width: '100%', 
-                      backgroundColor: '#3f3f46', 
-                      color: '#fff', 
+                      backgroundColor: '#facc15', 
+                      color: '#000', 
                       fontWeight: 'bold', 
                       padding: '12px', 
                       borderRadius: '8px', 
                       border: 'none',
                       fontSize: '14px',
-                      cursor: 'not-allowed'
+                      cursor: 'pointer'
                     }}
-                    disabled
                   >
-                    OPEN DEAL - COMING NEXT
+                    VIEW DEAL INTEL
                   </button>
                 </div>
               </div>
