@@ -6,7 +6,6 @@ import { createBrowserClient } from '@supabase/ssr'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts'
-import useSound from 'use-sound'
 import { Geist_Mono } from 'next/font/google'
 
 const geistMono = Geist_Mono({ subsets: ['latin'] })
@@ -25,10 +24,10 @@ export default function WarRoomPage() {
   const [showGavel, setShowGavel] = useState(false)
   const timerRef = useRef(null)
 
-  // Sounds
-  const [playBid] = useSound('/sounds/bid.mp3', { volume: 0.5 })
-  const [playExtend] = useSound('/sounds/extend.mp3', { volume: 0.7 })
-  const [playSold] = useSound('/sounds/gavel.mp3', { volume: 0.8 })
+  // SOUNDS DISABLED FOR CLEAN DEPLOY - UNCOMMENT WHEN YOU ADD FILES
+  // const [playBid] = useSound('/sounds/bid.mp3', { volume: 0.5 })
+  // const [playExtend] = useSound('/sounds/extend.mp3', { volume: 0.7 })
+  // const [playSold] = useSound('/sounds/gavel.mp3', { volume: 0.8 })
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,10 +46,10 @@ export default function WarRoomPage() {
 
   const loadRoom = async () => {
     const { data: roomData } = await supabase
-    .from('war_rooms')
-    .select('*, deals(*)')
-    .eq('id', params.id)
-    .single()
+   .from('war_rooms')
+   .select('*, deals(*)')
+   .eq('id', params.id)
+   .single()
 
     if (!roomData) return
 
@@ -58,10 +57,10 @@ export default function WarRoomPage() {
     setDeal(roomData.deals)
 
     const { data: bidData } = await supabase
-    .from('war_room_bids')
-    .select('*')
-    .eq('war_room_id', params.id)
-    .order('amount', { ascending: true }) // for chart
+   .from('war_room_bids')
+   .select('*')
+   .eq('war_room_id', params.id)
+   .order('amount', { ascending: true })
 
     setBids(bidData || [])
 
@@ -75,8 +74,8 @@ export default function WarRoomPage() {
     if (!params.id) return
 
     const roomChannel = supabase
-    .channel(`room-${params.id}`)
-    .on('postgres_changes', {
+   .channel(`room-${params.id}`)
+   .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'war_rooms',
@@ -85,41 +84,41 @@ export default function WarRoomPage() {
         setRoom(payload.new)
         updateTimer(payload.new)
         if (payload.new.status === 'completed') {
-          playSold()
+          // playSold() // UNCOMMENT WHEN SOUNDS ADDED
           setShowGavel(true)
         }
       })
-    .subscribe()
+   .subscribe()
 
     const bidChannel = supabase
-    .channel(`bids-${params.id}`)
-    .on('postgres_changes', {
+   .channel(`bids-${params.id}`)
+   .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'war_room_bids',
         filter: `war_room_id=eq.${params.id}`
       }, (payload) => {
-        playBid()
+        // playBid() // UNCOMMENT WHEN SOUNDS ADDED
         setBids(prev => [...prev, payload.new])
         setStats(prev => ({...prev, total_bids: prev.total_bids + 1 }))
       })
-    .subscribe()
+   .subscribe()
 
     const eventChannel = supabase
-    .channel(`events-${params.id}`)
-    .on('postgres_changes', {
+   .channel(`events-${params.id}`)
+   .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'war_room_events',
         filter: `war_room_id=eq.${params.id}`
       }, (payload) => {
         if (payload.new.event_type === 'bid_placed' && payload.new.event_data.extended) {
-          playExtend()
+          // playExtend() // UNCOMMENT WHEN SOUNDS ADDED
           setExtended(true)
           setTimeout(() => setExtended(false), 3000)
         }
       })
-    .subscribe()
+   .subscribe()
 
     return () => {
       supabase.removeChannel(roomChannel)
@@ -231,13 +230,13 @@ export default function WarRoomPage() {
               />
             </div>
             <div>
-              <div className="text-[10px] text-amber-500 tracking-[0.3em]">VAULTFORGE WAR ROOM</div>
+              <div className="text-xs text-amber-500 tracking-[0.3em]">VAULTFORGE WAR ROOM</div>
               <div className="text-sm font-bold tracking-tight">{deal.address}</div>
-              <div className="text-[10px] text-zinc-500">{deal.city}, {deal.state}</div>
+              <div className="text-xs text-zinc-500">{deal.city}, {deal.state}</div>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] text-zinc-500 tracking-widest">STATUS</div>
+            <div className="text-xs text-zinc-500 tracking-widest">STATUS</div>
             <motion.div
               layout
               className={`font-bold text-sm tracking-wider ${
@@ -260,7 +259,6 @@ export default function WarRoomPage() {
             animate={{ y: 0, opacity: 1 }}
             className="bg-black/60 backdrop-blur-xl border border-zinc-800/50 rounded-xl p-6 relative overflow-hidden"
           >
-            {/* GLOW WHEN RESERVE MET */}
             {reserveMet && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -271,19 +269,19 @@ export default function WarRoomPage() {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div>
-                <div className="text-[10px] text-zinc-500 tracking-widest">ARV</div>
+                <div className="text-xs text-zinc-500 tracking-widest">ARV</div>
                 <div className="text-2xl font-bold tracking-tight">${deal.arv?.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-[10px] text-zinc-500 tracking-widest">REPAIRS</div>
+                <div className="text-xs text-zinc-500 tracking-widest">REPAIRS</div>
                 <div className="text-2xl font-bold text-red-400 tracking-tight">-${deal.repairs?.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-[10px] text-zinc-500 tracking-widest">RESERVE</div>
+                <div className="text-xs text-zinc-500 tracking-widest">RESERVE</div>
                 <div className="text-2xl font-bold text-amber-400 tracking-tight">${deal.reserve_price?.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-[10px] text-zinc-500 tracking-widest">HIGH BID</div>
+                <div className="text-xs text-zinc-500 tracking-widest">HIGH BID</div>
                 <motion.div
                   layout
                   className={`text-2xl font-bold tracking-tight ${reserveMet? 'text-green-400' : 'text-white'}`}
@@ -293,7 +291,6 @@ export default function WarRoomPage() {
               </div>
             </div>
 
-            {/* BID CHART */}
             {chartData.length > 1 && (
               <div className="h-24 mb-4">
                 <ResponsiveContainer width="100%" height="100%">
@@ -338,7 +335,7 @@ export default function WarRoomPage() {
             animate={{ y: 0, opacity: 1, transition: { delay: 0.1 } }}
             className="bg-black/60 backdrop-blur-xl border border-zinc-800/50 rounded-xl p-6"
           >
-            <div className="text-[10px] text-amber-500 mb-4 tracking-[0.3em]">LIVE BID FEED</div>
+            <div className="text-xs text-amber-500 mb-4 tracking-[0.3em]">LIVE BID FEED</div>
             <div className="space-y-1 max-h-64 overflow-y-auto">
               <AnimatePresence>
                 {sortedBids.map((bid, i) => (
@@ -379,7 +376,7 @@ export default function WarRoomPage() {
             className="bg-black/60 backdrop-blur-xl border border-zinc-800/50 rounded-xl p-6 sticky top-4"
           >
             <div className="text-center mb-6">
-              <div className="text-[10px] text-zinc-500 tracking-[0.3em]">TIME REMAINING</div>
+              <div className="text-xs text-zinc-500 tracking-[0.3em]">TIME REMAINING</div>
               <motion.div
                 layout
                 className={`text-5xl font-bold tracking-tighter ${timeLeft < 60? 'text-red-500' : 'text-amber-400'}`}
@@ -404,15 +401,15 @@ export default function WarRoomPage() {
               <>
                 <div className="grid grid-cols-3 gap-3 mb-6 text-center">
                   <div>
-                    <div className="text-[10px] text-zinc-500">BIDS</div>
+                    <div className="text-xs text-zinc-500">BIDS</div>
                     <div className="text-lg font-bold">{stats.total_bids}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-zinc-500">BIDDERS</div>
+                    <div className="text-xs text-zinc-500">BIDDERS</div>
                     <div className="text-lg font-bold">{stats.unique_bidders}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-zinc-500">RESERVE</div>
+                    <div className="text-xs text-zinc-500">RESERVE</div>
                     <div className={`text-lg font-bold ${reserveMet? 'text-green-400' : 'text-red-400'}`}>
                       {reserveMet? 'MET' : 'OPEN'}
                     </div>
@@ -443,7 +440,7 @@ export default function WarRoomPage() {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setBidAmount(amt.toString())}
-                        className="bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/50 py-2.5 rounded-lg text-[10px] tracking-wider transition-all"
+                        className="bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/50 py-2.5 rounded-lg text-xs tracking-wider transition-all"
                       >
                         ${amt.toLocaleString()}
                       </motion.button>
@@ -467,7 +464,7 @@ export default function WarRoomPage() {
                   )}
                 </AnimatePresence>
                 <div className="text-3xl font-bold text-green-400 mb-2 tracking-tight">SOLD</div>
-                <div className="text-[10px] text-zinc-500 tracking-widest">WINNING BID</div>
+                <div className="text-xs text-zinc-500 tracking-widest">WINNING BID</div>
                 <div className="text-4xl font-bold tracking-tighter">${room.final_price?.toLocaleString()}</div>
               </div>
             )}
@@ -475,20 +472,19 @@ export default function WarRoomPage() {
             {room.status === 'unsold' && (
               <div className="text-center py-8">
                 <div className="text-3xl font-bold text-red-400 mb-2 tracking-tight">UNSOLD</div>
-                <div className="text-[10px] text-zinc-500 tracking-widest">RESERVE NOT MET</div>
+                <div className="text-xs text-zinc-500 tracking-widest">RESERVE NOT MET</div>
               </div>
             )}
 
             {room.status === 'scheduled' && (
               <div className="text-center py-8">
                 <div className="text-xl font-bold text-zinc-400 mb-2 tracking-tight">SCHEDULED</div>
-                <div className="text-[10px] text-zinc-500 tracking-widest">
+                <div className="text-xs text-zinc-500 tracking-widest">
                   {new Date(room.scheduled_for).toLocaleString()}
                 </div>
               </div>
             )}
 
-            {/* TX TERMS */}
             {deal.state === 'TX' && (
               <div className="mt-6 pt-6 border-t border-zinc-800/50 text-[9px] text-zinc-500 leading-relaxed space-y-1">
                 <div className="text-amber-500 font-bold tracking-widest">TX AUCTION TERMS</div>
