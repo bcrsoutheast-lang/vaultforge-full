@@ -27,7 +27,7 @@ export default function Home() {
         color: '#a1a1aa', 
         marginBottom: '8px' 
       }}>
-        Veteran Pride Exterior Services
+        Private Investor Network
       </p>
       
       <p style={{ 
@@ -35,21 +35,37 @@ export default function Home() {
         color: '#71717a', 
         marginBottom: '32px' 
       }}>
-        We Fight Dirt. We Fight Bad Deals.
+        Residential • Commercial • Land • Deal Intelligence
       </p>
 
-      <Link href="/deals" style={{
-        backgroundColor: '#facc15',
-        color: '#000',
-        fontWeight: '900',
-        fontSize: '18px',
-        padding: '16px 32px',
-        borderRadius: '8px',
-        textDecoration: 'none',
-        display: 'inline-block'
-      }}>
-        VIEW DEAL OPPORTUNITIES
-      </Link>
+      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <Link href="/login" style={{
+          backgroundColor: '#facc15',
+          color: '#000',
+          fontWeight: '900',
+          fontSize: '18px',
+          padding: '16px 32px',
+          borderRadius: '8px',
+          textDecoration: 'none',
+          display: 'inline-block'
+        }}>
+          MEMBER LOGIN
+        </Link>
+        
+        <Link href="/pain-intake" style={{
+          backgroundColor: '#27272a',
+          color: '#fff',
+          fontWeight: '700',
+          fontSize: '18px',
+          padding: '16px 32px',
+          borderRadius: '8px',
+          textDecoration: 'none',
+          display: 'inline-block',
+          border: '1px solid #3f3f46'
+        }}>
+          SUBMIT PAIN DEAL
+        </Link>
+      </div>
     </div>
   )
 }
