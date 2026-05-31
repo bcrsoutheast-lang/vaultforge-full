@@ -1,238 +1,100 @@
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RSVP Component</title>
+  <title>VaultForge - Military Surplus Binding RSVP</title>
   <style>
-    .rsvp-modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.85);
-      z-index: 9999;
-      overflow-y: auto;
-    }
-   .rsvp-card {
-      background: #1e293b;
-      max-width: 500px;
-      margin: 5% auto;
-      padding: 24px;
-      border-radius: 12px;
-      border: 1px solid #334155;
-      color: #fff;
-      font-family: system-ui, -apple-system, sans-serif;
-    }
-   .rsvp-card h3 {
-      margin: 0 0 8px 0;
-      font-size: 20px;
-    }
-   .property-addr {
-      color: #94a3b8;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-   .terms-box {
-      background: #0f172a;
-      padding: 16px;
-      border-radius: 8px;
-      margin: 16px 0;
-      font-size: 14px;
-      line-height: 1.6;
-      border: 1px solid #334155;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-   .terms-box strong {
-      color: #e2e8f0;
-    }
-   .checkbox-row {
-      display: flex;
-      align-items: flex-start;
-      margin: 12px 0;
-      font-size: 14px;
-    }
-   .checkbox-row input {
-      width: 18px;
-      height: 18px;
-      margin: 2px 10px 0 0;
-      flex-shrink: 0;
-      cursor: pointer;
-    }
-   .checkbox-row label {
-      cursor: pointer;
-      line-height: 1.4;
-    }
-   .rsvp-btn {
-      width: 100%;
-      padding: 16px;
-      background: #475569;
-      color: #94a3b8;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: bold;
-      margin-top: 16px;
-      cursor: not-allowed;
-      transition: all 0.2s;
-    }
-   .rsvp-btn.active {
-      background: #22c55e;
-      color: #000;
-      cursor: pointer;
-    }
-   .cancel-btn {
-      width: 100%;
-      padding: 12px;
-      background: transparent;
-      color: #94a3b8;
-      border: 1px solid #475569;
-      border-radius: 8px;
-      margin-top: 8px;
-      cursor: pointer;
-    }
-   .loading {
-      display: none;
-      text-align: center;
-      padding: 12px;
-      color: #60a5fa;
-    }
+    body { background: #0f172a; color: #fff; font-family: system-ui; padding: 20px; margin: 0; }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { color: #22d3ee; font-size: 28px; margin-bottom: 8px; }
+    .badge { background: #dc2626; padding: 4px 12px; border-radius: 4px; font-size: 12px; display: inline-block; margin-bottom: 24px; }
+    .terms { background: #1e293b; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #22d3ee; }
+    .terms h3 { margin-top: 0; color: #22d3ee; }
+    .terms ul { padding-left: 20px; }
+    .terms li { margin-bottom: 12px; line-height: 1.6; }
+    input { width: 100%; padding: 12px; margin: 8px 0; background: #1e293b; border: 1px solid #334155; color: #fff; border-radius: 6px; box-sizing: border-box; }
+    button { width: 100%; padding: 16px; background: #22d3ee; color: #0f172a; border: none; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 16px; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .disclaimer { font-size: 12px; color: #94a3b8; margin-top: 16px; line-height: 1.5; }
+    .checkbox-row { display: flex; align-items: flex-start; margin: 16px 0; }
+    .checkbox-row input { width: auto; margin: 2px 10px 0 0; }
   </style>
 </head>
 <body>
-
-<div id="rsvpModal" class="rsvp-modal">
-  <div class="rsvp-card">
-    <h3>VAULTFORGE AUCTION RSVP - BINDING COMMITMENT</h3>
-    <p class="property-addr" id="propertyAddr">123 Main St, Atlanta GA</p>
-
-    <div class="terms-box">
-      <strong>BY RSVP'ING YOU LEGALLY AGREE TO ALL TERMS BELOW:</strong><br><br>
-
-      <strong>1. COMMITMENT TO BID</strong><br>
-      You agree to place at least ONE bid at or above the reserve of <span id="reserveAmt">$180,000</span>.<br>
-      No bid = Strike. 2 Strikes = 30 day ban.<br><br>
-
-      <strong>2. EARNEST DEPOSIT IF YOU WIN</strong><br>
-      If you are the winning bidder, you agree to pay a NON-REFUNDABLE earnest deposit of 15% = <span id="depositAmt">$27,000</span> within 24 hours of gavel.<br><br>
-
-      <strong>DEPOSIT FORFEITURE:</strong> If you win and fail to close for any reason within your control, you forfeit the full deposit to Seller as liquidated damages. No refunds for buyer's remorse, financing issues, or failure to perform.<br><br>
-
-      <strong>3. AS-IS PURCHASE</strong><br>
-      You confirm you have access to the State Seller Disclosure and are bidding AS-IS, WHERE-IS with no contingencies.<br><br>
-
-      <strong>4. DISPUTE WAIVER</strong><br>
-      You waive rights to credit card chargeback or ACH dispute except in cases of fraud. Disputes go to legal@vaultforge.com first.<br><br>
-
-      <strong>5. ELECTRONIC SIGNATURE</strong><br>
-      Checking below constitutes your legal signature agreeing to VaultForge Auction Terms and Earnest Deposit Agreement. IP address and timestamp will be recorded.
-    </div>
-
-    <div class="checkbox-row">
-      <input type="checkbox" id="check1">
-      <label for="check1">I understand I must bid at least once.</label>
-    </div>
-    <div class="checkbox-row">
-      <input type="checkbox" id="check2">
-      <label for="check2">I understand I must pay <span id="depositAmt2">$27,000</span> NON-REFUNDABLE deposit if I win.</label>
-    </div>
-    <div class="checkbox-row">
-      <input type="checkbox" id="check3">
-      <label for="check3">I have read and agree to all terms above.</label>
-    </div>
-
-    <div class="loading" id="loading">Saving binding commitment...</div>
-
-    <button id="confirmRSVP" class="rsvp-btn" disabled>CONFIRM RSVP & COMMIT TO BID</button>
-    <button onclick="closeRSVP()" class="cancel-btn">CANCEL</button>
-  </div>
-</div>
-
-<script>
-let currentAuction = {}
-
-function openRSVP(auctionId, propertyAddr, reserve, deposit) {
-  currentAuction = { id: auctionId, propertyAddr, reserve, deposit }
-  document.getElementById('propertyAddr').textContent = propertyAddr
-  document.getElementById('reserveAmt').textContent = '$' + reserve.toLocaleString()
-  document.getElementById('depositAmt').textContent = '$' + deposit.toLocaleString()
-  document.getElementById('depositAmt2').textContent = '$' + deposit.toLocaleString()
-  document.getElementById('rsvpModal').style.display = 'block'
-  document.body.style.overflow = 'hidden'
-}
-
-function closeRSVP() {
-  document.getElementById('rsvpModal').style.display = 'none'
-  document.body.style.overflow = 'auto'
-  document.querySelectorAll('#rsvpModal input[type=checkbox]').forEach(cb => cb.checked = false)
-  document.getElementById('confirmRSVP').disabled = true
-  document.getElementById('confirmRSVP').classList.remove('active')
-  document.getElementById('loading').style.display = 'none'
-}
-
-// Enable button only when all 3 checked
-document.querySelectorAll('#rsvpModal input[type=checkbox]').forEach(cb => {
-  cb.addEventListener('change', () => {
-    const allChecked = Array.from(document.querySelectorAll('#rsvpModal input[type=checkbox]')).every(c => c.checked)
-    const btn = document.getElementById('confirmRSVP')
-    btn.disabled = !allChecked
-    if(allChecked) {
-      btn.classList.add('active')
-    } else {
-      btn.classList.remove('active')
-    }
-  })
-})
-
-// Submit RSVP to backend
-document.getElementById('confirmRSVP').addEventListener('click', async () => {
-  const btn = document.getElementById('confirmRSVP')
-  const loading = document.getElementById('loading')
-  btn.style.display = 'none'
-  loading.style.display = 'block'
-
-  const user = JSON.parse(localStorage.getItem('vaultforge_user') || '{"id":"guest","name":"Guest"}')
-  
-  const rsvpData = {
-    auctionId: currentAuction.id,
-    userId: user.id,
-    depositAmount: currentAuction.deposit,
-    checkbox1: document.getElementById('check1').checked,
-    checkbox2: document.getElementById('check2').checked,
-    checkbox3: document.getElementById('check3').checked
-  }
-
-  try {
-    const res = await fetch('/api/rsvp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(rsvpData)
-    })
-    const data = await res.json()
+  <div class="container">
+    <h1>VAULTFORGE MILITARY SURPLUS AUCTION</h1>
+    <div class="badge">BLOOMBERG TERMINAL VERIFIED</div>
     
-    if(data.success) {
-      alert('RSVP Confirmed. You are legally committed to bid. War Room opens 15min before start.')
-      localStorage.setItem('rsvp_' + currentAuction.id, JSON.stringify({...rsvpData, rsvpId: data.rsvpId}))
-      closeRSVP()
-      location.reload()
-    } else {
-      alert('Error: ' + (data.error || 'Failed to save RSVP. Try again.'))
-      btn.style.display = 'block'
-      loading.style.display = 'none'
-    }
-  } catch (err) {
-    alert('Network error. Check connection and try again.')
-    btn.style.display = 'block'
-    loading.style.display = 'none'
-  }
-})
+    <div class="terms">
+      <h3>BINDING BID TERMS - UCC §2-205 FIRM OFFER</h3>
+      <ul>
+        <li><strong>Bloomberg Verification:</strong> All lots verified against Bloomberg Military Surplus Index. Pricing reflects 72-hour terminal data.</li>
+        <li><strong>Binding Authorization:</strong> RSVP authorizes a $500 card hold. This is a firm offer under UCC §2-205. You waive right to revoke for 72 hours.</li>
+        <li><strong>Chargeback Waiver:</strong> You waive chargeback rights on the $500 authorization per auction terms §4.2. Disputes = binding arbitration Fulton County, GA.</li>
+        <li><strong>72-Hour Close:</strong> Winning bidders must fund within 72 hours. Failure to close = forfeit $500 to Seller as liquidated damages.</li>
+        <li><strong>ITAR/AS-IS:</strong> Military surplus sold as-is, where-is. Subject to ITAR restrictions. No warranties. Inspection waived.</li>
+      </ul>
+    </div>
 
-// Example usage: Call this from your auction card
-// openRSVP('auction_123', '123 Main St, Atlanta GA', 180000, 27000)
-</script>
+    <form id="rsvpForm">
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="text" id="dealId" placeholder="Deal ID" value="MIL-SURPLUS-BLOOM-001" required>
+      <input type="number" id="authAmount" placeholder="Authorization Amount" value="500" required>
+      
+      <div class="checkbox-row">
+        <input type="checkbox" id="agree" required>
+        <label for="agree">I agree to Binding Bid Terms above, authorize $500 hold, and waive chargeback rights per UCC §2-205</label>
+      </div>
+      
+      <button type="submit" id="submitBtn">SUBMIT BINDING RSVP - $500 HOLD</button>
+    </form>
+    
+    <p class="disclaimer">
+      VaultForge LLC. Electronic signature recorded with IP + timestamp. This is not an offer of securities. 
+      Military surplus subject to ITAR. By submitting you consent to binding arbitration.
+    </p>
+  </div>
 
+  <script>
+    document.getElementById('rsvpForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'PROCESSING BINDING COMMITMENT...';
+      
+      const data = {
+        email: document.getElementById('email').value,
+        dealId: document.getElementById('dealId').value,
+        fee: 500,
+        authAmount: 500,
+        terms: 'UCC-2-205-BLOOMBERG-MILITARY',
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent
+      };
+      
+      try {
+        const res = await fetch('/api/rsvp', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(data)
+        });
+        const json = await res.json();
+        if (json.ok) {
+          alert('BINDING RSVP CONFIRMED. $500 hold placed. Check email for wire instructions. 72 hours to close.');
+          btn.textContent = 'RSVP CONFIRMED ✓';
+          btn.style.background = '#22c55e';
+        } else {
+          alert('Error: ' + (json.error || 'Failed'));
+          btn.disabled = false;
+          btn.textContent = 'SUBMIT BINDING RSVP - $500 HOLD';
+        }
+      } catch (err) {
+        alert('Network error. Try again.');
+        btn.disabled = false;
+        btn.textContent = 'SUBMIT BINDING RSVP - $500 HOLD';
+      }
+    };
+  </script>
 </body>
-</htm
+</html>
