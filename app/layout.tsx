@@ -1,12 +1,6 @@
-import './globals.css'
-import { Inter } from 'next/font/google'
-import Nav from '@/components/Nav'
-
-const inter = Inter({ subsets: ['latin'] })
-
 export const metadata = {
-  title: '6SIGMA Pain Room',
-  description: 'Real Estate Pain Intake & Deal Flow System',
+  title: 'VaultForge',
+  description: 'Private Real Estate Auctions',
 }
 
 export default function RootLayout({
@@ -16,8 +10,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-black`}>
-        <Nav />
+      <body style={{ margin: 0, background: '#0f172a', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         {children}
       </body>
     </html>
