@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>VaultForge - Sell Your Property</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #0f172a; color: #fff; }
+   .form-card { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; }
+    label { display: block; margin: 16px 0 6px; font-weight: bold; color: #cbd5e1; }
+    input, select, textarea { width: 100%; padding: 12px; border: 1px solid #475569; border-radius: 8px; background: #0f172a; color: #fff; font-size: 16px; }
+    input:focus { border-color: #3b82f6; outline: none; }
+   .checkbox-row { display: flex; align-items: center; margin: 12px 0; }
+   .checkbox-row input { width: auto; margin-right: 10px; }
+    button { width: 100%; padding: 16px; background: #22c55e; color: #000; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+    button:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
+   .save-status { position: fixed; bottom: 20px; right: 20px; background: #22c55e; color: #000; padding: 8px 16px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity 0.3s; }
+   .save-status.show { opacity: 1; }
+   .auto-tag { font-size: 12px; color: #60a5fa; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="form-card">
+    <h2>SELL YOUR HOUSE ON VAULTFORGE</h2>
+    <p style="color:#94a3b8;">60 seconds. We handle the rest.</p>
+
+    <form id="sellerForm">
+      <label>Property Address</label>
+      <input type="text" id="address" placeholder="Start typing address..." autocomplete="street-address">
+      <div class="auto-tag" id="addressTag"></div>
+
+      <label>Your Role</label>
+      <select id="role">
+        <option value="owner">Property Owner</option>
+        <option value="realtor">Licensed Realtor</option>
+        <option value="wholesaler">Wholesaler</option>
+      </select>
+
+      <label>State Disclosure Upload</label>
+      <input type="file" id="disclosure" accept=".pdf">
+      <div class="auto-tag" id="disclosureTag">Required for TX & GA. Auto-detects state.</div>
+
+      <label>How do you want to sell?</label>
+      <select id="sellMethod">
+        <option value="route">Route to Members - AI finds buyers | 48hr target</option>
+        <option value="auction">Auction - War Room | You pick date</option>
+      </select>
+
+      <div id="auctionFields" style="display:none;">
+        <label>Auction Date</label>
+        <input type="date" id="auctionDate">
+        <label>Reserve Price</label>
+        <input type="number" id="reserve" placeholder="180000">
+        <label>Minimum Bidders Required</label>
+        <select id="minBidders">
+          <option value="3">3 Bidders</option>
+          <option value="5" selected>5 Bidders</option>
+          <option value="8">8 Bidders</option>
+        </select>
+      </div>
+
+      <label>Your Phone</label>
+      <input type="tel" id="phone" placeholder="(555) 123-4567" autocomplete="tel">
+
+      <label>Title Company</label>
+      <input type="text" id="titleCompany" placeholder="ABC Title">
+
+      <button type="submit" id="submitBtn">SUBMIT DEAL TO VAULTFORGE</button>
+    </form>
+  </div>
+
+  <div class="save-status" id="saveStatus">Saved</div>
+
+<script>
+// Auto-save every 3 seconds + auto-populate
+const form = document.getElementById('sellerForm');
+const saveStatus = document.getElementById('saveStatus');
+const user = JSON.parse(localStorage.getItem('vaultforge_user') || '{"name":"Deeve Moneyy","phone":"(555) 987-6543","state":"TX"}');
+
+// Auto-populate from user profile
+document.getElementById('phone').value = user.phone;
+
+// Show auction fields if selected
+document.getElementById('sellMethod').addEventListener('change', (e) => {
+  document.getElementById('auctionFields').style.display = e.target.value === 'auction'? 'block' : 'none';
+});
+
+// Auto-save function
+function autoSave() {
+  const formData = {
+    address: document.getElementById('address').value,
+    role: document.getElementById('role').value,
+    sellMethod: document.getElementById('sellMethod').value,
+    auctionDate: document.getElementById('auctionDate').value,
+    reserve: document.getElementById('reserve').value,
+    minBidders: document.getElementById('minBidders').value,
+    phone: document.getElementById('phone').value,
+    titleCompany: document.getElementById('titleCompany').value
+  };
+  localStorage.setItem('sellerForm_draft', JSON.stringify(formData));
+  saveStatus.classList.add('show');
+  setTimeout(() => saveStatus.classList.remove('show'), 1500);
+}
+
+// Load saved draft
+const draft = JSON.parse(localStorage.getItem('sellerForm_draft') || '{}');
+Object.keys(draft).forEach(key => {
+  if(document.getElementById(key)) document.getElementById(key).value = draft[key];
+});
+if(draft.sellMethod === 'auction') document.getElementById('auctionFields').style.display = 'block';
+
+// Save on input
+form.addEventListener('input', () => setTimeout(autoSave, 500));
+
+// State detection from address
+document.getElementById('address').addEventListener('blur', (e) => {
+  const addr = e.target.value;
+  if(addr.includes('TX') || addr.includes('Texas')) {
+    document.getElementById('addressTag').textContent = 'Texas detected. TREC disclosure required.';
+  } else if(addr.includes('GA') || addr.includes('Georgia')) {
+    document.getElementById('addressTag').textContent = 'Georgia detected. GA disclosure + Auctioneer # required.';
+  }
+});
+
+// Submit
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  localStorage.removeItem('sellerForm_draft');
+  alert('Deal submitted. You will receive a call in 10 minutes.');
+  window.location.href = '/dashboard';
+});
+</script>
+</body>
+</html>
