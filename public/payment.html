@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VaultForge - Payment Authorization</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        body { 
+            background: #0a0e1a; 
+            color: #fff; 
+            font-family: Arial, sans-serif; 
+            max-width: 600px; 
+            margin: 50px auto; 
+            padding: 20px;
+        }
+        .card { 
+            background: #1a1f2e; 
+            border: 2px solid #00d4ff; 
+            border-radius: 12px; 
+            padding: 30px; 
+        }
+        h1 { color: #00d4ff; }
+        #card-element { 
+            background: #0a0e1a; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin: 20px 0;
+        }
+        button { 
+            background: #00d4ff; 
+            color: #000; 
+            border: none; 
+            padding: 15px 30px; 
+            font-size: 18px; 
+            font-weight: bold;
+            border-radius: 8px; 
+            width: 100%; 
+            cursor: pointer;
+        }
+        .legal { font-size: 12px; color: #888; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>$500 BINDING BID AUTHORIZATION</h1>
+        <p>This authorizes a $500 hold on your card per UCC §2-205. Funds released if outbid. Forfeit if you win and fail to close in 72hrs.</p>
+        
+        <form id="payment-form">
+            <div id="card-element"></div>
+            <button type="submit">Authorize $500 Hold</button>
+        </form>
+        
+        <div class="legal">
+            By submitting you agree to Binding Bid Terms. Chargeback waiver applies. 
+            ITAR/AS-IS. Fulton County, GA arbitration.
+        </div>
+    </div>
+</body>
+</html
