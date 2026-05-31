@@ -1,14 +1,7 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  images: {
-    remotePatterns: [{ protocol: 'https', hostname: '**' }],
-  },
-}
-
-module.exports = nextConfig
+   const nextConfig = {
+     output: 'export',
+     images: { unoptimized: true },
+     trailingSlash: true
+   }
+   module.exports = nextConfig
