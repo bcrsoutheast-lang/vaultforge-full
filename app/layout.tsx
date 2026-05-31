@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'VaultForge - Veteran Pride Deals',
-  description: 'We Fight Dirt. We Fight Bad Deals.',
+  title: 'VaultForge - Private Deal Room',
+  description: 'Members-only real estate deal intelligence. Residential, commercial, and land.',
 }
 
 export default function RootLayout({
