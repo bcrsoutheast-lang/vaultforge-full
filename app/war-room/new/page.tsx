@@ -1,251 +1,125 @@
-// @ts-nocheck
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { getAuctionTerms } from '@/lib/auction-terms'
 
 export default function NewWarRoomPage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [photos, setPhotos] = useState([])
   const [form, setForm] = useState({
     address: '',
+    city: '',
+    state: 'TX',
     arv: '',
     repairs: '',
     reserve_price: '',
-    starting_price: '',
-    minimum_assignment: '',
-    scheduled_for: '',
-    description: ''
+    broker_company: '',
+    broker_license: '',
+    agent_name: '',
+    agent_license: '',
+    brokerage_address: '',
+    title_company: '',
+    seller_disclosure_url: ''
   })
-
+  const [uploading, setUploading] = useState(false)
+  const router = useRouter()
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const handlePhotoUpload = async (e) => {
-    const files = Array.from(e.target.files)
-    setLoading(true)
+  const uploadDisclosure = async (e: any) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploading(true)
+    const fileName = `disclosure-${Date.now()}.pdf`
+    const { data, error } = await supabase.storage
+    .from('deal-photos')
+    .upload(fileName, file)
     
-    for (const file of files) {
-      const fileName = `${Date.now()}-${file.name}`
-      const { data, error } = await supabase.storage
-        .from('deal-photos')
-        .upload(fileName, file)
-      
-      if (!error) {
-        const { data: { publicUrl } } = supabase.storage
-          .from('deal-photos')
-          .getPublicUrl(fileName)
-        setPhotos(prev => [...prev, publicUrl])
-      }
+    if (data) {
+      const { data: { publicUrl } } = supabase.storage.from('deal-photos').getPublicUrl(fileName)
+      setForm({ ...form, seller_disclosure_url: publicUrl })
     }
-    setLoading(false)
+    setUploading(false)
   }
 
-  const createWarRoom = async () => {
-    setLoading(true)
+  const canLaunch = form.broker_license && form.seller_disclosure_url && form.title_company
+
+  const handleSubmit = async () => {
+    if (!canLaunch) {
+      alert('TX Law: Broker License, Title Company, and T-64 Disclosure required to launch')
+      return
+    }
     
-    // 1. Create deal first
-    const { data: deal, error: dealError } = await supabase
-      .from('deals')
-      .insert({
-        address: form.address,
-        arv: parseInt(form.arv),
-        repairs: parseInt(form.repairs),
-        reserve_price: parseInt(form.reserve_price),
-        minimum_assignment: parseInt(form.minimum_assignment),
-        description: form.description,
-        photos: photos,
-        status: 'active'
-      })
-      .select()
-      .single()
-
-    if (dealError) {
-      alert('Error creating deal: ' + dealError.message)
-      setLoading(false)
-      return
-    }
-
-    // 2. Create war room
-    const endsAt = new Date(form.scheduled_for)
-    endsAt.setMinutes(endsAt.getMinutes() + 15) // 15 min auction
-
-    const { data: room, error: roomError } = await supabase
-      .from('war_rooms')
-      .insert({
-        deal_id: deal.id,
-        scheduled_for: form.scheduled_for,
-        ends_at: endsAt.toISOString(),
-        starting_price: parseInt(form.starting_price),
-        status: 'scheduled'
-      })
-      .select()
-      .single()
-
-    if (roomError) {
-      alert('Error creating war room: ' + roomError.message)
-      setLoading(false)
-      return
-    }
-
-    router.push(`/war-room/${room.id}`)
+    const { data } = await supabase.from('deals').insert(form).select().single()
+    router.push(`/war-room/${data.id}`)
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-mono">
-      {/* HEADER */}
-      <div className="border-b border-zinc-800 bg-black">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Image src="/IMG_4751.png" alt="VaultForge" width={40} height={40} className="rounded" />
-          <div>
-            <div className="text-xs text-amber-500 tracking-widest">VAULTFORGE</div>
-            <div className="text-lg font-bold">CREATE WAR ROOM</div>
-          </div>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-8 max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Create War Room - {form.state}</h1>
+      
+      <div className="space-y-4">
+        <select 
+          value={form.state} 
+          onChange={e => setForm({...form, state: e.target.value})}
+          className="w-full bg-zinc-900 border border-zinc-700 rounded p-3"
+        >
+          <option value="TX">Texas</option>
+          <option value="GA">Georgia</option>
+          <option value="FL">Florida</option>
+          <option value="CA">California</option>
+        </select>
+
+        <input placeholder="Property Address" className="w-full bg-zinc-900 border border-zinc-700 rounded p-3"
+          value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+        
+        <div className="grid grid-cols-2 gap-4">
+          <input placeholder="City" className="bg-zinc-900 border border-zinc-700 rounded p-3"
+            value={form.city} onChange={e => setForm({...form, city: e.target.value})} />
+          <input placeholder="ARV" type="number" className="bg-zinc-900 border border-zinc-700 rounded p-3"
+            value={form.arv} onChange={e => setForm({...form, arv: e.target.value})} />
         </div>
-      </div>
 
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-black border border-zinc-800 rounded-lg p-8 space-y-6">
-          
-          {/* PROPERTY DETAILS */}
-          <div>
-            <div className="text-xs text-amber-500 mb-4 tracking-widest">PROPERTY DETAILS</div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="text-xs text-zinc-500">ADDRESS</label>
-                <input
-                  type="text"
-                  value={form.address}
-                  onChange={e => setForm({...form, address: e.target.value})}
-                  placeholder="123 Main St, Atlanta GA"
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 mt-1 focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500">ARV</label>
-                <input
-                  type="number"
-                  value={form.arv}
-                  onChange={e => setForm({...form, arv: e.target.value})}
-                  placeholder="450000"
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 mt-1 focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500">REPAIRS</label>
-                <input
-                  type="number"
-                  value={form.repairs}
-                  onChange={e => setForm({...form, repairs: e.target.value})}
-                  placeholder="45000"
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 mt-1 focus:border-amber-500 outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* AUCTION SETTINGS */}
-          <div>
-            <div className="text-xs text-amber-500 mb-4 tracking-widest">AUCTION SETTINGS</div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-zinc-500">RESERVE PRICE</label>
-                <input
-                  type="number"
-                  value={form.reserve_price}
-                  onChange={e => setForm({...form, reserve_price: e.target.value})}
-                  placeholder="300000"
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 mt-1 focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500">STARTING BID</label>
-                <input
-                  type="number"
-                  value={form.starting_price}
-                  onChange={e => setForm({...form, starting_price: e.target.value})}
-                  placeholder="250000"
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 mt-1 focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500">MIN ASSIGNMENT FEE</label>
-                <input
-                  type="number"
-                  value={form.minimum_assignment}
-                  onChange={e => setForm({...form, minimum_assignment: e.target.value})}
-                  placeholder="15000"
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 mt-1 focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-zinc-500">SCHEDULED START</label>
-                <input
-                  type="datetime-local"
-                  value={form.scheduled_for}
-                  onChange={e => setForm({...form, scheduled_for: e.target.value})}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 mt-1 focus:border-amber-500 outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* PHOTOS */}
-          <div>
-            <div className="text-xs text-amber-500 mb-4 tracking-widest">PROPERTY PHOTOS</div>
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handlePhotoUpload}
-              className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 text-sm"
-            />
-            {photos.length > 0 && (
-              <div className="flex gap-2 mt-3 overflow-x-auto">
-                {photos.map((url, i) => (
-                  <div key={i} className="relative w-20 h-20 flex-shrink-0 rounded overflow-hidden">
-                    <Image src={url} alt="" fill className="object-cover" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* DESCRIPTION */}
-          <div>
-            <label className="text-xs text-zinc-500">DESCRIPTION / NOTES</label>
-            <textarea
-              value={form.description}
-              onChange={e => setForm({...form, description: e.target.value})}
-              placeholder="3BR/2BA brick ranch. Needs roof + HVAC. Good rental area..."
-              rows={4}
-              className="w-full bg-zinc-950 border border-zinc-700 rounded px-4 py-3 mt-1 focus:border-amber-500 outline-none"
-            />
-          </div>
-
-          {/* TERMS */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded p-4 text-xs text-zinc-400">
-            <div className="font-bold text-amber-500 mb-2">WAR ROOM TERMS</div>
-            <div>• Auction runs 15 minutes from scheduled start</div>
-            <div>• Each new bid extends timer to 2:00 minimum</div>
-            <div>• If SOLD: Winner pays 15% deposit instantly. You collect 2% fee.</div>
-            <div>• If UNSOLD: You pay $150 listing fee to VaultForge</div>
-            <div>• All sales subject to contract + due diligence</div>
-          </div>
-
-          {/* SUBMIT */}
-          <button
-            onClick={createWarRoom}
-            disabled={loading || !form.address || !form.reserve_price || !form.scheduled_for}
-            className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-zinc-800 disabled:text-zinc-600 py-4 rounded-lg font-bold text-lg transition-colors"
-          >
-            {loading? 'CREATING...' : 'LAUNCH WAR ROOM'}
-          </button>
+        <div className="border-t border-amber-600 pt-4 mt-6">
+          <div className="text-amber-500 font-bold mb-3">BROKER INFO - REQUIRED BY {form.state} LAW</div>
+          <input placeholder="Broker Company *" required className="w-full bg-zinc-900 border border-zinc-700 rounded p-3 mb-2"
+            value={form.broker_company} onChange={e => setForm({...form, broker_company: e.target.value})} />
+          <input placeholder="Broker License # * (TREC # for TX)" required className="w-full bg-zinc-900 border border-zinc-700 rounded p-3 mb-2"
+            value={form.broker_license} onChange={e => setForm({...form, broker_license: e.target.value})} />
+          <input placeholder="Agent Name" className="w-full bg-zinc-900 border border-zinc-700 rounded p-3 mb-2"
+            value={form.agent_name} onChange={e => setForm({...form, agent_name: e.target.value})} />
+          <input placeholder="Agent License #" className="w-full bg-zinc-900 border border-zinc-700 rounded p-3 mb-2"
+            value={form.agent_license} onChange={e => setForm({...form, agent_license: e.target.value})} />
+          <input placeholder="Brokerage Address" className="w-full bg-zinc-900 border border-zinc-700 rounded p-3"
+            value={form.brokerage_address} onChange={e => setForm({...form, brokerage_address: e.target.value})} />
         </div>
+
+        <div className="border-t border-amber-600 pt-4 mt-6">
+          <div className="text-amber-500 font-bold mb-3">TITLE COMPANY - REQUIRED</div>
+          <input placeholder="Title Company Name *" required className="w-full bg-zinc-900 border border-zinc-700 rounded p-3"
+            value={form.title_company} onChange={e => setForm({...form, title_company: e.target.value})} />
+        </div>
+
+        <div className="border-t border-amber-600 pt-4 mt-6">
+          <div className="text-amber-500 font-bold mb-3">SELLER DISCLOSURE - REQUIRED BY LAW</div>
+          <input type="file" accept=".pdf" onChange={uploadDisclosure} className="w-full mb-2" />
+          {uploading && <div className="text-zinc-500">Uploading...</div>}
+          {form.seller_disclosure_url && <div className="text-green-400 text-sm">✓ T-64 Uploaded</div>}
+          {!form.seller_disclosure_url && <div className="text-red-500 text-sm">TX Prop Code §5.008: Disclosure required before auction start</div>}
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-700 rounded p-4 text-xs whitespace-pre-wrap">
+          {getAuctionTerms(form.state, form)}
+        </div>
+
+        <button 
+          onClick={handleSubmit}
+          disabled={!canLaunch}
+          className="w-full bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 py-4 rounded font-bold"
+        >
+          {canLaunch? 'CREATE WAR ROOM' : 'MISSING REQUIRED FIELDS'}
+        </button>
       </div>
     </div>
   )
