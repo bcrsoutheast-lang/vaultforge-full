@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation'
 
 export default function CommandCenter() {
   const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
   const [signals, setSignals] = useState<any[]>([])
   const [tickerAlerts, setTickerAlerts] = useState<string[]>([])
   const [messages, setMessages] = useState<any[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [members, setMembers] = useState<any[]>([])
   const [selectedState, setSelectedState] = useState('GA')
-  const [showMapLocked, setShowMapLocked] = useState(false)
   const supabase = createClientComponentClient()
   const router = useRouter()
 
@@ -29,8 +29,20 @@ export default function CommandCenter() {
 
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) router.push('/login')
+    if (!user) {
+      router.push('/login')
+      return
+    }
     setUser(user)
+    
+    // Fetch profile for avatar + tier
+    const { data: profileData } = await supabase
+      .from('member_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .single()
+    
+    if (profileData) setProfile(profileData)
   }
 
   const fetchSignals = async () => {
@@ -117,15 +129,29 @@ export default function CommandCenter() {
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <div>
-          <div style={{ fontSize: '18px', fontWeight: '700', letterSpacing: '0.05em' }}>
-            VAULTFORGE COMMAND CENTER
-          </div>
-          <div style={{ fontSize: '10px', color: '#888', letterSpacing: '0.1em' }}>
-            LIVE INTEL // {user?.email}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {profile?.avatar_url && (
+            <img
+              src={profile.avatar_url}
+              alt="Profile"
+              style={{
+                width: '40px',
+                height: '40px',
+                border: '1px solid #333',
+                objectFit: 'cover'
+              }}
+            />
+          )}
+          <div>
+            <div style={{ fontSize: '18px', fontWeight: '700', letterSpacing: '0.05em' }}>
+              VAULTFORGE COMMAND CENTER
+            </div>
+            <div style={{ fontSize: '10px', color: '#888', letterSpacing: '0.1em' }}>
+              {profile?.tier || 'STANDARD'} // {user?.email}
+            </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{
             background: unreadCount > 0 ? '#dc2626' : '#333',
             padding: '8px 16px',
@@ -136,6 +162,20 @@ export default function CommandCenter() {
           }}>
             {unreadCount} UNREAD SIGNALS
           </div>
+          <button 
+            onClick={() => router.push('/profile')}
+            style={{
+              background: '#111',
+              color: '#f8f8f8',
+              border: '1px solid #333',
+              padding: '8px 16px',
+              fontSize: '11px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}
+          >
+            PROFILE
+          </button>
           <button 
             onClick={() => router.push('/deals')} 
             style={{
@@ -271,13 +311,25 @@ export default function CommandCenter() {
               border: '1px solid #333',
               padding: '8px',
               marginBottom: '6px',
-              fontSize: '10px'
+              fontSize: '10px',
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center'
             }}>
-              <div style={{ fontWeight: '700', color: m.tier === 'INSTITUTIONAL' ? '#facc15' : '#f8f8f8' }}>
-                {m.email}
-              </div>
-              <div style={{ color: '#666', fontSize: '9px' }}>
-                {m.tier} // {m.investor_types?.join(', ')}
+              {m.avatar_url && (
+                <img 
+                  src={m.avatar_url} 
+                  alt="" 
+                  style={{ width: '24px', height: '24px', objectFit: 'cover' }}
+                />
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: '700', color: m.tier === 'INSTITUTIONAL' ? '#facc15' : '#f8f8f8' }}>
+                  {m.email}
+                </div>
+                <div style={{ color: '#666', fontSize: '9px' }}>
+                  {m.tier} // {m.investor_types?.join(', ')}
+                </div>
               </div>
             </div>
           ))}
