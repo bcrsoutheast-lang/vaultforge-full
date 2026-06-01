@@ -126,6 +126,7 @@ export default function Members() {
               <div className="text-[#D4AF37] text-xs font-bold tracking-[0.3em]">MEMBERS VAULT</div>
               <div className="text-[#D4AF37]/60 text-xs tracking-[0.4em]">FOUNDING MEMBER</div>
             </div>
+          </div>
           <div className="flex items-center gap-4">
             <span className="text-[#D4AF37]/60 text-xs hidden md:block">{email}</span>
             <button onClick={handleLogout} className="border border-[#D4AF37] text-[#D4AF37] px-4 py-1.5 font-black tracking-wider text-xs hover:bg-[#D4AF37]/10">
