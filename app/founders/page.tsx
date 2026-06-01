@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 
-const FOUNDING_SEATS = { 
+const FOUNDING_SEATS = {  
   lenders: { total: 50, filled: 42, access: 1500, monthly: 299, desc: 'Fund DQI 90+ in 48hrs. SMS alerts. First money wins.', icon: '🏦' },
   buyers: { total: 200, filled: 167, access: 750, monthly: 199, desc: 'Vault Score priority. See pain deals before MLS.', icon: '🏠' },
   wholesalers: { total: 100, filled: 73, access: 500, monthly: 99, desc: 'List deals. BPS scores motivation for you.', icon: '📋' },
