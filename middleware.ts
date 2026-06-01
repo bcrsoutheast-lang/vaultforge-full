@@ -1,14 +1,17 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
-  const { data: { session } } = await supabase.auth.getSession()
+  const supabase = createClient()
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
   // Public routes
-  const publicRoutes = ['/', '/login', '/pain-intake']
+  const publicRoutes = ['/', '/login', '/pain-intake', '/founders']
   const isPublic = publicRoutes.includes(req.nextUrl.pathname)
 
   if (!session && !isPublic) {
@@ -19,5 +22,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/deals/:path*', '/profile/:path*', '/admin/:path*']
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
