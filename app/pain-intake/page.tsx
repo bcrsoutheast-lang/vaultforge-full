@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 
 export default function PainIntake() {
@@ -20,112 +20,77 @@ export default function PainIntake() {
     notes: ''
   })
   const [loading, setLoading] = useState(false)
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const submitPain = async () => {
     setLoading(true)
-    
     const { data: { user } } = await supabase.auth.getUser()
     
-    const { error } = await supabase.from('pain_deals').insert({
+    const { error } = await supabase.from('deals').insert({
       ...form,
-      owner_id: user?.id,
-      owner_email: user?.email,
-      status: 'active',
-      analyzed_at: new Date().toISOString(),
       beds: Number(form.beds),
       baths: Number(form.baths),
       sqft: Number(form.sqft),
       asking_price: Number(form.asking_price),
-      arv: Number(form.arv)
+      arv: Number(form.arv),
+      user_id: user?.id,
+      intel_status: 'PENDING_DQI',
+      created_at: new Date().toISOString()
     })
 
+    if (!error) {
+      alert('DEAL SUBMITTED // DQI ENGINE SCANNING')
+      router.push('/deals')
+    } else {
+      alert('ERROR: ' + error.message)
+    }
     setLoading(false)
-    if (!error) router.push('/dashboard')
-    else alert('Error: ' + error.message)
   }
 
   return (
-    <div style={{ background: '#000', minHeight: '100vh', padding: '16px' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ 
-          fontSize: '14px', 
-          fontWeight: '700', 
-          letterSpacing: '0.1em', 
-          borderBottom: '1px solid #333',
-          paddingBottom: '8px',
-          marginBottom: '24px'
-        }}>
-          PAIN DEAL INTAKE // VAULTFORGE INTEL // PROPRIETARY
+    <div className="bg-black text-white min-h-screen p-8 font-mono">
+      <h1 className="text-2xl font-bold mb-8">PAIN INTAKE // SELLER MOTIVATION SCAN</h1>
+      <div className="max-w-2xl space-y-4">
+        <input 
+          placeholder="PROPERTY ADDRESS" 
+          value={form.address} 
+          onChange={e => setForm({...form, address: e.target.value})}
+          className="w-full bg-zinc-900 border border-zinc-700 p-3"
+        />
+        <div className="grid grid-cols-3 gap-4">
+          <input placeholder="ZIP" value={form.zipcode} onChange={e => setForm({...form, zipcode: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3" />
+          <input placeholder="BEDS" value={form.beds} onChange={e => setForm({...form, beds: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3" />
+          <input placeholder="BATHS" value={form.baths} onChange={e => setForm({...form, baths: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3" />
         </div>
-        
-        <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <input
-              placeholder="PROPERTY ADDRESS"
-              value={form.address}
-              onChange={(e) => setForm({...form, address: e.target.value})}
-              style={{ background: '#111', border: '1px solid #333', color: '#f8f8f8', padding: '12px', fontSize: '11px' }}
-              required
-            />
-            <input
-              placeholder="ZIPCODE"
-              value={form.zipcode}
-              onChange={(e) => setForm({...form, zipcode: e.target.value})}
-              style={{ background: '#111', border: '1px solid #333', color: '#f8f8f8', padding: '12px', fontSize: '11px' }}
-              required
-            />
-            <input
-              placeholder="BEDS"
-              type="number"
-              value={form.beds}
-              onChange={(e) => setForm({...form, beds: e.target.value})}
-              style={{ background: '#111', border: '1px solid #333', color: '#f8f8f8', padding: '12px', fontSize: '11px' }}
-            />
-            <input
-              placeholder="BATHS"
-              type="number"
-              value={form.baths}
-              onChange={(e) => setForm({...form, baths: e.target.value})}
-              style={{ background: '#111', border: '1px solid #333', color: '#f8f8f8', padding: '12px', fontSize: '11px' }}
-            />
-            <input
-              placeholder="SQFT"
-              type="number"
-              value={form.sqft}
-              onChange={(e) => setForm({...form, sqft: e.target.value})}
-              style={{ background: '#111', border: '1px solid #333', color: '#f8f8f8', padding: '12px', fontSize: '11px' }}
-            />
-            <input
-              placeholder="ASKING PRICE"
-              type="number"
-              value={form.asking_price}
-              onChange={(e) => setForm({...form, asking_price: e.target.value})}
-              style={{ background: '#111', border: '1px solid #333', color: '#f8f8f8', padding: '12px', fontSize: '11px' }}
-            />
-          </div>
-          
-          <button 
-            type="submit" 
-            disabled={loading}
-            style={{
-              marginTop: '24px',
-              width: '100%',
-              background: '#f8f8f8',
-              color: '#000',
-              border: 'none',
-              padding: '16px',
-              fontSize: '11px',
-              fontWeight: '700',
-              letterSpacing: '0.1em',
-              cursor: 'pointer'
-            }}
-          >
-            {loading ? 'PROCESSING...' : 'SUBMIT TO VAULTFORGE INTEL'}
-          </button>
-        </form>
+        <div className="grid grid-cols-3 gap-4">
+          <input placeholder="SQFT" value={form.sqft} onChange={e => setForm({...form, sqft: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3" />
+          <input placeholder="ASKING PRICE" value={form.asking_price} onChange={e => setForm({...form, asking_price: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3" />
+          <input placeholder="ARV" value={form.arv} onChange={e => setForm({...form, arv: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <select value={form.rehab_level} onChange={e => setForm({...form, rehab_level: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3">
+            <option>LIGHT</option>
+            <option>MEDIUM</option>
+            <option>HEAVY</option>
+            <option>GUT</option>
+          </select>
+          <select value={form.urgency} onChange={e => setForm({...form, urgency: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3">
+            <option>FLEXIBLE</option>
+            <option>30_DAYS</option>
+            <option>14_DAYS</option>
+            <option>IMMEDIATE</option>
+          </select>
+        </div>
+        <input placeholder="SELLER NAME" value={form.contact_name} onChange={e => setForm({...form, contact_name: e.target.value})} className="w-full bg-zinc-900 border border-zinc-700 p-3" />
+        <div className="grid grid-cols-2 gap-4">
+          <input placeholder="SELLER PHONE" value={form.contact_phone} onChange={e => setForm({...form, contact_phone: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3" />
+          <input placeholder="SELLER EMAIL" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})} className="bg-zinc-900 border border-zinc-700 p-3" />
+        </div>
+        <textarea placeholder="PAIN NOTES // FORECLOSURE? DIVORCE? VACANT?" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={4} className="w-full bg-zinc-900 border border-zinc-700 p-3" />
+        <button onClick={submitPain} disabled={loading} className="w-full bg-white text-black py-4 font-bold">
+          {loading ? 'SCANNING...' : 'SUBMIT FOR BPS SCAN'}
+        </button>
       </div>
     </div>
   )
