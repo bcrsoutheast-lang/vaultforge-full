@@ -28,12 +28,13 @@ export default function DealsPage() {
   const fetchDeals = async () => {
     setLoading(true)
     const { data, error } = await supabase
-   .from('deals')
-   .select('*')
-   .eq('status', 'active')
-   .order('dqi_score', { ascending: false })
+     .from('deals')
+     .select('*')
+     .eq('status', 'active')
+     .order('dqi_score', { ascending: false })
 
     if (data) setDeals(data)
+    if (error) console.error(error)
     setLoading(false)
   }
 
@@ -74,6 +75,7 @@ export default function DealsPage() {
       deal_id: deal.id,
       dqi_score: deal.dqi_score,
       intel_flags: deal.intel_flags,
+      deal_dna: deal.deal_dna,
       intel_status: deal.intel_status,
       rehab_level: deal.rehab_level,
       spread_pct: calculateSpread(deal),
@@ -86,13 +88,15 @@ export default function DealsPage() {
     })
 
     const { error: dealError } = await supabase
-   .from('deals')
-   .update({ status: 'closed', closed_price: Number(closedPrice), closed_at: new Date().toISOString() })
-   .eq('id', deal.id)
+     .from('deals')
+     .update({ status: 'closed', closed_price: Number(closedPrice), closed_at: new Date().toISOString() })
+     .eq('id', deal.id)
 
     if (!outcomeError &&!dealError) {
       alert('DEAL CLOSED // VAULTFORGE ARV UPDATED // NETWORK SMARTER')
       fetchDeals()
+    } else {
+      alert('ERROR: ' + (outcomeError?.message || dealError?.message))
     }
   }
 
@@ -106,7 +110,7 @@ export default function DealsPage() {
 
   if (loading) {
     return (
-      <div style={{ background: '#000', minHeight: '100vh', color: '#f8f8f8', padding: '16px' }}>
+      <div style={{ background: '#000', minHeight: '100vh', color: '#f8f8f8', padding: '16px', fontFamily: 'monospace' }}>
         LOADING INTEL...
       </div>
     )
@@ -221,15 +225,37 @@ export default function DealsPage() {
                 </div>
               </div>
 
-              {/* FLAGS */}
+              {/* DEAL DNA - RED FLAGS */}
+              {deal.deal_dna && deal.deal_dna.length > 0 && (
+                <div style={{ marginBottom: '12px' }}>
+                  {deal.deal_dna.map((flag: string, i: number) => (
+                    <span key={i} style={{
+                      display: 'inline-block',
+                      background: '#dc2626',
+                      color: '#000',
+                      border: '1px solid #f87171',
+                      padding: '3px 8px',
+                      fontSize: '9px',
+                      fontWeight: '700',
+                      marginRight: '4px',
+                      marginBottom: '4px',
+                      letterSpacing: '0.05em'
+                    }}>
+                      ⚠ {flag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* INTEL FLAGS - YELLOW FLAGS */}
               {deal.intel_flags && deal.intel_flags.length > 0 && (
                 <div style={{ marginBottom: '12px' }}>
                   {deal.intel_flags.map((flag: string, i: number) => (
                     <span key={i} style={{
                       display: 'inline-block',
                       background: '#000',
-                      border: '1px solid #f87171',
-                      color: '#f87171',
+                      border: '1px solid #facc15',
+                      color: '#facc15',
                       padding: '2px 6px',
                       fontSize: '9px',
                       marginRight: '4px',
