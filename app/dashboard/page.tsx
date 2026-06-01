@@ -3,6 +3,14 @@ import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 
+const US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
+  'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
+  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'
+]
+
 export default function CommandCenter() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -11,7 +19,11 @@ export default function CommandCenter() {
   const [messages, setMessages] = useState<any[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [members, setMembers] = useState<any[]>([])
-  const [selectedState, setSelectedState] = useState('GA')
+  const [selectedState, setSelectedState] = useState<string | null>(null)
+  const [stateCounts, setStateCounts] = useState<Record<string, number>>({})
+  const [selectedMember, setSelectedMember] = useState<any>(null)
+  const [showMessageModal, setShowMessageModal] = useState(false)
+  const [messageText, setMessageText] = useState('')
   const supabase = createClientComponentClient()
   const router = useRouter()
 
@@ -19,7 +31,14 @@ export default function CommandCenter() {
     checkUser()
     fetchSignals()
     fetchMessages()
-    fetchMembers()
+    fetchStateCounts()
+  }, [])
+
+  useEffect(() => {
+    if (selectedState) fetchMembersByState(selectedState)
+  }, [selectedState])
+
+  useEffect(() => {
     const interval = setInterval(() => {
       fetchSignals()
       fetchMessages()
@@ -34,26 +53,25 @@ export default function CommandCenter() {
       return
     }
     setUser(user)
-    
-    // Fetch profile for avatar + tier
+
     const { data: profileData } = await supabase
-      .from('member_profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .single()
-    
+    .from('member_profiles')
+    .select('*')
+    .eq('user_id', user.id)
+    .single()
+
     if (profileData) setProfile(profileData)
   }
 
   const fetchSignals = async () => {
     const { data } = await supabase
-      .from('signal_alerts')
-      .select('*')
-      .eq('acknowledged', false)
-      .gte('created_at', new Date(Date.now() - 3600000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(10)
-    
+    .from('signal_alerts')
+    .select('*')
+    .eq('acknowledged', false)
+    .gte('created_at', new Date(Date.now() - 3600000).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(10)
+
     if (data) {
       setSignals(data)
       setTickerAlerts(data.map(s => s.message))
@@ -63,25 +81,42 @@ export default function CommandCenter() {
   const fetchMessages = async () => {
     if (!user?.email) return
     const { data } = await supabase
-      .from('deal_messages')
-      .select('*')
-      .eq('receiver_email', user.email)
-      .eq('read', false)
-      .order('created_at', { ascending: false })
-    
+    .from('deal_messages')
+    .select('*')
+    .eq('receiver_email', user.email)
+    .eq('read', false)
+    .order('created_at', { ascending: false })
+
     if (data) {
       setMessages(data)
       setUnreadCount(data.length)
     }
   }
 
-  const fetchMembers = async () => {
+  const fetchStateCounts = async () => {
     const { data } = await supabase
-      .from('member_profiles')
-      .select('*')
-      .eq('state', selectedState)
-      .order('tier', { ascending: false })
-    
+    .from('member_profiles')
+    .select('state')
+
+    if (data) {
+      const counts: Record<string, number> = {}
+      data.forEach(m => {
+        if (m.state) {
+          counts[m.state] = (counts[m.state] || 0) + 1
+        }
+      })
+      setStateCounts(counts)
+    }
+  }
+
+  const fetchMembersByState = async (state: string) => {
+    const { data } = await supabase
+    .from('member_profiles')
+    .select('*')
+    .eq('state', state)
+    .order('tier', { ascending: false })
+    .limit(50)
+
     if (data) setMembers(data)
   }
 
@@ -95,9 +130,31 @@ export default function CommandCenter() {
     fetchSignals()
   }
 
+  const sendMessage = async () => {
+    if (!messageText ||!selectedMember) return
+
+    const { error } = await supabase.from('deal_messages').insert({
+      sender_id: user?.id,
+      sender_email: user?.email,
+      receiver_email: selectedMember.email,
+      subject: `NETWORK MESSAGE from ${profile?.email}`,
+      message: messageText,
+      deal_id: null
+    })
+
+    if (!error) {
+      alert('MESSAGE SENT // MEMBER NOTIFIED')
+      setShowMessageModal(false)
+      setMessageText('')
+      setSelectedMember(null)
+    } else {
+      alert('ERROR: ' + error.message)
+    }
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: '#000', color: '#f8f8f8', fontFamily: 'monospace' }}>
-      
+
       {/* BLOOMBERG TICKER */}
       {tickerAlerts.length > 0 && (
         <div style={{
@@ -153,16 +210,16 @@ export default function CommandCenter() {
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{
-            background: unreadCount > 0 ? '#dc2626' : '#333',
+            background: unreadCount > 0? '#dc2626' : '#333',
             padding: '8px 16px',
             fontSize: '11px',
             fontWeight: '700',
-            animation: unreadCount > 0 ? 'pulse 2s infinite' : 'none',
+            animation: unreadCount > 0? 'pulse 2s infinite' : 'none',
             cursor: 'pointer'
           }}>
             {unreadCount} UNREAD SIGNALS
           </div>
-          <button 
+          <button
             onClick={() => router.push('/profile')}
             style={{
               background: '#111',
@@ -176,8 +233,8 @@ export default function CommandCenter() {
           >
             PROFILE
           </button>
-          <button 
-            onClick={() => router.push('/deals')} 
+          <button
+            onClick={() => router.push('/deals')}
             style={{
               background: '#f8f8f8',
               color: '#000',
@@ -190,7 +247,7 @@ export default function CommandCenter() {
           >
             DEALS GRID
           </button>
-          <button 
+          <button
             onClick={() => router.push('/comp-map')}
             style={{
               background: '#1a1a1a',
@@ -221,8 +278,8 @@ export default function CommandCenter() {
       </div>
 
       {/* GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 300px', gap: '1px', background: '#333' }}>
-        
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 400px', gap: '1px', background: '#333' }}>
+
         {/* SIGNALS COLUMN */}
         <div style={{ background: '#111', padding: '16px' }}>
           <div style={{ fontSize: '11px', fontWeight: '700', marginBottom: '12px', letterSpacing: '0.1em' }}>
@@ -231,11 +288,11 @@ export default function CommandCenter() {
           {signals.map(s => (
             <div key={s.id} onClick={() => acknowledgeSignal(s.id)} style={{
               background: '#000',
-              border: `1px solid ${s.severity === 'CRITICAL' ? '#dc2626' : '#facc15'}`,
+              border: `1px solid ${s.severity === 'CRITICAL'? '#dc2626' : '#facc15'}`,
               padding: '12px',
               marginBottom: '8px',
               cursor: 'pointer',
-              animation: s.severity === 'CRITICAL' ? 'pulse 2s infinite' : 'none'
+              animation: s.severity === 'CRITICAL'? 'pulse 2s infinite' : 'none'
             }}>
               <div style={{ fontSize: '10px', color: '#f87171', marginBottom: '4px' }}>
                 {s.signal_type} // {s.severity}
@@ -285,56 +342,336 @@ export default function CommandCenter() {
           )}
         </div>
 
-        {/* NETWORK COLUMN */}
+        {/* NETWORK COLUMN - BY RESIDENCE STATE */}
         <div style={{ background: '#111', padding: '16px' }}>
           <div style={{ fontSize: '11px', fontWeight: '700', marginBottom: '12px', letterSpacing: '0.1em' }}>
-            NETWORK // {selectedState}
+            NETWORK // BY RESIDENCE STATE
           </div>
-          <select 
-            value={selectedState} 
-            onChange={(e) => { setSelectedState(e.target.value); fetchMembers(); }}
-            style={{
-              width: '100%',
-              background: '#000',
-              border: '1px solid #333',
-              color: '#f8f8f8',
-              padding: '8px',
-              fontSize: '11px',
-              marginBottom: '12px'
-            }}
-          >
-            {['GA','FL','TX','CA','NY','IL','NC','SC','AL','TN'].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {members.map(m => (
-            <div key={m.id} style={{
-              background: '#000',
-              border: '1px solid #333',
-              padding: '8px',
-              marginBottom: '6px',
-              fontSize: '10px',
-              display: 'flex',
-              gap: '8px',
-              alignItems: 'center'
-            }}>
-              {m.avatar_url && (
-                <img 
-                  src={m.avatar_url} 
-                  alt="" 
-                  style={{ width: '24px', height: '24px', objectFit: 'cover' }}
-                />
-              )}
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', color: m.tier === 'INSTITUTIONAL' ? '#facc15' : '#f8f8f8' }}>
-                  {m.email}
+
+          {/* STATE GRID WITH COUNTS */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            gap: '4px',
+            marginBottom: '16px',
+            maxHeight: '200px',
+            overflowY: 'auto',
+            paddingRight: '4px'
+          }}>
+            {US_STATES.map(state => (
+              <button
+                key={state}
+                onClick={() => setSelectedState(state)}
+                style={{
+                  background: selectedState === state? '#f8f8f8' : '#000',
+                  color: selectedState === state? '#000' : '#f8f8f8',
+                  border: `1px solid ${stateCounts[state] > 0? '#4ade80' : '#333'}`,
+                  padding: '8px 4px',
+                  fontSize: '10px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '2px'
+                }}
+              >
+                <div>{state}</div>
+                <div style={{
+                  fontSize: '8px',
+                  color: selectedState === state? '#000' : '#4ade80'
+                }}>
+                  {stateCounts[state] || 0}
                 </div>
-                <div style={{ color: '#666', fontSize: '9px' }}>
-                  {m.tier} // {m.investor_types?.join(', ')}
-                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* SELECTED STATE MEMBERS */}
+          {selectedState && (
+            <div>
+              <div style={{
+                fontSize: '10px',
+                color: '#888',
+                marginBottom: '8px',
+                paddingBottom: '8px',
+                borderBottom: '1px solid #222'
+              }}>
+                {members.length} MEMBERS RESIDE IN {selectedState}
               </div>
+              {members.map(m => (
+                <div
+                  key={m.id}
+                  onClick={() => setSelectedMember(m)}
+                  style={{
+                    background: '#000',
+                    border: '1px solid #333',
+                    padding: '12px',
+                    marginBottom: '8px',
+                    fontSize: '10px',
+                    display: 'flex',
+                    gap: '12px',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#f8f8f8'}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#333'}
+                >
+                  {m.avatar_url? (
+                    <img
+                      src={m.avatar_url}
+                      alt=""
+                      style={{ width: '40px', height: '40px', objectFit: 'cover', border: '1px solid #333' }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      background: '#111',
+                      border: '1px solid #333',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                      fontWeight: '700'
+                    }}>
+                      {m.email?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '700', color: m.tier === 'INSTITUTIONAL'? '#facc15' : '#f8f8f8' }}>
+                      {m.email?.split('@')[0]}
+                    </div>
+                    <div style={{ color: '#666', fontSize: '9px' }}>
+                      {m.tier} // {m.city || 'CITY N/A'}
+                    </div>
+                    <div style={{ color: '#4ade80', fontSize: '9px' }}>
+                      {m.investor_types?.join(', ') || 'INVESTOR'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {members.length === 0 && (
+                <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', padding: '32px' }}>
+                  NO MEMBERS IN {selectedState}
+                </div>
+              )}
             </div>
-          ))}
+          )}
+
+          {!selectedState && (
+            <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', padding: '32px' }}>
+              SELECT A STATE ABOVE TO VIEW MEMBERS
+            </div>
+          )}
         </div>
       </div>
+
+      {/* MEMBER PROFILE MODAL */}
+      {selectedMember && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.95)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#111',
+            border: '1px solid #333',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '100%'
+          }}>
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+              {selectedMember.avatar_url? (
+                <img
+                  src={selectedMember.avatar_url}
+                  alt=""
+                  style={{ width: '80px', height: '80px', objectFit: 'cover', border: '1px solid #333' }}
+                />
+              ) : (
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  background: '#000',
+                  border: '1px solid #333',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '24px',
+                  fontWeight: '700'
+                }}>
+                  {selectedMember.email?.[0]?.toUpperCase()}
+                </div>
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '16px', fontWeight: '700', marginBottom: '4px' }}>
+                  {selectedMember.email?.split('@')[0]}
+                </div>
+                <div style={{
+                  fontSize: '10px',
+                  color: selectedMember.tier === 'INSTITUTIONAL'? '#facc15' : '#888',
+                  marginBottom: '8px'
+                }}>
+                  {selectedMember.tier} TIER
+                </div>
+                <div style={{ fontSize: '10px', color: '#666' }}>
+                  {selectedMember.city}, {selectedMember.state}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMember(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#f8f8f8',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  padding: '0',
+                  height: 'fit-content'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #222' }}>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px' }}>INVESTOR TYPE</div>
+              <div style={{ fontSize: '11px' }}>{selectedMember.investor_types?.join(', ') || 'NOT SPECIFIED'}</div>
+            </div>
+
+            <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #222' }}>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px' }}>BUY BOX</div>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: '#4ade80' }}>
+                {selectedMember.buy_box_min && selectedMember.buy_box_max
+               ? `$${Number(selectedMember.buy_box_min).toLocaleString()} - $${Number(selectedMember.buy_box_max).toLocaleString()}`
+                  : 'NOT SPECIFIED'}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #222' }}>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px' }}>STATES OPERATED</div>
+              <div style={{ fontSize: '11px' }}>{selectedMember.states_operated?.join(', ') || 'NOT SPECIFIED'}</div>
+            </div>
+
+            <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #222' }}>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px' }}>PREFERRED REHAB</div>
+              <div style={{ fontSize: '11px' }}>{selectedMember.preferred_rehab || 'NOT SPECIFIED'}</div>
+            </div>
+
+            {selectedMember.bio && (
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px' }}>BIO</div>
+                <div style={{ fontSize: '10px', color: '#888', lineHeight: '1.5' }}>{selectedMember.bio}</div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowMessageModal(true)}
+              style={{
+                width: '100%',
+                background: '#f8f8f8',
+                color: '#000',
+                border: 'none',
+                padding: '12px',
+                fontSize: '11px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                letterSpacing: '0.1em'
+              }}
+            >
+              SEND MESSAGE
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MESSAGE MODAL */}
+      {showMessageModal && selectedMember && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.95)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1001,
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#111',
+            border: '1px solid #333',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '100%'
+          }}>
+            <div style={{ fontSize: '14px', fontWeight: '700', marginBottom: '16px' }}>
+              MESSAGE {selectedMember.email?.split('@')[0]}
+            </div>
+            <textarea
+              placeholder="Enter your message..."
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              rows={6}
+              style={{
+                width: '100%',
+                background: '#000',
+                border: '1px solid #333',
+                color: '#f8f8f8',
+                padding: '12px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                marginBottom: '16px',
+                resize: 'vertical'
+              }}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  setShowMessageModal(false)
+                  setMessageText('')
+                }}
+                style={{
+                  background: '#111',
+                  color: '#f8f8f8',
+                  border: '1px solid #333',
+                  padding: '12px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={sendMessage}
+                style={{
+                  background: '#f8f8f8',
+                  color: '#000',
+                  border: 'none',
+                  padding: '12px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                SEND SIGNAL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes scroll {
