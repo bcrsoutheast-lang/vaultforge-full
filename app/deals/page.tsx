@@ -1,676 +1,309 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 
-const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']
-
-type DealStatus = 'active' | 'saved' | 'archived' | 'deleted'
-
-export default function DealOpportunities() {
-  const [activeTab, setActiveTab] = useState<DealStatus>('active')
+export default function DealsPage() {
   const [deals, setDeals] = useState<any[]>([])
-  const [selectedDeal, setSelectedDeal] = useState<any | null>(null)
-  const [showSubmit, setShowSubmit] = useState(false)
-  const [messages, setMessages] = useState<any[]>([])
-  const [newMessage, setNewMessage] = useState('')
-  const [unreadCount, setUnreadCount] = useState<{[key: string]: number}>({})
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [form, setForm] = useState({
-    address: '',
-    city: '',
-    state: '',
-    zipcode: '',
-    asking_price: '',
-    arv: '',
-    beds: '',
-    baths: '',
-    sqft: '',
-    description: '',
-    property_type: 'RESIDENTIAL',
-    rehab_level: 'LIGHT',
-    who_is_this_for: [] as string[],
-    urgency: '1-2_WEEKS',
-    contact_name: '',
-    contact_phone: '',
-    contact_email: ''
-  })
-  const [files, setFiles] = useState<FileList | null>(null)
-  const [previews, setPreviews] = useState<string[]>([])
-  const [uploading, setUploading] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [analysis, setAnalysis] = useState({
-    score: 0,
-    status: 'PENDING',
-    flags: [] as string[],
-    route_to: [] as string[]
-  })
+  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
+  const [filter, setFilter] = useState('ALL')
   const supabase = createClientComponentClient()
   const router = useRouter()
-  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    getCurrentUser()
+    checkUser()
     fetchDeals()
-    const interval = setInterval(checkForNewMessages, 5000)
-    return () => clearInterval(interval)
-  }, [activeTab])
+  }, [])
 
-  useEffect(() => {
-    if (selectedDeal) {
-      fetchMessages(selectedDeal.id)
-    }
-  }, [selectedDeal])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
-  useEffect(() => {
-    const asking = Number(form.asking_price) || 0
-    const arv = Number(form.arv) || 0
-    const spread = arv - asking
-    const spreadPct = arv > 0? (spread / arv) * 100 : 0
-
-    let score = 50
-    const flags: string[] = []
-    const route_to: string[] = []
-
-    if (spreadPct > 30) { score += 20; flags.push('HIGH_MARGIN') }
-    else if (spreadPct < 10 && arv > 0) { score -= 20; flags.push('MARGIN_COMPRESSION') }
-
-    if (form.rehab_level === 'FULL' && spread < 50000) { score -= 15; flags.push('CAPITAL_MISMATCH') }
-    if (form.rehab_level === 'LIGHT' && spread > 100000) { score += 10; flags.push('EQUITY_OPPORTUNITY') }
-
-    if (files && files.length >= 3) { score += 15 }
-    else if (form.rehab_level!== 'LIGHT' && (!files || files.length === 0)) { score -= 20; flags.push('NO_VISUAL_EVIDENCE') }
-
-    if (form.urgency === 'ASAP' && form.rehab_level === 'TEARDOWN') { flags.push('EXECUTION_RISK') }
-
-    if (form.who_is_this_for.includes('FLIPPER')) route_to.push('FLIP_OPERATORS')
-    if (form.who_is_this_for.includes('BUY_HOLD')) route_to.push('RENTAL_PORTFOLIOS')
-    if (form.rehab_level === 'TEARDOWN') route_to.push('BUILDERS')
-    if (form.who_is_this_for.includes('WHOLESALER')) route_to.push('WHOLESALE_NETWORK')
-
-    let status = 'PENDING'
-    if (score >= 90) status = 'PASS'
-    else if (score >= 70) status = 'REVIEW'
-    else if (score >= 50) status = 'HOLD'
-    else status = 'REJECT'
-
-    setAnalysis({ score, status, flags, route_to })
-  }, [form, files])
-
-  const getCurrentUser = async () => {
+  const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    setCurrentUser(user)
+    if (!user) {
+      router.push('/login')
+      return
+    }
+    setUser(user)
   }
 
   const fetchDeals = async () => {
-    const { data } = await supabase
-   .from('deals')
-   .select('*')
-   .eq('status', activeTab)
-   .order('created_at', { ascending: false })
-    setDeals(data || [])
-    checkUnreadCounts(data || [])
-  }
-
-  const checkForNewMessages = async () => {
-    const { data } = await supabase
-   .from('deal_messages')
-   .select('deal_id, read')
-   .eq('receiver_id', currentUser?.id)
-   .eq('read', false)
-
-    const counts: {[key: string]: number} = {}
-    data?.forEach(msg => {
-      counts[msg.deal_id] = (counts[msg.deal_id] || 0) + 1
-    })
-    setUnreadCount(counts)
-  }
-
-  const checkUnreadCounts = (dealList: any[]) => {
-    checkForNewMessages()
-  }
-
-  const fetchMessages = async (dealId: string) => {
-    const { data } = await supabase
-   .from('deal_messages')
-   .select('*')
-   .eq('deal_id', dealId)
-   .order('created_at', { ascending: true })
-
-    setMessages(data || [])
-
-    await supabase
-   .from('deal_messages')
-   .update({ read: true })
-   .eq('deal_id', dealId)
-   .eq('receiver_id', currentUser?.id)
-
-    checkForNewMessages()
-  }
-
-  const sendMessage = async () => {
-    if (!newMessage.trim() ||!selectedDeal ||!currentUser) return
-
-    const { error } = await supabase.from('deal_messages').insert([{
-      deal_id: selectedDeal.id,
-      sender_id: currentUser.id,
-      sender_email: currentUser.email,
-      receiver_email: selectedDeal.contact_email,
-      subject: `RE: ${selectedDeal.address} // $${Number(selectedDeal.asking_price).toLocaleString()}`,
-      message: newMessage,
-      read: false
-    }])
-
-    if (!error) {
-      setNewMessage('')
-      fetchMessages(selectedDeal.id)
-    }
-  }
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  const updateDealStatus = async (id: string, newStatus: DealStatus) => {
-    const { error } = await supabase
-   .from('deals')
-   .update({ status: newStatus })
-   .eq('id', id)
-
-    if (!error) {
-      fetchDeals()
-      setSelectedDeal(null)
-    }
-  }
-
-  const deleteDeal = async (id: string) => {
-    if (!confirm('PERMANENTLY DELETE THIS DEAL?')) return
-    const { error } = await supabase.from('deals').delete().eq('id', id)
-    if (!error) {
-      fetchDeals()
-      setSelectedDeal(null)
-    }
-  }
-
-  const toggleTarget = (val: string) => {
-    setForm(prev => ({
-  ...prev,
-      who_is_this_for: prev.who_is_this_for.includes(val)
-    ? prev.who_is_this_for.filter(v => v!== val)
-        : [...prev.who_is_this_for, val]
-    }))
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = e.target.files
-    if (!selectedFiles) return
-
-    if (selectedFiles.length > 10) {
-      alert('MAX 10 PHOTOS')
-      e.target.value = ''
-      return
-    }
-
-    setFiles(selectedFiles)
-    const urls = Array.from(selectedFiles).map(file => URL.createObjectURL(file))
-    setPreviews(urls)
-  }
-
-  const uploadPhotos = async (): Promise<string[]> => {
-    if (!files || files.length === 0) return []
-    setUploading(true)
-
-    const urls: string[] = []
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      const fileExt = file.name.split('.').pop()
-      const fileName = `deal-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-
-      const { error } = await supabase.storage
-    .from('pain-deal-photos')
-    .upload(fileName, file)
-
-      if (error) {
-        console.error('Upload error:', error)
-        continue
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-    .from('pain-deal-photos')
-    .getPublicUrl(fileName)
-
-      urls.push(publicUrl)
-    }
-    setUploading(false)
-    return urls
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
     setLoading(true)
+    const { data, error } = await supabase
+     .from('deals')
+     .select('*')
+     .eq('status', 'active')
+     .order('analyzed_at', { ascending: false })
 
-    const photoUrls = await uploadPhotos()
-
-    const { error } = await supabase.from('deals').insert([{
-      address: form.address,
-      city: form.city,
-      state: form.state,
-      zipcode: form.zipcode,
-      asking_price: Number(form.asking_price) || null,
-      arv: Number(form.arv) || null,
-      beds: Number(form.beds) || null,
-      baths: Number(form.baths) || null,
-      sqft: Number(form.sqft) || null,
-      description: form.description,
-      property_type: form.property_type,
-      rehab_level: form.rehab_level,
-      who_is_this_for: form.who_is_this_for,
-      urgency: form.urgency,
-      contact_name: form.contact_name,
-      contact_phone: form.contact_phone,
-      contact_email: form.contact_email,
-      photo_urls: photoUrls,
-      dqi_score: analysis.score,
-      intel_status: analysis.status,
-      intel_flags: analysis.flags,
-      routed_to: analysis.route_to,
-      analyzed_at: new Date().toISOString(),
-      status: 'active',
-      owner_id: currentUser?.id,
-      owner_email: currentUser?.email
-    }])
-
+    if (data) setDeals(data)
     setLoading(false)
-    if (error) alert(error.message)
-    else {
-      setForm({
-        address: '', city: '', state: '', zipcode: '', asking_price: '', arv: '',
-        beds: '', baths: '', sqft: '', description: '', property_type: 'RESIDENTIAL',
-        rehab_level: 'LIGHT', who_is_this_for: [], urgency: '1-2_WEEKS',
-        contact_name: '', contact_phone: '', contact_email: ''
-      })
-      setFiles(null)
-      setPreviews([])
-      setShowSubmit(false)
-      fetchDeals()
-    }
+  }
+
+  const calculateSpread = (deal: any) => {
+    if (!deal.arv ||!deal.asking_price) return 0
+    return Math.round(((deal.arv - deal.asking_price) / deal.arv) * 100)
   }
 
   const getStatusColor = (status: string) => {
-    if (status === 'PASS' || status === 'active') return '#4ade80'
-    if (status === 'REVIEW' || status === 'saved') return '#fbbf24'
-    if (status === 'HOLD' || status === 'archived') return '#60a5fa'
+    if (status === 'PASS') return '#4ade80'
+    if (status === 'REVIEW') return '#facc15'
     return '#f87171'
   }
 
+  const handleMessageOwner = async (deal: any) => {
+    const subject = `OFFER: ${deal.address}`
+    const message = prompt('Enter your offer message:')
+    if (!message) return
+
+    const { error } = await supabase.from('deal_messages').insert({
+      deal_id: deal.id,
+      sender_id: user?.id,
+      sender_email: user?.email,
+      receiver_email: deal.owner_email,
+      subject,
+      message
+    })
+
+    if (!error) alert('SIGNAL SENT // OWNER NOTIFIED')
+    else alert('ERROR: ' + error.message)
+  }
+
+  const handleMarkClosed = async (deal: any) => {
+    const closedPrice = prompt('Enter final closed price:')
+    if (!closedPrice) return
+
+    const { error: outcomeError } = await supabase.from('deal_outcomes').insert({
+      deal_id: deal.id,
+      dqi_score: deal.dqi_score,
+      intel_flags: deal.intel_flags,
+      intel_status: deal.intel_status,
+      rehab_level: deal.rehab_level,
+      spread_pct: calculateSpread(deal),
+      zipcode: deal.zipcode,
+      asking_price: deal.asking_price,
+      arv: deal.arv,
+      closed: true,
+      closed_price: Number(closedPrice),
+      closed_by_user_id: user?.id
+    })
+
+    const { error: dealError } = await supabase
+     .from('deals')
+     .update({ status: 'closed' })
+     .eq('id', deal.id)
+
+    if (!outcomeError &&!dealError) {
+      alert('DEAL CLOSED // VAULTFORGE ARV UPDATED')
+      fetchDeals()
+    }
+  }
+
+  const filteredDeals = deals.filter(d => {
+    if (filter === 'ALL') return true
+    if (filter === 'INSTITUTIONAL') return d.dqi_score >= 90
+    if (filter === 'PASS') return d.intel_status === 'PASS'
+    if (filter === 'MY_DEALS') return d.owner_email === user?.email
+    return true
+  })
+
+  if (loading) {
+    return (
+      <div style={{ background: '#000', minHeight: '100vh', color: '#f8f8f8', padding: '16px' }}>
+        LOADING INTEL...
+      </div>
+    )
+  }
+
   return (
-    <div style={{ background: '#000', minHeight: '100vh', padding: '16px' }}>
+    <div style={{ background: '#000', minHeight: '100vh', padding: '16px', color: '#f8f8f8', fontFamily: 'monospace' }}>
       <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
-        <div className="grid-header">DEAL OPPORTUNITIES // VAULTFORGE INTEL // MESSAGING ACTIVE</div>
 
-        <div style={{ display: 'flex', gap: '1px', background: '#27272a', marginTop: '1px', marginBottom: '16px' }}>
-          {(['active', 'saved', 'archived', 'deleted'] as DealStatus[]).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                flex: 1,
-                padding: '12px',
-                background: activeTab === tab? '#facc15' : '#0a0a0b',
-                color: activeTab === tab? '#000' : '#a1a1aa',
-                border: 'none',
-                fontSize: '11px',
-                fontWeight: '900',
-                letterSpacing: '0.1em',
-                cursor: 'pointer',
-                textTransform: 'uppercase',
-                position: 'relative'
-              }}
-            >
-              {tab} // {deals.filter(d => d.status === tab).length}
-              {unreadCount && Object.values(unreadCount).reduce((a, b) => a + b, 0) > 0 && tab === 'active' && (
-                <span style={{
-                  position: 'absolute',
-                  top: '4px',
-                  right: '8px',
-                  background: '#f87171',
-                  color: '#000',
-                  fontSize: '9px',
-                  padding: '2px 6px',
-                  borderRadius: '10px',
-                  fontWeight: '900',
-                  animation: 'pulse 2s infinite'
-                }}>
-                  {Object.values(unreadCount).reduce((a, b) => a + b, 0)}
-                </span>
-              )}
-            </button>
-          ))}
-          <button
-            onClick={() => setShowSubmit(!showSubmit)}
-            style={{
-              padding: '12px 24px',
-              background: '#facc15',
-              color: '#000',
-              border: 'none',
-              fontSize: '11px',
-              fontWeight: '900',
-              letterSpacing: '0.1em',
-              cursor: 'pointer'
-            }}
-          >
-            + SUBMIT DEAL
-          </button>
-        </div>
-
-        {showSubmit && (
-          <div className="grid-panel" style={{ marginBottom: '16px', padding: '0' }}>
-            <div className="grid-header">SUBMIT DEAL // INTEL ANALYSIS ACTIVE</div>
-            <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1px', background: '#27272a' }}>
-
-              <div className="grid-panel" style={{ padding: '16px' }}>
-                <div className="field-label">Asset Location</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '8px' }}>
-                  <input placeholder="STREET ADDRESS" required value={form.address} onChange={e => setForm({...form, address: e.target.value})}
-                    style={{ background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                  <input placeholder="CITY" required value={form.city} onChange={e => setForm({...form, city: e.target.value})}
-                    style={{ background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                  <select value={form.state} onChange={e => setForm({...form, state: e.target.value})}
-                    style={{ background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }}>
-                    <option value="">STATE</option>
-                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <input placeholder="ZIP" value={form.zipcode} onChange={e => setForm({...form, zipcode: e.target.value})}
-                    style={{ background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                </div>
-              </div>
-
-              <div className="grid-panel" style={{ padding: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-                  <div>
-                    <div className="field-label">Asking</div>
-                    <input type="number" placeholder="0" value={form.asking_price} onChange={e => setForm({...form, asking_price: e.target.value})}
-                      style={{ width: '100%', background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#60a5fa' }} />
-                  </div>
-                  <div>
-                    <div className="field-label">ARV</div>
-                    <input type="number" placeholder="0" value={form.arv} onChange={e => setForm({...form, arv: e.target.value})}
-                      style={{ width: '100%', background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#4ade80' }} />
-                  </div>
-                  <div>
-                    <div className="field-label">Beds/Baths</div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <input type="number" placeholder="BD" value={form.beds} onChange={e => setForm({...form, beds: e.target.value})}
-                        style={{ width: '50%', background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                      <input type="number" placeholder="BA" value={form.baths} onChange={e => setForm({...form, baths: e.target.value})}
-                        style={{ width: '50%', background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="field-label">Sqft</div>
-                    <input type="number" placeholder="0" value={form.sqft} onChange={e => setForm({...form, sqft: e.target.value})}
-                      style={{ width: '100%', background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid-panel" style={{ padding: '16px' }}>
-                <div className="field-label">Deal Photos // Max 10</div>
-                <input type="file" accept="image/*" multiple onChange={handleFileChange}
-                  style={{ width: '100%', background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                {previews.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px', marginTop: '8px' }}>
-                    {previews.map((url, i) => (
-                      <img key={i} src={url} alt={`Preview ${i+1}`} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', border: '1px solid #27272a' }} />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid-panel" style={{ padding: '16px' }}>
-                <div className="field-label">Contact Info // Auto-fills messaging</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                  <input placeholder="NAME" required value={form.contact_name} onChange={e => setForm({...form, contact_name: e.target.value})}
-                    style={{ background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                  <input placeholder="PHONE" required value={form.contact_phone} onChange={e => setForm({...form, contact_phone: e.target.value})}
-                    style={{ background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                  <input placeholder="EMAIL" type="email" required value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})}
-                    style={{ background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
-                </div>
-              </div>
-
-              <div className="grid-panel" style={{ padding: '16px' }}>
-                <div className="field-label">INTELLIGENCE ANALYSIS // LIVE</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: '16px', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '20px', fontWeight: '900', color: analysis.score >= 70? '#4ade80' : analysis.score >= 50? '#fbbf24' : '#f87171' }}>
-                      {analysis.score}
-                    </div>
-                    <div style={{ fontSize: '9px', color: '#71717a' }}>DQI</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: '900', color: analysis.status === 'PASS'? '#4ade80' : analysis.status === 'REVIEW'? '#fbbf24' : '#f87171' }}>
-                      {analysis.status}
-                    </div>
-                    <div style={{ fontSize: '9px', color: '#71717a', marginTop: '4px' }}>
-                      ROUTE: {analysis.route_to.join(', ') || 'NONE'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '9px', color: '#71717a' }}>FLAGS:</div>
-                    <div style={{ fontSize: '9px', color: '#f87171' }}>
-                      {analysis.flags.length > 0? analysis.flags.join(' // ') : 'NONE'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button type="submit" disabled={loading || uploading}
+        {/* HEADER */}
+        <div style={{
+          fontSize: '14px',
+          fontWeight: '700',
+          letterSpacing: '0.1em',
+          borderBottom: '1px solid #333',
+          paddingBottom: '8px',
+          marginBottom: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div>DEAL OPPORTUNITIES // VAULTFORGE INTEL // {filteredDeals.length} ACTIVE</div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {['ALL', 'INSTITUTIONAL', 'PASS', 'MY_DEALS'].map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
                 style={{
-                  background: loading || uploading? '#27272a' : '#facc15',
-                  color: '#000',
-                  fontWeight: '900',
-                  padding: '16px',
-                  border: 'none',
-                  cursor: loading || uploading? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
-                  letterSpacing: '0.1em'
-                }}>
-                {uploading? 'UPLOADING INTEL...' : loading? 'TRANSMITTING...' : 'SUBMIT DEAL // EXECUTE'}
-              </button>
-            </form>
-          </div>
-        )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
-          {deals.map(deal => (
-            <div key={deal.id} className="grid-panel" style={{ padding: '0', cursor: 'pointer', position: 'relative' }} onClick={() => setSelectedDeal(deal)}>
-              {unreadCount[deal.id] > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  background: '#f87171',
-                  color: '#000',
+                  background: filter === f? '#f8f8f8' : '#111',
+                  color: filter === f? '#000' : '#f8f8f8',
+                  border: '1px solid #333',
+                  padding: '6px 12px',
                   fontSize: '10px',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  fontWeight: '900',
-                  zIndex: 10,
-                  animation: 'pulse 2s infinite'
-                }}>
-                  {unreadCount[deal.id]} NEW MSG
-                </div>
-              )}
-              <div style={{ position: 'relative', paddingBottom: '60%', background: '#0a0a0b' }}>
-                {deal.photo_urls && deal.photo_urls[0] && (
-                  <img src={deal.photo_urls[0]} alt={deal.address} style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }} />
-                )}
-                <div style={{ position: 'absolute', top: '8px', left: '8px', background: '#000', padding: '4px 8px' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '900', color: getStatusColor(deal.intel_status) }}>
-                    DQI {deal.dqi_score} // {deal.intel_status}
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* DEALS GRID */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1px', background: '#333' }}>
+          {filteredDeals.map(deal => (
+            <div key={deal.id} style={{ background: '#111', padding: '16px', border: `2px solid ${getStatusColor(deal.intel_status)}` }}>
+
+              {/* DQI BADGE */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '12px',
+                paddingBottom: '12px',
+                borderBottom: '1px solid #222'
+              }}>
+                <div>
+                  <div style={{ fontSize: '24px', fontWeight: '700', color: getStatusColor(deal.intel_status) }}>
+                    DQI {deal.dqi_score || 'N/A'}
                   </div>
+                  <div style={{ fontSize: '9px', color: '#666', letterSpacing: '0.1em' }}>
+                    {deal.intel_status || 'PENDING'}
+                  </div>
+                </div>
+                {deal.dqi_score >= 90 && (
+                  <div style={{
+                    background: '#facc15',
+                    color: '#000',
+                    padding: '4px 8px',
+                    fontSize: '9px',
+                    fontWeight: '700',
+                    height: 'fit-content'
+                  }}>
+                    INSTITUTIONAL
+                  </div>
+                )}
+              </div>
+
+              {/* ADDRESS */}
+              <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>
+                {deal.address}
+              </div>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '12px' }}>
+                {deal.city}, {deal.zipcode} // {deal.beds}BD {deal.baths}BA {deal.sqft}SF
+              </div>
+
+              {/* METRICS */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '8px',
+                fontSize: '10px',
+                marginBottom: '12px',
+                paddingBottom: '12px',
+                borderBottom: '1px solid #222'
+              }}>
+                <div>
+                  <div style={{ color: '#666' }}>ASK</div>
+                  <div style={{ fontWeight: '700' }}>${deal.asking_price?.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#666' }}>ARV</div>
+                  <div style={{ fontWeight: '700' }}>${deal.arv?.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#666' }}>SPREAD</div>
+                  <div style={{ fontWeight: '700', color: '#4ade80' }}>{calculateSpread(deal)}%</div>
+                </div>
+                <div>
+                  <div style={{ color: '#666' }}>REHAB</div>
+                  <div style={{ fontWeight: '700' }}>{deal.rehab_level || 'N/A'}</div>
                 </div>
               </div>
-              <div style={{ padding: '12px' }}>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#fafafa', marginBottom: '4px' }}>
-                  {deal.address}, {deal.city} {deal.state}
+
+              {/* FLAGS */}
+              {deal.intel_flags && deal.intel_flags.length > 0 && (
+                <div style={{ marginBottom: '12px' }}>
+                  {deal.intel_flags.map((flag: string, i: number) => (
+                    <span key={i} style={{
+                      display: 'inline-block',
+                      background: '#000',
+                      border: '1px solid #f87171',
+                      color: '#f87171',
+                      padding: '2px 6px',
+                      fontSize: '9px',
+                      marginRight: '4px',
+                      marginBottom: '4px'
+                    }}>
+                      {flag}
+                    </span>
+                  ))}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: '900', color: '#60a5fa' }}>
-                    ${Number(deal.asking_price).toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#4ade80' }}>
-                    ARV ${Number(deal.arv).toLocaleString()}
-                  </div>
-                </div>
-                <div style={{ fontSize: '10px', color: '#71717a' }}>
-                  {deal.beds}BD {deal.baths}BA {deal.sqft}SQFT // {deal.property_type}
-                </div>
-                {activeTab === 'active' && (
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '12px' }}>
-                    <button onClick={(e) => { e.stopPropagation(); updateDealStatus(deal.id, 'saved') }}
-                      style={{ flex: 1, padding: '6px', background: '#fbbf24', color: '#000', border: 'none', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>
-                      SAVE
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); updateDealStatus(deal.id, 'archived') }}
-                      style={{ flex: 1, padding: '6px', background: '#60a5fa', color: '#000', border: 'none', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>
-                      ARCHIVE
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); deleteDeal(deal.id) }}
-                      style={{ flex: 1, padding: '6px', background: '#f87171', color: '#000', border: 'none', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>
-                      DELETE
-                    </button>
-                  </div>
+              )}
+
+              {/* ACTIONS */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {deal.owner_email!== user?.email? (
+                  <button
+                    onClick={() => handleMessageOwner(deal)}
+                    style={{
+                      background: '#f8f8f8',
+                      color: '#000',
+                      border: 'none',
+                      padding: '10px',
+                      fontSize: '10px',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    MESSAGE OWNER
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleMarkClosed(deal)}
+                    style={{
+                      background: '#4ade80',
+                      color: '#000',
+                      border: 'none',
+                      padding: '10px',
+                      fontSize: '10px',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    MARK CLOSED
+                  </button>
                 )}
-                {activeTab === 'saved' && (
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '12px' }}>
-                    <button onClick={(e) => { e.stopPropagation(); updateDealStatus(deal.id, 'active') }}
-                      style={{ flex: 1, padding: '6px', background: '#4ade80', color: '#000', border: 'none', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>
-                      ACTIVATE
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); updateDealStatus(deal.id, 'archived') }}
-                      style={{ flex: 1, padding: '6px', background: '#60a5fa', color: '#000', border: 'none', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>
-                      ARCHIVE
-                    </button>
-                  </div>
-                )}
-                {activeTab === 'archived' && (
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '12px' }}>
-                    <button onClick={(e) => { e.stopPropagation(); updateDealStatus(deal.id, 'active') }}
-                      style={{ flex: 1, padding: '6px', background: '#4ade80', color: '#000', border: 'none', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>
-                      RESTORE
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); deleteDeal(deal.id) }}
-                      style={{ flex: 1, padding: '6px', background: '#f87171', color: '#000', border: 'none', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>
-                      DELETE
-                    </button>
-                  </div>
-                )}
+                <button
+                  onClick={() => router.push(`/deals/${deal.id}`)}
+                  style={{
+                    background: '#111',
+                    color: '#f8f8f8',
+                    border: '1px solid #333',
+                    padding: '10px',
+                    fontSize: '10px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  VIEW INTEL
+                </button>
+              </div>
+
+              {/* OWNER */}
+              <div style={{ fontSize: '9px', color: '#444', marginTop: '8px', textAlign: 'center' }}>
+                OWNER: {deal.owner_email === user?.email? 'YOU' : deal.owner_email?.split('@')[0]}
               </div>
             </div>
           ))}
         </div>
 
-        {deals.length === 0 && (
-          <div className="grid-panel" style={{ padding: '48px', textAlign: 'center', color: '#71717a', fontSize: '11px' }}>
-            NO DEALS IN {activeTab.toUpperCase()} FOLDER
-          </div>
-        )}
-
-        {selectedDeal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, padding: '24px', overflowY: 'auto' }}
-            onClick={() => setSelectedDeal(null)}>
-            <div className="grid-panel" style={{ maxWidth: '1400px', margin: '0 auto', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1px', background: '#27272a' }} onClick={e => e.stopPropagation()}>
-              <div>
-                <div className="grid-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>DEAL INTEL // {selectedDeal.address}</span>
-                  <button onClick={() => setSelectedDeal(null)} style={{ background: 'none', border: 'none', color: '#f87171', fontSize: '16px', cursor: 'pointer' }}>✕</button>
-                </div>
-                <div style={{ padding: '16px', background: '#0a0a0b' }}>
-                  {selectedDeal.photo_urls && selectedDeal.photo_urls.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' }}>
-                      {selectedDeal.photo_urls.map((url: string, i: number) => (
-                        <img key={i} src={url} alt={`Photo ${i+1}`} style={{ width: '100%', border: '1px solid #27272a' }} />
-                      ))}
-                    </div>
-                  )}
-                  <div className="field-label">Property Details</div>
-                  <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8', marginBottom: '16px' }}>
-                    <div>ADDRESS: {selectedDeal.address}, {selectedDeal.city} {selectedDeal.state} {selectedDeal.zipcode}</div>
-                    <div>TYPE: {selectedDeal.property_type} // {selectedDeal.beds}BD {selectedDeal.baths}BA {selectedDeal.sqft}SQFT</div>
-                    <div>REHAB: {selectedDeal.rehab_level} // URGENCY: {selectedDeal.urgency}</div>
-                    <div>ASKING: ${Number(selectedDeal.asking_price).toLocaleString()} // ARV: ${Number(selectedDeal.arv).toLocaleString()}</div>
-                    <div style={{ marginTop: '8px' }}>NOTES: {selectedDeal.description}</div>
-                  </div>
-                  <div className="field-label">Contact Node</div>
-                  <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8', marginBottom: '16px' }}>
-                    <div>NAME: {selectedDeal.contact_name}</div>
-                    <div>PHONE: {selectedDeal.contact_phone}</div>
-                    <div>EMAIL: {selectedDeal.contact_email}</div>
-                  </div>
-                  <div className="field-label">Intelligence Analysis</div>
-                  <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8' }}>
-                    <div>DQI SCORE: <span style={{ color: getStatusColor(selectedDeal.intel_status), fontWeight: '900' }}>{selectedDeal.dqi_score}</span></div>
-                    <div>STATUS: {selectedDeal.intel_status}</div>
-                    <div>FLAGS: {selectedDeal.intel_flags?.join(' // ') || 'NONE'}</div>
-                    <div>ROUTE TO: {selectedDeal.routed_to?.join(' // ') || 'UNASSIGNED'}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', background: '#0a0a0b' }}>
-                <div className="grid-header">
-                  MESSAGE CENTER // TO: {selectedDeal.contact_email}
-                </div>
-                <div style={{ flex: 1, padding: '16px', overflowY: 'auto', maxHeight: '500px' }}>
-                  {messages.map((msg, i) => (
-                    <div key={i} style={{
-                      marginBottom: '12px',
-                      padding: '8px',
-                      background: msg.sender_id === currentUser?.id? '#18181b' : '#0a0a0b',
-                      border: '1px solid #27272a'
-                    }}>
-                      <div style={{ fontSize: '9px', color: '#71717a', marginBottom: '4px' }}>
-                        FROM: {msg.sender_email} // {new Date(msg.created_at).toLocaleString()}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#fafafa' }}>
-                        {msg.message}
-                      </div>
-                    </div>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </div>
-                <div style={{ padding: '16px', borderTop: '1px solid #27272a' }}>
-                  <div style={{ fontSize: '9px', color: '#71717a', marginBottom: '4px' }}>
-                    SUBJECT: RE: {selectedDeal.address} // ${Number(selectedDeal.asking_price).toLocaleString()}
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      value={newMessage}
-                      onChange={e => setNewMessage(e.target.value)}
-                      onKeyPress={e => e.key === 'Enter' && sendMessage()}
-                      placeholder="TYPE MESSAGE..."
-                      style={{ flex: 1, background: '#000', border: '1px solid #27272a', padding: '8px', color: '#fafafa', fontSize: '11px' }}
-                    />
-                    <button onClick={sendMessage}
-                      style={{ padding: '8px 16px', background: '#facc15', color: '#000', border: 'none', fontSize: '11px', fontWeight: '900', cursor: 'pointer' }}>
-                      SEND
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {filteredDeals.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '64px', color: '#666', fontSize: '11px' }}>
+            NO DEALS FOUND // SUBMIT PAIN INTAKE TO POPULATE INTEL
           </div>
         )}
       </div>
-
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
+    </div>
+  )
+}
