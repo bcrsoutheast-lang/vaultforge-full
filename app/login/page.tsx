@@ -8,19 +8,25 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError('')
 
-    // TEMP: Fake login for now. Replace with Supabase later.
+    // TEMP: Fake login. Any email/password works.
+    // Replace with Supabase later.
     if (email && password) {
       localStorage.setItem('vaultforge_auth', 'true')
       localStorage.setItem('vaultforge_email', email)
-      router.push('/members')
+      setTimeout(() => {
+        router.push('/members')
+      }, 800)
     } else {
-      alert('Enter email and password')
+      setError('Enter email and password')
       setLoading(false)
     }
   }
@@ -33,11 +39,12 @@ export default function Login() {
           alt="VaultForge"
           width={300}
           height={300}
+          priority
           className="mx-auto w-48 h-auto mb-8"
         />
 
         <h1 className="text-3xl font-black text-[#D4AF37] text-center mb-2">MEMBER LOGIN</h1>
-        <p className="text-[#D4AF37]/60 text-sm text-center mb-8">FOUNDING MEMBERS ONLY</p>
+        <p className="text-[#D4AF37]/60 text-sm text-center mb-8 tracking-[0.3em]">FOUNDING MEMBERS ONLY</p>
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
@@ -46,7 +53,7 @@ export default function Login() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-[#0A0A0A] border border-[#D4AF37]/30 text-white p-3 focus:border-[#D4AF37] outline-none"
+              className="w-full bg-[#0A0A0A] border border-[#D4AF37]/30 text-white p-3 focus:border-[#D4AF37] outline-none text-sm"
               placeholder="founder@vaultforge.com"
               required
             />
@@ -58,24 +65,36 @@ export default function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-[#0A0A0A] border border-[#D4AF37]/30 text-white p-3 focus:border-[#D4AF37] outline-none"
+              className="w-full bg-[#0A0A0A] border border-[#D4AF37]/30 text-white p-3 focus:border-[#D4AF37] outline-none text-sm"
               placeholder="••••••••"
               required
             />
           </div>
 
+          {error && (
+            <div className="bg-[#DC2626]/10 border border-[#DC2626] text-[#DC2626] p-3 text-sm text-center">
+              {error}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#D4AF37] text-black py-3 font-black tracking-wider hover:bg-[#F4CF47] transition disabled:opacity-50"
+            className="w-full bg-[#D4AF37] text-black py-3 font-black tracking-wider hover:bg-[#F4CF47] transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading? 'ACCESSING...' : 'ENTER VAULT'}
+            {loading? 'ACCESSING VAULT...' : 'ENTER VAULT'}
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-[#D4AF37]/20 text-center">
           <p className="text-[#D4AF37]/60 text-xs mb-3">NOT A MEMBER?</p>
-          <a href="/" className="text-[#D4AF37] font-bold text-sm hover:text-[#F4CF47]">START 3-DAY TRIAL</a>
+          <a href="/" className="text-[#D4AF37] font-bold text-sm hover:text-[#F4CF47] underline">
+            START 3-DAY TRIAL
+          </a>
+        </div>
+
+        <div className="mt-8 pt-6 border-t border-[#D4AF37]/20 text-center">
+          <p className="text-[#D4AF37]/40 text-xs">© 2026 VAULTFORGE // VETERAN OWNED // NDA PROTECTED</p>
         </div>
       </div>
     </main>
