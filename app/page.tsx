@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 
 export default function Home() {
@@ -18,7 +20,13 @@ export default function Home() {
 
       {/* TICKER */}
       <div className="bg-blue-600 py-2 overflow-hidden">
-        <div className="animate-marquee whitespace-nowrap text-xs font-bold">
+        <div 
+          className="whitespace-nowrap text-xs font-bold"
+          style={{
+            display: 'inline-block',
+            animation: 'marquee 20s linear infinite'
+          }}
+        >
           <span className="mx-8">🔥 492 ACTIVE DEALS ROUTED TODAY</span>
           <span className="mx-8">⚡ BPS 80+ = SELLER MUST SELL</span>
           <span className="mx-8">🏦 193 FOUNDING SEATS LEFT</span>
@@ -123,14 +131,10 @@ export default function Home() {
         </div>
       </footer>
 
-      <style jsx>{`
+      <style>{`
         @keyframes marquee {
           0% { transform: translateX(0%) }
           100% { transform: translateX(-50%) }
-        }
-        .animate-marquee {
-          display: inline-block;
-          animation: marquee 20s linear infinite;
         }
       `}</style>
     </div>
