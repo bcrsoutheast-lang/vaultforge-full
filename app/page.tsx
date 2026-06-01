@@ -40,14 +40,18 @@ export default function Home() {
         </div>
       </div>
 
-      {/* NAV - MINIMAL */}
+      {/* NAV */}
       <nav className="bg-black border-b border-[#D4AF37]/20 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="text-[#D4AF37] text-sm font-bold tracking-[0.3em]">VAULTFORGE</div>
           <div className="flex items-center gap-4">
-            <button className="border border-[#D4AF37] text-[#D4AF37] px-4 py-1.5 font-black tracking-wider text-xs hover:bg-[#D4AF37]/10 transition">
-              MEMBER LOGIN
-            </button>
+            <div className="text-[#D4AF37] text-sm font-bold tracking-[0.3em]">VAULTFORGE</div>
+          </div>
+          <div className="flex items-center gap-4">
+            <a href="/login">
+              <button className="border border-[#D4AF37] text-[#D4AF37] px-4 py-1.5 font-black tracking-wider text-xs hover:bg-[#D4AF37]/10 transition">
+                MEMBER LOGIN
+              </button>
+            </a>
             <button className="bg-[#D4AF37] text-black px-4 py-1.5 font-black tracking-wider text-xs hover:bg-[#F4CF47] transition">
               REQUEST INVITE
             </button>
@@ -88,9 +92,11 @@ export default function Home() {
             <button className="bg-[#D4AF37] text-black px-8 py-3 font-black tracking-wider text-base hover:bg-[#F4CF47] transition">
               START 3-DAY TRIAL
             </button>
-            <button className="border-2 border-[#D4AF37] text-[#D4AF37] px-8 py-3 font-black tracking-wider text-base hover:bg-[#D4AF37]/10 transition">
-              MEMBER LOGIN
-            </button>
+            <a href="/login">
+              <button className="border-2 border-[#D4AF37] text-[#D4AF37] px-8 py-3 font-black tracking-wider text-base hover:bg-[#D4AF37]/10 transition w-full md:w-auto">
+                MEMBER LOGIN
+              </button>
+            </a>
           </div>
         </div>
       </section>
@@ -149,7 +155,7 @@ export default function Home() {
                 </div>
                 <div className="flex gap-1 mb-3 flex-wrap">
                   {deal.flags.map((flag, j) => (
-                    <span key={j} className="border border-[#D4AF37]/40 text-[#D4AF37]/80 px-1.5 py-0.5 text-[10px]">{flag}</span>
+                    <span key={j} className="border border-[#D4AF37]/40 text-[#D4AF37]/80 px-1.5 py-0.5 text-">{flag}</span>
                   ))}
                 </div>
                 <div className="h-24 bg-gray-900 overflow-hidden border border-[#2A2A2A]">
@@ -190,7 +196,7 @@ export default function Home() {
               { name: 'VAULT SCORE', desc: 'Borrower reputation 0-1000. Updates per deal. Live now.' },
               { name: 'DEAL ROOMS', desc: 'Private room per deal. Docs, chat, e-sign. 48hr clock. Live now.' },
             ].map((item, i) => (
-              <div key={i} className="bg-[#0A0A0A] border border-[#D4AF37]/30 p-6">
+              <div key={i} className="bg-[#0A0A] border border-[#D4AF37]/30 p-6">
                 <h3 className="text-[#D4AF37] font-black text-base mb-3">{item.name}</h3>
                 <p className="text-white/60 text-xs leading-relaxed">{item.desc}</p>
               </div>
@@ -235,9 +241,11 @@ export default function Home() {
                 </div>
               )}
             </div>
-            <button onClick={closeModal} className="mt-8 bg-[#D4AF37] text-black px-8 py-3 font-black tracking-wider w-full hover:bg-[#F4CF47] transition">
-              START 3-DAY TRIAL
-            </button>
+            <a href="/login">
+              <button onClick={closeModal} className="mt-8 bg-[#D4AF37] text-black px-8 py-3 font-black tracking-wider w-full hover:bg-[#F4CF47] transition">
+                START 3-DAY TRIAL
+              </button>
+            </a>
           </div>
         </div>
       )}
