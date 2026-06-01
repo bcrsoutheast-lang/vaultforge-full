@@ -11,6 +11,7 @@ export default function CommandCenter() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [members, setMembers] = useState<any[]>([])
   const [selectedState, setSelectedState] = useState('GA')
+  const [showMapLocked, setShowMapLocked] = useState(false)
   const supabase = createClientComponentClient()
   const router = useRouter()
 
@@ -135,16 +136,46 @@ export default function CommandCenter() {
           }}>
             {unreadCount} UNREAD SIGNALS
           </div>
-          <button onClick={() => router.push('/comp-map')} style={{
-            background: '#f8f8f8',
-            color: '#000',
-            border: 'none',
-            padding: '8px 16px',
-            fontSize: '11px',
-            fontWeight: '700',
-            cursor: 'pointer'
-          }}>
-            COMP MAP
+          <button 
+            onClick={() => router.push('/deals')} 
+            style={{
+              background: '#f8f8f8',
+              color: '#000',
+              border: 'none',
+              padding: '8px 16px',
+              fontSize: '11px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}
+          >
+            DEALS GRID
+          </button>
+          <button 
+            onClick={() => router.push('/comp-map')}
+            style={{
+              background: '#1a1a1a',
+              color: '#dc2626',
+              border: '1px solid #dc2626',
+              padding: '8px 16px',
+              fontSize: '11px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              position: 'relative'
+            }}
+          >
+            COMP MAP // LOCKED
+            <span style={{
+              position: 'absolute',
+              top: '-6px',
+              right: '-6px',
+              background: '#dc2626',
+              color: '#000',
+              fontSize: '8px',
+              padding: '2px 4px',
+              fontWeight: '700'
+            }}>
+              SOON
+            </span>
           </button>
         </div>
       </div>
@@ -175,6 +206,11 @@ export default function CommandCenter() {
               </div>
             </div>
           ))}
+          {signals.length === 0 && (
+            <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', padding: '32px' }}>
+              NO ACTIVE SIGNALS // AWAITING INTEL
+            </div>
+          )}
         </div>
 
         {/* MESSAGES COLUMN */}
@@ -202,6 +238,11 @@ export default function CommandCenter() {
               </div>
             </div>
           ))}
+          {messages.length === 0 && (
+            <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', padding: '32px' }}>
+              NO INBOUND OFFERS
+            </div>
+          )}
         </div>
 
         {/* NETWORK COLUMN */}
@@ -222,7 +263,7 @@ export default function CommandCenter() {
               marginBottom: '12px'
             }}
           >
-            {['GA','FL','TX','CA','NY','IL'].map(s => <option key={s} value={s}>{s}</option>)}
+            {['GA','FL','TX','CA','NY','IL','NC','SC','AL','TN'].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           {members.map(m => (
             <div key={m.id} style={{
