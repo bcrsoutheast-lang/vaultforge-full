@@ -1,6 +1,8 @@
+import './globals.css'
+
 export const metadata = {
-  title: 'VaultForge - Private Deal Room',
-  description: 'Members-only real estate deal intelligence. Residential, commercial, and land.',
+  title: 'VAULTFORGE',
+  description: 'Private Deal Intelligence',
 }
 
 export default function RootLayout({
@@ -10,14 +12,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ 
-        margin: 0, 
-        backgroundColor: '#000', 
-        color: '#fff',
-        fontFamily: 'system-ui, -apple-system, sans-serif'
-      }}>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   )
 }
