@@ -28,10 +28,10 @@ export default function DealsPage() {
   const fetchDeals = async () => {
     setLoading(true)
     const { data, error } = await supabase
-     .from('deals')
-     .select('*')
-     .eq('status', 'active')
-     .order('analyzed_at', { ascending: false })
+   .from('deals')
+   .select('*')
+   .eq('status', 'active')
+   .order('dqi_score', { ascending: false })
 
     if (data) setDeals(data)
     setLoading(false)
@@ -62,7 +62,7 @@ export default function DealsPage() {
       message
     })
 
-    if (!error) alert('SIGNAL SENT // OWNER NOTIFIED')
+    if (!error) alert('SIGNAL SENT // OWNER NOTIFIED // TICKER ACTIVE')
     else alert('ERROR: ' + error.message)
   }
 
@@ -86,12 +86,12 @@ export default function DealsPage() {
     })
 
     const { error: dealError } = await supabase
-     .from('deals')
-     .update({ status: 'closed' })
-     .eq('id', deal.id)
+   .from('deals')
+   .update({ status: 'closed', closed_price: Number(closedPrice), closed_at: new Date().toISOString() })
+   .eq('id', deal.id)
 
     if (!outcomeError &&!dealError) {
-      alert('DEAL CLOSED // VAULTFORGE ARV UPDATED')
+      alert('DEAL CLOSED // VAULTFORGE ARV UPDATED // NETWORK SMARTER')
       fetchDeals()
     }
   }
@@ -165,7 +165,7 @@ export default function DealsPage() {
               }}>
                 <div>
                   <div style={{ fontSize: '24px', fontWeight: '700', color: getStatusColor(deal.intel_status) }}>
-                    DQI {deal.dqi_score || 'N/A'}
+                    DQI {deal.dqi_score || 0}
                   </div>
                   <div style={{ fontSize: '9px', color: '#666', letterSpacing: '0.1em' }}>
                     {deal.intel_status || 'PENDING'}
