@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 
@@ -12,6 +12,10 @@ export default function DealOpportunities() {
   const [deals, setDeals] = useState<any[]>([])
   const [selectedDeal, setSelectedDeal] = useState<any | null>(null)
   const [showSubmit, setShowSubmit] = useState(false)
+  const [messages, setMessages] = useState<any[]>([])
+  const [newMessage, setNewMessage] = useState('')
+  const [unreadCount, setUnreadCount] = useState<{[key: string]: number}>({})
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const [form, setForm] = useState({
     address: '',
     city: '',
@@ -43,10 +47,24 @@ export default function DealOpportunities() {
   })
   const supabase = createClientComponentClient()
   const router = useRouter()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    getCurrentUser()
     fetchDeals()
+    const interval = setInterval(checkForNewMessages, 5000)
+    return () => clearInterval(interval)
   }, [activeTab])
+
+  useEffect(() => {
+    if (selectedDeal) {
+      fetchMessages(selectedDeal.id)
+    }
+  }, [selectedDeal])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   useEffect(() => {
     const asking = Number(form.asking_price) || 0
@@ -83,20 +101,85 @@ export default function DealOpportunities() {
     setAnalysis({ score, status, flags, route_to })
   }, [form, files])
 
+  const getCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setCurrentUser(user)
+  }
+
   const fetchDeals = async () => {
     const { data } = await supabase
-    .from('deals')
-    .select('*')
-    .eq('status', activeTab)
-    .order('created_at', { ascending: false })
+   .from('deals')
+   .select('*')
+   .eq('status', activeTab)
+   .order('created_at', { ascending: false })
     setDeals(data || [])
+    checkUnreadCounts(data || [])
+  }
+
+  const checkForNewMessages = async () => {
+    const { data } = await supabase
+   .from('deal_messages')
+   .select('deal_id, read')
+   .eq('receiver_id', currentUser?.id)
+   .eq('read', false)
+
+    const counts: {[key: string]: number} = {}
+    data?.forEach(msg => {
+      counts[msg.deal_id] = (counts[msg.deal_id] || 0) + 1
+    })
+    setUnreadCount(counts)
+  }
+
+  const checkUnreadCounts = (dealList: any[]) => {
+    checkForNewMessages()
+  }
+
+  const fetchMessages = async (dealId: string) => {
+    const { data } = await supabase
+   .from('deal_messages')
+   .select('*')
+   .eq('deal_id', dealId)
+   .order('created_at', { ascending: true })
+
+    setMessages(data || [])
+
+    await supabase
+   .from('deal_messages')
+   .update({ read: true })
+   .eq('deal_id', dealId)
+   .eq('receiver_id', currentUser?.id)
+
+    checkForNewMessages()
+  }
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() ||!selectedDeal ||!currentUser) return
+
+    const { error } = await supabase.from('deal_messages').insert([{
+      deal_id: selectedDeal.id,
+      sender_id: currentUser.id,
+      sender_email: currentUser.email,
+      receiver_email: selectedDeal.contact_email,
+      subject: `RE: ${selectedDeal.address} // $${Number(selectedDeal.asking_price).toLocaleString()}`,
+      message: newMessage,
+      read: false
+    }])
+
+    if (!error) {
+      setNewMessage('')
+      fetchMessages(selectedDeal.id)
+    }
+  }
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
   const updateDealStatus = async (id: string, newStatus: DealStatus) => {
     const { error } = await supabase
-    .from('deals')
-    .update({ status: newStatus })
-    .eq('id', id)
+   .from('deals')
+   .update({ status: newStatus })
+   .eq('id', id)
 
     if (!error) {
       fetchDeals()
@@ -115,9 +198,9 @@ export default function DealOpportunities() {
 
   const toggleTarget = (val: string) => {
     setForm(prev => ({
-   ...prev,
+  ...prev,
       who_is_this_for: prev.who_is_this_for.includes(val)
-     ? prev.who_is_this_for.filter(v => v!== val)
+    ? prev.who_is_this_for.filter(v => v!== val)
         : [...prev.who_is_this_for, val]
     }))
   }
@@ -148,8 +231,8 @@ export default function DealOpportunities() {
       const fileName = `deal-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
 
       const { error } = await supabase.storage
-     .from('pain-deal-photos')
-     .upload(fileName, file)
+    .from('pain-deal-photos')
+    .upload(fileName, file)
 
       if (error) {
         console.error('Upload error:', error)
@@ -157,8 +240,8 @@ export default function DealOpportunities() {
       }
 
       const { data: { publicUrl } } = supabase.storage
-     .from('pain-deal-photos')
-     .getPublicUrl(fileName)
+    .from('pain-deal-photos')
+    .getPublicUrl(fileName)
 
       urls.push(publicUrl)
     }
@@ -196,7 +279,9 @@ export default function DealOpportunities() {
       intel_flags: analysis.flags,
       routed_to: analysis.route_to,
       analyzed_at: new Date().toISOString(),
-      status: 'active'
+      status: 'active',
+      owner_id: currentUser?.id,
+      owner_email: currentUser?.email
     }])
 
     setLoading(false)
@@ -225,7 +310,7 @@ export default function DealOpportunities() {
   return (
     <div style={{ background: '#000', minHeight: '100vh', padding: '16px' }}>
       <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
-        <div className="grid-header">DEAL OPPORTUNITIES // VAULTFORGE INTEL</div>
+        <div className="grid-header">DEAL OPPORTUNITIES // VAULTFORGE INTEL // MESSAGING ACTIVE</div>
 
         <div style={{ display: 'flex', gap: '1px', background: '#27272a', marginTop: '1px', marginBottom: '16px' }}>
           {(['active', 'saved', 'archived', 'deleted'] as DealStatus[]).map(tab => (
@@ -242,10 +327,27 @@ export default function DealOpportunities() {
                 fontWeight: '900',
                 letterSpacing: '0.1em',
                 cursor: 'pointer',
-                textTransform: 'uppercase'
+                textTransform: 'uppercase',
+                position: 'relative'
               }}
             >
               {tab} // {deals.filter(d => d.status === tab).length}
+              {unreadCount && Object.values(unreadCount).reduce((a, b) => a + b, 0) > 0 && tab === 'active' && (
+                <span style={{
+                  position: 'absolute',
+                  top: '4px',
+                  right: '8px',
+                  background: '#f87171',
+                  color: '#000',
+                  fontSize: '9px',
+                  padding: '2px 6px',
+                  borderRadius: '10px',
+                  fontWeight: '900',
+                  animation: 'pulse 2s infinite'
+                }}>
+                  {Object.values(unreadCount).reduce((a, b) => a + b, 0)}
+                </span>
+              )}
             </button>
           ))}
           <button
@@ -330,26 +432,7 @@ export default function DealOpportunities() {
               </div>
 
               <div className="grid-panel" style={{ padding: '16px' }}>
-                <div className="field-label">Who Is This For</div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {['FLIPPER', 'BUY_HOLD', 'BRRR', 'BUILDER', 'WHOLESALER', 'CASH_BUYER'].map(t => (
-                    <button key={t} type="button" onClick={() => toggleTarget(t)}
-                      style={{
-                        padding: '6px 12px',
-                        border: '1px solid #3f3f46',
-                        background: form.who_is_this_for.includes(t)? '#facc15' : '#0a0a0b',
-                        color: form.who_is_this_for.includes(t)? '#000' : '#a1a1aa',
-                        fontSize: '11px',
-                        cursor: 'pointer'
-                      }}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid-panel" style={{ padding: '16px' }}>
-                <div className="field-label">Contact Info</div>
+                <div className="field-label">Contact Info // Auto-fills messaging</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                   <input placeholder="NAME" required value={form.contact_name} onChange={e => setForm({...form, contact_name: e.target.value})}
                     style={{ background: '#0a0a0b', border: '1px solid #27272a', padding: '8px', color: '#fafafa' }} />
@@ -405,7 +488,24 @@ export default function DealOpportunities() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
           {deals.map(deal => (
-            <div key={deal.id} className="grid-panel" style={{ padding: '0', cursor: 'pointer' }} onClick={() => setSelectedDeal(deal)}>
+            <div key={deal.id} className="grid-panel" style={{ padding: '0', cursor: 'pointer', position: 'relative' }} onClick={() => setSelectedDeal(deal)}>
+              {unreadCount[deal.id] > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  background: '#f87171',
+                  color: '#000',
+                  fontSize: '10px',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontWeight: '900',
+                  zIndex: 10,
+                  animation: 'pulse 2s infinite'
+                }}>
+                  {unreadCount[deal.id]} NEW MSG
+                </div>
+              )}
               <div style={{ position: 'relative', paddingBottom: '60%', background: '#0a0a0b' }}>
                 {deal.photo_urls && deal.photo_urls[0] && (
                   <img src={deal.photo_urls[0]} alt={deal.address} style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -483,47 +583,84 @@ export default function DealOpportunities() {
         )}
 
         {selectedDeal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, padding: '24px', overflowY: 'auto' }}
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1000, padding: '24px', overflowY: 'auto' }}
             onClick={() => setSelectedDeal(null)}>
-            <div className="grid-panel" style={{ maxWidth: '1200px', margin: '0 auto' }} onClick={e => e.stopPropagation()}>
-              <div className="grid-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>DEAL INTEL // {selectedDeal.address}</span>
-                <button onClick={() => setSelectedDeal(null)} style={{ background: 'none', border: 'none', color: '#f87171', fontSize: '16px', cursor: 'pointer' }}>✕</button>
-              </div>
-              <div style={{ padding: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
-                  <div>
-                    {selectedDeal.photo_urls && selectedDeal.photo_urls.length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' }}>
-                        {selectedDeal.photo_urls.map((url: string, i: number) => (
-                          <img key={i} src={url} alt={`Photo ${i+1}`} style={{ width: '100%', border: '1px solid #27272a' }} />
-                        ))}
-                      </div>
-                    )}
-                    <div className="field-label">Property Details</div>
-                    <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8' }}>
-                      <div>ADDRESS: {selectedDeal.address}, {selectedDeal.city} {selectedDeal.state} {selectedDeal.zipcode}</div>
-                      <div>TYPE: {selectedDeal.property_type} // {selectedDeal.beds}BD {selectedDeal.baths}BA {selectedDeal.sqft}SQFT</div>
-                      <div>REHAB: {selectedDeal.rehab_level} // URGENCY: {selectedDeal.urgency}</div>
-                      <div>ASKING: ${Number(selectedDeal.asking_price).toLocaleString()} // ARV: ${Number(selectedDeal.arv).toLocaleString()}</div>
-                      <div style={{ marginTop: '8px' }}>DESCRIPTION: {selectedDeal.description}</div>
+            <div className="grid-panel" style={{ maxWidth: '1400px', margin: '0 auto', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1px', background: '#27272a' }} onClick={e => e.stopPropagation()}>
+              <div>
+                <div className="grid-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>DEAL INTEL // {selectedDeal.address}</span>
+                  <button onClick={() => setSelectedDeal(null)} style={{ background: 'none', border: 'none', color: '#f87171', fontSize: '16px', cursor: 'pointer' }}>✕</button>
+                </div>
+                <div style={{ padding: '16px', background: '#0a0a0b' }}>
+                  {selectedDeal.photo_urls && selectedDeal.photo_urls.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px' }}>
+                      {selectedDeal.photo_urls.map((url: string, i: number) => (
+                        <img key={i} src={url} alt={`Photo ${i+1}`} style={{ width: '100%', border: '1px solid #27272a' }} />
+                      ))}
                     </div>
+                  )}
+                  <div className="field-label">Property Details</div>
+                  <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8', marginBottom: '16px' }}>
+                    <div>ADDRESS: {selectedDeal.address}, {selectedDeal.city} {selectedDeal.state} {selectedDeal.zipcode}</div>
+                    <div>TYPE: {selectedDeal.property_type} // {selectedDeal.beds}BD {selectedDeal.baths}BA {selectedDeal.sqft}SQFT</div>
+                    <div>REHAB: {selectedDeal.rehab_level} // URGENCY: {selectedDeal.urgency}</div>
+                    <div>ASKING: ${Number(selectedDeal.asking_price).toLocaleString()} // ARV: ${Number(selectedDeal.arv).toLocaleString()}</div>
+                    <div style={{ marginTop: '8px' }}>NOTES: {selectedDeal.description}</div>
                   </div>
-                  <div>
-                    <div className="field-label">Contact Info</div>
-                    <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8', marginBottom: '16px' }}>
-                      <div>NAME: {selectedDeal.contact_name}</div>
-                      <div>PHONE: {selectedDeal.contact_phone}</div>
-                      <div>EMAIL: {selectedDeal.contact_email}</div>
+                  <div className="field-label">Contact Node</div>
+                  <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8', marginBottom: '16px' }}>
+                    <div>NAME: {selectedDeal.contact_name}</div>
+                    <div>PHONE: {selectedDeal.contact_phone}</div>
+                    <div>EMAIL: {selectedDeal.contact_email}</div>
+                  </div>
+                  <div className="field-label">Intelligence Analysis</div>
+                  <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8' }}>
+                    <div>DQI SCORE: <span style={{ color: getStatusColor(selectedDeal.intel_status), fontWeight: '900' }}>{selectedDeal.dqi_score}</span></div>
+                    <div>STATUS: {selectedDeal.intel_status}</div>
+                    <div>FLAGS: {selectedDeal.intel_flags?.join(' // ') || 'NONE'}</div>
+                    <div>ROUTE TO: {selectedDeal.routed_to?.join(' // ') || 'UNASSIGNED'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', background: '#0a0a0b' }}>
+                <div className="grid-header">
+                  MESSAGE CENTER // TO: {selectedDeal.contact_email}
+                </div>
+                <div style={{ flex: 1, padding: '16px', overflowY: 'auto', maxHeight: '500px' }}>
+                  {messages.map((msg, i) => (
+                    <div key={i} style={{
+                      marginBottom: '12px',
+                      padding: '8px',
+                      background: msg.sender_id === currentUser?.id? '#18181b' : '#0a0a0b',
+                      border: '1px solid #27272a'
+                    }}>
+                      <div style={{ fontSize: '9px', color: '#71717a', marginBottom: '4px' }}>
+                        FROM: {msg.sender_email} // {new Date(msg.created_at).toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#fafafa' }}>
+                        {msg.message}
+                      </div>
                     </div>
-                    <div className="field-label">Intelligence Analysis</div>
-                    <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.8' }}>
-                      <div>DQI SCORE: <span style={{ color: getStatusColor(selectedDeal.intel_status), fontWeight: '900' }}>{selectedDeal.dqi_score}</span></div>
-                      <div>STATUS: {selectedDeal.intel_status}</div>
-                      <div>FLAGS: {selectedDeal.intel_flags?.join(' // ') || 'NONE'}</div>
-                      <div>ROUTE TO: {selectedDeal.routed_to?.join(' // ') || 'UNASSIGNED'}</div>
-                      <div>ANALYZED: {new Date(selectedDeal.analyzed_at).toLocaleString()}</div>
-                    </div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+                <div style={{ padding: '16px', borderTop: '1px solid #27272a' }}>
+                  <div style={{ fontSize: '9px', color: '#71717a', marginBottom: '4px' }}>
+                    SUBJECT: RE: {selectedDeal.address} // ${Number(selectedDeal.asking_price).toLocaleString()}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      value={newMessage}
+                      onChange={e => setNewMessage(e.target.value)}
+                      onKeyPress={e => e.key === 'Enter' && sendMessage()}
+                      placeholder="TYPE MESSAGE..."
+                      style={{ flex: 1, background: '#000', border: '1px solid #27272a', padding: '8px', color: '#fafafa', fontSize: '11px' }}
+                    />
+                    <button onClick={sendMessage}
+                      style={{ padding: '8px 16px', background: '#facc15', color: '#000', border: 'none', fontSize: '11px', fontWeight: '900', cursor: 'pointer' }}>
+                      SEND
+                    </button>
                   </div>
                 </div>
               </div>
@@ -531,6 +668,9 @@ export default function DealOpportunities() {
           </div>
         )}
       </div>
-    </div>
-  )
-}
+
+      <style jsx>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
