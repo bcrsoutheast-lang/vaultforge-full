@@ -2437,8 +2437,8 @@ ${getData(LS_KEYS.PROFILE).name || 'Vaultforge Acquisitions'}`
     window.startDiligence = startDiligence;
     window.toggleDoc = toggleDoc;
     
-    // Final console message
-    console.log('%cVaultforge CRM v1.0', 'color: #00ff88; font-size: 20px; font-weight: bold;');
+    // Run auth check on load
+    checkAuth();
     console.log('%cAll systems operational', 'color: #00ccff; font-size: 14px;');
     console.log('%cBuild: 30/30 parts complete', 'color: #ff00ff; font-size: 12px;');
 </script>
