@@ -16,8 +16,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{padding: '40px', fontFamily: 'monospace', maxWidth: '400px', margin: '0 auto'}}>
-      <h1 style={{marginBottom: '30px'}}>VaultForge</h1>
+    <div style={{padding: '40px', fontFamily: 'monospace'}}>
+      <h1>VaultForge</h1>
       
       <input 
         placeholder="Username" 
@@ -33,6 +33,7 @@ export default function LoginPage() {
         style={{padding: '12px', marginBottom: '12px', display: 'block', width: '100%', border: '1px solid #ccc'}}
       />
       <button 
+        type="button"  // <- CRITICAL: NOT submit
         onClick={handleLogin}
         style={{padding: '12px 24px', background: '#0066ff', color: 'white', border: 'none', cursor: 'pointer', width: '100%'}}
       >
