@@ -77,6 +77,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .toggle-group button{flex:1;background:#111;border:1px solid #333}
 .toggle-group button.active{background:#FFB000;color:#000;border-color:#FFB000}
 .toggle-group[data-theme="deal"] button.active{background:#00FF41;color:#000;border-color:#00FF41}
+.toggle-group[data-theme="comps"] button.active{background:#A000FF;color:#000;border-color:#A000FF}
 .room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:20px}
 .lead-card{background:#111;border:1px solid #333;padding:12px;font-size:11px;position:relative}
 .lead-card.type{font-size:10px;color:#FFB000;margin-bottom:8px}
@@ -88,7 +89,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .lead-card.actions button{flex:1;font-size:9px;padding:6px}
 .lead-card.pulse{animation:pulse 1.5s infinite;border-color:#FF0040}
 .lead-card.comps-box{border:1px solid #A000FF;margin-top:8px;padding:8px;background:#0A0A0A}
-.lead-card.comps-box h4{color:#A000FF;font-size:10px;margin-bottom:6px}
+.lead-card.comps-box h4{color:#A000FF;font-size:10px;margin-bottom:6px;display:flex;justify-content:space-between}
 .lead-card.comps-box .comp-mini{font-size:9px;color:#888;margin:3px 0}
 .lead-card.comps-box .arv{color:#FFB000;font-weight:700;margin-top:6px;border-top:1px solid #222;padding-top:6px}
 .comp-card{background:#111;border:1px solid #A000FF;padding:10px;margin:8px 0;font-size:11px}
@@ -146,9 +147,9 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
   <div class="container">
     <!-- DASHBOARD -->
     <div id="dashboard" class="section active">
-      <div class="signal-bar" id="signalBar">SIGNAL: VAULTFORGE ACTIVE - AUTO-COMPS ENABLED</div>
-      <div class="banner banner-deal hidden" id="dealBanner">NEW DEAL SUBMITTED - COMPS ATTACHED</div>
-      <div class="banner banner-pain hidden" id="painBanner">NEW PAIN LEAD - COMPS ATTACHED</div>
+      <div class="signal-bar" id="signalBar">SIGNAL: VAULTFORGE ACTIVE - LIVE MARKET COMPS ENABLED</div>
+      <div class="banner banner-deal hidden" id="dealBanner">NEW DEAL SUBMITTED - LIVE COMPS ATTACHED</div>
+      <div class="banner banner-pain hidden" id="painBanner">NEW PAIN LEAD - LIVE COMPS ATTACHED</div>
       <div class="banner banner-comps hidden" id="compsBanner">COMPS FOUND IN DATABASE</div>
       <h2 style="color:#FFB000;margin-bottom:20px">DASHBOARD</h2>
       <div class="stats">
@@ -220,7 +221,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 
     <!-- PAIN -->
     <div id="pain" class="section">
-      <h2 style="color:#FFB000;margin-bottom:20px">PAIN INTAKE FORM // AUTO-COMPS ON</h2>
+      <h2 style="color:#FFB000;margin-bottom:20px">PAIN INTAKE FORM // LIVE COMPS ON</h2>
       <div class="card" data-theme="pain">
         <div class="toggle-group" data-theme="pain">
           <button class="active" onclick="setPropertyType('pain','residential')">RESIDENTIAL</button>
@@ -239,7 +240,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
           <div><label>SqFt *</label><input type="number" id="painSqft"></div>
           <div><label>Bed/Bath</label><input type="text" id="painBedBath" placeholder="3/2"></div>
         </div>
-        <button class="btn-primary" style="width:100%;margin-top:16px" onclick="submitLead('pain')">SUBMIT PAIN + AUTO-PULL COMPS</button>
+        <button class="btn-primary" style="width:100%;margin-top:16px" onclick="submitLead('pain')">SUBMIT PAIN + AUTO-PULL LIVE COMPS</button>
       </div>
       <h3 style="color:#FFB000;margin-top:30px">PAIN ROOM</h3>
       <div class="room-grid" id="painRoom"></div>
@@ -247,7 +248,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 
     <!-- DEAL -->
     <div id="deal" class="section">
-      <h2 style="color:#00FF41;margin-bottom:20px">DEAL INTAKE FORM // AUTO-COMPS ON</h2>
+      <h2 style="color:#00FF41;margin-bottom:20px">DEAL INTAKE FORM // LIVE COMPS ON</h2>
       <div class="card" data-theme="deal">
         <div class="toggle-group" data-theme="deal">
           <button class="active" onclick="setPropertyType('deal','residential')">RESIDENTIAL</button>
@@ -266,7 +267,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
           <div><label>SqFt *</label><input type="number" id="dealSqft"></div>
           <div><label>Bed/Bath</label><input type="text" id="dealBedBath" placeholder="3/2"></div>
         </div>
-        <button class="btn-primary btn-deal" style="width:100%;margin-top:16px" onclick="submitLead('deal')">SUBMIT DEAL + AUTO-PULL COMPS</button>
+        <button class="btn-primary btn-deal" style="width:100%;margin-top:16px" onclick="submitLead('deal')">SUBMIT DEAL + AUTO-PULL LIVE COMPS</button>
       </div>
       <h3 style="color:#00FF41;margin-top:30px">DEAL ROOM</h3>
       <div class="room-grid" id="dealRoom"></div>
@@ -349,6 +350,7 @@ let memberFilter = 'home';
 let propertyTypes = {pain:'residential',deal:'residential'};
 let currentMsgTab = 'deal';
 let currentSoldLead = null;
+let compsMode = 'live'; // 'live' or 'sold'
 
 function init(){
   if(localStorage.getItem('boardroom_session')){
@@ -522,19 +524,46 @@ function setPropertyType(type,prop){
   event.target.classList.add('active');
 }
 
-function getAutoComps(zip,sqft){
+function getAutoComps(zip,sqft,mode){
   if(!zip ||!sqft) return {comps:[],avgSqft:0,estARV:0,mao70:0};
-  const matches = soldComps.filter(c=>{
+  
+  // 1. SOLD COMPS - 100% weight
+  const soldMatches = soldComps.filter(c=>{
     const zipMatch = c.zip === zip;
     const sqftMatch = Math.abs(c.sqft - sqft) < (sqft * 0.2);
     const recentMatch = (Date.now() - c.soldDate) < (180 * 24 * 60 * 60 * 1000);
     return zipMatch && sqftMatch && recentMatch;
-  }).slice(0,4);
+  }).map(c=>({...c,status:'SOLD',weight:1.0,price:c.soldPrice}));
   
-  const avgSqft = matches.length? matches.reduce((sum,c)=>sum+c.pricePerSqft,0) / matches.length : 0;
+  let allMatches = [...soldMatches];
+  
+  // 2. LIVE MARKET - only if mode==='live'
+  if(mode==='live'){
+    const activeDeals = dealLeads.filter(d=>{
+      const zipMatch = d.zip === zip;
+      const sqftMatch = Math.abs(d.sqft - sqft) < (sqft * 0.2);
+      return zipMatch && sqftMatch &&!d.sold;
+    }).map(d=>({...d,status:'ACTIVE',weight:0.6,price:d.estARV||0,pricePerSqft:Math.round((d.estARV||0)/d.sqft)}));
+    
+    const painRefs = painLeads.filter(p=>{
+      const zipMatch = p.zip === zip;
+      const sqftMatch = Math.abs(p.sqft - sqft) < (sqft * 0.2);
+      return zipMatch && sqftMatch &&!p.sold;
+    }).map(p=>({...p,status:'PAIN REF',weight:0.4,price:p.estARV||0,pricePerSqft:Math.round((p.estARV||0)/p.sqft)}));
+    
+    allMatches = [...soldMatches,...activeDeals,...painRefs];
+  }
+  
+  allMatches = allMatches.slice(0,4);
+  
+  if(allMatches.length===0) return {comps:[],avgSqft:0,estARV:0,mao70:0};
+  
+  const totalWeight = allMatches.reduce((sum,c)=>sum+c.weight,0);
+  const avgSqft = allMatches.reduce((sum,c)=>sum+(c.pricePerSqft*c.weight),0) / totalWeight;
   const estARV = Math.round(avgSqft * sqft);
   const mao70 = Math.round(estARV * 0.7);
-  return {comps:matches,avgSqft,estARV,mao70};
+  
+  return {comps:allMatches,avgSqft,estARV,mao70,mode:mode};
 }
 
 function submitLead(type){
@@ -550,7 +579,7 @@ function submitLead(type){
     return;
   }
   
-  const autoComps = getAutoComps(zip,sqft);
+  const autoComps = getAutoComps(zip,sqft,compsMode);
   
   const lead={
     id:Date.now(),
@@ -567,32 +596,48 @@ function submitLead(type){
     comps:autoComps.comps,
     avgSqft:autoComps.avgSqft,
     estARV:autoComps.estARV,
-    mao70:autoComps.mao70
+    mao70:autoComps.mao70,
+    compsMode:compsMode
   };
   
   if(type==='pain'){
     painLeads.push(lead);
     localStorage.setItem('boardroom_pain',JSON.stringify(painLeads));
-    addMessage('pain',`New PAIN: ${lead.addr}, ${lead.city}, ${lead.state} - ARV: $${lead.estARV.toLocaleString()}`,lead);
+    addMessage('pain',`New PAIN: ${lead.addr}, ${lead.city} - ARV: $${lead.estARV.toLocaleString()} [${compsMode.toUpperCase()} COMPS]`,lead);
     showBanner('pain');
     pulseAlert('pain');
   }else{
     dealLeads.push(lead);
     localStorage.setItem('boardroom_deal',JSON.stringify(dealLeads));
-    addMessage('deal',`New DEAL: ${lead.addr}, ${lead.city}, ${lead.state} - ARV: $${lead.estARV.toLocaleString()}`,lead);
+    addMessage('deal',`New DEAL: ${lead.addr}, ${lead.city} - ARV: $${lead.estARV.toLocaleString()} [${compsMode.toUpperCase()} COMPS]`,lead);
     showBanner('deal');
     pulseAlert('deal');
   }
   
   if(autoComps.comps.length>0){
     document.getElementById('compsBanner').classList.remove('hidden');
-    document.getElementById('compsBanner').textContent = `AUTO-COMPS: ${autoComps.comps.length} FOUND - ARV: $${autoComps.estARV.toLocaleString()}`;
-    document.getElementById('signalBar').textContent = 'SIGNAL: COMPS AUTO-ATTACHED TO LEAD';
+    document.getElementById('compsBanner').textContent = `${compsMode.toUpperCase()} COMPS: ${autoComps.comps.length} FOUND - ARV: $${autoComps.estARV.toLocaleString()}`;
+    document.getElementById('signalBar').textContent = `SIGNAL: ${compsMode.toUpperCase()} COMPS AUTO-ATTACHED`;
     setTimeout(()=>document.getElementById('compsBanner').classList.add('hidden'),4000);
   }
   
-  alert(`SUBMITTED WITH ${autoComps.comps.length} COMPS ATTACHED`);
+  alert(`SUBMITTED WITH ${autoComps.comps.length} ${compsMode.toUpperCase()} COMPS`);
   loadData();
+}
+
+function toggleCompsMode(type,id){
+  const list = type==='pain'?painLeads:dealLeads;
+  const lead = list.find(l=>l.id===id);
+  if(!lead)return;
+  const newMode = lead.compsMode==='live'?'sold':'live';
+  const newComps = getAutoComps(lead.zip,lead.sqft,newMode);
+  lead.comps = newComps.comps;
+  lead.avgSqft = newComps.avgSqft;
+  lead.estARV = newComps.estARV;
+  lead.mao70 = newComps.mao70;
+  lead.compsMode = newMode;
+  localStorage.setItem(type==='pain'?'boardroom_pain':'boardroom_deal',JSON.stringify(list));
+  renderRooms();
 }
 
 function loadData(){
@@ -620,15 +665,24 @@ function renderRooms(){
     <div class="lead-card" data-theme="pain">
       <div class="type">${l.propType.toUpperCase()}</div>
       <div class="addr">${l.addr}, ${l.city}, ${l.state} ${l.zip}</div>
-      <div class="meta">${l.sqft}sqft | ${l.bedBath}</div>
+      <div class="meta">${l.sqft}sqft | ${l.bedBath||'N/A'}</div>
+      <div class="meta" style="color:#FFB000">Submitted: ${new Date(l.timestamp).toLocaleDateString()}</div>
       ${l.comps&&l.comps.length?`
         <div class="comps-box">
-          <h4>VAULTFORGE COMPS [${l.comps.length}]</h4>
-          ${l.comps.slice(0,2).map(c=>`<div class="comp-mini">${c.addr} - $${c.soldPrice.toLocaleString()} | $${c.pricePerSqft}/sqft</div>`).join('')}
+          <h4>
+            <span>${l.compsMode==='live'?'LIVE MARKET':'SOLD HISTORY'} [${l.comps.length}]</span>
+            <button onclick="toggleCompsMode('pain',${l.id})" style="font-size:8px;padding:2px 4px;background:#A000FF;border:none;color:#000">FLIP</button>
+          </h4>
+          ${l.comps.slice(0,2).map(c=>`
+            <div class="comp-mini">
+              <span style="color:${c.status==='SOLD'?'#00FF41':c.status==='ACTIVE'?'#FFB000':'#666'}">[${c.status}]</span> 
+              ${c.addr} - $${c.price.toLocaleString()} | $${c.pricePerSqft}/sqft
+            </div>
+          `).join('')}
           <div class="arv">ARV: $${l.estARV.toLocaleString()} | MAO: $${l.mao70.toLocaleString()}</div>
         </div>
       `:`<div class="comps-box"><h4>NO COMPS FOUND</h4></div>`}
-      <div class="profile-mini">Submitted by: ${l.submitter?.name||'Unknown'}<br>FROM: ${l.submitter?.homeState||'N/A'}</div>
+      <div class="profile-mini">Submitted by: ${l.submitter?.name||'Unknown'}<br>FROM: ${l.submitter?.homeState||'N/A'}<br>Company: ${l.submitter?.company||'N/A'}<br>Title: ${l.submitter?.title||'N/A'}</div>
       <div class="actions">
         <button class="btn-sold" onclick="openSoldModal(${l.id},'pain')">MARK SOLD</button>
       </div>
@@ -638,15 +692,24 @@ function renderRooms(){
     <div class="lead-card" data-theme="deal">
       <div class="type">${l.propType.toUpperCase()}</div>
       <div class="addr">${l.addr}, ${l.city}, ${l.state} ${l.zip}</div>
-      <div class="meta">${l.sqft}sqft | ${l.bedBath}</div>
+      <div class="meta">${l.sqft}sqft | ${l.bedBath||'N/A'}</div>
+      <div class="meta" style="color:#00FF41">Submitted: ${new Date(l.timestamp).toLocaleDateString()}</div>
       ${l.comps&&l.comps.length?`
         <div class="comps-box">
-          <h4>VAULTFORGE COMPS [${l.comps.length}]</h4>
-          ${l.comps.slice(0,2).map(c=>`<div class="comp-mini">${c.addr} - $${c.soldPrice.toLocaleString()} | $${c.pricePerSqft}/sqft</div>`).join('')}
+          <h4>
+            <span>${l.compsMode==='live'?'LIVE MARKET':'SOLD HISTORY'} [${l.comps.length}]</span>
+            <button onclick="toggleCompsMode('deal',${l.id})" style="font-size:8px;padding:2px 4px;background:#A000FF;border:none;color:#000">FLIP</button>
+          </h4>
+          ${l.comps.slice(0,2).map(c=>`
+            <div class="comp-mini">
+              <span style="color:${c.status==='SOLD'?'#00FF41':c.status==='ACTIVE'?'#FFB000':'#666'}">[${c.status}]</span> 
+              ${c.addr} - $${c.price.toLocaleString()} | $${c.pricePerSqft}/sqft
+            </div>
+          `).join('')}
           <div class="arv">ARV: $${l.estARV.toLocaleString()} | MAO: $${l.mao70.toLocaleString()}</div>
         </div>
       `:`<div class="comps-box"><h4>NO COMPS FOUND</h4></div>`}
-      <div class="profile-mini">Submitted by: ${l.submitter?.name||'Unknown'}<br>FROM: ${l.submitter?.homeState||'N/A'}</div>
+      <div class="profile-mini">Submitted by: ${l.submitter?.name||'Unknown'}<br>FROM: ${l.submitter?.homeState||'N/A'}<br>Company: ${l.submitter?.company||'N/A'}<br>Title: ${l.submitter?.title||'N/A'}</div>
       <div class="actions">
         <button class="btn-sold" onclick="openSoldModal(${l.id},'deal')">MARK SOLD</button>
       </div>
@@ -838,7 +901,7 @@ function pulseAlert(type){
     document.getElementById('dealNavBtn').classList.add('pulse');
     document.getElementById('statDealCard').classList.add('pulse');
     document.getElementById('dealBanner').classList.remove('hidden');
-    document.getElementById('signalBar').textContent='SIGNAL: NEW DEAL + AUTO-COMPS ATTACHED';
+    document.getElementById('signalBar').textContent='SIGNAL: NEW DEAL + LIVE COMPS ATTACHED';
     setTimeout(()=>{
       document.getElementById('dealBanner').classList.add('hidden');
     },3000);
@@ -846,7 +909,7 @@ function pulseAlert(type){
     document.getElementById('painNavBtn').classList.add('pulse');
     document.getElementById('statPainCard').classList.add('pulse');
     document.getElementById('painBanner').classList.remove('hidden');
-    document.getElementById('signalBar').textContent='SIGNAL: NEW PAIN + AUTO-COMPS ATTACHED';
+    document.getElementById('signalBar').textContent='SIGNAL: NEW PAIN + LIVE COMPS ATTACHED';
     setTimeout(()=>{
       document.getElementById('painBanner').classList.add('hidden');
     },3000);
@@ -883,7 +946,7 @@ function updateAlerts(){
   document.getElementById('statComps').textContent=soldComps.length;
   
   if(msgUnread===0){
-    document.getElementById('signalBar').textContent='SIGNAL: VAULTFORGE ACTIVE - AUTO-COMPS ENABLED';
+    document.getElementById('signalBar').textContent='SIGNAL: VAULTFORGE ACTIVE - LIVE MARKET COMPS ENABLED';
   }
 }
 
@@ -897,39 +960,33 @@ function scrapeVault(){
     return;
   }
   
-  const matches = soldComps.filter(c=>{
-    const zipMatch = c.zip === zip;
-    const sqftMatch = Math.abs(c.sqft - sqft) < (sqft * 0.3);
-    const recentMatch = (Date.now() - c.soldDate) < (365 * 24 * 60 * 60 * 1000);
-    return zipMatch && sqftMatch && recentMatch;
-  }).slice(0,5);
-  
+  const matches = getAutoComps(zip,sqft,'live');
   const state = zip.substring(0,2);
   const buyers = members.filter(m=>(m.states||[]).includes(state));
   
-  const avgSqft = matches.length? matches.reduce((sum,c)=>sum+c.pricePerSqft,0)/matches.length : 0;
-  const estARV = Math.round(avgSqft * sqft);
-  
   const html = `
     <div style="border:1px solid #00FFFF;padding:12px;margin-top:8px">
-      <div style="color:#00FFFF;font-size:12px;margin-bottom:8px">VAULTFORGE RESULTS</div>
-      ${matches.length?`
-        <div style="color:#A000FF;margin-bottom:8px">COMPS FOUND: ${matches.length}</div>
-        ${matches.map(c=>`
+      <div style="color:#00FFFF;font-size:12px;margin-bottom:8px">VAULTFORGE LIVE MARKET RESULTS</div>
+      ${matches.comps.length?`
+        <div style="color:#A000FF;margin-bottom:8px">${matches.mode.toUpperCase()} COMPS FOUND: ${matches.comps.length}</div>
+        ${matches.comps.map(c=>`
           <div class="comp-card">
             <div class="header">
               <span class="addr">${c.addr}, ${c.city}</span>
-              <span class="price">$${c.soldPrice.toLocaleString()}</span>
+              <span class="price">$${c.price.toLocaleString()}</span>
             </div>
-            <div class="meta">Sold: ${new Date(c.soldDate).toLocaleDateString()} | ${c.sqft}sqft | $${c.pricePerSqft}/sqft</div>
+            <div class="meta">
+              <span style="color:${c.status==='SOLD'?'#00FF41':c.status==='ACTIVE'?'#FFB000':'#666'}">[${c.status}]</span> 
+              ${c.sqft}sqft | $${c.pricePerSqft}/sqft
+            </div>
           </div>
         `).join('')}
         <div style="border-top:1px solid #00FFFF;margin-top:8px;padding-top:8px;font-size:12px">
-          <div style="color:#00FF41">AVG: $${Math.round(avgSqft)}/sqft</div>
-          <div style="color:#FFB000">EST ARV: $${estARV.toLocaleString()}</div>
-          <div style="color:#FF0040">MAO 70%: $${Math.round(estARV*0.7).toLocaleString()}</div>
+          <div style="color:#00FF41">AVG: $${Math.round(matches.avgSqft)}/sqft</div>
+          <div style="color:#FFB000">EST ARV: $${matches.estARV.toLocaleString()}</div>
+          <div style="color:#FF0040">MAO 70%: $${matches.mao70.toLocaleString()}</div>
         </div>
-      `:'<div style="color:#FF0040">NO COMPS IN DATABASE FOR THIS ZIP</div>'}
+      `:'<div style="color:#FF0040">NO COMPS IN NETWORK FOR THIS ZIP</div>'}
       <div style="border-top:1px solid #00FFFF;margin-top:8px;padding-top:8px">
         <div style="color:#0080FF;margin-bottom:4px">MATCHING BUYERS: ${buyers.length}</div>
         ${buyers.slice(0,3).map(m=>`
