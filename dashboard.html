@@ -18,7 +18,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .header p{font-size:10px;color:#666;margin-top:4px}
 .login-wrap{max-width:400px;margin:100px auto;padding:30px;border:1px solid #333}
 .login-wrap h2{font-size:16px;margin-bottom:20px;text-align:center}
-.login-wrap input{width:100%;margin-bottom:12px}
+.login-wrap input{width:100%;margin-bottom:12px;text-transform:none}
 .login-wrap button{width:100%;background:#FFB000;color:#000;border:none;padding:12px}
 .error{color:#FF0040;font-size:11px;margin-top:8px;text-align:center}
 .nav{background:#111;border-bottom:1px solid #222;display:flex;gap:1px;overflow-x:auto}
@@ -39,7 +39,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .banner{padding:12px;margin-bottom:16px;border-left:4px solid;font-size:12px;text-transform:uppercase}
 .banner-deal{border-color:#00FF41;background:rgba(0,255,65,0.1);color:#00FF41}
 .banner-pain{border-color:#FFB000;background:rgba(255,176,0,0.1);color:#FFB000}
-.banner-signal{border-color:#00FFFF;background:rgba(0,255,0.1);color:#00FFFF}
+.banner-signal{border-color:#00FFFF;background:rgba(0,255,255,0.1);color:#00FFFF}
 .banner-comps{border-color:#A000FF;background:rgba(160,0,255,0.1);color:#A000FF}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:20px}
 .card{background:#111;border:1px solid #222;padding:16px;position:relative}
@@ -119,8 +119,8 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 <div id="loginScreen" class="login-wrap">
   <div class="header"><h1>BOARDROOM PARTNERS</h1><p>VAULTFORGE COMPS ENGINE</p></div>
   <h2>LOGIN</h2>
-  <input type="text" id="username" placeholder="USERNAME" autocomplete="off">
-  <input type="password" id="password" placeholder="PASSWORD" autocomplete="off">
+  <input type="text" id="username" placeholder="username" autocomplete="off" autocapitalize="none" autocorrect="off" style="text-transform:none">
+  <input type="password" id="password" placeholder="password" autocomplete="off">
   <button onclick="login()">ACCESS</button>
   <div id="loginError" class="error hidden">ERROR: INVALID CREDENTIALS</div>
 </div>
@@ -379,8 +379,8 @@ function init(){
 }
 
 function login(){
-  const u=document.getElementById('username').value;
-  const p=document.getElementById('password').value;
+  const u=document.getElementById('username').value.toLowerCase().trim();
+  const p=document.getElementById('password').value.toLowerCase().trim();
   if(u==='deeve'&&p==='paindeal2026'){
     localStorage.setItem('boardroom_session','1');
     document.getElementById('loginScreen').classList.add('hidden');
@@ -880,8 +880,6 @@ function updateAlerts(){
   
   document.getElementById('msgCount').textContent=msgUnread;
   document.getElementById('msgCount').classList.toggle('hidden',msgUnread===0);
-  document.getElementById('statMsg').textContent=msgUnread;
-  document.getElementById('statMsgCard').classList.toggle('pulse',msgUnread>0);
   
   document.getElementById('savedMsgCount').textContent=savedMessages.length?`(${savedMessages.length})`:'';
   document.getElementById('statComps').textContent=soldComps.length;
