@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAULTFORGE | Deal Flow OS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+ <link rel="stylesheet" href="assets/style.css">p
+</head>
+<body>
+    <div class="login-container" id="loginScreen">
+        <div class="login-box">
+            <h1>VAULTFORGE</h1>
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="loginUser" placeholder="Enter username">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="loginPass" placeholder="Enter password">
+            </div>
+            <button class="btn-login" onclick="handleLogin()">Access Vault</button>
+            <p id="loginError" style="color: var(--pink); text-align: center; margin-top: 15px; display: none;">Invalid credentials</p>
+        </div>
+    </div>
+
+    <div class="app-container" id="appScreen">
+        <div class="header">
+            <div class="logo">VAULTFORGE</div>
+            <div class="nav">
+                <div class="nav-item active" data-tab="dashboard">Dashboard</div>
+                <div class="nav-item" data-tab="profile">Profile</div>
+                <div class="nav-item" data-tab="members">Members</div>
+                <div class="nav-item" data-tab="seller">Seller</div>
+                <div class="nav-item" data-tab="contract">Contract</div>
+                <div class="nav-item" data-tab="messages">Messages</div>
+                <div class="nav-item" data-tab="vaultforge">Vaultforge</div>
+                <div class="nav-item" data-tab="comps">Comps</div>
+                <div class="nav-item" onclick="handleLogout()">Logout</div>
+            </div>
+        </div>
+        <div class="main">
+            
+            <!-- DASHBOARD TAB -->
+            <div class="tab-content active" id="dashboard">
+                <div class="grid grid-3">
+                    <div class="card stat-box">
+                        <div class="stat-number" id="totalDeals">0</div>
+                        <div class="stat-label">Total Deals</div>
+                    </div>
+                    <div class="card stat-box">
+                        <div class="stat-number" id="activeDeals">0</div>
+                        <div class="stat-label">Active Contracts</div>
+                    </div>
+                    <div class="card stat-box">
+                        <div class="stat-number" id="totalMembers">0</div>
+                        <div class="stat-label">Network Members</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-2" style="margin-top: 20px;">
+                    <div class="card">
+                        <h3>Deal Flow Heat Map</h3>
+                        <div class="heat-map" id="heatMap"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Recent Activity</h3>
+                        <div id="activityFeed" style="max-height: 360px; overflow-y: auto;">
+                            <p style="color: var(--muted);">No activity yet. Add your first deal.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PROFILE TAB -->
+            <div class="tab-content" id="profile">
+                <div class="card">
+                    <h3>Your Profile</h3>
+                    <div class="grid grid-2">
+                        <div>
+                            <label>Full Name</label>
+                            <input type="text" id="profileName" placeholder="Deeve Moneyy">
+                        </div>
+                        <div>
+                            <label>Email</label>
+                            <input type="email" id="profileEmail" placeholder="you@vaultforge.com">
+                        </div>
+                        <div>
+                            <label>Phone</label>
+                            <input type="tel" id="profilePhone" placeholder="(555) 555-5555">
+                        </div>
+                        <div>
+                            <label>Market Focus</label>
+                            <select id="profileMarket">
+                                <option>Atlanta, GA</option>
+                                <option>Houston, TX</option>
+                                <option>Phoenix, AZ</option>
+                                <option>Tampa, FL</option>
+                                <option>Charlotte, NC</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveProfile()" style="margin-top: 15px;">Save Profile</button>
+                </div>
+            </div>
+
+            <!-- MEMBERS TAB -->
+            <div class="tab-content" id="members">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Network Members</h3>
+                        <button class="btn btn-primary" onclick="openMemberModal()">+ Add Member</button>
+                    </div>
+/* END PART 3 OF 30 - LINE 285 */    <table id="membersTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Role</th>
+                                <th>Market</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="membersBody">
+                            <tr><td colspan="5" style="text-align:center;color:var(--muted);">No members yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SELLER TAB -->
+            <div class="tab-content" id="seller">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Seller Leads</h3>
+                        <button class="btn btn-primary" onclick="openSellerModal()">+ Add Lead</button>
+                    </div>
+                    <table id="sellerTable">
+                        <thead>
+                            <tr>
+                                <th>Property</th>
+                                <th>ARV</th>
+                                <th>Asking</th>
+                                <th>Equity</th>
+                                <th>Motivation</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sellerBody">
+                            <tr><td colspan="6" style="text-align:center;color:var(--muted);">No seller leads yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CONTRACT TAB -->
+            <div class="tab-content" id="contract">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Active Contracts</h3>
+                        <button class="btn btn-primary" onclick="openContractModal()">+ New Contract</button>
+                    </div>
+                    <table id="contractTable">
+                        <thead>
+                            <tr>
+                                <th>Property</th>
+                                <th>Buyer</th>
+                                <th>Seller</th>
+                                <th>Purchase Price</th>
+                                <th>Assignment Fee</th>
+                                <th>Closing Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contractBody">
+                            <tr><td colspan="8" style="text-align:center;color:var(--muted);">No contracts yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- MESSAGES TAB -->
+            <div class="tab-content" id="messages">
+                <div class="grid grid-2">
+                    <div class="card">
+                        <h3>Deal Templates</h3>
+                        <select id="templateSelect" onchange="loadTemplate()">
+                            <option value="">Select Template...</option>
+                            <option value="cold_seller">Cold Seller Outreach</option>
+                            <option value="buyer_match">Buyer Match Alert</option>
+                            <option value="follow_up">Follow Up</option>
+                            <option value="closing_push">Closing Push</option>
+                        </select>
+                        <textarea id="messageTemplate" rows="8" placeholder="Select a template or write custom message..."></textarea>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-copy" onclick="copyMessage()">Copy</button>
+                            <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Message Log</h3>
+                        <div id="messageLog" style="max-height: 400px; overflow-y: auto;">
+                            <p style="color: var(--muted);">No messages sent yet</p>
+                        </div>
+/* END PART 4 OF 30 - LINE 380 */     </div>
+                </div>
+            </div>
+
+            <!-- VAULTFORGE TAB -->
+            <div class="tab-content" id="vaultforge">
+                <div class="grid grid-2">
+                    <div class="card">
+                        <h3>Deal Analyzer</h3>
+                        <label>Purchase Price</label>
+                        <input type="number" id="vfPurchase" placeholder="150000">
+                        <label>ARV</label>
+                        <input type="number" id="vfARV" placeholder="250000">
+                        <label>Repair Costs</label>
+                        <input type="number" id="vfRepairs" placeholder="30000">
+                        <label>Assignment Fee</label>
+                        <input type="number" id="vfFee" placeholder="15000">
+                        <button class="btn btn-primary" onclick="runVaultforge()" style="width:100%;margin-top:10px;">Analyze Deal</button>
+                        <div id="vfResults" style="margin-top:20px;"></div>
+                    </div>
+                    <div class="card">
+                        <h3>MAO Calculator</h3>
+                        <label>ARV</label>
+                        <input type="number" id="maoARV" placeholder="250000" oninput="calcMAO()">
+                        <label>Repair Estimate</label>
+                        <input type="number" id="maoRepairs" placeholder="30000" oninput="calcMAO()">
+                        <label>Desired Profit</label>
+                        <input type="number" id="maoProfit" placeholder="20000" oninput="calcMAO()">
+                        <label>MAO Formula</label>
+                        <select id="maoFormula" onchange="calcMAO()">
+                            <option value="0.7">70% Rule</option>
+                            <option value="0.75">75% Rule</option>
+                            <option value="0.8">80% Rule</option>
+                        </select>
+                        <div class="stat-box" style="margin-top:20px;">
+                            <div class="stat-number" id="maoResult">$0</div>
+                            <div class="stat-label">Max Allowable Offer</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COMPS TAB -->
+            <div class="tab-content" id="comps">
+                <div class="card">
+                    <h3>Comparable Sales</h3>
+                    <div class="grid grid-3">
+                        <div>
+                            <label>Address</label>
+                            <input type="text" id="compAddress" placeholder="123 Main St">
+                        </div>
+                        <div>
+                            <label>Beds/Baths</label>
+                            <input type="text" id="compBeds" placeholder="3/2">
+                        </div>
+                        <div>
+                            <label>Sqft</label>
+                            <input type="number" id="compSqft" placeholder="1800">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="addComp()" style="margin-top:10px;">+ Add Comp</button>
+                    <table id="compsTable" style="margin-top:20px;">
+                        <thead>
+                            <tr>
+                                <th>Address</th>
+                                <th>Beds/Baths</th>
+                                <th>Sqft</th>
+                                <th>Sale Price</th>
+                                <th>$/Sqft</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="compsBody">
+                            <tr><td colspan="7" style="text-align:center;color:var(--muted);">No comps added yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODALS -->
+    <div class="modal" id="memberModal">
+        <div class="modal-content">
+            <h3 style="margin-bottom:20px;color:var(--cyan);">Add Network Member</h3>
+            <label>Name</label>
+            <input type="text" id="memberName">
+            <label>Role</label>
+            <select id="memberRole">
+                <option>Buyer</option>
+                <option>Seller</option>
+                <option>Agent</option>
+                <option>Lender</option>
+                <option>Contractor</option>
+            </select>
+/* END PART    </div>
+                </div>
+            </div>
+
+            <!-- VAULTFORGE TAB -->
+            <div class="tab-content" id="vaultforge">
+                <div class="grid grid-2">
+                    <div class="card">
+                        <h3>Deal Analyzer</h3>
+                        <label>Purchase Price</label>
+                        <input type="number" id="vfPurchase" placeholder="150000">
+                        <label>ARV</label>
+                        <input type="number" id="vfARV" placeholder="250000">
+                        <label>Repair Costs</label>
+                        <input type="number" id="vfRepairs" placeholder="30000">
+                        <label>Assignment Fee</label>
+                        <input type="number" id="vfFee" placeholder="15000">
+                        <button class="btn btn-primary" onclick="runVaultforge()" style="width:100%;margin-top:10px;">Analyze Deal</button>
+                        <div id="vfResults" style="margin-top:20px;"></div>
+                    </div>
+                    <div class="card">
+                        <h3>MAO Calculator</h3>
+                        <label>ARV</label>
+                        <input type="number" id="maoARV" placeholder="250000" oninput="calcMAO()">
+                        <label>Repair Estimate</label>
+                        <input type="number" id="maoRepairs" placeholder="30000" oninput="calcMAO()">
+                        <label>Desired Profit</label>
+                        <input type="number" id="maoProfit" placeholder="20000" oninput="calcMAO()">
+                        <label>MAO Formula</label>
+                        <select id="maoFormula" onchange="calcMAO()">
+                            <option value="0.7">70% Rule</option>
+                            <option value="0.75">75% Rule</option>
+                            <option value="0.8">80% Rule</option>
+                        </select>
+                        <div class="stat-box" style="margin-top:20px;">
+                            <div class="stat-number" id="maoResult">$0</div>
+                            <div class="stat-label">Max Allowable Offer</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COMPS TAB -->
+            <div class="tab-content" id="comps">
+                <div class="card">
+                    <h3>Comparable Sales</h3>
+                    <div class="grid grid-3">
+                        <div>
+                            <label>Address</label>
+                            <input type="text" id="compAddress" placeholder="123 Main St">
+                        </div>
+                        <div>
+                            <label>Beds/Baths</label>
+                            <input type="text" id="compBeds" placeholder="3/2">
+                        </div>
+                        <div>
+                            <label>Sqft</label>
+                            <input type="number" id="compSqft" placeholder="1800">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="addComp()" style="margin-top:10px;">+ Add Comp</button>
+                    <table id="compsTable" style="margin-top:20px;">
+                        <thead>
+                            <tr>
+                                <th>Address</th>
+                                <th>Beds/Baths</th>
+                                <th>Sqft</th>
+                                <th>Sale Price</th>
+                                <th>$/Sqft</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="compsBody">
+                            <tr><td colspan="7" style="text-align:center;color:var(--muted);">No comps added yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODALS -->
+    <div class="modal" id="memberModal">
+        <div class="modal-content">
+            <h3 style="margin-bottom:20px;color:var(--cyan);">Add Network Member</h3>
+            <label>Name</label>
+            <input type="text" id="memberName">
+            <label>Role</label>
+            <select id="memberRole">
+                <option>Buyer</option>
+                <option>Seller</option>
+                <option>Agent</option>
+                <option>Lender</option>
+                <option>Contractor</option>
+            </select>
+/* END PART 5 OF 30 - LINE 475 */      <label>Market</label>
+            <input type="text" id="memberMarket" placeholder="Atlanta, GA">
+            <label>Email</label>
+            <input type="email" id="memberEmail">
+            <label>Phone</label>
+            <input type="tel" id="memberPhone">
+            <label>Notes</label>
+            <textarea id="memberNotes" rows="3"></textarea>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button class="btn btn-primary" onclick="saveMember()">Save Member</button>
+                <button class="btn btn-ghost" onclick="closeModal('memberModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="sellerModal">
+        <div class="modal-content">
+            <h3 style="margin-bottom:20px;color:var(--cyan);">Add Seller Lead</h3>
+            <label>Property Address</label>
+            <input type="text" id="sellerAddress" placeholder="123 Main St, Atlanta GA">
+            <div class="grid grid-2">
+                <div>
+                    <label>ARV</label>
+                    <input type="number" id="sellerARV" placeholder="250000">
+                </div>
+                <div>
+                    <label>Asking Price</label>
+                    <input type="number" id="sellerAsking" placeholder="180000">
+                </div>
+                <div>
+                    <label>Repairs Est.</label>
+                    <input type="number" id="sellerRepairs" placeholder="30000">
+                </div>
+                <div>
+                    <label>Mortgage Balance</label>
+                    <input type="number" id="sellerMortgage" placeholder="120000">
+                </div>
+            </div>
+            <label>Motivation Level</label>
+            <select id="sellerMotivation">
+                <option>Low - Just Curious</option>
+                <option>Medium - Open to Offers</option>
+                <option>High - Needs to Sell</option>
+                <option>Urgent - Must Sell Now</option>
+            </select>
+            <label>Seller Notes</label>
+            <textarea id="sellerNotes" rows="3"></textarea>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button class="btn btn-primary" onclick="saveSeller()">Save Lead</button>
+                <button class="btn btn-ghost" onclick="closeModal('sellerModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="contractModal">
+        <div class="modal-content">
+            <h3 style="margin-bottom:20px;color:var(--cyan);">New Contract</h3>
+            <label>Property Address</label>
+            <input type="text" id="contractAddress" placeholder="123 Main St">
+            <div class="grid grid-2">
+                <div>
+                    <label>Buyer Name</label>
+                    <input type="text" id="contractBuyer">
+                </div>
+                <div>
+                    <label>Seller Name</label>
+                    <input type="text" id="contractSeller">
+                </div>
+                <div>
+                    <label>Purchase Price</label>
+                    <input type="number" id="contractPrice">
+                </div>
+                <div>
+                    <label>Assignment Fee</label>
+                    <input type="number" id="contractFee">
+                </div>
+/* END PART 6 OF 30 - LINE 570 */    <div>
+                    <label>EMD Amount</label>
+                    <input type="number" id="contractEMD" placeholder="5000">
+                </div>
+                <div>
+                    <label>Closing Date</label>
+                    <input type="date" id="contractClosing">
+                </div>
+            </div>
+            <label>Status</label>
+            <select id="contractStatus">
+                <option>Under Contract</option>
+                <option>Title Ordered</option>
+                <option>Closing Scheduled</option>
+                <option>Closed</option>
+                <option>Terminated</option>
+            </select>
+            <label>Notes</label>
+            <textarea id="contractNotes" rows="3"></textarea>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button class="btn btn-primary" onclick="saveContract()">Save Contract</button>
+                <button class="btn btn-ghost" onclick="closeModal('contractModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="compModal">
+        <div class="modal-content">
+            <h3 style="margin-bottom:20px;color:var(--cyan);">Add Comparable Sale</h3>
+            <label>Sale Price</label>
+            <input type="number" id="compPrice" placeholder="225000">
+            <label>Sale Date</label>
+            <input type="date" id="compDate">
+            <label>Notes</label>
+            <textarea id="compNotes" rows="3" placeholder="Condition, upgrades, etc"></textarea>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button class="btn btn-primary" onclick="saveComp()">Save Comp</button>
+                <button class="btn btn-ghost" onclick="closeModal('compModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+<script src="assets/vaultforge.js"></script>
+
+<!-- Footer -->
+<footer style="text-align:center;padding:40px 20px;color:var(--muted);font-size:12px;">
+    <div>Vaultforge CRM v1.0 • Built for Closers</div>
+    <div style="margin-top:8px;">© 2026 Vaultforge Acquisitions • All Rights Reserved</div>
+</footer>
+
+</body>
+</html>
+<!-- END PART 30 OF 30 - LINE 2850 - FILE COMPLETE -->
