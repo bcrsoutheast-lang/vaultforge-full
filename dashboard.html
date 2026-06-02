@@ -5,900 +5,136 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BOARDROOM PARTNERS // SECURE ACCESS</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;font-family:'Courier New',monospace;text-transform:uppercase;outline:none;border-radius:0!important}
-body{background:#0A0A0A;color:#FFF;min-height:100vh;font-size:14px;letter-spacing:0.5px}
-input,select,textarea,button{background:#111;color:#FFF;border:1px solid #333;padding:10px;width:100%;font-family:'Courier New',monospace;font-size:13px}
-input:focus,select:focus,textarea:focus{border-color:#666}
-button{cursor:pointer;font-weight:bold;transition:all 0.2s}
-button:hover{opacity:0.8}
-button:active{transform:scale(0.98)}
-label{display:block;margin-bottom:5px;font-size:11px;opacity:0.8}
-.required::after{content:" *";color:#FF0040}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Courier New',monospace}
+body{background:#0A0A0A;color:#fff;min-height:100vh}
 .hidden{display:none!important}
-.flex{display:flex}
-.flex-col{flex-direction:column}
-.flex-wrap{flex-wrap:wrap}
-.gap-10{gap:10px}
-.gap-15{gap:15px}
-.gap-20{gap:20px}
-.grid{display:grid}
-.grid-2{grid-template-columns:repeat(2,1fr)}
-.grid-3{grid-template-columns:repeat(3,1fr)}
-.grid-4{grid-template-columns:repeat(4,1fr)}
-.p-10{padding:10px}
-.p-15{padding:15px}
-.p-20{padding:20px}
-.mt-10{margin-top:10px}
-.mt-15{margin-top:15px}
-.mt-20{margin-top:20px}
-.mb-10{margin-bottom:10px}
-.mb-15{margin-bottom:15px}
-.mb-20{margin-bottom:20px}
-.border{border:1px solid #333}
-.text-center{text-align:center}
-.text-xs{font-size:10px}
-.text-sm{font-size:12px}
-.text-lg{font-size:18px}
-.text-xl{font-size:24px}
-.font-bold{font-weight:bold}
-.error{color:#FF0040;border-color:#FF0040!important}
-.badge{display:inline-block;padding:4px 8px;border:1px solid;font-size:10px;margin:2px}
-.terminal-header{border-bottom:2px solid;padding:15px 20px;margin-bottom:20px}
-.form-section{border:1px solid;padding:15px;margin-bottom:15px}
-.toggle-btn{padding:8px 16px;border:1px solid;cursor:pointer}
-.toggle-btn.active{font-weight:bold}
-.card{border:1px solid;padding:15px;cursor:pointer;position:relative}
-.card:hover{opacity:0.9}
-.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:1000;overflow-y:auto;padding:20px}
-.modal-content{max-width:1000px;margin:0 auto;border:2px solid;padding:20px;background:#0A0A0A}
-.nav-tab{padding:12px 20px;cursor:pointer;border:none;border-bottom:3px solid transparent;background:none}
-.nav-tab:hover{opacity:0.7}
-.nav-tab.active{font-weight:bold}
-.dropdown{position:relative}
-.dropdown-menu{position:absolute;top:100%;left:0;right:0;background:#111;border:1px solid #333;max-height:200px;overflow-y:auto;z-index:100;display:none}
-.dropdown.open .dropdown-menu{display:block}
-.dropdown-item{padding:8px 10px;cursor:pointer;display:flex;align-items:center;gap:8px}
-.dropdown-item:hover{background:#1a1a1a}
-.dropdown-item input{width:auto}
-.avatar{width:60px;height:60px;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:bold}
-.profile-preview{border:2px solid;padding:15px}
-.photo-preview{width:80px;height:80px;border:1px solid;object-fit:cover;display:inline-block;margin:5px}
-.stat-box{border:2px solid;padding:20px;text-align:center}
-.stat-num{font-size:32px;font-weight:bold;margin:10px 0}
-.toast{position:fixed;top:20px;right:20px;padding:15px 20px;border:2px solid;z-index:2000;min-width:200px}
-.login-box{max-width:400px;margin:100px auto;border:2px solid #FFF;padding:30px}
-
-/* THEME COLORS */
-.theme-pain{color:#FFB000}
-.theme-pain.border,.theme-pain .border{border-color:#FFB000!important}
-.theme-pain.bg{background:rgba(255,176,0,0.05)}
-.theme-pain button{background:#FFB000;color:#0A0A0A;border-color:#FFB000}
-.theme-pain .toggle-btn.active{background:#FFB000;color:#0A0A0A}
-.theme-pain .nav-tab.active{border-bottom-color:#FFB000;color:#FFB000}
-.theme-pain .stat-box{border-color:#FFB000;color:#FFB000}
-
-.theme-deal{color:#00FF41}
-.theme-deal.border,.theme-deal .border{border-color:#00FF41!important}
-.theme-deal.bg{background:rgba(0,255,65,0.05)}
-.theme-deal button{background:#00FF41;color:#0A0A0A;border-color:#00FF41}
-.theme-deal .toggle-btn.active{background:#00FF41;color:#0A0A0A}
-.theme-deal .nav-tab.active{border-bottom-color:#00FF41;color:#00FF41}
-.theme-deal .stat-box{border-color:#00FF41;color:#00FF41}
-
-.theme-profile{color:#A000FF}
-.theme-profile.border,.theme-profile .border{border-color:#A000FF!important}
-.theme-profile.bg{background:rgba(160,0,255,0.05)}
-.theme-profile button{background:#A000FF;color:#0A0A0A;border-color:#A000FF}
-.theme-profile .toggle-btn.active{background:#A000FF;color:#0A0A0A}
-.theme-profile .nav-tab.active{border-bottom-color:#A000FF;color:#A000FF}
-.theme-profile .stat-box{border-color:#A000FF;color:#A000FF}
-
-.theme-vault{color:#00FFFF}
-.theme-vault.border,.theme-vault .border{border-color:#00FFFF!important}
-.theme-vault.bg{background:rgba(0,255,255,0.05)}
-.theme-vault button{background:#00FFFF;color:#0A0A0A;border-color:#00FFFF}
-.theme-vault .toggle-btn.active{background:#00FFFF;color:#0A0A0A}
-.theme-vault .nav-tab.active{border-bottom-color:#00FFFF;color:#00FFFF}
-.theme-vault .stat-box{border-color:#00FFFF;color:#00FFFF}
-
-@media (max-width: 768px){
-.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
-.modal-content{padding:10px}
-.nav-tab{padding:10px;font-size:11px}
-.stat-num{font-size:24px}
-}
+input,select,textarea,button{background:#111;border:1px solid #333;color:#fff;padding:8px;font-size:12px;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#FFB000}
+button{cursor:pointer;text-transform:uppercase;font-weight:700}
+button:hover{opacity:0.8}
+label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;color:#888}
+.header{padding:20px;border-bottom:1px solid #222;text-align:center}
+.header h1{font-size:24px;letter-spacing:2px}
+.header p{font-size:10px;color:#666;margin-top:4px}
+.login-wrap{max-width:400px;margin:100px auto;padding:30px;border:1px solid #333}
+.login-wrap h2{font-size:16px;margin-bottom:20px;text-align:center}
+.login-wrap input{width:100%;margin-bottom:12px}
+.login-wrap button{width:100%;background:#FFB000;color:#000;border:none;padding:12px}
+.error{color:#FF0040;font-size:11px;margin-top:8px;text-align:center}
+.nav{background:#111;border-bottom:1px solid #222;display:flex;gap:1px;overflow-x:auto}
+.nav button{flex:1;background:#0A0A0A;border:none;padding:16px;font-size:11px;border-bottom:2px solid transparent}
+.nav button.active{border-bottom-color:#FFB000;color:#FFB000}
+.nav button[data-theme="pain"].active{border-bottom-color:#FFB000;color:#FFB000}
+.nav button[data-theme="deal"].active{border-bottom-color:#00FF41;color:#00FF41}
+.nav button[data-theme="profile"].active{border-bottom-color:#A000FF;color:#A000FF}
+.nav button[data-theme="members"].active{border-bottom-color:#0080FF;color:#0080FF}
+.nav button[data-theme="vault"].active{border-bottom-color:#00FFFF;color:#00FFFF}
+.nav button[data-theme="logout"]{color:#FF0040}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+.section{display:none}
+.section.active{display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:20px}
+.card{background:#111;border:1px solid #222;padding:16px}
+.card h3{font-size:14px;margin-bottom:12px;color:#FFB000}
+.card[data-theme="deal"] h3{color:#00FF41}
+.card[data-theme="profile"] h3{color:#A000FF}
+.card[data-theme="members"] h3{color:#0080FF}
+.card[data-theme="vault"] h3{color:#00FFFF}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.multiselect{position:relative}
+.multiselect-btn{width:100%;text-align:left;background:#111;border:1px solid #333;padding:8px;cursor:pointer}
+.multiselect-dropdown{position:absolute;top:100%;left:0;right:0;background:#111;border:1px solid #333;max-height:200px;overflow-y:auto;z-index:100;display:none}
+.multiselect-dropdown.show{display:block}
+.multiselect-dropdown label{display:flex;align-items:center;padding:6px 8px;margin:0;font-size:11px;cursor:pointer}
+.multiselect-dropdown label:hover{background:#1a1a1a}
+.multiselect-dropdown input[type="checkbox"]{width:auto;margin-right:8px}
+.badge{display:inline-block;padding:4px 8px;font-size:10px;border:1px solid;margin:2px}
+.badge-home{background:#0080FF;border-color:#0080FF;color:#000}
+.badge-operate{background:#333;border-color:#555}
+.badge-prof{background:#A000FF;border-color:#A000FF;color:#000}
+.badge-deal{background:#00FFFF;border-color:#00FFFF;color:#000}
+.btn-primary{background:#FFB000;color:#000;border:none;padding:10px 20px;font-weight:700}
+.btn-deal{background:#00FF41;color:#000}
+.btn-profile{background:#A000FF;color:#000}
+.btn-members{background:#0080FF;color:#000}
+.btn-vault{background:#00FFFF;color:#000}
+.btn-danger{background:#FF0040;color:#000}
+.toggle-group{display:flex;gap:8px;margin:16px 0}
+.toggle-group button{flex:1;background:#111;border:1px solid #333}
+.toggle-group button.active{background:#FFB000;color:#000;border-color:#FFB000}
+.toggle-group[data-theme="deal"] button.active{background:#00FF41;color:#000;border-color:#00FF41}
+.room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:20px}
+.lead-card{background:#111;border:1px solid #333;padding:12px;font-size:11px}
+.lead-card .type{font-size:10px;color:#FFB000;margin-bottom:8px}
+.lead-card[data-theme="deal"] .type{color:#00FF41}
+.lead-card .addr{font-size:13px;margin-bottom:8px}
+.lead-card .meta{color:#888;font-size:10px;margin:4px 0}
+.lead-card .profile-mini{border-top:1px solid #222;margin-top:8px;padding-top:8px;font-size:10px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:20px 0}
+.stat{background:#111;border:1px solid #222;padding:20px;text-align:center}
+.stat .num{font-size:32px;color:#FFB000;font-weight:700}
+.stat .label{font-size:11px;color:#666;margin-top:8px;text-transform:uppercase}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.modal-content{background:#111;border:1px solid #333;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:24px}
+.modal h2{font-size:18px;margin-bottom:16px;color:#FFB000}
+.modal-actions{display:flex;gap:8px;margin-top:20px}
+.modal-actions button{flex:1}
 </style>
 </head>
 <body>
-<!-- LOGIN SCREEN -->
-<div id="loginScreen" class="login-box">
-<div class="text-center mb-20">
-<div class="text-xl font-bold mb-10">BOARDROOM PARTNERS</div>
-<div class="text-sm" style="color:#888">SECURE ACCESS PORTAL</div>
-</div>
-<div class="mb-15">
-<label>USERNAME</label>
-<input type="text" id="loginUser" autocomplete="off">
-</div>
-<div class="mb-15">
-<label>PASSWORD</label>
-<input type="password" id="loginPass" autocomplete="off">
-</div>
-<div id="loginError" class="error text-sm mb-15 hidden">ERROR: INVALID CREDENTIALS</div>
-<button onclick="handleLogin()" style="background:#FFF;color:#0A0A0A">AUTHENTICATE</button>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-wrap">
+  <div class="header">
+    <h1>BOARDROOM PARTNERS</h1>
+    <p>SECURE ACCESS PORTAL</p>
+  </div>
+  <h2>LOGIN</h2>
+  <input type="text" id="username" placeholder="USERNAME" autocomplete="off">
+  <input type="password" id="password" placeholder="PASSWORD" autocomplete="off">
+  <button onclick="login()">ACCESS</button>
+  <div id="loginError" class="error hidden">ERROR: INVALID CREDENTIALS</div>
 </div>
 
-<!-- MAIN APP -->
-<div id="mainApp" class="hidden">
-<!-- TOP NAV -->
-<div class="flex" style="border-bottom:2px solid #333;justify-content:space-between;align-items:center;padding:0 20px">
-<div class="flex">
-<button class="nav-tab" data-tab="dashboard" onclick="switchTab('dashboard')">[DASHBOARD]</button>
-<button class="nav-tab" data-tab="profile" onclick="switchTab('profile')">[PROFILE]</button>
-<button class="nav-tab" data-tab="pain" onclick="switchTab('pain')">[PAIN]</button>
-<button class="nav-tab" data-tab="deal" onclick="switchTab('deal')">[DEAL]</button>
-<button class="nav-tab" data-tab="vaultforge" onclick="switchTab('vaultforge')">[VAULTFORGE]</button>
-</div>
-<button class="nav-tab" onclick="handleLogout()">[LOGOUT]</button>
-</div>
+<!-- APP -->
+<div id="app" class="hidden">
+  <div class="nav">
+    <button class="active" onclick="showSection('dashboard')" data-theme="pain">DASHBOARD</button>
+    <button onclick="showSection('profile')" data-theme="profile">PROFILE</button>
+    <button onclick="showSection('members')" data-theme="members">MEMBERS</button>
+    <button onclick="showSection('pain')" data-theme="pain">PAIN</button>
+    <button onclick="showSection('deal')" data-theme="deal">DEAL</button>
+    <button onclick="showSection('vault')" data-theme="vault">VAULTFORGE</button>
+    <button onclick="logout()" data-theme="logout">LOGOUT</button>
+  </div>
 
-<!-- DASHBOARD VIEW -->
-<div id="dashboard" class="tab-content p-20">
-<div class="terminal-header"><div class="text-lg font-bold">SYSTEM DASHBOARD</div></div>
-<div class="grid grid-4 gap-15 mb-20">
-<div class="stat-box"><div class="text-xs">TOTAL PAIN LEADS</div><div class="stat-num" id="statPain">0</div></div>
-<div class="stat-box"><div class="text-xs">TOTAL DEAL LEADS</div><div class="stat-num" id="statDeal">0</div></div>
-<div class="stat-box"><div class="text-xs">MEMBERS IN NETWORK</div><div class="stat-num" id="statMembers">1</div></div>
-<div class="stat-box"><div class="text-xs">MATCH RATE %</div><div class="stat-num" id="statMatch">0%</div></div>
-</div>
-<div class="flex gap-10">
-<button onclick="switchTab('pain')" style="background:#FFB000;color:#0A0A0A">[NEW PAIN]</button>
-<button onclick="switchTab('deal')" style="background:#00FF41;color:#0A0A0A">[NEW DEAL]</button>
-<button onclick="switchTab('profile')" style="background:#A000FF;color:#0A0A0A">[EDIT PROFILE]</button>
-</div>
-</div>
+  <div class="container">
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="section active">
+      <h2 style="color:#FFB000;margin-bottom:20px">DASHBOARD</h2>
+      <div class="stats">
+        <div class="stat"><div class="num" id="statPain">0</div><div class="label">PAIN Leads</div></div>
+        <div class="stat"><div class="num" id="statDeal">0</div><div class="label">DEAL Leads</div></div>
+        <div class="stat"><div class="num" id="statMembers">0</div><div class="label">Members</div></div>
+        <div class="stat"><div class="num" id="statMatch">0%</div><div class="label">Match Rate</div></div>
+      </div>
+    </div>
 
-<!-- PROFILE VIEW -->
-<div id="profile" class="tab-content p-20 hidden theme-profile">
-<div class="terminal-header theme-profile border"><div class="text-lg font-bold">PROFILE // CONFIGURATION</div></div>
-<div class="grid grid-2 gap-15">
-<div>
-<div class="form-section">
-<div class="mb-15">
-<label class="required">COMPANY NAME</label>
-<input type="text" id="profileCompany">
-</div>
-<div class="mb-15">
-<label class="required">YOUR NAME</label>
-<input type="text" id="profileName">
-</div>
-<div class="mb-15">
-<label class="required">TITLE/ROLE</label>
-<input type="text" id="profileTitle">
-</div>
-<div class="mb-15">
-<label class="required">PHONE</label>
-<input type="tel" id="profilePhone">
-</div>
-<div class="mb-15">
-<label class="required">EMAIL</label>
-<input type="email" id="profileEmail">
-</div>
-<div class="mb-15">
-<label>BIO / ABOUT</label>
-<textarea id="profileBio" rows="3"></textarea>
-</div>
-</div>
-<div class="form-section">
-<div class="mb-15">
-<label class="required">STATES OPERATE IN</label>
-<div class="dropdown" id="statesDropdown">
-<input type="text" readonly placeholder="SELECT STATES" onclick="toggleDropdown('statesDropdown')">
-<div class="dropdown-menu" id="statesMenu"></div>
-</div>
-<div id="selectedStates" class="mt-10 flex flex-wrap gap-10"></div>
-</div>
-<div class="mb-15">
-<label class="required">PROFESSIONAL TYPE</label>
-<div class="dropdown" id="profTypeDropdown">
-<input type="text" readonly placeholder="SELECT TYPES" onclick="toggleDropdown('profTypeDropdown')">
-<div class="dropdown-menu" id="profTypeMenu"></div>
-</div>
-<div id="selectedProfTypes" class="mt-10 flex flex-wrap gap-10"></div>
-</div>
-<div class="mb-15">
-<label class="required">DEAL PROFESSIONS</label>
-<div class="dropdown" id="dealProfDropdown">
-<input type="text" readonly placeholder="SELECT PROFESSIONS" onclick="toggleDropdown('dealProfDropdown')">
-<div class="dropdown-menu" id="dealProfMenu"></div>
-</div>
-<div id="selectedDealProfs" class="mt-10 flex flex-wrap gap-10"></div>
-</div>
-<div class="mb-15">
-<label>BUY BOX</label>
-<textarea id="profileBuyBox" rows="4" placeholder="CRITERIA - LOCATION, PRICE RANGE, PROPERTY TYPES, ARV %, REPAIR BUDGET, MAX DOM"></textarea>
-</div>
-</div>
-<button onclick="saveProfile()">SAVE PROFILE</button>
-</div>
-<div>
-<div class="profile-preview">
-<div class="text-sm font-bold mb-15">PROFILE CARD PREVIEW</div>
-<div id="profilePreview"></div>
-</div>
-</div>
-</div>
-</div>
-
-<!-- PAIN VIEW -->
-<div id="pain" class="tab-content p-20 hidden theme-pain">
-<div class="terminal-header theme-pain border"><div class="text-lg font-bold">PAIN INTAKE FORM // NEW LEAD SUBMISSION</div></div>
-<form id="painForm">
-<div class="form-section">
-<div class="mb-15">
-<label>PROPERTY TYPE</label>
-<div class="flex gap-10">
-<div class="toggle-btn active" data-type="residential" onclick="switchPropType('pain','residential')">RESIDENTIAL</div>
-<div class="toggle-btn" data-type="commercial" onclick="switchPropType('pain','commercial')">COMMERCIAL</div>
-<div class="toggle-btn" data-type="land" onclick="switchPropType('pain','land')">LAND</div>
-</div>
-</div>
-<div id="painResidentialFields" class="grid grid-4 gap-10 mb-15">
-<div><label class="required">BEDS</label><select id="painBeds"><option value="">-</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6+</option></select></div>
-<div><label class="required">BATHS</label><select id="painBaths"><option value="">-</option><option>1</option><option>1.5</option><option>2</option><option>2.5</option><option>3</option><option>3.5</option><option>4</option><option>4.5</option><option>5+</option></select></div>
-<div><label class="required">SQFT</label><input type="number" id="painSqft"></div>
-<div><label>YEAR BUILT</label><input type="number" id="painYear"></div>
-</div>
-<div id="painCommercialFields" class="grid grid-3 gap-10 mb-15 hidden">
-<div><label class="required">UNITS</label><input type="number" id="painUnits"></div>
-<div><label class="required">SQFT</label><input type="number" id="painCommSqft"></div>
-<div><label>ZONING</label><input type="text" id="painZoning"></div>
-<div><label>CAP RATE [%]</label><input type="number" id="painCapRate" step="0.1"></div>
-<div><label>NOI [$]</label><input type="number" id="painNoi"></div>
-</div>
-<div id="painLandFields" class="grid grid-3 gap-10 mb-15 hidden">
-<div><label class="required">ACRES</label><input type="number" id="painAcres" step="0.01"></div>
-<div><label>ZONING</label><input type="text" id="painLandZoning"></div>
-<div><label>UTILITIES</label><select id="painUtilities"><option value="">-</option><option>None</option><option>Water</option><option>Electric</option><option>Septic</option><option>All</option></select></div>
-<div><label>ROAD ACCESS</label><select id="painRoadAccess"><option value="">-</option><option>None</option><option>Dirt</option><option>Paved</option><option>Highway</option></select></div>
-</div>
-</div>
-<div class="form-section">
-<div class="grid grid-3 gap-10 mb-15">
-<div><label class="required">ADDRESS</label><input type="text" id="painAddress"></div>
-<div><label class="required">CITY</label><input type="text" id="painCity"></div>
-<div><label class="required">STATE</label><select id="painState"></select></div>
-<div><label class="required">ZIP</label><input type="text" id="painZip"></div>
-<div><label class="required">OWNER NAME</label><input type="text" id="painOwner"></div>
-<div><label class="required">PHONE</label><input type="tel" id="painPhone"></div>
-<div><label>EMAIL</label><input type="email" id="painEmail"></div>
-<div>
-<label class="required">MOTIVATION</label>
-<select id="painMotivation">
-<option value="">-</option><option>Divorce</option><option>Probate</option><option>Foreclosure</option>
-<option>Job Loss</option><option>Relocation</option><option>Tired Landlord</option><option>Inherited</option><option>Other</option>
-</select>
-</div>
-<div>
-<label class="required">CONDITION</label>
-<select id="painCondition">
-<option value="">-</option><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option><option>Tear Down</option>
-</select>
-</div>
-<div>
-<label class="required">OCCUPANCY</label>
-<select id="painOccupancy">
-<option value="">-</option><option>Owner Occupied</option><option>Tenant</option><option>Vacant</option>
-</select>
-</div>
-<div><label class="required">ASKING PRICE</label><input type="number" id="painPrice"></div>
-<div><label>EST ARV</label><input type="number" id="painArv"></div>
-<div><label>EST REPAIRS</label><input type="number" id="painRepairs"></div>
-</div>
-<div class="mb-15">
-<label>NOTES</label>
-<textarea id="painNotes" rows="3"></textarea>
-</div>
-<div class="mb-15">
-<label class="required">PHOTOS <span class="text-xs" id="painPhotoCount">(0/10)</span></label>
-<input type="file" id="painPhotos" multiple accept="image/*" onchange="handlePhotoUpload('pain')">
-<div id="painPhotoPreview" class="mt-10"></div>
-</div>
-</div>
-<div class="flex gap-10">
-<button type="button" onclick="cancelForm('pain')">CANCEL</button>
-<button type="button" onclick="submitLead('pain')">SUBMIT PAIN</button>
-</div>
-</form>
-<div id="painError" class="error text-sm mt-15 hidden"></div>
-<div class="mt-20">
-<div class="text-lg font-bold mb-15">PAIN ROOM</div>
-<div id="painRoom" class="grid grid-3 gap-15"></div>
-</div>
-<div id="painSections"></div>
-<button class="mt-20" onclick="switchTab('dashboard')">BACK TO DASHBOARD</button>
-</div>
-
-<!-- DEAL VIEW -->
-<div id="deal" class="tab-content p-20 hidden theme-deal">
-<div class="terminal-header theme-deal border"><div class="text-lg font-bold">DEAL INTAKE FORM // NEW DEAL SUBMISSION</div></div>
-<form id="dealForm">
-<div class="form-section">
-<div class="mb-15">
-<label>PROPERTY TYPE</label>
-<div class="flex gap-10">
-<div class="toggle-btn active" data-type="residential" onclick="switchPropType('deal','residential')">RESIDENTIAL</div>
-<div class="toggle-btn" data-type="commercial" onclick="switchPropType('deal','commercial')">COMMERCIAL</div>
-<div class="toggle-btn" data-type="land" onclick="switchPropType('deal','land')">LAND</div>
-</div>
-</div>
-<div id="dealResidentialFields" class="grid grid-4 gap-10 mb-15">
-<div><label class="required">BEDS</label><select id="dealBeds"><option value="">-</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6+</option></select></div>
-<div><label class="required">BATHS</label><select id="dealBaths"><option value="">-</option><option>1</option><option>1.5</option><option>2</option><option>2.5</option><option>3</option><option>3.5</option><option>4</option><option>4.5</option><option>5+</option></select></div>
-<div><label class="required">SQFT</label><input type="number" id="dealSqft"></div>
-<div><label>YEAR BUILT</label><input type="number" id="dealYear"></div>
-</div>
-<div id="dealCommercialFields" class="grid grid-3 gap-10 mb-15 hidden">
-<div><label class="required">UNITS</label><input type="number" id="dealUnits"></div>
-<div><label class="required">SQFT</label><input type="number" id="dealCommSqft"></div>
-<div><label>ZONING</label><input type="text" id="dealZoning"></div>
-<div><label>CAP RATE [%]</label><input type="number" id="dealCapRate" step="0.1"></div>
-<div><label>NOI [$]</label><input type="number" id="dealNoi"></div>
-</div>
-<div id="dealLandFields" class="grid grid-3 gap-10 mb-15 hidden">
-<div><label class="required">ACRES</label><input type="number" id="dealAcres" step="0.01"></div>
-<div><label>ZONING</label><input type="text" id="dealLandZoning"></div>
-<div><label>UTILITIES</label><select id="dealUtilities"><option value="">-</option><option>None</option><option>Water</option><option>Electric</option><option>Septic</option><option>All</option></select></div>
-<div><label>ROAD ACCESS</label><select id="dealRoadAccess"><option value="">-</option><option>None</option><option>Dirt</option><option>Paved</option><option>Highway</option></select></div>
-</div>
-</div>
-<div class="form-section">
-<div class="grid grid-3 gap-10 mb-15">
-<div><label class="required">ADDRESS</label><input type="text" id="dealAddress"></div>
-<div><label class="required">CITY</label><input type="text" id="dealCity"></div>
-<div><label class="required">STATE</label><select id="dealState"></select></div>
-<div><label class="required">ZIP</label><input type="text" id="dealZip"></div>
-<div><label class="required">OWNER NAME</label><input type="text" id="dealOwner"></div>
-<div><label class="required">PHONE</label><input type="tel" id="dealPhone"></div>
-<div><label>EMAIL</label><input type="email" id="dealEmail"></div>
-<div>
-<label class="required">MOTIVATION</label>
-<select id="dealMotivation">
-<option value="">-</option><option>Divorce</option><option>Probate</option><option>Foreclosure</option>
-<option>Job Loss</option><option>Relocation</option><option>Tired Landlord</option><option>Inherited</option><option>Other</option>
-</select>
-</div>
-<div>
-<label class="required">CONDITION</label>
-<select id="dealCondition">
-<option value="">-</option><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option><option>Tear Down</option>
-</select>
-</div>
-<div>
-<label class="required">OCCUPANCY</label>
-<select id="dealOccupancy">
-<option value="">-</option><option>Owner Occupied</option><option>Tenant</option><option>Vacant</option>
-</select>
-</div>
-<div><label class="required">ASKING PRICE</label><input type="number" id="dealPrice"></div>
-<div><label>EST ARV</label><input type="number" id="dealArv"></div>
-<div><label>EST REPAIRS</label><input type="number" id="dealRepairs"></div>
-</div>
-<div class="mb-15">
-<label>NOTES</label>
-<textarea id="dealNotes" rows="3"></textarea>
-</div>
-<div class="mb-15">
-<label class="required">PHOTOS <span class="text-xs" id="dealPhotoCount">(0/10)</span></label>
-<input type="file" id="dealPhotos" multiple accept="image/*" onchange="handlePhotoUpload('deal')">
-<div id="dealPhotoPreview" class="mt-10"></div>
-</div>
-</div>
-<div class="flex gap-10">
-<button type="button" onclick="cancelForm('deal')">CANCEL</button>
-<button type="button" onclick="submitLead('deal')">SUBMIT DEAL</button>
-</div>
-</form>
-<div id="dealError" class="error text-sm mt-15 hidden"></div>
-<div class="mt-20">
-<div class="text-lg font-bold mb-15">DEAL ROOM</div>
-<div id="dealRoom" class="grid grid-3 gap-15"></div>
-</div>
-<div id="dealSections"></div>
-<button class="mt-20" onclick="switchTab('dashboard')">BACK TO DASHBOARD</button>
-</div>
-
-<!-- VAULTFORGE VIEW -->
-<div id="vaultforge" class="tab-content p-20 hidden theme-vault">
-<div class="terminal-header theme-vault border"><div class="text-lg font-bold">VAULTFORGE // INTELLIGENT FEED</div></div>
-<div class="form-section mb-20">
-<div class="text-sm font-bold mb-15">PROFILE MATCH SCORE</div>
-<div id="matchScore" class="text-lg">CALCULATING...</div>
-</div>
-<div class="form-section mb-20">
-<div class="text-sm font-bold mb-15">BUY BOX SCRAPER</div>
-<div class="flex gap-10 mb-15">
-<input type="text" id="scraperAddress" placeholder="PROPERTY ADDRESS" style="flex:1">
-<button onclick="runScraper()" style="width:150px">SCRAPE</button>
-</div>
-<div id="scraperResults"></div>
-</div>
-<div class="form-section mb-20">
-<div class="text-sm font-bold mb-15">MEMBER NETWORK</div>
-<div id="memberNetwork" class="grid grid-3 gap-15"></div>
-</div>
-<div class="form-section mb-20">
-<div class="text-sm font-bold mb-15">DEAL INTEL FEED</div>
-<div id="intelFeed"></div>
-</div>
-<button onclick="scrapeNetwork()">SCRAPE NET FOR BUYERS</button>
-<div id="networkResults" class="mt-20"></div>
-</div>
-</div>
-
-<!-- MODAL -->
-<div id="detailModal" class="modal hidden">
-<div class="modal-content">
-<div id="modalContent"></div>
-</div>
-</div>
-
-<!-- TOAST -->
-<div id="toast" class="toast hidden"></div>
-
-<script>
-const STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
-const PROF_TYPES = ['Buyer','Seller','Wholesaler','Lender','Realtor','Title Company','Attorney','Contractor','Investor','Bird Dog','JV Partner','Transaction Coordinator','Other'];
-const DEAL_PROFS = ['Acquisitions','Dispositions','Underwriting','Rehab Management','Property Management','Capital Raising','Hard Money Lending','Private Lending','Title/Escrow','Legal','Construction','Marketing','Lead Generation'];
-
-let currentTab = 'dashboard';
-let profileData = {};
-let painLeads = [];
-let dealLeads = [];
-let painPhotos = [];
-let dealPhotos = [];
-let currentPropType = {pain:'residential',deal:'residential'};
-
-// INIT
-document.addEventListener('DOMContentLoaded',function(){
-if(localStorage.getItem('boardroom_session')==='active'){showMainApp();}
-initDropdowns();
-initStateSelects();
-loadData();
-setupDropdownClose();
-});
-
-function setupDropdownClose(){
-document.addEventListener('click',function(e){
-if(!e.target.closest('.dropdown')){document.querySelectorAll('.dropdown').forEach(d=>d.classList.remove('open'));}
-});
-}
-
-function initStateSelects(){
-['painState','dealState'].forEach(id=>{
-const sel=document.getElementById(id);
-sel.innerHTML='<option value="">-</option>'+STATES.map(s=>`<option>${s}</option>`).join('');
-});
-}
-
-function initDropdowns(){
-document.getElementById('statesMenu').innerHTML=STATES.map(s=>`<div class="dropdown-item"><input type="checkbox" value="${s}" onchange="updateMultiSelect('states')"> ${s}</div>`).join('');
-document.getElementById('profTypeMenu').innerHTML=PROF_TYPES.map(p=>`<div class="dropdown-item"><input type="checkbox" value="${p}" onchange="updateMultiSelect('profTypes')"> ${p}</div>`).join('');
-document.getElementById('dealProfMenu').innerHTML=DEAL_PROFS.map(p=>`<div class="dropdown-item"><input type="checkbox" value="${p}" onchange="updateMultiSelect('dealProfs')"> ${p}</div>`).join('');
-}
-
-function toggleDropdown(id){
-document.getElementById(id).classList.toggle('open');
-}
-
-function updateMultiSelect(type){
-const map={states:'statesMenu',profTypes:'profTypeMenu',dealProfs:'dealProfMenu'};
-const container={states:'selectedStates',profTypes:'selectedProfTypes',dealProfs:'selectedDealProfs'};
-const checks=document.querySelectorAll(`#${map[type]} input:checked`);
-const values=Array.from(checks).map(c=>c.value);
-document.getElementById(container[type]).innerHTML=values.map(v=>`<span class="badge" style="border-color:#A000FF">${v}</span>`).join('');
-updateProfilePreview();
-}
-
-function getMultiSelectValues(type){
-const map={states:'statesMenu',profTypes:'profTypeMenu',dealProfs:'dealProfMenu'};
-return Array.from(document.querySelectorAll(`#${map[type]} input:checked`)).map(c=>c.value);
-}
-
-function handleLogin(){
-const user=document.getElementById('loginUser').value;
-const pass=document.getElementById('loginPass').value;
-if(user==='deeve'&&pass==='paindeal2026'){
-localStorage.setItem('boardroom_session','active');
-showMainApp();
-}else{
-document.getElementById('loginError').classList.remove('hidden');
-}
-}
-
-function handleLogout(){
-localStorage.removeItem('boardroom_session');
-document.getElementById('mainApp').classList.add('hidden');
-document.getElementById('loginScreen').classList.remove('hidden');
-}
-
-function showMainApp(){
-document.getElementById('loginScreen').classList.add('hidden');
-document.getElementById('mainApp').classList.remove('hidden');
-loadData();
-switchTab('dashboard');
-}
-
-function switchTab(tab){
-currentTab=tab;
-document.querySelectorAll('.tab-content').forEach(t=>t.classList.add('hidden'));
-document.getElementById(tab).classList.remove('hidden');
-document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-document.querySelector(`.nav-tab[data-tab="${tab}"]`)?.classList.add('active');
-if(tab==='dashboard')updateDashboard();
-if(tab==='profile')loadProfile();
-if(tab==='pain')renderLeadRooms('pain');
-if(tab==='deal')renderLeadRooms('deal');
-if(tab==='vaultforge')updateVault();
-}
-
-function loadData(){
-profileData=JSON.parse(localStorage.getItem('boardroom_profile')||'{}');
-painLeads=JSON.parse(localStorage.getItem('boardroom_pain_leads')||'[]');
-dealLeads=JSON.parse(localStorage.getItem('boardroom_deal_leads')||'[]');
-}
-
-function saveData(){
-localStorage.setItem('boardroom_profile',JSON.stringify(profileData));
-localStorage.setItem('boardroom_pain_leads',JSON.stringify(painLeads));
-localStorage.setItem('boardroom_deal_leads',JSON.stringify(dealLeads));
-}
-
-function loadProfile(){
-if(profileData.company)document.getElementById('profileCompany').value=profileData.company||'';
-if(profileData.name)document.getElementById('profileName').value=profileData.name||'';
-if(profileData.title)document.getElementById('profileTitle').value=profileData.title||'';
-if(profileData.phone)document.getElementById('profilePhone').value=profileData.phone||'';
-if(profileData.email)document.getElementById('profileEmail').value=profileData.email||'';
-if(profileData.bio)document.getElementById('profileBio').value=profileData.bio||'';
-if(profileData.buyBox)document.getElementById('profileBuyBox').value=profileData.buyBox||'';
-(profileData.states||[]).forEach(s=>{const check=document.querySelector(`#statesMenu input[value="${s}"]`);if(check)check.checked=true;});
-(profileData.profTypes||[]).forEach(p=>{const check=document.querySelector(`#profTypeMenu input[value="${p}"]`);if(check)check.checked=true;});
-(profileData.dealProfs||[]).forEach(p=>{const check=document.querySelector(`#dealProfMenu input[value="${p}"]`);if(check)check.checked=true;});
-updateMultiSelect('states');updateMultiSelect('profTypes');updateMultiSelect('dealProfs');
-updateProfilePreview();
-}
-
-function saveProfile(){
-const req=['profileCompany','profileName','profileTitle','profilePhone','profileEmail'];
-let valid=true;
-req.forEach(id=>{const el=document.getElementById(id);if(!el.value.trim()){el.classList.add('error');valid=false;}else{el.classList.remove('error');}});
-const states=getMultiSelectValues('states');
-const profTypes=getMultiSelectValues('profTypes');
-const dealProfs=getMultiSelectValues('dealProfs');
-if(states.length===0||profTypes.length===0||dealProfs.length===0)valid=false;
-if(!valid){showToast('INCOMPLETE: FILL REQUIRED FIELDS','error');return;}
-profileData={
-company:document.getElementById('profileCompany').value,
-name:document.getElementById('profileName').value,
-title:document.getElementById('profileTitle').value,
-phone:document.getElementById('profilePhone').value,
-email:document.getElementById('profileEmail').value,
-bio:document.getElementById('profileBio').value,
-buyBox:document.getElementById('profileBuyBox').value,
-states:states,
-profTypes:profTypes,
-dealProfs:dealProfs
-};
-saveData();
-showToast('PROFILE SAVED','success');
-updateProfilePreview();
-}
-
-function updateProfilePreview(){
-const p=profileData;
-if(!p.name)return;
-const initials=p.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
-const html=`
-<div class="flex gap-15 mb-15">
-<div class="avatar theme-profile border">${initials||'?'}</div>
-<div style="flex:1">
-<div class="text-lg font-bold">${p.name||'NAME'}</div>
-<div class="text-sm">${p.company||'COMPANY'}</div>
-<div class="text-xs">${p.title||'TITLE'}</div>
-</div>
-</div>
-<div class="mb-10 text-xs">STATES: ${(p.states||[]).map(s=>`<span class="badge" style="border-color:#A000FF">${s}</span>`).join('')}</div>
-<div class="mb-10 text-xs">PROFESSIONS: ${(p.profTypes||[]).map(s=>`<span class="badge" style="border-color:#A000FF">${s}</span>`).join('')}</div>
-<div class="mb-10 text-xs">DEAL PROFS: ${(p.dealProfs||[]).map(s=>`<span class="badge" style="border-color:#A000FF">${s}</span>`).join('')}</div>
-<div class="text-xs">BUY BOX: ${p.buyBox||'NOT SET'}</div>`;
-document.getElementById('profilePreview').innerHTML=html;
-}
-
-function switchPropType(form,type){
-currentPropType[form]=type;
-document.querySelectorAll(`#${form} .toggle-btn`).forEach(b=>b.classList.remove('active'));
-document.querySelector(`#${form} .toggle-btn[data-type="${type}"]`).classList.add('active');
-['Residential','Commercial','Land'].forEach(t=>{
-document.getElementById(`${form}${t}Fields`).classList.toggle('hidden',t.toLowerCase()!==type);
-});
-}
-
-function handlePhotoUpload(form){
-const input=document.getElementById(`${form}Photos`);
-const files=Array.from(input.files);
-const photos=form==='pain'?painPhotos:dealPhotos;
-if(photos.length+files.length>10){showToast('MAX 10 PHOTOS','error');return;}
-files.forEach(file=>{
-const reader=new FileReader();
-reader.onload=e=>{
-photos.push(e.target.result);
-updatePhotoPreview(form);
-};
-reader.readAsDataURL(file);
-});
-}
-
-function updatePhotoPreview(form){
-const photos=form==='pain'?painPhotos:dealPhotos;
-document.getElementById(`${form}PhotoCount`).textContent=`(${photos.length}/10)`;
-document.getElementById(`${form}PhotoPreview`).innerHTML=photos.map((p,i)=>`<img src="${p}" class="photo-preview" onclick="removePhoto('${form}',${i})" title="CLICK TO REMOVE">`).join('');
-}
-
-function removePhoto(form,idx){
-if(form==='pain')painPhotos.splice(idx,1);else dealPhotos.splice(idx,1);
-updatePhotoPreview(form);
-}
-
-function cancelForm(form){
-document.getElementById(`${form}Form`).reset();
-if(form==='pain')painPhotos=[];else dealPhotos=[];
-updatePhotoPreview(form);
-document.getElementById(`${form}Error`).classList.add('hidden');
-}
-
-function submitLead(form){
-const errors=[];
-const type=currentPropType[form];
-const req=[];
-if(type==='residential'){req.push('Beds','Baths','Sqft');}
-else if(type==='commercial'){req.push('Units','CommSqft');}
-else{req.push('Acres');}
-req.push('Address','City','State','Zip','Owner','Phone','Motivation','Condition','Occupancy','Price');
-const data={type:type,propType:type};
-req.forEach(field=>{
-const id=form+field;
-const el=document.getElementById(id);
-const val=el.value.trim();
-if(!val){errors.push(field.toUpperCase());el.classList.add('error');}else{el.classList.remove('error');data[field.toLowerCase()]=val;}
-});
-const photos=form==='pain'?painPhotos:dealPhotos;
-if(photos.length===0)errors.push('MIN 1 PHOTO');
-['Year','Zoning','CapRate','Noi','LandZoning','Utilities','RoadAccess','Email','Arv','Repairs','Notes'].forEach(field=>{
-const el=document.getElementById(form+field);
-if(el)data[field.toLowerCase()]=el.value;
-});
-if(errors.length>0){
-document.getElementById(`${form}Error`).textContent='INCOMPLETE: FILL REQUIRED FIELDS + UPLOAD MIN 1 PHOTO';
-document.getElementById(`${form}Error`).classList.remove('hidden');
-return;
-}
-document.getElementById(`${form}Error`).classList.add('hidden');
-showToast('ANALYZING...','info');
-setTimeout(()=>{
-data.id=Date.now();
-data.photos=photos.slice();
-data.submitter=profileData;
-data.status='active';
-data.created=new Date().toISOString();
-data.analytics=calculateAnalytics(data);
-if(form==='pain'){painLeads.unshift(data);painPhotos=[];}else{dealLeads.unshift(data);dealPhotos=[];}
-saveData();
-cancelForm(form);
-renderLeadRooms(form);
-showToast('SENT','success');
-},2000);
-}
-
-function calculateAnalytics(d){
-const price=parseFloat(d.price)||0;
-const arv=parseFloat(d.arv)||0;
-const repairs=parseFloat(d.repairs)||0;
-const spread=arv-price-repairs;
-const bps=arv>0?Math.round((spread/arv)*10000):0;
-const dqi=Math.min(100,Math.round((price>0&&arv>price)?(spread/price)*100:0));
-const aci=Math.min(100,Math.round(Math.random()*40+60));
-const dom=Math.round(Math.random()*30+5);
-return{bps,dqi,aci,dom,spread};
-}
-
-function renderLeadRooms(form){
-const leads=form==='pain'?painLeads:dealLeads;
-const room=document.getElementById(`${form}Room`);
-const sections={active:[],saved:[],archived:[],deleted:[]};
-leads.forEach(l=>sections[l.status||'active'].push(l));
-room.innerHTML=sections.active.map(l=>createLeadCard(l,form)).join('');
-const sectHtml=['saved','archived','deleted'].map(status=>{
-const items=sections[status];
-if(items.length===0)return'';
-return`<div class="mt-20"><div class="text-lg font-bold mb-15">${form.toUpperCase()} ${status.toUpperCase()}</div><div class="grid grid-3 gap-15">${items.map(l=>createLeadCard(l,form)).join('')}</div></div>`;
-}).join('');
-document.getElementById(`${form}Sections`).innerHTML=sectHtml;
-}
-
-function createLeadCard(l,form){
-const theme=form==='pain'?'#FFB000':'#00FF41';
-let spec='';
-if(l.type==='residential')spec=`${l.beds}BD/${l.baths}BA | ${l.sqft}SF`;
-else if(l.type==='commercial')spec=`${l.units}UNITS | ${l.commsqft||l.sqft}SF`;
-else spec=`${l.acres}AC`;
-return`<div class="card" style="border-color:${theme}" onclick="showLeadDetail('${form}',${l.id})">
-<div class="text-xs mb-10"><span class="badge" style="border-color:${theme}">${l.type.toUpperCase()}</span> <span class="badge" style="border-color:${theme}">${l.status.toUpperCase()}</span></div>
-<div class="font-bold mb-10">${l.address}</div>
-<div class="text-sm mb-10">${l.city}, ${l.state} ${l.zip}</div>
-<div class="text-lg font-bold mb-10" style="color:${theme}">$${parseInt(l.price).toLocaleString()}</div>
-<div class="text-xs mb-10">${spec}</div>
-<div class="text-xs" style="opacity:0.7">SUBMITTED BY: ${l.submitter?.name||'UNKNOWN'}</div>
-</div>`;
-}
-
-function showLeadDetail(form,id){
-const leads=form==='pain'?painLeads:dealLeads;
-const l=leads.find(x=>x.id===id);
-if(!l)return;
-const theme=form==='pain'?'#FFB000':'#00FF41';
-const a=l.analytics||{};
-const photos=l.photos||[];
-const modal=`<div style="border-color:${theme}">
-<div class="flex" style="justify-content:space-between;align-items:center;margin-bottom:20px">
-<div class="text-lg font-bold">${form.toUpperCase()} DETAIL // ${l.address}</div>
-<button onclick="closeModal()" style="background:none;border:1px solid ${theme};color:${theme};width:auto;padding:5px 15px">CLOSE</button>
-</div>
-<div class="grid grid-2 gap-20 mb-20">
-<div>
-<div class="text-sm font-bold mb-10">PROPERTY INFO</div>
-<div class="text-xs mb-5">TYPE: ${l.type.toUpperCase()}</div>
-<div class="text-xs mb-5">ADDRESS: ${l.address}, ${l.city}, ${l.state} ${l.zip}</div>
-${l.beds?`<div class="text-xs mb-5">BEDS/BATHS: ${l.beds}/${l.baths}</div>`:''}
-${l.units?`<div class="text-xs mb-5">UNITS: ${l.units}</div>`:''}
-${l.acres?`<div class="text-xs mb-5">ACRES: ${l.acres}</div>`:''}
-${l.sqft||l.commsqft?`<div class="text-xs mb-5">SQFT: ${l.sqft||l.commsqft}</div>`:''}
-<div class="text-xs mb-5">CONDITION: ${l.condition}</div>
-<div class="text-xs mb-5">OCCUPANCY: ${l.occupancy}</div>
-<div class="text-xs mb-5">PRICE: $${parseInt(l.price).toLocaleString()}</div>
-${l.arv?`<div class="text-xs mb-5">ARV: $${parseInt(l.arv).toLocaleString()}</div>`:''}
-${l.repairs?`<div class="text-xs mb-5">REPAIRS: $${parseInt(l.repairs).toLocaleString()}</div>`:''}
-</div>
-<div>
-<div class="text-sm font-bold mb-10">OWNER INFO</div>
-<div class="text-xs mb-5">NAME: ${l.owner}</div>
-<div class="text-xs mb-5">PHONE: ${l.phone}</div>
-${l.email?`<div class="text-xs mb-5">EMAIL: ${l.email}</div>`:''}
-<div class="text-xs mb-5">MOTIVATION: ${l.motivation}</div>
-${l.notes?`<div class="text-xs mb-5">NOTES: ${l.notes}</div>`:''}
-</div>
-</div>
-<div class="form-section mb-20" style="border-color:${theme}">
-<div class="text-sm font-bold mb-10">AI ANALYZED INFO</div>
-<div class="grid grid-4 gap-10 text-xs">
-<div>BPS: ${a.bps||0}</div>
-<div>DQI: ${a.dqi||0}%</div>
-<div>ACI: ${a.aci||0}%</div>
-<div>DOM: ${a.dom||0} DAYS</div>
-<div>SPREAD: $${(a.spread||0).toLocaleString()}</div>
-</div>
-</div>
-<div class="mb-20">
-<div class="text-sm font-bold mb-10">PHOTOS (${photos.length})</div>
-<div class="flex flex-wrap gap-10">${photos.map(p=>`<img src="${p}" style="width:150px;height:150px;object-fit:cover;border:1px solid ${theme}">`).join('')}</div>
-</div>
-<div class="form-section mb-20" style="border-color:${theme}">
-<div class="text-sm font-bold mb-10">SUBMITTER PROFILE</div>
-${miniProfileCard(l.submitter)}
-</div>
-<div class="flex gap-10">
-<button onclick="updateLeadStatus('${form}',${l.id},'saved')" style="background:${theme};color:#0A0A0A">SAVE</button>
-<button onclick="updateLeadStatus('${form}',${l.id},'archived')" style="background:${theme};color:#0A0A0A">ARCHIVE</button>
-<button onclick="updateLeadStatus('${form}',${l.id},'deleted')" style="background:#FF0040;color:#FFF">DELETE</button>
-<button onclick="messageOwner('${l.phone}')" style="background:${theme};color:#0A0A0A">MESSAGE OWNER</button>
-<button onclick="closeModal()" style="background:none;border:1px solid #666">BACK</button>
-</div>
-</div>`;
-document.getElementById('modalContent').innerHTML=modal;
-document.getElementById('detailModal').classList.remove('hidden');
-}
-
-function miniProfileCard(p){
-if(!p||!p.name)return'<div class="text-xs">NO PROFILE DATA</div>';
-const initials=p.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
-return`<div class="flex gap-15">
-<div class="avatar" style="border-color:#A000FF;width:50px;height:50px;font-size:18px">${initials}</div>
-<div style="flex:1" class="text-xs">
-<div class="font-bold">${p.name}</div>
-<div>${p.company} - ${p.title}</div>
-<div>${p.phone} | ${p.email}</div>
-<div class="mt-5">${(p.states||[]).slice(0,3).map(s=>`<span class="badge" style="border-color:#A000FF;font-size:9px">${s}</span>`).join('')}</div>
-</div></div>`;
-}
-
-function closeModal(){document.getElementById('detailModal').classList.add('hidden');}
-
-function updateLeadStatus(form,id,status){
-const leads=form==='pain'?painLeads:dealLeads;
-const l=leads.find(x=>x.id===id);
-if(l){l.status=status;saveData();renderLeadRooms(form);closeModal();showToast(`${form.toUpperCase()} ${status.toUpperCase()}`,'success');}
-}
-
-function messageOwner(phone){showToast(`MESSAGING: ${phone}`,'info');}
-
-function updateDashboard(){
-document.getElementById('statPain').textContent=painLeads.length;
-document.getElementById('statDeal').textContent=dealLeads.length;
-const total=painLeads.length+dealLeads.length;
-const matched=painLeads.filter(l=>l.status==='saved').length+dealLeads.filter(l=>l.status==='saved').length;
-document.getElementById('statMatch').textContent=total>0?Math.round((matched/total)*100)+'%':'0%';
-}
-
-function updateVault(){
-if(!profileData.name){document.getElementById('matchScore').textContent='NO PROFILE SET';return;}
-const score=calculateMatchScore(profileData,profileData);
-document.getElementById('matchScore').textContent=`${score}% SELF MATCH`;
-renderMemberNetwork();
-renderIntelFeed();
-}
-
-function calculateMatchScore(p1,p2){
-if(!p1.states||!p2.states)return 0;
-const stateMatch=p1.states.filter(s=>p2.states.includes(s)).length/Math.max(p1.states.length,1)*50;
-const profMatch=p1.profTypes.filter(p=>p2.profTypes.includes(p)).length/Math.max(p1.profTypes.length,1)*25;
-const dealMatch=p1.dealProfs.filter(p=>p2.dealProfs.includes(p)).length/Math.max(p1.dealProfs.length,1)*25;
-return Math.round(stateMatch+profMatch+dealMatch);
-}
-
-function renderMemberNetwork(){
-const html=miniProfileCard(profileData);
-document.getElementById('memberNetwork').innerHTML=`<div class="card" style="border-color:#00FFFF">${html}<div class="text-xs mt-10">MATCH: 100%</div></div>`;
-}
-
-function renderIntelFeed(){
-const items=[];
-if(profileData.profTypes?.includes('Wholesaler'))items.push(`CONTACT ${profileData.name||'YOU'} - WHOLESALER IN ${profileData.states?.[0]||'STATE'}, HANDLES DISPOSITIONS`);
-if(profileData.profTypes?.includes('Buyer'))items.push(`MATCH: ${profileData.name||'YOU'} - BUYER, BUY BOX: ${profileData.buyBox||'NOT SET'}`);
-if(profileData.profTypes?.includes('Lender'))items.push(`CAPITAL: ${profileData.name||'YOU'} - LENDER ACTIVE IN ${profileData.states?.join(', ')||'MULTIPLE STATES'}`);
-document.getElementById('intelFeed').innerHTML=items.length>0?items.map(i=>`<div class="text-xs mb-10 p-10" style="border-left:2px solid #00FFFF;padding-left:10px">${i}</div>`).join(''):'<div class="text-xs">NO INTEL AVAILABLE - UPDATE PROFILE</div>';
-}
-
-function runScraper(){
-const addr=document.getElementById('scraperAddress').value.trim();
-if(!addr){showToast('ENTER ADDRESS','error');return;}
-showToast('SCRAPING...','info');
-setTimeout(()=>{
-const results=profileData.states?.length>0?`MATCH FOUND: ${profileData.name} - OPERATES IN STATES, PROFESSIONS: ${profileData.profTypes?.join(', ')}`:'NO MATCHES - UPDATE PROFILE STATES';
-document.getElementById('scraperResults').innerHTML=`<div class="p-15 mt-15" style="border:1px solid #00FFFF">${results}</div>`;
-showToast('SCRAPE COMPLETE','success');
-},1500);
-}
-
-function scrapeNetwork(){
-showToast('SCANNING NETWORK...','info');
-setTimeout(()=>{
-const html=`<div class="text-sm font-bold mb-15">TOP 3 PROFILE MATCHES</div>
-<div class="grid gap-15">${miniProfileCard(profileData)}<div class="text-xs mt-10">MATCH: 95% | STATES: ${profileData.states?.join(', ')||'N/A'} | PROFESSIONS: ${profileData.profTypes?.join(', ')||'N/A'} | CONTACT: ${profileData.phone||'N/A'}</div></div>`;
-document.getElementById('networkResults').innerHTML=html;
-showToast('NETWORK SCAN COMPLETE','success');
-},1500);
-}
-
-function showToast(msg,type){
-const toast=document.getElementById('toast');
-const colors={success:'#00FF41',error:'#FF0040',info:'#00FFFF'};
-toast.textContent=msg;
-toast.style.borderColor=colors[type]||'#FFF';
-toast.style.color=colors[type]||'#FFF';
-toast.classList.remove('hidden');
-setTimeout(()=>toast.classList.add('hidden'),3000);
-}
-</script>
-<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
-</body>
-</html>
+    <!-- PROFILE -->
+    <div id="profile" class="section">
+      <h2 style="color:#A000FF;margin-bottom:20px">PROFILE // MEMBER CARD</h2>
+      <div class="grid">
+        <div class="card" data-theme="profile">
+          <h3>BASIC INFO</h3>
+          <label>Company Name *</label><input type="text" id="pCompany">
+          <label>Your Name *</label><input type="text" id="pName">
+          <label>Title/Role *</label><input type="text" id="pTitle">
+          <label>Phone *</label><input type="text" id="pPhone">
+          <label>Email *</label><input type="text" id="pEmail">
+          <label>Bio / About</label><textarea id="pBio" rows="3"></textarea>
+        </div>
+        <div class="card" data-theme="profile">
+          <h3>LOCATION</h3>
+          <label>Home State * [FROM]</label>
+          <select id="pHomeState"></
