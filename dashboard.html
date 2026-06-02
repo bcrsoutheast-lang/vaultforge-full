@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOARDROOM PARTNERS // SECURE ACCESS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+    
+    :root {
+        --bg-primary: #0A0A0A;
+        --bg-secondary: #121212;
+        --bg-tertiary: #1A1A1A;
+        --text-primary: #E0E0E0;
+        --text-secondary: #A0A0A0;
+        --border-color: #2A2A2A;
+        --accent-neutral: #404040;
+        --accent-pain: #FFB000;
+        --accent-deal: #00FF41;
+        --accent-error: #FF0040;
+        --transition: all 0.2s ease;
+    }
+    
+    * {
+        font-family: 'IBM Plex Mono', monospace;
+        text-transform: uppercase;
+        border-radius: 0 !important;
+        box-sizing: border-box;
+    }
+    
+    body {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .mono {
+        font-family: 'IBM Plex Mono', monospace;
+    }
+    
+    .terminal-border {
+        border: 1px solid var(--border-color);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+    }
+    
+    .terminal-input {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        padding: 0.75rem;
+        outline: none;
+        transition: var(--transition);
+        width: 100%;
+    }
+    
+    .terminal-input:focus {
+        border-color: var(--text-secondary);
+    }
+    
+    .terminal-input::placeholder {
+        color: var(--text-secondary);
+        opacity: 0.5;
+    }
+    
+    .terminal-select {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23A0A0A0' stroke-width='2'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        padding-right: 2.5rem;
+    }
+    
+    .theme-pain .terminal-input:focus,
+    .theme-pain .terminal-select:focus {
+        border-color: var(--accent-pain);
+        box-shadow: 0 0 0 1px var(--accent-pain);
+    }
+    
+    .theme-deal .terminal-input:focus,
+    .theme-deal .terminal-select:focus {
+        border-color: var(--accent-deal);
+        box-shadow: 0 0 0 1px var(--accent-deal);
+    }
+    
+    .btn {
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+        border: 1px solid var(--border-color);
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        letter-spacing: 0.05em;
+    }
+    
+    .btn:hover {
+        background: var(--bg-secondary);
+    }
+    
+    .btn:active {
+        transform: translateY(1px);
+    }
+    
+    .btn-primary-neutral {
+        background: var(--accent-neutral);
+        color: var(--bg-primary);
+        border-color: var(--accent-neutral);
+    }
+    
+    .btn-primary-neutral:hover {
+        background: #505050;
+        border-color: #505050;
+    }
+    
+    .theme-pain .btn-primary {
+        background: var(--accent-pain);
+        color: var(--bg-primary);
+        border-color: var(--accent-pain);
+    }
+    
+    .theme-pain .btn-primary:hover {
+        background: #FFC233;
+        border-color: #FFC233;
+    }
+    
+    .theme-deal .btn-primary {
+        background: var(--accent-deal);
+        color: var(--bg-primary);
+        border-color: var(--accent-deal);
+    }
+    
+    .theme-deal .btn-primary:hover {
+        background: #33FF6E;
+        border-color: #33FF6E;
+    }
+    
+    .btn-ghost {
+        background: transparent;
+        border-color: var(--border-color);
+    }
+    
+    .btn-ghost:hover {
+        background: var(--bg-tertiary);
+    }
+    
+    .btn-danger {
+        background: transparent;
+        border-color: var(--accent-error);
+        color: var(--accent-error);
+    }
+    
+    .btn-danger:hover {
+        background: var(--accent-error);
+        color: var(--bg-primary);
+    }
+    
+    .theme-pain .accent-text { color: var(--accent-pain); }
+    .theme-deal .accent-text { color: var(--accent-deal); }
+    .theme-pain .accent-border { border-color: var(--accent-pain); }
+    .theme-deal .accent-border { border-color: var(--accent-deal); }
+    .theme-pain .accent-bg { background: var(--accent-pain); }
+    .theme-deal .accent-bg { background: var(--accent-deal); }
+    
+    .error-text {
+        color: var(--accent-error);
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+        letter-spacing: 0.05em;
+    }
+    
+    .toggle-btn {
+        flex: 1;
+        padding: 0.75rem;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        transition: var(--transition);
+        cursor: pointer;
+    }
+    
+    .theme-pain .toggle-btn.active {
+        background: var(--accent-pain);
+        color: var(--bg-primary);
+        border-color: var(--accent-pain);
+    }
+    
+    .theme-deal .toggle-btn.active {
+        background: var(--accent-deal);
+        color: var(--bg-primary);
+        border-color: var(--accent-deal);
+    }
+    
+    .card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        padding: 1rem;
+        transition: var(--transition);
+    }
+    
+    .theme-pain .card:hover {
+        border-color: var(--accent-pain);
+    }
+    
+    .theme-deal .card:hover {
+        border-color: var(--accent-deal);
+    }
+    
+    .hidden { display: none !important; }
+    
+    .fade-in {
+        animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .photo-preview {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border: 1px solid var(--border-color);
+    }
+    
+    .loading-bar {
+        height: 2px;
+        background: var(--bg-tertiary);
+        overflow: hidden;
+    }
+    
+    .loading-progress {
+        height: 100%;
+        width: 0%;
+        transition: width 2s linear;
+    }
+    
+    .theme-pain .loading-progress { background: var(--accent-pain); }
+    .theme-deal .loading-progress { background: var(--accent-deal); }
+    
+    label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.25rem;
+        display: block;
+        letter-spacing: 0.1em;
+    }
+    
+    .required::after {
+        content: " *";
+    }
+    
+    .theme-pain .required::after { color: var(--accent-pain); }
+    .theme-deal .required::after { color: var(--accent-deal); }
+    
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: var(--bg-primary);
+    }
+    
+    .theme-pain ::-webkit-scrollbar-thumb {
+        background: var(--accent-pain);
+    }
+    
+    .theme-deal ::-webkit-scrollbar-thumb {
+        background: var(--accent-deal);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: var(--accent-neutral);
+    }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md terminal-border bg-[var(--bg-secondary)] p-8 fade-in">
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold mb-2">BOARDROOM PARTNERS</h1>
+            <div class="h-px bg-[var(--border-color)] my-4"></div>
+            <p class="text-sm text-[var(--text-secondary)]">SECURE ACCESS</p>
+        </div>
+        
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="mb-4">
+                <label for="username">USERNAME</label>
+                <input type="text" id="username" class="terminal-input" autocomplete="username">
+            </div>
+            
+            <div class="mb-4">
+                <label for="password">PASSWORD</label>
+                <input type="password" id="password" class="terminal-input" autocomplete="current-password">
+            </div>
+            
+            <div id="loginError" class="error-text mb-4 hidden">ERROR: INVALID CREDENTIALS</div>
+            
+            <button type="submit" class="btn btn-primary-neutral w-full">LOGIN</button>
+        </form>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" class="hidden min-h-screen">
+    <!-- HEADER -->
+    <header class="terminal-border border-b bg-[var(--bg-secondary)] sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <h1 class="text-lg font-bold">BOARDROOM PARTNERS</h1>
+                <span id="systemIndicator" class="text-sm text-[var(--text-secondary)]"></span>
+            </div>
+            <button onclick="handleLogout()" class="btn btn-ghost text-sm">LOGOUT</button>
+        </div>
+    </header>
+
+    <!-- SYSTEM SELECTOR -->
+    <div id="systemSelector" class="max-w-7xl mx-auto px-4 py-12 fade-in">
+        <div class="terminal-border bg-[var(--bg-secondary)] p-8">
+            <h2 class="text-2xl font-bold mb-8">SELECT SYSTEM</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+                <button onclick="selectSystem('pain')" class="btn terminal-border p-8 hover:border-[#FFB000] group">
+                    <div class="text-left">
+                        <div class="text-3xl font-bold mb-2 group-hover:text-[#FFB000] transition">PAIN // AMBER</div>
+                        <div class="text-sm text-[var(--text-secondary)]">LEAD INTAKE & ANALYSIS</div>
+                    </div>
+                </button>
+                <button onclick="selectSystem('deal')" class="btn terminal-border p-8 hover:border-[#00FF41] group">
+                    <div class="text-left">
+                        <div class="text-3xl font-bold mb-2 group-hover:text-[#00FF41] transition">DEAL // GREEN</div>
+                        <div class="text-sm text-[var(--text-secondary)]">DEAL INTAKE & ANALYSIS</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SYSTEM WORKSPACE -->
+    <div id="systemWorkspace" class="hidden">
+        <!-- INTAKE FORM -->
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="terminal-border bg-[var(--bg-secondary)]">
+                <div class="p-6 border-b border-[var(--border-color)] flex items-center justify-between">
+                    <h2 id="formHeader" class="text-xl font-bold"></h2>
+                    <button onclick="backToSelector()" class="btn btn-ghost text-sm">BACK TO SELECTOR</button>
+                </div>
+                
+                <form id="intakeForm" class="p-6" onsubmit="handleSubmit(event)">
+                    <!-- PROPERTY TYPE TOGGLE -->
+                    <div class="mb-6">
+                        <label>PROPERTY TYPE</label>
+                        <div class="flex gap-2">
+                            <button type="button" class="toggle-btn active" data-type="residential" onclick="setPropertyType('residential')">RESIDENTIAL</button>
+                            <button type="button" class="toggle-btn" data-type="commercial" onclick="setPropertyType('commercial')">COMMERCIAL</button>
+                            <button type="button" class="toggle-btn" data-type="land" onclick="setPropertyType('land')">LAND</button>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- SHARED FIELDS -->
+                        <div>
+                            <label for="address" class="required">ADDRESS</label>
+                            <input type="text" id="address" class="terminal-input" data-required="true">
+                        </div>
+                        <div>
+                            <label for="city" class="required">CITY</label>
+                            <input type="text" id="city" class="terminal-input" data-required="true">
+                        </div>
+                        <div>
+                            <label for="state" class="required">STATE</label>
+                            <select id="state" class="terminal-input terminal-select" data-required="true">
+                                <option value="">SELECT STATE</option>
+                                <option value="AL">AL</option><option value="AK">AK</option><option value="AZ">AZ</option>
+                                <option value="AR">AR</option><option value="CA">CA</option><option value="CO">CO</option>
+                                <option value="CT">CT</option><option value="DE">DE</option><option value="FL">FL</option>
+                                <option value="GA">GA</option><option value="HI">HI</option><option value="ID">ID</option>
+                                <option value="IL">IL</option><option value="IN">IN</option><option value="IA">IA</option>
+                                <option value="KS">KS</option><option value="KY">KY</option><option value="LA">LA</option>
+                                <option value="ME">ME</option><option value="MD">MD</option><option value="MA">MA</option>
+                                <option value="MI">MI</option><option value="MN">MN</option><option value="MS">MS</option>
+                                <option value="MO">MO</option><option value="MT">MT</option><option value="NE">NE</option>
+                                <option value="NV">NV</option><option value="NH">NH</option><option value="NJ">NJ</option>
+                                <option value="NM">NM</option><option value="NY">NY</option><option value="NC">NC</option>
+                                <option value="ND">ND</option><option value="OH">OH</option><option value="OK">OK</option>
+                                <option value="OR">OR</option><option value="PA">PA</option><option value="RI">RI</option>
+                                <option value="SC">SC</option><option value="SD">SD</option><option value="TN">TN</option>
+                                <option value="TX">TX</option><option value="UT">UT</option><option value="VT">VT</option>
+                                <option value="VA">VA</option><option value="WA">WA</option><option value="WV">WV</option>
+                                <option value="WI">WI</option><option value="WY">WY</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="zip" class="required">ZIP</label>
+                            <input type="text" id="zip" class="terminal-input" data-required="true">
+                        </div>
+                        <div>
+                            <label for="ownerName" class="required">OWNER NAME</label>
+                            <input type="text" id="ownerName" class="terminal-input" data-required="true">
+                        </div>
+                        <div>
+                            <label for="phone" class="required">PHONE</label>
+                            <input type="tel" id="phone" class="terminal-input" data-required="true">
+                        </div>
+                        <div>
+                            <label for="email">EMAIL</label>
+                            <input type="email" id="email" class="terminal-input">
+                        </div>
+                        <div>
+                            <label for="motivation" class="required">MOTIVATION</label>
+                            <select id="motivation" class="terminal-input terminal-select" data-required="true">
+                                <option value="">SELECT</option>
+                                <option value="HIGH">HIGH</option>
+                                <option value="MEDIUM">MEDIUM</option>
+                                <option value="LOW">LOW</option>
+                                <option value="DISTRESSED">DISTRESSED</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="condition" class="required">CONDITION</label>
+                            <select id="condition" class="terminal-input terminal-select" data-required="true">
+                                <option value="">SELECT</option>
+                                <option value="EXCELLENT">EXCELLENT</option>
+                                <option value="GOOD">GOOD</option>
+                                <option value="FAIR">FAIR</option>
+                                <option value="POOR">POOR</option>
+                                <option value="TEARDOWN">TEARDOWN</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="occupancy" class="required">OCCUPANCY</label>
+                            <select id="occupancy" class="terminal-input terminal-select" data-required="true">
+                                <option value="">SELECT</option>
+                                <option value="VACANT">VACANT</option>
+                                <option value="OWNER OCCUPIED">OWNER OCCUPIED</option>
+                                <option value="TENANT">TENANT</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="askingPrice" class="required">ASKING PRICE</label>
+                            <input type="number" id="askingPrice" class="terminal-input" data-required="true">
+                        </div>
+                        <div>
+                            <label for="estArv">EST ARV</label>
+                            <input type="number" id="estArv" class="terminal-input">
+                        </div>
+                        <div>
+                            <label for="estRepairs">EST REPAIRS</label>
+                            <input type="number" id="estRepairs" class="terminal-input">
+                        </div>
+
+                        <!-- RESIDENTIAL FIELDS -->
+                        <div class="conditional-field residential-field">
+                            <label for="beds" class="required">BEDS</label>
+                            <input type="number" id="beds" class="terminal-input" data-required="true">
+                        </div>
+                        <div class="conditional-field residential-field">
+                            <label for="baths" class="required">BATHS</label>
+                            <input type="number" id="baths" class="terminal-input" data-required="true" step="0.5">
+                        </div>
+                        <div class="conditional-field residential-field">
+                            <label for="sqft" class="required">SQFT</label>
+                            <input type="number" id="sqft" class="terminal-input" data-required="true">
+                        </div>
+                        <div class="conditional-field residential-field">
+                            <label for="yearBuilt" class="required">YEAR BUILT</label>
+                            <input type="number" id="yearBuilt" class="terminal-input" data-required="true">
+                        </div>
+
+                        <!-- COMMERCIAL FIELDS -->
+                        <div class="conditional-field commercial-field hidden">
+                            <label for="units" class="required">UNITS</label>
+                            <input type="number" id="units" class="terminal-input" data-required="true">
+                        </div>
+                        <div class="conditional-field commercial-field hidden">
+                            <label for="commSqft" class="required">SQFT</label>
+                            <input type="number" id="commSqft" class="terminal-input" data-required="true">
+                        </div>
+                        <div class="conditional-field commercial-field hidden">
+                            <label for="zoning">ZONING</label>
+                            <input type="text" id="zoning" class="terminal-input">
+                        </div>
+                        <div class="conditional-field commercial-field hidden">
+                            <label for="capRate">CAP RATE</label>
+                            <input type="number" id="capRate" class="terminal-input" step="0.1">
+                        </div>
+                        <div class="conditional-field commercial-field hidden">
+                            <label for="noi">NOI</label>
+                            <input type="number" id="noi" class="terminal-input">
+                        </div>
+
+                        <!-- LAND FIELDS -->
+                        <div class="conditional-field land-field hidden">
+                            <label for="acres" class="required">ACRES</label>
+                            <input type="number" id="acres" class="terminal-input" data-required="true" step="0.01">
+                        </div>
+                        <div class="conditional-field land-field hidden">
+                            <label for="landZoning" class="required">ZONING</label>
+                            <input type="text" id="landZoning" class="terminal-input" data-required="true">
+                        </div>
+                        <div class="conditional-field land-field hidden">
+                            <label for="utilities" class="required">UTILITIES</label>
+                            <select id="utilities" class="terminal-input terminal-select" data-required="true">
+                                <option value="">SELECT</option>
+                                <option value="ALL">ALL AVAILABLE</option>
+                                <option value="WATER/SEWER">WATER/SEWER ONLY</option>
+                                <option value="ELECTRIC">ELECTRIC ONLY</option>
+                                <option value="NONE">NONE</option>
+                            </select>
+                        </div>
+                        <div class="conditional-field land-field hidden">
+                            <label for="roadAccess" class="required">ROAD ACCESS</label>
+                            <select id="roadAccess" class="terminal-input terminal-select" data-required="true">
+                                <option value="">SELECT</option>
+                                <option value="PAVED">PAVED</option>
+                                <option value="GRAVEL">GRAVEL</option>
+                                <option value="DIRT">DIRT</option>
+                                <option value="NONE">NONE</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <label for="notes">NOTES</label>
+                        <textarea id="notes" rows="3" class="terminal-input"></textarea>
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="required">PHOTOS [<span id="photoCount">0</span>/10]</label>
+                        <input type="file" id="photos" multiple accept="image/*" class="hidden" onchange="handlePhotoUpload(event)">
+                        <button type="button" onclick="document.getElementById('photos').click()" class="btn btn-ghost text-sm">UPLOAD PHOTOS</button>
+                        <div id="photoPreview" class="flex gap-2 mt-2 flex-wrap"></div>
+                    </div>
+
+                    <div id="formError" class="error-text mt-4 hidden"></div>
+                    <div id="analyzingBar" class="loading-bar mt-4 hidden">
+                        <div class="loading-progress"></div>
+                    </div>
+                    <div id="sentMessage" class="mt-4 text-sm font-bold hidden">
+                        <span class="accent-text">SENT</span> // DATA PROCESSED
+                    </div>
+
+                    <div class="flex gap-2 mt-6">
+                        <button type="button" onclick="cancelForm()" class="btn btn-ghost">CANCEL</button>
+                        <button type="submit" id="submitBtn" class="btn btn-primary flex-1">SUBMIT</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ROOM -->
+        <div class="max-w-7xl mx-auto px-4 pb-8">
+            <div class="terminal-border bg-[var(--bg-secondary)]">
+                <div class="p-6 border-b border-[var(--border-color)]">
+                    <h2 id="roomHeader" class="text-xl font-bold"></h2>
+                    <p class="text-sm text-[var(--text-secondary)] mt-1"><span id="roomCount">0</span> SUBMISSIONS</p>
+                </div>
+                <div id="roomCards" class="p-6 grid gap-4"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const STATE = {
+        loggedIn: false,
+        currentSystem: null, // 'pain' or 'deal'
+        propertyType: 'residential',
+        photos: [],
+        painData: [],
+        dealData: [],
+        isSubmitting: false
+    };
+
+    const CREDENTIALS = {
+        username: 'deeve',
+        password: 'paindeal2026'
+    };
+
+    // INIT
+    document.addEventListener('DOMContentLoaded', () => {
+        const session = localStorage.getItem('bp_session');
+        const painData = localStorage.getItem('bp_pain_data');
+        const dealData = localStorage.getItem('bp_deal_data');
+        
+        if (painData) STATE.painData = JSON.parse(painData);
+        if (dealData) STATE.dealData = JSON.parse(dealData);
+        
+        if (session === 'active') {
+            showMainApp();
+        }
+    });
+
+    // AUTH
+    function handleLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value.trim().toLowerCase();
+        const password = document.getElementById('password').value;
+        const errorEl = document.getElementById('loginError');
+        
+        if (username === CREDENTIALS.username && password === CREDENTIALS.password) {
+            STATE.loggedIn = true;
+            localStorage.setItem('bp_session', 'active');
+            errorEl.classList.add('hidden');
+            showMainApp();
+        } else {
+            errorEl.classList.remove('hidden');
+            errorEl.textContent = 'ERROR: INVALID CREDENTIALS';
+        }
+    }
+
+    function handleLogout() {
+        STATE.loggedIn = false;
+        STATE.currentSystem = null;
+        localStorage.removeItem('bp_session');
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('mainApp').classList.add('hidden');
+        document.getElementById('loginForm').reset();
+        document.body.classList.remove('theme-pain', 'theme-deal');
+    }
+
+    function showMainApp() {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+    }
+
+    // SYSTEM SELECTION
+    function selectSystem(system) {
+        STATE.currentSystem = system;
+        STATE.propertyType = 'residential';
+        STATE.photos = [];
+        
+        document.getElementById('systemSelector').classList.add('hidden');
+        document.getElementById('systemWorkspace').classList.remove('hidden');
+        document.getElementById('systemWorkspace').classList.add('fade-in');
+        
+        document.body.classList.remove('theme-pain', 'theme-deal');
+        document.body.classList.add(`theme-${system}`);
+        
+        const isPain = system === 'pain';
+        document.getElementById('systemIndicator').textContent = `// ${system.toUpperCase()} SYSTEM`;
+        document.getElementById('systemIndicator').className = `text-sm accent-text`;
+        document.getElementById('formHeader').textContent = isPain ? 'PAIN INTAKE FORM // NEW LEAD SUBMISSION' : 'DEAL INTAKE FORM // NEW DEAL SUBMISSION';
+        document.getElementById('roomHeader').textContent = isPain ? 'PAIN ROOM' : 'DEAL ROOM';
+        document.getElementById('submitBtn').textContent = isPain ? 'SUBMIT PAIN' : 'SUBMIT DEAL';
+        
+        resetForm();
+        renderRoom();
+    }
+
+    function backToSelector() {
+        document.getElementById('systemWorkspace').classList.add('hidden');
+        document.getElementById('systemSelector').classList.remove('hidden');
+        document.getElementById('systemIndicator').textContent = '';
+        STATE.currentSystem = null;
+        document.body.classList.remove('theme-pain', 'theme-deal');
+    }
+
+    // PROPERTY TYPE
+    function setPropertyType(type) {
+        STATE.propertyType = type;
+        
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-type="${type}"]`).classList.add('active');
+        
+        document.querySelectorAll('.conditional-field').forEach(field => {
+            field.classList.add('hidden');
+            field.querySelectorAll('input, select').forEach(input => {
+                input.removeAttribute('data-required');
+            });
+        });
+        
+        document.querySelectorAll(`.${type}-field`).forEach(field => {
+            field.classList.remove('hidden');
+            field.querySelectorAll('input, select').forEach(input => {
+                if (input.parentElement.querySelector('label').classList.contains('required')) {
+                    input.setAttribute('data-required', 'true');
+                }
+            });
+        });
+    }
+
+    // PHOTO HANDLING
+    function handlePhotoUpload(e) {
+        const files = Array.from(e.target.files);
+        const remaining = 10 - STATE.photos.length;
+        const toAdd = files.slice(0, remaining);
+        
+        toAdd.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                STATE.photos.push(event.target.result);
+                updatePhotoPreview();
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function updatePhotoPreview() {
+        const preview = document.getElementById('photoPreview');
+        const count = document.getElementById('photoCount');
+        count.textContent = STATE.photos.length;
+        
+        preview.innerHTML = STATE.photos.map((photo, idx) => `
+            <div class="relative">
+                <img src="${photo}" class="photo-preview">
+                <button type="button" onclick="removePhoto(${idx})" class="absolute top-0 right-0 bg-[var(--accent-error)] text-[var(--bg-primary)] w-5 h-5 text-xs font-bold">X</button>
+            </div>
+        `).join('');
+    }
+
+    function removePhoto(idx) {
+        STATE.photos.splice(idx, 1);
+        updatePhotoPreview();
+    }
+
+    // FORM SUBMISSION
+    function handleSubmit(e) {
+        e.preventDefault();
+        if (STATE.isSubmitting) return;
+        
+        const errorEl = document.getElementById('formError');
+        errorEl.classList.add('hidden');
+        
+        // Validation
+        const requiredFields = document.querySelectorAll('[data-required="true"]:not(.hidden)');
+        let isValid = true;
+        let missingFields = [];
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                isValid = false;
+                missingFields.push(field.id);
+            }
+        });
+        
+        if (!isValid || STATE.photos.length === 0) {
+            let msg = 'INCOMPLETE: ';
+            if (!isValid) msg += 'FILL REQUIRED FIELDS';
+            if (!isValid && STATE.photos.length === 0) msg += ' + ';
+            if (STATE.photos.length === 0) msg += 'UPLOAD MIN 1 PHOTO';
+            errorEl.textContent = msg;
+            errorEl.classList.remove('hidden');
+            return;
+        }
+        
+        // Submit
+        STATE.isSubmitting = true;
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('analyzingBar').classList.remove('hidden');
+        document.querySelector('.loading-progress').style.width = '100%';
+        
+        setTimeout(() => {
+            processSubmission();
+        }, 2000);
+    }
+
+    function processSubmission() {
+        const formData = {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            propertyType: STATE.propertyType,
+            address: document.getElementById('address').value,
+            city: document.getElementById('city').value,
+            state: document.getElementById('state').value,
+            zip: document.getElementById('zip').value,
+            ownerName: document.getElementById('ownerName').value,
+            phone: document.getElementById('phone').value,
+            email: document.getElementById('email').value,
+            motivation: document.getElementById('motivation').value,
+            condition: document.getElementById('condition').value,
+            occupancy: document.getElementById('occupancy').value,
+            askingPrice: document.getElementById('askingPrice').value,
+            estArv: document.getElementById('estArv').value,
+            estRepairs: document.getElementById('estRepairs').value,
+            notes: document.getElementById('notes').value,
+            photos: [...STATE.photos],
+            saved: false,
+            archived: false
+        };
+        
+        // Add type-specific fields
+        if (STATE.propertyType === 'residential') {
+            formData.beds = document.getElementById('beds').value;
+            formData.baths = document.getElementById('baths').value;
+            formData.sqft = document.getElementById('sqft').value;
+            formData.yearBuilt = document.getElementById('yearBuilt').value;
+        } else if (STATE.propertyType === 'commercial') {
+            formData.units = document.getElementById('units').value;
+            formData.sqft = document.getElementById('commSqft').value;
+            formData.zoning = document.getElementById('zoning').value;
+            formData.capRate = document.getElementById('capRate').value;
+            formData.noi = document.getElementById('noi').value;
+        } else if (STATE.propertyType === 'land') {
+            formData.acres = document.getElementById('acres').value;
+            formData.zoning = document.getElementById('landZoning').value;
+            formData.utilities = document.getElementById('utilities').value;
+            formData.roadAccess = document.getElementById('roadAccess').value;
+        }
+        
+        const dataKey = STATE.currentSystem === 'pain' ? 'painData' : 'dealData';
+        STATE[dataKey].unshift(formData);
+        localStorage.setItem(`bp_${STATE.currentSystem}_data`, JSON.stringify(STATE[dataKey]));
+        
+        document.getElementById('analyzingBar').classList.add('hidden');
+        document.getElementById('sentMessage').classList.remove('hidden');
+        document.querySelector('.loading-progress').style.width = '0%';
+        
+        setTimeout(() => {
+            document.getElementById('sentMessage').classList.add('hidden');
+            resetForm();
+            renderRoom();
+            STATE.isSubmitting = false;
+            document.getElementById('submitBtn').disabled = false;
+        }, 1500);
+    }
+
+    function cancelForm() {
+        if (confirm('CANCEL FORM? ALL DATA WILL BE LOST.')) {
+            resetForm();
+        }
+    }
+
+    function resetForm() {
+        document.getElementById('intakeForm').reset();
+        STATE.photos = [];
+        updatePhotoPreview();
+        setPropertyType('residential');
+        document.getElementById('formError').classList.add('hidden');
+    }
+
+    // ROOM RENDERING
+    function renderRoom() {
+        const dataKey = STATE.currentSystem === 'pain' ? 'painData' : 'dealData';
+        const data = STATE[dataKey];
+        const container = document.getElementById('roomCards');
+        const count = document.getElementById('roomCount');
+        
+        count.textContent = data.length;
+        
+        if (data.length === 0) {
+            container.innerHTML = '<div class="text-center py-12 text-[var(--text-secondary)]">NO SUBMISSIONS YET</div>';
+            return;
+        }
+        
+        container.innerHTML = data.map(item => `
+            <div class="card ${item.archived ? 'opacity-50' : ''}">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <div class="text-lg font-bold accent-text">${item.address.toUpperCase()}</div>
+                        <div class="text-sm text-[var(--text-secondary)]">${item.city}, ${item.state} ${item.zip} // ${item.propertyType.toUpperCase()}</div>
+                    </div>
+                    <div class="text-xs text-[var(--text-secondary)]">
+                        ${new Date(item.timestamp).toLocaleDateString()} ${new Date(item.timestamp).toLocaleTimeString()}
+                    </div>
+                </div>
+                
+                <div class="grid md:grid-cols-3 gap-4 mb-4 text-sm">
+                    <div>
+                        <div class="text-[var(--text-secondary)] text-xs">OWNER</div>
+                        <div>${item.ownerName}</div>
+                    </div>
+                    <div>
+                        <div class="text-[var(--text-secondary)] text-xs">PHONE</div>
+                        <div>${item.phone}</div>
+                    </div>
+                    <div>
+                        <div class="text-[var(--text-secondary)] text-xs">ASKING</div>
+                        <div>$${parseInt(item.askingPrice || 0).toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div class="text-[var(--text-secondary)] text-xs">MOTIVATION</div>
+                        <div>${item.motivation}</div>
+                    </div>
+                    <div>
+                        <div class="text-[var(--text-secondary)] text-xs">CONDITION</div>
+                        <div>${item.condition}</div>
+                    </div>
+                    <div>
+                        <div class="text-[var(--text-secondary)] text-xs">OCCUPANCY</div>
+                        <div>${item.occupancy}</div>
+                    </div>
+                </div>
+                
+                ${item.propertyType === 'residential' ? `
+                    <div class="grid md:grid-cols-4 gap-4 mb-4 text-sm border-t border-[var(--border-color)] pt-4">
+                        <div><span class="text-[var(--text-secondary)]">BEDS:</span> ${item.beds}</div>
+                        <div><span class="text-[var(--text-secondary)]">BATHS:</span> ${item.baths}</div>
+                        <div><span class="text-[var(--text-secondary)]">SQFT:</span> ${item.sqft}</div>
+                        <div><span class="text-[var(--text-secondary)]">BUILT:</span> ${item.yearBuilt}</div>
+                    </div>
+                ` : item.propertyType === 'commercial' ? `
+                    <div class="grid md:grid-cols-3 gap-4 mb-4 text-sm border-t border-[var(--border-color)] pt-4">
+                        <div><span class="text-[var(--text-secondary)]">UNITS:</span> ${item.units}</div>
+                        <div><span class="text-[var(--text-secondary)]">SQFT:</span> ${item.sqft}</div>
+                        <div><span class="text-[var(--text-secondary)]">CAP:</span> ${item.capRate || 'N/A'}%</div>
+                    </div>
+                ` : `
+                    <div class="grid md:grid-cols-3 gap-4 mb-4 text-sm border-t border-[var(--border-color)] pt-4">
+                        <div><span class="text-[var(--text-secondary)]">ACRES:</span> ${item.acres}</div>
+                        <div><span class="text-[var(--text-secondary)]">UTILITIES:</span> ${item.utilities}</div>
+                        <div><span class="text-[var(--text-secondary)]">ACCESS:</span> ${item.roadAccess}</div>
+                    </div>
+                `}
+                
+                ${item.notes ? `<div class="text-sm mb-4 border-t border-[var(--border-color)] pt-4"><span class="text-[var(--text-secondary)]">NOTES:</span> ${item.notes}</div>` : ''}
+                
+                <div class="flex gap-2 mb-4 flex-wrap">
+                    ${item.photos.map(photo => `<img src="${photo}" class="photo-preview">`).join('')}
+                </div>
+                
+                <div class="flex gap-2 flex-wrap">
+                    <button onclick="toggleSave(${item.id})" class="btn btn-ghost text-xs">${item.saved ? 'UNSAVE' : 'SAVE'}</button>
+                    <button onclick="toggleArchive(${item.id})" class="btn btn-ghost text-xs">${item.archived ? 'UNARCHIVE' : 'ARCHIVE'}</button>
+                    <button onclick="deleteItem(${item.id})" class="btn btn-danger text-xs">DELETE</button>
+                    <button onclick="messageOwner('${item.phone}', '${item.ownerName}')" class="btn btn-primary text-xs">MESSAGE OWNER</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function toggleSave(id) {
+        const dataKey = STATE.currentSystem === 'pain' ? 'painData' : 'dealData';
+        const item = STATE[dataKey].find(i => i.id === id);
+        if (item) {
+            item.saved = !item.saved;
+            localStorage.setItem(`bp_${STATE.currentSystem}_data`, JSON.stringify(STATE[dataKey]));
+            renderRoom();
+        }
+    }
+
+    function toggleArchive(id) {
+        const dataKey = STATE.currentSystem === 'pain' ? 'painData' : 'dealData';
+        const item = STATE[dataKey].find(i => i.id === id);
+        if (item) {
+            item.archived = !item.archived;
+            localStorage.setItem(`bp_${STATE.currentSystem}_data`, JSON.stringify(STATE[dataKey]));
+            renderRoom();
+        }
+    }
+
+    function deleteItem(id) {
+        if (confirm('DELETE THIS SUBMISSION? THIS CANNOT BE UNDONE.')) {
+            const dataKey = STATE.currentSystem === 'pain' ? 'painData' : 'dealData';
+            STATE[dataKey] = STATE[dataKey].filter(i => i.id !== id);
+            localStorage.setItem(`bp_${STATE.currentSystem}_data`, JSON.stringify(STATE[dataKey]));
+            renderRoom();
+        }
+    }
+
+    function messageOwner(phone, name) {
+        alert(`MESSAGE OWNER FUNCTION\nNAME: ${name}\nPHONE: ${phone}\n\nINTEGRATION REQUIRED FOR SMS/CALL`);
+    }
+</script>
+
+<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
+</body>
+</html>
