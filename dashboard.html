@@ -31,7 +31,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .nav button[data-theme="logout"]{color:#FF0040}
 .badge-count{position:absolute;top:8px;right:8px;background:#FF0040;color:#000;font-size:10px;padding:2px 6px;border-radius:10px;min-width:18px;text-align:center}
 .pulse{animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,0,64,0.7)}50%{box-shadow:0 0 0 8px rgba(255,0,64,0)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,0,64,0.7)}50%{box-shadow:0 0 0 8px rgba(255,0,64,0)}}
 .container{max-width:1200px;margin:0 auto;padding:20px}
 .section{display:none}
 .section.active{display:block}
@@ -319,4 +319,369 @@ function init(){
 function login(){
   const u=document.getElementById('username').value;
   const p=document.getElementById('password').value;
-  if(u==='deeve'&&
+  if(u==='deeve'&&p==='paindeal2026'){
+    localStorage.setItem('boardroom_session','1');
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('loginError').classList.add('hidden');
+    loadData();
+  }else{
+    document.getElementById('loginError').classList.remove('hidden');
+  }
+}
+
+function logout(){
+  localStorage.removeItem('boardroom_session');
+  location.reload();
+}
+
+function showSection(s){
+  document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(el=>el.classList.remove('active'));
+  document.getElementById(s).classList.add('active');
+  event.target.classList.add('active');
+  if(s==='deal')markRead('deal');
+  if(s==='pain')markRead('pain');
+  if(s==='messages')markRead('msg');
+  updateAlerts();
+}
+
+function toggleMulti(id){
+  document.getElementById(id).classList.toggle('show');
+}
+
+function getMultiValues(id){
+  return Array.from(document.querySelectorAll(`#${id} input:checked`)).map(i=>i.value);
+}
+
+function saveProfile(){
+  const profile={
+    id:Date.now(),
+    company:document.getElementById('pCompany').value,
+    name:document.getElementById('pName').value,
+    title:document.getElementById('pTitle').value,
+    phone:document.getElementById('pPhone').value,
+    email:document.getElementById('pEmail').value,
+    homeState:document.getElementById('pHomeState').value,
+    states:getMultiValues('pStates'),
+    profTypes:getMultiValues('pProf'),
+    dealProfs:getMultiValues('pDealProf'),
+    buyBox:document.getElementById('pBuyBox').value
+  };
+  members=members.filter(m=>m.name!==profile.name);
+  members.push(profile);
+  localStorage.setItem('boardroom_members',JSON.stringify(members));
+  currentUser=profile;
+  renderProfilePreview();
+  renderMembers();
+  updateStats();
+  alert('PROFILE SAVED');
+}
+
+function loadProfile(){
+  const saved=localStorage.getItem('boardroom_members');
+  if(saved){
+    members=JSON.parse(saved);
+    if(members.length>0){
+      currentUser=members[0];
+      document.getElementById('pCompany').value=currentUser.company||'';
+      document.getElementById('pName').value=currentUser.name||'';
+      document.getElementById('pTitle').value=currentUser.title||'';
+      document.getElementById('pPhone').value=currentUser.phone||'';
+      document.getElementById('pEmail').value=currentUser.email||'';
+      document.getElementById('pHomeState').value=currentUser.homeState||'';
+      document.getElementById('pBuyBox').value=currentUser.buyBox||'';
+      renderProfilePreview();
+    }
+  }
+}
+
+function renderProfilePreview(){
+  if(!currentUser)return;
+  const html=`
+    <div style="border:1px solid #A000FF;padding:16px">
+      <div style="font-size:16px;color:#A000FF;margin-bottom:8px">${currentUser.name||'NAME'}</div>
+      <div style="font-size:12px;color:#888;margin-bottom:12px">${currentUser.company||'COMPANY'} // ${currentUser.title||'TITLE'}</div>
+      <div style="margin:8px 0"><span class="badge badge-home">FROM: ${currentUser.homeState||'N/A'}</span></div>
+      <div style="margin:8px 0">${(currentUser.states||[]).map(s=>`<span class="badge badge-operate">${s}</span>`).join('')}</div>
+      <div style="margin:8px 0">${(currentUser.profTypes||[]).map(p=>`<span class="badge badge-prof">${p}</span>`).join('')}</div>
+      <div style="margin:8px 0">${(currentUser.dealProfs||[]).map(p=>`<span class="badge badge-deal">${p}</span>`).join('')}</div>
+      <div style="font-size:10px;color:#666;margin-top:12px;border-top:1px solid #222;padding-top:8px">${currentUser.buyBox||'No buy box'}</div>
+    </div>
+  `;
+  document.getElementById('profilePreview').innerHTML=html;
+}
+
+function setMemberFilter(type){
+  memberFilter=type;
+  filterMembers();
+}
+
+function filterMembers(){
+  const state=document.getElementById('memberState').value;
+  const search=document.getElementById('memberSearch').value.toLowerCase();
+  let filtered=members;
+  if(state){
+    if(memberFilter==='home'){
+      filtered=filtered.filter(m=>m.homeState===state);
+    }else{
+      filtered=filtered.filter(m=>(m.states||[]).includes(state));
+    }
+  }
+  if(search){
+    filtered=filtered.filter(m=>(m.name||'').toLowerCase().includes(search)||(m.company||'').toLowerCase().includes(search));
+  }
+  renderMembersGrid(filtered);
+}
+
+function renderMembers(){
+  renderMembersGrid(members);
+}
+
+function renderMembersGrid(list){
+  const html=list.map(m=>`
+    <div class="lead-card">
+      <div style="font-size:14px;color:#0080FF;margin-bottom:8px">${m.name}</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px">${m.company} // ${m.title}</div>
+      <div style="margin:8px 0"><span class="badge badge-home">FROM: ${m.homeState}</span></div>
+      <div style="margin:8px 0">${(m.states||[]).map(s=>`<span class="badge badge-operate">${s}</span>`).join('')}</div>
+      <div style="margin:8px 0">${(m.profTypes||[]).slice(0,3).map(p=>`<span class="badge badge-prof">${p}</span>`).join('')}</div>
+      <div style="font-size:10px;color:#666;margin-top:8px;border-top:1px solid #222;padding-top:8px">${(m.buyBox||'').substring(0,100)}...</div>
+      <button class="btn-members" style="width:100%;margin-top:8px" onclick="alert('Phone: ${m.phone}\\nEmail: ${m.email}')">CONTACT</button>
+    </div>
+  `).join('');
+  document.getElementById('membersGrid').innerHTML=html||'<div style="color:#666;text-align:center;padding:40px">No members found</div>';
+}
+
+function setPropertyType(type,prop){
+  propertyTypes[type]=prop;
+  document.querySelectorAll(`#${type}.toggle-group button`).forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function submitLead(type){
+  const lead={
+    id:Date.now(),
+    addr:document.getElementById(type+'Addr').value,
+    city:document.getElementById(type+'City').value,
+    state:document.getElementById(type+'State').value,
+    zip:document.getElementById(type+'Zip').value,
+    propType:propertyTypes[type],
+    submitter:currentUser,
+    timestamp:Date.now()
+  };
+  if(type==='pain'){
+    painLeads.push(lead);
+    localStorage.setItem('boardroom_pain',JSON.stringify(painLeads));
+    addMessage('pain',`New PAIN lead: ${lead.addr}, ${lead.city}, ${lead.state}`,lead);
+    showBanner('pain');
+    pulseAlert('pain');
+  }else{
+    dealLeads.push(lead);
+    localStorage.setItem('boardroom_deal',JSON.stringify(dealLeads));
+    addMessage('deal',`New DEAL: ${lead.addr}, ${lead.city}, ${lead.state}`,lead);
+    showBanner('deal');
+    pulseAlert('deal');
+  }
+  alert('SUBMITTED');
+  loadData();
+}
+
+function loadData(){
+  const p=localStorage.getItem('boardroom_pain');
+  const d=localStorage.getItem('boardroom_deal');
+  const dm=localStorage.getItem('boardroom_deal_msg');
+  const pm=localStorage.getItem('boardroom_pain_msg');
+  const sm=localStorage.getItem('boardroom_saved_msg');
+  if(p)painLeads=JSON.parse(p);
+  if(d)dealLeads=JSON.parse(d);
+  if(dm)dealMessages=JSON.parse(dm);
+  if(pm)painMessages=JSON.parse(pm);
+  if(sm)savedMessages=JSON.parse(sm);
+  renderRooms();
+  renderMessages();
+  updateStats();
+  updateAlerts();
+}
+
+function renderRooms(){
+  document.getElementById('painRoom').innerHTML=painLeads.map(l=>`
+    <div class="lead-card" data-theme="pain">
+      <div class="type">${l.propType.toUpperCase()}</div>
+      <div class="addr">${l.addr}, ${l.city}, ${l.state}</div>
+      <div class="profile-mini">Submitted by: ${l.submitter?.name||'Unknown'}<br>FROM: ${l.submitter?.homeState||'N/A'}</div>
+    </div>
+  `).join('');
+  document.getElementById('dealRoom').innerHTML=dealLeads.map(l=>`
+    <div class="lead-card" data-theme="deal">
+      <div class="type">${l.propType.toUpperCase()}</div>
+      <div class="addr">${l.addr}, ${l.city}, ${l.state}</div>
+      <div class="profile-mini">Submitted by: ${l.submitter?.name||'Unknown'}<br>FROM: ${l.submitter?.homeState||'N/A'}</div>
+    </div>
+  `).join('');
+}
+
+function addMessage(type,text,lead){
+  const msg={
+    id:Date.now(),
+    type:type,
+    text:text,
+    lead:lead,
+    timestamp:Date.now(),
+    read:false,
+    saved:false
+  };
+  if(type==='deal'){
+    dealMessages.unshift(msg);
+    localStorage.setItem('boardroom_deal_msg',JSON.stringify(dealMessages));
+  }else{
+    painMessages.unshift(msg);
+    localStorage.setItem('boardroom_pain_msg',JSON.stringify(painMessages));
+  }
+  updateAlerts();
+}
+
+function renderMessages(){
+  renderMsgList('deal',dealMessages);
+  renderMsgList('pain',painMessages);
+  renderMsgList('saved',savedMessages);
+}
+
+function renderMsgList(type,list){
+  const html=list.map(m=>`
+    <div class="message-card ${m.read?'':'unread'} ${m.read?'':'pulse'}" data-id="${m.id}">
+      <div class="header">
+        <span>${new Date(m.timestamp).toLocaleString()}</span>
+        <span>${m.type.toUpperCase()}</span>
+      </div>
+      <div class="body">${m.text}</div>
+      <div class="actions">
+        <button class="btn-save" onclick="saveMessage(${m.id},'${type}')">SAVE</button>
+        <button class="btn-danger" onclick="deleteMessage(${m.id},'${type}')">DELETE</button>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById(type+'Messages').innerHTML=html||'<div style="color:#666;text-align:center;padding:40px">No messages</div>';
+}
+
+function saveMessage(id,type){
+  let list=type==='deal'?dealMessages:type==='pain'?painMessages:savedMessages;
+  const idx=list.findIndex(m=>m.id===id);
+  if(idx>-1){
+    const msg={...list[idx]};
+    msg.saved=true;
+    msg.read=true;
+    savedMessages.unshift(msg);
+    list.splice(idx,1);
+    localStorage.setItem('boardroom_saved_msg',JSON.stringify(savedMessages));
+    localStorage.setItem('    localStorage.setItem('boardroom_saved_msg',JSON.stringify(savedMessages));
+    localStorage.setItem(type==='deal'?'boardroom_deal_msg':'boardroom_pain_msg',JSON.stringify(list));
+    renderMessages();
+    updateAlerts();
+  }
+}
+
+function deleteMessage(id,type){
+  let list=type==='deal'?dealMessages:type==='pain'?painMessages:savedMessages;
+  const idx=list.findIndex(m=>m.id===id);
+  if(idx>-1){
+    list.splice(idx,1);
+    localStorage.setItem(type==='deal'?'boardroom_deal_msg':type==='pain'?'boardroom_pain_msg':'boardroom_saved_msg',JSON.stringify(list));
+    renderMessages();
+    updateAlerts();
+  }
+}
+
+function markRead(type){
+  if(type==='deal'){
+    dealMessages.forEach(m=>m.read=true);
+    localStorage.setItem('boardroom_deal_msg',JSON.stringify(dealMessages));
+  }else if(type==='pain'){
+    painMessages.forEach(m=>m.read=true);
+    localStorage.setItem('boardroom_pain_msg',JSON.stringify(painMessages));
+  }
+  updateAlerts();
+}
+
+function showMsgTab(tab){
+  currentMsgTab=tab;
+  document.querySelectorAll('.msg-container').forEach(el=>el.classList.add('hidden'));
+  document.querySelectorAll('.toggle-group button').forEach(el=>el.classList.remove('active'));
+  document.getElementById(tab+'Messages').classList.remove('hidden');
+  event.target.classList.add('active');
+  markRead(tab);
+}
+
+function pulseAlert(type){
+  if(type==='deal'){
+    document.getElementById('dealNavBtn').classList.add('pulse');
+    document.getElementById('statDealCard').classList.add('pulse');
+    document.getElementById('dealBanner').classList.remove('hidden');
+    document.getElementById('signalBar').textContent='SIGNAL: NEW DEAL ACTIVITY';
+    setTimeout(()=>{
+      document.getElementById('dealBanner').classList.add('hidden');
+    },3000);
+  }else{
+    document.getElementById('painNavBtn').classList.add('pulse');
+    document.getElementById('statPainCard').classList.add('pulse');
+    document.getElementById('painBanner').classList.remove('hidden');
+    document.getElementById('signalBar').textContent='SIGNAL: NEW PAIN LEAD';
+    setTimeout(()=>{
+      document.getElementById('painBanner').classList.add('hidden');
+    },3000);
+  }
+}
+
+function updateAlerts(){
+  const dealUnread=dealMessages.filter(m=>!m.read).length;
+  const painUnread=painMessages.filter(m=>!m.read).length;
+  const msgUnread=dealUnread+painUnread;
+  
+  document.getElementById('dealCount').textContent=dealUnread;
+  document.getElementById('dealCount').classList.toggle('hidden',dealUnread===0);
+  document.getElementById('dealNavBtn').classList.toggle('pulse',dealUnread>0);
+  document.getElementById('statDealCard').classList.toggle('pulse',dealUnread>0);
+  document.getElementById('dealMsgCount').textContent=dealUnread?`(${dealUnread})`:'';
+  
+  document.getElementById('painCount').textContent=painUnread;
+  document.getElementById('painCount').classList.toggle('hidden',painUnread===0);
+  document.getElementById('painNavBtn').classList.toggle('pulse',painUnread>0);
+  document.getElementById('statPainCard').classList.toggle('pulse',painUnread>0);
+  document.getElementById('painMsgCount').textContent=painUnread?`(${painUnread})`:'';
+  
+  document.getElementById('msgCount').textContent=msgUnread;
+  document.getElementById('msgCount').classList.toggle('hidden',msgUnread===0);
+  document.getElementById('statMsg').textContent=msgUnread;
+  document.getElementById('statMsgCard').classList.toggle('pulse',msgUnread>0);
+  
+  document.getElementById('savedMsgCount').textContent=savedMessages.length?`(${savedMessages.length})`:'';
+  
+  if(msgUnread===0){
+    document.getElementById('signalBar').textContent='SIGNAL: AWAITING ACTIVITY';
+  }
+}
+
+function scrapeBuyers(){
+  const addr=document.getElementById('scrapeAddr').value;
+  const state=addr.split(',').pop()?.trim().substring(0,2).toUpperCase();
+  const matches=members.filter(m=>(m.states||[]).includes(state));
+  const html=matches.length?matches.slice(0,3).map(m=>`
+    <div style="border:1px solid #00FFFF;padding:12px;margin:8px 0">
+      <div style="color:#00FFFF">${m.name} - ${m.company}</div>
+      <div style="font-size:10px;color:#888">FROM: ${m.homeState} // OPERATES: ${(m.states||[]).join(', ')}</div>
+      <div style="font-size:10px;margin-top:4px">${m.phone} | ${m.email}</div>
+    </div>
+  `).join(''):'<div style="color:#666">No matches found</div>';
+  document.getElementById('scrapeResults').innerHTML=html;
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.multiselect')){
+    document.querySelectorAll('.multiselect-dropdown').forEach(d=>d.classList.remove('show'));
+  }
+});
+
+init();
+</script>
+</body>
+</html>
