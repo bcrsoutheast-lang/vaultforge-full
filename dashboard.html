@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BOARDROOM PARTNERS // VAULTFORGE</title>
+<title>BOARDROOM PARTNERS // VAULTFORGE AUTO</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Courier New',monospace}
 body{background:#0A0A0A;color:#fff;min-height:100vh}
@@ -41,6 +41,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .banner-pain{border-color:#FFB000;background:rgba(255,176,0,0.1);color:#FFB000}
 .banner-signal{border-color:#00FFFF;background:rgba(0,255,255,0.1);color:#00FFFF}
 .banner-comps{border-color:#A000FF;background:rgba(160,0,255,0.1);color:#A000FF}
+.banner-auto{border-color:#00FF41;background:rgba(0,255,65,0.2);color:#00FF41;animation:pulse 1s 3}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:20px}
 .card{background:#111;border:1px solid #222;padding:16px;position:relative}
 .card h3{font-size:14px;margin-bottom:12px}
@@ -64,6 +65,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .badge-prof{background:#A000FF;border-color:#A000FF;color:#000}
 .badge-deal{background:#00FFFF;border-color:#00FFFF;color:#000}
 .badge-comp{background:#FFB000;border-color:#FFB000;color:#000}
+.badge-auto{background:#00FF41;border-color:#00FF41;color:#000}
 .btn-primary{background:#FFB000;color:#000;border:none;padding:10px 20px;font-weight:700}
 .btn-deal{background:#00FF41;color:#000}
 .btn-profile{background:#A000FF;color:#000}
@@ -92,6 +94,9 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .lead-card.comps-box h4{color:#A000FF;font-size:10px;margin-bottom:6px;display:flex;justify-content:space-between}
 .lead-card.comps-box .comp-mini{font-size:9px;color:#888;margin:3px 0}
 .lead-card.comps-box .arv{color:#FFB000;font-weight:700;margin-top:6px;border-top:1px solid #222;padding-top:6px}
+.lead-card.auto-box{border:1px solid #00FF41;margin-top:8px;padding:8px;background:rgba(0,255,65,0.05)}
+.lead-card.auto-box h4{color:#00FF41;font-size:10px;margin-bottom:6px}
+.lead-card.auto-box .auto-line{font-size:9px;color:#00FF41;margin:3px 0}
 .comp-card{background:#111;border:1px solid #A000FF;padding:10px;margin:8px 0;font-size:11px}
 .comp-card.header{display:flex;justify-content:space-between;margin-bottom:6px}
 .comp-card.addr{color:#A000FF;font-weight:700}
@@ -100,6 +105,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .message-card{background:#111;border:1px solid #333;padding:12px;margin-bottom:12px;position:relative}
 .message-card.unread{border-color:#FF0040}
 .message-card.unread.pulse{animation:pulse 1.5s infinite}
+.message-card.auto{border-color:#00FF41;background:rgba(0,255,65,0.05)}
 .message-card.header{font-size:11px;color:#888;margin-bottom:8px;display:flex;justify-content:space-between}
 .message-card.body{font-size:12px;margin-bottom:8px}
 .message-card.actions{display:flex;gap:8px}
@@ -122,7 +128,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 
 <!-- LOGIN -->
 <div id="loginScreen" class="login-wrap">
-  <div class="header"><h1>BOARDROOM PARTNERS</h1><p>VAULTFORGE COMPS ENGINE</p></div>
+  <div class="header"><h1>BOARDROOM PARTNERS</h1><p>VAULTFORGE AUTO</p></div>
   <h2>LOGIN</h2>
   <input type="text" id="username" placeholder="username" autocomplete="off" autocapitalize="none" autocorrect="off" style="text-transform:none">
   <input type="password" id="password" placeholder="password" autocomplete="off">
@@ -147,16 +153,21 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
   <div class="container">
     <!-- DASHBOARD -->
     <div id="dashboard" class="section active">
-      <div class="signal-bar" id="signalBar">SIGNAL: VAULTFORGE ACTIVE - LIVE MARKET COMPS ENABLED</div>
-      <div class="banner banner-deal hidden" id="dealBanner">NEW DEAL SUBMITTED - LIVE COMPS ATTACHED</div>
-      <div class="banner banner-pain hidden" id="painBanner">NEW PAIN LEAD - LIVE COMPS ATTACHED</div>
+      <div class="signal-bar" id="signalBar">SIGNAL: VAULTFORGE AUTO - ZERO CLICKS REQUIRED</div>
+      <div class="banner banner-auto hidden" id="autoBanner">AUTO-BLAST: 12 BUYERS MATCHED + SMS COPIED</div>
+      <div class="banner banner-deal hidden" id="dealBanner">NEW DEAL SUBMITTED - AUTO-EXECUTED</div>
+      <div class="banner banner-pain hidden" id="painBanner">NEW PAIN LEAD - AUTO-EXECUTED</div>
       <div class="banner banner-comps hidden" id="compsBanner">COMPS FOUND IN DATABASE</div>
-      <h2 style="color:#FFB000;margin-bottom:20px">DASHBOARD</h2>
+      <h2 style="color:#FFB000;margin-bottom:20px">DASHBOARD // FULL AUTO</h2>
       <div class="stats">
         <div class="stat" id="statPainCard"><div class="num" id="statPain">0</div><div class="label">PAIN Leads</div></div>
         <div class="stat" id="statDealCard"><div class="num" id="statDeal">0</div><div class="label">DEAL Leads</div></div>
         <div class="stat"><div class="num" id="statMembers">0</div><div class="label">Members</div></div>
         <div class="stat" id="statCompsCard"><div class="num" id="statComps">0</div><div class="label">Sold Comps</div></div>
+      </div>
+      <div class="card" data-theme="vault" style="margin-top:20px">
+        <h3>ZIP VELOCITY HEAT MAP</h3>
+        <div id="velocityGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:12px"></div>
       </div>
     </div>
 
@@ -221,7 +232,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 
     <!-- PAIN -->
     <div id="pain" class="section">
-      <h2 style="color:#FFB000;margin-bottom:20px">PAIN INTAKE FORM // LIVE COMPS ON</h2>
+      <h2 style="color:#FFB000;margin-bottom:20px">PAIN INTAKE // FULL AUTO MODE</h2>
       <div class="card" data-theme="pain">
         <div class="toggle-group" data-theme="pain">
           <button class="active" onclick="setPropertyType('pain','residential')">RESIDENTIAL</button>
@@ -240,7 +251,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
           <div><label>SqFt *</label><input type="number" id="painSqft"></div>
           <div><label>Bed/Bath</label><input type="text" id="painBedBath" placeholder="3/2"></div>
         </div>
-        <button class="btn-primary" style="width:100%;margin-top:16px" onclick="submitLead('pain')">SUBMIT PAIN + AUTO-PULL LIVE COMPS</button>
+        <button class="btn-primary" style="width:100%;margin-top:16px" onclick="submitLead('pain')">SUBMIT // AUTO: COMPS + MATCH + VELOCITY + BLAST</button>
       </div>
       <h3 style="color:#FFB000;margin-top:30px">PAIN ROOM</h3>
       <div class="room-grid" id="painRoom"></div>
@@ -248,7 +259,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 
     <!-- DEAL -->
     <div id="deal" class="section">
-      <h2 style="color:#00FF41;margin-bottom:20px">DEAL INTAKE FORM // LIVE COMPS ON</h2>
+      <h2 style="color:#00FF41;margin-bottom:20px">DEAL INTAKE // FULL AUTO MODE</h2>
       <div class="card" data-theme="deal">
         <div class="toggle-group" data-theme="deal">
           <button class="active" onclick="setPropertyType('deal','residential')">RESIDENTIAL</button>
@@ -267,7 +278,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
           <div><label>SqFt *</label><input type="number" id="dealSqft"></div>
           <div><label>Bed/Bath</label><input type="text" id="dealBedBath" placeholder="3/2"></div>
         </div>
-        <button class="btn-primary btn-deal" style="width:100%;margin-top:16px" onclick="submitLead('deal')">SUBMIT DEAL + AUTO-PULL LIVE COMPS</button>
+        <button class="btn-primary btn-deal" style="width:100%;margin-top:16px" onclick="submitLead('deal')">SUBMIT // AUTO: COMPS + MATCH + VELOCITY + BLAST</button>
       </div>
       <h3 style="color:#00FF41;margin-top:30px">DEAL ROOM</h3>
       <div class="room-grid" id="dealRoom"></div>
@@ -275,7 +286,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 
     <!-- MESSAGES -->
     <div id="messages" class="section">
-      <h2 style="color:#00FFFF;margin-bottom:20px">MESSAGES</h2>
+      <h2 style="color:#00FFFF;margin-bottom:20px">MESSAGES // AUTO-BLASTS</h2>
       <div class="toggle-group">
         <button class="active" onclick="showMsgTab('deal')" id="dealMsgTab">DEAL MESSAGES <span id="dealMsgCount"></span></button>
         <button onclick="showMsgTab('pain')" id="painMsgTab">PAIN MESSAGES <span id="painMsgCount"></span></button>
@@ -350,7 +361,7 @@ let memberFilter = 'home';
 let propertyTypes = {pain:'residential',deal:'residential'};
 let currentMsgTab = 'deal';
 let currentSoldLead = null;
-let compsMode = 'live'; // 'live' or 'sold'
+let compsMode = 'live';
 
 function init(){
   if(localStorage.getItem('boardroom_session')){
@@ -378,6 +389,7 @@ function init(){
   renderMembers();
   updateStats();
   updateAlerts();
+  renderVelocityMap();
 }
 
 function login(){
@@ -408,6 +420,7 @@ function showSection(s){
   if(s==='pain')markRead('pain');
   if(s==='messages')markRead('msg');
   if(s==='comps')renderComps();
+  if(s==='dashboard')renderVelocityMap();
   updateAlerts();
 }
 
@@ -520,14 +533,13 @@ function renderMembersGrid(list){
 
 function setPropertyType(type,prop){
   propertyTypes[type]=prop;
-  document.querySelectorAll(`#${type}.toggle-group button`).forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll(`#${type} .toggle-group button`).forEach(b=>b.classList.remove('active'));
   event.target.classList.add('active');
 }
 
 function getAutoComps(zip,sqft,mode){
   if(!zip ||!sqft) return {comps:[],avgSqft:0,estARV:0,mao70:0};
   
-  // 1. SOLD COMPS - 100% weight
   const soldMatches = soldComps.filter(c=>{
     const zipMatch = c.zip === zip;
     const sqftMatch = Math.abs(c.sqft - sqft) < (sqft * 0.2);
@@ -537,7 +549,6 @@ function getAutoComps(zip,sqft,mode){
   
   let allMatches = [...soldMatches];
   
-  // 2. LIVE MARKET - only if mode==='live'
   if(mode==='live'){
     const activeDeals = dealLeads.filter(d=>{
       const zipMatch = d.zip === zip;
@@ -566,6 +577,29 @@ function getAutoComps(zip,sqft,mode){
   return {comps:allMatches,avgSqft,estARV,mao70,mode:mode};
 }
 
+function getZipVelocity(zip){
+  const now = Date.now();
+  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+  const deals = dealLeads.filter(d=>d.zip===zip && (now-d.timestamp)<thirtyDays).length;
+  const sold = soldComps.filter(c=>c.zip===zip && (now-c.soldDate)<thirtyDays).length;
+  const buyers = members.filter(m=>(m.states||[]).some(s=>zip.startsWith(s.substring(0,2)))).length;
+  const score = Math.min(10,Math.round((deals*2)+(sold*3)+(buyers*0.2)));
+  return score;
+}
+
+function renderVelocityMap(){
+  const zips = [...new Set([...dealLeads.map(d=>d.zip),...painLeads.map(p=>p.zip),...soldComps.map(c=>c.zip)])];
+  const html = zips.map(zip=>{
+    const score = getZipVelocity(zip);
+    const color = score>=8?'#00FF41':score>=5?'#FFB000':'#666';
+    return `<div style="border:1px solid ${color};padding:8px;text-align:center;font-size:10px">
+      <div style="color:${color};font-weight:700">${zip}</div>
+      <div style="color:${color}">🔥 ${score}/10</div>
+    </div>`;
+  }).join('');
+  document.getElementById('velocityGrid').innerHTML = html||'<div style="color:#666;text-align:center;padding:20px">No zip activity yet</div>';
+}
+
 function submitLead(type){
   const addr=document.getElementById(type+'Addr').value;
   const city=document.getElementById(type+'City').value;
@@ -580,6 +614,12 @@ function submitLead(type){
   }
   
   const autoComps = getAutoComps(zip,sqft,compsMode);
+  const velocity = getZipVelocity(zip);
+  
+  const matchingBuyers = members.filter(m=>{
+    const stateMatch = (m.states||[]).includes(state);
+    return stateMatch;
+  });
   
   const lead={
     id:Date.now(),
@@ -597,31 +637,36 @@ function submitLead(type){
     avgSqft:autoComps.avgSqft,
     estARV:autoComps.estARV,
     mao70:autoComps.mao70,
-    compsMode:compsMode
+    compsMode:compsMode,
+    buyerCount:matchingBuyers.length,
+    velocity:velocity
   };
   
   if(type==='pain'){
     painLeads.push(lead);
     localStorage.setItem('boardroom_pain',JSON.stringify(painLeads));
-    addMessage('pain',`New PAIN: ${lead.addr}, ${lead.city} - ARV: $${lead.estARV.toLocaleString()} [${compsMode.toUpperCase()} COMPS]`,lead);
+    addMessage('pain',`New PAIN: ${lead.addr}, ${lead.city} - ARV: $${lead.estARV.toLocaleString()} [${compsMode.toUpperCase()}]`,lead);
     showBanner('pain');
     pulseAlert('pain');
   }else{
     dealLeads.push(lead);
     localStorage.setItem('boardroom_deal',JSON.stringify(dealLeads));
-    addMessage('deal',`New DEAL: ${lead.addr}, ${lead.city} - ARV: $${lead.estARV.toLocaleString()} [${compsMode.toUpperCase()} COMPS]`,lead);
+    addMessage('deal',`New DEAL: ${lead.addr}, ${lead.city} - ARV: $${lead.estARV.toLocaleString()} [${compsMode.toUpperCase()}]`,lead);
     showBanner('deal');
     pulseAlert('deal');
   }
   
-  if(autoComps.comps.length>0){
-    document.getElementById('compsBanner').classList.remove('hidden');
-    document.getElementById('compsBanner').textContent = `${compsMode.toUpperCase()} COMPS: ${autoComps.comps.length} FOUND - ARV: $${autoComps.estARV.toLocaleString()}`;
-    document.getElementById('signalBar').textContent = `SIGNAL: ${compsMode.toUpperCase()} COMPS AUTO-ATTACHED`;
-    setTimeout(()=>document.getElementById('compsBanner').classList.add('hidden'),4000);
+  const smsText = `${currentUser?.name||'Deeve'} // OFF MARKET: ${lead.addr} ${lead.city} ${lead.state} // ${lead.bedBath||''} ${lead.sqft}sqft // ARV $${lead.estARV.toLocaleString()} // MAO $${lead.mao70.toLocaleString()} // ${lead.buyerCount} buyers matched // Velocity ${velocity}/10 // Reply YES for photos`;
+  navigator.clipboard.writeText(smsText);
+  
+  if(autoComps.comps.length>0||matchingBuyers.length>0){
+    document.getElementById('autoBanner').classList.remove('hidden');
+    document.getElementById('autoBanner').textContent = `AUTO-BLAST: ${matchingBuyers.length} BUYERS MATCHED + SMS COPIED + VELOCITY ${velocity}/10`;
+    addMessage(type,`AUTO-BLAST: ${lead.addr} - ${matchingBuyers.length} buyers matched - Velocity ${velocity}/10 - SMS copied to clipboard`,lead,true);
+    setTimeout(()=>document.getElementById('autoBanner').classList.add('hidden'),5000);
   }
   
-  alert(`SUBMITTED WITH ${autoComps.comps.length} ${compsMode.toUpperCase()} COMPS`);
+  alert(`SUBMITTED // ${autoComps.comps.length} ${compsMode.toUpperCase()} COMPS // ${matchingBuyers.length} BUYERS // SMS COPIED`);
   loadData();
 }
 
@@ -658,6 +703,7 @@ function loadData(){
   renderComps();
   updateStats();
   updateAlerts();
+  renderVelocityMap();
 }
 
 function renderRooms(){
@@ -682,6 +728,12 @@ function renderRooms(){
           <div class="arv">ARV: $${l.estARV.toLocaleString()} | MAO: $${l.mao70.toLocaleString()}</div>
         </div>
       `:`<div class="comps-box"><h4>NO COMPS FOUND</h4></div>`}
+      <div class="auto-box">
+        <h4>AUTO INTEL</h4>
+        <div class="auto-line">🎯 ${l.buyerCount||0} BUYERS MATCHED</div>
+        <div class="auto-line">⚡ VELOCITY: ${l.velocity||0}/10</div>
+        <div class="auto-line">📱 SMS READY</div>
+      </div>
       <div class="profile-mini">Submitted by: ${l.submitter?.name||'Unknown'}<br>FROM: ${l.submitter?.homeState||'N/A'}<br>Company: ${l.submitter?.company||'N/A'}<br>Title: ${l.submitter?.title||'N/A'}</div>
       <div class="actions">
         <button class="btn-sold" onclick="openSoldModal(${l.id},'pain')">MARK SOLD</button>
@@ -709,6 +761,12 @@ function renderRooms(){
           <div class="arv">ARV: $${l.estARV.toLocaleString()} | MAO: $${l.mao70.toLocaleString()}</div>
         </div>
       `:`<div class="comps-box"><h4>NO COMPS FOUND</h4></div>`}
+      <div class="auto-box">
+        <h4>AUTO INTEL</h4>
+        <div class="auto-line">🎯 ${l.buyerCount||0} BUYERS MATCHED</div>
+        <div class="auto-line">⚡ VELOCITY: ${l.velocity||0}/10</div>
+        <div class="auto-line">📱 SMS READY</div>
+      </div>
       <div class="profile-mini">Submitted by: ${l.submitter?.name||'Unknown'}<br>FROM: ${l.submitter?.homeState||'N/A'}<br>Company: ${l.submitter?.company||'N/A'}<br>Title: ${l.submitter?.title||'N/A'}</div>
       <div class="actions">
         <button class="btn-sold" onclick="openSoldModal(${l.id},'deal')">MARK SOLD</button>
@@ -806,7 +864,7 @@ function filterComps(){
   document.getElementById('compsGrid').innerHTML = html||'<div style="color:#666;text-align:center;padding:40px">No comps match filter</div>';
 }
 
-function addMessage(type,text,lead){
+function addMessage(type,text,lead,isAuto=false){
   const msg={
     id:Date.now(),
     type:type,
@@ -814,7 +872,8 @@ function addMessage(type,text,lead){
     lead:lead,
     timestamp:Date.now(),
     read:false,
-    saved:false
+    saved:false,
+    auto:isAuto
   };
   if(type==='deal'){
     dealMessages.unshift(msg);
@@ -834,10 +893,10 @@ function renderMessages(){
 
 function renderMsgList(type,list){
   const html=list.map(m=>`
-    <div class="message-card ${m.read?'':'unread'} ${m.read?'':'pulse'}" data-id="${m.id}">
+    <div class="message-card ${m.read?'':'unread'} ${m.read?'':'pulse'} ${m.auto?'auto':''}" data-id="${m.id}">
       <div class="header">
         <span>${new Date(m.timestamp).toLocaleString()}</span>
-        <span>${m.type.toUpperCase()}</span>
+        <span>${m.auto?'AUTO-BLAST':m.type.toUpperCase()}</span>
       </div>
       <div class="body">${m.text}</div>
       <div class="actions">
@@ -901,7 +960,7 @@ function pulseAlert(type){
     document.getElementById('dealNavBtn').classList.add('pulse');
     document.getElementById('statDealCard').classList.add('pulse');
     document.getElementById('dealBanner').classList.remove('hidden');
-    document.getElementById('signalBar').textContent='SIGNAL: NEW DEAL + LIVE COMPS ATTACHED';
+    document.getElementById('signalBar').textContent='SIGNAL: NEW DEAL + AUTO-EXECUTED';
     setTimeout(()=>{
       document.getElementById('dealBanner').classList.add('hidden');
     },3000);
@@ -909,7 +968,7 @@ function pulseAlert(type){
     document.getElementById('painNavBtn').classList.add('pulse');
     document.getElementById('statPainCard').classList.add('pulse');
     document.getElementById('painBanner').classList.remove('hidden');
-    document.getElementById('signalBar').textContent='SIGNAL: NEW PAIN + LIVE COMPS ATTACHED';
+    document.getElementById('signalBar').textContent='SIGNAL: NEW PAIN + AUTO-EXECUTED';
     setTimeout(()=>{
       document.getElementById('painBanner').classList.add('hidden');
     },3000);
@@ -946,7 +1005,7 @@ function updateAlerts(){
   document.getElementById('statComps').textContent=soldComps.length;
   
   if(msgUnread===0){
-    document.getElementById('signalBar').textContent='SIGNAL: VAULTFORGE ACTIVE - LIVE MARKET COMPS ENABLED';
+    document.getElementById('signalBar').textContent='SIGNAL: VAULTFORGE AUTO - ZERO CLICKS REQUIRED';
   }
 }
 
