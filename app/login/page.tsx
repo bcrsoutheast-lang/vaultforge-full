@@ -14,7 +14,7 @@ export default function LoginPage() {
     // Change these to whatever you want
     if (username === 'admin' && password === 'vault2024') {
       // Send them to dashboard after login
-      window.location.href = '/dashboard.html'
+      window.location.replace('/dashboard.html')
     } else {
       setError('Invalid username or password')
     }
