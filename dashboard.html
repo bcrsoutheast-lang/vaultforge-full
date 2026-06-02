@@ -22,24 +22,33 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .login-wrap button{width:100%;background:#FFB000;color:#000;border:none;padding:12px}
 .error{color:#FF0040;font-size:11px;margin-top:8px;text-align:center}
 .nav{background:#111;border-bottom:1px solid #222;display:flex;gap:1px;overflow-x:auto}
-.nav button{flex:1;background:#0A0A0A;border:none;padding:16px;font-size:11px;border-bottom:2px solid transparent}
+.nav button{flex:1;background:#0A0A0A;border:none;padding:16px;font-size:11px;border-bottom:2px solid transparent;position:relative}
 .nav button.active{border-bottom-color:#FFB000;color:#FFB000}
-.nav button[data-theme="pain"].active{border-bottom-color:#FFB000;color:#FFB000}
 .nav button[data-theme="deal"].active{border-bottom-color:#00FF41;color:#00FF41}
 .nav button[data-theme="profile"].active{border-bottom-color:#A000FF;color:#A000FF}
 .nav button[data-theme="members"].active{border-bottom-color:#0080FF;color:#0080FF}
 .nav button[data-theme="vault"].active{border-bottom-color:#00FFFF;color:#00FFFF}
 .nav button[data-theme="logout"]{color:#FF0040}
+.badge-count{position:absolute;top:8px;right:8px;background:#FF0040;color:#000;font-size:10px;padding:2px 6px;border-radius:10px;min-width:18px;text-align:center}
+.pulse{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,0,64,0.7)}50%{box-shadow:0 0 0 8px rgba(255,0,64,0)}
 .container{max-width:1200px;margin:0 auto;padding:20px}
 .section{display:none}
 .section.active{display:block}
+.banner{padding:12px;margin-bottom:16px;border-left:4px solid;font-size:12px;text-transform:uppercase}
+.banner-deal{border-color:#00FF41;background:rgba(0,255,65,0.1);color:#00FF41}
+.banner-pain{border-color:#FFB000;background:rgba(255,176,0,0.1);color:#FFB000}
+.banner-signal{border-color:#00FFFF;background:rgba(0,255,255,0.1);color:#00FFFF}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:20px}
-.card{background:#111;border:1px solid #222;padding:16px}
-.card h3{font-size:14px;margin-bottom:12px;color:#FFB000}
+.card{background:#111;border:1px solid #222;padding:16px;position:relative}
+.card h3{font-size:14px;margin-bottom:12px}
+.card[data-theme="pain"] h3{color:#FFB000}
 .card[data-theme="deal"] h3{color:#00FF41}
 .card[data-theme="profile"] h3{color:#A000FF}
 .card[data-theme="members"] h3{color:#0080FF}
 .card[data-theme="vault"] h3{color:#00FFFF}
+.card-alert{border-color:#FF0040}
+.card-alert.pulse{animation:pulse 1.5s infinite}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .multiselect{position:relative}
 .multiselect-btn{width:100%;text-align:left;background:#111;border:1px solid #333;padding:8px;cursor:pointer}
@@ -59,21 +68,32 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 .btn-members{background:#0080FF;color:#000}
 .btn-vault{background:#00FFFF;color:#000}
 .btn-danger{background:#FF0040;color:#000}
+.btn-save{background:#0080FF;color:#000;font-size:10px;padding:4px 8px}
 .toggle-group{display:flex;gap:8px;margin:16px 0}
 .toggle-group button{flex:1;background:#111;border:1px solid #333}
 .toggle-group button.active{background:#FFB000;color:#000;border-color:#FFB000}
 .toggle-group[data-theme="deal"] button.active{background:#00FF41;color:#000;border-color:#00FF41}
 .room-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:20px}
-.lead-card{background:#111;border:1px solid #333;padding:12px;font-size:11px}
-.lead-card .type{font-size:10px;color:#FFB000;margin-bottom:8px}
-.lead-card[data-theme="deal"] .type{color:#00FF41}
-.lead-card .addr{font-size:13px;margin-bottom:8px}
-.lead-card .meta{color:#888;font-size:10px;margin:4px 0}
-.lead-card .profile-mini{border-top:1px solid #222;margin-top:8px;padding-top:8px;font-size:10px}
+.lead-card{background:#111;border:1px solid #333;padding:12px;font-size:11px;position:relative}
+.lead-card.type{font-size:10px;color:#FFB000;margin-bottom:8px}
+.lead-card[data-theme="deal"].type{color:#00FF41}
+.lead-card.addr{font-size:13px;margin-bottom:8px}
+.lead-card.meta{color:#888;font-size:10px;margin:4px 0}
+.lead-card.profile-mini{border-top:1px solid #222;margin-top:8px;padding-top:8px;font-size:10px}
+.lead-card.pulse{animation:pulse 1.5s infinite;border-color:#FF0040}
+.message-card{background:#111;border:1px solid #333;padding:12px;margin-bottom:12px;position:relative}
+.message-card.unread{border-color:#FF0040}
+.message-card.unread.pulse{animation:pulse 1.5s infinite}
+.message-card.header{font-size:11px;color:#888;margin-bottom:8px;display:flex;justify-content:space-between}
+.message-card.body{font-size:12px;margin-bottom:8px}
+.message-card.actions{display:flex;gap:8px}
+.message-card.actions button{flex:1;font-size:10px;padding:6px}
+.signal-bar{background:#111;border:1px solid #00FFFF;padding:8px;margin-bottom:12px;font-size:11px;color:#00FFFF;text-align:center}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:20px 0}
-.stat{background:#111;border:1px solid #222;padding:20px;text-align:center}
-.stat .num{font-size:32px;color:#FFB000;font-weight:700}
-.stat .label{font-size:11px;color:#666;margin-top:8px;text-transform:uppercase}
+.stat{background:#111;border:1px solid #222;padding:20px;text-align:center;position:relative}
+.stat.num{font-size:32px;color:#FFB000;font-weight:700}
+.stat.label{font-size:11px;color:#666;margin-top:8px;text-transform:uppercase}
+.stat.pulse{animation:pulse 1.5s infinite;border-color:#FF0040}
 .modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
 .modal.show{display:flex}
 .modal-content{background:#111;border:1px solid #333;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:24px}
@@ -86,10 +106,7 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
 
 <!-- LOGIN -->
 <div id="loginScreen" class="login-wrap">
-  <div class="header">
-    <h1>BOARDROOM PARTNERS</h1>
-    <p>SECURE ACCESS PORTAL</p>
-  </div>
+  <div class="header"><h1>BOARDROOM PARTNERS</h1><p>SECURE ACCESS PORTAL</p></div>
   <h2>LOGIN</h2>
   <input type="text" id="username" placeholder="USERNAME" autocomplete="off">
   <input type="password" id="password" placeholder="PASSWORD" autocomplete="off">
@@ -103,8 +120,9 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
     <button class="active" onclick="showSection('dashboard')" data-theme="pain">DASHBOARD</button>
     <button onclick="showSection('profile')" data-theme="profile">PROFILE</button>
     <button onclick="showSection('members')" data-theme="members">MEMBERS</button>
-    <button onclick="showSection('pain')" data-theme="pain">PAIN</button>
-    <button onclick="showSection('deal')" data-theme="deal">DEAL</button>
+    <button onclick="showSection('pain')" data-theme="pain" id="painNavBtn">PAIN<span class="badge-count hidden" id="painCount">0</span></button>
+    <button onclick="showSection('deal')" data-theme="deal" id="dealNavBtn">DEAL<span class="badge-count hidden" id="dealCount">0</span></button>
+    <button onclick="showSection('messages')" data-theme="vault" id="msgNavBtn">MESSAGES<span class="badge-count hidden" id="msgCount">0</span></button>
     <button onclick="showSection('vault')" data-theme="vault">VAULTFORGE</button>
     <button onclick="logout()" data-theme="logout">LOGOUT</button>
   </div>
@@ -112,12 +130,15 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
   <div class="container">
     <!-- DASHBOARD -->
     <div id="dashboard" class="section active">
+      <div class="signal-bar" id="signalBar">SIGNAL: AWAITING ACTIVITY</div>
+      <div class="banner banner-deal hidden" id="dealBanner">NEW DEAL SUBMITTED</div>
+      <div class="banner banner-pain hidden" id="painBanner">NEW PAIN LEAD SUBMITTED</div>
       <h2 style="color:#FFB000;margin-bottom:20px">DASHBOARD</h2>
       <div class="stats">
-        <div class="stat"><div class="num" id="statPain">0</div><div class="label">PAIN Leads</div></div>
-        <div class="stat"><div class="num" id="statDeal">0</div><div class="label">DEAL Leads</div></div>
+        <div class="stat" id="statPainCard"><div class="num" id="statPain">0</div><div class="label">PAIN Leads</div></div>
+        <div class="stat" id="statDealCard"><div class="num" id="statDeal">0</div><div class="label">DEAL Leads</div></div>
         <div class="stat"><div class="num" id="statMembers">0</div><div class="label">Members</div></div>
-        <div class="stat"><div class="num" id="statMatch">0%</div><div class="label">Match Rate</div></div>
+        <div class="stat" id="statMsgCard"><div class="num" id="statMsg">0</div><div class="label">Unread Messages</div></div>
       </div>
     </div>
 
@@ -132,9 +153,170 @@ label{display:block;font-size:11px;margin:8px 0 4px;text-transform:uppercase;col
           <label>Title/Role *</label><input type="text" id="pTitle">
           <label>Phone *</label><input type="text" id="pPhone">
           <label>Email *</label><input type="text" id="pEmail">
-          <label>Bio / About</label><textarea id="pBio" rows="3"></textarea>
         </div>
         <div class="card" data-theme="profile">
           <h3>LOCATION</h3>
-          <label>Home State * [FROM]</label>
-          <select id="pHomeState"></
+          <label>Home State * [FROM]</label><select id="pHomeState"></select>
+          <label>States Operate In * [DO BUSINESS]</label>
+          <div class="multiselect">
+            <div class="multiselect-btn" onclick="toggleMulti('pStates')">Select States...</div>
+            <div class="multiselect-dropdown" id="pStates"></div>
+          </div>
+        </div>
+        <div class="card" data-theme="profile">
+          <h3>PROFESSIONAL TYPE *</h3>
+          <div class="multiselect">
+            <div class="multiselect-btn" onclick="toggleMulti('pProf')">Select Types...</div>
+            <div class="multiselect-dropdown" id="pProf"></div>
+          </div>
+          <h3 style="margin-top:16px">DEAL PROFESSIONS *</h3>
+          <div class="multiselect">
+            <div class="multiselect-btn" onclick="toggleMulti('pDealProf')">Select Professions...</div>
+            <div class="multiselect-dropdown" id="pDealProf"></div>
+          </div>
+        </div>
+        <div class="card" data-theme="profile">
+          <h3>BUY BOX</h3>
+          <textarea id="pBuyBox" rows="6" placeholder="Criteria: location, price range, property types"></textarea>
+          <button class="btn-profile" style="width:100%;margin-top:12px" onclick="saveProfile()">SAVE PROFILE</button>
+        </div>
+      </div>
+      <div class="card" data-theme="profile" style="margin-top:16px">
+        <h3>PROFILE CARD PREVIEW</h3>
+        <div id="profilePreview"></div>
+      </div>
+    </div>
+
+    <!-- MEMBERS -->
+    <div id="members" class="section">
+      <h2 style="color:#0080FF;margin-bottom:20px">MEMBERS NETWORK</h2>
+      <div class="card" data-theme="members">
+        <label>Select State</label><select id="memberState" onchange="filterMembers()"></select>
+        <div style="margin:12px 0">
+          <button class="btn-members" onclick="setMemberFilter('home')">BY HOME STATE</button>
+          <button class="btn-members" onclick="setMemberFilter('operate')">BY OPERATING STATE</button>
+        </div>
+        <input type="text" id="memberSearch" placeholder="Search name/company..." onkeyup="filterMembers()" style="width:100%">
+      </div>
+      <div class="room-grid" id="membersGrid"></div>
+    </div>
+
+    <!-- PAIN -->
+    <div id="pain" class="section">
+      <h2 style="color:#FFB000;margin-bottom:20px">PAIN INTAKE FORM</h2>
+      <div class="card" data-theme="pain">
+        <div class="toggle-group" data-theme="pain">
+          <button class="active" onclick="setPropertyType('pain','residential')">RESIDENTIAL</button>
+          <button onclick="setPropertyType('pain','commercial')">COMMERCIAL</button>
+          <button onclick="setPropertyType('pain','land')">LAND</button>
+        </div>
+        <div class="form-row">
+          <div><label>Address *</label><input type="text" id="painAddr"></div>
+          <div><label>City *</label><input type="text" id="painCity"></div>
+        </div>
+        <div class="form-row">
+          <div><label>State *</label><select id="painState"></select></div>
+          <div><label>Zip *</label><input type="text" id="painZip"></div>
+        </div>
+        <button class="btn-primary" style="width:100%;margin-top:16px" onclick="submitLead('pain')">SUBMIT PAIN</button>
+      </div>
+      <h3 style="color:#FFB000;margin-top:30px">PAIN ROOM</h3>
+      <div class="room-grid" id="painRoom"></div>
+    </div>
+
+    <!-- DEAL -->
+    <div id="deal" class="section">
+      <h2 style="color:#00FF41;margin-bottom:20px">DEAL INTAKE FORM</h2>
+      <div class="card" data-theme="deal">
+        <div class="toggle-group" data-theme="deal">
+          <button class="active" onclick="setPropertyType('deal','residential')">RESIDENTIAL</button>
+          <button onclick="setPropertyType('deal','commercial')">COMMERCIAL</button>
+          <button onclick="setPropertyType('deal','land')">LAND</button>
+        </div>
+        <div class="form-row">
+          <div><label>Address *</label><input type="text" id="dealAddr"></div>
+          <div><label>City *</label><input type="text" id="dealCity"></div>
+        </div>
+        <div class="form-row">
+          <div><label>State *</label><select id="dealState"></select></div>
+          <div><label>Zip *</label><input type="text" id="dealZip"></div>
+        </div>
+        <button class="btn-primary btn-deal" style="width:100%;margin-top:16px" onclick="submitLead('deal')">SUBMIT DEAL</button>
+      </div>
+      <h3 style="color:#00FF41;margin-top:30px">DEAL ROOM</h3>
+      <div class="room-grid" id="dealRoom"></div>
+    </div>
+
+    <!-- MESSAGES -->
+    <div id="messages" class="section">
+      <h2 style="color:#00FFFF;margin-bottom:20px">MESSAGES</h2>
+      <div class="toggle-group">
+        <button class="active" onclick="showMsgTab('deal')" id="dealMsgTab">DEAL MESSAGES <span id="dealMsgCount"></span></button>
+        <button onclick="showMsgTab('pain')" id="painMsgTab">PAIN MESSAGES <span id="painMsgCount"></span></button>
+        <button onclick="showMsgTab('saved')" id="savedMsgTab">SAVED <span id="savedMsgCount"></span></button>
+      </div>
+      <div id="dealMessages" class="msg-container"></div>
+      <div id="painMessages" class="msg-container hidden"></div>
+      <div id="savedMessages" class="msg-container hidden"></div>
+    </div>
+
+    <!-- VAULTFORGE -->
+    <div id="vault" class="section">
+      <h2 style="color:#00FFFF;margin-bottom:20px">VAULTFORGE // INTELLIGENT FEED</h2>
+      <div class="card" data-theme="vault">
+        <h3>BUY BOX SCRAPER</h3>
+        <input type="text" id="scrapeAddr" placeholder="Enter property address" style="width:100%;margin-bottom:8px">
+        <button class="btn-vault" style="width:100%" onclick="scrapeBuyers()">SCRAPE NET FOR BUYERS</button>
+        <div id="scrapeResults" style="margin-top:16px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+const PROF_TYPES = ['Buyer','Seller','Wholesaler','Lender','Realtor','Title Company','Attorney','Contractor','Investor','Bird Dog','JV Partner','Transaction Coordinator','Other'];
+const DEAL_PROFS = ['Acquisitions','Dispositions','Underwriting','Rehab Management','Property Management','Capital Raising','Hard Money Lending','Private Lending','Title/Escrow','Legal','Construction','Marketing','Lead Generation'];
+
+let currentUser = null;
+let members = [];
+let painLeads = [];
+let dealLeads = [];
+let dealMessages = [];
+let painMessages = [];
+let savedMessages = [];
+let memberFilter = 'home';
+let propertyTypes = {pain:'residential',deal:'residential'};
+let currentMsgTab = 'deal';
+
+function init(){
+  if(localStorage.getItem('boardroom_session')){
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    loadData();
+  }
+  STATES.forEach(s=>{
+    document.getElementById('pHomeState').innerHTML += `<option value="${s}">${s}</option>`;
+    document.getElementById('memberState').innerHTML += `<option value="${s}">${s}</option>`;
+    document.getElementById('painState').innerHTML += `<option value="${s}">${s}</option>`;
+    document.getElementById('dealState').innerHTML += `<option value="${s}">${s}</option>`;
+  });
+  PROF_TYPES.forEach(p=>{
+    document.getElementById('pProf').innerHTML += `<label><input type="checkbox" value="${p}"> ${p}</label>`;
+  });
+  DEAL_PROFS.forEach(p=>{
+    document.getElementById('pDealProf').innerHTML += `<label><input type="checkbox" value="${p}"> ${p}</label>`;
+  });
+  STATES.forEach(s=>{
+    document.getElementById('pStates').innerHTML += `<label><input type="checkbox" value="${s}"> ${s}</label>`;
+  });
+  loadProfile();
+  renderMembers();
+  updateStats();
+  updateAlerts();
+}
+
+function login(){
+  const u=document.getElementById('username').value;
+  const p=document.getElementById('password').value;
+  if(u==='deeve'&&
