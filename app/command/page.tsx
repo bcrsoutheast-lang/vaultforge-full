@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+// If you use supabase, uncomment next line and make sure /lib/supabase.ts exists
+// import { supabase } from '@/lib/supabase'
 
 type DealFormType = {
   titleClear: boolean
@@ -15,6 +17,7 @@ type DealFormType = {
   assignmentFee: number
   arv: number
   notes: string
+  // catch-all so f.k doesn't break
   [key: string]: boolean | string | number
 }
 
@@ -44,7 +47,8 @@ export default function CommandPage() {
 
   const handleSubmit = async () => {
     console.log('Submitting deal:', dealForm)
-    // Your submit logic here
+    // await supabase.from('deals').insert(dealForm)
+    alert('Deal submitted')
   }
 
   return (
@@ -99,6 +103,16 @@ export default function CommandPage() {
               </label>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Owner Name</label>
+          <input 
+            type="text" 
+            value={dealForm.ownerName}
+            onChange={e => setDealForm({...dealForm, ownerName: e.target.value})}
+            className="w-full border rounded px-3 py-2"
+          />
         </div>
 
         <div>
