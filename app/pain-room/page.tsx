@@ -19,6 +19,7 @@ interface PainLead {
   beds: number
   baths: number
   sqft: number
+  yearBuilt: number
   ask: number
   arv: number
   spread: number
@@ -35,7 +36,17 @@ interface PainLead {
 function PainRoomContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [time, setTime] = useState('')
   const [filter, setFilter] = useState(searchParams.get('status') || 'all')
+  
+  useEffect(() => {
+    setTime(new Date().toLocaleTimeString('en-US', {hour12: false}))
+    const interval = setInterval(() => {
+      setTime(new Date().toLocaleTimeString('en-US', {hour12: false}))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   const [leads, setLeads] = useState<PainLead[]>([
     {
       id: '1',
@@ -51,6 +62,7 @@ function PainRoomContent() {
       beds: 3,
       baths: 2,
       sqft: 1840,
+      yearBuilt: 1985,
       ask: 180000,
       arv: 285000,
       spread: 22000,
@@ -62,6 +74,60 @@ function PainRoomContent() {
       motivation: ['DIVORCE', 'FORECLOSURE NOD'],
       isNew: true,
       unread: true
+    },
+    {
+      id: '2',
+      status: 'archived',
+      sellerName: 'Lisa Johnson',
+      sellerPhone: '404-555-0143',
+      sellerEmail: 'lisa@gmail.com',
+      photo: 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400',
+      address: '456 Oak Ave',
+      city: 'Atlanta',
+      state: 'GA',
+      zip: '30309',
+      beds: 4,
+      baths: 2,
+      sqft: 2100,
+      yearBuilt: 1992,
+      ask: 210000,
+      arv: 295000,
+      spread: 18000,
+      painScore: 72,
+      vaultScore: 701,
+      liens: '$4.2K TAX',
+      title: 'CLEAN',
+      dom: 120,
+      motivation: ['TIRED LANDLORD'],
+      isNew: false,
+      unread: false
+    },
+    {
+      id: '3',
+      status: 'saved',
+      sellerName: 'Robert Chen',
+      sellerPhone: '404-555-0177',
+      sellerEmail: 'rchen@gmail.com',
+      photo: 'https://images.unsplash.com/photo-1518780664697-55e365304249?w=400',
+      address: '789 Pine Rd',
+      city: 'Atlanta',
+      state: 'GA',
+      zip: '30310',
+      beds: 5,
+      baths: 3,
+      sqft: 2800,
+      yearBuilt: 2001,
+      ask: 295000,
+      arv: 420000,
+      spread: 45000,
+      painScore: 88,
+      vaultScore: 910,
+      liens: 'NONE',
+      title: 'CLEAN',
+      dom: 45,
+      motivation: ['JOB RELOCATION', 'OUT OF STATE'],
+      isNew: false,
+      unread: false
     }
   ])
 
@@ -84,6 +150,18 @@ function PainRoomContent() {
     setLeads(prev => prev.map(l => l.id === id? {...l, status: newStatus, unread: false, isNew: false} : l))
   }
 
+  const getBorderColor = (lead: PainLead) => {
+    if (lead.painScore >= 90) return 'border-[#FF3B30]'
+    if (lead.vaultScore >= 800) return 'border-[#D4AF37]'
+    return 'border-[#333]'
+  }
+
+  const getGlow = (lead: PainLead) => {
+    if (lead.painScore >= 90) return 'shadow-[0_0_20px_rgba(255,59,48,0.6)]'
+    if (lead.vaultScore >= 800) return 'shadow-[0_0_20px_rgba(212,175,55,0.6)]'
+    return ''
+  }
+
   return (
     <main className="min-h-screen bg-[#0D0D0D] text-white font-mono p-4">
       <div className="border-b border-[#333] pb-4 mb-4">
@@ -93,7 +171,8 @@ function PainRoomContent() {
             <div className="text-[#666] text-xs">DASHBOARD</div>
           </div>
           <div className="text-[#666] text-xs text-right">
-            SESSION ACTIVE | TOTAL: {leads.length} | {new Date().toLocaleTimeString('en-US', {hour12: false})} CST
+            SESSION ACTIVE | TOTAL: {leads.length} |<br/>
+            {time} CST
           </div>
         </div>
       </div>
@@ -128,10 +207,7 @@ function PainRoomContent() {
 
       <div className="space-y-3">
         {filteredLeads.map((lead) => (
-          <div key={lead.id} className={`border-2 bg-[#1a1a1a] p-3 transition relative ${
-            lead.painScore >= 90? 'border-[#FF3B30] shadow-[0_0_20px_rgba(255,59,48,0.6)]' : 
-            lead.vaultScore >= 800? 'border-[#D4AF37] shadow-[0_0_20px_rgba(212,175,55,0.6)]' : 'border-[#333]'
-          } ${lead.isNew? 'animate-pulse' : ''}`}>
+          <div key={lead.id} className={`border-2 bg-[#1a1a1a] p-3 transition relative ${getBorderColor(lead)} ${getGlow(lead)} ${lead.isNew? 'animate-pulse' : ''}`}>
             {lead.unread && <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#FF3B30] rounded-full animate-ping" />}
             
             <div className="flex justify-between items-start mb-3 pb-3 border-b border-[#333]">
@@ -139,7 +215,7 @@ function PainRoomContent() {
                 <img src={lead.photo} alt="" className="w-16 h-16 object-cover rounded" />
                 <div>
                   <div className="text-white text-sm font-bold">{lead.sellerName.toUpperCase()}</div>
-                  <div className="text-[#666] text-xs">Owner | {lead.city}, {lead.state}</div>
+                  <div className="text-[#666] text-xs">Owner | {lead.city}, {lead.state} {lead.zip}</div>
                   <div className="text-[#D4AF37] text-xs mt-1">{lead.sellerPhone}</div>
                   <div className="text-[#666] text-xs">{lead.sellerEmail}</div>
                 </div>
@@ -152,7 +228,7 @@ function PainRoomContent() {
 
             <div className="mb-3">
               <div className="text-white text-sm font-bold mb-1">{lead.address.toUpperCase()} {lead.city.toUpperCase()}, {lead.state}</div>
-              <div className="text-[#999] text-xs">{lead.beds}BD {lead.baths}BA {lead.sqft.toLocaleString()}SQFT</div>
+              <div className="text-[#999] text-xs">{lead.beds}BD {lead.baths}BA {lead.sqft.toLocaleString()}SQFT | BUILT {lead.yearBuilt}</div>
             </div>
 
             <div className="grid grid-cols-4 gap-2 mb-3 text-xs">
