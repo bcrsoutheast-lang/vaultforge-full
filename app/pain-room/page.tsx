@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +15,7 @@ interface PainLead {
   address: string
   city: string
   state: string
+  zip: string
   beds: number
   baths: number
   sqft: number
@@ -46,6 +47,7 @@ function PainRoomContent() {
       address: '123 Main St',
       city: 'Atlanta',
       state: 'GA',
+      zip: '30308',
       beds: 3,
       baths: 2,
       sqft: 1840,
@@ -60,31 +62,6 @@ function PainRoomContent() {
       motivation: ['DIVORCE', 'FORECLOSURE NOD'],
       isNew: true,
       unread: true
-    },
-    {
-      id: '2',
-      status: 'archived',
-      sellerName: 'Lisa Johnson',
-      sellerPhone: '404-555-0143',
-      sellerEmail: 'lisa@gmail.com',
-      photo: 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400',
-      address: '456 Oak Ave',
-      city: 'Atlanta',
-      state: 'GA',
-      beds: 4,
-      baths: 2,
-      sqft: 2100,
-      ask: 210000,
-      arv: 295000,
-      spread: 18000,
-      painScore: 72,
-      vaultScore: 701,
-      liens: '$4.2K TAX',
-      title: 'CLEAN',
-      dom: 120,
-      motivation: ['TIRED LANDLORD'],
-      isNew: false,
-      unread: false
     }
   ])
 
@@ -95,28 +72,16 @@ function PainRoomContent() {
   }
 
   const avgPS = {
-    saved: Math.round(leads.filter(l => l.status === 'saved').reduce((a,b) => a + b.painScore, 0) / counts.saved || 0),
-    archived: Math.round(leads.filter(l => l.status === 'archived').reduce((a,b) => a + b.painScore, 0) / counts.archived || 0),
-    deleted: Math.round(leads.filter(l => l.status === 'deleted').reduce((a,b) => a + b.painScore, 0) / counts.deleted || 0)
+    saved: Math.round(leads.filter(l => l.status === 'saved').reduce((a,b) => a + b.painScore, 0) / (counts.saved || 1)),
+    archived: Math.round(leads.filter(l => l.status === 'archived').reduce((a,b) => a + b.painScore, 0) / (counts.archived || 1)),
+    deleted: Math.round(leads.filter(l => l.status === 'deleted').reduce((a,b) => a + b.painScore, 0) / (counts.deleted || 1))
   }
 
   const hotLeads = leads.filter(l => l.status === 'saved' && l.painScore >= 90).length
   const filteredLeads = filter === 'all'? leads.filter(l => l.status!== 'deleted') : leads.filter(l => l.status === filter)
 
   const updateLeadStatus = (id: string, newStatus: 'saved' | 'archived' | 'deleted') => {
-    setLeads(leads.map(l => l.id === id? {...l, status: newStatus, unread: false, isNew: false} : l))
-  }
-
-  const getBorderColor = (lead: PainLead) => {
-    if (lead.painScore >= 90) return 'border-[#FF3B30]'
-    if (lead.vaultScore >= 800) return 'border-[#D4AF37]'
-    return 'border-[#333]'
-  }
-
-  const getGlow = (lead: PainLead) => {
-    if (lead.painScore >= 90) return 'shadow-[0_0_20px_rgba(255,59,48,0.6)]'
-    if (lead.vaultScore >= 800) return 'shadow-[0_0_20px_rgba(212,175,55,0.6)]'
-    return ''
+    setLeads(prev => prev.map(l => l.id === id? {...l, status: newStatus, unread: false, isNew: false} : l))
   }
 
   return (
@@ -128,8 +93,7 @@ function PainRoomContent() {
             <div className="text-[#666] text-xs">DASHBOARD</div>
           </div>
           <div className="text-[#666] text-xs text-right">
-            SESSION ACTIVE | TOTAL: {leads.length} |<br/>
-            {new Date().toLocaleTimeString('en-US', {hour12: false})} CST
+            SESSION ACTIVE | TOTAL: {leads.length} | {new Date().toLocaleTimeString('en-US', {hour12: false})} CST
           </div>
         </div>
       </div>
@@ -164,7 +128,10 @@ function PainRoomContent() {
 
       <div className="space-y-3">
         {filteredLeads.map((lead) => (
-          <div key={lead.id} className={`border-2 bg-[#1a1a1a] p-3 transition relative ${getBorderColor(lead)} ${getGlow(lead)} ${lead.isNew? 'animate-pulse' : ''}`}>
+          <div key={lead.id} className={`border-2 bg-[#1a1a1a] p-3 transition relative ${
+            lead.painScore >= 90? 'border-[#FF3B30] shadow-[0_0_20px_rgba(255,59,48,0.6)]' : 
+            lead.vaultScore >= 800? 'border-[#D4AF37] shadow-[0_0_20px_rgba(212,175,55,0.6)]' : 'border-[#333]'
+          } ${lead.isNew? 'animate-pulse' : ''}`}>
             {lead.unread && <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#FF3B30] rounded-full animate-ping" />}
             
             <div className="flex justify-between items-start mb-3 pb-3 border-b border-[#333]">
