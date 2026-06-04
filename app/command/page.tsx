@@ -1,7 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+
+export const dynamic = 'force-dynamic'
+
+interface Buyer {
+  id: string
+  name: string
+  vaultScore: number
+  closes: number
+  cash: number
+  photo: string
+}
 
 interface Deal {
   id: string
@@ -29,21 +40,12 @@ interface Deal {
   exitStrategy: string
   route: 'ALPHA' | 'AUCTION' | 'EXCHANGE'
   buyersNotified: Buyer[]
-  firstLook: number // seconds remaining
+  firstLook: number
   isNew: boolean
   unread: boolean
 }
 
-interface Buyer {
-  id: string
-  name: string
-  vaultScore: number
-  closes: number
-  cash: number
-  photo: string
-}
-
-export default function DealRoom() {
+function DealRoomContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [filter, setFilter] = useState(searchParams.get('status') || 'all')
@@ -81,36 +83,6 @@ export default function DealRoom() {
       firstLook: 1723,
       isNew: true,
       unread: true
-    },
-    {
-      id: '2',
-      status: 'archived',
-      sellerName: 'Lisa Johnson',
-      sellerPhone: '404-555-0143',
-      sellerEmail: 'lisa@gmail.com',
-      photo: 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400',
-      address: '456 Oak Ave',
-      city: 'Atlanta',
-      state: 'GA',
-      beds: 4,
-      baths: 2,
-      sqft: 2100,
-      ask: 210000,
-      arv: 295000,
-      spread: 18000,
-      contractPrice: 205000,
-      rehab: 32000,
-      painScore: 72,
-      vaultScore: 701,
-      liens: '$4.2K TAX',
-      title: 'CLEAN',
-      closeDate: '2026-07-01',
-      exitStrategy: 'Fix & Flip',
-      route: 'AUCTION',
-      buyersNotified: [],
-      firstLook: 0,
-      isNew: false,
-      unread: false
     }
   ])
 
@@ -122,7 +94,8 @@ export default function DealRoom() {
         const updated = {...prev}
         deals.forEach(deal => {
           if (deal.firstLook > 0 && deal.route === 'ALPHA') {
-            updated[deal.id] = (updated[deal.id]?? deal.firstLook) - 1
+            const current = updated[deal.id]?? deal.firstLook
+            if (current > 0) updated[deal.id] = current - 1
           }
         })
         return updated
@@ -144,13 +117,10 @@ export default function DealRoom() {
   }
 
   const alphaDeals = deals.filter(d => d.status === 'saved' && d.route === 'ALPHA').length
-
-  const filteredDeals = filter === 'all' 
-   ? deals.filter(d => d.status!== 'deleted')
-    : deals.filter(d => d.status === filter)
+  const filteredDeals = filter === 'all'? deals.filter(d => d.status!== 'deleted') : deals.filter(d => d.status === filter)
 
   const updateDealStatus = (id: string, newStatus: 'saved' | 'archived' | 'deleted') => {
-    setDeals(deals.map(d => d.id === id? {...d, status: newStatus, unread: false} : d))
+    setDeals(deals.map(d => d.id === id? {...d, status: newStatus, unread: false, isNew: false} : d))
   }
 
   const getBorderColor = (deal: Deal) => {
@@ -174,7 +144,6 @@ export default function DealRoom() {
 
   return (
     <main className="min-h-screen bg-[#0D0D0D] text-white font-mono p-4">
-      {/* HEADER */}
       <div className="border-b border-[#333] pb-4 mb-4">
         <div className="flex justify-between items-center">
           <div>
@@ -188,9 +157,8 @@ export default function DealRoom() {
         </div>
       </div>
 
-      {/* ROUTE CARDS */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        {['saved', 'archived', 'deleted'].map((status) => {
+        {(['saved', 'archived', 'deleted'] as const).map((status) => {
           const isActive = filter === status
           const hasNew = deals.some(d => d.status === status && d.unread)
           return (
@@ -201,15 +169,11 @@ export default function DealRoom() {
                 isActive? 'border-[#D4AF37] bg-[#1a1a1a]' : 'border-[#333] bg-[#0D0D0D]'
               } ${hasNew? 'ring-2 ring-[#D4AF37] animate-pulse' : ''}`}
             >
-              <div className="text-[#D4AF37] text-xs font-bold mb-1">
-                DEAL {status.toUpperCase()}
-              </div>
-              <div className="text-white text-2xl font-bold">{counts[status as keyof typeof counts]}</div>
+              <div className="text-[#D4AF37] text-xs font-bold mb-1">DEAL {status.toUpperCase()}</div>
+              <div className="text-white text-2xl font-bold">{counts[status]}</div>
               <div className="text-[#666] text-xs mt-1">
-                AVG: ${avgSpread[status as keyof typeof avgSpread]}K
-                {status === 'saved' && alphaDeals > 0 && (
-                  <span className="text-[#D4AF37] ml-2">ALPHA: {alphaDeals}</span>
-                )}
+                AVG: ${avgSpread[status]}K
+                {status === 'saved' && alphaDeals > 0 && <span className="text-[#D4AF37] ml-2">ALPHA: {alphaDeals}</span>}
               </div>
               <div className="text-[#D4AF37] text-xs mt-2">[VIEW ALL]</div>
             </button>
@@ -217,33 +181,19 @@ export default function DealRoom() {
         })}
       </div>
 
-      {/* BACK BUTTON */}
-      <button
-        onClick={() => router.push('/dashboard')}
-        className="mb-4 px-4 py-2 border border-[#333] text-[#999] text-xs hover:border-[#D4AF37]"
-      >
+      <button onClick={() => router.push('/dashboard')} className="mb-4 px-4 py-2 border border-[#333] text-[#999] text-xs hover:border-[#D4AF37]">
         BACK TO DASHBOARD
       </button>
 
-      {/* DEAL CARDS */}
       <div className="space-y-3">
         {filteredDeals.map((deal) => {
           const timeLeft = timers[deal.id]?? deal.firstLook
           const isFirstLook = deal.route === 'ALPHA' && timeLeft > 0
           
           return (
-            <div
-              key={deal.id}
-              className={`border-2 bg-[#1a1a1a] p-3 transition relative ${getBorderColor(deal)} ${getGlow(deal)} ${
-                deal.isNew? 'animate-pulse' : ''
-              }`}
-            >
-              {/* UNREAD DOT */}
-              {deal.unread && (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#D4AF37] rounded-full animate-ping" />
-              )}
+            <div key={deal.id} className={`border-2 bg-[#1a1a1a] p-3 transition relative ${getBorderColor(deal)} ${getGlow(deal)} ${deal.isNew? 'animate-pulse' : ''}`}>
+              {deal.unread && <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#D4AF37] rounded-full animate-ping" />}
               
-              {/* SELLER PROFILE */}
               <div className="flex justify-between items-start mb-3 pb-3 border-b border-[#333]">
                 <div className="flex gap-3">
                   <img src={deal.photo} alt="" className="w-16 h-16 object-cover rounded" />
@@ -260,44 +210,24 @@ export default function DealRoom() {
                 </div>
               </div>
 
-              {/* PROPERTY INFO */}
               <div className="mb-3">
-                <div className="text-white text-sm font-bold mb-1">
-                  {deal.address.toUpperCase()} {deal.city.toUpperCase()}, {deal.state}
-                </div>
-                <div className="text-[#999] text-xs">
-                  {deal.beds}BD {deal.baths}BA {deal.sqft.toLocaleString()}SQFT | CONTRACT: ${(deal.contractPrice/1000).toFixed(0)}K
-                </div>
+                <div className="text-white text-sm font-bold mb-1">{deal.address.toUpperCase()} {deal.city.toUpperCase()}, {deal.state}</div>
+                <div className="text-[#999] text-xs">{deal.beds}BD {deal.baths}BA {deal.sqft.toLocaleString()}SQFT | CONTRACT: ${(deal.contractPrice/1000).toFixed(0)}K</div>
               </div>
 
-              {/* FINANCIALS */}
               <div className="grid grid-cols-4 gap-2 mb-3 text-xs">
-                <div>
-                  <div className="text-[#666]">ARV</div>
-                  <div className="text-white font-bold">${(deal.arv/1000).toFixed(0)}K</div>
-                </div>
-                <div>
-                  <div className="text-[#666]">REHAB</div>
-                  <div className="text-white font-bold">${(deal.rehab/1000).toFixed(0)}K</div>
-                </div>
-                <div>
-                  <div className="text-[#666]">PROFIT</div>
-                  <div className="text-[#D4AF37] font-bold">${(deal.spread/1000).toFixed(0)}K</div>
-                </div>
-                <div>
-                  <div className="text-[#666]">%</div>
-                  <div className="text-white font-bold">{Math.round((deal.spread/deal.arv)*100)}%</div>
-                </div>
+                <div><div className="text-[#666]">ARV</div><div className="text-white font-bold">${(deal.arv/1000).toFixed(0)}K</div></div>
+                <div><div className="text-[#666]">REHAB</div><div className="text-white font-bold">${(deal.rehab/1000).toFixed(0)}K</div></div>
+                <div><div className="text-[#666]">PROFIT</div><div className="text-[#D4AF37] font-bold">${(deal.spread/1000).toFixed(0)}K</div></div>
+                <div><div className="text-[#666]">%</div><div className="text-white font-bold">{Math.round((deal.spread/deal.arv)*100)}%</div></div>
               </div>
 
-              {/* LIENS + TITLE + CLOSE */}
               <div className="text-xs mb-3 pb-3 border-b border-[#333]">
                 <span className="text-[#666]">LIENS:</span> <span className="text-white">{deal.liens}</span>
                 <span className="text-[#666] ml-3">TITLE:</span> <span className="text-white">{deal.title}</span>
                 <span className="text-[#666] ml-3">CLOSE:</span> <span className="text-white">{deal.closeDate}</span>
               </div>
 
-              {/* ROUTE + BUYERS NOTIFIED */}
               <div className="mb-3 pb-3 border-b border-[#333]">
                 <div className="flex justify-between items-center mb-2">
                   <div className="text-xs">
@@ -316,7 +246,6 @@ export default function DealRoom() {
                   )}
                 </div>
                 
-                {/* BUYER PROFILES ATTACHED */}
                 {deal.buyersNotified.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {deal.buyersNotified.map(buyer => (
@@ -330,36 +259,14 @@ export default function DealRoom() {
                 )}
               </div>
 
-              {/* CLEANUP BUTTONS */}
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => updateDealStatus(deal.id, 'saved')}
-                  className={`py-3 text-xs font-bold rounded transition ${
-                    deal.status === 'saved' 
-                     ? 'bg-[#34C759] text-white' 
-                      : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#34C759]'
-                  }`}
-                >
+                <button onClick={() => updateDealStatus(deal.id, 'saved')} className={`py-3 text-xs font-bold rounded transition ${deal.status === 'saved'? 'bg-[#34C759] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#34C759]'}`}>
                   
                 </button>
-                <button
-                  onClick={() => updateDealStatus(deal.id, 'archived')}
-                  className={`py-3 text-xs font-bold rounded transition ${
-                    deal.status === 'archived' 
-                     ? 'bg-[#FFA500] text-white' 
-                      : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FFA500]'
-                  }`}
-                >
+                <button onClick={() => updateDealStatus(deal.id, 'archived')} className={`py-3 text-xs font-bold rounded transition ${deal.status === 'archived'? 'bg-[#FFA500] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FFA500]'}`}>
                   [ARCHIVE]
                 </button>
-                <button
-                  onClick={() => updateDealStatus(deal.id, 'deleted')}
-                  className={`py-3 text-xs font-bold rounded transition ${
-                    deal.status === 'deleted' 
-                     ? 'bg-[#FF3B30] text-white' 
-                      : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FF3B30]'
-                  }`}
-                >
+                <button onClick={() => updateDealStatus(deal.id, 'deleted')} className={`py-3 text-xs font-bold rounded transition ${deal.status === 'deleted'? 'bg-[#FF3B30] text-white' : 'bg-[#1a1a1a] border border-[#333] text-[#999] hover:border-[#FF3B30]'}`}>
                   [DELETE]
                 </button>
               </div>
@@ -368,5 +275,13 @@ export default function DealRoom() {
         })}
       </div>
     </main>
+  )
+}
+
+export default function DealRoom() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0D0D0D] text-[#D4AF37] p-4">Loading Deal Room...</div>}>
+      <DealRoomContent />
+    </Suspense>
   )
 }
